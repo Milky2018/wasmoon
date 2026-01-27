@@ -30,6 +30,7 @@ priv struct JsonCommand {
 priv struct JsonValue {
   type_ : String
   value : String?
+  items : Array[JsonValue]?
 } derive(FromJson(fields(type_(rename="type"))))
 
 ///|
@@ -169,40 +170,125 @@ fn parse_component_value(
   val : JsonValue,
 ) -> @component.ComponentValue raise ComponentTestError {
   let kind = val.type_
-  let raw = match val.value {
-    Some(v) => v
-    None => raise ComponentTestError::ParseError("missing value")
-  }
+  let raw = val.value
   match kind {
+    "list" => {
+      let out : Array[@component.ComponentValue] = []
+      match val.items {
+        Some(items) =>
+          for item in items {
+            out.push(parse_component_value(item))
+          }
+        None => ()
+      }
+      @component.ComponentValue::List(out)
+    }
     "bool" =>
       @component.ComponentValue::Bool(
-        @strconv.parse_bool(raw) catch {
+        @strconv.parse_bool(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ) catch {
           e => raise ComponentTestError::ParseError(e.to_string())
         },
       )
     "u8" =>
       @component.ComponentValue::U8(
-        parse_unsigned_int(raw).reinterpret_as_int(),
+        parse_unsigned_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ).reinterpret_as_int(),
       )
-    "s8" => @component.ComponentValue::S8(parse_signed_int(raw))
+    "s8" =>
+      @component.ComponentValue::S8(
+        parse_signed_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
     "u16" =>
       @component.ComponentValue::U16(
-        parse_unsigned_int(raw).reinterpret_as_int(),
+        parse_unsigned_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ).reinterpret_as_int(),
       )
-    "s16" => @component.ComponentValue::S16(parse_signed_int(raw))
+    "s16" =>
+      @component.ComponentValue::S16(
+        parse_signed_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
     "u32" =>
       @component.ComponentValue::U32(
-        parse_unsigned_int(raw).reinterpret_as_int(),
+        parse_unsigned_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ).reinterpret_as_int(),
       )
-    "s32" => @component.ComponentValue::S32(parse_signed_int(raw))
+    "s32" =>
+      @component.ComponentValue::S32(
+        parse_signed_int(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
     "u64" =>
       @component.ComponentValue::U64(
-        parse_unsigned_int64(raw).reinterpret_as_int64(),
+        parse_unsigned_int64(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ).reinterpret_as_int64(),
       )
-    "s64" => @component.ComponentValue::S64(parse_signed_int64(raw))
-    "char" => @component.ComponentValue::Char(parse_char_value(raw))
-    "str" => @component.ComponentValue::String(raw)
-    "string" => @component.ComponentValue::String(raw)
+    "s64" =>
+      @component.ComponentValue::S64(
+        parse_signed_int64(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
+    "char" =>
+      @component.ComponentValue::Char(
+        parse_char_value(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
+    "str" =>
+      @component.ComponentValue::String(
+        match raw {
+          Some(v) => v
+          None => raise ComponentTestError::ParseError("missing value")
+        },
+      )
+    "string" =>
+      @component.ComponentValue::String(
+        match raw {
+          Some(v) => v
+          None => raise ComponentTestError::ParseError("missing value")
+        },
+      )
     _ => raise ComponentTestError::ScriptError("unsupported value type")
   }
 }
@@ -283,7 +369,12 @@ fn make_const_u32_func(value : Int) -> @component.ComponentFunc {
     }
     [@component.ComponentValue::U32(value)]
   }
-  @component.ComponentFunc::Host(func_type, func)
+  @component.ComponentFunc::Host(func_type, [], fn(
+    args : Array[@component.ComponentValue],
+    _table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    func(args)
+  })
 }
 
 ///|
@@ -292,6 +383,11 @@ fn make_instance(
   store : @runtime.Store,
   exports : Map[String, @component.ComponentExtern],
 ) -> @component.ComponentInstance {
+  let stream_table = @component.StreamTable::new()
+  let async_state = @component.AsyncState::new(
+    stream_table.next_handle,
+    stream_table.free_handles,
+  )
   {
     name,
     types: [],
@@ -299,6 +395,9 @@ fn make_instance(
     values: [],
     components: [],
     instances: [],
+    resource_table: @component.ResourceTable::new(),
+    stream_table,
+    async_state,
     core_modules: [],
     core_instances: [],
     core_funcs: [],
@@ -368,6 +467,298 @@ pub fn run_component_script(path : String) -> Unit {
   host_exports.set(
     "nested",
     @component.ComponentExtern::Instance(nested_instance),
+  )
+
+  // Host instance used by component-spec/wasmtime suites.
+  let resource1_id = 100
+  let resource2_id = 101
+  let resource1_type : @component.TypeDef? = Some(
+    @component.TypeDef::ResourceType(
+      resource1_id,
+      0x7f,
+      None,
+      @component.ResourceKind::HostDefined,
+    ),
+  )
+  let resource2_type : @component.TypeDef? = Some(
+    @component.TypeDef::ResourceType(
+      resource2_id,
+      0x7f,
+      None,
+      @component.ResourceKind::HostDefined,
+    ),
+  )
+  host_exports.set(
+    "resource1",
+    @component.ComponentExtern::Type(resource1_type),
+  )
+  host_exports.set(
+    "resource2",
+    @component.ComponentExtern::Type(resource2_type),
+  )
+  host_exports.set(
+    "resource1-again",
+    @component.ComponentExtern::Type(resource1_type),
+  )
+  let resource1_drops : Array[Int] = [0]
+  let resource1_last_drop : Array[Int] = [0]
+  let dtor_core_type : @types.FuncType = {
+    params: [@types.ValueType::I32],
+    results: [],
+  }
+  let resource1_dtor = @component.alloc_host_core_func(store, dtor_core_type, fn(
+    args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    match args {
+      [@types.Value::I32(rep)] => {
+        resource1_drops[0] = resource1_drops[0] + 1
+        resource1_last_drop[0] = rep
+        []
+      }
+      _ => raise @runtime.RuntimeError::Unreachable
+    }
+  })
+  fn resource1_expect_handle(
+    table : @component.ResourceTable,
+    handle : Int,
+  ) -> @component.ResourceHandle raise @component.ComponentRuntimeError {
+    match table.get(handle) {
+      Some(h) =>
+        if h.type_id != resource1_id {
+          raise @component.ComponentRuntimeError::CanonCallError(
+            "handle index \{handle} used with the wrong type",
+          )
+        } else {
+          h
+        }
+      None =>
+        raise @component.ComponentRuntimeError::CanonCallError(
+          "unknown handle index \{handle}",
+        )
+    }
+  }
+
+  let ctor_types : Array[@component.TypeDef?] = [
+    resource1_type,
+    Some(@component.TypeDef::Own(0)),
+  ]
+  let ctor_func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "r", ty: @component.ValType::Prim(@component.PrimValType::U32) },
+    ],
+    result: Some(@component.ValType::TypeIdx(1)),
+  }
+  let ctor = @component.ComponentFunc::Host(ctor_func_type, ctor_types, fn(
+    args : Array[@component.ComponentValue],
+    table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    match args {
+      [@component.ComponentValue::U32(rep)] => {
+        let handle = table.alloc({
+          type_id: resource1_id,
+          rep,
+          dtor: Some(resource1_dtor),
+          kind: @component.ResourceKind::HostDefined,
+        })
+        [@component.ComponentValue::U32(handle)]
+      }
+      _ =>
+        raise @component.ComponentRuntimeError::HostCallError(
+          "argument type mismatch",
+        )
+    }
+  })
+  host_exports.set(
+    "[constructor]resource1",
+    @component.ComponentExtern::Func(ctor),
+  )
+  let drops_func_type : @component.FuncType = {
+    is_async: false,
+    params: [],
+    result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
+  }
+  let drops = @component.ComponentFunc::Host(drops_func_type, [], fn(
+    _args : Array[@component.ComponentValue],
+    _table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    [@component.ComponentValue::U32(resource1_drops[0])]
+  })
+  host_exports.set(
+    "[static]resource1.drops",
+    @component.ComponentExtern::Func(drops),
+  )
+  let last_drop = @component.ComponentFunc::Host(drops_func_type, [], fn(
+    _args : Array[@component.ComponentValue],
+    _table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    [@component.ComponentValue::U32(resource1_last_drop[0])]
+  })
+  host_exports.set(
+    "[static]resource1.last-drop",
+    @component.ComponentExtern::Func(last_drop),
+  )
+  let assert_types : Array[@component.TypeDef?] = [
+    resource1_type,
+    Some(@component.TypeDef::Own(0)),
+  ]
+  let assert_func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "r", ty: @component.ValType::TypeIdx(1) },
+      {
+        label: "rep",
+        ty: @component.ValType::Prim(@component.PrimValType::U32),
+      },
+    ],
+    result: None,
+  }
+  let assert = @component.ComponentFunc::Host(assert_func_type, assert_types, fn(
+    args : Array[@component.ComponentValue],
+    table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    match args {
+      [
+        @component.ComponentValue::U32(handle),
+        @component.ComponentValue::U32(expected),
+      ] => {
+        let actual = resource1_expect_handle(table, handle)
+        // Consume the owned resource.
+        table.free(handle) |> ignore
+        if actual.rep != expected {
+          raise @component.ComponentRuntimeError::HostCallError("rep mismatch")
+        }
+        []
+      }
+      _ =>
+        raise @component.ComponentRuntimeError::HostCallError(
+          "argument type mismatch",
+        )
+    }
+  })
+  host_exports.set(
+    "[static]resource1.assert",
+    @component.ComponentExtern::Func(assert),
+  )
+  let borrow_ty = Some(@component.TypeDef::Borrow(0))
+  let simple_types : Array[@component.TypeDef?] = [resource1_type, borrow_ty]
+  let simple_func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "self", ty: @component.ValType::TypeIdx(1) },
+      {
+        label: "rep",
+        ty: @component.ValType::Prim(@component.PrimValType::U32),
+      },
+    ],
+    result: None,
+  }
+  let simple = @component.ComponentFunc::Host(simple_func_type, simple_types, fn(
+    args : Array[@component.ComponentValue],
+    table : @component.ResourceTable,
+  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    match args {
+      [
+        @component.ComponentValue::U32(handle),
+        @component.ComponentValue::U32(expected),
+      ] => {
+        let actual = resource1_expect_handle(table, handle)
+        if actual.rep != expected {
+          raise @component.ComponentRuntimeError::HostCallError("rep mismatch")
+        }
+        []
+      }
+      _ =>
+        raise @component.ComponentRuntimeError::HostCallError(
+          "argument type mismatch",
+        )
+    }
+  })
+  host_exports.set(
+    "[method]resource1.simple",
+    @component.ComponentExtern::Func(simple),
+  )
+  let take_borrow_func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "self", ty: @component.ValType::TypeIdx(1) },
+      { label: "b", ty: @component.ValType::TypeIdx(1) },
+    ],
+    result: None,
+  }
+  let take_borrow = @component.ComponentFunc::Host(
+    take_borrow_func_type,
+    simple_types,
+    fn(
+      args : Array[@component.ComponentValue],
+      table : @component.ResourceTable,
+    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      match args {
+        [@component.ComponentValue::U32(a), @component.ComponentValue::U32(b)] => {
+          resource1_expect_handle(table, a) |> ignore
+          resource1_expect_handle(table, b) |> ignore
+          []
+        }
+        _ =>
+          raise @component.ComponentRuntimeError::HostCallError(
+            "argument type mismatch",
+          )
+      }
+    },
+  )
+  host_exports.set(
+    "[method]resource1.take-borrow",
+    @component.ComponentExtern::Func(take_borrow),
+  )
+  let own_ty = Some(@component.TypeDef::Own(0))
+  let take_own_types : Array[@component.TypeDef?] = [
+    resource1_type, borrow_ty, own_ty,
+  ]
+  let take_own_func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "self", ty: @component.ValType::TypeIdx(1) },
+      { label: "b", ty: @component.ValType::TypeIdx(2) },
+    ],
+    result: None,
+  }
+  let take_own = @component.ComponentFunc::Host(
+    take_own_func_type,
+    take_own_types,
+    fn(
+      args : Array[@component.ComponentValue],
+      table : @component.ResourceTable,
+    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      match args {
+        [
+          @component.ComponentValue::U32(self_handle),
+          @component.ComponentValue::U32(b_handle),
+        ] => {
+          resource1_expect_handle(table, self_handle) |> ignore
+          if self_handle == b_handle {
+            raise @component.ComponentRuntimeError::CanonCallError(
+              "cannot remove owned resource while borrowed",
+            )
+          }
+          // Consume owned argument.
+          match table.free(b_handle) {
+            Some(_) => []
+            None =>
+              raise @component.ComponentRuntimeError::CanonCallError(
+                "unknown handle index \{b_handle}",
+              )
+          }
+        }
+        _ =>
+          raise @component.ComponentRuntimeError::HostCallError(
+            "argument type mismatch",
+          )
+      }
+    },
+  )
+  host_exports.set(
+    "[method]resource1.take-own",
+    @component.ComponentExtern::Func(take_own),
   )
   let host_instance = make_instance("host", store, host_exports)
   linker.add_instance("host", host_instance)
