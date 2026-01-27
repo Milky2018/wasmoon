@@ -1548,7 +1548,9 @@ pub fn instantiate_module_with_imports(
                 )
                 // Check if T_export <: T_import
                 if not(ctx.is_subtype(actual_type_idx, type_idx)) {
-                  raise @runtime.LinkError
+                  raise @runtime.LinkErrorDetail(
+                    "import \{imp.mod_name}.\{imp.name}: exported type is not a subtype of imported type",
+                  )
                 }
               }
               None => {
@@ -1560,11 +1562,15 @@ pub fn instantiate_module_with_imports(
                 )
                 // Host functions must be imported by singleton rec group types
                 if expected_rec_info != (0, 1) {
-                  raise @runtime.LinkError
+                  raise @runtime.LinkErrorDetail(
+                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{expected_rec_info}",
+                  )
                 }
                 // Compare types structurally
                 if not(@types.func_types_equal(expected_type, actual_type)) {
-                  raise @runtime.LinkError
+                  raise @runtime.LinkErrorDetail(
+                    "import \{imp.mod_name}.\{imp.name}: type mismatch; expected=\{expected_type} actual=\{actual_type}",
+                  )
                 }
               }
             }
@@ -1927,6 +1933,7 @@ pub fn instantiate_module_with_imports(
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
       @runtime.UnknownImport(_) as e => raise e
       @runtime.LinkError => raise @runtime.LinkError
+      @runtime.LinkErrorDetail(_) as e => raise e
       _ => raise @runtime.Unreachable
     })
     |> ignore
