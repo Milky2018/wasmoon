@@ -8,7 +8,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `m
 - CLI entry point: `main/` (builds the `wasmoon` binary).
 - WASI Preview 1 support: `wasi/`.
 - Tests: `testsuite/` (MoonBit tests) and `spec/` (upstream WAST scripts used by the CLI runner).
-- Build artifacts: `target/`; `install.sh` copies the built executable to `./wasmoon`.
+- Build artifacts: `target/`; `install.sh` creates/updates symlinks in repo root (`./wasmoon`, `./wasmoon-tools`) that point at the built executables.
 
 ## Development Commands
 
@@ -22,11 +22,11 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `m
 ## Building and Running
 
 ```bash
-moon build && ./install.sh    # Build and install wasmoon binary
+./install.sh    # Build and (re)link wasmoon binaries into repo root
 ./wasmoon test <file.wast>    # Run WAST tests
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
 ./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
-python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh first)
+python3 scripts/run_all_wast.py --rec  # Run all WAST tests (ensure ./wasmoon exists; run ./install.sh once)
 python3 scripts/run_component_wast.py --dir component-spec/values --rec  # Component model (subset)
 python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Component model (subset)
 ```
