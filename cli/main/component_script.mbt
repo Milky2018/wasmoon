@@ -384,10 +384,7 @@ fn make_instance(
   exports : Map[String, @component.ComponentExtern],
 ) -> @component.ComponentInstance {
   let stream_table = @component.StreamTable::new()
-  let async_state = @component.AsyncState::new(
-    stream_table.next_handle,
-    stream_table.free_handles,
-  )
+  let async_state = @component.AsyncState::new(stream_table)
   {
     name,
     types: [],

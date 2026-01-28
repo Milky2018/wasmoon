@@ -24,6 +24,7 @@ pub(all) suberror ComponentValidationError {
   TypeIndexNotComponentType(Int)
   TypeIndexNotInstanceType(Int)
   TypeIndexNotDefinedType(Int)
+  TypeIndexNotResourceType(Int)
   InvalidFuncIndex(Int)
   InvalidValueIndex(Int)
   InvalidComponentIndex(Int)

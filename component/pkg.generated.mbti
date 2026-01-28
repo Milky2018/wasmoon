@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError) -> CoreFuncRef
+
 pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
 
 pub fn parse_canon_section(Bytes) -> Array[Canon] raise ComponentParseError
@@ -76,6 +78,8 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
+  AsyncSuspendYield
+  AsyncSuspendWait(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
@@ -99,6 +103,40 @@ pub(all) enum AliasTarget {
 pub impl Eq for AliasTarget
 pub impl Show for AliasTarget
 
+pub(all) struct AsyncState {
+  next_handle : Array[Int]
+  free_handles : Array[Int]
+  stream_table : StreamTable
+  task_stack : Array[Int]
+  next_task_id : Array[Int]
+  task_results : Map[Int, Array[ComponentValue]]
+  task_returned : Map[Int, Bool]
+  task_cancelled : Map[Int, Bool]
+  task_contexts : Map[Int, Map[Int, @types.Value]]
+  task_can_block : Array[Bool]
+  can_block_stack : Array[Bool]
+  in_async_callback : Array[Bool]
+  yield_cursor_stack : Array[Int]
+  wait_cursor_stack : Array[Int]
+  call_cursor_stack : Array[Int]
+  yield_replay_upto : Map[Int, Int]
+  wait_results : Map[Int, Map[Int, WaitEvent]]
+  waiting_ws : Map[Int, Int]
+  call_results : Map[Int, Map[Int, Array[@types.Value]]]
+  sync_lower_states : Map[Int, Map[Int, SyncLowerState]]
+  waitable_sets : Map[Int, WaitableSet]
+  waitable_to_set : Map[Int, Int]
+  waitable_events : Map[Int, Array[WaitEvent]]
+  subtasks : Map[Int, Subtask]
+  inflight_by_instance : Map[Int, Int]
+  pending_by_instance : Map[Int, Array[Int]]
+  next_future_id : Array[Int]
+  futures : Map[Int, FutureState]
+  future_endpoints : Map[Int, FutureEndpoint]
+}
+pub fn AsyncState::new(StreamTable) -> Self
+pub impl Show for AsyncState
+
 pub(all) enum BinaryKind {
   CoreModule
   Component
@@ -107,9 +145,44 @@ pub(all) enum BinaryKind {
 pub impl Eq for BinaryKind
 pub impl Show for BinaryKind
 
+type CallbackTask
+pub impl Show for CallbackTask
+
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int)
   Lower(Int, Array[CanonOpt])
+  ContextGet(@types.ValueType, Int)
+  ContextSet(@types.ValueType, Int)
+  TaskReturn(ValType?, Array[CanonOpt])
+  TaskCancel
+  ThreadIndex
+  ThreadYield(Bool)
+  ThreadYieldTo(Bool)
+  ThreadSwitchTo(Bool)
+  ThreadResumeLater
+  ThreadSuspend(Bool)
+  ThreadNewIndirect(Int, Int)
+  WaitableSetNew
+  WaitableSetWait(Bool, Int)
+  WaitableSetPoll(Bool, Int)
+  WaitableSetDrop
+  WaitableJoin
+  SubtaskCancel(Bool)
+  SubtaskDrop
+  StreamNew(Int)
+  StreamRead(Int, Array[CanonOpt])
+  StreamWrite(Int, Array[CanonOpt])
+  StreamCancelRead(Int, Bool)
+  StreamCancelWrite(Int, Bool)
+  StreamDropReadable(Int)
+  StreamDropWritable(Int)
+  FutureNew(Int)
+  FutureRead(Int, Array[CanonOpt])
+  FutureWrite(Int, Array[CanonOpt])
+  FutureCancelRead(Int, Bool)
+  FutureCancelWrite(Int, Bool)
+  FutureDropReadable(Int)
+  FutureDropWritable(Int)
   ResourceNew(Int)
   ResourceDrop(Int)
   ResourceRep(Int)
@@ -130,6 +203,10 @@ pub impl Show for CanonOpt
 
 type CanonResources
 pub impl Show for CanonResources
+
+type CanonSuspend
+pub impl Eq for CanonSuspend
+pub impl Show for CanonSuspend
 
 pub(all) struct Component {
   binary : ComponentBinary
@@ -191,8 +268,8 @@ pub(all) enum ComponentExtern {
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, FuncType, CanonResources)
-  Host(FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError)
+  Lifted(CoreFuncRef, FuncType, CanonResources, Array[TypeDef?], ResourceTable, Array[Bool], CoreFuncRef?, Bool)
+  Host(FuncType, Array[TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
 
@@ -203,6 +280,9 @@ pub(all) struct ComponentInstance {
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
   instances : Array[ComponentInstance]
+  resource_table : ResourceTable
+  stream_table : StreamTable
+  async_state : AsyncState
   core_modules : Array[@types.Module]
   core_instances : Array[CoreInstance]
   core_funcs : Array[CoreFuncRef]
@@ -247,6 +327,9 @@ pub(all) enum ComponentValue {
   Char(Char)
   String(String)
   ErrorContext(String)
+  List(Array[ComponentValue])
+  Tuple(Array[ComponentValue])
+  Variant(Int, ComponentValue?)
 }
 pub impl Eq for ComponentValue
 pub impl Show for ComponentValue
@@ -293,6 +376,9 @@ pub(all) struct CoreInstantiateArg {
 pub impl Eq for CoreInstantiateArg
 pub impl Show for CoreInstantiateArg
 
+type DecodedCallbackCode
+pub impl Show for DecodedCallbackCode
+
 pub(all) struct Export {
   name : ExportName
   sortidx : SortIdx
@@ -326,6 +412,12 @@ pub(all) struct FuncType {
 }
 pub impl Eq for FuncType
 pub impl Show for FuncType
+
+type FutureEndpoint
+pub impl Show for FutureEndpoint
+
+type FutureState
+pub impl Show for FutureState
 
 pub(all) struct Import {
   name : ImportName
@@ -385,6 +477,15 @@ pub(all) struct Param {
 pub impl Eq for Param
 pub impl Show for Param
 
+type PendingFutureRead
+pub impl Show for PendingFutureRead
+
+type PendingStreamRead
+pub impl Show for PendingStreamRead
+
+type PendingStreamWrite
+pub impl Show for PendingStreamWrite
+
 pub(all) enum PrimValType {
   Bool
   S8
@@ -403,6 +504,40 @@ pub(all) enum PrimValType {
 }
 pub impl Eq for PrimValType
 pub impl Show for PrimValType
+
+pub(all) struct RecordField {
+  label : String
+  ty : ValType
+}
+pub impl Eq for RecordField
+pub impl Show for RecordField
+
+pub(all) struct ResourceHandle {
+  type_id : Int
+  rep : Int
+  dtor : CoreFuncRef?
+  kind : ResourceKind
+}
+pub impl Show for ResourceHandle
+
+pub(all) enum ResourceKind {
+  GuestDefined
+  HostDefined
+}
+pub impl Eq for ResourceKind
+pub impl Show for ResourceKind
+
+pub(all) struct ResourceTable {
+  id : Int
+  next_handle : Array[Int]
+  free_handles : Array[Int]
+  entries : Map[Int, ResourceHandle]
+}
+pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
+pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
+pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
+pub fn ResourceTable::new() -> Self
+pub impl Show for ResourceTable
 
 pub struct Section {
   id : Int
@@ -437,6 +572,26 @@ pub(all) struct Start {
 pub impl Eq for Start
 pub impl Show for Start
 
+pub(all) struct StreamEndpoint {
+  stream_id : Int
+  is_readable : Bool
+  notified_peer_dropped : Array[Bool]
+}
+pub impl Show for StreamEndpoint
+
+type StreamState
+pub impl Show for StreamState
+
+pub(all) struct StreamTable {
+  next_handle : Array[Int]
+  free_handles : Array[Int]
+  next_stream_id : Array[Int]
+  endpoints : Map[Int, StreamEndpoint]
+  streams : Map[Int, StreamState]
+}
+pub fn StreamTable::new() -> Self
+pub impl Show for StreamTable
+
 pub(all) enum StringEncoding {
   Utf8
   Utf16
@@ -444,6 +599,23 @@ pub(all) enum StringEncoding {
 }
 pub impl Eq for StringEncoding
 pub impl Show for StringEncoding
+
+type Subtask
+pub impl Show for Subtask
+
+type SubtaskDriver
+pub impl Show for SubtaskDriver
+
+type SubtaskPhase
+pub impl Eq for SubtaskPhase
+pub impl Show for SubtaskPhase
+
+type SyncLowerState
+pub impl Show for SyncLowerState
+
+type TaskStep
+pub impl Eq for TaskStep
+pub impl Show for TaskStep
 
 pub(all) enum TypeBound {
   Eq(Int)
@@ -455,7 +627,19 @@ pub impl Show for TypeBound
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
-  ResourceType(Int, Int, Int?)
+  List(ValType)
+  Record(Array[RecordField])
+  Variant(Array[VariantCase])
+  Tuple(Array[ValType])
+  Flags(Array[String])
+  Enum(Array[String])
+  Option(ValType)
+  Result(ValType?, ValType?)
+  Own(Int)
+  Borrow(Int)
+  Stream(ValType?)
+  Future(ValType?)
+  ResourceType(Int, Int, Int?, ResourceKind)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
@@ -476,6 +660,20 @@ pub(all) enum ValueBound {
 }
 pub impl Eq for ValueBound
 pub impl Show for ValueBound
+
+pub(all) struct VariantCase {
+  label : String
+  ty : ValType?
+  refines : Int?
+}
+pub impl Eq for VariantCase
+pub impl Show for VariantCase
+
+type WaitEvent
+pub impl Show for WaitEvent
+
+type WaitableSet
+pub impl Show for WaitableSet
 
 // Type aliases
 
