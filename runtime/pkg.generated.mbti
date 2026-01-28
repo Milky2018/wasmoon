@@ -27,6 +27,7 @@ pub(all) suberror RuntimeError {
   CallStackExhausted
   UnknownImport(String, String)
   LinkError
+  LinkErrorDetail(String)
   NullReference
   UnalignedAtomic
 }
