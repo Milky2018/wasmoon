@@ -16,6 +16,9 @@ pub(all) suberror RuntimeError {
   CallStackExhausted
   UnknownImport(String, String) // Import not found: (module_name, field_name)
   LinkError // Import type mismatch during linking
+  // Link error with extra context (e.g. which import mismatched).
+  // The `Show` output still begins with "link error" for compatibility.
+  LinkErrorDetail(String)
   NullReference // Null exception reference (null exnref thrown)
   UnalignedAtomic
 }
@@ -41,6 +44,12 @@ pub impl Show for RuntimeError with output(self, logger) {
     UnknownImport(mod_name, field_name) =>
       "unknown import: \{mod_name}.\{field_name}"
     LinkError => "link error"
+    LinkErrorDetail(detail) =>
+      if detail == "" {
+        "link error"
+      } else {
+        "link error: \{detail}"
+      }
     NullReference => "null reference"
     UnalignedAtomic => "unaligned atomic"
   }

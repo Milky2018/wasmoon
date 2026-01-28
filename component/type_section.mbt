@@ -29,6 +29,14 @@ pub(all) enum ValType {
 } derive(Show, Eq)
 
 ///|
+pub(all) enum ResourceKind {
+  /// Resources defined within a component.
+  GuestDefined
+  /// Resources imported from the host environment.
+  HostDefined
+} derive(Show, Eq)
+
+///|
 pub(all) struct Param {
   label : String
   ty : ValType
@@ -74,24 +82,41 @@ pub(all) enum ComponentDecl {
 pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
+  List(ValType)
+  Record(Array[RecordField])
+  Variant(Array[VariantCase])
+  Tuple(Array[ValType])
+  Flags(Array[String])
+  Enum(Array[String])
+  Option(ValType)
+  Result(ValType?, ValType?)
+  Own(Int)
+  Borrow(Int)
+  Stream(ValType?)
+  Future(ValType?)
   // Nominal resource type. `id` is filled at instantiation time.
   // `rep` is the core wasm value type (e.g. i32=0x7f).
   // `dtor` is an optional destructor core func index.
-  ResourceType(Int, Int, Int?)
+  // `kind` tracks whether the resource originates from the component or host.
+  ResourceType(Int, Int, Int?, ResourceKind)
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
 } derive(Show, Eq)
 
 ///|
-fn Reader::peek_u8(self : Reader) -> Int raise ComponentParseError {
-  if self.pos >= self.data.length() {
-    raise UnexpectedEndOfInput
-  }
-  self.data[self.pos].to_int()
-}
+pub(all) struct RecordField {
+  label : String
+  ty : ValType
+} derive(Show, Eq)
 
 ///|
+pub(all) struct VariantCase {
+  label : String
+  ty : ValType?
+  // `refines` points at a previously defined case index.
+  refines : Int?
+} derive(Show, Eq)
 
 ///|
 
@@ -125,16 +150,14 @@ fn parse_prim_valtype(op : Int) -> PrimValType? {
 
 ///|
 fn parse_valtype(reader : Reader) -> ValType raise ComponentParseError {
-  let b = reader.peek_u8()
-  // Opcodes are negative signed-LEB encodings; indices are nonnegative.
-  if b >= 0x40 && (b & 0x80) == 0 {
-    let op = reader.read_u8()
-    match parse_prim_valtype(op) {
+  let v = reader.read_sleb_i32()
+  if v >= 0 {
+    TypeIdx(v)
+  } else {
+    match parse_prim_valtype_from_sleb(v) {
       Some(p) => Prim(p)
       None => raise InvalidTypeSection
     }
-  } else {
-    TypeIdx(reader.read_typeidx())
   }
 }
 
@@ -148,7 +171,7 @@ fn parse_paramlist(reader : Reader) -> Array[Param] raise ComponentParseError {
       } else {
         let label = reader.read_label()
         let ty = parse_valtype(reader)
-        acc.push({ label, ty })
+        acc.push(({ label, ty } : Param))
         continue (acc, i + 1)
       }
   }
@@ -452,6 +475,135 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
   let op = reader.read_u8()
   match op {
     0x40 | 0x43 => FuncType(parse_functype(reader, op))
+    0x65 => {
+      // futuretype ::= 0x65 t?:<opt valtype>
+      let tag = reader.read_u8()
+      if tag == 0x00 {
+        Future(None)
+      } else if tag == 0x01 {
+        Future(Some(parse_valtype(reader)))
+      } else {
+        raise InvalidTypeSection
+      }
+    }
+    0x66 => {
+      // streamtype ::= 0x66 t?:<opt valtype>
+      let tag = reader.read_u8()
+      if tag == 0x00 {
+        Stream(None)
+      } else if tag == 0x01 {
+        Stream(Some(parse_valtype(reader)))
+      } else {
+        raise InvalidTypeSection
+      }
+    }
+    0x68 => Borrow(reader.read_typeidx())
+    0x69 => Own(reader.read_typeidx())
+    0x6a => {
+      let has_ok = reader.read_u8()
+      let ok = if has_ok == 0x00 {
+        None
+      } else if has_ok == 0x01 {
+        Some(parse_valtype(reader))
+      } else {
+        raise InvalidTypeSection
+      }
+      let has_err = reader.read_u8()
+      let err = if has_err == 0x00 {
+        None
+      } else if has_err == 0x01 {
+        Some(parse_valtype(reader))
+      } else {
+        raise InvalidTypeSection
+      }
+      Result(ok, err)
+    }
+    0x6b => Option(parse_valtype(reader))
+    0x6d => {
+      let n = reader.read_leb_u32()
+      let cases = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            acc.push(reader.read_label())
+            continue (acc, i + 1)
+          }
+      }
+      Enum(cases)
+    }
+    0x6e => {
+      let n = reader.read_leb_u32()
+      let cases = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            acc.push(reader.read_label())
+            continue (acc, i + 1)
+          }
+      }
+      Flags(cases)
+    }
+    0x6f => {
+      let n = reader.read_leb_u32()
+      let tys = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            acc.push(parse_valtype(reader))
+            continue (acc, i + 1)
+          }
+      }
+      Tuple(tys)
+    }
+    0x70 => List(parse_valtype(reader))
+    0x71 => {
+      let n = reader.read_leb_u32()
+      let cases = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            let label = reader.read_label()
+            let has_ty = reader.read_u8()
+            let ty = if has_ty == 0x00 {
+              None
+            } else if has_ty == 0x01 {
+              Some(parse_valtype(reader))
+            } else {
+              raise InvalidTypeSection
+            }
+            let has_refines = reader.read_u8()
+            let refines = if has_refines == 0x00 {
+              None
+            } else if has_refines == 0x01 {
+              Some(reader.read_leb_u32())
+            } else {
+              raise InvalidTypeSection
+            }
+            acc.push(({ label, ty, refines } : VariantCase))
+            continue (acc, i + 1)
+          }
+      }
+      Variant(cases)
+    }
+    0x72 => {
+      let n = reader.read_leb_u32()
+      let fields = loop ([], 0) {
+        (acc, i) =>
+          if i >= n {
+            acc
+          } else {
+            let label = reader.read_label()
+            let ty = parse_valtype(reader)
+            acc.push(({ label, ty } : RecordField))
+            continue (acc, i + 1)
+          }
+      }
+      Record(fields)
+    }
     0x3f => {
       // resourcetype ::= 0x3f rep:<corevaltype> dtor:<opt u32>
       let rep = reader.read_u8()
@@ -463,7 +615,7 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
       } else {
         raise InvalidTypeSection
       }
-      ResourceType(-1, rep, dtor)
+      ResourceType(-1, rep, dtor, ResourceKind::GuestDefined)
     }
     0x41 => {
       // componenttype ::= 0x41 cd*:vec(<componentdecl>)

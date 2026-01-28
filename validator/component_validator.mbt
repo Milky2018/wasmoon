@@ -15,6 +15,7 @@ pub(all) suberror ComponentValidationError {
   TypeIndexNotComponentType(Int)
   TypeIndexNotInstanceType(Int)
   TypeIndexNotDefinedType(Int)
+  TypeIndexNotResourceType(Int)
   InvalidFuncIndex(Int)
   InvalidValueIndex(Int)
   InvalidComponentIndex(Int)
@@ -116,6 +117,240 @@ priv struct CoreModuleTypeImport {
 priv struct InstanceSig {
   exports : Map[String, @component.Sort]
   nested : Map[String, InstanceSig]
+}
+
+///|
+priv struct ParamShape {
+  name : String
+  ty : TypeSig
+} derive(Show, Eq)
+
+///|
+priv struct FuncSigShape {
+  params : Array[ParamShape]
+  result : TypeSig?
+} derive(Show, Eq)
+
+///|
+priv enum ExportedTypeInfo {
+  Existing(Int)
+  Resource(Int)
+  Opaque
+} derive(Show, Eq)
+
+///|
+/// Structural signature for type imports (used to validate instantiation args).
+priv enum TypeSig {
+  Prim(@component.PrimValType)
+  Tuple(Array[TypeSig])
+  Record(Array[TypeFieldSig])
+  Variant(Array[TypeCaseSig])
+  Option(TypeSig)
+  Result(TypeSig?, TypeSig?)
+  List(TypeSig)
+  Flags(Array[String])
+  Enum(Array[String])
+  Resource(Int)
+  Other
+} derive(Show, Eq)
+
+///|
+priv struct TypeFieldSig {
+  name : String
+  ty : TypeSig
+} derive(Show, Eq)
+
+///|
+priv struct TypeCaseSig {
+  name : String
+  ty : TypeSig?
+} derive(Show, Eq)
+
+///|
+fn typeidx_of_typesig(
+  sig : TypeSig,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+) -> Int? {
+  for i in 0..<type_table.length() {
+    if type_sig_of_typeidx(i, type_table, resource_ids) == sig {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+fn valtype_of_typesig(
+  sig : TypeSig,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+) -> @component.ValType? {
+  match sig {
+    TypeSig::Prim(p) => Some(@component.ValType::Prim(p))
+    _ =>
+      match typeidx_of_typesig(sig, type_table, resource_ids) {
+        Some(idx) => Some(@component.ValType::TypeIdx(idx))
+        None => None
+      }
+  }
+}
+
+///|
+fn typedef_of_typesig(
+  sig : TypeSig,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+) -> @component.TypeDef? {
+  match sig {
+    TypeSig::Prim(p) => Some(@component.TypeDef::DefValType(p))
+    TypeSig::Tuple(ts) => {
+      let out : Array[@component.ValType] = []
+      for t in ts {
+        match valtype_of_typesig(t, type_table, resource_ids) {
+          Some(v) => out.push(v)
+          None => return None
+        }
+      }
+      Some(@component.TypeDef::Tuple(out))
+    }
+    TypeSig::Record(fields) => {
+      let out : Array[@component.RecordField] = []
+      for f in fields {
+        match valtype_of_typesig(f.ty, type_table, resource_ids) {
+          Some(v) => out.push({ label: f.name, ty: v })
+          None => return None
+        }
+      }
+      Some(@component.TypeDef::Record(out))
+    }
+    TypeSig::Variant(cases) => {
+      let out : Array[@component.VariantCase] = []
+      for c in cases {
+        let ty = match c.ty {
+          None => None
+          Some(t) =>
+            match valtype_of_typesig(t, type_table, resource_ids) {
+              Some(v) => Some(v)
+              None => return None
+            }
+        }
+        out.push({ label: c.name, ty, refines: None })
+      }
+      Some(@component.TypeDef::Variant(out))
+    }
+    TypeSig::Option(t) =>
+      match valtype_of_typesig(t, type_table, resource_ids) {
+        Some(v) => Some(@component.TypeDef::Option(v))
+        None => None
+      }
+    TypeSig::Result(ok, err) => {
+      let ok_v = match ok {
+        None => None
+        Some(t) =>
+          match valtype_of_typesig(t, type_table, resource_ids) {
+            Some(v) => Some(v)
+            None => return None
+          }
+      }
+      let err_v = match err {
+        None => None
+        Some(t) =>
+          match valtype_of_typesig(t, type_table, resource_ids) {
+            Some(v) => Some(v)
+            None => return None
+          }
+      }
+      Some(@component.TypeDef::Result(ok_v, err_v))
+    }
+    TypeSig::List(t) =>
+      match valtype_of_typesig(t, type_table, resource_ids) {
+        Some(v) => Some(@component.TypeDef::List(v))
+        None => None
+      }
+    TypeSig::Flags(labels) => Some(@component.TypeDef::Flags(labels))
+    TypeSig::Enum(labels) => Some(@component.TypeDef::Enum(labels))
+    _ => None
+  }
+}
+
+///|
+fn typesig_contains(sig : TypeSig, hay : Array[TypeSig]) -> Bool {
+  for s in hay {
+    if s == sig {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
+  match sig {
+    TypeSig::Prim(_) | TypeSig::Other => true
+    TypeSig::Resource(_) | TypeSig::Flags(_) | TypeSig::Enum(_) =>
+      typesig_contains(sig, named)
+    TypeSig::Record(fields) =>
+      if !typesig_contains(sig, named) {
+        false
+      } else {
+        for f in fields {
+          if !typesig_valid_in_interface(f.ty, named) {
+            return false
+          }
+        }
+        true
+      }
+    TypeSig::Variant(cases) =>
+      if !typesig_contains(sig, named) {
+        false
+      } else {
+        for c in cases {
+          match c.ty {
+            None => ()
+            Some(t) => if !typesig_valid_in_interface(t, named) { return false }
+          }
+        }
+        true
+      }
+    TypeSig::Tuple(ts) => {
+      for t in ts {
+        if !typesig_valid_in_interface(t, named) {
+          return false
+        }
+      }
+      true
+    }
+    TypeSig::Option(t) => typesig_valid_in_interface(t, named)
+    TypeSig::Result(ok, err) => {
+      match ok {
+        None => ()
+        Some(t) => if !typesig_valid_in_interface(t, named) { return false }
+      }
+      match err {
+        None => ()
+        Some(t) => if !typesig_valid_in_interface(t, named) { return false }
+      }
+      true
+    }
+    TypeSig::List(t) => typesig_valid_in_interface(t, named)
+  }
+}
+
+///|
+fn funcsig_valid_in_interface(
+  sig : FuncSigShape,
+  named : Array[TypeSig],
+) -> Bool {
+  for p in sig.params {
+    if !typesig_valid_in_interface(p.ty, named) {
+      return false
+    }
+  }
+  match sig.result {
+    None => true
+    Some(r) => typesig_valid_in_interface(r, named)
+  }
 }
 
 ///|
@@ -306,6 +541,78 @@ fn core_kind_of_extern_type(ty : CoreExternType) -> Int {
     Table(_) => 0x01
     Memory(_) => 0x02
     Global(_) => 0x03
+  }
+}
+
+///|
+/// Core module import signature keyed by "<module>::<name>".
+fn core_module_import_sig_of_module(
+  m : @types.Module,
+) -> Map[String, CoreExternType] {
+  let out : Map[String, CoreExternType] = {}
+  for imp in m.imports {
+    match core_import_type_of_module(m, imp.desc) {
+      Some(ty) => out.set("\{imp.mod_name}::\{imp.name}", ty)
+      None => ()
+    }
+  }
+  out
+}
+
+///|
+fn core_module_import_sig_of_type(
+  sig : Array[CoreModuleTypeImport],
+) -> Map[String, CoreExternType] {
+  let out : Map[String, CoreExternType] = {}
+  for imp in sig {
+    out.set("\{imp.mod_name}::\{imp.name}", imp.ty)
+  }
+  out
+}
+
+///|
+fn core_module_import_sig_of_idx(
+  idx : Int,
+  core_module_defs : Array[@types.Module?],
+  core_module_type_imports : Array[Array[CoreModuleTypeImport]?],
+) -> Map[String, CoreExternType]? {
+  if idx < 0 || idx >= core_module_defs.length() {
+    return None
+  }
+  match core_module_defs[idx] {
+    Some(m) => Some(core_module_import_sig_of_module(m))
+    None =>
+      if idx >= 0 && idx < core_module_type_imports.length() {
+        match core_module_type_imports[idx] {
+          Some(sig) => Some(core_module_import_sig_of_type(sig))
+          None => None
+        }
+      } else {
+        None
+      }
+  }
+}
+
+///|
+/// For core module types, imports are contravariant: a provided module may
+/// require fewer (or more general) imports than the type describes.
+fn check_core_module_import_subtype(
+  actual : Map[String, CoreExternType]?,
+  expected : Map[String, CoreExternType],
+) -> Unit raise ComponentValidationError {
+  match actual {
+    Some(map) =>
+      for kv in map.iter() {
+        let (key, actual_ty) = kv
+        match expected.get(key) {
+          None => raise ComponentImportTypeMismatch("import \{key}")
+          Some(expected_ty) =>
+            if !core_import_compatible(actual_ty, expected_ty) {
+              raise ComponentImportTypeMismatch("import \{key}")
+            }
+        }
+      }
+    None => ()
   }
 }
 
@@ -956,8 +1263,71 @@ fn is_kebab_case(name : Bytes) -> Bool {
 }
 
 ///|
+fn is_bracket_resource_name(name : Bytes) -> Bool {
+  // WIT-encoding uses resource item names like:
+  //   [constructor]resource1
+  //   [static]resource1.assert
+  //   [method]resource1.take-own
+  // These are ASCII and should not be validated as kebab-case.
+  if name.length() < 3 {
+    return false
+  }
+  if name[0].to_int() != 0x5B { // '['
+    return false
+  }
+  let mut close = -1
+  for i in 1..<name.length() {
+    if name[i].to_int() == 0x5D { // ']'
+      close = i
+      break
+    }
+  }
+  if close <= 1 || close >= name.length() - 1 {
+    return false
+  }
+  fn prefix_eq(s : String) -> Bool {
+    if close - 1 != s.length() {
+      return false
+    }
+    for j in 0..<s.length() {
+      if name[1 + j].to_int() != s.code_unit_at(j).to_int() {
+        return false
+      }
+    }
+    true
+  }
+
+  let is_constructor = prefix_eq("constructor")
+  let is_method = prefix_eq("method")
+  let is_static = prefix_eq("static")
+  if !is_constructor && !is_method && !is_static {
+    return false
+  }
+  if is_constructor {
+    return is_kebab_case_range(name, close + 1, name.length())
+  }
+  // method/static: require exactly one '.' and kebab-case around it.
+  let mut dot = -1
+  for k in (close + 1)..<name.length() {
+    if name[k].to_int() == 0x2E { // '.'
+      if dot >= 0 {
+        return false
+      }
+      dot = k
+    }
+  }
+  if dot < 0 || dot == close + 1 || dot == name.length() - 1 {
+    return false
+  }
+  is_kebab_case_range(name, close + 1, dot) &&
+  is_kebab_case_range(name, dot + 1, name.length())
+}
+
+///|
 fn validate_name_bytes(name : Bytes) -> Unit raise ComponentValidationError {
-  if !is_kebab_case(name) && !is_package_name(name) {
+  if !is_kebab_case(name) &&
+    !is_package_name(name) &&
+    !is_bracket_resource_name(name) {
     raise InvalidKebabName(name.to_string())
   }
 }
@@ -970,6 +1340,7 @@ fn validate_import_name_bytes(
   // `unlocked-dep=...`, `url=...`, and `integrity=...`.
   if !is_kebab_case(name) &&
     !is_package_name(name) &&
+    !is_bracket_resource_name(name) &&
     !is_unlocked_dep_name(name) &&
     !is_locked_dep_name(name) &&
     !is_url_name(name) &&
@@ -1641,9 +2012,64 @@ fn ascii_lower_key(s : String) -> String {
 }
 
 ///|
+fn wit_name_conflict_base(name : String) -> String {
+  fn parse_resource_prefix(name : String, prefix_len : Int) -> String {
+    let buf = StringBuilder::new()
+    let mut i = 0
+    let mut saw_dot = false
+    let mut after_dot = false
+    for c in name {
+      if i < prefix_len {
+        i += 1
+        continue
+      }
+      if c == '.' {
+        saw_dot = true
+        after_dot = true
+        continue
+      }
+      if after_dot {
+        buf.write_char(c)
+      }
+    }
+    if saw_dot {
+      buf.to_string()
+    } else {
+      name
+    }
+  }
+
+  if name.has_prefix("[method]") {
+    parse_resource_prefix(name, 8)
+  } else if name.has_prefix("[static]") {
+    parse_resource_prefix(name, 8)
+  } else {
+    name
+  }
+}
+
+///|
+fn wit_conflict_key(name : String) -> String {
+  let base = wit_name_conflict_base(name)
+  // Names with embedded opaque payloads (base64/url) are case-sensitive.
+  if base.has_prefix("integrity=<") ||
+    base.has_prefix("locked-dep=") ||
+    base.has_prefix("unlocked-dep=") ||
+    base.has_prefix("url=") {
+    base
+  } else {
+    ascii_lower_key(base)
+  }
+}
+
+///|
 fn validate_extern_name_string(
   name : String,
+  cfg : ComponentValidationConfig,
 ) -> Unit raise ComponentValidationError {
+  if !cfg.wit_names {
+    return
+  }
   // Component type section names are decoded as UTF-8 strings by the parser.
   // For now we only validate ASCII-compatible names to match the wasm-tools
   // component-spec suite.
@@ -1656,6 +2082,1164 @@ fn validate_extern_name_string(
     bytes.push(cp.to_byte())
   }
   validate_name_bytes(Bytes::from_array(bytes))
+}
+
+///|
+priv enum BracketResourceKind {
+  Constructor
+  Method
+  Static
+}
+
+///|
+priv struct BracketResourceName {
+  kind : BracketResourceKind
+  resource : String
+}
+
+///|
+fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
+  if !name.has_prefix("[") {
+    return None
+  }
+  let prefix = StringBuilder::new()
+  let suffix = StringBuilder::new()
+  let mut in_prefix = true
+  let mut saw_close = false
+  let mut i = 0
+  for c in name {
+    if i == 0 {
+      i += 1
+      continue
+    }
+    if in_prefix {
+      if c == ']' {
+        in_prefix = false
+        saw_close = true
+      } else {
+        prefix.write_char(c)
+      }
+    } else {
+      suffix.write_char(c)
+    }
+    i += 1
+  }
+  if !saw_close {
+    return None
+  }
+  let p = prefix.to_string()
+  let s = suffix.to_string()
+  if p == "constructor" {
+    return Some({ kind: Constructor, resource: s })
+  }
+  if p == "method" || p == "static" {
+    let res = StringBuilder::new()
+    let mut after_dot = false
+    for c in s {
+      if c == '.' && !after_dot {
+        after_dot = true
+        continue
+      }
+      if !after_dot {
+        res.write_char(c)
+      }
+    }
+    let kind = if p == "method" { Method } else { Static }
+    return Some({ kind, resource: res.to_string() })
+  }
+  None
+}
+
+///|
+fn own_target_of_valtype(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+) -> Int? {
+  match ty {
+    @component.ValType::TypeIdx(idx) =>
+      if idx >= 0 && idx < type_table.length() {
+        match type_table[idx] {
+          Some(@component.TypeDef::Own(t)) => Some(t)
+          _ => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn borrow_target_of_valtype(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+) -> Int? {
+  match ty {
+    @component.ValType::TypeIdx(idx) =>
+      if idx >= 0 && idx < type_table.length() {
+        match type_table[idx] {
+          Some(@component.TypeDef::Borrow(t)) => Some(t)
+          _ => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn validate_bracketed_func_name(
+  section : Int,
+  name : String,
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  known_resources : Map[String, Int],
+) -> Unit raise ComponentValidationError {
+  let br = parse_bracket_resource_name(name)
+  match br {
+    None => ()
+    Some(info) =>
+      match known_resources.get(info.resource) {
+        None =>
+          raise SectionParseError(
+            section, "resource used in function does not have a name in this context",
+          )
+        Some(expected_tyidx) =>
+          match info.kind {
+            Constructor =>
+              match ft.result {
+                None =>
+                  raise SectionParseError(
+                    section, "constructor must return a value",
+                  )
+                Some(r) => {
+                  // Accept `(own $T)` or `(result (own $T) ...)`.
+                  let ok = match own_target_of_valtype(r, type_table) {
+                    Some(t) =>
+                      type_sig_of_typeidx(t, type_table, resource_ids) ==
+                      type_sig_of_typeidx(
+                        expected_tyidx, type_table, resource_ids,
+                      )
+                    None =>
+                      match r {
+                        @component.ValType::TypeIdx(idx) =>
+                          if idx >= 0 && idx < type_table.length() {
+                            match type_table[idx] {
+                              Some(@component.TypeDef::Result(ok, _err)) =>
+                                match ok {
+                                  Some(v) =>
+                                    match own_target_of_valtype(v, type_table) {
+                                      Some(t) =>
+                                        type_sig_of_typeidx(
+                                          t, type_table, resource_ids,
+                                        ) ==
+                                        type_sig_of_typeidx(
+                                          expected_tyidx, type_table, resource_ids,
+                                        )
+                                      None => false
+                                    }
+                                  None => false
+                                }
+                              _ => false
+                            }
+                          } else {
+                            false
+                          }
+                        _ => false
+                      }
+                  }
+                  if !ok {
+                    raise SectionParseError(
+                      section, "constructor does not match resource",
+                    )
+                  }
+                }
+              }
+            Method => {
+              if ft.params.length() == 0 {
+                raise SectionParseError(section, "method must take `self`")
+              }
+              let first = ft.params[0]
+              if first.label != "self" {
+                raise SectionParseError(section, "method must take `self`")
+              }
+              match borrow_target_of_valtype(first.ty, type_table) {
+                Some(t) =>
+                  if type_sig_of_typeidx(t, type_table, resource_ids) !=
+                    type_sig_of_typeidx(
+                      expected_tyidx, type_table, resource_ids,
+                    ) {
+                    raise SectionParseError(
+                      section, "method does not match resource",
+                    )
+                  }
+                None =>
+                  raise SectionParseError(section, "method must take `borrow`")
+              }
+            }
+            Static => ()
+          }
+      }
+  }
+}
+
+///|
+fn valtype_uses_disallowed_resources(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  allowed_resource_type_idxs : Map[Int, Int],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    @component.ValType::Prim(_) => false
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        false
+      } else if visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, 1)
+        let bad = match type_table[idx] {
+          Some(@component.TypeDef::Own(t))
+          | Some(@component.TypeDef::Borrow(t)) =>
+            allowed_resource_type_idxs.get(t) is None
+          Some(@component.TypeDef::Tuple(tys)) => {
+            let mut bad = false
+            for t in tys {
+              if valtype_uses_disallowed_resources(
+                  t, type_table, allowed_resource_type_idxs, visiting,
+                ) {
+                bad = true
+                break
+              }
+            }
+            bad
+          }
+          Some(@component.TypeDef::Record(fields)) => {
+            let mut bad = false
+            for f in fields {
+              if valtype_uses_disallowed_resources(
+                  f.ty,
+                  type_table,
+                  allowed_resource_type_idxs,
+                  visiting,
+                ) {
+                bad = true
+                break
+              }
+            }
+            bad
+          }
+          Some(@component.TypeDef::Variant(cases)) => {
+            let mut bad = false
+            for c in cases {
+              match c.ty {
+                None => ()
+                Some(t) =>
+                  if valtype_uses_disallowed_resources(
+                      t, type_table, allowed_resource_type_idxs, visiting,
+                    ) {
+                    bad = true
+                    break
+                  }
+              }
+            }
+            bad
+          }
+          Some(@component.TypeDef::Option(v)) =>
+            valtype_uses_disallowed_resources(
+              v, type_table, allowed_resource_type_idxs, visiting,
+            )
+          Some(@component.TypeDef::Result(ok, err)) => {
+            let ok_bad = match ok {
+              None => false
+              Some(v) =>
+                valtype_uses_disallowed_resources(
+                  v, type_table, allowed_resource_type_idxs, visiting,
+                )
+            }
+            let err_bad = match err {
+              None => false
+              Some(v) =>
+                valtype_uses_disallowed_resources(
+                  v, type_table, allowed_resource_type_idxs, visiting,
+                )
+            }
+            ok_bad || err_bad
+          }
+          Some(@component.TypeDef::List(v)) =>
+            valtype_uses_disallowed_resources(
+              v, type_table, allowed_resource_type_idxs, visiting,
+            )
+          Some(@component.TypeDef::Stream(v))
+          | Some(@component.TypeDef::Future(v)) =>
+            match v {
+              None => false
+              Some(inner) =>
+                valtype_uses_disallowed_resources(
+                  inner, type_table, allowed_resource_type_idxs, visiting,
+                )
+            }
+          // Other type defs either don't contain resources or are validated elsewhere.
+          _ => false
+        }
+        visiting.remove(idx) |> ignore
+        bad
+      }
+  }
+}
+
+///|
+fn functype_uses_disallowed_resources(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+  allowed_resource_type_idxs : Map[Int, Int],
+) -> Bool {
+  let visiting : Map[Int, Int] = {}
+  for p in ft.params {
+    if valtype_uses_disallowed_resources(
+        p.ty,
+        type_table,
+        allowed_resource_type_idxs,
+        visiting,
+      ) {
+      return true
+    }
+  }
+  match ft.result {
+    None => false
+    Some(r) =>
+      valtype_uses_disallowed_resources(
+        r, type_table, allowed_resource_type_idxs, visiting,
+      )
+  }
+}
+
+///|
+fn funcsig_of_functype(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+) -> FuncSigShape {
+  let visiting : Map[Int, Int] = {}
+  let params : Array[ParamShape] = []
+  for p in ft.params {
+    params.push({
+      name: p.label,
+      ty: type_sig_of_valtype(p.ty, type_table, resource_ids, visiting),
+    })
+  }
+  let result : TypeSig? = match ft.result {
+    Some(v) => Some(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    None => None
+  }
+  { params, result }
+}
+
+///|
+fn type_sig_of_typedef_lg(
+  td : @component.TypeDef,
+  local_types : Array[@component.TypeDef],
+  local_resource_ids : Array[Int?],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+  visiting : Map[Int, Int],
+) -> TypeSig {
+  match td {
+    @component.TypeDef::DefValType(p) => TypeSig::Prim(p)
+    @component.TypeDef::Tuple(tys) => {
+      let out : Array[TypeSig] = []
+      for t in tys {
+        out.push(
+          type_sig_of_valtype_lg(
+            t, local_types, local_resource_ids, global_types, global_resource_ids,
+            visiting,
+          ),
+        )
+      }
+      TypeSig::Tuple(out)
+    }
+    @component.TypeDef::Record(fields) => {
+      let out : Array[TypeFieldSig] = []
+      for f in fields {
+        out.push({
+          name: f.label,
+          ty: type_sig_of_valtype_lg(
+            f.ty,
+            local_types,
+            local_resource_ids,
+            global_types,
+            global_resource_ids,
+            visiting,
+          ),
+        })
+      }
+      TypeSig::Record(out)
+    }
+    @component.TypeDef::Variant(cases) => {
+      let out : Array[TypeCaseSig] = []
+      for c in cases {
+        let payload = match c.ty {
+          None => None
+          Some(t) =>
+            Some(
+              type_sig_of_valtype_lg(
+                t, local_types, local_resource_ids, global_types, global_resource_ids,
+                visiting,
+              ),
+            )
+        }
+        out.push({ name: c.label, ty: payload })
+      }
+      TypeSig::Variant(out)
+    }
+    @component.TypeDef::Option(v) =>
+      TypeSig::Option(
+        type_sig_of_valtype_lg(
+          v, local_types, local_resource_ids, global_types, global_resource_ids,
+          visiting,
+        ),
+      )
+    @component.TypeDef::Result(ok, err) => {
+      let ok_sig = ok.map(fn(v) {
+        type_sig_of_valtype_lg(
+          v, local_types, local_resource_ids, global_types, global_resource_ids,
+          visiting,
+        )
+      })
+      let err_sig = err.map(fn(v) {
+        type_sig_of_valtype_lg(
+          v, local_types, local_resource_ids, global_types, global_resource_ids,
+          visiting,
+        )
+      })
+      TypeSig::Result(ok_sig, err_sig)
+    }
+    @component.TypeDef::List(v) =>
+      TypeSig::List(
+        type_sig_of_valtype_lg(
+          v, local_types, local_resource_ids, global_types, global_resource_ids,
+          visiting,
+        ),
+      )
+    @component.TypeDef::Flags(labels) => TypeSig::Flags(labels)
+    @component.TypeDef::Enum(labels) => TypeSig::Enum(labels)
+    @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
+      type_sig_of_valtype_lg(
+        @component.ValType::TypeIdx(idx),
+        local_types,
+        local_resource_ids,
+        global_types,
+        global_resource_ids,
+        visiting,
+      )
+    _ => TypeSig::Other
+  }
+}
+
+///|
+fn type_sig_of_valtype_lg(
+  ty : @component.ValType,
+  local_types : Array[@component.TypeDef],
+  local_resource_ids : Array[Int?],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+  visiting : Map[Int, Int],
+) -> TypeSig {
+  match ty {
+    @component.ValType::Prim(p) => TypeSig::Prim(p)
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 {
+        TypeSig::Other
+      } else if visiting.get(idx) is Some(_) {
+        TypeSig::Other
+      } else {
+        visiting.set(idx, 1)
+        let td = if idx < local_types.length() {
+          Some(local_types[idx])
+        } else if idx < global_types.length() {
+          global_types[idx]
+        } else {
+          None
+        }
+        let rid = if idx < local_resource_ids.length() {
+          local_resource_ids[idx]
+        } else if idx < global_resource_ids.length() {
+          global_resource_ids[idx]
+        } else {
+          None
+        }
+        let sig = match td {
+          Some(@component.TypeDef::ResourceType(_, _, _, _)) =>
+            match rid {
+              Some(v) => TypeSig::Resource(v)
+              None => TypeSig::Resource(-1)
+            }
+          Some(def) =>
+            type_sig_of_typedef_lg(
+              def, local_types, local_resource_ids, global_types, global_resource_ids,
+              visiting,
+            )
+          None => TypeSig::Other
+        }
+        visiting.remove(idx) |> ignore
+        sig
+      }
+  }
+}
+
+///|
+fn funcsig_of_functype_lg(
+  ft : @component.FuncType,
+  local_types : Array[@component.TypeDef],
+  local_resource_ids : Array[Int?],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> FuncSigShape {
+  let visiting : Map[Int, Int] = {}
+  let params : Array[ParamShape] = []
+  for p in ft.params {
+    params.push({
+      name: p.label,
+      ty: type_sig_of_valtype_lg(
+        p.ty,
+        local_types,
+        local_resource_ids,
+        global_types,
+        global_resource_ids,
+        visiting,
+      ),
+    })
+  }
+  let result : TypeSig? = match ft.result {
+    Some(v) =>
+      Some(
+        type_sig_of_valtype_lg(
+          v, local_types, local_resource_ids, global_types, global_resource_ids,
+          visiting,
+        ),
+      )
+    None => None
+  }
+  { params, result }
+}
+
+///|
+fn type_sig_of_typedef(
+  td : @component.TypeDef,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  visiting : Map[Int, Int],
+) -> TypeSig {
+  match td {
+    @component.TypeDef::DefValType(p) => TypeSig::Prim(p)
+    @component.TypeDef::Tuple(tys) => {
+      let out : Array[TypeSig] = []
+      for t in tys {
+        out.push(type_sig_of_valtype(t, type_table, resource_ids, visiting))
+      }
+      TypeSig::Tuple(out)
+    }
+    @component.TypeDef::Record(fields) => {
+      let out : Array[TypeFieldSig] = []
+      for f in fields {
+        out.push({
+          name: f.label,
+          ty: type_sig_of_valtype(f.ty, type_table, resource_ids, visiting),
+        })
+      }
+      TypeSig::Record(out)
+    }
+    @component.TypeDef::Variant(cases) => {
+      let out : Array[TypeCaseSig] = []
+      for c in cases {
+        let payload = match c.ty {
+          None => None
+          Some(t) =>
+            Some(type_sig_of_valtype(t, type_table, resource_ids, visiting))
+        }
+        out.push({ name: c.label, ty: payload })
+      }
+      TypeSig::Variant(out)
+    }
+    @component.TypeDef::Option(v) =>
+      TypeSig::Option(
+        type_sig_of_valtype(v, type_table, resource_ids, visiting),
+      )
+    @component.TypeDef::Result(ok, err) => {
+      let ok_sig = ok.map(fn(v) {
+        type_sig_of_valtype(v, type_table, resource_ids, visiting)
+      })
+      let err_sig = err.map(fn(v) {
+        type_sig_of_valtype(v, type_table, resource_ids, visiting)
+      })
+      TypeSig::Result(ok_sig, err_sig)
+    }
+    @component.TypeDef::List(v) =>
+      TypeSig::List(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    @component.TypeDef::Flags(labels) => TypeSig::Flags(labels)
+    @component.TypeDef::Enum(labels) => TypeSig::Enum(labels)
+    // Own/borrow wrappers are nominally tied to the underlying resource type.
+    @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
+      type_sig_of_valtype(
+        @component.ValType::TypeIdx(idx),
+        type_table,
+        resource_ids,
+        visiting,
+      )
+    _ => TypeSig::Other
+  }
+}
+
+///|
+fn type_sig_of_valtype(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  visiting : Map[Int, Int],
+) -> TypeSig {
+  match ty {
+    @component.ValType::Prim(p) => TypeSig::Prim(p)
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        TypeSig::Other
+      } else if visiting.get(idx) is Some(_) {
+        TypeSig::Other
+      } else {
+        visiting.set(idx, 1)
+        let sig = match type_table[idx] {
+          Some(@component.TypeDef::ResourceType(_, _, _, _)) =>
+            match resource_ids.get(idx) {
+              Some(Some(rid)) => TypeSig::Resource(rid)
+              _ => TypeSig::Resource(-1)
+            }
+          Some(td) =>
+            type_sig_of_typedef(td, type_table, resource_ids, visiting)
+          None => TypeSig::Other
+        }
+        visiting.remove(idx) |> ignore
+        sig
+      }
+  }
+}
+
+///|
+fn type_sig_of_typeidx(
+  idx : Int,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+) -> TypeSig {
+  type_sig_of_valtype(
+    @component.ValType::TypeIdx(idx),
+    type_table,
+    resource_ids,
+    {},
+  )
+}
+
+///|
+fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
+  match sig {
+    TypeSig::Prim(p) => TypeSig::Prim(p)
+    TypeSig::Tuple(xs) =>
+      TypeSig::Tuple(xs.map(fn(x) { type_sig_subst_resources(x, subst) }))
+    TypeSig::Record(fs) =>
+      TypeSig::Record(
+        fs.map(fn(f) {
+          { name: f.name, ty: type_sig_subst_resources(f.ty, subst) }
+        }),
+      )
+    TypeSig::Variant(cs) =>
+      TypeSig::Variant(
+        cs.map(fn(c) {
+          let ty = match c.ty {
+            None => None
+            Some(t) => Some(type_sig_subst_resources(t, subst))
+          }
+          { name: c.name, ty }
+        }),
+      )
+    TypeSig::Option(v) => TypeSig::Option(type_sig_subst_resources(v, subst))
+    TypeSig::Result(ok, err) => {
+      let ok2 = ok.map(fn(v) { type_sig_subst_resources(v, subst) })
+      let err2 = err.map(fn(v) { type_sig_subst_resources(v, subst) })
+      TypeSig::Result(ok2, err2)
+    }
+    TypeSig::List(v) => TypeSig::List(type_sig_subst_resources(v, subst))
+    TypeSig::Flags(labels) => TypeSig::Flags(labels)
+    TypeSig::Enum(labels) => TypeSig::Enum(labels)
+    TypeSig::Resource(rid) =>
+      match subst.get(rid) {
+        Some(v) => TypeSig::Resource(v)
+        None => TypeSig::Resource(rid)
+      }
+    TypeSig::Other => TypeSig::Other
+  }
+}
+
+///|
+fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool {
+  match (expected, actual) {
+    (TypeSig::Resource(a), TypeSig::Resource(b)) => a != b
+    (TypeSig::Tuple(xs), TypeSig::Tuple(ys)) =>
+      xs.length() == ys.length() &&
+      {
+        let mut mismatch = false
+        for i in 0..<xs.length() {
+          if xs[i] != ys[i] && type_sig_has_resource_mismatch(xs[i], ys[i]) {
+            mismatch = true
+            break
+          }
+        }
+        mismatch
+      }
+    (TypeSig::Record(xs), TypeSig::Record(ys)) =>
+      xs.length() == ys.length() &&
+      {
+        let mut mismatch = false
+        for i in 0..<xs.length() {
+          if xs[i].ty != ys[i].ty &&
+            type_sig_has_resource_mismatch(xs[i].ty, ys[i].ty) {
+            mismatch = true
+            break
+          }
+        }
+        mismatch
+      }
+    (TypeSig::Variant(xs), TypeSig::Variant(ys)) =>
+      xs.length() == ys.length() &&
+      {
+        let mut mismatch = false
+        for i in 0..<xs.length() {
+          let a = xs[i].ty
+          let b = ys[i].ty
+          if a != b {
+            match (a, b) {
+              (Some(a2), Some(b2)) =>
+                if type_sig_has_resource_mismatch(a2, b2) {
+                  mismatch = true
+                  break
+                }
+              _ => ()
+            }
+          }
+        }
+        mismatch
+      }
+    (TypeSig::Option(a), TypeSig::Option(b)) =>
+      a != b && type_sig_has_resource_mismatch(a, b)
+    (TypeSig::List(a), TypeSig::List(b)) =>
+      a != b && type_sig_has_resource_mismatch(a, b)
+    (TypeSig::Result(a1, a2), TypeSig::Result(b1, b2)) => {
+      if a1 != b1 {
+        match (a1, b1) {
+          (Some(x), Some(y)) =>
+            if type_sig_has_resource_mismatch(x, y) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      if a2 != b2 {
+        match (a2, b2) {
+          (Some(x), Some(y)) =>
+            if type_sig_has_resource_mismatch(x, y) {
+              return true
+            }
+          _ => ()
+        }
+      }
+      false
+    }
+    _ => false
+  }
+}
+
+///|
+fn funcsig_subst_resources(
+  sig : FuncSigShape,
+  subst : Map[Int, Int],
+) -> FuncSigShape {
+  let params : Array[ParamShape] = []
+  for p in sig.params {
+    params.push({ name: p.name, ty: type_sig_subst_resources(p.ty, subst) })
+  }
+  let result = match sig.result {
+    None => None
+    Some(r) => Some(type_sig_subst_resources(r, subst))
+  }
+  { params, result }
+}
+
+///|
+fn funcsig_has_resource_mismatch(
+  expected : FuncSigShape,
+  actual : FuncSigShape,
+) -> Bool {
+  if expected.params.length() != actual.params.length() {
+    return false
+  }
+  for i in 0..<expected.params.length() {
+    let a = expected.params[i].ty
+    let b = actual.params[i].ty
+    if a != b && type_sig_has_resource_mismatch(a, b) {
+      return true
+    }
+  }
+  match (expected.result, actual.result) {
+    (None, None) => false
+    (Some(a), Some(b)) => a != b && type_sig_has_resource_mismatch(a, b)
+    _ => false
+  }
+}
+
+///|
+fn typedef_requires_name_for_interface(td : @component.TypeDef) -> Bool {
+  match td {
+    @component.TypeDef::Record(_)
+    | @component.TypeDef::Variant(_)
+    | @component.TypeDef::Flags(_)
+    | @component.TypeDef::Enum(_)
+    | @component.TypeDef::ResourceType(_, _, _, _) => true
+    _ => false
+  }
+}
+
+///|
+fn valtype_valid_in_interface(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  named_types : Map[Int, Int],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    @component.ValType::Prim(_) => true
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        true
+      } else if visiting.get(idx) is Some(_) {
+        true
+      } else {
+        match type_table[idx] {
+          None => true
+          Some(td) => {
+            if typedef_requires_name_for_interface(td) &&
+              named_types.get(idx) is None {
+              let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
+              let mut ok = false
+              if sig != TypeSig::Other {
+                for kv in named_types.iter() {
+                  let (k, _v) = kv
+                  if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
+                    ok = true
+                    break
+                  }
+                }
+              }
+              if !ok {
+                return false
+              }
+            }
+            visiting.set(idx, 1)
+            let ok = match td {
+              @component.TypeDef::DefValType(_) => true
+              @component.TypeDef::Tuple(tys) => {
+                let mut ok = true
+                for t in tys {
+                  if !valtype_valid_in_interface(
+                      t, type_table, resource_ids, named_types, visiting,
+                    ) {
+                    ok = false
+                    break
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Record(fields) => {
+                let mut ok = true
+                for f in fields {
+                  if !valtype_valid_in_interface(
+                      f.ty,
+                      type_table,
+                      resource_ids,
+                      named_types,
+                      visiting,
+                    ) {
+                    ok = false
+                    break
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Variant(cases) => {
+                let mut ok = true
+                for c in cases {
+                  match c.ty {
+                    None => ()
+                    Some(t) =>
+                      if !valtype_valid_in_interface(
+                          t, type_table, resource_ids, named_types, visiting,
+                        ) {
+                        ok = false
+                        break
+                      }
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Option(v) =>
+                valtype_valid_in_interface(
+                  v, type_table, resource_ids, named_types, visiting,
+                )
+              @component.TypeDef::Result(ok, err) => {
+                let ok_ok = match ok {
+                  None => true
+                  Some(v) =>
+                    valtype_valid_in_interface(
+                      v, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+                let err_ok = match err {
+                  None => true
+                  Some(v) =>
+                    valtype_valid_in_interface(
+                      v, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+                ok_ok && err_ok
+              }
+              @component.TypeDef::List(v) =>
+                valtype_valid_in_interface(
+                  v, type_table, resource_ids, named_types, visiting,
+                )
+              @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
+                valtype_valid_in_interface(
+                  @component.ValType::TypeIdx(idx),
+                  type_table,
+                  resource_ids,
+                  named_types,
+                  visiting,
+                )
+              // Nominal-ish types still need their payloads checked.
+              @component.TypeDef::Future(v) | @component.TypeDef::Stream(v) =>
+                match v {
+                  None => true
+                  Some(inner) =>
+                    valtype_valid_in_interface(
+                      inner, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+              _ => true
+            }
+            visiting.remove(idx) |> ignore
+            ok
+          }
+        }
+      }
+  }
+}
+
+///|
+fn valtype_valid_for_type_import_export(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  named_types : Map[Int, Int],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    @component.ValType::Prim(_) => true
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        true
+      } else if visiting.get(idx) is Some(_) {
+        true
+      } else {
+        match type_table[idx] {
+          None => true
+          Some(td) => {
+            match td {
+              @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) =>
+                return false
+              @component.TypeDef::FuncType(ft) =>
+                return functype_valid_in_interface(
+                  ft, type_table, resource_ids, named_types,
+                )
+              _ => ()
+            }
+            if typedef_requires_name_for_interface(td) &&
+              named_types.get(idx) is None {
+              let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
+              let mut ok = false
+              if sig != TypeSig::Other {
+                for kv in named_types.iter() {
+                  let (k, _v) = kv
+                  if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
+                    ok = true
+                    break
+                  }
+                }
+              }
+              if !ok {
+                return false
+              }
+            }
+            visiting.set(idx, 1)
+            let ok = match td {
+              @component.TypeDef::DefValType(_) => true
+              @component.TypeDef::Tuple(tys) => {
+                let mut ok = true
+                for t in tys {
+                  if !valtype_valid_for_type_import_export(
+                      t, type_table, resource_ids, named_types, visiting,
+                    ) {
+                    ok = false
+                    break
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Record(fields) => {
+                let mut ok = true
+                for f in fields {
+                  if !valtype_valid_for_type_import_export(
+                      f.ty,
+                      type_table,
+                      resource_ids,
+                      named_types,
+                      visiting,
+                    ) {
+                    ok = false
+                    break
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Variant(cases) => {
+                let mut ok = true
+                for c in cases {
+                  match c.ty {
+                    None => ()
+                    Some(t) =>
+                      if !valtype_valid_for_type_import_export(
+                          t, type_table, resource_ids, named_types, visiting,
+                        ) {
+                        ok = false
+                        break
+                      }
+                  }
+                }
+                ok
+              }
+              @component.TypeDef::Option(v) =>
+                valtype_valid_for_type_import_export(
+                  v, type_table, resource_ids, named_types, visiting,
+                )
+              @component.TypeDef::Result(ok_v, err_v) => {
+                let ok_ok = match ok_v {
+                  None => true
+                  Some(v) =>
+                    valtype_valid_for_type_import_export(
+                      v, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+                let err_ok = match err_v {
+                  None => true
+                  Some(v) =>
+                    valtype_valid_for_type_import_export(
+                      v, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+                ok_ok && err_ok
+              }
+              @component.TypeDef::List(v) =>
+                valtype_valid_for_type_import_export(
+                  v, type_table, resource_ids, named_types, visiting,
+                )
+              @component.TypeDef::Flags(_) | @component.TypeDef::Enum(_) => true
+              @component.TypeDef::ResourceType(_, _, _, _) => true
+              @component.TypeDef::Future(v) | @component.TypeDef::Stream(v) =>
+                match v {
+                  None => true
+                  Some(inner) =>
+                    valtype_valid_for_type_import_export(
+                      inner, type_table, resource_ids, named_types, visiting,
+                    )
+                }
+              @component.TypeDef::InstanceTypeEmpty => true
+              @component.TypeDef::InstanceType(_) => true
+              @component.TypeDef::ComponentType(_) => true
+              _ => false
+            }
+            visiting.remove(idx) |> ignore
+            ok
+          }
+        }
+      }
+  }
+}
+
+///|
+fn functype_valid_in_interface(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  named_types : Map[Int, Int],
+) -> Bool {
+  let visiting : Map[Int, Int] = {}
+  for p in ft.params {
+    if !valtype_valid_in_interface(
+        p.ty,
+        type_table,
+        resource_ids,
+        named_types,
+        visiting,
+      ) {
+      return false
+    }
+  }
+  match ft.result {
+    None => true
+    Some(r) =>
+      valtype_valid_in_interface(
+        r, type_table, resource_ids, named_types, visiting,
+      )
+  }
+}
+
+///|
+fn component_import_type_sigs_of(
+  c : @component.Component,
+) -> Map[String, TypeSig] {
+  let type_table : Array[@component.TypeDef?] = []
+  let resource_ids : Array[Int?] = []
+  let mut next_rid = 0
+  for td in c.types {
+    type_table.push(Some(td))
+    match td {
+      @component.TypeDef::ResourceType(_, _, _, _) => {
+        resource_ids.push(Some(next_rid))
+        next_rid += 1
+      }
+      _ => resource_ids.push(None)
+    }
+  }
+  let out : Map[String, TypeSig] = {}
+  for imp in c.imports {
+    match (importname_to_string(imp.name), imp.desc) {
+      (Some(name), @component.ExternDesc::Type(bound)) =>
+        match bound {
+          @component.TypeBound::Eq(tyidx) =>
+            out.set(name, type_sig_of_typeidx(tyidx, type_table, resource_ids))
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  out
 }
 
 ///|
@@ -1753,6 +3337,175 @@ fn instancetype_sig_of_decls(
     }
   }
   { exports, nested }
+}
+
+///|
+fn instancetype_valid_for_use_as_interface(
+  tyidx : Int,
+  type_table : Array[@component.TypeDef?],
+  type_outers : Array[Array[@component.TypeDef?]],
+) -> Bool {
+  if tyidx < 0 || tyidx >= type_table.length() {
+    return true
+  }
+  match type_table[tyidx] {
+    Some(@component.TypeDef::InstanceTypeEmpty) => true
+    Some(@component.TypeDef::InstanceType(decls)) => {
+      let local_type_table : Array[@component.TypeDef?] = []
+      let local_resource_ids : Array[Int?] = []
+      let local_named_types : Map[Int, Int] = {}
+      let mut next_rid = 0
+      fn push_local(td : @component.TypeDef?) -> Unit {
+        local_type_table.push(td)
+        match td {
+          Some(@component.TypeDef::ResourceType(_, _, _, _)) => {
+            local_resource_ids.push(Some(next_rid))
+            next_rid += 1
+          }
+          _ => local_resource_ids.push(None)
+        }
+      }
+
+      for d in decls {
+        match d {
+          @component.InstanceDecl::Type(t) => push_local(Some(t))
+          @component.InstanceDecl::AliasOuter(kind, count, idx) =>
+            if kind == 0x03 {
+              let td = outer_type_of_alias(type_outers, count, idx) catch {
+                _ => None
+              }
+              push_local(td)
+            }
+          @component.InstanceDecl::AliasInstanceExport(kind, _inst, _name) =>
+            if kind == 0x03 {
+              push_local(None)
+            }
+          @component.InstanceDecl::Export(_name, desc) =>
+            match desc {
+              @component.ExternDesc::Type(bound) => {
+                let new_idx = local_type_table.length()
+                match bound {
+                  @component.TypeBound::Eq(src) =>
+                    if src >= 0 && src < local_type_table.length() {
+                      push_local(local_type_table[src])
+                    } else {
+                      push_local(None)
+                    }
+                  @component.TypeBound::SubResource =>
+                    push_local(
+                      Some(
+                        @component.TypeDef::ResourceType(
+                          -1,
+                          0x7f,
+                          None,
+                          @component.ResourceKind::HostDefined,
+                        ),
+                      ),
+                    )
+                }
+                local_named_types.set(new_idx, 1)
+                if !valtype_valid_for_type_import_export(
+                    @component.ValType::TypeIdx(new_idx),
+                    local_type_table,
+                    local_resource_ids,
+                    local_named_types,
+                    {},
+                  ) {
+                  return false
+                }
+              }
+              @component.ExternDesc::FuncType(ft_idx) =>
+                if ft_idx >= 0 && ft_idx < local_type_table.length() {
+                  match local_type_table[ft_idx] {
+                    Some(@component.TypeDef::FuncType(ft)) =>
+                      if !functype_valid_in_interface(
+                          ft, local_type_table, local_resource_ids, local_named_types,
+                        ) {
+                        return false
+                      }
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+          _ => ()
+        }
+      }
+      true
+    }
+    _ => true
+  }
+}
+
+///|
+fn componenttype_signature_of_decls(
+  decls : Array[@component.ComponentDecl],
+  type_table : Array[@component.TypeDef?],
+) -> (
+  Map[String, @component.Sort],
+  Map[String, InstanceSig],
+  Map[String, @component.Sort],
+  Map[String, InstanceSig],
+) {
+  let import_sorts : Map[String, @component.Sort] = {}
+  let import_instance_sigs : Map[String, InstanceSig] = {}
+  let export_sorts : Map[String, @component.Sort] = {}
+  let export_instance_sigs : Map[String, InstanceSig] = {}
+  // Component type declarations define their own local type space introduced by
+  // `Type(...)` plus type-valued alias/import/export declarations.
+  let local_types : Array[@component.TypeDef] = []
+  let visiting_local : Map[Int, Int] = {}
+  let visiting_global : Map[Int, Int] = {}
+  fn record_type_slot() -> Unit {
+    // Placeholder for a type index introduced by an alias/import/export decl.
+    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+  }
+
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Type(t) => local_types.push(t)
+      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::Import(name, desc) => {
+        import_sorts.set(name, sort_of_externdesc(desc))
+        match desc {
+          @component.ExternDesc::InstanceType(tyidx) => {
+            let sig = instancetype_sig_of_local_idx(
+              tyidx, local_types, type_table, visiting_local, visiting_global,
+            )
+            import_instance_sigs.set(name, sig)
+          }
+          _ => ()
+        }
+        if desc is @component.ExternDesc::Type(_) {
+          record_type_slot()
+        }
+      }
+      @component.ComponentDecl::Export(name, desc) => {
+        export_sorts.set(name, sort_of_externdesc(desc))
+        match desc {
+          @component.ExternDesc::InstanceType(tyidx) => {
+            let sig = instancetype_sig_of_local_idx(
+              tyidx, local_types, type_table, visiting_local, visiting_global,
+            )
+            export_instance_sigs.set(name, sig)
+          }
+          _ => ()
+        }
+        if desc is @component.ExternDesc::Type(_) {
+          record_type_slot()
+        }
+      }
+      @component.ComponentDecl::CoreType(_) => ()
+    }
+  }
+  (import_sorts, import_instance_sigs, export_sorts, export_instance_sigs)
 }
 
 ///|
@@ -1861,6 +3614,385 @@ fn component_signature(
 }
 
 ///|
+fn component_import_func_sigs_of(
+  c : @component.Component,
+) -> Map[String, FuncSigShape] {
+  let type_table : Array[@component.TypeDef?] = []
+  let resource_ids : Array[Int?] = []
+  let mut next_rid = 0
+  for td in c.types {
+    type_table.push(Some(td))
+    match td {
+      @component.TypeDef::ResourceType(_, _, _, _) => {
+        resource_ids.push(Some(next_rid))
+        next_rid += 1
+      }
+      _ => resource_ids.push(None)
+    }
+  }
+  let out : Map[String, FuncSigShape] = {}
+  for i in c.imports {
+    match (importname_to_string(i.name), i.desc) {
+      (Some(name), @component.ExternDesc::FuncType(tyidx)) =>
+        if tyidx >= 0 && tyidx < type_table.length() {
+          match type_table[tyidx] {
+            Some(@component.TypeDef::FuncType(ft)) =>
+              out.set(name, funcsig_of_functype(ft, type_table, resource_ids))
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_import_func_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> Map[String, FuncSigShape] {
+  let out : Map[String, FuncSigShape] = {}
+  let local_types : Array[@component.TypeDef] = []
+  let local_resource_ids : Array[Int?] = []
+  // Avoid collisions with the enclosing component's nominal resource ids.
+  let mut next_rid = 0
+  for rid in global_resource_ids {
+    match rid {
+      Some(v) => if v >= next_rid { next_rid = v + 1 }
+      None => ()
+    }
+  }
+  fn record_type_slot() -> Unit {
+    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+    local_resource_ids.push(None)
+  }
+
+  fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
+    match b {
+      @component.TypeBound::SubResource => {
+        local_types.push(
+          @component.TypeDef::ResourceType(
+            -1,
+            0x7f,
+            None,
+            @component.ResourceKind::HostDefined,
+          ),
+        )
+        local_resource_ids.push(Some(next_rid))
+        next_rid += 1
+      }
+      @component.TypeBound::Eq(_idx) => record_type_slot()
+    }
+  }
+
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Type(t) => {
+        local_types.push(t)
+        match t {
+          @component.TypeDef::ResourceType(_, _, _, _) => {
+            local_resource_ids.push(Some(next_rid))
+            next_rid += 1
+          }
+          _ => local_resource_ids.push(None)
+        }
+      }
+      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::Import(name, desc) => {
+        match desc {
+          @component.ExternDesc::FuncType(tyidx) =>
+            if tyidx >= 0 && tyidx < local_types.length() {
+              match local_types[tyidx] {
+                @component.TypeDef::FuncType(ft) =>
+                  out.set(
+                    name,
+                    funcsig_of_functype_lg(
+                      ft, local_types, local_resource_ids, global_types, global_resource_ids,
+                    ),
+                  )
+                _ => ()
+              }
+            } else if tyidx >= 0 && tyidx < global_types.length() {
+              match global_types[tyidx] {
+                Some(@component.TypeDef::FuncType(ft)) =>
+                  out.set(
+                    name,
+                    funcsig_of_functype_lg(
+                      ft,
+                      [],
+                      [],
+                      global_types,
+                      global_resource_ids,
+                    ),
+                  )
+                _ => ()
+              }
+            }
+          _ => ()
+        }
+        match desc {
+          @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
+          _ => ()
+        }
+      }
+      @component.ComponentDecl::Export(_name, desc) =>
+        match desc {
+          @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
+          _ => ()
+        }
+      @component.ComponentDecl::CoreType(_) => ()
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_import_type_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> Map[String, TypeSig] {
+  let out : Map[String, TypeSig] = {}
+  let local_types : Array[@component.TypeDef] = []
+  let local_resource_ids : Array[Int?] = []
+  // Avoid collisions with the enclosing component's nominal resource ids.
+  let mut next_rid = 0
+  for rid in global_resource_ids {
+    match rid {
+      Some(v) => if v >= next_rid { next_rid = v + 1 }
+      None => ()
+    }
+  }
+  fn record_type_slot(as_resource : Bool) -> Int {
+    let idx = local_types.length()
+    if as_resource {
+      local_types.push(
+        @component.TypeDef::ResourceType(
+          -1,
+          0x7f,
+          None,
+          @component.ResourceKind::HostDefined,
+        ),
+      )
+      local_resource_ids.push(Some(next_rid))
+      next_rid += 1
+    } else {
+      local_types.push(@component.TypeDef::InstanceTypeEmpty)
+      local_resource_ids.push(None)
+    }
+    idx
+  }
+
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Type(t) => {
+        local_types.push(t)
+        match t {
+          @component.TypeDef::ResourceType(_, _, _, _) => {
+            local_resource_ids.push(Some(next_rid))
+            next_rid += 1
+          }
+          _ => local_resource_ids.push(None)
+        }
+      }
+      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+        if kind == 0x03 {
+          record_type_slot(false) |> ignore
+        }
+      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+        if kind == 0x03 {
+          record_type_slot(false) |> ignore
+        }
+      @component.ComponentDecl::Import(name, desc) =>
+        match desc {
+          @component.ExternDesc::Type(bound) =>
+            match bound {
+              @component.TypeBound::Eq(tyidx) => {
+                // Compute the bound signature in the current local/global environment.
+                out.set(
+                  name,
+                  type_sig_of_valtype_lg(
+                    @component.ValType::TypeIdx(tyidx),
+                    local_types,
+                    local_resource_ids,
+                    global_types,
+                    global_resource_ids,
+                    {},
+                  ),
+                )
+                record_type_slot(false) |> ignore
+              }
+              @component.TypeBound::SubResource => {
+                let new_idx = record_type_slot(true)
+                out.set(
+                  name,
+                  type_sig_of_valtype_lg(
+                    @component.ValType::TypeIdx(new_idx),
+                    local_types,
+                    local_resource_ids,
+                    global_types,
+                    global_resource_ids,
+                    {},
+                  ),
+                )
+              }
+            }
+          _ =>
+            if desc is @component.ExternDesc::Type(_) {
+              record_type_slot(false) |> ignore
+            }
+        }
+      @component.ComponentDecl::Export(_name, desc) =>
+        match desc {
+          @component.ExternDesc::Type(bound) =>
+            match bound {
+              @component.TypeBound::SubResource =>
+                record_type_slot(true) |> ignore
+              @component.TypeBound::Eq(_tyidx) =>
+                record_type_slot(false) |> ignore
+            }
+          _ => ()
+        }
+      @component.ComponentDecl::CoreType(_) => ()
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_import_type_bounds_of_decls(
+  decls : Array[@component.ComponentDecl],
+) -> Map[String, @component.TypeBound] {
+  let out : Map[String, @component.TypeBound] = {}
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) =>
+        out.set(name, b)
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_export_func_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> Map[String, FuncSigShape] {
+  let out : Map[String, FuncSigShape] = {}
+  let local_types : Array[@component.TypeDef] = []
+  let local_resource_ids : Array[Int?] = []
+  // Avoid collisions with the enclosing component's nominal resource ids.
+  let mut next_rid = 0
+  for rid in global_resource_ids {
+    match rid {
+      Some(v) => if v >= next_rid { next_rid = v + 1 }
+      None => ()
+    }
+  }
+  fn record_type_slot() -> Unit {
+    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+    local_resource_ids.push(None)
+  }
+
+  fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
+    match b {
+      @component.TypeBound::SubResource => {
+        local_types.push(
+          @component.TypeDef::ResourceType(
+            -1,
+            0x7f,
+            None,
+            @component.ResourceKind::HostDefined,
+          ),
+        )
+        local_resource_ids.push(Some(next_rid))
+        next_rid += 1
+      }
+      @component.TypeBound::Eq(_idx) => record_type_slot()
+    }
+  }
+
+  fn record_type_slots_for_desc(desc : @component.ExternDesc) -> Unit {
+    match desc {
+      @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
+      _ => ()
+    }
+  }
+
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Type(t) => {
+        local_types.push(t)
+        match t {
+          @component.TypeDef::ResourceType(_, _, _, _) => {
+            local_resource_ids.push(Some(next_rid))
+            next_rid += 1
+          }
+          _ => local_resource_ids.push(None)
+        }
+      }
+      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+        if kind == 0x03 {
+          record_type_slot()
+        }
+      @component.ComponentDecl::Import(_name, desc) =>
+        record_type_slots_for_desc(desc)
+      @component.ComponentDecl::Export(name, desc) => {
+        match desc {
+          @component.ExternDesc::FuncType(tyidx) =>
+            if tyidx >= 0 && tyidx < local_types.length() {
+              match local_types[tyidx] {
+                @component.TypeDef::FuncType(ft) =>
+                  out.set(
+                    name,
+                    funcsig_of_functype_lg(
+                      ft, local_types, local_resource_ids, global_types, global_resource_ids,
+                    ),
+                  )
+                _ => ()
+              }
+            } else if tyidx >= 0 && tyidx < global_types.length() {
+              match global_types[tyidx] {
+                Some(@component.TypeDef::FuncType(ft)) =>
+                  out.set(
+                    name,
+                    funcsig_of_functype_lg(
+                      ft,
+                      [],
+                      [],
+                      global_types,
+                      global_resource_ids,
+                    ),
+                  )
+                _ => ()
+              }
+            }
+          _ => ()
+        }
+        record_type_slots_for_desc(desc)
+      }
+      @component.ComponentDecl::CoreType(_) => ()
+    }
+  }
+  out
+}
+
+///|
 /// For a given component, extract the expected export-kinds of any core-module
 /// imports, keyed by the component import name.
 fn component_import_core_module_exports_of(
@@ -1887,6 +4019,129 @@ fn component_import_core_module_exports_of(
     }
   }
   result
+}
+
+///|
+fn component_import_core_module_import_sigs_of(
+  c : @component.Component,
+) -> Map[String, Map[String, CoreExternType]] raise ComponentValidationError {
+  let core_type_imports : Array[Array[CoreModuleTypeImport]?] = []
+  let mut base_bound = 0
+  for payload in c.core_types {
+    let (imports, _export_types) = parse_core_type_section_module_sigs(
+      payload,
+      -1,
+      base_bound,
+      [],
+    )
+    for imps in imports {
+      core_type_imports.push(imps)
+    }
+    base_bound += imports.length()
+  }
+  let result : Map[String, Map[String, CoreExternType]] = {}
+  for i in c.imports {
+    match (importname_to_string(i.name), i.desc) {
+      (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) =>
+        if tyidx >= 0 && tyidx < core_type_imports.length() {
+          match core_type_imports[tyidx] {
+            Some(imps) => {
+              let map : Map[String, CoreExternType] = {}
+              for imp in imps {
+                map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
+              }
+              result.set(name, map)
+            }
+            None => ()
+          }
+        }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
+fn componenttype_import_core_module_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+) -> (Map[String, Map[String, CoreExternType]], Map[String, Map[String, Int]]) raise ComponentValidationError {
+  let local_core_import_sigs : Array[Map[String, CoreExternType]?] = []
+  let local_core_export_kinds : Array[Map[String, Int]?] = []
+  let mut core_type_bound = 0
+  for d in decls {
+    match d {
+      @component.ComponentDecl::CoreType(bytes) => {
+        let r = CoreTypeReader::new(bytes)
+        let op = r.read_u8()
+        if op == 0x50 {
+          let (imps, exps) = parse_core_type_module_sig(
+            r,
+            -1,
+            core_type_bound,
+            [],
+          )
+          let imp_map : Map[String, CoreExternType] = {}
+          for imp in imps {
+            imp_map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
+          }
+          let exp_kinds : Map[String, Int] = {}
+          for kv in exps.iter() {
+            let (nm, ty) = kv
+            exp_kinds.set(nm, core_kind_of_extern_type(ty))
+          }
+          local_core_import_sigs.push(Some(imp_map))
+          local_core_export_kinds.push(Some(exp_kinds))
+        } else if op == 0x60 {
+          r.skip_func_type_body()
+          local_core_import_sigs.push(None)
+          local_core_export_kinds.push(None)
+        } else {
+          raise SectionParseError(3, "unsupported core type opcode: \{op}")
+        }
+        if !r.is_eof() {
+          raise SectionParseError(3, "trailing bytes in core type payload")
+        }
+        core_type_bound += 1
+      }
+      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+        if kind != 0x03 {
+          // Core-type aliases consume a core-type index.
+          local_core_import_sigs.push(None)
+          local_core_export_kinds.push(None)
+          core_type_bound += 1
+        }
+      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+        if kind != 0x03 {
+          local_core_import_sigs.push(None)
+          local_core_export_kinds.push(None)
+          core_type_bound += 1
+        }
+      _ => ()
+    }
+  }
+  let import_sigs : Map[String, Map[String, CoreExternType]] = {}
+  let export_kinds : Map[String, Map[String, Int]] = {}
+  for d in decls {
+    match d {
+      @component.ComponentDecl::Import(name, desc) =>
+        match desc {
+          @component.ExternDesc::CoreModuleType(tyidx) =>
+            if tyidx >= 0 && tyidx < local_core_import_sigs.length() {
+              match local_core_import_sigs[tyidx] {
+                Some(map) => import_sigs.set(name, map)
+                None => ()
+              }
+              match local_core_export_kinds[tyidx] {
+                Some(map) => export_kinds.set(name, map)
+                None => ()
+              }
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  (import_sigs, export_kinds)
 }
 
 ///|
@@ -2008,10 +4263,8 @@ fn count_alias(
 fn count_canon(c : @component.Canon, counts : Counts) -> Unit {
   match c {
     Lift(_, _, _) => counts.func += 1
-    Lower(_, _) => counts.core_func += 1
-    ResourceNew(_) => ()
-    ResourceDrop(_) => ()
-    ResourceRep(_) => ()
+    // All other canonical items produce a core function.
+    _ => counts.core_func += 1
   }
 }
 
@@ -2024,9 +4277,14 @@ fn validate_valtype(
     TypeIdx(idx) => {
       check_typeidx(idx, type_table.length())
       match type_table[idx] {
-        Some(@component.TypeDef::DefValType(_)) => ()
-        Some(@component.TypeDef::ResourceType(_, _, _)) => ()
-        Some(_) => raise TypeIndexNotDefinedType(idx)
+        // Component valtypes may reference any defined type (not function,
+        // component, or instance types).
+        Some(@component.TypeDef::FuncType(_))
+        | Some(@component.TypeDef::ComponentType(_))
+        | Some(@component.TypeDef::InstanceTypeEmpty)
+        | Some(@component.TypeDef::InstanceType(_)) =>
+          raise TypeIndexNotDefinedType(idx)
+        Some(_) => ()
         None => ()
       }
     }
@@ -2088,10 +4346,99 @@ fn component_outer_type_of_alias(
 }
 
 ///|
+fn valtype_contains_borrow(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    @component.ValType::Prim(_) => false
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        false
+      } else if visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, 1)
+        let any = match type_table[idx] {
+          Some(@component.TypeDef::Borrow(_)) => true
+          Some(@component.TypeDef::Tuple(xs)) => {
+            let mut any = false
+            for v in xs {
+              if valtype_contains_borrow(v, type_table, visiting) {
+                any = true
+                break
+              }
+            }
+            any
+          }
+          Some(@component.TypeDef::Record(fields)) => {
+            let mut any = false
+            for f in fields {
+              if valtype_contains_borrow(f.ty, type_table, visiting) {
+                any = true
+                break
+              }
+            }
+            any
+          }
+          Some(@component.TypeDef::Variant(cases)) => {
+            let mut any = false
+            for c in cases {
+              match c.ty {
+                None => ()
+                Some(v) =>
+                  if valtype_contains_borrow(v, type_table, visiting) {
+                    any = true
+                    break
+                  }
+              }
+            }
+            any
+          }
+          Some(@component.TypeDef::Option(v)) =>
+            valtype_contains_borrow(v, type_table, visiting)
+          Some(@component.TypeDef::Result(ok, err)) => {
+            let ok_any = match ok {
+              None => false
+              Some(v) => valtype_contains_borrow(v, type_table, visiting)
+            }
+            let err_any = match err {
+              None => false
+              Some(v) => valtype_contains_borrow(v, type_table, visiting)
+            }
+            ok_any || err_any
+          }
+          Some(@component.TypeDef::List(v)) =>
+            valtype_contains_borrow(v, type_table, visiting)
+          Some(@component.TypeDef::Stream(v))
+          | Some(@component.TypeDef::Future(v)) =>
+            match v {
+              None => false
+              Some(inner) =>
+                valtype_contains_borrow(inner, type_table, visiting)
+            }
+          Some(@component.TypeDef::Own(idx2)) =>
+            valtype_contains_borrow(
+              @component.ValType::TypeIdx(idx2),
+              type_table,
+              visiting,
+            )
+          _ => false
+        }
+        visiting.remove(idx) |> ignore
+        any
+      }
+  }
+}
+
+///|
 fn validate_typedef(
   td : @component.TypeDef,
+  cfg : ComponentValidationConfig,
   type_outers : Array[Array[@component.TypeDef?]],
   core_type_outers : Array[Array[Map[String, Int]?]],
+  allow_resource_defs : Bool,
 ) -> Unit raise ComponentValidationError {
   if type_outers.length() == 0 || core_type_outers.length() == 0 {
     raise SectionParseError(
@@ -2105,14 +4452,154 @@ fn validate_typedef(
   }
   match td {
     DefValType(_) => ()
-    ResourceType(_, _, _) => ()
+    List(v) => validate_valtype(v, type_table)
+    Record(fields) => {
+      if fields.length() == 0 {
+        raise SectionParseError(7, "record type must have at least one field")
+      }
+      let seen : Map[String, String] = {}
+      for f in fields {
+        validate_extern_name_string(f.label, cfg)
+        let key = ascii_lower_key(f.label)
+        match seen.get(key) {
+          Some(prev) =>
+            raise SectionParseError(
+              7,
+              "record field name `\{f.label}` conflicts with previous field name `\{prev}`",
+            )
+          None => seen.set(key, f.label)
+        }
+        validate_valtype(f.ty, type_table)
+      }
+    }
+    Variant(cases) => {
+      if cases.length() == 0 {
+        raise SectionParseError(7, "variant type must have at least one case")
+      }
+      let seen : Map[String, String] = {}
+      for i in 0..<cases.length() {
+        let c = cases[i]
+        validate_extern_name_string(c.label, cfg)
+        let key = ascii_lower_key(c.label)
+        match seen.get(key) {
+          Some(prev) =>
+            raise SectionParseError(
+              7,
+              "variant case name `\{c.label}` conflicts with previous case name `\{prev}`",
+            )
+          None => seen.set(key, c.label)
+        }
+        match c.refines {
+          Some(idx) =>
+            if idx < 0 || idx >= i {
+              raise SectionParseError(
+                7, "variant case can only refine a previously defined case",
+              )
+            }
+          None => ()
+        }
+        match c.ty {
+          Some(v) => validate_valtype(v, type_table)
+          None => ()
+        }
+      }
+    }
+    Tuple(tys) => {
+      if tys.length() == 0 {
+        raise SectionParseError(7, "tuple type must have at least one type")
+      }
+      for v in tys {
+        validate_valtype(v, type_table)
+      }
+    }
+    Flags(cases) => {
+      if cases.length() == 0 {
+        raise SectionParseError(7, "flags must have at least one entry")
+      }
+      if cases.length() > 32 {
+        raise SectionParseError(7, "cannot have more than 32 flags")
+      }
+      let seen : Map[String, String] = {}
+      for name in cases {
+        validate_extern_name_string(name, cfg)
+        let key = ascii_lower_key(name)
+        match seen.get(key) {
+          Some(prev) =>
+            raise SectionParseError(
+              7,
+              "flag name `\{name}` conflicts with previous flag name `\{prev}`",
+            )
+          None => seen.set(key, name)
+        }
+      }
+    }
+    Enum(cases) => {
+      if cases.length() == 0 {
+        raise SectionParseError(7, "enum type must have at least one variant")
+      }
+      let seen : Map[String, String] = {}
+      for name in cases {
+        validate_extern_name_string(name, cfg)
+        let key = ascii_lower_key(name)
+        match seen.get(key) {
+          Some(prev) =>
+            raise SectionParseError(
+              7,
+              "enum tag name `\{name}` conflicts with previous tag name `\{prev}`",
+            )
+          None => seen.set(key, name)
+        }
+      }
+    }
+    Option(v) => validate_valtype(v, type_table)
+    Result(ok, err) => {
+      match ok {
+        Some(v) => validate_valtype(v, type_table)
+        None => ()
+      }
+      match err {
+        Some(v) => validate_valtype(v, type_table)
+        None => ()
+      }
+    }
+    Own(ti) | Borrow(ti) => {
+      if ti < 0 || ti >= type_table.length() {
+        raise SectionParseError(7, "type index out of bounds")
+      }
+      match type_table[ti] {
+        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        None => ()
+        Some(_) => raise SectionParseError(7, "not a resource type")
+      }
+    }
+    Stream(v) | Future(v) =>
+      match v {
+        Some(t) => validate_valtype(t, type_table)
+        None => ()
+      }
+    ResourceType(_, rep, _dtor, _kind) => {
+      if !allow_resource_defs {
+        raise SectionParseError(
+          7, "resources can only be defined within a concrete component",
+        )
+      }
+      if rep != 0x7f {
+        raise SectionParseError(7, "resources can only be represented by `i32`")
+      }
+    }
     ComponentType(decls) => {
       // Component type declarations define their own internal type/core-type
       // index spaces referenced by later imports/exports within the same type.
       let local_type_table : Array[@component.TypeDef?] = []
+      let local_resource_ids : Array[Int?] = []
       let mut local_core_type_bound = 0
       let seen_imports : Map[String, String] = {}
       let seen_exports : Map[String, String] = {}
+      let local_named_types : Map[Int, Int] = {}
+      let local_import_resource_names : Map[String, Int] = {}
+      let local_export_resource_names : Map[String, Int] = {}
+      let local_import_resource_type_idxs : Map[Int, Int] = {}
+      let local_export_resource_type_idxs : Map[Int, Int] = {}
       let local_core_type_exports : Array[Map[String, Int]?] = []
       for d in decls {
         match d {
@@ -2131,6 +4618,7 @@ fn validate_typedef(
               local_type_table.push(
                 outer_type_of_alias(type_outers, count, idx),
               )
+              local_resource_ids.push(None)
             } else {
               local_core_type_exports.push(
                 outer_core_type_of_alias(core_type_outers, count, idx),
@@ -2144,6 +4632,7 @@ fn validate_typedef(
           ) =>
             if kind == 0x03 {
               local_type_table.push(None)
+              local_resource_ids.push(None)
             } else {
               local_core_type_exports.push(None)
               local_core_type_bound += 1
@@ -2151,13 +4640,16 @@ fn validate_typedef(
           @component.ComponentDecl::Type(t) => {
             validate_typedef(
               t,
+              cfg,
               [local_type_table] + type_outers,
               [local_core_type_exports] + core_type_outers,
+              false,
             )
             local_type_table.push(Some(t))
+            local_resource_ids.push(None)
           }
           @component.ComponentDecl::Import(name, desc) => {
-            validate_extern_name_string(name)
+            validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_imports.get(key) {
               Some(prev) =>
@@ -2181,12 +4673,82 @@ fn validate_typedef(
                 }
               _ => ()
             }
-            if desc is Type(_) {
-              local_type_table.push(None)
+            match desc {
+              @component.ExternDesc::Type(bound) => {
+                let new_idx = local_type_table.length()
+                match bound {
+                  @component.TypeBound::Eq(tyidx) =>
+                    if tyidx >= 0 && tyidx < local_type_table.length() {
+                      local_type_table.push(local_type_table[tyidx])
+                      local_resource_ids.push(local_resource_ids[tyidx])
+                    } else {
+                      local_type_table.push(None)
+                      local_resource_ids.push(None)
+                    }
+                  @component.TypeBound::SubResource => {
+                    local_type_table.push(
+                      Some(
+                        @component.TypeDef::ResourceType(
+                          -1,
+                          0x7f,
+                          None,
+                          @component.ResourceKind::HostDefined,
+                        ),
+                      ),
+                    )
+                    local_resource_ids.push(None)
+                  }
+                }
+                local_named_types.set(new_idx, 1)
+                match bound {
+                  @component.TypeBound::SubResource => {
+                    local_import_resource_names.set(name, new_idx)
+                    local_import_resource_type_idxs.set(new_idx, 1)
+                  }
+                  _ => ()
+                }
+                if !valtype_valid_for_type_import_export(
+                    @component.ValType::TypeIdx(new_idx),
+                    local_type_table,
+                    local_resource_ids,
+                    local_named_types,
+                    {},
+                  ) {
+                  raise SectionParseError(
+                    7, "type not valid to be used as import",
+                  )
+                }
+              }
+              @component.ExternDesc::FuncType(tyidx) =>
+                if tyidx >= 0 && tyidx < local_type_table.length() {
+                  match local_type_table[tyidx] {
+                    Some(@component.TypeDef::FuncType(ft)) => {
+                      validate_bracketed_func_name(
+                        7, name, ft, local_type_table, local_resource_ids, local_import_resource_names,
+                      )
+                      if functype_uses_disallowed_resources(
+                          ft, local_type_table, local_import_resource_type_idxs,
+                        ) {
+                        raise SectionParseError(
+                          7, "func not valid to be used as import",
+                        )
+                      }
+                      if !functype_valid_in_interface(
+                          ft, local_type_table, local_resource_ids, local_named_types,
+                        ) {
+                        raise SectionParseError(
+                          7, "func not valid to be used as import",
+                        )
+                      }
+                    }
+                    _ => ()
+                  }
+                }
+              _ => ()
             }
           }
           @component.ComponentDecl::Export(name, desc) => {
-            validate_extern_name_string(name)
+            validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>
@@ -2210,8 +4772,71 @@ fn validate_typedef(
                 }
               _ => ()
             }
-            if desc is Type(_) {
-              local_type_table.push(None)
+            match desc {
+              @component.ExternDesc::Type(bound) => {
+                let new_idx = local_type_table.length()
+                match bound {
+                  @component.TypeBound::Eq(tyidx) =>
+                    if tyidx >= 0 && tyidx < local_type_table.length() {
+                      local_type_table.push(local_type_table[tyidx])
+                      local_resource_ids.push(local_resource_ids[tyidx])
+                    } else {
+                      local_type_table.push(None)
+                      local_resource_ids.push(None)
+                    }
+                  @component.TypeBound::SubResource => {
+                    local_type_table.push(
+                      Some(
+                        @component.TypeDef::ResourceType(
+                          -1,
+                          0x7f,
+                          None,
+                          @component.ResourceKind::HostDefined,
+                        ),
+                      ),
+                    )
+                    local_resource_ids.push(None)
+                  }
+                }
+                local_named_types.set(new_idx, 1)
+                match bound {
+                  @component.TypeBound::SubResource => {
+                    local_export_resource_names.set(name, new_idx)
+                    local_export_resource_type_idxs.set(new_idx, 1)
+                  }
+                  _ => ()
+                }
+                if !valtype_valid_for_type_import_export(
+                    @component.ValType::TypeIdx(new_idx),
+                    local_type_table,
+                    local_resource_ids,
+                    local_named_types,
+                    {},
+                  ) {
+                  raise SectionParseError(
+                    7, "type not valid to be used as export",
+                  )
+                }
+              }
+              @component.ExternDesc::FuncType(tyidx) =>
+                if tyidx >= 0 && tyidx < local_type_table.length() {
+                  match local_type_table[tyidx] {
+                    Some(@component.TypeDef::FuncType(ft)) => {
+                      validate_bracketed_func_name(
+                        7, name, ft, local_type_table, local_resource_ids, local_export_resource_names,
+                      )
+                      if !functype_valid_in_interface(
+                          ft, local_type_table, local_resource_ids, local_named_types,
+                        ) {
+                        raise SectionParseError(
+                          7, "func not valid to be used as export",
+                        )
+                      }
+                    }
+                    _ => ()
+                  }
+                }
+              _ => ()
             }
           }
         }
@@ -2272,13 +4897,15 @@ fn validate_typedef(
           @component.InstanceDecl::Type(t) => {
             validate_typedef(
               t,
+              cfg,
               [local_type_table] + type_outers,
               [local_core_type_exports] + core_type_outers,
+              false,
             )
             local_type_table.push(Some(t))
           }
           @component.InstanceDecl::Export(name, desc) => {
-            validate_extern_name_string(name)
+            validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>
@@ -2314,7 +4941,7 @@ fn validate_typedef(
     FuncType(ft) => {
       let seen_params : Map[String, String] = {}
       for p in ft.params {
-        validate_extern_name_string(p.label)
+        validate_extern_name_string(p.label, cfg)
         let key = ascii_lower_key(p.label)
         match seen_params.get(key) {
           Some(prev) => raise FuncParamNameConflict(p.label, prev)
@@ -2323,7 +4950,14 @@ fn validate_typedef(
         validate_valtype(p.ty, type_table)
       }
       match ft.result {
-        Some(r) => validate_valtype(r, type_table)
+        Some(r) => {
+          validate_valtype(r, type_table)
+          if valtype_contains_borrow(r, type_table, {}) {
+            raise SectionParseError(
+              7, "function result cannot contain a `borrow` type",
+            )
+          }
+        }
         None => ()
       }
     }
@@ -2477,49 +5111,97 @@ fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
 }
 
 ///|
-fn valtype_needs_memory(ty : @component.ValType) -> Bool {
-  match ty {
-    Prim(p) =>
-      match p {
-        @component.PrimValType::String | @component.PrimValType::ErrorContext =>
-          true
-        _ => false
-      }
-    TypeIdx(_) => false
+fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
+  for o in opts {
+    match o {
+      Realloc(idx) => return Some(idx)
+      _ => ()
+    }
   }
+  None
 }
 
 ///|
-fn functype_needs_memory(ft : @component.FuncType) -> Bool {
+fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int? {
+  for o in opts {
+    match o {
+      PostReturn(idx) => return Some(idx)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+fn valtype_needs_memory(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  core_valtypes_for_component_valtype(ty, type_table) is None
+}
+
+///|
+fn functype_needs_memory(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  // Canonical ABI uses linear memory when:
+  // - any param/result type itself needs memory (e.g. string/list), or
+  // - the flattened parameter list is too large (>16), or
+  // - the result can't be represented as a single core value.
+  let mut param_count = 0
   for p in ft.params {
-    if valtype_needs_memory(p.ty) {
-      return true
+    match core_valtypes_for_component_valtype(p.ty, type_table) {
+      Some(ts) => {
+        param_count += ts.length()
+        if param_count > 16 {
+          return true
+        }
+      }
+      None => return true
     }
   }
   match ft.result {
-    Some(r) => valtype_needs_memory(r)
     None => false
+    Some(r) =>
+      match core_valtypes_for_component_valtype(r, type_table) {
+        None => true
+        Some(ts) => ts.length() != 1
+      }
   }
 }
 
 ///|
-fn functype_needs_realloc_for_lift(ft : @component.FuncType) -> Bool {
-  // For canon lift, `realloc` is required when the wrapper must write a
-  // component value (like `string`) into core linear memory to pass as a param.
+fn functype_needs_realloc_for_lift(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  // For canon lift, `realloc` is required when the wrapper must allocate/write
+  // linear memory to pass params (strings/lists or indirect args).
+  let mut param_count = 0
   for p in ft.params {
-    if valtype_needs_memory(p.ty) {
-      return true
+    match core_valtypes_for_component_valtype(p.ty, type_table) {
+      Some(ts) => {
+        param_count += ts.length()
+        if param_count > 16 {
+          return true
+        }
+      }
+      None => return true
     }
   }
   false
 }
 
 ///|
-fn functype_needs_realloc_for_lower(ft : @component.FuncType) -> Bool {
+fn functype_needs_realloc_for_lower(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
   // For canon lower, `realloc` is required when the wrapper must write a
   // component value into core linear memory as a result.
   match ft.result {
-    Some(r) => valtype_needs_memory(r)
+    Some(r) => core_valtypes_for_component_valtype(r, type_table) is None
     None => false
   }
 }
@@ -2527,42 +5209,246 @@ fn functype_needs_realloc_for_lower(ft : @component.FuncType) -> Bool {
 ///|
 fn core_valtypes_for_component_valtype(
   ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
 ) -> Array[@types.ValueType]? {
-  match ty {
-    @component.ValType::TypeIdx(_) => None
-    @component.ValType::Prim(p) =>
-      match p {
-        @component.PrimValType::Bool
-        | @component.PrimValType::S8
-        | @component.PrimValType::U8
-        | @component.PrimValType::S16
-        | @component.PrimValType::U16
-        | @component.PrimValType::S32
-        | @component.PrimValType::U32
-        | @component.PrimValType::Char => Some([@types.ValueType::I32])
-        @component.PrimValType::S64 | @component.PrimValType::U64 =>
-          Some([@types.ValueType::I64])
-        @component.PrimValType::F32 => Some([@types.ValueType::F32])
-        @component.PrimValType::F64 => Some([@types.ValueType::F64])
-        // Strings/results need canonical ABI lowering/lifting rules (ptr/len,
-        // return pointers, etc). We'll validate these once the full ABI
-        // machinery is implemented.
-        @component.PrimValType::String | @component.PrimValType::ErrorContext =>
-          None
-      }
+  // For now, we only model the "flat" ABI for scalar/composite values that can
+  // be represented without linear memory. Types that require memory (strings,
+  // lists, etc) return `None` and skip signature checks; those are still
+  // validated structurally by canonical option checks.
+  let visiting : Map[Int, Unit] = {}
+  fn scalar_prim(p : @component.PrimValType) -> Array[@types.ValueType]? {
+    match p {
+      @component.PrimValType::Bool
+      | @component.PrimValType::S8
+      | @component.PrimValType::U8
+      | @component.PrimValType::S16
+      | @component.PrimValType::U16
+      | @component.PrimValType::S32
+      | @component.PrimValType::U32
+      | @component.PrimValType::Char => Some([@types.ValueType::I32])
+      @component.PrimValType::S64 | @component.PrimValType::U64 =>
+        Some([@types.ValueType::I64])
+      @component.PrimValType::F32 => Some([@types.ValueType::F32])
+      @component.PrimValType::F64 => Some([@types.ValueType::F64])
+      // Strings/results need canonical ABI memory rules.
+      @component.PrimValType::String | @component.PrimValType::ErrorContext =>
+        None
+    }
   }
+
+  fn join_flat(a : @types.ValueType, b : @types.ValueType) -> @types.ValueType {
+    if a == b {
+      return a
+    }
+    // The canonical ABI uses "join" to unify variant payloads with differing
+    // shapes. Mixed integer/float representations fall back to integer bit
+    // patterns (I32/I64) to preserve bits and allow masking.
+    match (a, b) {
+      (@types.ValueType::I64, _)
+      | (_, @types.ValueType::I64)
+      | (@types.ValueType::F64, _)
+      | (_, @types.ValueType::F64) => @types.ValueType::I64
+      (@types.ValueType::F32, @types.ValueType::I32)
+      | (@types.ValueType::I32, @types.ValueType::F32) => @types.ValueType::I32
+      (@types.ValueType::F32, @types.ValueType::F64)
+      | (@types.ValueType::F64, @types.ValueType::F32) => @types.ValueType::I64
+      (@types.ValueType::F32, @types.ValueType::I64)
+      | (@types.ValueType::I64, @types.ValueType::F32) => @types.ValueType::I64
+      (@types.ValueType::I32, _) | (_, @types.ValueType::I32) =>
+        @types.ValueType::I32
+      // Default to I64 for any other mixed case (conservative).
+      _ => @types.ValueType::I64
+    }
+  }
+
+  fn scalar_flat_valtype(vt : @component.ValType) -> Array[@types.ValueType]? {
+    match vt {
+      @component.ValType::Prim(p) => scalar_prim(p)
+      @component.ValType::TypeIdx(idx) => {
+        if idx < 0 || idx >= type_table.length() {
+          return None
+        }
+        match visiting.get(idx) {
+          Some(_) => None
+          None => {
+            visiting.set(idx, ())
+            let res = match type_table[idx] {
+              None => None
+              Some(td) =>
+                match td {
+                  @component.TypeDef::DefValType(p) => scalar_prim(p)
+                  @component.TypeDef::Tuple(tys) => {
+                    let out : Array[@types.ValueType] = []
+                    for t in tys {
+                      match scalar_flat_valtype(t) {
+                        Some(ts) =>
+                          for x in ts {
+                            out.push(x)
+                            if out.length() > 16 {
+                              return None
+                            }
+                          }
+                        None => return None
+                      }
+                    }
+                    Some(out)
+                  }
+                  @component.TypeDef::Record(fields) => {
+                    let out : Array[@types.ValueType] = []
+                    for f in fields {
+                      match scalar_flat_valtype(f.ty) {
+                        Some(ts) =>
+                          for x in ts {
+                            out.push(x)
+                            if out.length() > 16 {
+                              return None
+                            }
+                          }
+                        None => return None
+                      }
+                    }
+                    Some(out)
+                  }
+                  @component.TypeDef::Variant(cases) => {
+                    let payloads : Array[Array[@types.ValueType]] = []
+                    let mut max_len = 0
+                    for c in cases {
+                      let flat = match c.ty {
+                        None => []
+                        Some(t) =>
+                          match scalar_flat_valtype(t) {
+                            Some(ts) => ts
+                            None => return None
+                          }
+                      }
+                      if flat.length() > max_len {
+                        max_len = flat.length()
+                      }
+                      payloads.push(flat)
+                    }
+                    let joined : Array[@types.ValueType] = []
+                    for i in 0..<max_len {
+                      let mut cur : @types.ValueType? = None
+                      for p in payloads {
+                        if i < p.length() {
+                          cur = match cur {
+                            None => Some(p[i])
+                            Some(prev) => Some(join_flat(prev, p[i]))
+                          }
+                        }
+                      }
+                      match cur {
+                        None => ()
+                        Some(t) => joined.push(t)
+                      }
+                    }
+                    if 1 + joined.length() > 16 {
+                      None
+                    } else {
+                      Some([@types.ValueType::I32] + joined)
+                    }
+                  }
+                  @component.TypeDef::Option(v) =>
+                    match scalar_flat_valtype(v) {
+                      Some(payload) =>
+                        if 1 + payload.length() > 16 {
+                          None
+                        } else {
+                          Some([@types.ValueType::I32] + payload)
+                        }
+                      None => None
+                    }
+                  @component.TypeDef::Result(ok, err) => {
+                    let ok_flat = match ok {
+                      None => []
+                      Some(v) =>
+                        match scalar_flat_valtype(v) {
+                          Some(ts) => ts
+                          None => return None
+                        }
+                    }
+                    let err_flat = match err {
+                      None => []
+                      Some(v) =>
+                        match scalar_flat_valtype(v) {
+                          Some(ts) => ts
+                          None => return None
+                        }
+                    }
+                    let mut max_len = ok_flat.length()
+                    if err_flat.length() > max_len {
+                      max_len = err_flat.length()
+                    }
+                    let joined : Array[@types.ValueType] = []
+                    for i in 0..<max_len {
+                      let mut cur : @types.ValueType? = None
+                      if i < ok_flat.length() {
+                        cur = Some(ok_flat[i])
+                      }
+                      if i < err_flat.length() {
+                        cur = match cur {
+                          None => Some(err_flat[i])
+                          Some(prev) => Some(join_flat(prev, err_flat[i]))
+                        }
+                      }
+                      match cur {
+                        None => ()
+                        Some(t) => joined.push(t)
+                      }
+                    }
+                    if 1 + joined.length() > 16 {
+                      None
+                    } else {
+                      Some([@types.ValueType::I32] + joined)
+                    }
+                  }
+                  @component.TypeDef::Flags(labels) =>
+                    if labels.length() <= 32 {
+                      Some([@types.ValueType::I32])
+                    } else if labels.length() <= 64 {
+                      Some([@types.ValueType::I64])
+                    } else {
+                      None
+                    }
+                  @component.TypeDef::Enum(_labels) =>
+                    Some([@types.ValueType::I32])
+                  @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) =>
+                    Some([@types.ValueType::I32])
+                  @component.TypeDef::ResourceType(_, _, _, _) =>
+                    Some([@types.ValueType::I32])
+                  @component.TypeDef::Future(_)
+                  | @component.TypeDef::Stream(_) =>
+                    Some([@types.ValueType::I32])
+                  // Lists/strings/resources with non-scalar reps require memory.
+                  _ => None
+                }
+            }
+            visiting.remove(idx) |> ignore
+            res
+          }
+        }
+      }
+    }
+  }
+
+  scalar_flat_valtype(ty)
 }
 
 ///|
 fn core_functype_for_component_functype(
   ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
 ) -> @types.FuncType? {
   let params : Array[@types.ValueType] = []
   for p in ft.params {
-    match core_valtypes_for_component_valtype(p.ty) {
+    match core_valtypes_for_component_valtype(p.ty, type_table) {
       Some(ts) =>
         for t in ts {
           params.push(t)
+          if params.length() > 16 {
+            // Indirect parameters: canonical ABI requires memory.
+            return None
+          }
         }
       None => return None
     }
@@ -2571,13 +5457,17 @@ fn core_functype_for_component_functype(
   match ft.result {
     None => ()
     Some(r) =>
-      match core_valtypes_for_component_valtype(r) {
+      match core_valtypes_for_component_valtype(r, type_table) {
         Some(ts) =>
           for t in ts {
             results.push(t)
           }
         None => return None
       }
+  }
+  // Indirect/multi-value results go through memory (retptr), not direct core results.
+  if results.length() > 1 {
+    return None
   }
   Some({ params, results })
 }
@@ -2586,6 +5476,7 @@ fn core_functype_for_component_functype(
 fn validate_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
+  local_resource_types : Array[Bool],
   type_bound : Int,
   core_memory_types : Array[@types.MemoryType?],
   core_func_types : Array[@types.FuncType?],
@@ -2609,6 +5500,20 @@ fn validate_canon(
           }
         None => ()
       }
+      match canon_realloc_idx(opts) {
+        Some(idx) =>
+          if idx < 0 || idx >= core_func_types.length() {
+            raise InvalidCoreFuncIndex(idx)
+          }
+        None => ()
+      }
+      match canon_post_return_idx(opts) {
+        Some(idx) =>
+          if idx < 0 || idx >= core_func_types.length() {
+            raise InvalidCoreFuncIndex(idx)
+          }
+        None => ()
+      }
       if core_func_idx < 0 || core_func_idx >= core_func_types.length() {
         raise InvalidCoreFuncIndex(core_func_idx)
       }
@@ -2616,31 +5521,73 @@ fn validate_canon(
       let td = type_table[tyidx]
       match td {
         Some(@component.TypeDef::FuncType(ft)) => {
-          if canon_has_async(opts) && !ft.is_async {
-            raise CanonAsyncTypeMismatch(tyidx)
+          match canon_realloc_idx(opts) {
+            Some(idx) =>
+              match core_func_types[idx] {
+                Some(core_ft) => {
+                  let expected : @types.FuncType = {
+                    params: [
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                    ],
+                    results: [@types.ValueType::I32],
+                  }
+                  if core_ft != expected {
+                    raise CanonCoreFuncTypeMismatch(
+                      "canonical option `realloc` uses a core function with an incorrect signature",
+                    )
+                  }
+                }
+                None => ()
+              }
+            None => ()
           }
-          if functype_needs_memory(ft) {
+          match canon_post_return_idx(opts) {
+            Some(idx) =>
+              match (core_func_types[core_func_idx], core_func_types[idx]) {
+                (Some(lifted_ft), Some(post_ft)) => {
+                  let expected : @types.FuncType = {
+                    params: lifted_ft.results,
+                    results: [],
+                  }
+                  if post_ft != expected {
+                    raise CanonCoreFuncTypeMismatch(
+                      "canonical option `post-return` uses a core function with an incorrect signature",
+                    )
+                  }
+                }
+                _ => ()
+              }
+            None => ()
+          }
+          if functype_needs_memory(ft, type_table) {
             if !canon_has_memory(opts) {
               raise MissingCanonOption("memory")
             }
           }
-          if functype_needs_realloc_for_lift(ft) {
+          if functype_needs_realloc_for_lift(ft, type_table) {
             if !canon_has_realloc(opts) {
               raise MissingCanonOption("realloc")
             }
           }
-          match
-            (
-              core_func_types[core_func_idx],
-              core_functype_for_component_functype(ft),
-            ) {
-            (Some(core_ft), Some(expected_core_ft)) =>
-              if core_ft != expected_core_ft {
-                raise CanonCoreFuncTypeMismatch(
-                  "canon lift core signature mismatch",
-                )
-              }
-            _ => ()
+          // Async-lifted functions use a callback/event-code ABI and do not
+          // match the direct lowering signature.
+          if !canon_has_async(opts) {
+            match
+              (
+                core_func_types[core_func_idx],
+                core_functype_for_component_functype(ft, type_table),
+              ) {
+              (Some(core_ft), Some(expected_core_ft)) =>
+                if core_ft != expected_core_ft {
+                  raise CanonCoreFuncTypeMismatch(
+                    "canon lift core signature mismatch",
+                  )
+                }
+              _ => ()
+            }
           }
         }
         None => ()
@@ -2667,24 +5614,365 @@ fn validate_canon(
           }
         None => ()
       }
+      match canon_realloc_idx(opts) {
+        Some(idx) =>
+          if idx < 0 || idx >= core_func_types.length() {
+            raise InvalidCoreFuncIndex(idx)
+          }
+        None => ()
+      }
       if func_idx < 0 || func_idx >= func_types.length() {
         raise InvalidFuncIndex(func_idx)
       }
       match func_types[func_idx] {
         Some(ft) => {
-          if functype_needs_memory(ft) && !canon_has_memory(opts) {
+          match canon_realloc_idx(opts) {
+            Some(idx) =>
+              match core_func_types[idx] {
+                Some(core_ft) => {
+                  let expected : @types.FuncType = {
+                    params: [
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                      @types.ValueType::I32,
+                    ],
+                    results: [@types.ValueType::I32],
+                  }
+                  if core_ft != expected {
+                    raise CanonCoreFuncTypeMismatch(
+                      "canonical option `realloc` uses a core function with an incorrect signature",
+                    )
+                  }
+                }
+                None => ()
+              }
+            None => ()
+          }
+          if functype_needs_memory(ft, type_table) && !canon_has_memory(opts) {
             raise MissingCanonOption("memory")
           }
-          if functype_needs_realloc_for_lower(ft) && !canon_has_realloc(opts) {
+          if functype_needs_realloc_for_lower(ft, type_table) &&
+            !canon_has_realloc(opts) {
             raise MissingCanonOption("realloc")
           }
         }
         None => ()
       }
     }
-    ResourceNew(tyidx) => check_typeidx(tyidx, type_bound)
-    ResourceDrop(tyidx) => check_typeidx(tyidx, type_bound)
-    ResourceRep(tyidx) => check_typeidx(tyidx, type_bound)
+    ResourceNew(tyidx) => {
+      if tyidx < 0 || tyidx >= type_bound {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      // `resource.new` requires a resource type defined in this concrete component.
+      if tyidx < 0 || tyidx >= type_table.length() {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      if tyidx < 0 ||
+        tyidx >= local_resource_types.length() ||
+        !local_resource_types[tyidx] {
+        raise SectionParseError(8, "not a local resource")
+      }
+      match type_table[tyidx] {
+        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        _ => raise SectionParseError(8, "not a resource type")
+      }
+    }
+    ResourceRep(tyidx) => {
+      if tyidx < 0 || tyidx >= type_bound {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      if tyidx < 0 || tyidx >= type_table.length() {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      if tyidx < 0 ||
+        tyidx >= local_resource_types.length() ||
+        !local_resource_types[tyidx] {
+        raise SectionParseError(8, "not a local resource")
+      }
+      match type_table[tyidx] {
+        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        _ => raise SectionParseError(8, "not a resource type")
+      }
+    }
+    ResourceDrop(tyidx) => {
+      if tyidx < 0 || tyidx >= type_bound {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      if tyidx < 0 || tyidx >= type_table.length() {
+        raise SectionParseError(8, "type index out of bounds")
+      }
+      // `resource.drop` is allowed for both local resource types and imported
+      // `(sub resource)` types (which we currently model as None).
+      match type_table[tyidx] {
+        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        None => ()
+        Some(_) => raise SectionParseError(8, "not a resource type")
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+fn valtype_refers_to_resource(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    @component.ValType::Prim(_) => false
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() {
+        false
+      } else if visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, 1)
+        let any = match type_table[idx] {
+          None => false
+          Some(td) => typedef_refers_to_resource(td, type_table, visiting)
+        }
+        visiting.remove(idx) |> ignore
+        any
+      }
+  }
+}
+
+///|
+fn externdesc_refers_to_resource(
+  desc : @component.ExternDesc,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match desc {
+    @component.ExternDesc::Type(b) =>
+      match b {
+        @component.TypeBound::Eq(idx) =>
+          valtype_refers_to_resource(
+            @component.ValType::TypeIdx(idx),
+            type_table,
+            visiting,
+          )
+        @component.TypeBound::SubResource => true
+      }
+    @component.ExternDesc::FuncType(tyidx) =>
+      if tyidx < 0 || tyidx >= type_table.length() {
+        false
+      } else {
+        match type_table[tyidx] {
+          Some(@component.TypeDef::FuncType(ft)) => {
+            let mut any = false
+            for p in ft.params {
+              if valtype_refers_to_resource(p.ty, type_table, visiting) {
+                any = true
+                break
+              }
+            }
+            if !any {
+              match ft.result {
+                None => ()
+                Some(r) =>
+                  if valtype_refers_to_resource(r, type_table, visiting) {
+                    any = true
+                  }
+              }
+            }
+            any
+          }
+          _ => false
+        }
+      }
+    @component.ExternDesc::InstanceType(tyidx) =>
+      if tyidx < 0 || tyidx >= type_table.length() {
+        false
+      } else {
+        match type_table[tyidx] {
+          Some(@component.TypeDef::InstanceType(decls)) => {
+            let mut any = false
+            for d in decls {
+              match d {
+                @component.InstanceDecl::Type(td) =>
+                  if typedef_refers_to_resource(td, type_table, visiting) {
+                    any = true
+                    break
+                  }
+                @component.InstanceDecl::Export(_name, desc) =>
+                  if externdesc_refers_to_resource(desc, type_table, visiting) {
+                    any = true
+                    break
+                  }
+                _ => ()
+              }
+            }
+            any
+          }
+          _ => false
+        }
+      }
+    @component.ExternDesc::ComponentType(tyidx) =>
+      if tyidx < 0 || tyidx >= type_table.length() {
+        false
+      } else {
+        match type_table[tyidx] {
+          Some(@component.TypeDef::ComponentType(decls)) => {
+            let mut any = false
+            for d in decls {
+              match d {
+                @component.ComponentDecl::Type(td) =>
+                  if typedef_refers_to_resource(td, type_table, visiting) {
+                    any = true
+                    break
+                  }
+                @component.ComponentDecl::Import(_name, desc) =>
+                  if externdesc_refers_to_resource(desc, type_table, visiting) {
+                    any = true
+                    break
+                  }
+                @component.ComponentDecl::Export(_name, desc) =>
+                  if externdesc_refers_to_resource(desc, type_table, visiting) {
+                    any = true
+                    break
+                  }
+                _ => ()
+              }
+            }
+            any
+          }
+          _ => false
+        }
+      }
+    _ => false
+  }
+}
+
+///|
+fn typedef_refers_to_resource(
+  td : @component.TypeDef,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match td {
+    @component.TypeDef::ResourceType(_, _, _, _) => true
+    @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) => true
+    @component.TypeDef::DefValType(_) => false
+    @component.TypeDef::Tuple(tys) => {
+      let mut any = false
+      for t in tys {
+        if valtype_refers_to_resource(t, type_table, visiting) {
+          any = true
+          break
+        }
+      }
+      any
+    }
+    @component.TypeDef::Record(fields) => {
+      let mut any = false
+      for f in fields {
+        if valtype_refers_to_resource(f.ty, type_table, visiting) {
+          any = true
+          break
+        }
+      }
+      any
+    }
+    @component.TypeDef::Variant(cases) => {
+      let mut any = false
+      for c in cases {
+        match c.ty {
+          None => ()
+          Some(t) =>
+            if valtype_refers_to_resource(t, type_table, visiting) {
+              any = true
+              break
+            }
+        }
+      }
+      any
+    }
+    @component.TypeDef::Option(v) =>
+      valtype_refers_to_resource(v, type_table, visiting)
+    @component.TypeDef::Result(ok, err) => {
+      let ok_any = match ok {
+        None => false
+        Some(v) => valtype_refers_to_resource(v, type_table, visiting)
+      }
+      let err_any = match err {
+        None => false
+        Some(v) => valtype_refers_to_resource(v, type_table, visiting)
+      }
+      ok_any || err_any
+    }
+    @component.TypeDef::List(v) =>
+      valtype_refers_to_resource(v, type_table, visiting)
+    @component.TypeDef::Stream(v) | @component.TypeDef::Future(v) =>
+      match v {
+        None => false
+        Some(inner) => valtype_refers_to_resource(inner, type_table, visiting)
+      }
+    @component.TypeDef::FuncType(ft) => {
+      let mut any = false
+      for p in ft.params {
+        if valtype_refers_to_resource(p.ty, type_table, visiting) {
+          any = true
+          break
+        }
+      }
+      if !any {
+        match ft.result {
+          None => ()
+          Some(r) =>
+            if valtype_refers_to_resource(r, type_table, visiting) {
+              any = true
+            }
+        }
+      }
+      any
+    }
+    @component.TypeDef::ComponentType(decls) => {
+      let mut any = false
+      for d in decls {
+        match d {
+          @component.ComponentDecl::Type(td2) =>
+            if typedef_refers_to_resource(td2, type_table, visiting) {
+              any = true
+              break
+            }
+          @component.ComponentDecl::Import(_name, desc) =>
+            if externdesc_refers_to_resource(desc, type_table, visiting) {
+              any = true
+              break
+            }
+          @component.ComponentDecl::Export(_name, desc) =>
+            if externdesc_refers_to_resource(desc, type_table, visiting) {
+              any = true
+              break
+            }
+          _ => ()
+        }
+      }
+      any
+    }
+    @component.TypeDef::InstanceType(decls) => {
+      let mut any = false
+      for d in decls {
+        match d {
+          @component.InstanceDecl::Type(td2) =>
+            if typedef_refers_to_resource(td2, type_table, visiting) {
+              any = true
+              break
+            }
+          @component.InstanceDecl::Export(_name, desc) =>
+            if externdesc_refers_to_resource(desc, type_table, visiting) {
+              any = true
+              break
+            }
+          _ => ()
+        }
+      }
+      any
+    }
+    _ => false
   }
 }
 
@@ -2742,6 +6030,13 @@ fn effective_typedef_size(
   td : @component.TypeDef,
   outer_sizes : Array[Int],
 ) -> Int {
+  fn valtype_size(ty : @component.ValType) -> Int {
+    match ty {
+      @component.ValType::Prim(_) => 1
+      @component.ValType::TypeIdx(idx) => local_type_size_of(idx, outer_sizes)
+    }
+  }
+
   match td {
     @component.TypeDef::ComponentType(decls) => {
       let local_sizes : Array[Int] = []
@@ -2827,8 +6122,180 @@ fn effective_typedef_size(
       }
       total
     }
+    @component.TypeDef::DefValType(_) => 1
+    @component.TypeDef::FuncType(ft) => {
+      let mut total = 1
+      for p in ft.params {
+        total = add_type_size(total, valtype_size(p.ty))
+        if total > 100000 {
+          return 100001
+        }
+      }
+      match ft.result {
+        Some(r) => add_type_size(total, valtype_size(r))
+        None => total
+      }
+    }
+    @component.TypeDef::Tuple(tys) => {
+      let mut total = 1
+      for t in tys {
+        total = add_type_size(total, valtype_size(t))
+        if total > 100000 {
+          return 100001
+        }
+      }
+      total
+    }
+    @component.TypeDef::Record(fields) => {
+      let mut total = 1
+      for f in fields {
+        total = add_type_size(total, valtype_size(f.ty))
+        if total > 100000 {
+          return 100001
+        }
+      }
+      total
+    }
+    @component.TypeDef::Variant(cases) => {
+      let mut total = 1
+      for c in cases {
+        match c.ty {
+          Some(t) => total = add_type_size(total, valtype_size(t))
+          None => ()
+        }
+        if total > 100000 {
+          return 100001
+        }
+      }
+      total
+    }
+    @component.TypeDef::Option(v) => add_type_size(1, valtype_size(v))
+    @component.TypeDef::Result(ok, err) => {
+      let mut total = 1
+      match ok {
+        Some(v) => total = add_type_size(total, valtype_size(v))
+        None => ()
+      }
+      match err {
+        Some(v) => total = add_type_size(total, valtype_size(v))
+        None => ()
+      }
+      total
+    }
+    @component.TypeDef::List(v) => add_type_size(1, valtype_size(v))
+    @component.TypeDef::Flags(labels) => add_type_size(1, labels.length())
+    @component.TypeDef::Enum(labels) => add_type_size(1, labels.length())
     _ => 1
   }
+}
+
+///|
+/// Compute a conservative nesting depth for defined types.
+///
+/// The component-spec suite expects a rejection for overly deep nesting even
+/// when effective size is small (e.g. 101 nested `list` types).
+fn valtype_nesting_depth(
+  ty : @component.ValType,
+  type_depths : Array[Int],
+) -> Int {
+  match ty {
+    @component.ValType::Prim(_) => 0
+    @component.ValType::TypeIdx(idx) =>
+      if idx < 0 || idx >= type_depths.length() {
+        0
+      } else {
+        type_depths[idx]
+      }
+  }
+}
+
+///|
+fn effective_typedef_depth(
+  td : @component.TypeDef,
+  type_depths : Array[Int],
+) -> Int {
+  match td {
+    // Base types contribute depth=1 so that chains like 101 nested `list`
+    // typedefs trip the component-spec limit.
+    @component.TypeDef::DefValType(_) => 1
+    @component.TypeDef::FuncType(_) => 1
+    @component.TypeDef::List(v) => 1 + valtype_nesting_depth(v, type_depths)
+    @component.TypeDef::Option(v) => 1 + valtype_nesting_depth(v, type_depths)
+    @component.TypeDef::Result(ok, err) => {
+      let mut max_child = 0
+      match ok {
+        Some(v) => max_child = valtype_nesting_depth(v, type_depths)
+        None => ()
+      }
+      match err {
+        Some(v) => {
+          let d = valtype_nesting_depth(v, type_depths)
+          if d > max_child {
+            max_child = d
+          }
+        }
+        None => ()
+      }
+      1 + max_child
+    }
+    @component.TypeDef::Tuple(tys) => {
+      let mut max_child = 0
+      for v in tys {
+        let d = valtype_nesting_depth(v, type_depths)
+        if d > max_child {
+          max_child = d
+        }
+      }
+      1 + max_child
+    }
+    @component.TypeDef::Record(fields) => {
+      let mut max_child = 0
+      for f in fields {
+        let d = valtype_nesting_depth(f.ty, type_depths)
+        if d > max_child {
+          max_child = d
+        }
+      }
+      1 + max_child
+    }
+    @component.TypeDef::Variant(cases) => {
+      let mut max_child = 0
+      for c in cases {
+        match c.ty {
+          Some(v) => {
+            let d = valtype_nesting_depth(v, type_depths)
+            if d > max_child {
+              max_child = d
+            }
+          }
+          None => ()
+        }
+      }
+      1 + max_child
+    }
+    // Types that are represented scalarly or don't contribute additional depth
+    // beyond the base `1`.
+    _ => 1
+  }
+}
+
+///|
+priv struct ValidatedComponentInfo {
+  size : Int
+  import_sorts : Map[String, @component.Sort]
+  import_instance_sigs : Map[String, InstanceSig]
+  import_func_sigs : Map[String, FuncSigShape]
+  import_instance_resource_exports : Map[String, Map[String, Int]]
+  import_type_bounds : Map[String, @component.TypeBound]
+  import_type_sigs : Map[String, TypeSig]
+  import_core_module_exports : Map[String, Map[String, Int]]
+  import_core_module_import_sigs : Map[String, Map[String, CoreExternType]]
+  export_sorts : Map[String, @component.Sort]
+  export_instance_sigs : Map[String, InstanceSig]
+  export_instance_type_sigs : Map[String, Map[String, TypeSig]]
+  export_instance_func_sigs : Map[String, Map[String, FuncSigShape]]
+  export_type_sigs : Map[String, TypeSig]
+  export_func_sigs : Map[String, FuncSigShape]
 }
 
 ///|
@@ -2841,14 +6308,27 @@ fn validate_component_inner(
   type_outers : Array[Array[@component.TypeDef?]],
   core_type_bound_outers : Array[Int],
   component_size_outers : Array[Array[Int]],
-) -> Int raise ComponentValidationError {
+) -> ValidatedComponentInfo raise ComponentValidationError {
   let counts = Counts::new()
   let type_table : Array[@component.TypeDef?] = []
+  // Track which type indices correspond to resource types defined in the
+  // current concrete component (as opposed to imported/aliased resource types).
+  let local_resource_types : Array[Bool] = []
+  // Nominal identity ids for resource types (both defined and imported via `sub resource`).
+  // These are local to this validation run, but used to detect mismatches across instantiation.
+  let resource_ids : Array[Int?] = []
+  let mut next_resource_id = 0
   let type_sizes : Array[Int] = []
+  let type_depths : Array[Int] = []
   // Approximate export-signature size (used for wasm-tools' very-nested.wast).
   let component_sizes : Array[Int] = []
   let instance_sizes : Array[Int] = []
   let mut export_size = 1
+  // Type indices that have names in the current interface namespace (type imports/exports).
+  let named_types : Map[Int, Int] = {}
+  // Type indices named by imports only (used to validate imports even if the
+  // component's sections are reordered).
+  let import_named_types : Map[Int, Int] = {}
   let core_type_exports : Array[Map[String, Int]?] = []
   let core_type_module_imports : Array[Array[CoreModuleTypeImport]?] = []
   let core_type_module_export_types : Array[Map[String, CoreExternType]?] = []
@@ -2863,15 +6343,65 @@ fn validate_component_inner(
   let core_memory_types : Array[@types.MemoryType?] = []
   let component_import_sorts : Array[Map[String, @component.Sort]?] = []
   let component_import_instance_sigs : Array[Map[String, InstanceSig]?] = []
+  let component_import_func_sigs : Array[Map[String, FuncSigShape]?] = []
+  let component_import_instance_resource_exports : Array[
+    Map[String, Map[String, Int]]?,
+  ] = []
   let component_import_core_module_exports : Array[
     Map[String, Map[String, Int]]?,
   ] = []
+  let component_import_core_module_import_sigs : Array[
+    Map[String, Map[String, CoreExternType]]?,
+  ] = []
+  let component_import_type_bounds : Array[Map[String, @component.TypeBound]?] = []
+  let component_import_type_sigs : Array[Map[String, TypeSig]?] = []
   let component_export_sorts : Array[Map[String, @component.Sort]?] = []
   let component_export_instance_sigs : Array[Map[String, InstanceSig]?] = []
+  let component_export_instance_type_sigs : Array[
+    Map[String, Map[String, TypeSig]]?,
+  ] = []
+  let component_export_instance_func_sigs : Array[
+    Map[String, Map[String, FuncSigShape]]?,
+  ] = []
+  let component_export_type_sigs : Array[Map[String, TypeSig]?] = []
+  let component_export_func_sigs : Array[Map[String, FuncSigShape]?] = []
   let instance_sigs : Array[InstanceSig?] = []
+  // Instances that are part of this component's interface namespace (imports
+  // plus export-introduced instance aliases).
+  let interface_instance_idxs : Map[Int, Int] = {}
+  let instance_export_type_idxs : Array[Array[Int]?] = []
+  let instance_export_func_idxs : Array[Array[Int]?] = []
+  let instance_export_type_map : Array[Map[String, ExportedTypeInfo]?] = []
+  let instance_export_type_sigs : Array[Map[String, TypeSig]?] = []
+  let instance_export_func_sigs : Array[Map[String, FuncSigShape]?] = []
+  let instance_nested_instance_type_sigs : Array[
+    Map[String, Map[String, TypeSig]]?,
+  ] = []
+  let instance_nested_instance_func_sigs : Array[
+    Map[String, Map[String, FuncSigShape]]?,
+  ] = []
   let func_types : Array[@component.FuncType?] = []
+  let func_sig_shapes : Array[FuncSigShape?] = []
   let mut imported_funcs = 0
-  let seen_import_names : Map[String, Int] = {}
+  let seen_import_names : Map[String, String] = {}
+  let seen_export_names : Map[String, String] = {}
+  // Resource-type names in the WIT interface namespace.
+  let import_resource_names : Map[String, Int] = {}
+  let export_resource_names : Map[String, Int] = {}
+
+  // Signature tables for this component (returned to parent for instantiation validation).
+  let my_import_sorts : Map[String, @component.Sort] = {}
+  let my_import_instance_sigs : Map[String, InstanceSig] = {}
+  let my_import_func_sigs : Map[String, FuncSigShape] = {}
+  let my_import_instance_resource_exports : Map[String, Map[String, Int]] = {}
+  let my_import_type_bounds : Map[String, @component.TypeBound] = {}
+  let my_import_type_sigs : Map[String, TypeSig] = {}
+  let my_export_sorts : Map[String, @component.Sort] = {}
+  let my_export_instance_sigs : Map[String, InstanceSig] = {}
+  let my_export_instance_type_sigs : Map[String, Map[String, TypeSig]] = {}
+  let my_export_instance_func_sigs : Map[String, Map[String, FuncSigShape]] = {}
+  let my_export_type_sigs : Map[String, TypeSig] = {}
+  let my_export_func_sigs : Map[String, FuncSigShape] = {}
   for s in component.binary.sections {
     match s.id {
       // Core module/instance/type sections each declare a single core item.
@@ -3134,7 +6664,7 @@ fn validate_component_inner(
         let nested = @component.parse_component(s.payload) catch {
           e => raise SectionParseError(4, "parse nested component: \{e}")
         }
-        let nested_size = validate_component_inner(
+        let nested_info = validate_component_inner(
           nested,
           false,
           cfg,
@@ -3143,17 +6673,38 @@ fn validate_component_inner(
           [counts.core_type] + core_type_bound_outers,
           [component_sizes] + component_size_outers,
         )
-        let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = component_signature(
-          nested,
+        component_import_sorts.push(Some(nested_info.import_sorts))
+        component_import_instance_sigs.push(
+          Some(nested_info.import_instance_sigs),
         )
-        component_import_sorts.push(Some(imp_sorts))
-        component_import_instance_sigs.push(Some(imp_inst_sigs))
+        component_import_func_sigs.push(Some(nested_info.import_func_sigs))
+        component_import_instance_resource_exports.push(
+          Some(nested_info.import_instance_resource_exports),
+        )
         component_import_core_module_exports.push(
-          Some(component_import_core_module_exports_of(nested)),
+          Some(nested_info.import_core_module_exports),
         )
-        component_export_sorts.push(Some(exp_sorts))
-        component_export_instance_sigs.push(Some(exp_inst_sigs))
-        component_sizes.push(nested_size)
+        component_import_core_module_import_sigs.push(
+          Some(nested_info.import_core_module_import_sigs),
+        )
+        component_import_type_bounds.push(Some(nested_info.import_type_bounds))
+        component_import_type_sigs.push(Some(nested_info.import_type_sigs))
+        component_export_sorts.push(Some(nested_info.export_sorts))
+        component_export_instance_sigs.push(
+          Some(nested_info.export_instance_sigs),
+        )
+        component_export_instance_type_sigs.push(
+          Some(nested_info.export_instance_type_sigs),
+        )
+        component_export_instance_func_sigs.push(
+          Some(nested_info.export_instance_func_sigs),
+        )
+        component_export_type_sigs.push(Some(nested_info.export_type_sigs))
+        component_export_func_sigs.push(Some(nested_info.export_func_sigs))
+        component_sizes.push(nested_info.size)
+        // Nested component definitions contribute to the overall effective
+        // size of the component graph (wasm-tools/very-nested.wast).
+        export_size = add_type_size(export_size, nested_info.size)
         counts.component += 1
       }
       7 => {
@@ -3163,13 +6714,63 @@ fn validate_component_inner(
         }
         for d in defs {
           // This is still a subset: we only allow referencing earlier types.
-          validate_typedef(d, [type_table], [core_type_exports])
+          validate_typedef(
+            d,
+            cfg,
+            [type_table] + type_outers,
+            [core_type_exports],
+            true,
+          )
+          // Resource types refer to the core-func index space for their dtor.
+          // Validate bounds/signature here where we have access to the current
+          // core-func types.
+          match d {
+            @component.TypeDef::ResourceType(_, _rep, dtor_idx, _kind) =>
+              match dtor_idx {
+                Some(idx) =>
+                  if idx < 0 || idx >= counts.core_func {
+                    raise SectionParseError(7, "function index out of bounds")
+                  } else {
+                    match core_func_types.get(idx) {
+                      Some(Some(ft)) => {
+                        let expected : @types.FuncType = {
+                          params: [@types.ValueType::I32],
+                          results: [],
+                        }
+                        if ft != expected {
+                          raise SectionParseError(
+                            7, "wrong signature for a destructor",
+                          )
+                        }
+                      }
+                      _ => ()
+                    }
+                  }
+                None => ()
+              }
+            _ => ()
+          }
           let size = effective_typedef_size(d, type_sizes)
           if size > 100000 {
             raise SectionParseError(7, "effective type size exceeds the limit")
           }
+          let depth = effective_typedef_depth(d, type_depths)
+          if depth > 100 {
+            raise SectionParseError(7, "type nesting is too deep")
+          }
           type_table.push(Some(d))
+          local_resource_types.push(
+            d is @component.TypeDef::ResourceType(_, _, _, _),
+          )
+          match d {
+            @component.TypeDef::ResourceType(_, _, _, _) => {
+              resource_ids.push(Some(next_resource_id))
+              next_resource_id += 1
+            }
+            _ => resource_ids.push(None)
+          }
           type_sizes.push(size)
+          type_depths.push(depth)
         }
       }
       10 => {
@@ -3178,12 +6779,42 @@ fn validate_component_inner(
         }
         for i in imports {
           validate_import_name(i.name, cfg)
+          if is_root && i.desc is @component.ExternDesc::ComponentType(_) {
+            raise SectionParseError(
+              10, "root-level component imports are not supported",
+            )
+          }
+          match importname_to_string(i.name) {
+            Some(name) => {
+              let key = if cfg.wit_names {
+                wit_conflict_key(name)
+              } else {
+                name
+              }
+              match seen_import_names.get(key) {
+                Some(prev) =>
+                  if prev == name {
+                    raise DuplicateImportName(name)
+                  } else {
+                    raise SectionParseError(
+                      10,
+                      "import name `\{name}` conflicts with previous name `\{prev}`",
+                    )
+                  }
+                None => seen_import_names.set(key, name)
+              }
+            }
+            None => ()
+          }
+          match importname_to_string(i.name) {
+            Some(name) => my_import_sorts.set(name, sort_of_externdesc(i.desc))
+            None => ()
+          }
           match importname_to_string(i.name) {
             Some(name) =>
-              if seen_import_names.get(name) is Some(_) {
-                raise DuplicateImportName(name)
-              } else {
-                seen_import_names.set(name, 1)
+              if parse_bracket_resource_name(name) is Some(_) &&
+                !(i.desc is @component.ExternDesc::FuncType(_)) {
+                raise SectionParseError(10, "is not a func")
               }
             None => ()
           }
@@ -3214,9 +6845,33 @@ fn validate_component_inner(
           match i.desc {
             FuncType(tyidx) =>
               match type_table[tyidx] {
-                Some(@component.TypeDef::FuncType(ft)) =>
+                Some(@component.TypeDef::FuncType(ft)) => {
+                  let sig = funcsig_of_functype(ft, type_table, resource_ids)
+                  match importname_to_string(i.name) {
+                    Some(name) =>
+                      validate_bracketed_func_name(
+                        10, name, ft, type_table, resource_ids, import_resource_names,
+                      )
+                    None => ()
+                  }
+                  if !functype_valid_in_interface(
+                      ft, type_table, resource_ids, import_named_types,
+                    ) {
+                    raise SectionParseError(
+                      10, "func not valid to be used as import",
+                    )
+                  }
                   func_types.push(Some(ft))
-                _ => func_types.push(None)
+                  func_sig_shapes.push(Some(sig))
+                  match importname_to_string(i.name) {
+                    Some(name) => my_import_func_sigs.set(name, sig)
+                    None => ()
+                  }
+                }
+                _ => {
+                  func_types.push(None)
+                  func_sig_shapes.push(None)
+                }
               }
             _ => ()
           }
@@ -3249,36 +6904,393 @@ fn validate_component_inner(
               }
             }
             InstanceType(tyidx) => {
+              let mut type_map : Map[String, ExportedTypeInfo]? = None
+              let mut type_sig_map : Map[String, TypeSig]? = None
+              let mut resource_exports : Map[String, Int]? = None
+              let mut func_export_sigs : Map[String, FuncSigShape]? = None
               match type_table[tyidx] {
-                Some(td) =>
-                  instance_sigs.push(
-                    Some(instancetype_sig_of_typedef(td, type_table, {})),
-                  )
+                Some(td) => {
+                  let sig = instancetype_sig_of_typedef(td, type_table, {})
+                  instance_sigs.push(Some(sig))
+                  match importname_to_string(i.name) {
+                    Some(name) => my_import_instance_sigs.set(name, sig)
+                    None => ()
+                  }
+                  match td {
+                    @component.TypeDef::InstanceType(decls) => {
+                      let local_types : Array[@component.TypeDef] = []
+                      let local_resource_ids : Array[Int?] = []
+                      let out : Map[String, ExportedTypeInfo] = {}
+                      let type_sigs : Map[String, TypeSig] = {}
+                      let res : Map[String, Int] = {}
+                      let fns : Map[String, FuncSigShape] = {}
+                      let mut any_types = false
+                      let mut any_fns = false
+                      let visiting : Map[Int, Int] = {}
+                      fn record_type_slot() -> Unit {
+                        local_types.push(@component.TypeDef::InstanceTypeEmpty)
+                        local_resource_ids.push(None)
+                      }
+
+                      fn record_type_slot_for_bound(
+                        b : @component.TypeBound,
+                      ) -> Unit {
+                        match b {
+                          @component.TypeBound::SubResource => {
+                            let rid = next_resource_id
+                            next_resource_id += 1
+                            local_types.push(
+                              @component.TypeDef::ResourceType(
+                                -1,
+                                0x7f,
+                                None,
+                                @component.ResourceKind::HostDefined,
+                              ),
+                            )
+                            local_resource_ids.push(Some(rid))
+                          }
+                          @component.TypeBound::Eq(_idx) => record_type_slot()
+                        }
+                      }
+
+                      for d in decls {
+                        match d {
+                          @component.InstanceDecl::Type(t) => {
+                            local_types.push(t)
+                            local_resource_ids.push(None)
+                          }
+                          @component.InstanceDecl::AliasOuter(
+                            kind,
+                            _count,
+                            _idx
+                          ) => if kind == 0x03 { record_type_slot() }
+                          @component.InstanceDecl::AliasInstanceExport(
+                            kind,
+                            _inst,
+                            _name
+                          ) => if kind == 0x03 { record_type_slot() }
+                          @component.InstanceDecl::Export(name, desc) =>
+                            match desc {
+                              @component.ExternDesc::Type(b) =>
+                                match b {
+                                  @component.TypeBound::SubResource => {
+                                    let rid = next_resource_id
+                                    next_resource_id += 1
+                                    local_types.push(
+                                      @component.TypeDef::ResourceType(
+                                        -1,
+                                        0x7f,
+                                        None,
+                                        @component.ResourceKind::HostDefined,
+                                      ),
+                                    )
+                                    local_resource_ids.push(Some(rid))
+                                    out.set(
+                                      name,
+                                      ExportedTypeInfo::Resource(rid),
+                                    )
+                                    type_sigs.set(name, TypeSig::Resource(rid))
+                                    res.set(name, rid)
+                                    any_types = true
+                                  }
+                                  @component.TypeBound::Eq(idx) => {
+                                    let new_idx = local_types.length()
+                                    if idx >= 0 && idx < local_types.length() {
+                                      local_types.push(local_types[idx])
+                                      local_resource_ids.push(
+                                        local_resource_ids[idx],
+                                      )
+                                    } else {
+                                      record_type_slot()
+                                    }
+                                    let sig = type_sig_of_valtype_lg(
+                                      @component.ValType::TypeIdx(new_idx),
+                                      local_types,
+                                      local_resource_ids,
+                                      type_table,
+                                      resource_ids,
+                                      visiting,
+                                    )
+                                    out.set(name, ExportedTypeInfo::Opaque)
+                                    type_sigs.set(name, sig)
+                                    any_types = true
+                                  }
+                                }
+                              @component.ExternDesc::FuncType(ft_idx) => {
+                                let sig = if ft_idx >= 0 &&
+                                  ft_idx < local_types.length() {
+                                  match local_types[ft_idx] {
+                                    @component.TypeDef::FuncType(ft) =>
+                                      Some(
+                                        funcsig_of_functype_lg(
+                                          ft, local_types, local_resource_ids, type_table,
+                                          resource_ids,
+                                        ),
+                                      )
+                                    _ => None
+                                  }
+                                } else if ft_idx >= 0 &&
+                                  ft_idx < type_table.length() {
+                                  match type_table[ft_idx] {
+                                    Some(@component.TypeDef::FuncType(ft)) =>
+                                      Some(
+                                        funcsig_of_functype_lg(
+                                          ft,
+                                          [],
+                                          [],
+                                          type_table,
+                                          resource_ids,
+                                        ),
+                                      )
+                                    _ => None
+                                  }
+                                } else {
+                                  None
+                                }
+                                match sig {
+                                  Some(s) => {
+                                    fns.set(name, s)
+                                    any_fns = true
+                                  }
+                                  None => ()
+                                }
+                              }
+                              _ => ()
+                            }
+                          _ => ()
+                        }
+                      }
+                      if any_types {
+                        type_map = Some(out)
+                        type_sig_map = Some(type_sigs)
+                        resource_exports = Some(res)
+                      }
+                      if any_fns {
+                        func_export_sigs = Some(fns)
+                      }
+                    }
+                    _ => ()
+                  }
+                  match (importname_to_string(i.name), resource_exports) {
+                    (Some(name), Some(res)) =>
+                      my_import_instance_resource_exports.set(name, res)
+                    _ => ()
+                  }
+                  if !instancetype_valid_for_use_as_interface(
+                      tyidx, type_table, type_outers,
+                    ) {
+                    raise SectionParseError(
+                      10, "instance not valid to be used as import",
+                    )
+                  }
+                }
                 None => instance_sigs.push(None)
               }
+              instance_export_type_idxs.push(None)
+              instance_export_func_idxs.push(None)
+              instance_export_type_map.push(type_map)
+              instance_export_type_sigs.push(type_sig_map)
+              instance_export_func_sigs.push(func_export_sigs)
+              instance_nested_instance_type_sigs.push(None)
+              instance_nested_instance_func_sigs.push(None)
               // Imported instances contribute an entry to the instance index space.
               // We don't have a precise effective-size model here; treat as 1.
               instance_sizes.push(1)
+              interface_instance_idxs.set(instance_sigs.length() - 1, 1)
             }
             _ => ()
-          }
-          if is_root && i.desc is ComponentType(_) {
-            raise UnsupportedComponentImport
           }
           if i.desc is FuncType(_) {
             imported_funcs += 1
           }
-          if i.desc is ComponentType(_) {
-            component_import_sorts.push(None)
-            component_import_instance_sigs.push(None)
-            component_import_core_module_exports.push(None)
-            component_export_sorts.push(None)
-            component_export_instance_sigs.push(None)
-            // Imported component size is unknown; treat as 1.
-            component_sizes.push(1)
+          match i.desc {
+            ComponentType(tyidx) => {
+              let mut import_sorts : Map[String, @component.Sort]? = None
+              let mut import_instance_sigs : Map[String, InstanceSig]? = None
+              let mut import_func_sigs : Map[String, FuncSigShape]? = None
+              let mut import_core_module_import_sigs : Map[
+                String,
+                Map[String, CoreExternType],
+              ]? = None
+              let mut import_core_module_exports : Map[String, Map[String, Int]]? = None
+              let mut import_type_sigs : Map[String, TypeSig]? = None
+              let mut import_type_bounds : Map[String, @component.TypeBound]? = None
+              let mut export_sorts : Map[String, @component.Sort]? = None
+              let mut export_instance_sigs : Map[String, InstanceSig]? = None
+              let mut export_func_sigs : Map[String, FuncSigShape]? = None
+              if tyidx >= 0 && tyidx < type_table.length() {
+                match type_table[tyidx] {
+                  Some(@component.TypeDef::ComponentType(decls)) => {
+                    let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
+                      decls, type_table,
+                    )
+                    import_sorts = Some(imp_sorts)
+                    import_instance_sigs = Some(imp_inst_sigs)
+                    import_func_sigs = Some(
+                      componenttype_import_func_sigs_of_decls(
+                        decls, type_table, resource_ids,
+                      ),
+                    )
+                    let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
+                      decls,
+                    )
+                    import_core_module_import_sigs = Some(core_imports)
+                    import_core_module_exports = Some(core_exports)
+                    import_type_sigs = Some(
+                      componenttype_import_type_sigs_of_decls(
+                        decls, type_table, resource_ids,
+                      ),
+                    )
+                    import_type_bounds = Some(
+                      componenttype_import_type_bounds_of_decls(decls),
+                    )
+                    export_sorts = Some(exp_sorts)
+                    export_instance_sigs = Some(exp_inst_sigs)
+                    export_func_sigs = Some(
+                      componenttype_export_func_sigs_of_decls(
+                        decls, type_table, resource_ids,
+                      ),
+                    )
+                  }
+                  _ => ()
+                }
+              }
+              component_import_sorts.push(import_sorts)
+              component_import_instance_sigs.push(import_instance_sigs)
+              component_import_func_sigs.push(import_func_sigs)
+              component_import_instance_resource_exports.push(None)
+              component_import_core_module_exports.push(
+                import_core_module_exports,
+              )
+              component_import_core_module_import_sigs.push(
+                import_core_module_import_sigs,
+              )
+              component_import_type_bounds.push(import_type_bounds)
+              component_import_type_sigs.push(import_type_sigs)
+              component_export_sorts.push(export_sorts)
+              component_export_instance_sigs.push(export_instance_sigs)
+              component_export_instance_type_sigs.push(None)
+              component_export_instance_func_sigs.push(None)
+              component_export_type_sigs.push(None)
+              component_export_func_sigs.push(export_func_sigs)
+              // Imported component size is unknown; treat as 1.
+              component_sizes.push(1)
+            }
+            _ => ()
           }
-          if i.desc is Type(_) {
-            type_table.push(None)
+          match i.desc {
+            // Type imports extend the type index space.
+            //
+            // `eq` imports are aliases to an existing type, so we can propagate
+            // the underlying definition/size/depth. `sub resource` is treated
+            // as abstract for now.
+            Type(b) => {
+              match b {
+                Eq(tyidx) =>
+                  if tyidx >= 0 && tyidx < type_table.length() {
+                    type_table.push(type_table[tyidx])
+                    if tyidx >= 0 && tyidx < local_resource_types.length() {
+                      local_resource_types.push(local_resource_types[tyidx])
+                    } else {
+                      local_resource_types.push(false)
+                    }
+                    if tyidx >= 0 && tyidx < resource_ids.length() {
+                      resource_ids.push(resource_ids[tyidx])
+                    } else {
+                      resource_ids.push(None)
+                    }
+                    if tyidx >= 0 && tyidx < type_sizes.length() {
+                      type_sizes.push(type_sizes[tyidx])
+                    } else {
+                      type_sizes.push(1)
+                    }
+                    if tyidx >= 0 && tyidx < type_depths.length() {
+                      type_depths.push(type_depths[tyidx])
+                    } else {
+                      type_depths.push(1)
+                    }
+                  } else {
+                    type_table.push(None)
+                    local_resource_types.push(false)
+                    resource_ids.push(None)
+                    type_sizes.push(1)
+                    type_depths.push(1)
+                  }
+                SubResource => {
+                  type_table.push(
+                    Some(
+                      @component.TypeDef::ResourceType(
+                        -1,
+                        0x7f,
+                        None,
+                        @component.ResourceKind::HostDefined,
+                      ),
+                    ),
+                  )
+                  local_resource_types.push(false)
+                  resource_ids.push(Some(next_resource_id))
+                  next_resource_id += 1
+                  type_sizes.push(1)
+                  type_depths.push(1)
+                }
+              }
+              // Imported types are named by their import string, so the newly
+              // introduced type index is available as a named type.
+              let new_idx = type_table.length() - 1
+              named_types.set(new_idx, 1)
+              import_named_types.set(new_idx, 1)
+              match importname_to_string(i.name) {
+                Some(name) =>
+                  match b {
+                    Eq(tyidx) => {
+                      my_import_type_bounds.set(
+                        name,
+                        @component.TypeBound::Eq(tyidx),
+                      )
+                      my_import_type_sigs.set(
+                        name,
+                        type_sig_of_typeidx(tyidx, type_table, resource_ids),
+                      )
+                    }
+                    SubResource => {
+                      import_resource_names.set(name, new_idx)
+                      my_import_type_bounds.set(
+                        name,
+                        @component.TypeBound::SubResource,
+                      )
+                      my_import_type_sigs.set(
+                        name,
+                        type_sig_of_typeidx(new_idx, type_table, resource_ids),
+                      )
+                    }
+                  }
+                None => ()
+              }
+              if !valtype_valid_for_type_import_export(
+                  @component.ValType::TypeIdx(new_idx),
+                  type_table,
+                  resource_ids,
+                  import_named_types,
+                  {},
+                ) {
+                raise SectionParseError(
+                  10, "type not valid to be used as import",
+                )
+              }
+              match type_table[new_idx] {
+                Some(@component.TypeDef::InstanceType(_))
+                | Some(@component.TypeDef::InstanceTypeEmpty) =>
+                  if !instancetype_valid_for_use_as_interface(
+                      new_idx, type_table, type_outers,
+                    ) {
+                    raise SectionParseError(
+                      10, "type not valid to be used as import",
+                    )
+                  }
+                _ => ()
+              }
+            }
+            _ => ()
           }
           count_import(i.desc, counts)
         }
@@ -3289,19 +7301,397 @@ fn validate_component_inner(
         }
         for e in exports {
           validate_export_name(e.name, cfg)
-          if is_root && e.sortidx.sort is Component {
-            raise UnsupportedComponentExport
+          if is_root && e.sortidx.sort is @component.Sort::Component {
+            raise SectionParseError(
+              11, "exporting a component from the root component is not supported",
+            )
+          }
+          match exportname_to_string(e.name) {
+            Some(name) => {
+              // wasm-tools' very-nested.wast relies on long export names to
+              // trigger the effective-size limiter.
+              export_size = add_type_size(export_size, name.length())
+              let key = if cfg.wit_names {
+                wit_conflict_key(name)
+              } else {
+                name
+              }
+              match seen_export_names.get(key) {
+                Some(prev) =>
+                  if prev == name {
+                    raise DuplicateExportName(name)
+                  } else {
+                    raise SectionParseError(
+                      11,
+                      "export name `\{name}` conflicts with previous name `\{prev}`",
+                    )
+                  }
+                None => seen_export_names.set(key, name)
+              }
+            }
+            None => ()
+          }
+          match exportname_to_string(e.name) {
+            Some(name) => my_export_sorts.set(name, e.sortidx.sort)
+            None => ()
+          }
+          match exportname_to_string(e.name) {
+            Some(name) =>
+              if parse_bracket_resource_name(name) is Some(_) &&
+                !(e.sortidx.sort is @component.Sort::Func) {
+                raise SectionParseError(11, "is not a func")
+              }
+            None => ()
           }
           if is_root && e.sortidx.sort is Func && e.sortidx.idx < imported_funcs {
             raise ExportedImportedFunc(e.sortidx.idx)
           }
           check_sortidx(e.sortidx, counts, type_table.length())
+          if e.sortidx.sort is @component.Sort::Type {
+            match exportname_to_string(e.name) {
+              Some(name) =>
+                my_export_type_sigs.set(
+                  name,
+                  type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids),
+                )
+              None => ()
+            }
+            match exportname_to_string(e.name) {
+              Some(name) =>
+                if type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
+                  is TypeSig::Resource(_) {
+                  export_resource_names.set(name, e.sortidx.idx)
+                }
+              None => ()
+            }
+          }
+          if e.sortidx.sort is @component.Sort::Func {
+            match exportname_to_string(e.name) {
+              Some(name) =>
+                if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
+                  let mut ft : @component.FuncType? = None
+                  match e.desc {
+                    Some(@component.ExternDesc::FuncType(tyidx)) =>
+                      if tyidx >= 0 && tyidx < type_table.length() {
+                        match type_table[tyidx] {
+                          Some(@component.TypeDef::FuncType(t)) => ft = Some(t)
+                          _ => ()
+                        }
+                      }
+                    _ => ()
+                  }
+                  if ft is None {
+                    ft = func_types[e.sortidx.idx]
+                  }
+                  match ft {
+                    Some(ft) => {
+                      validate_bracketed_func_name(
+                        11, name, ft, type_table, resource_ids, export_resource_names,
+                      )
+                      my_export_func_sigs.set(
+                        name,
+                        funcsig_of_functype(ft, type_table, resource_ids),
+                      )
+                    }
+                    None => ()
+                  }
+                }
+              None => ()
+            }
+          }
+          if e.sortidx.sort is @component.Sort::Instance {
+            match exportname_to_string(e.name) {
+              Some(name) => {
+                if e.sortidx.idx >= 0 && e.sortidx.idx < instance_sigs.length() {
+                  match instance_sigs[e.sortidx.idx] {
+                    Some(sig) => my_export_instance_sigs.set(name, sig)
+                    None => ()
+                  }
+                }
+                if e.sortidx.idx >= 0 &&
+                  e.sortidx.idx < instance_export_type_sigs.length() {
+                  match instance_export_type_sigs[e.sortidx.idx] {
+                    Some(map) => my_export_instance_type_sigs.set(name, map)
+                    None => ()
+                  }
+                }
+                if e.sortidx.idx >= 0 &&
+                  e.sortidx.idx < instance_export_func_sigs.length() {
+                  match instance_export_func_sigs[e.sortidx.idx] {
+                    Some(map) => my_export_instance_func_sigs.set(name, map)
+                    None => ()
+                  }
+                }
+              }
+              None => ()
+            }
+          }
+
+          // Enforce "exportable" rules: nominal-ish types must have names in the
+          // interface namespace (provided via type imports/exports).
+          match e.sortidx.sort {
+            @component.Sort::Type => {
+              let idx = e.sortidx.idx
+              let had = named_types.get(idx) is Some(_)
+              if !had {
+                named_types.set(idx, 1)
+              }
+              if !valtype_valid_for_type_import_export(
+                  @component.ValType::TypeIdx(idx),
+                  type_table,
+                  resource_ids,
+                  named_types,
+                  {},
+                ) {
+                raise SectionParseError(
+                  11, "type not valid to be used as export",
+                )
+              }
+              if !had {
+                named_types.remove(idx) |> ignore
+              }
+              if idx >= 0 && idx < type_table.length() {
+                match type_table[idx] {
+                  Some(@component.TypeDef::InstanceType(_))
+                  | Some(@component.TypeDef::InstanceTypeEmpty) =>
+                    if !instancetype_valid_for_use_as_interface(
+                        idx, type_table, type_outers,
+                      ) {
+                      raise SectionParseError(
+                        11, "type not valid to be used as export",
+                      )
+                    }
+                  _ => ()
+                }
+              }
+            }
+            @component.Sort::Func =>
+              if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
+                let mut ft : @component.FuncType? = None
+                match e.desc {
+                  Some(@component.ExternDesc::FuncType(tyidx)) =>
+                    if tyidx >= 0 && tyidx < type_table.length() {
+                      match type_table[tyidx] {
+                        Some(@component.TypeDef::FuncType(t)) => ft = Some(t)
+                        _ => ()
+                      }
+                    }
+                  _ => ()
+                }
+                if ft is None {
+                  ft = func_types[e.sortidx.idx]
+                }
+                match ft {
+                  Some(ft) =>
+                    if !functype_valid_in_interface(
+                        ft, type_table, resource_ids, named_types,
+                      ) {
+                      raise SectionParseError(
+                        11, "func not valid to be used as export",
+                      )
+                    }
+                  None => ()
+                }
+              }
+            @component.Sort::Instance => {
+              let inst_idx = e.sortidx.idx
+              if inst_idx >= 0 && inst_idx < counts.instance {
+                let exported_type_idxs : Array[Int] = []
+                let seen : Map[Int, Int] = {}
+                if inst_idx >= 0 &&
+                  inst_idx < instance_export_type_idxs.length() {
+                  match instance_export_type_idxs[inst_idx] {
+                    Some(t_idxs) =>
+                      for t in t_idxs {
+                        if seen.get(t) is None {
+                          seen.set(t, 1)
+                          exported_type_idxs.push(t)
+                        }
+                      }
+                    None => ()
+                  }
+                }
+                if inst_idx >= 0 && inst_idx < instance_export_type_map.length() {
+                  match instance_export_type_map[inst_idx] {
+                    Some(map) =>
+                      for kv in map.iter() {
+                        let (_name, info) = kv
+                        match info {
+                          ExportedTypeInfo::Existing(t) =>
+                            if seen.get(t) is None {
+                              seen.set(t, 1)
+                              exported_type_idxs.push(t)
+                            }
+                          _ => ()
+                        }
+                      }
+                    None => ()
+                  }
+                }
+                if inst_idx >= 0 &&
+                  inst_idx < instance_export_type_sigs.length() {
+                  match instance_export_type_sigs[inst_idx] {
+                    Some(map) =>
+                      for kv in map.iter() {
+                        let (_name, sig) = kv
+                        match
+                          typeidx_of_typesig(sig, type_table, resource_ids) {
+                          Some(t) =>
+                            if seen.get(t) is None {
+                              seen.set(t, 1)
+                              exported_type_idxs.push(t)
+                            }
+                          None => ()
+                        }
+                      }
+                    None => ()
+                  }
+                }
+                let inst_named : Map[Int, Int] = {}
+                for kv in named_types.iter() {
+                  let (k, v) = kv
+                  inst_named.set(k, v)
+                }
+                for t in exported_type_idxs {
+                  inst_named.set(t, 1)
+                }
+                for t in exported_type_idxs {
+                  if !valtype_valid_in_interface(
+                      @component.ValType::TypeIdx(t),
+                      type_table,
+                      resource_ids,
+                      inst_named,
+                      {},
+                    ) {
+                    raise SectionParseError(
+                      11, "instance not valid to be used as export",
+                    )
+                  }
+                }
+
+                // Make types exported through this instance available to later
+                // exports in this component's interface.
+                for t in exported_type_idxs {
+                  named_types.set(t, 1)
+                }
+
+                // Validate exported functions use only named types (either named
+                // in the parent interface or exported by this instance).
+                let named_sigs : Array[TypeSig] = []
+                for kv in inst_named.iter() {
+                  let (k, _v) = kv
+                  let sig = type_sig_of_typeidx(k, type_table, resource_ids)
+                  if sig != TypeSig::Other && !typesig_contains(sig, named_sigs) {
+                    named_sigs.push(sig)
+                  }
+                }
+                if inst_idx >= 0 &&
+                  inst_idx < instance_export_type_sigs.length() {
+                  match instance_export_type_sigs[inst_idx] {
+                    Some(map) =>
+                      for kv in map.iter() {
+                        let (_name, sig) = kv
+                        if sig != TypeSig::Other &&
+                          !typesig_contains(sig, named_sigs) {
+                          named_sigs.push(sig)
+                        }
+                      }
+                    None => ()
+                  }
+                }
+                let mut validated_by_idx = false
+                let mut validated_by_sig = false
+                if inst_idx >= 0 &&
+                  inst_idx < instance_export_func_idxs.length() {
+                  match instance_export_func_idxs[inst_idx] {
+                    Some(f_idxs) => {
+                      validated_by_idx = true
+                      for f in f_idxs {
+                        if f >= 0 && f < func_types.length() {
+                          match func_types[f] {
+                            Some(ft) =>
+                              if !functype_valid_in_interface(
+                                  ft, type_table, resource_ids, inst_named,
+                                ) {
+                                raise SectionParseError(
+                                  11, "instance not valid to be used as export",
+                                )
+                              }
+                            None => ()
+                          }
+                        }
+                      }
+                    }
+                    None => ()
+                  }
+                }
+                if !validated_by_idx &&
+                  inst_idx >= 0 &&
+                  inst_idx < instance_export_func_sigs.length() {
+                  match instance_export_func_sigs[inst_idx] {
+                    Some(map) => {
+                      validated_by_sig = true
+                      for kv in map.iter() {
+                        let (_name, sig) = kv
+                        if !funcsig_valid_in_interface(sig, named_sigs) {
+                          raise SectionParseError(
+                            11, "instance not valid to be used as export",
+                          )
+                        }
+                      }
+                    }
+                    None => ()
+                  }
+                }
+                if !validated_by_idx && !validated_by_sig {
+                  let mut needs_funcs = false
+                  if inst_idx >= 0 && inst_idx < instance_sigs.length() {
+                    match instance_sigs[inst_idx] {
+                      Some(s) =>
+                        for kv in s.exports.iter() {
+                          let (_n, sort) = kv
+                          if sort is @component.Sort::Func {
+                            needs_funcs = true
+                            break
+                          }
+                        }
+                      None => ()
+                    }
+                  }
+                  if needs_funcs {
+                    raise SectionParseError(
+                      11, "instance not valid to be used as export",
+                    )
+                  }
+                }
+              }
+            }
+            _ => ()
+          }
           // Track effective type size of this component's export signature.
           match e.sortidx.sort {
             @component.Sort::Instance => {
               let delta = if e.sortidx.idx >= 0 &&
                 e.sortidx.idx < instance_sizes.length() {
                 instance_sizes[e.sortidx.idx]
+              } else {
+                1
+              }
+              export_size = add_type_size(export_size, delta)
+            }
+            @component.Sort::Type => {
+              let delta = if e.sortidx.idx >= 0 &&
+                e.sortidx.idx < type_sizes.length() {
+                type_sizes[e.sortidx.idx]
+              } else {
+                1
+              }
+              export_size = add_type_size(export_size, delta)
+            }
+            @component.Sort::Component => {
+              let delta = if e.sortidx.idx >= 0 &&
+                e.sortidx.idx < component_sizes.length() {
+                component_sizes[e.sortidx.idx]
               } else {
                 1
               }
@@ -3333,6 +7723,10 @@ fn validate_component_inner(
                   None
                 }
                 check_instance_subtype(actual, expected)
+                match exportname_to_string(e.name) {
+                  Some(name) => my_export_instance_sigs.set(name, expected)
+                  None => ()
+                }
               } else {
                 raise AscribedExportTypeIncompatible
               }
@@ -3342,37 +7736,198 @@ fn validate_component_inner(
               }
             _ => ()
           }
-          if e.sortidx.sort is Type {
-            type_table.push(None)
+
+          // Component exports can introduce an alias in the corresponding index
+          // space, which later sections can reference by index.
+          if e.sortidx.sort is @component.Sort::Type {
+            let idx = e.sortidx.idx
+            if idx >= 0 && idx < type_table.length() {
+              type_table.push(type_table[idx])
+              if idx >= 0 && idx < local_resource_types.length() {
+                local_resource_types.push(local_resource_types[idx])
+              } else {
+                local_resource_types.push(false)
+              }
+              if idx >= 0 && idx < resource_ids.length() {
+                resource_ids.push(resource_ids[idx])
+              } else {
+                resource_ids.push(None)
+              }
+              if idx >= 0 && idx < type_sizes.length() {
+                type_sizes.push(type_sizes[idx])
+              } else {
+                type_sizes.push(1)
+              }
+              if idx >= 0 && idx < type_depths.length() {
+                type_depths.push(type_depths[idx])
+              } else {
+                type_depths.push(1)
+              }
+            } else {
+              type_table.push(None)
+              local_resource_types.push(false)
+              resource_ids.push(None)
+              type_sizes.push(1)
+              type_depths.push(1)
+            }
+            // The exported type alias is now a named type in the interface.
+            named_types.set(type_table.length() - 1, 1)
           } else {
             count_alias(e.sortidx.sort, counts)
             match e.sortidx.sort {
               @component.Sort::Func =>
                 if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
                   func_types.push(func_types[e.sortidx.idx])
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < func_sig_shapes.length() {
+                    func_sig_shapes.push(func_sig_shapes[e.sortidx.idx])
+                  } else {
+                    func_sig_shapes.push(None)
+                  }
                 } else {
                   func_types.push(None)
+                  func_sig_shapes.push(None)
                 }
               @component.Sort::Instance =>
                 if e.sortidx.idx >= 0 && e.sortidx.idx < instance_sigs.length() {
                   instance_sigs.push(instance_sigs[e.sortidx.idx])
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_export_type_idxs.length() {
+                    instance_export_type_idxs.push(
+                      instance_export_type_idxs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_export_type_idxs.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_export_func_idxs.length() {
+                    instance_export_func_idxs.push(
+                      instance_export_func_idxs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_export_func_idxs.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_export_type_map.length() {
+                    instance_export_type_map.push(
+                      instance_export_type_map[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_export_type_map.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_export_type_sigs.length() {
+                    instance_export_type_sigs.push(
+                      instance_export_type_sigs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_export_type_sigs.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_export_func_sigs.length() {
+                    instance_export_func_sigs.push(
+                      instance_export_func_sigs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_export_func_sigs.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_nested_instance_type_sigs.length() {
+                    instance_nested_instance_type_sigs.push(
+                      instance_nested_instance_type_sigs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_nested_instance_type_sigs.push(None)
+                  }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < instance_nested_instance_func_sigs.length() {
+                    instance_nested_instance_func_sigs.push(
+                      instance_nested_instance_func_sigs[e.sortidx.idx],
+                    )
+                  } else {
+                    instance_nested_instance_func_sigs.push(None)
+                  }
                   if e.sortidx.idx >= 0 &&
                     e.sortidx.idx < instance_sizes.length() {
                     instance_sizes.push(instance_sizes[e.sortidx.idx])
                   } else {
                     instance_sizes.push(1)
                   }
+                  interface_instance_idxs.set(instance_sigs.length() - 1, 1)
                 } else {
                   instance_sigs.push(None)
+                  instance_export_type_idxs.push(None)
+                  instance_export_func_idxs.push(None)
+                  instance_export_type_map.push(None)
+                  instance_export_type_sigs.push(None)
+                  instance_export_func_sigs.push(None)
+                  instance_nested_instance_type_sigs.push(None)
+                  instance_nested_instance_func_sigs.push(None)
                   instance_sizes.push(1)
+                  interface_instance_idxs.set(instance_sigs.length() - 1, 1)
                 }
               @component.Sort::Component => {
-                component_import_sorts.push(None)
-                component_import_instance_sigs.push(None)
-                component_import_core_module_exports.push(None)
-                component_export_sorts.push(None)
-                component_export_instance_sigs.push(None)
-                component_sizes.push(1)
+                let src = e.sortidx.idx
+                if src >= 0 && src < component_import_sorts.length() {
+                  component_import_sorts.push(component_import_sorts[src])
+                  component_import_instance_sigs.push(
+                    component_import_instance_sigs[src],
+                  )
+                  component_import_func_sigs.push(
+                    component_import_func_sigs[src],
+                  )
+                  component_import_instance_resource_exports.push(
+                    component_import_instance_resource_exports[src],
+                  )
+                  component_import_core_module_exports.push(
+                    component_import_core_module_exports[src],
+                  )
+                  component_import_core_module_import_sigs.push(
+                    component_import_core_module_import_sigs[src],
+                  )
+                  component_import_type_bounds.push(
+                    component_import_type_bounds[src],
+                  )
+                  component_import_type_sigs.push(
+                    component_import_type_sigs[src],
+                  )
+                  component_export_sorts.push(component_export_sorts[src])
+                  component_export_instance_sigs.push(
+                    component_export_instance_sigs[src],
+                  )
+                  component_export_instance_type_sigs.push(
+                    component_export_instance_type_sigs[src],
+                  )
+                  component_export_instance_func_sigs.push(
+                    component_export_instance_func_sigs[src],
+                  )
+                  component_export_type_sigs.push(
+                    component_export_type_sigs[src],
+                  )
+                  component_export_func_sigs.push(
+                    component_export_func_sigs[src],
+                  )
+                } else {
+                  component_import_sorts.push(None)
+                  component_import_instance_sigs.push(None)
+                  component_import_func_sigs.push(None)
+                  component_import_instance_resource_exports.push(None)
+                  component_import_core_module_exports.push(None)
+                  component_import_core_module_import_sigs.push(None)
+                  component_import_type_bounds.push(None)
+                  component_import_type_sigs.push(None)
+                  component_export_sorts.push(None)
+                  component_export_instance_sigs.push(None)
+                  component_export_instance_type_sigs.push(None)
+                  component_export_instance_func_sigs.push(None)
+                  component_export_type_sigs.push(None)
+                  component_export_func_sigs.push(None)
+                }
+                if src >= 0 && src < component_sizes.length() {
+                  component_sizes.push(component_sizes[src])
+                } else {
+                  component_sizes.push(1)
+                }
               }
               @component.Sort::Core(core_sort) =>
                 if core_sort == 0x00 {
@@ -3412,7 +7967,12 @@ fn validate_component_inner(
                   } else {
                     core_module_type_imports.push(None)
                   }
-                  core_module_defs.push(None)
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < core_module_defs.length() {
+                    core_module_defs.push(core_module_defs[e.sortidx.idx])
+                  } else {
+                    core_module_defs.push(None)
+                  }
                 } else if core_sort == 0x12 {
                   if e.sortidx.idx >= 0 &&
                     e.sortidx.idx < core_instance_exports.length() {
@@ -3422,11 +7982,49 @@ fn validate_component_inner(
                   } else {
                     core_instance_exports.push(None)
                   }
+                  if e.sortidx.idx >= 0 &&
+                    e.sortidx.idx < core_instance_export_types.length() {
+                    core_instance_export_types.push(
+                      core_instance_export_types[e.sortidx.idx],
+                    )
+                  } else {
+                    core_instance_export_types.push(None)
+                  }
                 } else {
                   ()
                 }
               _ => ()
             }
+          }
+          // These aliases can be referenced by later exports/sections, so
+          // conservatively account for their contribution to the effective
+          // signature size (wasm-tools' very-nested.wast).
+          match e.sortidx.sort {
+            @component.Sort::Instance => {
+              let delta = if instance_sizes.length() > 0 {
+                instance_sizes[instance_sizes.length() - 1]
+              } else {
+                1
+              }
+              export_size = add_type_size(export_size, delta)
+            }
+            @component.Sort::Type => {
+              let delta = if type_sizes.length() > 0 {
+                type_sizes[type_sizes.length() - 1]
+              } else {
+                1
+              }
+              export_size = add_type_size(export_size, delta)
+            }
+            @component.Sort::Component => {
+              let delta = if component_sizes.length() > 0 {
+                component_sizes[component_sizes.length() - 1]
+              } else {
+                1
+              }
+              export_size = add_type_size(export_size, delta)
+            }
+            _ => export_size = add_type_size(export_size, 1)
           }
         }
       }
@@ -3437,6 +8035,13 @@ fn validate_component_inner(
         for inst in instances {
           let mut inst_sig : InstanceSig? = None
           let mut inst_size = 1
+          let mut inst_type_idxs : Array[Int]? = None
+          let mut inst_func_idxs : Array[Int]? = None
+          let mut inst_type_map : Map[String, ExportedTypeInfo]? = None
+          let mut inst_type_sig_map : Map[String, TypeSig]? = None
+          let mut inst_func_sig_map : Map[String, FuncSigShape]? = None
+          let mut inst_nested_type_sigs : Map[String, Map[String, TypeSig]]? = None
+          let mut inst_nested_func_sigs : Map[String, Map[String, FuncSigShape]]? = None
           match inst.expr {
             Instantiate(component_idx, args) => {
               if component_idx < 0 || component_idx >= counts.component {
@@ -3461,12 +8066,49 @@ fn validate_component_inner(
               } else {
                 None
               }
+              let expected_import_func_sigs = if component_idx >= 0 &&
+                component_idx < component_import_func_sigs.length() {
+                component_import_func_sigs[component_idx]
+              } else {
+                None
+              }
               let expected_import_core_modules = if component_idx >= 0 &&
                 component_idx < component_import_core_module_exports.length() {
                 component_import_core_module_exports[component_idx]
               } else {
                 None
               }
+              let expected_import_core_module_import_sigs = if component_idx >=
+                0 &&
+                component_idx <
+                component_import_core_module_import_sigs.length() {
+                component_import_core_module_import_sigs[component_idx]
+              } else {
+                None
+              }
+              let expected_import_type_sigs = if component_idx >= 0 &&
+                component_idx < component_import_type_sigs.length() {
+                component_import_type_sigs[component_idx]
+              } else {
+                None
+              }
+              let expected_import_type_bounds = if component_idx >= 0 &&
+                component_idx < component_import_type_bounds.length() {
+                component_import_type_bounds[component_idx]
+              } else {
+                None
+              }
+              let expected_import_instance_resource_exports = if component_idx >=
+                0 &&
+                component_idx <
+                component_import_instance_resource_exports.length() {
+                component_import_instance_resource_exports[component_idx]
+              } else {
+                None
+              }
+              let pending_type_args : Array[(String, Int)] = []
+              let pending_func_args : Array[(String, Int)] = []
+              let pending_instance_args : Array[(String, Int)] = []
               let seen_args : Map[String, Int] = {}
               for a in args {
                 check_sortidx(a.sortidx, counts, type_table.length())
@@ -3482,6 +8124,12 @@ fn validate_component_inner(
                         if sort != a.sortidx.sort {
                           raise ComponentImportTypeMismatch(a.name)
                         } else {
+                          if sort is @component.Sort::Func {
+                            pending_func_args.push((a.name, a.sortidx.idx))
+                          }
+                          if sort is @component.Sort::Instance {
+                            pending_instance_args.push((a.name, a.sortidx.idx))
+                          }
                           match (sort, expected_import_instance_sigs) {
                             (@component.Sort::Instance, Some(sig_map)) =>
                               match sig_map.get(a.name) {
@@ -3515,11 +8163,220 @@ fn validate_component_inner(
                               }
                             _ => ()
                           }
+                          match
+                            (sort, expected_import_core_module_import_sigs) {
+                            (@component.Sort::Core(0x11), Some(sig_map)) =>
+                              match sig_map.get(a.name) {
+                                Some(req) => {
+                                  let actual_sig = core_module_import_sig_of_idx(
+                                    a.sortidx.idx,
+                                    core_module_defs,
+                                    core_module_type_imports,
+                                  )
+                                  check_core_module_import_subtype(
+                                    actual_sig, req,
+                                  )
+                                }
+                                None => ()
+                              }
+                            _ => ()
+                          }
+                          if sort is @component.Sort::Type {
+                            pending_type_args.push((a.name, a.sortidx.idx))
+                          }
                         }
                     }
                   None => ()
                 }
               }
+              match expected_imports {
+                Some(map) =>
+                  for kv in map.iter() {
+                    let (name, _sort) = kv
+                    if seen_args.get(name) is None {
+                      raise MissingComponentImport(name)
+                    }
+                  }
+                None => ()
+              }
+
+              // Validate type/function arguments that may depend on type-argument
+              // substitution (notably for nominal resource types).
+              let rid_subst : Map[Int, Int] = {}
+              match expected_import_instance_resource_exports {
+                Some(inst_map) =>
+                  for kv in pending_instance_args {
+                    let (name, inst_idx) = kv
+                    match inst_map.get(name) {
+                      Some(exports) =>
+                        for kv2 in exports.iter() {
+                          let (tname, expected_rid) = kv2
+                          let tmap = if inst_idx >= 0 &&
+                            inst_idx < instance_export_type_map.length() {
+                            instance_export_type_map[inst_idx]
+                          } else {
+                            None
+                          }
+                          match tmap {
+                            Some(map) =>
+                              match map.get(tname) {
+                                Some(ExportedTypeInfo::Resource(actual_rid)) =>
+                                  rid_subst.set(expected_rid, actual_rid)
+                                Some(ExportedTypeInfo::Existing(tidx)) =>
+                                  match
+                                    type_sig_of_typeidx(
+                                      tidx, type_table, resource_ids,
+                                    ) {
+                                    TypeSig::Resource(actual_rid) =>
+                                      rid_subst.set(expected_rid, actual_rid)
+                                    _ =>
+                                      raise SectionParseError(
+                                        5, "expected resource, found defined type",
+                                      )
+                                  }
+                                _ =>
+                                  raise SectionParseError(
+                                    5, "expected resource, found defined type",
+                                  )
+                              }
+                            None =>
+                              raise SectionParseError(
+                                5, "expected resource, found defined type",
+                              )
+                          }
+                        }
+                      None => ()
+                    }
+                  }
+                None => ()
+              }
+              match (expected_import_type_bounds, expected_import_type_sigs) {
+                (Some(bounds), Some(sigs)) => {
+                  // First, map `sub resource` imports to the actual provided resource ids.
+                  for kv in pending_type_args {
+                    let (name, idx) = kv
+                    match bounds.get(name) {
+                      Some(@component.TypeBound::SubResource) =>
+                        match sigs.get(name) {
+                          Some(TypeSig::Resource(expected_rid)) => {
+                            let actual_sig = type_sig_of_typeidx(
+                              idx, type_table, resource_ids,
+                            )
+                            match actual_sig {
+                              TypeSig::Resource(actual_rid) =>
+                                rid_subst.set(expected_rid, actual_rid)
+                              _ =>
+                                raise SectionParseError(
+                                  5, "expected resource, found defined type",
+                                )
+                            }
+                          }
+                          _ => ()
+                        }
+                      _ => ()
+                    }
+                  }
+                  // Then validate `eq` type imports with resource substitution applied.
+                  for kv in pending_type_args {
+                    let (name, idx) = kv
+                    match bounds.get(name) {
+                      Some(@component.TypeBound::Eq(_)) =>
+                        match sigs.get(name) {
+                          Some(req0) => {
+                            let req = type_sig_subst_resources(req0, rid_subst)
+                            let actual = type_sig_of_typeidx(
+                              idx, type_table, resource_ids,
+                            )
+                            if actual != req {
+                              match (req, actual) {
+                                (TypeSig::Resource(_), TypeSig::Resource(_)) =>
+                                  raise SectionParseError(
+                                    5, "resource types are not the same",
+                                  )
+                                (TypeSig::Resource(_), _) =>
+                                  raise SectionParseError(
+                                    5, "expected resource, found defined type",
+                                  )
+                                (_, TypeSig::Resource(_)) =>
+                                  raise SectionParseError(
+                                    5, "expected defined type, found resource",
+                                  )
+                                _ =>
+                                  if type_sig_has_resource_mismatch(req, actual) {
+                                    raise SectionParseError(
+                                      5, "resource types are not the same",
+                                    )
+                                  } else {
+                                    raise ComponentImportTypeMismatch(
+                                      "type \{name}",
+                                    )
+                                  }
+                              }
+                            }
+                          }
+                          None => ()
+                        }
+                      _ => ()
+                    }
+                  }
+                }
+                _ => ()
+              }
+              // Finally validate function imports with the same resource substitution.
+              match expected_import_func_sigs {
+                Some(func_map) =>
+                  for kv in pending_func_args {
+                    let (name, idx) = kv
+                    match func_map.get(name) {
+                      Some(expected0) => {
+                        let expected = funcsig_subst_resources(
+                          expected0, rid_subst,
+                        )
+                        let sig_from_map = if idx >= 0 &&
+                          idx < func_sig_shapes.length() {
+                          func_sig_shapes[idx]
+                        } else {
+                          None
+                        }
+                        let actual_sig = match sig_from_map {
+                          Some(sig) => Some(sig)
+                          None =>
+                            if idx >= 0 && idx < func_types.length() {
+                              match func_types[idx] {
+                                Some(actual) =>
+                                  Some(
+                                    funcsig_of_functype(
+                                      actual, type_table, resource_ids,
+                                    ),
+                                  )
+                                None => None
+                              }
+                            } else {
+                              None
+                            }
+                        }
+                        match actual_sig {
+                          Some(actual_sig) =>
+                            if actual_sig != expected {
+                              if funcsig_has_resource_mismatch(
+                                  expected, actual_sig,
+                                ) {
+                                raise SectionParseError(
+                                  5, "resource types are not the same",
+                                )
+                              } else {
+                                raise ComponentImportTypeMismatch("function")
+                              }
+                            }
+                          None => ()
+                        }
+                      }
+                      None => ()
+                    }
+                  }
+                None => ()
+              }
+
               // Propagate the component's export signature to the instantiated
               // instance so later aliasing/instantiations can validate exports.
               if component_idx >= 0 &&
@@ -3540,17 +8397,200 @@ fn validate_component_inner(
                   None => ()
                 }
               }
+
+              // Track exported types so `(alias export $inst "t" (type $x))` can
+              // resolve resource identities (wasm-tools/resources.wast).
+              if component_idx >= 0 &&
+                component_idx < component_export_type_sigs.length() {
+                match component_export_type_sigs[component_idx] {
+                  Some(sig_map) => {
+                    let out : Map[String, ExportedTypeInfo] = {}
+                    let sig_out : Map[String, TypeSig] = {}
+                    for kv in sig_map.iter() {
+                      let (name, sig0) = kv
+                      sig_out.set(
+                        name,
+                        type_sig_subst_resources(sig0, rid_subst),
+                      )
+                      match sig0 {
+                        TypeSig::Resource(rid0) =>
+                          match rid_subst.get(rid0) {
+                            Some(actual_rid) => {
+                              let mut found : Int? = None
+                              for i in 0..<type_table.length() {
+                                if type_sig_of_typeidx(
+                                    i, type_table, resource_ids,
+                                  ) ==
+                                  TypeSig::Resource(actual_rid) {
+                                  found = Some(i)
+                                  break
+                                }
+                              }
+                              match found {
+                                Some(idx) =>
+                                  out.set(name, ExportedTypeInfo::Existing(idx))
+                                None =>
+                                  out.set(
+                                    name,
+                                    ExportedTypeInfo::Resource(actual_rid),
+                                  )
+                              }
+                            }
+                            None => {
+                              let rid = next_resource_id
+                              next_resource_id += 1
+                              rid_subst.set(rid0, rid)
+                              out.set(name, ExportedTypeInfo::Resource(rid))
+                            }
+                          }
+                        _ => {
+                          let sig = type_sig_subst_resources(sig0, rid_subst)
+                          let mut found : Int? = None
+                          for i in 0..<type_table.length() {
+                            if type_sig_of_typeidx(i, type_table, resource_ids) ==
+                              sig {
+                              found = Some(i)
+                              break
+                            }
+                          }
+                          match found {
+                            Some(idx) =>
+                              out.set(name, ExportedTypeInfo::Existing(idx))
+                            None => out.set(name, ExportedTypeInfo::Opaque)
+                          }
+                        }
+                      }
+                    }
+                    inst_type_map = Some(out)
+                    inst_type_sig_map = Some(sig_out)
+                  }
+                  None => ()
+                }
+              }
+              if component_idx >= 0 &&
+                component_idx < component_export_func_sigs.length() {
+                match component_export_func_sigs[component_idx] {
+                  Some(sig_map) => {
+                    let out : Map[String, FuncSigShape] = {}
+                    for kv in sig_map.iter() {
+                      let (name, sig0) = kv
+                      out.set(name, funcsig_subst_resources(sig0, rid_subst))
+                    }
+                    inst_func_sig_map = Some(out)
+                  }
+                  None => ()
+                }
+              }
+              if component_idx >= 0 &&
+                component_idx < component_export_instance_type_sigs.length() {
+                match component_export_instance_type_sigs[component_idx] {
+                  Some(inst_map0) => {
+                    let out : Map[String, Map[String, TypeSig]] = {}
+                    for kv in inst_map0.iter() {
+                      let (inst_name, types0) = kv
+                      let types : Map[String, TypeSig] = {}
+                      for kv2 in types0.iter() {
+                        let (name, sig0) = kv2
+                        types.set(
+                          name,
+                          type_sig_subst_resources(sig0, rid_subst),
+                        )
+                      }
+                      out.set(inst_name, types)
+                    }
+                    inst_nested_type_sigs = Some(out)
+                  }
+                  None => ()
+                }
+              }
+              if component_idx >= 0 &&
+                component_idx < component_export_instance_func_sigs.length() {
+                match component_export_instance_func_sigs[component_idx] {
+                  Some(inst_map0) => {
+                    let out : Map[String, Map[String, FuncSigShape]] = {}
+                    for kv in inst_map0.iter() {
+                      let (inst_name, funcs0) = kv
+                      let funcs : Map[String, FuncSigShape] = {}
+                      for kv2 in funcs0.iter() {
+                        let (name, sig0) = kv2
+                        funcs.set(
+                          name,
+                          funcsig_subst_resources(sig0, rid_subst),
+                        )
+                      }
+                      out.set(inst_name, funcs)
+                    }
+                    inst_nested_func_sigs = Some(out)
+                  }
+                  None => ()
+                }
+              }
             }
             InlineExports(inline_exports) => {
               let map : Map[String, @component.Sort] = {}
               let mut size = 1
+              let t_idxs : Array[Int] = []
+              let f_idxs : Array[Int] = []
+              let type_map : Map[String, ExportedTypeInfo] = {}
+              let type_sig_map : Map[String, TypeSig] = {}
+              let func_map : Map[String, FuncSigShape] = {}
               for ex in inline_exports {
                 check_sortidx(ex.sortidx, counts, type_table.length())
-                validate_extern_name_string(ex.name)
+                if cfg.wit_names &&
+                  parse_bracket_resource_name(ex.name) is Some(_) {
+                  raise SectionParseError(
+                    5, "resource used in function does not have a name in this context",
+                  )
+                }
+                validate_extern_name_string(ex.name, cfg)
                 if map.get(ex.name) is Some(_) {
                   raise DuplicateExportName(ex.name)
                 }
                 map.set(ex.name, ex.sortidx.sort)
+                match ex.sortidx.sort {
+                  @component.Sort::Type => {
+                    t_idxs.push(ex.sortidx.idx)
+                    type_map.set(
+                      ex.name,
+                      ExportedTypeInfo::Existing(ex.sortidx.idx),
+                    )
+                    type_sig_map.set(
+                      ex.name,
+                      type_sig_of_typeidx(
+                        ex.sortidx.idx,
+                        type_table,
+                        resource_ids,
+                      ),
+                    )
+                  }
+                  @component.Sort::Func => {
+                    f_idxs.push(ex.sortidx.idx)
+                    let sig = if ex.sortidx.idx >= 0 &&
+                      ex.sortidx.idx < func_sig_shapes.length() {
+                      func_sig_shapes[ex.sortidx.idx]
+                    } else {
+                      None
+                    }
+                    match sig {
+                      Some(s) => func_map.set(ex.name, s)
+                      None =>
+                        if ex.sortidx.idx >= 0 &&
+                          ex.sortidx.idx < func_types.length() {
+                          match func_types[ex.sortidx.idx] {
+                            Some(ft) =>
+                              func_map.set(
+                                ex.name,
+                                funcsig_of_functype(
+                                  ft, type_table, resource_ids,
+                                ),
+                              )
+                            None => ()
+                          }
+                        }
+                    }
+                  }
+                  _ => ()
+                }
                 match ex.sortidx.sort {
                   @component.Sort::Instance => {
                     let delta = if ex.sortidx.idx >= 0 &&
@@ -3566,10 +8606,22 @@ fn validate_component_inner(
               }
               inst_sig = Some({ exports: map, nested: {} })
               inst_size = size
+              inst_type_idxs = Some(t_idxs)
+              inst_func_idxs = Some(f_idxs)
+              inst_type_map = Some(type_map)
+              inst_type_sig_map = Some(type_sig_map)
+              inst_func_sig_map = Some(func_map)
             }
           }
           instance_sigs.push(inst_sig)
           instance_sizes.push(inst_size)
+          instance_export_type_idxs.push(inst_type_idxs)
+          instance_export_func_idxs.push(inst_func_idxs)
+          instance_export_type_map.push(inst_type_map)
+          instance_export_type_sigs.push(inst_type_sig_map)
+          instance_export_func_sigs.push(inst_func_sig_map)
+          instance_nested_instance_type_sigs.push(inst_nested_type_sigs)
+          instance_nested_instance_func_sigs.push(inst_nested_func_sigs)
           counts.instance += 1
         }
       }
@@ -3581,6 +8633,13 @@ fn validate_component_inner(
           let mut new_core_func_ty : @types.FuncType? = None
           let mut new_core_memory_ty : @types.MemoryType? = None
           let mut new_instance_sig : InstanceSig? = None
+          let mut new_instance_export_type_sigs : Map[String, TypeSig]? = None
+          let mut new_instance_export_func_sigs : Map[String, FuncSigShape]? = None
+          let new_instance_nested_type_sigs : Map[String, Map[String, TypeSig]]? = None
+          let new_instance_nested_func_sigs : Map[
+            String,
+            Map[String, FuncSigShape],
+          ]? = None
           let mut new_component_size = 1
           match a.target {
             Export(instance_idx, _name) =>
@@ -3645,6 +8704,28 @@ fn validate_component_inner(
                     None => ()
                   }
                 None => ()
+              }
+              if instance_idx >= 0 &&
+                instance_idx < instance_nested_instance_type_sigs.length() {
+                match instance_nested_instance_type_sigs[instance_idx] {
+                  Some(map) =>
+                    match map.get(name) {
+                      Some(m) => new_instance_export_type_sigs = Some(m)
+                      None => ()
+                    }
+                  None => ()
+                }
+              }
+              if instance_idx >= 0 &&
+                instance_idx < instance_nested_instance_func_sigs.length() {
+                match instance_nested_instance_func_sigs[instance_idx] {
+                  Some(map) =>
+                    match map.get(name) {
+                      Some(m) => new_instance_export_func_sigs = Some(m)
+                      None => ()
+                    }
+                  None => ()
+                }
               }
             }
             _ => ()
@@ -3736,29 +8817,191 @@ fn validate_component_inner(
             _ => ()
           }
           if a.sort is Type {
+            let mut new_td : @component.TypeDef? = None
+            let mut new_local_resource = false
+            let mut new_rid : Int? = None
+            let mut new_size = 1
+            let mut new_depth = 1
             match a.target {
               Outer(ct, idx) =>
-                type_table.push(
-                  component_outer_type_of_alias(
-                    type_table, type_outers, ct, idx,
-                  ),
-                )
-              _ => type_table.push(None)
+                if ct == 0 {
+                  if idx >= 0 && idx < type_table.length() {
+                    new_td = type_table[idx]
+                  }
+                  if idx >= 0 && idx < local_resource_types.length() {
+                    new_local_resource = local_resource_types[idx]
+                  }
+                  if idx >= 0 && idx < resource_ids.length() {
+                    new_rid = resource_ids[idx]
+                  }
+                  if idx >= 0 && idx < type_sizes.length() {
+                    new_size = type_sizes[idx]
+                  }
+                  if idx >= 0 && idx < type_depths.length() {
+                    new_depth = type_depths[idx]
+                  }
+                } else {
+                  let outer_td = outer_type_of_alias(type_outers, ct, idx)
+                  match outer_td {
+                    Some(td) => {
+                      let tbl = type_outers[ct - 1]
+                      if typedef_refers_to_resource(td, tbl, {}) {
+                        raise SectionParseError(
+                          6, "refers to resources not defined in the current component",
+                        )
+                      }
+                    }
+                    None => ()
+                  }
+                  new_td = outer_td
+                }
+              Export(instance_idx, name) => {
+                let tmap = if instance_idx >= 0 &&
+                  instance_idx < instance_export_type_map.length() {
+                  instance_export_type_map[instance_idx]
+                } else {
+                  None
+                }
+                match tmap {
+                  Some(map) =>
+                    match map.get(name) {
+                      Some(ExportedTypeInfo::Existing(idx)) => {
+                        if idx >= 0 && idx < type_table.length() {
+                          new_td = type_table[idx]
+                        }
+                        if idx >= 0 && idx < local_resource_types.length() {
+                          new_local_resource = local_resource_types[idx]
+                        }
+                        if idx >= 0 && idx < resource_ids.length() {
+                          new_rid = resource_ids[idx]
+                        }
+                        if idx >= 0 && idx < type_sizes.length() {
+                          new_size = type_sizes[idx]
+                        }
+                        if idx >= 0 && idx < type_depths.length() {
+                          new_depth = type_depths[idx]
+                        }
+                      }
+                      Some(ExportedTypeInfo::Resource(rid)) => {
+                        new_td = Some(
+                          @component.TypeDef::ResourceType(
+                            -1,
+                            0x7f,
+                            None,
+                            @component.ResourceKind::HostDefined,
+                          ),
+                        )
+                        new_rid = Some(rid)
+                      }
+                      Some(ExportedTypeInfo::Opaque) => {
+                        let sigmap = if instance_idx >= 0 &&
+                          instance_idx < instance_export_type_sigs.length() {
+                          instance_export_type_sigs[instance_idx]
+                        } else {
+                          None
+                        }
+                        match sigmap {
+                          Some(sm) =>
+                            match sm.get(name) {
+                              Some(sig) =>
+                                match
+                                  typedef_of_typesig(
+                                    sig, type_table, resource_ids,
+                                  ) {
+                                  Some(td) => new_td = Some(td)
+                                  None => ()
+                                }
+                              None => ()
+                            }
+                          None => ()
+                        }
+                      }
+                      None => ()
+                    }
+                  None => ()
+                }
+              }
+              _ => ()
+            }
+            type_table.push(new_td)
+            local_resource_types.push(new_local_resource)
+            resource_ids.push(new_rid)
+            type_sizes.push(new_size)
+            type_depths.push(new_depth)
+            match a.target {
+              Export(instance_idx, _name) =>
+                if interface_instance_idxs.get(instance_idx) is Some(_) {
+                  named_types.set(type_table.length() - 1, 1)
+                }
+              _ => ()
             }
           } else {
             count_alias(a.sort, counts)
             match a.sort {
-              @component.Sort::Func => func_types.push(None)
+              @component.Sort::Func => {
+                let mut new_ft : @component.FuncType? = None
+                let mut new_sig : FuncSigShape? = None
+                match a.target {
+                  Outer(ct, idx) =>
+                    if ct == 0 {
+                      if idx >= 0 && idx < func_types.length() {
+                        new_ft = func_types[idx]
+                      }
+                      if idx >= 0 && idx < func_sig_shapes.length() {
+                        new_sig = func_sig_shapes[idx]
+                      }
+                    }
+                  Export(instance_idx, name) => {
+                    let fmap = if instance_idx >= 0 &&
+                      instance_idx < instance_export_func_sigs.length() {
+                      instance_export_func_sigs[instance_idx]
+                    } else {
+                      None
+                    }
+                    match fmap {
+                      Some(map) =>
+                        match map.get(name) {
+                          Some(sig) => new_sig = Some(sig)
+                          None => ()
+                        }
+                      None => ()
+                    }
+                  }
+                  _ => ()
+                }
+                func_types.push(new_ft)
+                func_sig_shapes.push(new_sig)
+              }
               @component.Sort::Instance => {
                 instance_sigs.push(new_instance_sig)
+                instance_export_type_idxs.push(None)
+                instance_export_func_idxs.push(None)
+                instance_export_type_map.push(None)
+                instance_export_type_sigs.push(new_instance_export_type_sigs)
+                instance_export_func_sigs.push(new_instance_export_func_sigs)
+                instance_nested_instance_type_sigs.push(
+                  new_instance_nested_type_sigs,
+                )
+                instance_nested_instance_func_sigs.push(
+                  new_instance_nested_func_sigs,
+                )
                 instance_sizes.push(1)
               }
               @component.Sort::Component => {
                 component_import_sorts.push(None)
                 component_import_instance_sigs.push(None)
+                component_import_func_sigs.push(None)
+                component_import_instance_resource_exports.push(None)
                 component_import_core_module_exports.push(None)
+                component_import_core_module_import_sigs.push(None)
+                component_import_type_bounds.push(None)
+                component_import_type_sigs.push(None)
                 component_export_sorts.push(None)
                 component_export_instance_sigs.push(None)
+                component_export_instance_type_sigs.push(None)
+                component_export_instance_func_sigs.push(None)
+                component_export_type_sigs.push(None)
+                component_export_func_sigs.push(None)
                 component_sizes.push(new_component_size)
               }
               @component.Sort::Core(core_sort) =>
@@ -3789,6 +9032,7 @@ fn validate_component_inner(
           validate_canon(
             c,
             type_table,
+            local_resource_types,
             type_table.length(),
             core_memory_types,
             core_func_types,
@@ -3796,14 +9040,22 @@ fn validate_component_inner(
           )
           count_canon(c, counts)
           match c {
-            @component.Canon::Lower(_, _) => core_func_types.push(None)
             @component.Canon::Lift(_, _, tyidx) =>
               match type_table[tyidx] {
-                Some(@component.TypeDef::FuncType(ft)) =>
+                Some(@component.TypeDef::FuncType(ft)) => {
                   func_types.push(Some(ft))
-                _ => func_types.push(None)
+                  func_sig_shapes.push(
+                    Some(funcsig_of_functype(ft, type_table, resource_ids)),
+                  )
+                }
+                _ => {
+                  func_types.push(None)
+                  func_sig_shapes.push(None)
+                }
               }
-            _ => ()
+            // All non-lift canonical items append a core function to the core-func
+            // index space, but we don't (yet) model their signatures here.
+            _ => core_func_types.push(None)
           }
         }
       }
@@ -3821,7 +9073,27 @@ fn validate_component_inner(
   if export_size > 100000 {
     raise SectionParseError(11, "effective type size exceeds the limit")
   }
-  export_size
+  {
+    size: export_size,
+    import_sorts: my_import_sorts,
+    import_instance_sigs: my_import_instance_sigs,
+    import_func_sigs: my_import_func_sigs,
+    import_instance_resource_exports: my_import_instance_resource_exports,
+    import_type_bounds: my_import_type_bounds,
+    import_type_sigs: my_import_type_sigs,
+    import_core_module_exports: component_import_core_module_exports_of(
+      component,
+    ),
+    import_core_module_import_sigs: component_import_core_module_import_sigs_of(
+      component,
+    ),
+    export_sorts: my_export_sorts,
+    export_instance_sigs: my_export_instance_sigs,
+    export_instance_type_sigs: my_export_instance_type_sigs,
+    export_instance_func_sigs: my_export_instance_func_sigs,
+    export_type_sigs: my_export_type_sigs,
+    export_func_sigs: my_export_func_sigs,
+  }
 }
 
 ///|
