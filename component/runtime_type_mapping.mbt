@@ -84,8 +84,6 @@ fn core_types_for_valtype(
       | (_, @types.ValueType::F64) => @types.ValueType::I64
       (@types.ValueType::F32, @types.ValueType::I32)
       | (@types.ValueType::I32, @types.ValueType::F32) => @types.ValueType::I32
-      (@types.ValueType::F32, @types.ValueType::F64)
-      | (@types.ValueType::F64, @types.ValueType::F32) => @types.ValueType::I64
       (@types.ValueType::I32, _) | (_, @types.ValueType::I32) =>
         @types.ValueType::I32
       _ => @types.ValueType::I64

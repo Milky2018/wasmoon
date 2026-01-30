@@ -973,7 +973,6 @@ fn progress_one_subtask(
     let step = match st.driver {
       SubtaskDriver::CallbackLifted(t) =>
         step_task_once(t, store, st.caller_table, async_state)
-      _ => TaskStep::Blocked
     }
     pop_task(async_state)
     match step {
@@ -1038,7 +1037,6 @@ fn progress_one_subtask(
                       ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
                         (func_type, types)
                     }
-                  _ => raise CanonCallError("unsupported subtask driver")
                 }
                 // Subtask results are observed by the caller component instance; if the task ran
                 // in a nested component, move stream/future handles into the caller's local space.
@@ -1181,7 +1179,7 @@ fn call_component_func_in_task(
       callee_table,
       may_enter,
       cb_opt,
-      async_abi
+      _async_abi
     ) => {
       if func_type.is_async {
         return await_component_func(

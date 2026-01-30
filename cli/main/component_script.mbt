@@ -576,9 +576,14 @@ pub fn run_component_script(path : String) -> Unit {
     result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
   }
   let drops = @component.ComponentFunc::Host(drops_func_type, [], fn(
-    _args : Array[@component.ComponentValue],
+    args : Array[@component.ComponentValue],
     _table : @component.ResourceTable,
   ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    if args.length() != 0 {
+      raise @component.ComponentRuntimeError::HostCallError(
+        "argument count mismatch",
+      )
+    }
     [@component.ComponentValue::U32(resource1_drops[0])]
   })
   host_exports.set(
@@ -586,9 +591,14 @@ pub fn run_component_script(path : String) -> Unit {
     @component.ComponentExtern::Func(drops),
   )
   let last_drop = @component.ComponentFunc::Host(drops_func_type, [], fn(
-    _args : Array[@component.ComponentValue],
+    args : Array[@component.ComponentValue],
     _table : @component.ResourceTable,
   ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    if args.length() != 0 {
+      raise @component.ComponentRuntimeError::HostCallError(
+        "argument count mismatch",
+      )
+    }
     [@component.ComponentValue::U32(resource1_last_drop[0])]
   })
   host_exports.set(
@@ -610,32 +620,38 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: None,
   }
-  let assert = @component.ComponentFunc::Host(assert_func_type, assert_types, fn(
-    args : Array[@component.ComponentValue],
-    table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
-    match args {
-      [
-        @component.ComponentValue::U32(handle),
-        @component.ComponentValue::U32(expected),
-      ] => {
-        let actual = resource1_expect_handle(table, handle)
-        // Consume the owned resource.
-        table.free(handle) |> ignore
-        if actual.rep != expected {
-          raise @component.ComponentRuntimeError::HostCallError("rep mismatch")
+  let assert_func = @component.ComponentFunc::Host(
+    assert_func_type,
+    assert_types,
+    fn(
+      args : Array[@component.ComponentValue],
+      table : @component.ResourceTable,
+    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      match args {
+        [
+          @component.ComponentValue::U32(handle),
+          @component.ComponentValue::U32(expected),
+        ] => {
+          let actual = resource1_expect_handle(table, handle)
+          // Consume the owned resource.
+          table.free(handle) |> ignore
+          if actual.rep != expected {
+            raise @component.ComponentRuntimeError::HostCallError(
+              "rep mismatch",
+            )
+          }
+          []
         }
-        []
+        _ =>
+          raise @component.ComponentRuntimeError::HostCallError(
+            "argument type mismatch",
+          )
       }
-      _ =>
-        raise @component.ComponentRuntimeError::HostCallError(
-          "argument type mismatch",
-        )
-    }
-  })
+    },
+  )
   host_exports.set(
     "[static]resource1.assert",
-    @component.ComponentExtern::Func(assert),
+    @component.ComponentExtern::Func(assert_func),
   )
   let borrow_ty = Some(@component.TypeDef::Borrow(0))
   let simple_types : Array[@component.TypeDef?] = [resource1_type, borrow_ty]

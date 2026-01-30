@@ -135,7 +135,6 @@ fn instantiate_canon_waitable_set_wait(
                       ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
                         (func_type, types)
                     }
-                  _ => return
                 }
                 let mem2 = store.get_mem(mem_addr2) catch { _ => return }
                 let core_vals = component_results_to_core(

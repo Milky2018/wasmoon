@@ -83,7 +83,7 @@ fn validate_instance_import_type(
   tyidx : Int,
   inst : ComponentInstance,
   types : Array[TypeDef?],
-  core_types : Array[Bytes],
+  _core_types : Array[Bytes],
   outer_stack : Array[ComponentInstance],
 ) -> Unit raise ComponentRuntimeError {
   if tyidx < 0 || tyidx >= types.length() {

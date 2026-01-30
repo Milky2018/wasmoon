@@ -351,8 +351,6 @@ enum SubtaskPhase {
 
 ///|
 enum SubtaskDriver {
-  // Not yet started: execute by calling `await_component_func` once.
-  WaitLifted(ComponentFunc, Array[ComponentValue])
   // Callback-driven: step using callback codes and waitable-set events.
   CallbackLifted(CallbackTask)
 } derive(Show)
@@ -481,21 +479,6 @@ fn find_stream_endpoint_key_by_local(
 }
 
 ///|
-fn find_future_endpoint_key(
-  async_state : AsyncState,
-  future_id : Int,
-  want_readable : Bool,
-) -> Int64? {
-  for kv in async_state.future_endpoints.iter() {
-    let (k, ep) = kv
-    if ep.future_id == future_id && ep.is_readable == want_readable {
-      return Some(k)
-    }
-  }
-  None
-}
-
-///|
 fn find_future_endpoint_key_by_local(
   async_state : AsyncState,
   local_handle : Int,
@@ -538,107 +521,6 @@ fn remove_waitable_membership(
     None => ()
   }
   async_state.waitable_events.remove(wkey)
-}
-
-///|
-fn update_waitable_event_payload(
-  async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
-  code : Int,
-  payload : Int,
-) -> Unit {
-  let wkey = handle_key(owner_component_id, handle)
-  // Update per-waitable backlog.
-  match async_state.waitable_events.get(wkey) {
-    Some(list) => {
-      for i in 0..<list.length() {
-        if list[i].code == code && list[i].index == handle {
-          list[i] = { owner_component_id, code, index: handle, payload }
-        }
-      }
-      async_state.waitable_events.set(wkey, list)
-    }
-    None => ()
-  }
-  // Update set queue (if currently joined).
-  match async_state.waitable_to_set.get(wkey) {
-    Some(ws_key) =>
-      match async_state.waitable_sets.get(ws_key) {
-        Some(set) =>
-          for i in 0..<set.queue.length() {
-            if set.queue[i].code == code && set.queue[i].index == handle {
-              set.queue[i] = {
-                owner_component_id,
-                code,
-                index: handle,
-                payload,
-              }
-            }
-          }
-        None => ()
-      }
-    None => ()
-  }
-}
-
-///|
-/// Ensure that the specified waitable has an event of the given `(code, index=handle)`
-/// with `payload`. If it already exists, update it in-place; otherwise, enqueue it.
-///
-/// This mirrors Wasmtime's `ConcurrentState::update_event` behavior (single logical
-/// event per waitable) while we internally represent events as per-waitable queues.
-fn force_waitable_event_payload(
-  async_state : AsyncState,
-  owner_component_id : Int,
-  handle : Int,
-  code : Int,
-  payload : Int,
-) -> Unit {
-  let wkey = handle_key(owner_component_id, handle)
-  let mut found = false
-  // Update per-waitable backlog.
-  match async_state.waitable_events.get(wkey) {
-    Some(list0) => {
-      let list = list0
-      for i in 0..<list.length() {
-        if list[i].code == code && list[i].index == handle {
-          list[i] = { owner_component_id, code, index: handle, payload }
-          found = true
-        }
-      }
-      async_state.waitable_events.set(wkey, list)
-    }
-    None => ()
-  }
-  // Update set queue (if currently joined).
-  match async_state.waitable_to_set.get(wkey) {
-    Some(ws_key) =>
-      match async_state.waitable_sets.get(ws_key) {
-        Some(set) =>
-          for i in 0..<set.queue.length() {
-            if set.queue[i].code == code && set.queue[i].index == handle {
-              set.queue[i] = {
-                owner_component_id,
-                code,
-                index: handle,
-                payload,
-              }
-              found = true
-            }
-          }
-        None => ()
-      }
-    None => ()
-  }
-  if !found {
-    enqueue_waitable_event(async_state, wkey, {
-      owner_component_id,
-      code,
-      index: handle,
-      payload,
-    })
-  }
 }
 
 ///|
