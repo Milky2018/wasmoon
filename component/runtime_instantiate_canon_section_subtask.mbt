@@ -71,7 +71,6 @@ fn instantiate_canon_subtask_cancel(
             // Mark cancellation request for callback-driven tasks.
             match st.driver {
               SubtaskDriver::CallbackLifted(t) => t.cancelled[0] = true
-              _ => ()
             }
 
             // Best-effort: if the subtask uses the callback-style async ABI,
@@ -91,7 +90,6 @@ fn instantiate_canon_subtask_cancel(
                   ) => true
                   _ => false
                 }
-              _ => false
             }
             if is_callback {
               match st.driver {
@@ -126,7 +124,6 @@ fn instantiate_canon_subtask_cancel(
                     _ => ()
                   }
                 }
-                _ => ()
               }
             }
 

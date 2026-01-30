@@ -123,20 +123,20 @@ priv struct InstanceSig {
 priv struct ParamShape {
   name : String
   ty : TypeSig
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 priv struct FuncSigShape {
   params : Array[ParamShape]
   result : TypeSig?
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 priv enum ExportedTypeInfo {
   Existing(Int)
   Resource(Int)
   Opaque
-} derive(Show, Eq)
+}
 
 ///|
 /// Structural signature for type imports (used to validate instantiation args).
@@ -3211,38 +3211,6 @@ fn functype_valid_in_interface(
 }
 
 ///|
-fn component_import_type_sigs_of(
-  c : @component.Component,
-) -> Map[String, TypeSig] {
-  let type_table : Array[@component.TypeDef?] = []
-  let resource_ids : Array[Int?] = []
-  let mut next_rid = 0
-  for td in c.types {
-    type_table.push(Some(td))
-    match td {
-      @component.TypeDef::ResourceType(_, _, _, _) => {
-        resource_ids.push(Some(next_rid))
-        next_rid += 1
-      }
-      _ => resource_ids.push(None)
-    }
-  }
-  let out : Map[String, TypeSig] = {}
-  for imp in c.imports {
-    match (importname_to_string(imp.name), imp.desc) {
-      (Some(name), @component.ExternDesc::Type(bound)) =>
-        match bound {
-          @component.TypeBound::Eq(tyidx) =>
-            out.set(name, type_sig_of_typeidx(tyidx, type_table, resource_ids))
-          _ => ()
-        }
-      _ => ()
-    }
-  }
-  out
-}
-
-///|
 fn instancetype_sig_of_typedef(
   td : @component.TypeDef,
   type_table : Array[@component.TypeDef?],
@@ -3558,93 +3526,6 @@ fn check_core_module_subtype(
       }
     None => ()
   }
-}
-
-///|
-fn component_signature(
-  c : @component.Component,
-) -> (
-  Map[String, @component.Sort],
-  Map[String, InstanceSig],
-  Map[String, @component.Sort],
-  Map[String, InstanceSig],
-) {
-  let type_table : Array[@component.TypeDef?] = []
-  for td in c.types {
-    type_table.push(Some(td))
-  }
-  let import_sorts : Map[String, @component.Sort] = {}
-  let import_instance_sigs : Map[String, InstanceSig] = {}
-  for i in c.imports {
-    match importname_to_string(i.name) {
-      Some(name) => {
-        let sort = sort_of_externdesc(i.desc)
-        import_sorts.set(name, sort)
-        match i.desc {
-          @component.ExternDesc::InstanceType(tyidx) =>
-            if tyidx >= 0 && tyidx < type_table.length() {
-              let sig = instancetype_sig_of_global_idx(tyidx, type_table, {})
-              import_instance_sigs.set(name, sig)
-            }
-          _ => ()
-        }
-      }
-      None => ()
-    }
-  }
-  let export_sorts : Map[String, @component.Sort] = {}
-  let export_instance_sigs : Map[String, InstanceSig] = {}
-  for e in c.exports {
-    match exportname_to_string(e.name) {
-      Some(name) => {
-        export_sorts.set(name, e.sortidx.sort)
-        match e.desc {
-          Some(@component.ExternDesc::InstanceType(tyidx)) =>
-            if tyidx >= 0 && tyidx < type_table.length() {
-              let sig = instancetype_sig_of_global_idx(tyidx, type_table, {})
-              export_instance_sigs.set(name, sig)
-            }
-          _ => ()
-        }
-      }
-      None => ()
-    }
-  }
-  (import_sorts, import_instance_sigs, export_sorts, export_instance_sigs)
-}
-
-///|
-fn component_import_func_sigs_of(
-  c : @component.Component,
-) -> Map[String, FuncSigShape] {
-  let type_table : Array[@component.TypeDef?] = []
-  let resource_ids : Array[Int?] = []
-  let mut next_rid = 0
-  for td in c.types {
-    type_table.push(Some(td))
-    match td {
-      @component.TypeDef::ResourceType(_, _, _, _) => {
-        resource_ids.push(Some(next_rid))
-        next_rid += 1
-      }
-      _ => resource_ids.push(None)
-    }
-  }
-  let out : Map[String, FuncSigShape] = {}
-  for i in c.imports {
-    match (importname_to_string(i.name), i.desc) {
-      (Some(name), @component.ExternDesc::FuncType(tyidx)) =>
-        if tyidx >= 0 && tyidx < type_table.length() {
-          match type_table[tyidx] {
-            Some(@component.TypeDef::FuncType(ft)) =>
-              out.set(name, funcsig_of_functype(ft, type_table, resource_ids))
-            _ => ()
-          }
-        }
-      _ => ()
-    }
-  }
-  out
 }
 
 ///|
@@ -4328,21 +4209,6 @@ fn outer_core_type_of_alias(
   let tbl = core_type_outers[count - 1]
   check_core_typeidx(idx, tbl.length())
   tbl[idx]
-}
-
-///|
-fn component_outer_type_of_alias(
-  current_types : Array[@component.TypeDef?],
-  type_outers : Array[Array[@component.TypeDef?]],
-  count : Int,
-  idx : Int,
-) -> @component.TypeDef? raise ComponentValidationError {
-  if count == 0 {
-    check_typeidx(idx, current_types.length())
-    current_types[idx]
-  } else {
-    outer_type_of_alias(type_outers, count, idx)
-  }
 }
 
 ///|
@@ -5133,14 +4999,6 @@ fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int? {
 }
 
 ///|
-fn valtype_needs_memory(
-  ty : @component.ValType,
-  type_table : Array[@component.TypeDef?],
-) -> Bool {
-  core_valtypes_for_component_valtype(ty, type_table) is None
-}
-
-///|
 fn functype_needs_memory(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
@@ -5250,10 +5108,6 @@ fn core_valtypes_for_component_valtype(
       | (_, @types.ValueType::F64) => @types.ValueType::I64
       (@types.ValueType::F32, @types.ValueType::I32)
       | (@types.ValueType::I32, @types.ValueType::F32) => @types.ValueType::I32
-      (@types.ValueType::F32, @types.ValueType::F64)
-      | (@types.ValueType::F64, @types.ValueType::F32) => @types.ValueType::I64
-      (@types.ValueType::F32, @types.ValueType::I64)
-      | (@types.ValueType::I64, @types.ValueType::F32) => @types.ValueType::I64
       (@types.ValueType::I32, _) | (_, @types.ValueType::I32) =>
         @types.ValueType::I32
       // Default to I64 for any other mixed case (conservative).
@@ -6930,27 +6784,6 @@ fn validate_component_inner(
                       fn record_type_slot() -> Unit {
                         local_types.push(@component.TypeDef::InstanceTypeEmpty)
                         local_resource_ids.push(None)
-                      }
-
-                      fn record_type_slot_for_bound(
-                        b : @component.TypeBound,
-                      ) -> Unit {
-                        match b {
-                          @component.TypeBound::SubResource => {
-                            let rid = next_resource_id
-                            next_resource_id += 1
-                            local_types.push(
-                              @component.TypeDef::ResourceType(
-                                -1,
-                                0x7f,
-                                None,
-                                @component.ResourceKind::HostDefined,
-                              ),
-                            )
-                            local_resource_ids.push(Some(rid))
-                          }
-                          @component.TypeBound::Eq(_idx) => record_type_slot()
-                        }
                       }
 
                       for d in decls {
