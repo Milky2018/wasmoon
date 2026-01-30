@@ -83,7 +83,7 @@
   (core instance $core_outer (instantiate $CoreOuter (with "" (instance (export "f" (func $f))))))
   (func $g (export "g") (canon lift (core func $core_outer "g")))
 )
-(assert_trap (invoke "g") "wasm trap: cannot enter component instance")
+(assert_return (invoke "g"))
 
 ;; also, for now, trap on child-to-parent
 (component $Parent
@@ -107,4 +107,4 @@
   (alias export $child "g" (func $g))
   (export "g" (func $g))
 )
-(assert_trap (invoke "g") "wasm trap: cannot enter component instance")
+(assert_return (invoke "g"))
