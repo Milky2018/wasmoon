@@ -11,13 +11,31 @@ fn instantiate_canon_thread_index(
     params: [],
     results: [@types.ValueType::I32],
   }
+  let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    [@types.Value::I32(0)]
+    let task_id = current_task_id(async_state)
+    // Lazily create a current thread handle when requested by guest code.
+    ensure_task_thread(async_state, owner_component_id, task_id)
+    match async_state.task_thread.get(task_id) {
+      Some(m) =>
+        match m.get(owner_component_id) {
+          Some(h) => [@types.Value::I32(h)]
+          None => {
+            trap_canon("no current thread")
+            [@types.Value::I32(0)]
+          }
+        }
+      None => {
+        trap_canon("no current thread")
+        [@types.Value::I32(0)]
+      }
+    }
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
 }
@@ -181,13 +199,14 @@ fn instantiate_canon_thread_new_indirect(
     results: [@types.ValueType::I32],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let id = alloc_shared_handle(async_state)
+    let id = alloc_shared_handle(async_state, owner_component_id)
     [@types.Value::I32(id)]
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))

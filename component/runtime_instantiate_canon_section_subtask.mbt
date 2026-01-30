@@ -13,6 +13,7 @@ fn instantiate_canon_subtask_cancel(
     results: [@types.ValueType::I32],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -54,8 +55,9 @@ fn instantiate_canon_subtask_cancel(
       return cache_i32(0)
     }
     match args {
-      [@types.Value::I32(id)] =>
-        match async_state.subtasks.get(id) {
+      [@types.Value::I32(id)] => {
+        let skey = handle_key(owner_component_id, id)
+        match async_state.subtasks.get(skey) {
           None => {
             trap_canon("unknown subtask handle index \{id}")
             cache_i32(0)
@@ -94,7 +96,7 @@ fn instantiate_canon_subtask_cancel(
             if is_callback {
               match st.driver {
                 SubtaskDriver::CallbackLifted(t) => {
-                  push_task(async_state, id, true)
+                  push_task(async_state, skey, true)
                   let step = step_task_once(
                     t,
                     store,
@@ -112,7 +114,8 @@ fn instantiate_canon_subtask_cancel(
                     TaskStep::Done => {
                       st.phase[0] = SubtaskPhase::Returned
                       async_state.inflight_by_instance.set(st.bp_key, 0)
-                      enqueue_waitable_event(async_state, id, {
+                      enqueue_waitable_event(async_state, skey, {
+                        owner_component_id,
                         code: 1,
                         index: id,
                         payload: 2,
@@ -131,6 +134,7 @@ fn instantiate_canon_subtask_cancel(
             cache_i32(-1)
           }
         }
+      }
       _ => {
         trap_canon("type mismatch")
         cache_i32(0)
@@ -150,6 +154,7 @@ fn instantiate_canon_subtask_drop(
     results: [],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -188,15 +193,16 @@ fn instantiate_canon_subtask_drop(
 
     match args {
       [@types.Value::I32(id)] => {
+        let skey = handle_key(owner_component_id, id)
         // Ensure this is a known subtask and it has completed.
-        let st_opt = async_state.subtasks.get(id)
+        let st_opt = async_state.subtasks.get(skey)
         match st_opt {
           Some(st) =>
             if st.phase[0] != SubtaskPhase::Returned {
               trap_canon("cannot drop a subtask which has not yet resolved")
               return cache_void()
             } else {
-              async_state.subtasks.remove(id)
+              async_state.subtasks.remove(skey)
             }
           None => {
             trap_canon("unknown subtask handle index \{id}")
@@ -205,10 +211,10 @@ fn instantiate_canon_subtask_drop(
         }
 
         // Remove from any waitable-set membership and queued events.
-        match async_state.waitable_to_set.get(id) {
-          Some(ws) => {
-            async_state.waitable_to_set.remove(id)
-            match async_state.waitable_sets.get(ws) {
+        match async_state.waitable_to_set.get(skey) {
+          Some(ws_key) => {
+            async_state.waitable_to_set.remove(skey)
+            match async_state.waitable_sets.get(ws_key) {
               Some(set) => {
                 set.members.remove(id)
                 // Purge queued events for this waitable.
@@ -226,18 +232,20 @@ fn instantiate_canon_subtask_drop(
           }
           None => ()
         }
-        async_state.waitable_events.remove(id)
+        async_state.waitable_events.remove(skey)
 
         // Clear per-task bookkeeping so the handle id can be reused.
-        async_state.task_results.remove(id)
-        async_state.task_returned.remove(id)
-        async_state.task_cancelled.remove(id)
-        async_state.task_contexts.remove(id)
-        async_state.yield_replay_upto.remove(id)
-        async_state.wait_results.remove(id)
-        async_state.waiting_ws.remove(id)
-        async_state.call_results.remove(id)
-        async_state.sync_lower_states.remove(id)
+        async_state.task_results.remove(skey)
+        async_state.task_result_owner.remove(skey)
+        async_state.task_returned.remove(skey)
+        async_state.task_cancelled.remove(skey)
+        async_state.task_contexts.remove(skey)
+        drop_task_thread(async_state, skey)
+        async_state.yield_replay_upto.remove(skey)
+        async_state.wait_results.remove(skey)
+        async_state.waiting_ws.remove(skey)
+        async_state.call_results.remove(skey)
+        async_state.sync_lower_states.remove(skey)
 
         // Remove from pending queues if it was still STARTING.
         let inst_ids : Array[Int] = []
@@ -250,7 +258,7 @@ fn instantiate_canon_subtask_drop(
             Some(q) => {
               let mut j = 0
               while j < q.length() {
-                if q[j] == id {
+                if q[j] == skey {
                   q.remove(j) |> ignore
                 } else {
                   j = j + 1
@@ -263,7 +271,7 @@ fn instantiate_canon_subtask_drop(
             None => ()
           }
         }
-        free_shared_handle(async_state, id)
+        free_shared_handle(async_state, owner_component_id, id)
         cache_void()
       }
       _ => {

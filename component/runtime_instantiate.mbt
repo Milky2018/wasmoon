@@ -64,15 +64,39 @@ fn instantiate_component(
               }
               let module_name = "\{name}::coreinst\{state.core_instances.length()}"
               clear_canon_trap_message()
+              // Core module instantiation can execute start functions that call back into
+              // canonical host imports. Run under a dedicated task id so per-task replay/caching
+              // state (e.g. waitable-set.new) does not leak across component instances.
+              let inst_task_id = alloc_task_id(async_state)
+              // Core start runs during instantiation and must not block.
+              push_task(async_state, inst_task_id, false)
+              // Some canonical ops assume an implicit "current thread" handle slot is reserved
+              // even for synchronous tasks. If this component requires that numbering, reserve
+              // it for the instantiation task as well so start functions see consistent ids.
+              if async_state.thread_handle_required.get(state.resource_table.id)
+                is Some(true) {
+                ensure_task_thread(
+                  async_state,
+                  state.resource_table.id,
+                  inst_task_id,
+                )
+              }
               let instance = @executor.instantiate_module_with_imports(
                 store, mod_, imports,
               ) catch {
-                e =>
+                e => {
+                  pop_task(async_state)
+                  drop_task_thread(async_state, inst_task_id)
                   match canon_trap_message[0] {
                     Some(msg) => raise CoreModuleInstantiateError(msg)
                     None => raise CoreModuleInstantiateError(e.to_string())
                   }
+                }
               }
+              pop_task(async_state)
+              drop_task_thread(async_state, inst_task_id)
+              // Register a stable name for debugging core traps.
+              register_core_instance_name(instance.store_idx, module_name)
               linker.core_linker.register(module_name, instance)
               state.core_instances.push(core_instance_from_module(instance))
             }

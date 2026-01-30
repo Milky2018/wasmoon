@@ -9,6 +9,8 @@ import {
 // Values
 pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError) -> CoreFuncRef
 
+pub fn clear_canon_debug_message() -> Unit
+
 pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
 
 pub fn parse_canon_section(Bytes) -> Array[Canon] raise ComponentParseError
@@ -28,6 +30,14 @@ pub fn parse_instance_section(Bytes) -> Array[Instance] raise ComponentParseErro
 pub fn parse_start_section(Bytes) -> Start raise ComponentParseError
 
 pub fn parse_type_section(Bytes) -> Array[TypeDef] raise ComponentParseError
+
+pub fn preset_canon_debug_message(String) -> Unit
+
+pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise ComponentRuntimeError
+
+pub fn register_core_instance_name(Int, String) -> Unit
+
+pub fn set_canon_debug_message(String) -> Unit
 
 pub fn sniff_binary_kind(Bytes) -> BinaryKind?
 
@@ -79,7 +89,7 @@ pub(all) suberror ComponentRuntimeError {
   CanonCallError(String)
   HostCallError(String)
   AsyncSuspendYield
-  AsyncSuspendWait(Int)
+  AsyncSuspendWait(Int64)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
@@ -104,35 +114,43 @@ pub impl Eq for AliasTarget
 pub impl Show for AliasTarget
 
 pub(all) struct AsyncState {
-  next_handle : Array[Int]
-  free_handles : Array[Int]
+  next_handle_by_component : Map[Int, Array[Int]]
+  free_handles_by_component : Map[Int, Array[Int]]
   stream_table : StreamTable
-  task_stack : Array[Int]
-  next_task_id : Array[Int]
-  task_results : Map[Int, Array[ComponentValue]]
-  task_returned : Map[Int, Bool]
-  task_cancelled : Map[Int, Bool]
-  task_contexts : Map[Int, Map[Int, @types.Value]]
+  task_stack : Array[Int64]
+  next_task_id : Array[Int64]
+  task_results : Map[Int64, Array[ComponentValue]]
+  task_result_owner : Map[Int64, Int]
+  task_returned : Map[Int64, Bool]
+  task_cancelled : Map[Int64, Bool]
+  task_contexts : Map[Int64, Map[Int, @types.Value]]
+  task_thread : Map[Int64, Map[Int, Int]]
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
   yield_cursor_stack : Array[Int]
   wait_cursor_stack : Array[Int]
   call_cursor_stack : Array[Int]
-  yield_replay_upto : Map[Int, Int]
-  wait_results : Map[Int, Map[Int, WaitEvent]]
-  waiting_ws : Map[Int, Int]
-  call_results : Map[Int, Map[Int, Array[@types.Value]]]
-  sync_lower_states : Map[Int, Map[Int, SyncLowerState]]
-  waitable_sets : Map[Int, WaitableSet]
-  waitable_to_set : Map[Int, Int]
-  waitable_events : Map[Int, Array[WaitEvent]]
-  subtasks : Map[Int, Subtask]
+  stream_cursor_stack : Array[Int]
+  task_caller : Map[Int64, Int64]
+  task_instance : Map[Int64, Int]
+  yield_replay_upto : Map[Int64, Int]
+  wait_results : Map[Int64, Map[Int, WaitResult]]
+  waiting_ws : Map[Int64, Int64]
+  call_results : Map[Int64, Map[Int, Array[@types.Value]]]
+  stream_results : Map[Int64, Map[Int, Int]]
+  stream_results_cb : Map[Int64, Map[Int, Int]]
+  sync_lower_states : Map[Int64, Map[Int, SyncLowerState]]
+  waitable_sets : Map[Int64, WaitableSet]
+  waitable_to_set : Map[Int64, Int64]
+  waitable_events : Map[Int64, Array[WaitEvent]]
+  subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
-  pending_by_instance : Map[Int, Array[Int]]
+  pending_by_instance : Map[Int, Array[Int64]]
   next_future_id : Array[Int]
   futures : Map[Int, FutureState]
-  future_endpoints : Map[Int, FutureEndpoint]
+  future_endpoints : Map[Int64, FutureEndpoint]
+  thread_handle_required : Map[Int, Bool]
 }
 pub fn AsyncState::new(StreamTable) -> Self
 pub impl Show for AsyncState
@@ -480,6 +498,9 @@ pub impl Show for Param
 type PendingFutureRead
 pub impl Show for PendingFutureRead
 
+type PendingFutureWrite
+pub impl Show for PendingFutureWrite
+
 type PendingStreamRead
 pub impl Show for PendingStreamRead
 
@@ -583,10 +604,8 @@ type StreamState
 pub impl Show for StreamState
 
 pub(all) struct StreamTable {
-  next_handle : Array[Int]
-  free_handles : Array[Int]
   next_stream_id : Array[Int]
-  endpoints : Map[Int, StreamEndpoint]
+  endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
 }
 pub fn StreamTable::new() -> Self
@@ -671,6 +690,9 @@ pub impl Show for VariantCase
 
 type WaitEvent
 pub impl Show for WaitEvent
+
+type WaitResult
+pub impl Show for WaitResult
 
 type WaitableSet
 pub impl Show for WaitableSet

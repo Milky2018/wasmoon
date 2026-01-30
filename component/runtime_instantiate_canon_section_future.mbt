@@ -56,33 +56,16 @@ fn instantiate_canon_future_new(
       out
     }
 
-    fn alloc_with_source() -> (Int, Bool) {
-      if async_state.free_handles.length() > 0 {
-        // Deterministic: pick smallest.
-        let mut best_i = 0
-        let mut best = async_state.free_handles[0]
-        for i in 1..<async_state.free_handles.length() {
-          let h = async_state.free_handles[i]
-          if h < best {
-            best = h
-            best_i = i
-          }
-        }
-        async_state.free_handles.remove(best_i) |> ignore
-        (best, true)
-      } else {
-        let h = async_state.next_handle[0]
-        async_state.next_handle[0] = h + 1
-        (h, false)
-      }
-    }
-
     let future_id = async_state.next_future_id[0]
     async_state.next_future_id[0] = future_id + 1
     let (rh, wh) = if payload_ty is Some(_) {
       // For typed futures, prefer reusing a freed handle for the readable end.
-      let (h1, f1) = alloc_with_source()
-      let (h2, f2) = alloc_with_source()
+      let (h1, f1) = alloc_shared_handle_with_source(
+        async_state, creator_component_id,
+      )
+      let (h2, f2) = alloc_shared_handle_with_source(
+        async_state, creator_component_id,
+      )
       if f1 != f2 {
         if f1 {
           (h1, h2)
@@ -96,23 +79,25 @@ fn instantiate_canon_future_new(
       }
     } else {
       // Empty future: allocate readable then writable.
-      let (rh, _fr) = alloc_with_source()
-      let (wh, _fw) = alloc_with_source()
+      let (rh, _fr) = alloc_shared_handle_with_source(
+        async_state, creator_component_id,
+      )
+      let (wh, _fw) = alloc_shared_handle_with_source(
+        async_state, creator_component_id,
+      )
       (rh, wh)
     }
-    async_state.future_endpoints.set(rh, {
+    async_state.future_endpoints.set(handle_key(creator_component_id, rh), {
       future_id,
       is_readable: true,
       creator_component_id,
     })
-    async_state.future_endpoints.set(wh, {
+    async_state.future_endpoints.set(handle_key(creator_component_id, wh), {
       future_id,
       is_readable: false,
       creator_component_id,
     })
     async_state.futures.set(future_id, {
-      readable_handle: rh,
-      writable_handle: wh,
       payload_ty,
       pending_read: None,
       pending_write: None,
@@ -186,7 +171,10 @@ fn instantiate_canon_future_read(
     }
     match args {
       [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(caller_component_id, handle),
+          ) {
           None => {
             trap_canon("unknown future handle index \{handle}")
             cache_i32(0)
@@ -210,7 +198,7 @@ fn instantiate_canon_future_read(
                 return cache_i32(0)
               }
               match st0.pending_write {
-                Some(v) => {
+                Some(pw) => {
                   // Intra-component char futures cannot rendezvous.
                   match st0.payload_ty {
                     Some(Prim(Char)) =>
@@ -240,7 +228,7 @@ fn instantiate_canon_future_read(
                           return [@types.Value::I32(0)]
                         }
                       }
-                      mem.store_byte(ptr, trunc_u8(v).to_byte()) catch {
+                      mem.store_byte(ptr, trunc_u8(pw.val).to_byte()) catch {
                         e => {
                           trap_canon(e.to_string())
                           return [@types.Value::I32(0)]
@@ -265,7 +253,7 @@ fn instantiate_canon_future_read(
                           return [@types.Value::I32(0)]
                         }
                       }
-                      mem.store_i32(ptr, v) catch {
+                      mem.store_i32(ptr, pw.val) catch {
                         e => {
                           trap_canon(e.to_string())
                           return [@types.Value::I32(0)]
@@ -279,17 +267,22 @@ fn instantiate_canon_future_read(
                   }
 
                   // Completing a pending write unblocks the writer: emit FUTURE_WRITE.
-                  if async_state.future_endpoints.get(st0.writable_handle)
+                  if async_state.future_endpoints.get(
+                      handle_key(pw.writer_component_id, pw.writer_handle),
+                    )
                     is Some(_) {
-                    enqueue_waitable_event(async_state, st0.writable_handle, {
-                      code: 5,
-                      index: st0.writable_handle,
-                      payload: 0,
-                    })
+                    enqueue_waitable_event(
+                      async_state,
+                      handle_key(pw.writer_component_id, pw.writer_handle),
+                      {
+                        owner_component_id: pw.writer_component_id,
+                        code: 5,
+                        index: pw.writer_handle,
+                        payload: 0,
+                      },
+                    )
                   }
                   async_state.futures.set(ep.future_id, {
-                    readable_handle: st0.readable_handle,
-                    writable_handle: st0.writable_handle,
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -305,8 +298,6 @@ fn instantiate_canon_future_read(
                 None =>
                   if st0.writable_dropped {
                     async_state.futures.set(ep.future_id, {
-                      readable_handle: st0.readable_handle,
-                      writable_handle: st0.writable_handle,
                       payload_ty: st0.payload_ty,
                       pending_read: None,
                       pending_write: None,
@@ -321,14 +312,14 @@ fn instantiate_canon_future_read(
                   } else {
                     // Register a pending read and report BLOCKED=-1.
                     async_state.futures.set(ep.future_id, {
-                      readable_handle: st0.readable_handle,
-                      writable_handle: st0.writable_handle,
                       payload_ty: st0.payload_ty,
                       pending_read: Some({
                         // Remember the reader-side canon memory so a writer from a different
                         // component instance can write into the correct memory.
                         mem_addr: resources.mem_addr,
                         ptr,
+                        reader_component_id: caller_component_id,
+                        reader_handle: handle,
                       }),
                       pending_write: None,
                       readable_dropped: st0.readable_dropped,
@@ -409,7 +400,10 @@ fn instantiate_canon_future_write(
     }
     match args {
       [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(caller_component_id, handle),
+          ) {
           None => {
             trap_canon("unknown future handle index \{handle}")
             cache_i32(0)
@@ -442,8 +436,6 @@ fn instantiate_canon_future_write(
               // If the readable end was dropped before any rendezvous, report DROPPED.
               if st0.readable_dropped {
                 async_state.futures.set(ep.future_id, {
-                  readable_handle: st0.readable_handle,
-                  writable_handle: st0.writable_handle,
                   payload_ty: st0.payload_ty,
                   pending_read: None,
                   pending_write: None,
@@ -573,17 +565,22 @@ fn instantiate_canon_future_write(
                   }
 
                   // Completing a pending read unblocks the reader: emit FUTURE_READ.
-                  if async_state.future_endpoints.get(st0.readable_handle)
+                  if async_state.future_endpoints.get(
+                      handle_key(pr.reader_component_id, pr.reader_handle),
+                    )
                     is Some(_) {
-                    enqueue_waitable_event(async_state, st0.readable_handle, {
-                      code: 4,
-                      index: st0.readable_handle,
-                      payload: 0,
-                    })
+                    enqueue_waitable_event(
+                      async_state,
+                      handle_key(pr.reader_component_id, pr.reader_handle),
+                      {
+                        owner_component_id: pr.reader_component_id,
+                        code: 4,
+                        index: pr.reader_handle,
+                        payload: 0,
+                      },
+                    )
                   }
                   async_state.futures.set(ep.future_id, {
-                    readable_handle: st0.readable_handle,
-                    writable_handle: st0.writable_handle,
                     payload_ty: st0.payload_ty,
                     pending_read: None,
                     pending_write: None,
@@ -661,11 +658,13 @@ fn instantiate_canon_future_write(
                     }
                   }
                   async_state.futures.set(ep.future_id, {
-                    readable_handle: st0.readable_handle,
-                    writable_handle: st0.writable_handle,
                     payload_ty: st0.payload_ty,
                     pending_read: None,
-                    pending_write: Some(write_val),
+                    pending_write: Some({
+                      writer_component_id: caller_component_id,
+                      writer_handle: handle,
+                      val: write_val,
+                    }),
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: st0.writable_dropped,
                     read_done: st0.read_done,
@@ -699,6 +698,7 @@ fn instantiate_canon_future_cancel_read(
     results: [@types.ValueType::I32],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -711,7 +711,10 @@ fn instantiate_canon_future_cancel_read(
     }
     match args {
       [@types.Value::I32(handle)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(owner_component_id, handle),
+          ) {
           None => {
             trap_canon("unknown future handle index \{handle}")
             [@types.Value::I32(0)]
@@ -729,8 +732,6 @@ fn instantiate_canon_future_cancel_read(
                 }
               }
               async_state.futures.set(ep.future_id, {
-                readable_handle: st0.readable_handle,
-                writable_handle: st0.writable_handle,
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: st0.pending_write,
@@ -766,6 +767,7 @@ fn instantiate_canon_future_cancel_write(
     results: [@types.ValueType::I32],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -778,7 +780,10 @@ fn instantiate_canon_future_cancel_write(
     }
     match args {
       [@types.Value::I32(handle)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(owner_component_id, handle),
+          ) {
           None => {
             trap_canon("unknown future handle index \{handle}")
             [@types.Value::I32(0)]
@@ -800,8 +805,6 @@ fn instantiate_canon_future_cancel_write(
                 None => false
               }
               async_state.futures.set(ep.future_id, {
-                readable_handle: st0.readable_handle,
-                writable_handle: st0.writable_handle,
                 payload_ty: st0.payload_ty,
                 pending_read: st0.pending_read,
                 pending_write: None,
@@ -840,6 +843,8 @@ fn instantiate_canon_future_drop_readable(
     results: [],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
+  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -848,7 +853,10 @@ fn instantiate_canon_future_drop_readable(
     }
     match args {
       [@types.Value::I32(handle)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(owner_component_id, handle),
+          ) {
           Some(ep) =>
             if !ep.is_readable {
               []
@@ -858,19 +866,26 @@ fn instantiate_canon_future_drop_readable(
                 None => return []
               }
               // Dropping readable end may resolve a pending write as DROPPED.
-              if st0.pending_write is Some(_) {
-                if async_state.future_endpoints.get(st0.writable_handle)
-                  is Some(_) {
-                  enqueue_waitable_event(async_state, st0.writable_handle, {
-                    code: 5,
-                    index: st0.writable_handle,
-                    payload: 1,
-                  })
-                }
+              match st0.pending_write {
+                Some(pw) =>
+                  if async_state.future_endpoints.get(
+                      handle_key(pw.writer_component_id, pw.writer_handle),
+                    )
+                    is Some(_) {
+                    enqueue_waitable_event(
+                      async_state,
+                      handle_key(pw.writer_component_id, pw.writer_handle),
+                      {
+                        owner_component_id: pw.writer_component_id,
+                        code: 5,
+                        index: pw.writer_handle,
+                        payload: 1,
+                      },
+                    )
+                  }
+                None => ()
               }
               async_state.futures.set(ep.future_id, {
-                readable_handle: st0.readable_handle,
-                writable_handle: st0.writable_handle,
                 payload_ty: st0.payload_ty,
                 pending_read: None,
                 pending_write: None,
@@ -878,34 +893,19 @@ fn instantiate_canon_future_drop_readable(
                 writable_dropped: st0.writable_dropped,
                 read_done: true,
                 write_succeeded: st0.write_succeeded,
-                write_observed_readable_drop: st0.write_observed_readable_drop,
+                write_observed_readable_drop: st0.pending_write is Some(_) ||
+                st0.write_observed_readable_drop,
                 wrote_value: st0.wrote_value,
               })
 
               // Remove from any waitable-set membership and queued events.
-              match async_state.waitable_to_set.get(handle) {
-                Some(ws) => {
-                  async_state.waitable_to_set.remove(handle)
-                  match async_state.waitable_sets.get(ws) {
-                    Some(set) => {
-                      set.members.remove(handle)
-                      let mut i = 0
-                      while i < set.queue.length() {
-                        if set.queue[i].index == handle {
-                          set.queue.remove(i) |> ignore
-                        } else {
-                          i = i + 1
-                        }
-                      }
-                    }
-                    None => ()
-                  }
-                }
-                None => ()
-              }
-              async_state.waitable_events.remove(handle)
-              async_state.future_endpoints.remove(handle)
-              free_shared_handle(async_state, handle)
+              remove_waitable_membership(
+                async_state, owner_component_id, handle,
+              )
+              async_state.future_endpoints.remove(
+                handle_key(owner_component_id, handle),
+              )
+              free_shared_handle(async_state, owner_component_id, handle)
               []
             }
           None => []
@@ -927,6 +927,7 @@ fn instantiate_canon_future_drop_writable(
     results: [],
   }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -935,7 +936,10 @@ fn instantiate_canon_future_drop_writable(
     }
     match args {
       [@types.Value::I32(handle)] =>
-        match async_state.future_endpoints.get(handle) {
+        match
+          async_state.future_endpoints.get(
+            handle_key(owner_component_id, handle),
+          ) {
           Some(ep) =>
             if ep.is_readable {
               []
@@ -950,42 +954,44 @@ fn instantiate_canon_future_drop_writable(
                 )
                 return []
               }
+              // Dropping writable end may resolve a pending read as DROPPED.
+              match st0.pending_read {
+                Some(pr) =>
+                  if async_state.future_endpoints.get(
+                      handle_key(pr.reader_component_id, pr.reader_handle),
+                    )
+                    is Some(_) {
+                    enqueue_waitable_event(
+                      async_state,
+                      handle_key(pr.reader_component_id, pr.reader_handle),
+                      {
+                        owner_component_id: pr.reader_component_id,
+                        code: 4,
+                        index: pr.reader_handle,
+                        payload: 1,
+                      },
+                    )
+                  }
+                None => ()
+              }
               async_state.futures.set(ep.future_id, {
-                readable_handle: st0.readable_handle,
-                writable_handle: st0.writable_handle,
                 payload_ty: st0.payload_ty,
-                pending_read: st0.pending_read,
+                pending_read: None,
                 pending_write: st0.pending_write,
                 readable_dropped: st0.readable_dropped,
                 writable_dropped: true,
-                read_done: st0.read_done,
+                read_done: st0.pending_read is Some(_) || st0.read_done,
                 write_succeeded: st0.write_succeeded,
                 write_observed_readable_drop: st0.write_observed_readable_drop,
                 wrote_value: st0.wrote_value,
               })
-              match async_state.waitable_to_set.get(handle) {
-                Some(ws) => {
-                  async_state.waitable_to_set.remove(handle)
-                  match async_state.waitable_sets.get(ws) {
-                    Some(set) => {
-                      set.members.remove(handle)
-                      let mut i = 0
-                      while i < set.queue.length() {
-                        if set.queue[i].index == handle {
-                          set.queue.remove(i) |> ignore
-                        } else {
-                          i = i + 1
-                        }
-                      }
-                    }
-                    None => ()
-                  }
-                }
-                None => ()
-              }
-              async_state.waitable_events.remove(handle)
-              async_state.future_endpoints.remove(handle)
-              free_shared_handle(async_state, handle)
+              remove_waitable_membership(
+                async_state, owner_component_id, handle,
+              )
+              async_state.future_endpoints.remove(
+                handle_key(owner_component_id, handle),
+              )
+              free_shared_handle(async_state, owner_component_id, handle)
               []
             }
           None => []
