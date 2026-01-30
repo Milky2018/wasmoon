@@ -30,7 +30,7 @@ pub(all) suberror ComponentRuntimeError {
   HostCallError(String)
   // Cooperative suspension used by sync-style async lifting (canon lift ... async).
   AsyncSuspendYield
-  AsyncSuspendWait(Int)
+  AsyncSuspendWait(Int64)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
@@ -52,7 +52,7 @@ fn clear_canon_trap_message() -> Unit {
 /// Cooperative suspension marker used by certain canonical intrinsics (e.g. thread.yield).
 enum CanonSuspend {
   Yield
-  Wait(Int) // waitable-set index
+  Wait(Int64) // waitable-set key (handle_key(owner_component_id, local_index))
 } derive(Show, Eq)
 
 ///|

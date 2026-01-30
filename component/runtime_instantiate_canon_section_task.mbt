@@ -16,6 +16,7 @@ fn instantiate_canon_task_return(
   }
   let core_type : @types.FuncType = { params: core_params, results: [] }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let types = state.types
   let host = fn(
     args : Array[@types.Value],
@@ -62,12 +63,12 @@ fn instantiate_canon_task_return(
                 return []
               }
             }
-            validate_lifted_stream_future(vt, v, types, async_state) catch {
-              e => {
-                trap_canon(canon_err_message(e))
-                return []
-              }
-            }
+            // NOTE: Unlike wasmtime, wasmoon currently implements sync-style
+            // suspension by cooperatively replaying the whole core function.
+            // This means `task.return` may be re-executed after its stream/future
+            // readable handles have already been transferred to the caller's
+            // component instance. In that case, re-validating the handle against
+            // the original component's handle table would spuriously trap.
             match async_state.task_results.get(task_id) {
               Some(prev) =>
                 if prev.length() == 1 && prev[0] == v {
@@ -117,7 +118,9 @@ fn instantiate_canon_task_return(
         }
         // `canon task.return` lifts core values into the component result; apply the
         // same stream/future handle validation as `canon lift`.
-        validate_lifted_stream_future(vt, v, types, async_state) catch {
+        validate_lifted_stream_future(
+          vt, v, types, async_state, owner_component_id,
+        ) catch {
           e => {
             trap_canon(canon_err_message(e))
             return []
@@ -126,7 +129,7 @@ fn instantiate_canon_task_return(
         [v]
       }
     }
-    set_task_result(async_state, task_id, vals)
+    set_task_result(async_state, task_id, owner_component_id, vals)
     []
   }
   // Stash as a core func.
@@ -140,6 +143,7 @@ fn instantiate_canon_task_cancel(
 ) -> Unit {
   let core_type : @types.FuncType = { params: [], results: [] }
   let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -149,7 +153,7 @@ fn instantiate_canon_task_cancel(
     let task_id = current_task_id(async_state)
     async_state.task_cancelled.set(task_id, true)
     async_state.task_returned.set(task_id, true)
-    set_task_result(async_state, task_id, [])
+    set_task_result(async_state, task_id, owner_component_id, [])
     []
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
