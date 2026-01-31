@@ -75,10 +75,28 @@ fn try_compile_jit(
     return None // Fall back to interpreter for potential cross-module sharing
   }
   // Check if all imports are supported by JIT
+  let mut func_imp_idx = 0
   for imp in mod_.imports {
-    if imp.desc is Func(_) &&
-      @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
-      return None // Unsupported import
+    if imp.desc is Func(_) {
+      let has_builtin = @jit.get_import_trampoline(imp.mod_name, imp.name)
+        is Some(_)
+      if not(has_builtin) {
+        let func_addr = if func_imp_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_imp_idx]
+        } else {
+          -1
+        }
+        if func_addr < 0 {
+          return None
+        }
+        let inst = store.get_func_inst(func_addr) catch { _ => return None }
+        if inst is @runtime.FuncInst::HostFunc(_) {
+          ()
+        } else {
+          return None // Unsupported import
+        }
+      }
+      func_imp_idx = func_imp_idx + 1
     }
   }
   // Get actual memory max from the store (for imported memories)
@@ -106,11 +124,18 @@ fn try_compile_jit(
     Some((pc, _)) => {
       // Build func_signatures array for JIT module
       let func_signatures = @wast.build_func_signatures(mod_)
+      let external_imports = @wast.build_external_imports_for_jit(
+        mod_, instance, store,
+      )
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_signatures)
+      let jit_module = @jit.JITModule::load_with_imports(
+        pc, func_signatures, external_imports,
+      )
       match jit_module {
         None => abort("Failed to create JIT module")
         Some(jm) => {
+          // Enable arbitrary host function imports via JIT -> hostcall bridge.
+          @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)

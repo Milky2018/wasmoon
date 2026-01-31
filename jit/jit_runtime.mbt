@@ -85,6 +85,8 @@ struct JITModule {
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut debug_db : JITDebugDB?
+  // Keep generated import trampolines alive (GC-managed executable memory).
+  import_exec_codes : Array[ExecCode]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
 }
@@ -97,6 +99,7 @@ pub fn JITModule::new() -> JITModule {
     address_ranges: [],
     context: None,
     debug_db: None,
+    import_exec_codes: [],
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
   }
@@ -255,7 +258,32 @@ pub fn JITModule::load_with_imports(
           None => get_import_trampoline(imp.module_name, imp.func_name)
         }
         match func_ptr {
-          Some(ptr) => ctx.set_func(i, ptr)
+          Some(ptr) =>
+            if ptr < 0L {
+              // Special encoding: negative values represent a runtime Store host func address.
+              // This allows callers to pass host funcs through `external_imports` without
+              // exposing raw function pointers.
+              let host_func_addr = (-(ptr + 1L)).to_int()
+              let (param_types, result_types) = if i < func_signatures.length() {
+                func_signatures[i]
+              } else {
+                ([], [])
+              }
+              let mc = @emit.emit_hostcall_import_trampoline(
+                param_types, result_types, host_func_addr,
+              )
+              let code_ints = mc.get_bytes()
+              let exec = ExecCode::new(code_ints)
+              match exec {
+                Some(ec) => {
+                  jit_module.import_exec_codes.push(ec)
+                  ctx.set_func(i, ec.ptr())
+                }
+                None => return None
+              }
+            } else {
+              ctx.set_func(i, ptr)
+            }
           None => return None // Unsupported import
         }
       }
@@ -941,6 +969,27 @@ pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
   match self.context {
     Some(ctx) => ctx.has_wasm_stack()
     None => false
+  }
+}
+
+///|
+/// Set the hostcall callback used for JIT -> host bridging.
+/// The callback should return 0 on success, or a trap code on failure.
+pub fn JITModule::set_hostcall_callback(
+  self : JITModule,
+  callback : () -> Int,
+) -> Unit {
+  match self.context {
+    Some(ctx) => ctx.set_hostcall_callback(callback)
+    None => ()
+  }
+}
+
+///|
+pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
+  match self.context {
+    Some(ctx) => ctx.clear_hostcall_callback()
+    None => ()
   }
 }
 

@@ -89,6 +89,39 @@ pub fn check_trap() -> Unit raise JITTrap {
   }
 }
 
+// ============ Hostcall Dispatch Info ============
+
+///|
+/// Get the runtime store function address for the current JIT -> hostcall.
+///
+/// This value is set by `wasmoon_jit_hostcall` right before invoking the
+/// MoonBit hostcall callback.
+pub fn get_hostcall_func_addr() -> Int {
+  @jit_ffi.c_jit_get_hostcall_func_idx()
+}
+
+///|
+/// Get the pointer to the hostcall scratch `values_vec` buffer.
+pub fn get_hostcall_values_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_hostcall_values_ptr()
+}
+
+///|
+/// Get the number of argument *slots* in `values_vec`.
+///
+/// Note: slots are 8 bytes each; V128 occupies 2 slots.
+pub fn get_hostcall_num_arg_slots() -> Int {
+  @jit_ffi.c_jit_get_hostcall_num_args()
+}
+
+///|
+/// Get the number of result *slots* in `values_vec`.
+///
+/// Note: slots are 8 bytes each; V128 occupies 2 slots.
+pub fn get_hostcall_num_result_slots() -> Int {
+  @jit_ffi.c_jit_get_hostcall_num_results()
+}
+
 // ============ Memory Info ============
 
 ///|
@@ -487,6 +520,23 @@ fn JITContext::set_wasi_stdin_callback(
     f()
   }
   @jit_ffi.c_jit_set_wasi_stdin_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+/// Set hostcall callback for JIT -> host bridging.
+/// The callback is invoked with no arguments and should return 0 on success,
+/// or a trap code on failure.
+fn JITContext::set_hostcall_callback(
+  self : JITContext,
+  callback : () -> Int,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
+  @jit_ffi.c_jit_set_hostcall_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
+  @jit_ffi.c_jit_clear_hostcall_callback(self.ptr())
 }
 
 ///|

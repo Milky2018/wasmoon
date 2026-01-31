@@ -143,6 +143,58 @@ pub fn Linker::add_host_func(
 }
 
 ///|
+/// Add a host function that receives the caller context.
+pub fn Linker::add_host_func_with_caller(
+  self : Linker,
+  mod_name : String,
+  name : String,
+  func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
+  func_type? : @types.FuncType = { params: [], results: [] },
+) -> Unit {
+  let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
+
+  // Find or create a synthetic module entry for this mod_name (same as add_host_func).
+  fn find_or_create_host_module(
+    modules : Array[(String, ModuleInstance)],
+    target_name : String,
+  ) -> Int {
+    for i, entry in modules {
+      let (name, _) = entry
+      if name == target_name {
+        return i
+      }
+    }
+    let instance : ModuleInstance = {
+      types: [],
+      type_rec_groups: [],
+      canonical_type_indices: [],
+      store_idx: -1,
+      func_addrs: [],
+      func_type_indices: [],
+      table_addrs: [],
+      mem_addrs: [],
+      global_addrs: [],
+      tag_addrs: [],
+      exports: [],
+      elem_segments: [],
+      data_segments: [],
+      dropped_elems: [],
+      dropped_datas: [],
+    }
+    modules.push((target_name, instance))
+    modules.length() - 1
+  }
+
+  let idx = find_or_create_host_module(self.modules, mod_name)
+  let (_, instance) = self.modules[idx]
+  instance.func_addrs.push(func_addr)
+  instance.exports.push({
+    name,
+    desc: @types.ExportDesc::Func(instance.func_addrs.length() - 1),
+  })
+}
+
+///|
 /// Add a memory to the linker
 pub fn Linker::add_memory(
   self : Linker,

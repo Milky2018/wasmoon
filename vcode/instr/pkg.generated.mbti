@@ -167,6 +167,7 @@ pub(all) enum JITLibcall {
   TableCopy
   TableInit
   ElemDrop
+  HostCall
 }
 pub impl Eq for JITLibcall
 pub impl Show for JITLibcall

@@ -4,7 +4,9 @@ pub(all) enum FuncInst {
   /// WASM function with code
   WasmFunc(@types.FunctionCode)
   /// Host function provided by the embedder
-  HostFunc((Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
+  HostFunc(
+    (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError
+  )
 }
 
 ///|

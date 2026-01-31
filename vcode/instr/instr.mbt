@@ -55,6 +55,7 @@ pub(all) enum JITLibcall {
   TableCopy
   TableInit
   ElemDrop
+  HostCall
 } derive(Eq, Show)
 
 ///|

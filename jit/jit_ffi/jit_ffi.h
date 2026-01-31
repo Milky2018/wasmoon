@@ -145,6 +145,11 @@ typedef struct {
     // WASI stdin callback (MoonBit closure)
     void *wasi_stdin_callback;        // Function pointer for stdin callback
     void *wasi_stdin_callback_data;   // Closure data for stdin callback
+
+    // Hostcall callback (MoonBit closure) for JIT -> host function bridging.
+    // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
+    void *hostcall_callback;          // Function pointer for hostcall callback
+    void *hostcall_callback_data;     // Closure data for hostcall callback
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

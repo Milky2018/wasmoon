@@ -17,6 +17,8 @@ pub const FUNCREF_TAG : Int64 = 0x2000000000000000
 
 pub const NULL_REF : Int64 = 0
 
+pub fn build_external_imports_for_jit(@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Map[String, Map[String, Int64]]
+
 pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
 
 pub fn builtin_jit_modules() -> Array[String]
@@ -38,6 +40,8 @@ pub fn has_unsupported_instructions(@types.Module) -> Bool
 pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@jit.MemoryInfo]?
+
+pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance) -> Unit
 
 pub fn invoke_action(WastContext, @wat.WastAction) -> Array[@types.Value] raise WastRunnerError
 

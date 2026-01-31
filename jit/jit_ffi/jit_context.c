@@ -86,6 +86,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->wasi_stdin_offset = 0;
     ctx->wasi_stdin_callback = NULL;
     ctx->wasi_stdin_callback_data = NULL;
+    ctx->hostcall_callback = NULL;
+    ctx->hostcall_callback_data = NULL;
     ctx->wasi_stdout_capture = 0;
     ctx->wasi_stdout_buf = NULL;
     ctx->wasi_stdout_len = 0;
@@ -141,6 +143,13 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->wasm_stack_base) {
         munmap(ctx->wasm_stack_base, ctx->wasm_stack_size);
     }
+
+    // Free hostcall callback closure (if registered).
+    if (ctx->hostcall_callback_data) {
+        moonbit_decref(ctx->hostcall_callback_data);
+        ctx->hostcall_callback_data = NULL;
+    }
+    ctx->hostcall_callback = NULL;
 
     // Free WASI resources (fds, args/env, stdio buffers)
     wasmoon_jit_free_wasi_fds((int64_t)ctx);
