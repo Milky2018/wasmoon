@@ -263,6 +263,36 @@ fn cmd_wit(
       panic()
     }
   }
+  // Extract WIT from a wasm-encoded component package.
+  if input.has_suffix(".wasm") && !is_dir(input) {
+    if as_wasm || as_wat {
+      exit_error(
+        "cannot use --wasm/--wat when the input is already a .wasm component",
+      )
+      panic()
+    }
+    if out_dir_opt is Some(_) {
+      exit_error("cannot use --out-dir when the input is a .wasm component")
+      panic()
+    }
+    let bytes = read_file(input)
+    let pkg = @wit.decode_wit_package_from_component(bytes) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+    let out = if as_json {
+      @wit.package_to_json(pkg)
+    } else {
+      @wit.format_package(pkg)
+    }
+    match output_opt {
+      Some(path) => write_text_file(path, out)
+      None => println(out)
+    }
+    return
+  }
   let (root, deps) = if is_dir(input) {
     let root = read_wit_dir(input)
     let deps = read_wit_deps(input)
