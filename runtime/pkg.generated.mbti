@@ -30,6 +30,7 @@ pub(all) suberror RuntimeError {
   LinkErrorDetail(String)
   NullReference
   UnalignedAtomic
+  InvalidConstantExpression(String)
 }
 pub impl Show for RuntimeError
 
