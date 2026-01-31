@@ -882,14 +882,24 @@ fn run_with_jit(
     Some((pc, debug_db)) => {
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
+      let external_imports = @wast.build_external_imports_for_jit(
+        mod_, instance, store,
+      )
       // Load JIT module
-      let jit_module = @jit.JITModule::load(pc, func_signatures, debug_db~)
+      let jit_module = @jit.JITModule::load_with_imports(
+        pc,
+        func_signatures,
+        external_imports,
+        debug_db~,
+      )
       match jit_module {
         None => {
           @logger.error("Failed to load JIT module")
           return exit_failure()
         }
         Some(jm) => {
+          // Enable arbitrary host function imports via JIT -> hostcall bridge.
+          @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page.
           // Use a larger default than 1MB since real-world programs can have
           // large native frames after register allocation.

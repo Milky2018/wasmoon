@@ -523,3 +523,425 @@ fn encode_value_for_jit(
     ExnRef(_) => NULL_REF // Exception refs not supported in tables
   }
 }
+
+// ============================================================
+// JIT Hostcall Bridge (Host Closures With Caller)
+// ============================================================
+
+///|
+fn slot_count_for_type(ty : @types.ValueType) -> Int {
+  match ty {
+    V128 => 2
+    _ => 1
+  }
+}
+
+///|
+fn sum_slot_count(types : Array[@types.ValueType]) -> Int {
+  let mut n = 0
+  for ty in types {
+    n = n + slot_count_for_type(ty)
+  }
+  n
+}
+
+///|
+fn read_slot_i64(values_ptr : Int64, slot_idx : Int) -> Int64 {
+  @jit.c_jit_read_i64(values_ptr + (slot_idx * 8).to_int64())
+}
+
+///|
+fn write_slot_i64(values_ptr : Int64, slot_idx : Int, value : Int64) -> Unit {
+  @jit.c_jit_write_i64(values_ptr + (slot_idx * 8).to_int64(), value)
+}
+
+///|
+fn low_u32_bits(raw : Int64) -> Int {
+  (raw & 0xFFFFFFFFL).to_int()
+}
+
+///|
+fn decode_funcref_to_store_addr(
+  raw : Int64,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> @types.Value {
+  if raw == NULL_REF {
+    return @types.Value::Null
+  }
+  match @jit.decode_funcref_idx(raw) {
+    Some(mod_func_idx) =>
+      if mod_func_idx >= 0 && mod_func_idx < instance.func_addrs.length() {
+        @types.Value::FuncRef(instance.func_addrs[mod_func_idx])
+      } else {
+        @types.Value::Null
+      }
+    None =>
+      if @jit.is_funcref_ptr(raw) {
+        let pc = @jit.untag_funcref_ptr(raw)
+        match jit_module.find_func_by_pc(pc) {
+          Some((func_idx, _, _)) =>
+            if func_idx >= 0 && func_idx < instance.func_addrs.length() {
+              @types.Value::FuncRef(instance.func_addrs[func_idx])
+            } else {
+              @types.Value::Null
+            }
+          None => @types.Value::Null
+        }
+      } else {
+        // Fallback: treat as a store address (best-effort).
+        @types.Value::FuncRef(raw.to_int())
+      }
+  }
+}
+
+///|
+fn encode_store_funcref_for_jit(
+  value : @types.Value,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Int64 {
+  // Convert the store function address back to the module function index.
+  fn store_addr_to_module_func_idx(
+    store_addr : Int,
+    instance : @runtime.ModuleInstance,
+  ) -> Int? {
+    for i, addr in instance.func_addrs {
+      if addr == store_addr {
+        return Some(i)
+      }
+    }
+    None
+  }
+
+  match value {
+    Null => NULL_REF
+    FuncRef(store_addr) =>
+      match store_addr_to_module_func_idx(store_addr, instance) {
+        Some(mod_func_idx) => {
+          let ptr = jit_module.get_func_ptr(mod_func_idx)
+          if ptr == 0L {
+            NULL_REF
+          } else {
+            @jit.tag_funcref_ptr(ptr)
+          }
+        }
+        None => NULL_REF
+      }
+    _ => NULL_REF
+  }
+}
+
+///|
+fn decode_ref_value(
+  ty : @types.ValueType,
+  raw : Int64,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> @types.Value {
+  match ty {
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      decode_funcref_to_store_addr(raw, jit_module, instance)
+    ExternRef | RefExtern | NullExternRef =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else {
+        match @jit.decode_externref(raw) {
+          Some(idx) => @types.Value::ExternRef(idx)
+          None => @types.Value::ExternRef(raw.to_int())
+        }
+      }
+    ExnRef | NullExnRef =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::ExnRef(raw.to_int())
+      }
+    StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::StructRef(@jit.decode_heap_ref(raw))
+      }
+    ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::ArrayRef(@jit.decode_heap_ref(raw))
+      }
+    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else if (raw & 1L) == 1L {
+        @types.Value::I31((raw >> 1).to_int())
+      } else {
+        // Best-effort: we do not attempt to discriminate struct vs array here.
+        @types.Value::StructRef(@jit.decode_heap_ref(raw))
+      }
+    RefI31 | RefNullI31 =>
+      if raw == NULL_REF {
+        @types.Value::Null
+      } else if (raw & 1L) == 1L {
+        @types.Value::I31((raw >> 1).to_int())
+      } else {
+        @types.Value::Null
+      }
+    RefNone => @types.Value::Null
+
+    // Non-ref types should not reach here.
+    _ => @types.Value::Null
+  }
+}
+
+///|
+fn decode_value(
+  ty : @types.ValueType,
+  values_ptr : Int64,
+  slot_idx : Int,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> (@types.Value, Int) {
+  match ty {
+    I32 =>
+      (@types.Value::I32(low_u32_bits(read_slot_i64(values_ptr, slot_idx))), 1)
+    I64 => (@types.Value::I64(read_slot_i64(values_ptr, slot_idx)), 1)
+    F32 => {
+      let bits = low_u32_bits(read_slot_i64(values_ptr, slot_idx))
+      (@types.Value::F32(Float::reinterpret_from_int(bits)), 1)
+    }
+    F64 => {
+      let raw = read_slot_i64(values_ptr, slot_idx)
+      (@types.Value::F64(raw.reinterpret_as_double()), 1)
+    }
+    V128 => {
+      let lo = read_slot_i64(values_ptr, slot_idx)
+      let hi = read_slot_i64(values_ptr, slot_idx + 1)
+      (@types.Value::V128(int64_pair_to_v128_le(lo, hi)), 2)
+    }
+    _ =>
+      (
+        decode_ref_value(
+          ty,
+          read_slot_i64(values_ptr, slot_idx),
+          jit_module,
+          instance,
+        ),
+        1,
+      )
+  }
+}
+
+///|
+fn encode_value(
+  ty : @types.ValueType,
+  value : @types.Value,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Array[Int64]? {
+  match ty {
+    I32 =>
+      match value {
+        I32(n) => Some([n.to_int64() & 0xFFFFFFFFL])
+        _ => None
+      }
+    I64 =>
+      match value {
+        I64(n) => Some([n])
+        _ => None
+      }
+    F32 =>
+      match value {
+        F32(f) => Some([f.reinterpret_as_int().to_int64() & 0xFFFFFFFFL])
+        _ => None
+      }
+    F64 =>
+      match value {
+        F64(d) => Some([d.reinterpret_as_int64()])
+        _ => None
+      }
+    V128 =>
+      match value {
+        V128(bytes) =>
+          if bytes.length() >= 16 {
+            let lo = bytes_to_int64_le(bytes, 0)
+            let hi = bytes_to_int64_le(bytes, 8)
+            Some([lo, hi])
+          } else {
+            None
+          }
+        _ => None
+      }
+    // References.
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      Some([encode_store_funcref_for_jit(value, jit_module, instance)])
+    ExternRef | RefExtern | NullExternRef =>
+      match value {
+        Null => Some([NULL_REF])
+        ExternRef(idx) => Some([@jit.encode_externref(idx)])
+        _ => None
+      }
+    ExnRef | NullExnRef =>
+      match value {
+        Null => Some([NULL_REF])
+        ExnRef(idx) => Some([idx.to_int64()])
+        _ => None
+      }
+    StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
+      match value {
+        Null => Some([NULL_REF])
+        StructRef(idx) => Some([@jit.encode_heap_ref(idx)])
+        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)]) // best-effort
+        _ => None
+      }
+    ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
+      match value {
+        Null => Some([NULL_REF])
+        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)])
+        StructRef(idx) => Some([@jit.encode_heap_ref(idx)]) // best-effort
+        _ => None
+      }
+    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+      match value {
+        Null => Some([NULL_REF])
+        I31(n) => Some([@jit.encode_i31(n)])
+        StructRef(idx) => Some([@jit.encode_heap_ref(idx)])
+        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)])
+        _ => None
+      }
+    RefI31 | RefNullI31 =>
+      match value {
+        Null => Some([NULL_REF])
+        I31(n) => Some([@jit.encode_i31(n)])
+        _ => None
+      }
+    RefNone => Some([NULL_REF])
+  }
+}
+
+///|
+fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
+  match err {
+    @runtime.RuntimeError::OutOfBoundsMemoryAccess => 1
+    @runtime.RuntimeError::CallStackExhausted => 2
+    @runtime.RuntimeError::Unreachable => 3
+    @runtime.RuntimeError::IndirectCallTypeMismatch => 4
+    @runtime.RuntimeError::InvalidConversion => 5
+    @runtime.RuntimeError::DivisionByZero => 6
+    @runtime.RuntimeError::IntegerOverflow => 7
+    _ => 99
+  }
+}
+
+///|
+/// Build `external_imports` for `JITModule::load_with_imports`.
+///
+/// For function imports without built-in trampolines, if the resolved import is a
+/// runtime host function, we pass a special negative encoding `-(addr+1)` to
+/// instruct the JIT loader to generate a hostcall trampoline.
+pub fn build_external_imports_for_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Map[String, Map[String, Int64]] {
+  let external : Map[String, Map[String, Int64]] = {}
+  let mut func_imp_idx = 0
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(_) => {
+        let func_addr = if func_imp_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_imp_idx]
+        } else {
+          -1
+        }
+        func_imp_idx = func_imp_idx + 1
+        if func_addr < 0 {
+          continue
+        }
+        // Prefer built-in trampolines when available.
+        if @jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
+          continue
+        }
+        let inst = store.get_func_inst(func_addr) catch { _ => continue }
+        if inst is @runtime.FuncInst::HostFunc(_) {
+          let encoded = -(func_addr.to_int64() + 1L)
+          let m = match external.get(imp.mod_name) {
+            Some(mm) => mm
+            None => {}
+          }
+          m.set(imp.name, encoded)
+          external.set(imp.mod_name, m)
+        }
+      }
+      _ => ()
+    }
+  }
+  external
+}
+
+///|
+/// Install a JIT hostcall dispatcher closure on `jit_module`.
+///
+/// This enables arbitrary imported host functions (stored in `store`) to be
+/// called from JIT-compiled wasm via `wasmoon_jit_hostcall`.
+pub fn install_jit_hostcall_dispatcher(
+  jit_module : @jit.JITModule,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+) -> Unit {
+  jit_module.set_hostcall_callback(fn() {
+    let func_addr = @jit.get_hostcall_func_addr()
+    let values_ptr = @jit.get_hostcall_values_ptr()
+    let arg_slots = @jit.get_hostcall_num_arg_slots()
+    let res_slots = @jit.get_hostcall_num_result_slots()
+    let ft = match store.get_func_type_opt(func_addr) {
+      Some(t) => t
+      None => return 3
+    }
+    if sum_slot_count(ft.params) != arg_slots ||
+      sum_slot_count(ft.results) != res_slots {
+      return 3
+    }
+
+    // Decode args.
+    let args : Array[@types.Value] = []
+    let mut slot = 0
+    for ty in ft.params {
+      let (v, used) = decode_value(ty, values_ptr, slot, jit_module, instance)
+      args.push(v)
+      slot = slot + used
+    }
+
+    // Invoke host function.
+    let caller = @runtime.Caller::new(store, instance)
+    let inst = match store.get_func_inst_opt(func_addr) {
+      Some(i) => i
+      None => return 3
+    }
+    let results : Array[@types.Value] = match inst {
+      @runtime.FuncInst::HostFunc(f) =>
+        f(caller, args) catch {
+          e => return runtime_error_to_trap_code(e)
+        }
+      _ => return 3
+    }
+    if results.length() != ft.results.length() {
+      return 3
+    }
+
+    // Encode results right after the arg slots region.
+    let mut out_slot = arg_slots
+    for i, ty in ft.results {
+      let slots = encode_value(ty, results[i], jit_module, instance)
+      match slots {
+        None => return 3
+        Some(encoded_slots) => {
+          for j in 0..<encoded_slots.length() {
+            write_slot_i64(values_ptr, out_slot + j, encoded_slots[j])
+          }
+          out_slot = out_slot + encoded_slots.length()
+        }
+      }
+    }
+    0
+  })
+}
