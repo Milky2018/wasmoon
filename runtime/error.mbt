@@ -21,6 +21,9 @@ pub(all) suberror RuntimeError {
   LinkErrorDetail(String)
   NullReference // Null exception reference (null exnref thrown)
   UnalignedAtomic
+  // Used when evaluating init expressions during instantiation; this should
+  // never be reached for validated modules, but helps diagnose engine gaps.
+  InvalidConstantExpression(String)
 }
 
 ///|
@@ -52,6 +55,12 @@ pub impl Show for RuntimeError with output(self, logger) {
       }
     NullReference => "null reference"
     UnalignedAtomic => "unaligned atomic"
+    InvalidConstantExpression(detail) =>
+      if detail == "" {
+        "invalid constant expression"
+      } else {
+        "invalid constant expression: \{detail}"
+      }
   }
   logger.write_string(msg)
 }

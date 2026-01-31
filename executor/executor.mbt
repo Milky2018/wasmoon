@@ -980,6 +980,37 @@ pub fn ExecContext::call_func(
 // ============================================================
 
 ///|
+/// Convert an arbitrary thrown value into a `RuntimeError` for public APIs.
+///
+/// The executor uses internal `ControlSignal`s for structured control flow; any
+/// leaked signal should be surfaced as `unreachable` externally.
+fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
+  match e {
+    @runtime.StackUnderflow => @runtime.StackUnderflow
+    @runtime.StackOverflow => @runtime.StackOverflow
+    @runtime.TypeMismatch => @runtime.TypeMismatch
+    @runtime.OutOfBoundsMemoryAccess => @runtime.OutOfBoundsMemoryAccess
+    @runtime.OutOfBoundsTableAccess => @runtime.OutOfBoundsTableAccess
+    @runtime.OutOfBoundsArrayAccess => @runtime.OutOfBoundsArrayAccess
+    @runtime.UndefinedElement => @runtime.UndefinedElement
+    @runtime.UninitializedElement => @runtime.UninitializedElement
+    @runtime.IndirectCallTypeMismatch => @runtime.IndirectCallTypeMismatch
+    @runtime.DivisionByZero => @runtime.DivisionByZero
+    @runtime.IntegerOverflow => @runtime.IntegerOverflow
+    @runtime.InvalidConversion => @runtime.InvalidConversion
+    @runtime.Unreachable => @runtime.Unreachable
+    @runtime.CallStackExhausted => @runtime.CallStackExhausted
+    @runtime.UnknownImport(_, _) as err => err
+    @runtime.LinkError => @runtime.LinkError
+    @runtime.LinkErrorDetail(_) as err => err
+    @runtime.NullReference => @runtime.NullReference
+    @runtime.UnalignedAtomic => @runtime.UnalignedAtomic
+    @runtime.InvalidConstantExpression(_) as err => err
+    _ => @runtime.Unreachable
+  }
+}
+
+///|
 /// Create a simple module instance from a parsed module
 pub fn instantiate_module(
   mod : @types.Module,
@@ -1033,7 +1064,9 @@ pub fn instantiate_module(
         globals=[],
         store=Some(store),
         types=mod.types,
-      )
+      ) catch {
+        e => abort(e.to_string())
+      }
     } else {
       @types.Value::Null
     }
@@ -1060,7 +1093,9 @@ pub fn instantiate_module(
       globals=global_instances,
       store=Some(store),
       types=mod.types,
-    )
+    ) catch {
+      e => abort(e.to_string())
+    }
     let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
@@ -1121,7 +1156,7 @@ fn eval_const_expr(
   globals? : Array[@runtime.GlobalInstance] = [],
   store? : @runtime.Store? = None,
   types? : Array[@types.SubType] = [],
-) -> @types.Value {
+) -> @types.Value raise @runtime.RuntimeError {
   // Use stack-based evaluation for extended constant expressions
   let stack : Array[@types.Value] = []
   for instr in instrs {
@@ -1143,6 +1178,10 @@ fn eval_const_expr(
       GlobalGet(idx) =>
         if idx < globals.length() {
           stack.push(globals[idx].get())
+        } else {
+          raise @runtime.InvalidConstantExpression(
+            "global.get out of range: " + idx.to_string(),
+          )
         }
       // GC: i31 reference creation
       RefI31 =>
@@ -1159,42 +1198,84 @@ fn eval_const_expr(
         }
       // GC: array.new_default - create array with default values
       ArrayNewDefault(type_idx) =>
-        if stack.length() >= 1 && store is Some(s) && type_idx < types.length() {
+        if stack.length() < 1 {
+          raise @runtime.InvalidConstantExpression(
+            "array.new_default requires a length operand",
+          )
+        } else if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "array.new_default requires a store",
+          )
+        } else if type_idx < 0 || type_idx >= types.length() {
+          raise @runtime.InvalidConstantExpression(
+            "array.new_default type index out of range: " + type_idx.to_string(),
+          )
+        } else {
           let len_val = stack.pop().unwrap()
           if len_val is I32(len) {
             let array_type = match types[type_idx].composite {
               Array(at) => at
-              _ => continue
+              _ =>
+                raise @runtime.InvalidConstantExpression(
+                  "array.new_default expects an array type at index " +
+                  type_idx.to_string(),
+                )
             }
             let default_val = default_value_for_storage_type(
               array_type.element.storage_type,
             )
             let elements : Array[@types.Value] = Array::make(len, default_val)
-            let ref_idx = s.alloc_array(type_idx, elements)
+            let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
+          } else {
+            raise @runtime.InvalidConstantExpression(
+              "array.new_default length must be i32",
+            )
           }
         }
       // GC: array.new - create array with initial value
       ArrayNew(type_idx) =>
-        if stack.length() >= 2 && store is Some(s) {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "array.new requires (init, len) operands",
+          )
+        } else if store is None {
+          raise @runtime.InvalidConstantExpression("array.new requires a store")
+        } else {
           let len_val = stack.pop().unwrap()
           let init_val = stack.pop().unwrap()
           if len_val is I32(len) {
             let elements : Array[@types.Value] = Array::make(len, init_val)
-            let ref_idx = s.alloc_array(type_idx, elements)
+            let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
+          } else {
+            raise @runtime.InvalidConstantExpression(
+              "array.new length must be i32",
+            )
           }
         }
       // GC: array.new_fixed - create array from fixed number of stack values
       ArrayNewFixed(type_idx, len) =>
-        if store is Some(s) && type_idx < types.length() {
+        if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "array.new_fixed requires a store",
+          )
+        } else if type_idx < 0 || type_idx >= types.length() {
+          raise @runtime.InvalidConstantExpression(
+            "array.new_fixed type index out of range: " + type_idx.to_string(),
+          )
+        } else {
           // Ensure this is actually an array type.
           match types[type_idx].composite {
             Array(_) => ()
-            _ => continue
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "array.new_fixed expects an array type at index " +
+                type_idx.to_string(),
+              )
           }
           if len == 0 {
-            let ref_idx = s.alloc_array(type_idx, [])
+            let ref_idx = store.unwrap().alloc_array(type_idx, [])
             stack.push(ArrayRef(ref_idx))
           } else if stack.length() >= len {
             // Pop elements in reverse order (last element pushed first).
@@ -1205,30 +1286,61 @@ fn eval_const_expr(
             for i = len - 1; i >= 0; i = i - 1 {
               elements[i] = stack.pop().unwrap()
             }
-            let ref_idx = s.alloc_array(type_idx, elements)
+            let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
+          } else {
+            raise @runtime.InvalidConstantExpression(
+              "array.new_fixed requires " +
+              len.to_string() +
+              " element operands",
+            )
           }
         }
       // GC: struct.new_default - create struct with default values
       StructNewDefault(type_idx) =>
-        if store is Some(s) && type_idx < types.length() {
+        if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "struct.new_default requires a store",
+          )
+        } else if type_idx < 0 || type_idx >= types.length() {
+          raise @runtime.InvalidConstantExpression(
+            "struct.new_default type index out of range: " +
+            type_idx.to_string(),
+          )
+        } else {
           let struct_type = match types[type_idx].composite {
             Struct(st) => st
-            _ => continue
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "struct.new_default expects a struct type at index " +
+                type_idx.to_string(),
+              )
           }
           let fields : Array[@types.Value] = []
           for field in struct_type.fields {
             fields.push(default_value_for_storage_type(field.storage_type))
           }
-          let ref_idx = s.alloc_struct(type_idx, fields)
+          let ref_idx = store.unwrap().alloc_struct(type_idx, fields)
           stack.push(StructRef(ref_idx))
         }
       // GC: struct.new - create struct from stack values
       StructNew(type_idx) =>
-        if store is Some(s) && type_idx < types.length() {
+        if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "struct.new requires a store",
+          )
+        } else if type_idx < 0 || type_idx >= types.length() {
+          raise @runtime.InvalidConstantExpression(
+            "struct.new type index out of range: " + type_idx.to_string(),
+          )
+        } else {
           let struct_type = match types[type_idx].composite {
             Struct(st) => st
-            _ => continue
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "struct.new expects a struct type at index " +
+                type_idx.to_string(),
+              )
           }
           let num_fields = struct_type.fields.length()
           if stack.length() >= num_fields {
@@ -1240,8 +1352,14 @@ fn eval_const_expr(
             for i = num_fields - 1; i >= 0; i = i - 1 {
               fields[i] = stack.pop().unwrap()
             }
-            let ref_idx = s.alloc_struct(type_idx, fields)
+            let ref_idx = store.unwrap().alloc_struct(type_idx, fields)
             stack.push(StructRef(ref_idx))
+          } else {
+            raise @runtime.InvalidConstantExpression(
+              "struct.new requires " +
+              num_fields.to_string() +
+              " field operands",
+            )
           }
         }
       // i32 arithmetic operations
@@ -1298,11 +1416,12 @@ fn eval_const_expr(
       _ => ()
     }
   }
-  if stack.length() > 0 {
-    stack[stack.length() - 1]
-  } else {
-    Null
+  if stack.length() != 1 {
+    raise @runtime.InvalidConstantExpression(
+      "expected 1 value on stack, got " + stack.length().to_string(),
+    )
   }
+  stack[0]
 }
 
 ///|
@@ -1489,25 +1608,7 @@ pub fn instantiate_module_with_init(
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise @runtime.Unreachable
-      @runtime.StackUnderflow => raise @runtime.StackUnderflow
-      @runtime.StackOverflow => raise @runtime.StackOverflow
-      @runtime.TypeMismatch => raise @runtime.TypeMismatch
-      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
-      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
-      @runtime.UndefinedElement => raise @runtime.UndefinedElement
-      @runtime.UninitializedElement => raise @runtime.UninitializedElement
-      @runtime.IndirectCallTypeMismatch =>
-        raise @runtime.IndirectCallTypeMismatch
-      @runtime.DivisionByZero => raise @runtime.DivisionByZero
-      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-      @runtime.InvalidConversion => raise @runtime.InvalidConversion
-      @runtime.Unreachable => raise @runtime.Unreachable
-      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport(_) as e => raise e
-      @runtime.NullReference => raise @runtime.NullReference
-      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
-      _ => raise @runtime.Unreachable
+      e => raise normalize_runtime_error(e)
     })
     |> ignore
   }
@@ -1944,27 +2045,7 @@ pub fn instantiate_module_with_imports(
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise @runtime.Unreachable
-      @runtime.StackUnderflow => raise @runtime.StackUnderflow
-      @runtime.StackOverflow => raise @runtime.StackOverflow
-      @runtime.TypeMismatch => raise @runtime.TypeMismatch
-      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
-      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
-      @runtime.UndefinedElement => raise @runtime.UndefinedElement
-      @runtime.UninitializedElement => raise @runtime.UninitializedElement
-      @runtime.IndirectCallTypeMismatch =>
-        raise @runtime.IndirectCallTypeMismatch
-      @runtime.DivisionByZero => raise @runtime.DivisionByZero
-      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-      @runtime.InvalidConversion => raise @runtime.InvalidConversion
-      @runtime.Unreachable => raise @runtime.Unreachable
-      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport(_) as e => raise e
-      @runtime.LinkError => raise @runtime.LinkError
-      @runtime.LinkErrorDetail(_) as e => raise e
-      @runtime.NullReference => raise @runtime.NullReference
-      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
-      _ => raise @runtime.Unreachable
+      e => raise normalize_runtime_error(e)
     })
     |> ignore
   }
@@ -2007,28 +2088,7 @@ pub fn call_exported_func(
           // Catch any leaked ControlSignal and convert to RuntimeError
           ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return => raise @runtime.Unreachable
-            @runtime.StackUnderflow => raise @runtime.StackUnderflow
-            @runtime.StackOverflow => raise @runtime.StackOverflow
-            @runtime.TypeMismatch => raise @runtime.TypeMismatch
-            @runtime.OutOfBoundsMemoryAccess =>
-              raise @runtime.OutOfBoundsMemoryAccess
-            @runtime.OutOfBoundsTableAccess =>
-              raise @runtime.OutOfBoundsTableAccess
-            @runtime.OutOfBoundsArrayAccess =>
-              raise @runtime.OutOfBoundsArrayAccess
-            @runtime.UndefinedElement => raise @runtime.UndefinedElement
-            @runtime.UninitializedElement => raise @runtime.UninitializedElement
-            @runtime.IndirectCallTypeMismatch =>
-              raise @runtime.IndirectCallTypeMismatch
-            @runtime.DivisionByZero => raise @runtime.DivisionByZero
-            @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-            @runtime.InvalidConversion => raise @runtime.InvalidConversion
-            @runtime.Unreachable => raise @runtime.Unreachable
-            @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-            @runtime.UnknownImport(_) as e => raise e
-            @runtime.NullReference => raise @runtime.NullReference
-            @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
-            _ => raise @runtime.Unreachable
+            e => raise normalize_runtime_error(e)
           }
         } // Unknown error
         _ => raise @runtime.UndefinedElement
@@ -2049,24 +2109,7 @@ pub fn call_func_by_index(
   // Catch any leaked ControlSignal and convert to RuntimeError
   ctx.call_func(func_idx, args) catch {
     BranchWith(_, _) | Return => raise @runtime.Unreachable
-    @runtime.StackUnderflow => raise @runtime.StackUnderflow
-    @runtime.StackOverflow => raise @runtime.StackOverflow
-    @runtime.TypeMismatch => raise @runtime.TypeMismatch
-    @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
-    @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-    @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
-    @runtime.UndefinedElement => raise @runtime.UndefinedElement
-    @runtime.UninitializedElement => raise @runtime.UninitializedElement
-    @runtime.IndirectCallTypeMismatch => raise @runtime.IndirectCallTypeMismatch
-    @runtime.DivisionByZero => raise @runtime.DivisionByZero
-    @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-    @runtime.InvalidConversion => raise @runtime.InvalidConversion
-    @runtime.Unreachable => raise @runtime.Unreachable
-    @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-    @runtime.UnknownImport(_) as e => raise e
-    @runtime.NullReference => raise @runtime.NullReference
-    @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
-    _ => raise @runtime.Unreachable
+    e => raise normalize_runtime_error(e)
   }
 }
 
@@ -2177,25 +2220,7 @@ pub fn instantiate_with_linker(
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise @runtime.Unreachable
-      @runtime.StackUnderflow => raise @runtime.StackUnderflow
-      @runtime.StackOverflow => raise @runtime.StackOverflow
-      @runtime.TypeMismatch => raise @runtime.TypeMismatch
-      @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
-      @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
-      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
-      @runtime.UndefinedElement => raise @runtime.UndefinedElement
-      @runtime.UninitializedElement => raise @runtime.UninitializedElement
-      @runtime.IndirectCallTypeMismatch =>
-        raise @runtime.IndirectCallTypeMismatch
-      @runtime.DivisionByZero => raise @runtime.DivisionByZero
-      @runtime.IntegerOverflow => raise @runtime.IntegerOverflow
-      @runtime.InvalidConversion => raise @runtime.InvalidConversion
-      @runtime.Unreachable => raise @runtime.Unreachable
-      @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
-      @runtime.UnknownImport(_) as e => raise e
-      @runtime.NullReference => raise @runtime.NullReference
-      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
-      _ => raise @runtime.Unreachable
+      e => raise normalize_runtime_error(e)
     })
     |> ignore
   }

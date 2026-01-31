@@ -2850,3 +2850,43 @@ test "i32.trunc_f64_s: boundary near INT32_MIN" {
     _ => fail("Expected I32 result")
   }
 }
+
+///|
+test "executor: normalize_runtime_error preserves runtime errors" {
+  let errors : Array[@runtime.RuntimeError] = [
+    @runtime.StackUnderflow,
+    @runtime.StackOverflow,
+    @runtime.TypeMismatch,
+    @runtime.OutOfBoundsMemoryAccess,
+    @runtime.OutOfBoundsTableAccess,
+    @runtime.OutOfBoundsArrayAccess,
+    @runtime.UndefinedElement,
+    @runtime.UninitializedElement,
+    @runtime.IndirectCallTypeMismatch,
+    @runtime.DivisionByZero,
+    @runtime.IntegerOverflow,
+    @runtime.InvalidConversion,
+    @runtime.Unreachable,
+    @runtime.CallStackExhausted,
+    @runtime.UnknownImport("test_mod", "test_field"),
+    @runtime.LinkError,
+    @runtime.LinkErrorDetail("test detail"),
+    @runtime.NullReference,
+    @runtime.UnalignedAtomic,
+    @runtime.InvalidConstantExpression("test detail"),
+  ]
+  for err in errors {
+    let mapped = normalize_runtime_error(err)
+    assert_true(
+      @runtime.format_runtime_error(mapped) ==
+      @runtime.format_runtime_error(err),
+    )
+  }
+}
+
+///|
+test "executor: normalize_runtime_error converts leaked control signals to unreachable" {
+  // Whitebox test: ControlSignal is internal and should never leak as a public API error.
+  let mapped = normalize_runtime_error(ControlSignal::Return)
+  inspect(mapped.to_string(), content="unreachable")
+}

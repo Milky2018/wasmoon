@@ -148,6 +148,7 @@ test "all RuntimeError types have descriptive messages" {
     @runtime.TypeMismatch,
     @runtime.OutOfBoundsMemoryAccess,
     @runtime.OutOfBoundsTableAccess,
+    @runtime.OutOfBoundsArrayAccess,
     @runtime.UndefinedElement,
     @runtime.UninitializedElement,
     @runtime.IndirectCallTypeMismatch,
@@ -157,6 +158,11 @@ test "all RuntimeError types have descriptive messages" {
     @runtime.Unreachable,
     @runtime.CallStackExhausted,
     @runtime.UnknownImport("test_mod", "test_field"),
+    @runtime.LinkError,
+    @runtime.LinkErrorDetail("test detail"),
+    @runtime.NullReference,
+    @runtime.UnalignedAtomic,
+    @runtime.InvalidConstantExpression("test detail"),
   ]
   for err in errors {
     let formatted = @runtime.format_runtime_error(err)
