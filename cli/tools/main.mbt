@@ -28,6 +28,12 @@ fn main {
             short='j',
             help="Emit JSON AST instead of WIT",
           ),
+          "no-docs": @clap.Arg::flag(
+            help="Do not include doc comments when emitting WIT text (currently a no-op)",
+          ),
+          "skip-validation": @clap.Arg::flag(
+            help="Skip validation when emitting --wasm/--wat (currently a no-op)",
+          ),
           "wasm": @clap.Arg::flag(
             short='w',
             help="Emit a WebAssembly Component binary instead of WIT text",
@@ -35,6 +41,17 @@ fn main {
           "wat": @clap.Arg::flag(
             short='t',
             help="Emit a WebAssembly Component text format instead of WIT text",
+          ),
+          "importize": @clap.Arg::flag(
+            help="Generate a WIT world that imports the exports of the input component (.wasm)",
+          ),
+          "importize-world": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Generate a WIT world that imports the exports of the selected world in a WIT package",
+          ),
+          "importize-out-world-name": @clap.Arg::named(
+            nargs=@clap.Nargs::AtMost(1),
+            help="Name of the generated world for --importize/--importize-world",
           ),
         },
       ),
@@ -105,10 +122,25 @@ fn main {
                 None => None
               }
               let as_json = sub.flags.get("json") is Some(true)
+              let no_docs = sub.flags.get("no-docs") is Some(true)
+              let skip_validation = sub.flags.get("skip-validation")
+                is Some(true)
               let as_wasm = sub.flags.get("wasm") is Some(true)
               let as_wat = sub.flags.get("wat") is Some(true)
+              let importize = sub.flags.get("importize") is Some(true)
+              let importize_world : String? = match
+                sub.args.get("importize-world") {
+                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
+                None => None
+              }
+              let importize_out_world_name : String? = match
+                sub.args.get("importize-out-world-name") {
+                Some(arr) => if arr.length() > 0 { Some(arr[0]) } else { None }
+                None => None
+              }
               cmd_wit(
-                input_opt, output_opt, out_dir_opt, as_json, as_wasm, as_wat,
+                input_opt, output_opt, out_dir_opt, as_json, no_docs, skip_validation,
+                as_wasm, as_wat, importize, importize_world, importize_out_world_name,
               )
             }
             "wasm2wat" =>
@@ -253,16 +285,67 @@ fn cmd_wit(
   output_opt : String?,
   out_dir_opt : String?,
   as_json : Bool,
+  no_docs : Bool,
+  skip_validation : Bool,
   as_wasm : Bool,
   as_wat : Bool,
+  importize : Bool,
+  importize_world : String?,
+  importize_out_world_name : String?,
 ) -> Unit {
-  let input = match input_opt {
-    Some(p) => p
-    None => {
-      exit_error("missing input (.wit file or directory)")
+  // Currently `no-docs` / `skip-validation` are accepted for CLI parity but are
+  // no-ops (wasmoon's WIT parser does not preserve docs, and validation happens
+  // during resolve/encode).
+  let _ = (no_docs, skip_validation)
+  let input_opt2 : String? = match input_opt {
+    Some(p) => if p == "-" { None } else { Some(p) }
+    None => None
+  }
+  let input = input_opt2.unwrap_or("")
+
+  // Read stdin as a single-document WIT package when no input path is provided.
+  if input_opt2 is None {
+    if out_dir_opt is Some(_) {
+      exit_error("cannot use --out-dir when reading WIT from stdin")
       panic()
     }
+    if importize || importize_world is Some(_) {
+      exit_error(
+        "`--importize*` requires a file input (component .wasm or WIT package)",
+      )
+      panic()
+    }
+    let src = read_stdin_all_text()
+    let root = @wit.parse_package(src) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+    let res = @wit.resolve_package(root, []) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+    let pkg_for_print : @wit.Package = {
+      name: res.root.name,
+      version: res.root.version,
+      items: res.root.items,
+      nested: res.deps,
+    }
+    let out = if as_json {
+      @wit.package_to_json(pkg_for_print)
+    } else {
+      @wit.format_package(pkg_for_print)
+    }
+    match output_opt {
+      Some(path) => write_text_file(path, out)
+      None => println(out)
+    }
+    return
   }
+
   // Extract WIT from a wasm-encoded component package.
   if input.has_suffix(".wasm") && !is_dir(input) {
     if as_wasm || as_wat {
@@ -282,10 +365,28 @@ fn cmd_wit(
         panic()
       }
     }
-    let out = if as_json {
-      @wit.package_to_json(pkg)
+    let pkg2 = if importize {
+      @wit.importize_first_world_in_package(
+        pkg,
+        out_world_name=importize_out_world_name,
+      ) catch {
+        e => {
+          exit_error(e.to_string())
+          panic()
+        }
+      }
+    } else if importize_world is Some(_) {
+      exit_error(
+        "use --importize (not --importize-world) with a component .wasm input",
+      )
+      panic()
     } else {
-      @wit.format_package(pkg)
+      pkg
+    }
+    let out = if as_json {
+      @wit.package_to_json(pkg2)
+    } else {
+      @wit.format_package(pkg2)
     }
     match output_opt {
       Some(path) => write_text_file(path, out)
@@ -332,6 +433,10 @@ fn cmd_wit(
       exit_error("cannot use --out-dir with --wasm/--wat")
       panic()
     }
+    if importize || importize_world is Some(_) {
+      exit_error("cannot use `--importize*` with --wasm/--wat")
+      panic()
+    }
     if as_wasm {
       let out_path = match output_opt {
         Some(p) => p
@@ -367,14 +472,34 @@ fn cmd_wit(
       exit_error("cannot use -o with --out-dir")
       panic()
     }
+    if importize || importize_world is Some(_) {
+      exit_error("cannot use `--importize*` with --out-dir")
+      panic()
+    }
     write_wit_out_dir(out_dir, res, as_json)
     return
   }
-  let pkg_for_print : @wit.Package = {
-    name: res.root.name,
-    version: res.root.version,
-    items: res.root.items,
-    nested: res.deps,
+  let pkg_for_print : @wit.Package = if importize {
+    exit_error("use --importize-world with a WIT package input")
+    panic()
+  } else if importize_world is Some(wname) {
+    @wit.importize_resolved_package(
+      res,
+      wname,
+      out_world_name=importize_out_world_name,
+    ) catch {
+      e => {
+        exit_error(e.to_string())
+        panic()
+      }
+    }
+  } else {
+    {
+      name: res.root.name,
+      version: res.root.version,
+      items: res.root.items,
+      nested: res.deps,
+    }
   }
   let out = if as_json {
     @wit.package_to_json(pkg_for_print)
@@ -385,6 +510,33 @@ fn cmd_wit(
     Some(path) => write_text_file(path, out)
     None => println(out)
   }
+}
+
+///|
+fn read_stdin_all_bytes() -> Bytes {
+  let out : Array[Byte] = []
+  let buf = FixedArray::make(4096, b'\x00')
+  while true {
+    match @wasi.native_read(0, buf, 4096) {
+      Some(n) if n > 0 =>
+        for i in 0..<n {
+          out.push(buf[i])
+        }
+      _ => break
+    }
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn read_stdin_all_text() -> String {
+  let bytes = read_stdin_all_bytes()
+  // WIT inputs are assumed ASCII/UTF-8; this matches existing parser usage.
+  let sb = StringBuilder::new()
+  for i in 0..<bytes.length() {
+    sb.write_char(bytes[i].to_int().unsafe_to_char())
+  }
+  sb.to_string()
 }
 
 ///|

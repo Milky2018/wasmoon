@@ -12,6 +12,12 @@ pub fn format_package(Package) -> String
 
 pub fn format_wit_component_wat(ResolveResult) -> String raise WitError
 
+pub fn importize_first_world_in_package(Package, out_world_name? : String?) -> Package raise WitError
+
+pub fn importize_resolved_package(ResolveResult, String, out_world_name? : String?) -> Package raise WitError
+
+pub fn importize_world(World, String) -> World
+
 pub fn merge_package_files(Array[Package]) -> Package raise WitError
 
 pub fn package_to_json(Package) -> String
