@@ -1185,7 +1185,11 @@ fn eval_const_expr(
         }
       // GC: i31 reference creation
       RefI31 =>
-        if stack.length() >= 1 {
+        if stack.length() < 1 {
+          raise @runtime.InvalidConstantExpression(
+            "ref.i31 requires an i32 operand",
+          )
+        } else {
           let val = stack.pop().unwrap()
           match val {
             I32(n) => {
@@ -1193,7 +1197,10 @@ fn eval_const_expr(
               let i31_val = n & 0x7FFFFFFF
               stack.push(I31(i31_val))
             }
-            _ => ()
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "ref.i31 operand must be i32",
+              )
           }
         }
       // GC: array.new_default - create array with default values
@@ -1364,56 +1371,106 @@ fn eval_const_expr(
         }
       // i32 arithmetic operations
       I32Add =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i32.add requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          if (a, b) is (I32(av), I32(bv)) {
-            stack.push(I32(av + bv))
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av + bv))
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i32.add operands must be i32",
+              )
           }
         }
       I32Sub =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i32.sub requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          if (a, b) is (I32(av), I32(bv)) {
-            stack.push(I32(av - bv))
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av - bv))
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i32.sub operands must be i32",
+              )
           }
         }
       I32Mul =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i32.mul requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          if (a, b) is (I32(av), I32(bv)) {
-            stack.push(I32(av * bv))
+          match (a, b) {
+            (I32(av), I32(bv)) => stack.push(I32(av * bv))
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i32.mul operands must be i32",
+              )
           }
         }
       // i64 arithmetic operations
       I64Add =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i64.add requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          if (a, b) is (I64(av), I64(bv)) {
-            stack.push(I64(av + bv))
+          match (a, b) {
+            (I64(av), I64(bv)) => stack.push(I64(av + bv))
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i64.add operands must be i64",
+              )
           }
         }
       I64Sub =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i64.sub requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
-          if (a, b) is (I64(av), I64(bv)) {
-            stack.push(I64(av - bv))
+          match (a, b) {
+            (I64(av), I64(bv)) => stack.push(I64(av - bv))
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i64.sub operands must be i64",
+              )
           }
         }
       I64Mul =>
-        if stack.length() >= 2 {
+        if stack.length() < 2 {
+          raise @runtime.InvalidConstantExpression(
+            "i64.mul requires 2 operands",
+          )
+        } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I64(av), I64(bv)) => stack.push(I64(av * bv))
-            _ => ()
+            _ =>
+              raise @runtime.InvalidConstantExpression(
+                "i64.mul operands must be i64",
+              )
           }
         }
-      _ => ()
+      _ =>
+        raise @runtime.InvalidConstantExpression(
+          "unsupported const expr instruction: " + instr.to_string(),
+        )
     }
   }
   if stack.length() != 1 {
