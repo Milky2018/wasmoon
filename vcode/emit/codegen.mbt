@@ -2021,6 +2021,7 @@ fn MachineCode::emit_instruction(
         TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
         TableInit => @jit_ffi.c_jit_get_table_init_ptr()
         ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
+        HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
       }
       self.emit_load_imm64(result_reg, func_ptr)
     }

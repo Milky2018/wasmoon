@@ -44,6 +44,43 @@ pub extern "c" fn c_jit_get_trap_brk_imm() -> Int = "wasmoon_jit_get_trap_brk_im
 /// Get best-effort wasm func_idx at trap time, or -1 if unknown
 pub extern "c" fn c_jit_get_trap_func_idx() -> Int = "wasmoon_jit_get_trap_func_idx"
 
+// ============ Hostcall Bridge (JIT -> Host) ============
+
+///|
+/// Get hostcall function pointer (C calling convention).
+pub extern "c" fn c_jit_get_hostcall_ptr() -> Int64 = "wasmoon_jit_get_hostcall_ptr"
+
+///|
+/// Set hostcall callback for a JITContext.
+/// The callback closure is invoked with no arguments; it can query the current
+/// hostcall parameters via `c_jit_get_hostcall_*` helpers.
+#owned(closure)
+pub extern "c" fn c_jit_set_hostcall_callback(
+  ctx_ptr : Int64,
+  call_closure : FuncRef[(() -> Int) -> Int],
+  closure : () -> Int,
+) -> Unit = "wasmoon_jit_set_hostcall_callback"
+
+///|
+/// Clear hostcall callback for a JITContext.
+pub extern "c" fn c_jit_clear_hostcall_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_hostcall_callback"
+
+///|
+/// Current hostcall func_idx (thread-local).
+pub extern "c" fn c_jit_get_hostcall_func_idx() -> Int = "wasmoon_jit_get_hostcall_func_idx"
+
+///|
+/// Current hostcall values_vec pointer (thread-local).
+pub extern "c" fn c_jit_get_hostcall_values_ptr() -> Int64 = "wasmoon_jit_get_hostcall_values_ptr"
+
+///|
+/// Current hostcall num_args (thread-local).
+pub extern "c" fn c_jit_get_hostcall_num_args() -> Int = "wasmoon_jit_get_hostcall_num_args"
+
+///|
+/// Current hostcall num_results (thread-local).
+pub extern "c" fn c_jit_get_hostcall_num_results() -> Int = "wasmoon_jit_get_hostcall_num_results"
+
 // ============ GC-managed JITContext ============
 
 ///|

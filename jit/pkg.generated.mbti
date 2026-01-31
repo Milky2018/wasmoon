@@ -138,6 +138,14 @@ pub fn get_gc_struct_set_ptr() -> Int64
 
 pub fn get_gc_type_check_subtype_ptr() -> Int64
 
+pub fn get_hostcall_func_addr() -> Int
+
+pub fn get_hostcall_num_arg_slots() -> Int
+
+pub fn get_hostcall_num_result_slots() -> Int
+
+pub fn get_hostcall_values_ptr() -> Int64
+
 pub fn get_import_trampoline(String, String) -> Int64?
 
 pub fn get_last_trap_details() -> TrapDetails
@@ -454,6 +462,7 @@ pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
+pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
@@ -477,6 +486,7 @@ pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
+pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
 pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 

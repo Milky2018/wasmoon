@@ -106,6 +106,8 @@ pub fn c_jit_call_with_stack_switch(Int64, Int64, Int64, FixedArray[Int64], Int)
 
 pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
 
+pub fn c_jit_clear_hostcall_callback(Int64) -> Unit
+
 pub fn c_jit_clear_segments() -> Unit
 
 pub fn c_jit_clear_trap() -> Unit
@@ -292,6 +294,16 @@ pub fn c_jit_get_gc_struct_set_ptr() -> Int64
 
 pub fn c_jit_get_gc_type_check_subtype_ptr() -> Int64
 
+pub fn c_jit_get_hostcall_func_idx() -> Int
+
+pub fn c_jit_get_hostcall_num_args() -> Int
+
+pub fn c_jit_get_hostcall_num_results() -> Int
+
+pub fn c_jit_get_hostcall_ptr() -> Int64
+
+pub fn c_jit_get_hostcall_values_ptr() -> Int64
+
 pub fn c_jit_get_memory_copy_ptr() -> Int64
 
 pub fn c_jit_get_memory_fill_ptr() -> Int64
@@ -405,6 +417,8 @@ pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
 
 pub fn c_jit_set_wasi_arg(Int64, Int, FixedArray[Byte]) -> Unit
 

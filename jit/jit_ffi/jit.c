@@ -4,6 +4,14 @@
 
 #include "jit_internal.h"
 
+// ============ Hostcall Bridge (JIT -> Host) ============
+// Thread-local scratch for the currently executing hostcall.
+// This is read by the MoonBit dispatcher via FFI getters.
+static __thread int32_t g_hostcall_func_idx = -1;
+static __thread int64_t g_hostcall_values_ptr = 0;
+static __thread int32_t g_hostcall_num_args = 0;
+static __thread int32_t g_hostcall_num_results = 0;
+
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
@@ -36,6 +44,88 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
     return (int64_t)g_trap_fault_addr;
+}
+
+// ============ Hostcall Callback Registration ============
+
+typedef int32_t (*hostcall_callback_fn)(void *closure);
+
+static void clear_hostcall_callback(jit_context_t *ctx) {
+    if (!ctx) return;
+    if (ctx->hostcall_callback_data) {
+        moonbit_decref(ctx->hostcall_callback_data);
+        ctx->hostcall_callback_data = NULL;
+    }
+    ctx->hostcall_callback = NULL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback(
+    int64_t ctx_ptr,
+    hostcall_callback_fn callback,
+    void *closure
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    clear_hostcall_callback(ctx);
+    ctx->hostcall_callback = (void *)callback;
+    ctx->hostcall_callback_data = closure;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_hostcall_callback(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    clear_hostcall_callback(ctx);
+}
+
+// ============ Hostcall Execution ============
+
+// Called by JIT-generated trampolines (C calling convention).
+// On error, sets g_trap_code and longjmps back to the JIT entrypoint.
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    int64_t values_ptr,
+    int32_t num_args,
+    int32_t num_results
+) {
+    if (!ctx || !ctx->hostcall_callback) {
+        g_trap_code = 3; // unreachable
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return (int32_t)g_trap_code;
+    }
+
+    g_hostcall_func_idx = func_idx;
+    g_hostcall_values_ptr = values_ptr;
+    g_hostcall_num_args = num_args;
+    g_hostcall_num_results = num_results;
+
+    hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
+    int32_t trap = cb(ctx->hostcall_callback_data);
+    if (trap != 0) {
+        g_trap_code = trap;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return trap;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_hostcall_ptr(void) {
+    return (int64_t)wasmoon_jit_hostcall;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_func_idx(void) {
+    return g_hostcall_func_idx;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_hostcall_values_ptr(void) {
+    return g_hostcall_values_ptr;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_num_args(void) {
+    return g_hostcall_num_args;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_num_results(void) {
+    return g_hostcall_num_results;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_brk_imm(void) {

@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/vcode/emit"
 
 import {
+  "Milky2018/wasmoon/types",
   "Milky2018/wasmoon/vcode/abi",
   "Milky2018/wasmoon/vcode/instr",
   "Milky2018/wasmoon/vcode/regalloc",
@@ -21,6 +22,8 @@ pub const TYPE_V128 : Int = 4
 pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
 
 pub fn emit_function(@regalloc.VCodeFunction, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings) -> MachineCode
+
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int) -> MachineCode
 
 // Errors
 
