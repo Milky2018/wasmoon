@@ -1369,6 +1369,53 @@ fn eval_const_expr(
             )
           }
         }
+      // GC: any.convert_extern - convert externref to anyref
+      AnyConvertExtern =>
+        if stack.length() < 1 {
+          raise @runtime.InvalidConstantExpression(
+            "any.convert_extern requires 1 operand",
+          )
+        } else if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "any.convert_extern requires a store",
+          )
+        } else {
+          let val = stack.pop().unwrap()
+          match val {
+            Null => stack.push(@types.Value::Null)
+            ExternRef(_) => {
+              // Unwrap: host externrefs stay as ExternRef, wrapped internals get unwrapped
+              let unwrapped = store.unwrap().unwrap_extern(val)
+              stack.push(unwrapped)
+            }
+            _ => stack.push(val)
+          }
+        }
+      // GC: extern.convert_any - convert anyref to externref
+      ExternConvertAny =>
+        if stack.length() < 1 {
+          raise @runtime.InvalidConstantExpression(
+            "extern.convert_any requires 1 operand",
+          )
+        } else if store is None {
+          raise @runtime.InvalidConstantExpression(
+            "extern.convert_any requires a store",
+          )
+        } else {
+          let val = stack.pop().unwrap()
+          match val {
+            Null => stack.push(@types.Value::Null)
+            ExternRef(_) =>
+              // Already an externref, pass through
+              stack.push(val)
+            I31(_) | StructRef(_) | ArrayRef(_) => {
+              // Wrap internal GC values as externref
+              let wrapped = store.unwrap().wrap_as_extern(val)
+              stack.push(wrapped)
+            }
+            _ => stack.push(val)
+          }
+        }
       // i32 arithmetic operations
       I32Add =>
         if stack.length() < 2 {
