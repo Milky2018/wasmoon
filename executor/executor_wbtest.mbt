@@ -2890,3 +2890,34 @@ test "executor: normalize_runtime_error converts leaked control signals to unrea
   let mapped = normalize_runtime_error(ControlSignal::Return)
   inspect(mapped.to_string(), content="unreachable")
 }
+
+///|
+test "executor: const expr supports extern.convert_any/any.convert_extern" {
+  // Mirrors spec/gc/extern.wast global initializers.
+  let mod : @types.Module = {
+    ..@types.Module::empty(),
+    globals: [
+      {
+        type_: { value_type: @types.ValueType::ExternRef, mutable: false },
+        init: [RefNull(@types.ValueType::AnyRef), ExternConvertAny],
+      },
+      {
+        type_: { value_type: @types.ValueType::AnyRef, mutable: false },
+        init: [RefNull(@types.ValueType::ExternRef), AnyConvertExtern],
+      },
+      {
+        type_: { value_type: @types.ValueType::AnyRef, mutable: false },
+        init: [I32Const(7), RefI31, ExternConvertAny, AnyConvertExtern],
+      },
+    ],
+    exports: [
+      { name: "g_extern_null", desc: Global(0) },
+      { name: "g_any_null", desc: Global(1) },
+      { name: "g_any_i31", desc: Global(2) },
+    ],
+  }
+  let (store, instance) = instantiate_module(mod)
+  inspect(get_exported_global(store, instance, "g_extern_null"), content="Null")
+  inspect(get_exported_global(store, instance, "g_any_null"), content="Null")
+  inspect(get_exported_global(store, instance, "g_any_i31"), content="I31(7)")
+}
