@@ -5,9 +5,10 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional, Tuple
 
 
-def run_test(wast_file: Path, use_jit: bool) -> tuple[int | None, int | None, str | None]:
+def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     """Run a single wast test and return (passed, failed, error)."""
     cmd = ["./wasmoon", "test", str(wast_file)]
     if not use_jit:

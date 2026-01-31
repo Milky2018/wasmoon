@@ -2,6 +2,8 @@
 package "Milky2018/wasmoon/wit"
 
 // Values
+pub fn decode_wit_package_from_component(Bytes) -> Package raise WitError
+
 pub fn desugar_toplevel_use(Package) -> Package raise WitError
 
 pub fn encode_wit_component_wasm(ResolveResult) -> Bytes raise WitError

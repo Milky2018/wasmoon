@@ -1,4 +1,5 @@
 {
-  "import": []
+  "import": [
+    "Milky2018/wasmoon/component"
+  ]
 }
-
