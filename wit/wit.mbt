@@ -641,6 +641,93 @@ pub fn resolve_package(
   { root: root_pkg, deps: out_deps }
 }
 
+// ============================================================
+// wasm-tools Parity Helpers (Partial)
+// ============================================================
+
+///|
+/// "Importize" a world: drop all original imports and convert exports into imports.
+///
+/// This mirrors the `wasm-tools component wit --importize-world` behavior:
+/// the resulting world describes the interface needed to *import* a component
+/// that implements the original world's exports.
+pub fn importize_world(world : World, out_name : String) -> World {
+  let items : Array[WorldItem] = []
+  for wi in world.items {
+    match wi {
+      Import(_) | ImportFunc(_) | ImportInlineInterface(_, _) =>
+        // Drop original imports.
+        ()
+      Export(p) => items.push(Import(p))
+      ExportFunc(f) => items.push(ImportFunc(f))
+      ExportInlineInterface(n, iface) =>
+        items.push(ImportInlineInterface(n, iface))
+      // Keep non import/export items (types, includes, use, etc.) so any
+      // exported signatures that reference them remain valid.
+      _ => items.push(wi)
+    }
+  }
+  { name: out_name, items }
+}
+
+///|
+/// Build a "printable" resolved package that contains only non-world top items
+/// plus a single importized world (and inlined `deps` as `nested`).
+pub fn importize_resolved_package(
+  res : ResolveResult,
+  world_name : String,
+  out_world_name? : String? = None,
+) -> Package raise WitError {
+  let mut target : World? = None
+  let non_world_items : Array[TopItem] = []
+  for it in res.root.items {
+    match it {
+      World(w) => if w.name == world_name { target = Some(w) } else { () }
+      _ => non_world_items.push(it)
+    }
+  }
+  let w = target.unwrap_or_else(fn() {
+    raise WitError::Error("unknown world `" + world_name + "`")
+  })
+  let out_name = out_world_name.unwrap_or(world_name + "-importized")
+  let out_world = importize_world(w, out_name)
+  let items : Array[TopItem] = []
+  for it in non_world_items {
+    items.push(it)
+  }
+  items.push(World(out_world))
+  { name: res.root.name, version: res.root.version, items, nested: res.deps }
+}
+
+///|
+/// Importize the first world found in a decoded/parsed package.
+///
+/// This is primarily used for `--importize` with a component binary input.
+pub fn importize_first_world_in_package(
+  pkg : Package,
+  out_world_name? : String? = None,
+) -> Package raise WitError {
+  let mut target : World? = None
+  let non_world_items : Array[TopItem] = []
+  for it in pkg.items {
+    match it {
+      World(w) => if target is None { target = Some(w) } else { () }
+      _ => non_world_items.push(it)
+    }
+  }
+  let w = target.unwrap_or_else(fn() {
+    raise WitError::Error("no world found in input")
+  })
+  let out_name = out_world_name.unwrap_or(w.name + "-importized")
+  let out_world = importize_world(w, out_name)
+  let items : Array[TopItem] = []
+  for it in non_world_items {
+    items.push(it)
+  }
+  items.push(World(out_world))
+  { name: pkg.name, version: pkg.version, items, nested: pkg.nested }
+}
+
 ///|
 priv struct IfaceRef {
   pkg_key : String
