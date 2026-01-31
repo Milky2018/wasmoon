@@ -216,7 +216,8 @@ fn ExecContext::call_func_inst_with_context(
       }
     HostFunc(host_fn) => {
       // Call host function directly
-      let results = host_fn(args)
+      let caller = @runtime.Caller::new(self.store, self.instance)
+      let results = host_fn(caller, args)
       // Push results onto the stack
       for result in results {
         self.stack.push(result)
@@ -302,7 +303,8 @@ fn ExecContext::call_wasm_func_with_instance(
           }
           HostFunc(host_fn) => {
             // Host function - call directly and exit
-            let results = host_fn(tail_args)
+            let caller = @runtime.Caller::new(self.store, self.instance)
+            let results = host_fn(caller, tail_args)
             for result in results {
               self.stack.push(result)
             }

@@ -829,6 +829,79 @@ test "host function: simple call" {
 }
 
 ///|
+test "host function: caller can access exported memory" {
+  let store = @runtime.Store::new()
+
+  // Host function writes 7 into caller-exported memory "mem" at address 0.
+  let host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = fn(
+    caller,
+    args,
+  ) {
+    if args.length() != 0 {
+      raise @runtime.TypeMismatch
+    }
+    let mem = caller.get_exported_memory("mem")
+    match mem {
+      Some(m) => {
+        m.store_i32(0, 7)
+        []
+      }
+      None => raise @runtime.UndefinedElement
+    }
+  }
+  let host_type : @types.FuncType = { params: [], results: [] }
+  let host_addr = store.alloc_host_func_with_caller(
+    host_fn,
+    func_type=host_type,
+  )
+
+  // Define a module that:
+  // - exports a memory as "mem"
+  // - imports "env.write_mem0" and calls it
+  // - reads mem[0] and returns it
+  let main_type : @types.FuncType = {
+    params: [],
+    results: [@types.ValueType::I32],
+  }
+  let main_func : @types.FunctionCode = {
+    locals: [],
+    body: [Call(0), I32Const(0), I32Load(0, 2, 0)],
+  }
+  let mod : @types.Module = {
+    types: [
+      @types.SubType::from_func(host_type),
+      @types.SubType::from_func(main_type),
+    ],
+    type_rec_groups: [0, 1],
+    imports: [{ mod_name: "env", name: "write_mem0", desc: Func(0) }],
+    funcs: [1],
+    tables: [],
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+    globals: [],
+    exports: [
+      { name: "mem", desc: @types.ExportDesc::Memory(0) },
+      { name: "main", desc: @types.ExportDesc::Func(1) },
+    ],
+    start: None,
+    elems: [],
+    codes: [main_func],
+    datas: [],
+    tags: [],
+    func_names: {},
+  }
+  let imports = @runtime.Imports::new()
+  imports.add_func("env", "write_mem0", host_addr)
+  let instance = instantiate_module_with_imports(store, mod, imports)
+  let results = call_exported_func(store, instance, "main", [])
+  match results[0] {
+    I32(n) => inspect(n, content="7")
+    _ => fail("Expected I32 result")
+  }
+}
+
+///|
 test "memory import: shared memory between modules" {
   // Create a store and allocate a shared memory
   let store = @runtime.Store::new()

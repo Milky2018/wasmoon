@@ -202,6 +202,29 @@ pub fn Store::alloc_host_func(
   type_idx? : Int = -1,
 ) -> Int {
   let idx = self.funcs.length()
+  // Back-compat: old-style host funcs don't take a Caller.
+  let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = fn(
+    _caller,
+    args,
+  ) {
+    func(args)
+  }
+  self.funcs.push(FuncInst::HostFunc(wrapped))
+  self.func_types.push(func_type)
+  self.func_type_indices.push(type_idx)
+  self.func_owners.push(FuncOwner::HostFunc)
+  idx
+}
+
+///|
+/// Allocate a host function that receives the caller context.
+pub fn Store::alloc_host_func_with_caller(
+  self : Store,
+  func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
+  func_type? : @types.FuncType = { params: [], results: [] },
+  type_idx? : Int = -1,
+) -> Int {
+  let idx = self.funcs.length()
   self.funcs.push(FuncInst::HostFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
@@ -540,6 +563,18 @@ pub fn Store::get_func_inst(
 }
 
 ///|
+/// Get function instance by store address (returns None if out of range).
+///
+/// This is useful for embedding/JIT callbacks that must not raise.
+pub fn Store::get_func_inst_opt(self : Store, idx : Int) -> FuncInst? {
+  if idx < 0 || idx >= self.funcs.length() {
+    None
+  } else {
+    Some(self.funcs[idx])
+  }
+}
+
+///|
 /// Get function type by store address
 pub fn Store::get_func_type(
   self : Store,
@@ -549,6 +584,18 @@ pub fn Store::get_func_type(
     raise UndefinedElement
   }
   self.func_types[idx]
+}
+
+///|
+/// Get function type by store address (returns None if out of range).
+///
+/// This is useful for embedding/JIT callbacks that must not raise.
+pub fn Store::get_func_type_opt(self : Store, idx : Int) -> @types.FuncType? {
+  if idx < 0 || idx >= self.func_types.length() {
+    None
+  } else {
+    Some(self.func_types[idx])
+  }
 }
 
 ///|

@@ -46,6 +46,17 @@ pub(all) struct CallStackEntry {
   func_name : String?
 }
 
+pub struct Caller {
+  store : Store
+  instance : ModuleInstance
+}
+pub fn Caller::get_exported_func_addr(Self, String) -> Int?
+pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
+pub fn Caller::instance(Self) -> ModuleInstance
+pub fn Caller::new(Store, ModuleInstance) -> Self
+pub fn Caller::store(Self) -> Store
+pub impl Show for Caller
+
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
@@ -69,7 +80,7 @@ pub impl Show for Frame
 
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
-  HostFunc((Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
+  HostFunc((Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
 pub impl Show for FuncInst
 
@@ -124,6 +135,7 @@ pub fn Imports::resolve(Self, String, String) -> ExternVal?
 type Linker
 pub fn Linker::add_global(Self, String, String, GlobalInstance) -> Unit
 pub fn Linker::add_host_func(Self, String, String, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit
+pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType) -> Unit
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit
 pub fn Linker::add_table(Self, String, String, Table) -> Unit
 pub fn Linker::build_imports(Self) -> Imports
@@ -298,6 +310,7 @@ pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int
 pub fn Store::alloc_global(Self, GlobalInstance) -> Int
 pub fn Store::alloc_host_func(Self, (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int
+pub fn Store::alloc_host_func_with_caller(Self, (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError, func_type? : @types.FuncType, type_idx? : Int) -> Int
 pub fn Store::alloc_mem(Self, Memory) -> Int
 pub fn Store::alloc_struct(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_table(Self, Table, use_jit? : Bool) -> Int
@@ -315,10 +328,12 @@ pub fn Store::get_exn(Self, Int) -> ExnInstance raise RuntimeError
 pub fn Store::get_func(Self, Int) -> @types.FunctionCode raise RuntimeError
 pub fn Store::get_func_canonical_type_idx(Self, Int) -> Int
 pub fn Store::get_func_inst(Self, Int) -> FuncInst raise RuntimeError
+pub fn Store::get_func_inst_opt(Self, Int) -> FuncInst?
 pub fn Store::get_func_owner(Self, Int) -> ModuleInstance?
 pub fn Store::get_func_owner_idx(Self, Int) -> Int
 pub fn Store::get_func_type(Self, Int) -> @types.FuncType raise RuntimeError
 pub fn Store::get_func_type_idx(Self, Int) -> Int
+pub fn Store::get_func_type_opt(Self, Int) -> @types.FuncType?
 pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
