@@ -158,6 +158,46 @@ test "gc: array.new_fixed" {
 }
 
 ///|
+test "gc: const expr array.new_fixed (empty)" {
+  let results = run_wat(
+    (
+      #|
+      #|(module
+      #|  (type $moonbit.string (array (mut i16)))
+      #|  (global $g (ref $moonbit.string) (array.new_fixed $moonbit.string 0))
+      #|  (func (export "test") (result i32)
+      #|    (array.len (global.get $g))
+      #|  )
+      #|)
+    ),
+  )
+  inspect(results, content="[I32(0)]")
+}
+
+///|
+test "gc: null reference trap is surfaced as null reference" {
+  let wat =
+    #|
+    #|(module
+    #|  (type $arr (array i32))
+    #|  (global $g (ref null $arr) (ref.null $arr))
+    #|  (func (export "test") (result i32)
+    #|    (array.len (global.get $g))
+    #|  )
+    #|)
+  let mod = @wat.parse(wat)
+  let (store, instance) = @executor.instantiate_module_with_init(mod)
+  try @executor.call_exported_func(store, instance, "test", []) catch {
+    e => {
+      inspect(e.to_string(), content="null reference")
+      return
+    }
+  } noraise {
+    _ => fail("expected trap")
+  }
+}
+
+///|
 test "gc: array.set" {
   let results = run_wat(
     (

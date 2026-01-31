@@ -1114,7 +1114,7 @@ pub fn instantiate_module(
 ///|
 /// Evaluate a constant initialization expression
 /// Supports extended constant expressions with arithmetic operations
-/// and GC instructions (array.new, array.new_default, struct.new, struct.new_default)
+/// and GC instructions (array.new, array.new_default, array.new_fixed, struct.new, struct.new_default)
 fn eval_const_expr(
   instrs : Array[@types.Instruction],
   func_addrs? : Array[Int] = [],
@@ -1181,6 +1181,30 @@ fn eval_const_expr(
           let init_val = stack.pop().unwrap()
           if len_val is I32(len) {
             let elements : Array[@types.Value] = Array::make(len, init_val)
+            let ref_idx = s.alloc_array(type_idx, elements)
+            stack.push(ArrayRef(ref_idx))
+          }
+        }
+      // GC: array.new_fixed - create array from fixed number of stack values
+      ArrayNewFixed(type_idx, len) =>
+        if store is Some(s) && type_idx < types.length() {
+          // Ensure this is actually an array type.
+          match types[type_idx].composite {
+            Array(_) => ()
+            _ => continue
+          }
+          if len == 0 {
+            let ref_idx = s.alloc_array(type_idx, [])
+            stack.push(ArrayRef(ref_idx))
+          } else if stack.length() >= len {
+            // Pop elements in reverse order (last element pushed first).
+            let elements : Array[@types.Value] = Array::make(
+              len,
+              @types.Value::Null,
+            )
+            for i = len - 1; i >= 0; i = i - 1 {
+              elements[i] = stack.pop().unwrap()
+            }
             let ref_idx = s.alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
           }
@@ -1470,6 +1494,7 @@ pub fn instantiate_module_with_init(
       @runtime.TypeMismatch => raise @runtime.TypeMismatch
       @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
       @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
       @runtime.UndefinedElement => raise @runtime.UndefinedElement
       @runtime.UninitializedElement => raise @runtime.UninitializedElement
       @runtime.IndirectCallTypeMismatch =>
@@ -1480,6 +1505,8 @@ pub fn instantiate_module_with_init(
       @runtime.Unreachable => raise @runtime.Unreachable
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
       @runtime.UnknownImport(_) as e => raise e
+      @runtime.NullReference => raise @runtime.NullReference
+      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
       _ => raise @runtime.Unreachable
     })
     |> ignore
@@ -1922,6 +1949,7 @@ pub fn instantiate_module_with_imports(
       @runtime.TypeMismatch => raise @runtime.TypeMismatch
       @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
       @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
       @runtime.UndefinedElement => raise @runtime.UndefinedElement
       @runtime.UninitializedElement => raise @runtime.UninitializedElement
       @runtime.IndirectCallTypeMismatch =>
@@ -1934,6 +1962,8 @@ pub fn instantiate_module_with_imports(
       @runtime.UnknownImport(_) as e => raise e
       @runtime.LinkError => raise @runtime.LinkError
       @runtime.LinkErrorDetail(_) as e => raise e
+      @runtime.NullReference => raise @runtime.NullReference
+      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
       _ => raise @runtime.Unreachable
     })
     |> ignore
@@ -1984,6 +2014,8 @@ pub fn call_exported_func(
               raise @runtime.OutOfBoundsMemoryAccess
             @runtime.OutOfBoundsTableAccess =>
               raise @runtime.OutOfBoundsTableAccess
+            @runtime.OutOfBoundsArrayAccess =>
+              raise @runtime.OutOfBoundsArrayAccess
             @runtime.UndefinedElement => raise @runtime.UndefinedElement
             @runtime.UninitializedElement => raise @runtime.UninitializedElement
             @runtime.IndirectCallTypeMismatch =>
@@ -1994,6 +2026,8 @@ pub fn call_exported_func(
             @runtime.Unreachable => raise @runtime.Unreachable
             @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
             @runtime.UnknownImport(_) as e => raise e
+            @runtime.NullReference => raise @runtime.NullReference
+            @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
             _ => raise @runtime.Unreachable
           }
         } // Unknown error
@@ -2020,6 +2054,7 @@ pub fn call_func_by_index(
     @runtime.TypeMismatch => raise @runtime.TypeMismatch
     @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
     @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+    @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
     @runtime.UndefinedElement => raise @runtime.UndefinedElement
     @runtime.UninitializedElement => raise @runtime.UninitializedElement
     @runtime.IndirectCallTypeMismatch => raise @runtime.IndirectCallTypeMismatch
@@ -2029,6 +2064,8 @@ pub fn call_func_by_index(
     @runtime.Unreachable => raise @runtime.Unreachable
     @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
     @runtime.UnknownImport(_) as e => raise e
+    @runtime.NullReference => raise @runtime.NullReference
+    @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
     _ => raise @runtime.Unreachable
   }
 }
@@ -2145,6 +2182,7 @@ pub fn instantiate_with_linker(
       @runtime.TypeMismatch => raise @runtime.TypeMismatch
       @runtime.OutOfBoundsMemoryAccess => raise @runtime.OutOfBoundsMemoryAccess
       @runtime.OutOfBoundsTableAccess => raise @runtime.OutOfBoundsTableAccess
+      @runtime.OutOfBoundsArrayAccess => raise @runtime.OutOfBoundsArrayAccess
       @runtime.UndefinedElement => raise @runtime.UndefinedElement
       @runtime.UninitializedElement => raise @runtime.UninitializedElement
       @runtime.IndirectCallTypeMismatch =>
@@ -2155,6 +2193,8 @@ pub fn instantiate_with_linker(
       @runtime.Unreachable => raise @runtime.Unreachable
       @runtime.CallStackExhausted => raise @runtime.CallStackExhausted
       @runtime.UnknownImport(_) as e => raise e
+      @runtime.NullReference => raise @runtime.NullReference
+      @runtime.UnalignedAtomic => raise @runtime.UnalignedAtomic
       _ => raise @runtime.Unreachable
     })
     |> ignore
