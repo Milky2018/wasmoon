@@ -122,6 +122,68 @@ test "liveness: multi-block function" {
 }
 
 ///|
+
+///|
+test "apply_allocation: BranchCmp reloads both spilled operands without clobber" {
+  // Regression test: terminator BranchCmp has two operands. If both are spilled,
+  // apply_allocation must reload them into distinct scratch registers, otherwise
+  // one reload clobbers the other and the compare becomes nonsense.
+  let func = VCodeFunction::new("test_branchcmp_spill")
+
+  // No return values needed.
+  let entry = func.new_block()
+  let then_b = func.new_block()
+  let else_b = func.new_block()
+  then_b.set_terminator(@instr.Return([]))
+  else_b.set_terminator(@instr.Return([]))
+
+  // Define two virtual regs.
+  let lhs = func.new_vreg(@abi.Int)
+  let rhs = func.new_vreg(@abi.Int)
+  let lhs_inst = @instr.VCodeInst::new(@instr.LoadConst(1L))
+  lhs_inst.add_def({ reg: @abi.Virtual(lhs) })
+  entry.add_inst(lhs_inst)
+  let rhs_inst = @instr.VCodeInst::new(@instr.LoadConst(2L))
+  rhs_inst.add_def({ reg: @abi.Virtual(rhs) })
+  entry.add_inst(rhs_inst)
+
+  // Compare lhs < rhs (unsigned), then branch.
+  entry.set_terminator(
+    @instr.BranchCmp(
+      @abi.Virtual(lhs),
+      @abi.Virtual(rhs),
+      @instr.Cond::Lo,
+      true,
+      then_b.id,
+      else_b.id,
+    ),
+  )
+
+  // Force both regs to be spilled so apply_allocation must reload them.
+  let spill_slots : Map[Int, Int] = {}
+  spill_slots.set(lhs.id, 0)
+  spill_slots.set(rhs.id, 1)
+  let alloc : RegAllocResult = {
+    assignments: {},
+    spill_slots,
+    num_spill_slots: 2,
+    inst_edits: {},
+  }
+  let allocated = apply_allocation(func, alloc)
+  match allocated.blocks[0].terminator {
+    Some(@instr.VCodeTerminator::BranchCmp(lhs_reg, rhs_reg, _, _, _, _)) =>
+      match (lhs_reg, rhs_reg) {
+        (@abi.Physical(l), @abi.Physical(r)) => {
+          inspect(l.index == 16, content="true")
+          inspect(r.index == 17, content="true")
+        }
+        _ => abort("expected BranchCmp to use physical regs after allocation")
+      }
+    _ => abort("expected BranchCmp terminator")
+  }
+}
+
+///|
 test "regalloc: aarch64 convenience function" {
   // Test the convenience function
   let func = VCodeFunction::new("test_aarch64")
