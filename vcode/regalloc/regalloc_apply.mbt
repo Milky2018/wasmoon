@@ -814,29 +814,30 @@ pub fn apply_allocation(
           @instr.Jump(target, [])
         }
         Branch(cond, then_b, else_b) => {
-          // Handle spilled condition register
-          let new_cond = rewrite_reg_with_spill(cond, alloc, new_block)
+          // Handle spilled condition register (single input).
+          let new_cond = rewrite_reg_with_spill(cond, alloc, new_block, 16)
           Branch(new_cond, then_b, else_b)
         }
         BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
-          // Handle spilled registers
-          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block)
-          let new_rhs = rewrite_reg_with_spill(rhs, alloc, new_block)
+          // Handle spilled registers. IMPORTANT: if both sides are spilled, we must
+          // reload into distinct scratch registers, otherwise we clobber one side.
+          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block, 16)
+          let new_rhs = rewrite_reg_with_spill(rhs, alloc, new_block, 17)
           BranchCmp(new_lhs, new_rhs, cond, is_64, then_b, else_b)
         }
         BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
-          // Handle spilled register
-          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block)
+          // Handle spilled register (single input).
+          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block, 16)
           BranchCmpImm(new_lhs, imm, cond, is_64, then_b, else_b)
         }
         BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
-          // Handle spilled register
-          let new_reg = rewrite_reg_with_spill(reg, alloc, new_block)
+          // Handle spilled register (single input).
+          let new_reg = rewrite_reg_with_spill(reg, alloc, new_block, 16)
           BranchZero(new_reg, is_nonzero, is_64, then_b, else_b)
         }
         BrTable(index, targets, default) => {
-          // Handle spilled index register
-          let new_index = rewrite_reg_with_spill(index, alloc, new_block)
+          // Handle spilled index register (single input).
+          let new_index = rewrite_reg_with_spill(index, alloc, new_block, 16)
           BrTable(new_index, targets, default)
         }
         Return(values) => {
@@ -948,6 +949,7 @@ fn rewrite_reg_with_spill(
   reg : @abi.Reg,
   alloc : RegAllocResult,
   block : @block.VCodeBlock,
+  scratch_idx : Int,
 ) -> @abi.Reg {
   match reg {
     @abi.Virtual(vreg) =>
@@ -957,7 +959,14 @@ fn rewrite_reg_with_spill(
           // Spilled: insert reload and use scratch register
           match alloc.spill_slots.get(vreg.id) {
             Some(slot) => {
-              let scratch_preg : @abi.PReg = { index: 16, class: vreg.class }
+              let scratch_class = match vreg.class {
+                @abi.Float32 | @abi.Float64 => @abi.Float64
+                _ => vreg.class
+              }
+              let scratch_preg : @abi.PReg = {
+                index: scratch_idx,
+                class: scratch_class,
+              }
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
               reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
               block.add_inst(reload_inst)
