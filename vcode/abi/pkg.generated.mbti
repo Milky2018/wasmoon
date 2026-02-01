@@ -158,6 +158,7 @@ pub(all) enum RegClass {
   Float64
   Vector
 }
+pub impl Eq for RegClass
 pub impl Show for RegClass
 
 pub(all) struct VReg {

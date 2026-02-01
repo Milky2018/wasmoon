@@ -250,6 +250,47 @@ pub fn allocate_registers_backtracking(
 }
 
 ///|
+/// Allocate registers and return a Cranelift-style regalloc `Output`.
+///
+/// The returned `VCodeFunction` is *not* rewritten to physical registers; the
+/// emitter consumes the returned `Output` to materialize edits and operand
+/// allocations on the fly.
+pub fn allocate_registers_backtracking_output(
+  func : VCodeFunction,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> (VCodeFunction, Output) {
+  // Step 0: Eliminate dead code first.
+  let func = eliminate_dead_code(func)
+
+  // Build register pools.
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_aarch64_reg_pools(func, settings)
+
+  // Compute liveness (Phase 1).
+  let liveness = compute_liveness(func)
+
+  // Use backtracking allocator (Phases 2-4).
+  let alloc_result = allocate_backtracking(
+    func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
+
+  // Optional safety net (Cranelift-like checker).
+  verify_allocation_aarch64(func, liveness, alloc_result, settings~)
+
+  // Process constraints and generate RegMove edits.
+  process_constraints(func, alloc_result)
+
+  // Build output (allocs + edits). VCode remains in terms of vregs.
+  let output = build_output(func, alloc_result)
+  (func, output)
+}
+
+///|
 /// Allocation statistics for comparison
 struct AllocStats {
   mut num_vregs : Int // Total virtual registers

@@ -4,6 +4,25 @@
 // X16 is used for integer spills, we can use X17 if needed
 
 ///|
+/// Convert a `Loc` that must be a register into a `PReg`.
+fn loc_as_preg(loc : Loc) -> @abi.PReg {
+  match loc {
+    Reg(preg) => preg
+    Spill(_) => abort("expected register loc")
+  }
+}
+
+///|
+/// Decode the historical spilled-PReg encoding into `Loc`.
+fn preg_to_loc(preg : @abi.PReg) -> Loc {
+  if preg.is_spilled() {
+    Spill(preg.get_spill_slot())
+  } else {
+    Reg(preg)
+  }
+}
+
+///|
 /// Apply register allocation results to a VCode function
 /// Handles spilled registers by inserting StackLoad/StackStore instructions
 pub fn apply_allocation(
@@ -471,7 +490,7 @@ pub fn apply_allocation(
               }
             } else {
               let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-              store_inst.add_use(@abi.Physical(mv.from))
+              store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
               new_block.add_inst(store_inst)
             }
           } else if mv.from.is_spilled() {
@@ -480,21 +499,21 @@ pub fn apply_allocation(
             if reloaded_slots.get(slot) is Some(source_preg) {
               // This slot was already reloaded - use mov instead of another load
               let move_inst = @instr.VCodeInst::new(Move)
-              move_inst.add_def({ reg: @abi.Physical(mv.to) })
+              move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
               move_inst.add_use(@abi.Physical(source_preg))
               new_block.add_inst(move_inst)
             } else {
               // First reload of this slot - emit StackLoad and record
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+              reload_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
               new_block.add_inst(reload_inst)
-              reloaded_slots.set(slot, mv.to)
+              reloaded_slots.set(slot, loc_as_preg(mv.to))
             }
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
-            move_inst.add_def({ reg: @abi.Physical(mv.to) })
-            move_inst.add_use(@abi.Physical(mv.from))
+            move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
+            move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
             new_block.add_inst(move_inst)
           }
         }
@@ -511,13 +530,13 @@ pub fn apply_allocation(
             // Store to spill slot from source register
             let slot = mv.to.get_spill_slot()
             let store_inst = @instr.VCodeInst::new(StackStore(slot * 8))
-            store_inst.add_use(@abi.Physical(mv.from))
+            store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
             new_block.add_inst(store_inst)
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
-            move_inst.add_def({ reg: @abi.Physical(mv.to) })
-            move_inst.add_use(@abi.Physical(mv.from))
+            move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
+            move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
             new_block.add_inst(move_inst)
           }
         }
@@ -567,12 +586,12 @@ pub fn apply_allocation(
               if i >= args.length() {
                 break
               }
-              let from = reg_location(args[i])
-              let to = vreg_location(param)
+              let from_preg = reg_location(args[i])
+              let to_preg = vreg_location(param)
 
               // Same location: nothing to do.
               // Compare both index and register bank (int vs float/vector).
-              let same_bank = match (from.class, to.class) {
+              let same_bank = match (from_preg.class, to_preg.class) {
                 (@abi.Int, @abi.Int) => true
                 (
                   @abi.Float32
@@ -584,10 +603,14 @@ pub fn apply_allocation(
                 ) => true
                 _ => false
               }
-              if from.index == to.index && same_bank {
+              if from_preg.index == to_preg.index && same_bank {
                 continue
               }
-              moves.push({ from, to, class: param.class })
+              moves.push({
+                from: preg_to_loc(from_preg),
+                to: preg_to_loc(to_preg),
+                class: param.class,
+              })
               let src_vreg_id = match args[i] {
                 @abi.Virtual(vreg) => Some(vreg.id)
                 _ => None
@@ -672,8 +695,8 @@ pub fn apply_allocation(
                 } else {
                   continue
                 }
-                if !same_preg(mv_i.from, mv_j.to) ||
-                  !same_preg(mv_i.to, mv_j.from) {
+                if !same_preg(loc_as_preg(mv_i.from), loc_as_preg(mv_j.to)) ||
+                  !same_preg(loc_as_preg(mv_i.to), loc_as_preg(mv_j.from)) {
                   continue
                 }
                 fn try_rewrite_move(
@@ -722,7 +745,7 @@ pub fn apply_allocation(
                   }
                   new_inst.defs[def_pos] = { reg: @abi.Physical(scratch_preg) }
                   moves[move_idx] = {
-                    from: scratch_preg,
+                    from: Reg(scratch_preg),
                     to: moves[move_idx].to,
                     class: moves[move_idx].class,
                   }
@@ -771,18 +794,18 @@ pub fn apply_allocation(
                 new_block.add_inst(store_inst)
               } else {
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-                store_inst.add_use(@abi.Physical(mv.from))
+                store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
                 new_block.add_inst(store_inst)
               }
             } else if mv.from.is_spilled() {
               let slot = mv.from.get_spill_slot()
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(mv.to) })
+              reload_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
               new_block.add_inst(reload_inst)
             } else {
               let move_inst = @instr.VCodeInst::new(Move)
-              move_inst.add_def({ reg: @abi.Physical(mv.to) })
-              move_inst.add_use(@abi.Physical(mv.from))
+              move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
+              move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
               new_block.add_inst(move_inst)
             }
           }

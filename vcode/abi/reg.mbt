@@ -5,7 +5,7 @@ pub(all) enum RegClass {
   Float32 // 32-bit floating-point registers
   Float64 // 64-bit floating-point registers
   Vector // 128-bit SIMD vector registers
-}
+} derive(Eq)
 
 ///|
 fn RegClass::to_string(self : RegClass) -> String {

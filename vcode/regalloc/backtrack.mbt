@@ -713,8 +713,8 @@ pub fn BacktrackingAllocator::generate_result(
                 if assigned_preg.index != required_preg.index {
                   // Need to move from assigned to required
                   edits.before.push({
-                    from: assigned_preg,
-                    to: required_preg,
+                    from: Reg(assigned_preg),
+                    to: Reg(required_preg),
                     class: vreg.class,
                   })
                 }
@@ -722,12 +722,9 @@ pub fn BacktrackingAllocator::generate_result(
               None =>
                 // Spilled: need to reload to the required register
                 if result.spill_slots.get(vreg.id) is Some(slot) {
-                  // Encode spill slot as negative index in 'from'
-                  // The emit phase will interpret this as a reload
-                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
                   edits.before.push({
-                    from: spilled_preg,
-                    to: required_preg,
+                    from: Spill(slot),
+                    to: Reg(required_preg),
                     class: vreg.class,
                   })
                 }
@@ -748,18 +745,17 @@ pub fn BacktrackingAllocator::generate_result(
                   // Need to move from required to assigned
                   // (the instruction produces in required_preg, we need to move to assigned)
                   edits.after.push({
-                    from: required_preg,
-                    to: assigned_preg,
+                    from: Reg(required_preg),
+                    to: Reg(assigned_preg),
                     class: vreg.class,
                   })
                 }
               None =>
                 // Spilled: need to store from required register to spill slot
                 if result.spill_slots.get(vreg.id) is Some(slot) {
-                  let spilled_preg = @abi.PReg::spilled(slot, vreg.class)
                   edits.after.push({
-                    from: required_preg,
-                    to: spilled_preg,
+                    from: Reg(required_preg),
+                    to: Spill(slot),
                     class: vreg.class,
                   })
                 }
@@ -769,7 +765,7 @@ pub fn BacktrackingAllocator::generate_result(
       }
 
       // Store edits if any
-      if not(edits.before.is_empty()) || not(edits.after.is_empty()) {
+      if !edits.before.is_empty() || !edits.after.is_empty() {
         result.inst_edits.set((block_idx, inst_idx), edits)
       }
     }

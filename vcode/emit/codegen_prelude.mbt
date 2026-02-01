@@ -921,3 +921,720 @@ pub fn emit_function(
   mc.resolve_fixups()
   mc
 }
+
+// ============ Cranelift-Style Emission (VCode + regalloc::Output) ============
+
+///|
+fn output_uses_preg(
+  func : @regalloc.VCodeFunction,
+  output : @regalloc.Output,
+  preg_idx : Int,
+) -> Bool {
+  // Params.
+  for i in 0..<func.get_params().length() {
+    match output.get_param_loc(i) {
+      @regalloc.Reg(p) => if p.index == preg_idx { return true }
+      _ => ()
+    }
+  }
+  // Insts + terminators.
+  for block in func.get_blocks() {
+    for inst_idx, inst in block.insts {
+      for di in 0..<inst.defs.length() {
+        match output.inst_def_loc(block.id, inst_idx, false, di) {
+          @regalloc.Reg(p) => if p.index == preg_idx { return true }
+          _ => ()
+        }
+      }
+      for ui in 0..<inst.uses.length() {
+        match output.inst_use_loc(block.id, inst_idx, false, ui) {
+          @regalloc.Reg(p) => if p.index == preg_idx { return true }
+          _ => ()
+        }
+      }
+      // Edits around the instruction.
+      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
+        match output.edits_at(block.id, inst_idx, pos) {
+          Some(edits) =>
+            for e in edits {
+              match e {
+                @regalloc.Move(_from, to, _class) =>
+                  match to {
+                    @regalloc.Reg(p) => if p.index == preg_idx { return true }
+                    _ => ()
+                  }
+              }
+            }
+          None => ()
+        }
+      }
+    }
+    if block.terminator is Some(_) {
+      let term_inst = block.insts.length()
+      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
+        match output.edits_at(block.id, term_inst, pos) {
+          Some(edits) =>
+            for e in edits {
+              match e {
+                @regalloc.Move(_from, to, _class) =>
+                  match to {
+                    @regalloc.Reg(p) => if p.index == preg_idx { return true }
+                    _ => ()
+                  }
+              }
+            }
+          None => ()
+        }
+      }
+      // Terminator operand allocations.
+      // `output_build` records empty ranges for Jump/Trap, so this is safe.
+      let term = block.terminator.unwrap()
+      let use_count = match term {
+        @instr.Branch(_, _, _) => 1
+        @instr.BranchCmp(_, _, _, _, _, _) => 2
+        @instr.BranchZero(_, _, _, _, _) => 1
+        @instr.BranchCmpImm(_, _, _, _, _, _) => 1
+        @instr.Return(values) => values.length()
+        @instr.BrTable(_, _, _) => 1
+        @instr.Trap(_) => 0
+        @instr.Jump(_, _) => 0
+      }
+      for ui in 0..<use_count {
+        match output.inst_use_loc(block.id, term_inst, true, ui) {
+          @regalloc.Reg(p) => if p.index == preg_idx { return true }
+          _ => ()
+        }
+      }
+    }
+  }
+  false
+}
+
+///|
+fn collect_used_callee_saved_from_output(
+  func : @regalloc.VCodeFunction,
+  output : @regalloc.Output,
+  enable_pinned_reg : Bool,
+) -> Array[Int] {
+  let used : @hashset.HashSet[Int] = @hashset.new()
+
+  // Params are defined in the prologue, so they count as clobbers.
+  for i in 0..<func.get_params().length() {
+    match output.get_param_loc(i) {
+      @regalloc.Reg(p) =>
+        if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
+          if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+            used.add(p.index)
+          }
+        }
+      _ => ()
+    }
+  }
+
+  // Edits (moves) define their destination reg.
+  for block in func.get_blocks() {
+    let term_inst = block.insts.length()
+    fn record_edits_at(inst_idx : Int) -> Unit {
+      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
+        match output.edits_at(block.id, inst_idx, pos) {
+          Some(edits) =>
+            for e in edits {
+              match e {
+                @regalloc.Move(_from, to, _class) =>
+                  match to {
+                    @regalloc.Reg(p) =>
+                      if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
+                        if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+                          used.add(p.index)
+                        }
+                      }
+                    _ => ()
+                  }
+              }
+            }
+          None => ()
+        }
+      }
+    }
+
+    for inst_idx in 0..<term_inst {
+      record_edits_at(inst_idx)
+    }
+    record_edits_at(term_inst)
+
+    // Instruction defs.
+    for inst_idx, inst in block.insts {
+      for di in 0..<inst.defs.length() {
+        match output.inst_def_loc(block.id, inst_idx, false, di) {
+          @regalloc.Reg(p) =>
+            if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
+              if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+                used.add(p.index)
+              }
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  if func_has_calls(func) {
+    used.add(30) // LR
+  }
+  let result : Array[Int] = []
+  for reg in used {
+    result.push(reg)
+  }
+  result.sort()
+  result
+}
+
+///|
+fn collect_used_callee_saved_fprs_from_output(
+  func : @regalloc.VCodeFunction,
+  output : @regalloc.Output,
+) -> Array[Int] {
+  let used : @hashset.HashSet[Int] = @hashset.new()
+
+  // Params are defined in the prologue, so they count as clobbers.
+  for i in 0..<func.get_params().length() {
+    match output.get_param_loc(i) {
+      @regalloc.Reg(p) =>
+        if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+          is_callee_saved_fpr(p.index) {
+          used.add(p.index)
+        }
+      _ => ()
+    }
+  }
+
+  // Edits define their destination reg.
+  for block in func.get_blocks() {
+    let term_inst = block.insts.length()
+    fn record_edits_at(inst_idx : Int) -> Unit {
+      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
+        match output.edits_at(block.id, inst_idx, pos) {
+          Some(edits) =>
+            for e in edits {
+              match e {
+                @regalloc.Move(_from, to, _class) =>
+                  match to {
+                    @regalloc.Reg(p) =>
+                      if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+                        is_callee_saved_fpr(p.index) {
+                        used.add(p.index)
+                      }
+                    _ => ()
+                  }
+              }
+            }
+          None => ()
+        }
+      }
+    }
+
+    for inst_idx in 0..<term_inst {
+      record_edits_at(inst_idx)
+    }
+    record_edits_at(term_inst)
+
+    // Instruction defs.
+    for inst_idx, inst in block.insts {
+      for di in 0..<inst.defs.length() {
+        match output.inst_def_loc(block.id, inst_idx, false, di) {
+          @regalloc.Reg(p) =>
+            if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+              is_callee_saved_fpr(p.index) {
+              used.add(p.index)
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  let result : Array[Int] = []
+  for reg in used {
+    result.push(reg)
+  }
+  result.sort()
+  result
+}
+
+///|
+fn emit_edit_move(
+  mc : MachineCode,
+  edit : @regalloc.Edit,
+  stack_frame : JITStackFrame,
+) -> Unit {
+  match edit {
+    @regalloc.Move(from, to, class) =>
+      match (from, to) {
+        (@regalloc.Reg(src), @regalloc.Reg(dst)) => {
+          let inst = @instr.VCodeInst::new(@instr.Move)
+          inst.add_def({ reg: @abi.Physical({ index: dst.index, class }) })
+          inst.add_use(@abi.Physical({ index: src.index, class }))
+          mc.emit_instruction(inst, stack_frame)
+        }
+        (@regalloc.Spill(slot), @regalloc.Reg(dst)) => {
+          let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
+          inst.add_def({ reg: @abi.Physical({ index: dst.index, class }) })
+          mc.emit_instruction(inst, stack_frame)
+        }
+        (@regalloc.Reg(src), @regalloc.Spill(slot)) => {
+          let inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
+          inst.add_use(@abi.Physical({ index: src.index, class }))
+          mc.emit_instruction(inst, stack_frame)
+        }
+        (@regalloc.Spill(from_slot), @regalloc.Spill(to_slot)) =>
+          abort(
+            "regalloc output should not contain stack-to-stack moves: \{from_slot} -> \{to_slot} (class=\{class})",
+          )
+      }
+  }
+}
+
+///|
+fn map_inst_for_emission(
+  block_id : Int,
+  inst_idx : Int,
+  inst : @instr.VCodeInst,
+  output : @regalloc.Output,
+) -> @instr.VCodeInst {
+  let mapped = @instr.VCodeInst::new(inst.opcode)
+  for di in 0..<inst.defs.length() {
+    match output.inst_def_loc(block_id, inst_idx, false, di) {
+      @regalloc.Reg(preg) => mapped.add_def({ reg: @abi.Physical(preg) })
+      @regalloc.Spill(_) => abort("Spill loc in instruction def allocation")
+    }
+  }
+  for ui in 0..<inst.uses.length() {
+    match output.inst_use_loc(block_id, inst_idx, false, ui) {
+      @regalloc.Reg(preg) => mapped.add_use(@abi.Physical(preg))
+      @regalloc.Spill(_) => abort("Spill loc in instruction use allocation")
+    }
+  }
+  mapped
+}
+
+///|
+fn map_term_for_emission(
+  block_id : Int,
+  term_inst : Int,
+  term : @instr.VCodeTerminator,
+  output : @regalloc.Output,
+) -> @instr.VCodeTerminator {
+  // Jump and Trap don't consume vregs in the emitter.
+  match term {
+    Jump(_, _) | Trap(_) => term
+    Branch(_cond, then_b, else_b) => {
+      let loc = output.inst_use_loc(block_id, term_inst, true, 0)
+      guard loc is @regalloc.Reg(p) else {
+        abort("Spill loc in terminator use allocation")
+      }
+      Branch(@abi.Physical(p), then_b, else_b)
+    }
+    BranchCmp(_lhs, _rhs, cond, is_64, then_b, else_b) => {
+      let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
+      let l1 = output.inst_use_loc(block_id, term_inst, true, 1)
+      guard (l0, l1) is (@regalloc.Reg(p0), @regalloc.Reg(p1)) else {
+        abort("Spill loc in terminator use allocation")
+      }
+      BranchCmp(
+        @abi.Physical(p0),
+        @abi.Physical(p1),
+        cond,
+        is_64,
+        then_b,
+        else_b,
+      )
+    }
+    BranchZero(_r, is_nonzero, is_64, then_b, else_b) => {
+      let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
+      guard l0 is @regalloc.Reg(p0) else {
+        abort("Spill loc in terminator use allocation")
+      }
+      BranchZero(@abi.Physical(p0), is_nonzero, is_64, then_b, else_b)
+    }
+    BranchCmpImm(_lhs, imm, cond, is_64, then_b, else_b) => {
+      let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
+      guard l0 is @regalloc.Reg(p0) else {
+        abort("Spill loc in terminator use allocation")
+      }
+      BranchCmpImm(@abi.Physical(p0), imm, cond, is_64, then_b, else_b)
+    }
+    Return(values) => {
+      let mapped : Array[@abi.Reg] = []
+      for i in 0..<values.length() {
+        let li = output.inst_use_loc(block_id, term_inst, true, i)
+        guard li is @regalloc.Reg(p0) else {
+          abort("Spill loc in terminator use allocation")
+        }
+        mapped.push(@abi.Physical(p0))
+      }
+      Return(mapped)
+    }
+    BrTable(_index, targets, default) => {
+      let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
+      guard l0 is @regalloc.Reg(p0) else {
+        abort("Spill loc in terminator use allocation")
+      }
+      BrTable(@abi.Physical(p0), targets, default)
+    }
+  }
+}
+
+///|
+fn MachineCode::emit_prologue_with_output(
+  self : MachineCode,
+  stack_frame : JITStackFrame,
+  params : Array[@abi.VReg],
+  output : @regalloc.Output,
+  debug_func_idx : Int?,
+  abi_settings : @abi.ABISettings,
+) -> Unit {
+  // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
+  // then do a Cranelift-style "param moves + param spills" stage.
+  //
+  // We must spill any spilled params *before* we clobber their incoming ABI regs.
+
+  // Emit the "standard" prologue without param moves by passing `None` for all params.
+  let dummy_param_pregs : Array[@abi.PReg?] = []
+  for _ in 0..<params.length() {
+    dummy_param_pregs.push(None)
+  }
+  self.emit_prologue(
+    stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
+  )
+
+  // Store spilled params from incoming ABI regs to spill slots.
+  let max_int_params = @abi.MAX_REG_PARAMS // 8
+  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let mut int_idx = 0
+  let mut float_idx = 0
+  for param_idx, param in params {
+    let loc = output.get_param_loc(param_idx)
+    match param.class {
+      @abi.Int =>
+        if int_idx < max_int_params {
+          let x_src = int_idx
+          match loc {
+            @regalloc.Spill(slot) =>
+              self.emit_str_imm(x_src, 31, stack_frame.spill_offset + slot * 8)
+            _ => ()
+          }
+          int_idx += 1
+        }
+      @abi.Float32 | @abi.Float64 =>
+        if float_idx < max_float_params {
+          let v_src = float_idx
+          match loc {
+            @regalloc.Spill(slot) =>
+              self.emit_str_d_imm(
+                v_src,
+                31,
+                stack_frame.spill_offset + slot * 8,
+              )
+            _ => ()
+          }
+          float_idx += 1
+        }
+      @abi.Vector =>
+        if float_idx < max_float_params {
+          let v_src = float_idx
+          match loc {
+            @regalloc.Spill(slot) =>
+              self.emit_str_q_imm(
+                v_src,
+                31,
+                stack_frame.spill_offset + slot * 8,
+              )
+            _ => ()
+          }
+          float_idx += 1
+        }
+    }
+  }
+
+  // Now move register params to their assigned registers, using a parallel move resolver.
+  fn emit_parallel_moves_x(
+    self : MachineCode,
+    moves : Array[(Int, Int)],
+  ) -> Unit {
+    let pending = moves.copy()
+    fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+      for mv in pending {
+        let (src, _) = mv
+        if src == dst {
+          return true
+        }
+      }
+      false
+    }
+
+    while !pending.is_empty() {
+      let mut idx_opt : Int? = None
+      for i in 0..<pending.length() {
+        let (_, dst) = pending[i]
+        if !dst_is_used_as_src(pending, dst) {
+          idx_opt = Some(i)
+          break
+        }
+      }
+      match idx_opt {
+        Some(i) => {
+          let (src, dst) = pending.remove(i)
+          if src != dst {
+            self.emit_mov_reg(dst, src)
+          }
+        }
+        None => {
+          let scratch = 16
+          let (saved_src, hole_dst) = pending.remove(0)
+          self.emit_mov_reg(scratch, saved_src)
+          let mut cur_dst = saved_src
+          while cur_dst != hole_dst {
+            let mut found = -1
+            for i in 0..<pending.length() {
+              let (_, dst) = pending[i]
+              if dst == cur_dst {
+                found = i
+                break
+              }
+            }
+            guard found >= 0 else { abort("prologue parallel move (x): cycle") }
+            let (next_src, _) = pending.remove(found)
+            if next_src != cur_dst {
+              self.emit_mov_reg(cur_dst, next_src)
+            }
+            cur_dst = next_src
+          }
+          self.emit_mov_reg(hole_dst, scratch)
+        }
+      }
+    }
+  }
+
+  fn emit_parallel_moves_v(
+    self : MachineCode,
+    moves : Array[(Int, Int)],
+  ) -> Unit {
+    let pending = moves.copy()
+    fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+      for mv in pending {
+        let (src, _) = mv
+        if src == dst {
+          return true
+        }
+      }
+      false
+    }
+
+    while !pending.is_empty() {
+      let mut idx_opt : Int? = None
+      for i in 0..<pending.length() {
+        let (_, dst) = pending[i]
+        if !dst_is_used_as_src(pending, dst) {
+          idx_opt = Some(i)
+          break
+        }
+      }
+      match idx_opt {
+        Some(i) => {
+          let (src, dst) = pending.remove(i)
+          if src != dst {
+            OrrVec(dst, src).emit(self)
+          }
+        }
+        None => {
+          let scratch = 16
+          let (saved_src, hole_dst) = pending.remove(0)
+          OrrVec(scratch, saved_src).emit(self)
+          let mut cur_dst = saved_src
+          while cur_dst != hole_dst {
+            let mut found = -1
+            for i in 0..<pending.length() {
+              let (_, dst) = pending[i]
+              if dst == cur_dst {
+                found = i
+                break
+              }
+            }
+            guard found >= 0 else { abort("prologue parallel move (v): cycle") }
+            let (next_src, _) = pending.remove(found)
+            if next_src != cur_dst {
+              OrrVec(cur_dst, next_src).emit(self)
+            }
+            cur_dst = next_src
+          }
+          OrrVec(hole_dst, scratch).emit(self)
+        }
+      }
+    }
+  }
+
+  // Collect moves from ABI incoming regs to allocated regs.
+  let int_moves : Array[(Int, Int)] = []
+  let fp_moves : Array[(Int, Int)] = []
+  int_idx = 0
+  float_idx = 0
+  for param_idx, param in params {
+    let loc = output.get_param_loc(param_idx)
+    match param.class {
+      @abi.Int =>
+        if int_idx < max_int_params {
+          let x_src = int_idx
+          match loc {
+            @regalloc.Reg(dst) =>
+              if dst.index != x_src {
+                int_moves.push((x_src, dst.index))
+              }
+            _ => ()
+          }
+          int_idx += 1
+        }
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        if float_idx < max_float_params {
+          let v_src = float_idx
+          match loc {
+            @regalloc.Reg(dst) =>
+              if dst.index != v_src {
+                fp_moves.push((v_src, dst.index))
+              }
+            _ => ()
+          }
+          float_idx += 1
+        }
+    }
+  }
+  emit_parallel_moves_x(self, int_moves)
+  emit_parallel_moves_v(self, fp_moves)
+}
+
+///|
+/// Emit machine code using the Cranelift-style regalloc output.
+pub fn emit_function_with_regalloc(
+  func : @regalloc.VCodeFunction,
+  output : @regalloc.Output,
+  debug_func_idx? : Int? = None,
+  force_frame_setup? : Bool = false,
+  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> MachineCode {
+  // Keep block layout optimization (targets are block IDs; ids stay stable).
+  let func = @layout.optimize_layout(func)
+  let mc = MachineCode::new()
+
+  // Compute clobbers from regalloc output.
+  let clobbered = collect_used_callee_saved_from_output(
+    func,
+    output,
+    abi_settings.enable_pinned_reg,
+  )
+  let clobbered_fprs = collect_used_callee_saved_fprs_from_output(func, output)
+  let has_calls = func_has_calls(func)
+  let has_incoming_stack_args = func_has_incoming_stack_args(func)
+  let uses_mem0 = func.uses_mem0()
+  let uses_func_table = func.uses_func_table()
+  let needs_vmctx = has_calls ||
+    output_uses_preg(func, output, @abi.REG_VMCTX) ||
+    uses_mem0
+  let clobbered_gprs = clobbered
+  if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
+    clobbered_gprs.push(@abi.REG_MEM0_DESC)
+  }
+  if uses_func_table && !clobbered_gprs.contains(@abi.REG_FUNC_TABLE) {
+    clobbered_gprs.push(@abi.REG_FUNC_TABLE)
+  }
+  let stack_frame = JITStackFrame::build(
+    clobbered_gprs,
+    clobbered_fprs,
+    output.get_num_spillslots(),
+    has_calls~,
+    outgoing_args_size=func.get_max_outgoing_args_size(),
+    needs_vmctx~,
+    cache_mem0_desc=uses_mem0,
+    cache_func_table=uses_func_table,
+    force_frame_setup~,
+    has_incoming_stack_args~,
+  )
+
+  // Emit prologue.
+  mc.emit_prologue_with_output(
+    stack_frame,
+    func.get_params(),
+    output,
+    debug_func_idx,
+    abi_settings,
+  )
+
+  // Emit function body.
+  let blocks = func.get_blocks()
+  let mut return_count = 0
+  let mut max_block_id = -1
+  for block in blocks {
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
+    if block.terminator is Some(Return(_)) {
+      return_count = return_count + 1
+    }
+  }
+  let shared_exit_block = if return_count > 1 && stack_frame.total_size > 0 {
+    Some(max_block_id + 1)
+  } else {
+    None
+  }
+  for i, block in blocks {
+    mc.define_label(block.id)
+    for inst_idx, inst in block.insts {
+      // Edits before instruction.
+      match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before) {
+        Some(edits) =>
+          for e in edits {
+            emit_edit_move(mc, e, stack_frame)
+          }
+        None => ()
+      }
+      let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
+      mc.emit_instruction(mapped, stack_frame)
+
+      // Edits after instruction.
+      match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After) {
+        Some(edits) =>
+          for e in edits {
+            emit_edit_move(mc, e, stack_frame)
+          }
+        None => ()
+      }
+    }
+    if block.terminator is Some(term) {
+      let term_inst = block.insts.length()
+      // Edits before terminator (block-arg moves, terminator reloads, etc).
+      match output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before) {
+        Some(edits) =>
+          for e in edits {
+            emit_edit_move(mc, e, stack_frame)
+          }
+        None => ()
+      }
+      let next_block = if i + 1 < blocks.length() {
+        Some(blocks[i + 1].id)
+      } else {
+        None
+      }
+      let mapped_term = map_term_for_emission(block.id, term_inst, term, output)
+      mc.emit_terminator_with_epilogue(
+        mapped_term,
+        stack_frame,
+        func.get_result_types(),
+        next_block,
+        shared_exit_block,
+      )
+    }
+  }
+  if shared_exit_block is Some(exit_block) {
+    mc.define_label(exit_block)
+    mc.emit_epilogue(stack_frame)
+    mc.emit_ret(30)
+  }
+  mc.resolve_fixups()
+  mc
+}
