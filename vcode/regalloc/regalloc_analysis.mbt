@@ -13,18 +13,18 @@
 /// A program point - identifies a position in the VCode
 /// Using #valtype for stack allocation - this struct is created/compared frequently
 #valtype
-struct ProgPoint {
+pub struct ProgPoint {
   block : Int // Block index
   inst : Int // Instruction index within block (-1 for block params)
   pos : ProgPos // Before or after the instruction
-} derive(Eq)
+} derive(Eq, Hash)
 
 ///|
 /// Position relative to an instruction
-pub enum ProgPos {
+pub(all) enum ProgPos {
   Before // Before the instruction executes (uses happen here)
   After // After the instruction executes (defs happen here)
-} derive(Eq)
+} derive(Eq, Hash)
 
 ///|
 /// Compare two program points using a block order array

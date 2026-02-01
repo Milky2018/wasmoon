@@ -1089,16 +1089,20 @@ fn compile_module_to_jit(
     if debug_db is Some(_) {
       vcode_before_dump = Some(vcode_func.print())
     }
-    // Stage 4: Register allocation
-    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
+    // Stage 4: Register allocation (Cranelift-style output)
+    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
+      vcode_func,
+    )
     let mut vcode_after_dump : String? = None
     if debug_db is Some(_) {
-      vcode_after_dump = Some(allocated.print())
+      // Note: VCode is not rewritten; regalloc results are in `ra_output`.
+      vcode_after_dump = Some(vcode_ra.print())
     }
     // Stage 5: Emit machine code
     let debug_func_idx = if debug { Some(func_idx) } else { None }
-    let mc = @emit.emit_function(
-      allocated,
+    let mc = @emit.emit_function_with_regalloc(
+      vcode_ra,
+      ra_output,
       debug_func_idx~,
       force_frame_setup=enable_dwarf,
     )

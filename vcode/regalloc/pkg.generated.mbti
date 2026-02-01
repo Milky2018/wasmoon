@@ -14,6 +14,8 @@ pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Ar
 
 pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
 
+pub fn allocate_registers_backtracking_output(VCodeFunction, settings? : @abi.ABISettings) -> (VCodeFunction, Output)
+
 pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
 pub fn build_bundles_with_merging(VCodeFunction, LiveRangeSet) -> BundleSet
@@ -86,6 +88,11 @@ pub fn BundleSet::get(Self, Int) -> Bundle
 pub fn BundleSet::length(Self) -> Int
 pub fn BundleSet::new() -> Self
 
+pub(all) enum Edit {
+  Move(Loc, Loc, @abi.RegClass)
+}
+pub impl Show for Edit
+
 type InstEdits
 
 pub struct LiveInterval {
@@ -125,25 +132,57 @@ pub struct LivenessResult {
   call_points : Array[(ProgPoint, @instr.CallConv)]
 }
 
+pub(all) enum Loc {
+  Reg(@abi.PReg)
+  Spill(Int)
+}
+pub fn Loc::get_spill_slot(Self) -> Int
+pub fn Loc::is_spilled(Self) -> Bool
+pub impl Show for Loc
+
 pub enum OperandConstraint {
   AnyReg
   FixedReg(@abi.PReg)
 }
 pub impl Show for OperandConstraint
 
-type ProgPoint
+pub struct Output {
+  param_locs : Array[Loc]
+  allocs : Array[Loc]
+  operand_ranges : Array[(Int, Int, Bool, Int, Int, Int)]
+  operand_range_index : Map[(Int, Int, Bool), Int]
+  edits : Array[((Int, Int, ProgPos), Edit)]
+  edits_by_point : Map[(Int, Int, ProgPos), Array[Edit]]
+  mut num_spillslots : Int
+}
+pub fn Output::edits_at(Self, Int, Int, ProgPos) -> Array[Edit]?
+pub fn Output::get_num_spillslots(Self) -> Int
+pub fn Output::get_param_loc(Self, Int) -> Loc
+pub fn Output::inst_def_loc(Self, Int, Int, Bool, Int) -> Loc
+pub fn Output::inst_use_loc(Self, Int, Int, Bool, Int) -> Loc
+pub fn Output::new() -> Self
+pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
+pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
+
+pub struct ProgPoint {
+  block : Int
+  inst : Int
+  pos : ProgPos
+}
 pub impl Eq for ProgPoint
+pub impl Hash for ProgPoint
 pub impl Show for ProgPoint
 
 type ProgPointRange
 pub fn ProgPointRange::contains(Self, ProgPoint, FixedArray[Int]) -> Bool
 pub impl Show for ProgPointRange
 
-pub enum ProgPos {
+pub(all) enum ProgPos {
   Before
   After
 }
 pub impl Eq for ProgPos
+pub impl Hash for ProgPos
 
 type QueueEntry
 pub impl Eq for QueueEntry
@@ -241,6 +280,7 @@ pub fn VCodeFunction::uses_mem0(Self) -> Bool
 pub impl Show for VCodeFunction
 
 // Type aliases
+pub type SpillSlot = Int
 
 // Traits
 

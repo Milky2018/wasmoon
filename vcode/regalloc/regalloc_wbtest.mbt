@@ -1062,17 +1062,16 @@ test "constraint_reload_coalescing" {
   // Create InstEdits with two reloads from the same spill slot
   let edits = InstEdits::new()
   let slot = 0
-  let spilled_preg = @abi.PReg::spilled(slot, @abi.Int)
 
   // Two constraints need the same spilled value in different registers
   edits.before.push({
-    from: spilled_preg,
-    to: { index: 16, class: @abi.Int },
+    from: Spill(slot),
+    to: Reg(@abi.PReg::{ index: 16, class: @abi.Int }),
     class: @abi.Int,
   })
   edits.before.push({
-    from: spilled_preg,
-    to: { index: 3, class: @abi.Int },
+    from: Spill(slot),
+    to: Reg(@abi.PReg::{ index: 3, class: @abi.Int }),
     class: @abi.Int,
   })
 
@@ -1093,12 +1092,19 @@ test "constraint_reload_coalescing_logic" {
   // Simulate what happens in apply_allocation when processing constraint edits
   // with two reloads from the same spill slot
   let slot = 0
-  let spilled_preg = @abi.PReg::spilled(slot, @abi.Int)
 
   // Create moves as they would appear in inst_edits.before
   let moves : Array[RegMove] = [
-    { from: spilled_preg, to: { index: 16, class: @abi.Int }, class: @abi.Int },
-    { from: spilled_preg, to: { index: 3, class: @abi.Int }, class: @abi.Int },
+    {
+      from: Spill(slot),
+      to: Reg(@abi.PReg::{ index: 16, class: @abi.Int }),
+      class: @abi.Int,
+    },
+    {
+      from: Spill(slot),
+      to: Reg(@abi.PReg::{ index: 3, class: @abi.Int }),
+      class: @abi.Int,
+    },
   ]
 
   // Resolve moves (this shouldn't change spilled sources)
@@ -1112,14 +1118,30 @@ test "constraint_reload_coalescing_logic" {
       let s = mv.from.get_spill_slot()
       if reloaded_slots.get(s) is Some(source_preg) {
         // Already reloaded - use Move
-        operations.push("Move from X\{source_preg.index} to X\{mv.to.index}")
+        let to_preg = match mv.to {
+          Reg(p) => p
+          _ => abort("expected register")
+        }
+        operations.push("Move from X\{source_preg.index} to X\{to_preg.index}")
       } else {
         // First reload - use StackLoad
-        operations.push("StackLoad slot \{s} to X\{mv.to.index}")
-        reloaded_slots.set(s, mv.to)
+        let to_preg = match mv.to {
+          Reg(p) => p
+          _ => abort("expected register")
+        }
+        operations.push("StackLoad slot \{s} to X\{to_preg.index}")
+        reloaded_slots.set(s, to_preg)
       }
     } else {
-      operations.push("Move from X\{mv.from.index} to X\{mv.to.index}")
+      let from_preg = match mv.from {
+        Reg(p) => p
+        _ => abort("expected register")
+      }
+      let to_preg = match mv.to {
+        Reg(p) => p
+        _ => abort("expected register")
+      }
+      operations.push("Move from X\{from_preg.index} to X\{to_preg.index}")
     }
   }
 
