@@ -790,3 +790,37 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
     ),
   )
 }
+
+///|
+test "emit: Trap terminator encodes BRK immediate by trap message" {
+  fn find_first_brk_imm(bytes : Array[Int]) -> Int? {
+    let mut i = 0
+    while i + 3 < bytes.length() {
+      let inst =
+        (bytes[i] & 255)
+        | ((bytes[i + 1] & 255) << 8)
+        | ((bytes[i + 2] & 255) << 16)
+        | ((bytes[i + 3] & 255) << 24)
+      // BRK encoding: 0xD4200000 | (imm16 << 5)
+      if (inst & 0xFFE0001F) == 0xD4200000 {
+        return Some((inst >> 5) & 0xFFFF)
+      }
+      i = i + 1
+    }
+    None
+  }
+
+  fn emit_trap_func(name : String, msg : String) -> Array[Int] {
+    let func = @regalloc.VCodeFunction::new(name)
+    let block = func.new_block()
+    block.set_terminator(Trap(msg))
+    let mc = @emit.emit_function(func)
+    mc.get_bytes()
+  }
+
+  let bytes_unreachable = emit_trap_func("test_trap_unreachable", "unreachable")
+  inspect(find_first_brk_imm(bytes_unreachable).unwrap(), content="0")
+
+  let bytes_oob = emit_trap_func("test_trap_oob", "memory out of bounds")
+  inspect(find_first_brk_imm(bytes_oob).unwrap(), content="1")
+}
