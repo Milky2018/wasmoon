@@ -454,7 +454,7 @@ test "validator: control flow - valid br in block" {
 ///|
 test "validator: control flow - invalid label index" {
   // br with invalid label index (no enclosing block)
-  let func : @types.FunctionCode = { locals: [], body: [Br(0)] }
+  let func : @types.FunctionCode = { locals: [], body: [Br(1)] }
   let func_type : @types.FuncType = { params: [], results: [] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
@@ -473,7 +473,7 @@ test "validator: control flow - invalid label index" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(InvalidLabelIndex(0)),
+    (try? validate_module(mod)) is Err(InvalidLabelIndex(1)),
     content="true",
   )
 }

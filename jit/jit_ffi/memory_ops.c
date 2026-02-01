@@ -58,8 +58,6 @@ static uint8_t *alloc_guarded_memory(wasmoon_memory_t *memory, size_t initial_si
             munmap(mapping, reserve_size);
             return NULL;
         }
-        // Zero-initialize (mmap with MAP_ANONYMOUS should already be zero, but be safe)
-        memset(mapping, 0, initial_size);
     }
 #endif
 
@@ -99,8 +97,6 @@ static int grow_guarded_memory(wasmoon_memory_t *memory, size_t old_size, size_t
     }
 #endif
 
-    // Zero-initialize new pages
-    memset(base + old_size, 0, grow_size);
     memory->guard_start = new_size;
     atomic_store_explicit(&memory->current_length, new_size, memory_order_relaxed);
 
