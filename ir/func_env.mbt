@@ -297,63 +297,15 @@ pub fn FuncEnvironment::translate_table_set(
   value : Value,
   is_table64? : Bool = false,
 ) -> Unit {
-  // Get table size for bounds check
-  let (table_size, table_base) = if table_idx == 0 {
-    let size_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64(),
-    )
-    let size = builder.load_ptr(Type::I64, vmctx, size_offset)
-    let base_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE0_BASE_OFFSET.to_int64(),
-    )
-    let base = builder.load_ptr(Type::I64, vmctx, base_offset)
-    (size, base)
-  } else {
-    let sizes_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE_SIZES_OFFSET.to_int64(),
-    )
-    let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
-    let idx_offset = builder.iconst(Type::I64, (table_idx * 8).to_int64())
-    let size = builder.load_ptr(Type::I64, sizes_ptr, idx_offset)
-    let tables_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLES_OFFSET.to_int64(),
-    )
-    let tables_ptr = builder.load_ptr(Type::I64, vmctx, tables_offset)
-    let base = builder.load_ptr(Type::I64, tables_ptr, idx_offset)
-    (size, base)
-  }
-
-  // Bounds check
-  // For table64, elem_idx is already i64; for table32, extend to i64
-  let elem_idx_i64 = if is_table64 {
-    elem_idx
-  } else {
-    builder.uextend(Type::I64, elem_idx)
-  }
-  let in_bounds = builder.icmp(IntCC::Ult, elem_idx_i64, table_size)
-  let trap_block = builder.create_block()
-  let continue_block = builder.create_block()
-  builder.brnz(in_bounds, continue_block, trap_block)
-
-  // Trap block
-  builder.switch_to_block(trap_block)
-  builder.trap("table out of bounds")
-
-  // Continue block: store the value
-  builder.switch_to_block(continue_block)
-
-  // Calculate address: table_base + elem_idx * 16
-  let stride = builder.iconst(Type::I64, TABLE_ENTRY_STRIDE.to_int64())
-  let byte_offset = builder.imul(elem_idx_i64, stride)
-  let addr = builder.iadd(table_base, byte_offset)
-
-  // Store the funcref value (first 8 bytes of entry)
-  let zero_offset = builder.iconst(Type::I64, 0L)
-  builder.store_ptr(Type::I64, addr, value, zero_offset)
+  // For the JIT, table entries are "fat" (16 bytes): value bits + type index.
+  // Use TableFill with size=1 so the runtime helper can also populate the type
+  // slot for funcref values (needed for call_indirect type checks).
+  //
+  // We keep is_table64 only to choose the correct immediate width for `size=1`.
+  ignore(vmctx)
+  ignore(is_table64)
+  let one = builder.iconst(elem_idx.ty, 1L)
+  builder.table_fill(table_idx, elem_idx, value, one)
 }
 
 // ============ Memory Operations ============

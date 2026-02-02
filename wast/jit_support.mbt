@@ -229,7 +229,7 @@ pub fn sync_tables_to_jit(
       None => continue
     }
     // Sync the table
-    sync_table_to_jit(table, jit_table, jit_module)
+    sync_table_to_jit(table, jit_table, jit_module, instance, store)
   }
 }
 
@@ -459,76 +459,53 @@ pub fn init_bulk_segments(
   }
 
   // Build element segment (value,type) pairs.
+  // We evaluate element init expressions using the executor's extended const-expr
+  // evaluator so GC const exprs (array.new, struct.new, ref.i31, etc.) work.
   let elem_pairs : Array[Array[Int64]] = []
   for elem in mod_.elems {
     let pairs : Array[Int64] = []
     for init_expr in elem.init {
+      // Evaluate the const expression to a runtime Value.
+      let value = @executor.eval_const_expr(
+        init_expr,
+        func_addrs=instance.func_addrs,
+        globals~,
+        store=Some(store),
+        types=mod_.types,
+      ) catch {
+        _ => @types.Value::Null
+      }
+
+      // Encode the value to the JIT segment format (value bits + type idx for funcref).
       let mut raw = @types.NULL_REF
       let mut ty = -1L
-      match init_expr {
-        [RefFunc(idx)] => {
-          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
-          let t = if idx >= 0 && idx < func_canonical_types.length() {
-            func_canonical_types[idx]
-          } else {
-            -1
-          }
-          ty = t.to_int64()
-        }
-        [I32Const(idx)] => {
-          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
-          let t = if idx >= 0 && idx < func_canonical_types.length() {
-            func_canonical_types[idx]
-          } else {
-            -1
-          }
-          ty = t.to_int64()
-        }
-        [RefNull(_)] => ()
-        // GC: i31ref element segments.
-        [I32Const(n), RefI31] => {
-          raw = @jit.encode_i31(n & 0x7FFFFFFF)
-          ty = -1L
-        }
-        [GlobalGet(idx), RefI31] =>
-          if idx >= 0 && idx < globals.length() {
-            match globals[idx].get() {
-              @types.Value::I32(n) => {
-                raw = @jit.encode_i31(n & 0x7FFFFFFF)
-                ty = -1L
-              }
-              _ => ()
-            }
-          }
-        [GlobalGet(idx)] =>
-          if idx >= 0 && idx < globals.length() {
-            match globals[idx].get() {
-              @types.Value::FuncRef(store_addr) =>
-                match func_addr_to_idx.get(store_addr) {
-                  Some(func_idx) => {
-                    raw = @jit.tag_funcref_ptr(jm.get_func_ptr(func_idx))
-                    let t = if func_idx >= 0 &&
-                      func_idx < func_canonical_types.length() {
-                      func_canonical_types[func_idx]
-                    } else {
-                      -1
-                    }
-                    ty = t.to_int64()
-                  }
-                  None => ()
+      match value {
+        @types.Value::Null => ()
+        @types.Value::I31(n) => raw = @jit.encode_i31(n)
+        @types.Value::ExternRef(host_idx) =>
+          raw = @jit.encode_externref(host_idx)
+        @types.Value::StructRef(idx) =>
+          // JIT GC refs are encoded as (gc_ref << 1), where gc_ref = idx + 1.
+          raw = (idx + 1).to_int64() << 1
+        @types.Value::ArrayRef(idx) => raw = (idx + 1).to_int64() << 1
+        @types.Value::FuncRef(store_addr) =>
+          match func_addr_to_idx.get(store_addr) {
+            Some(func_idx) => {
+              let ptr = jm.get_func_ptr(func_idx)
+              if ptr != 0L {
+                raw = @jit.tag_funcref_ptr(ptr)
+                let t = if func_idx >= 0 &&
+                  func_idx < func_canonical_types.length() {
+                  func_canonical_types[func_idx]
+                } else {
+                  -1
                 }
-              @types.Value::ExternRef(host_idx) => {
-                raw = @jit.encode_externref(host_idx)
-                ty = -1L
+                ty = t.to_int64()
               }
-              @types.Value::I31(n) => {
-                raw = @jit.encode_i31(n)
-                ty = -1L
-              }
-              @types.Value::Null => ()
-              _ => ()
             }
+            None => ()
           }
+        // Numeric / unsupported values are not valid in element segments.
         _ => ()
       }
       pairs.push(raw)
@@ -595,55 +572,34 @@ pub fn sync_table_to_jit(
   table : @runtime.Table,
   jit_table : @jit.JITTable,
   jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
 ) -> Unit {
   let size = table.size()
   for i in 0..<size {
     let value = table.get(i) catch { _ => continue }
-    let encoded : Int64 = encode_value_for_jit(value, jit_module)
-    // Use type_hash 0 for GC values (not used for type checking)
-    jit_table.set(i, encoded, 0)
-  }
-}
-
-///|
-/// Encode a Value for JIT table storage
-fn encode_value_for_jit(
-  value : @types.Value,
-  jit_module : @jit.JITModule,
-) -> Int64 {
-  match value {
-    Null => NULL_REF
-    I31(n) => {
-      // i31 encoding: (value << 1) | 1
-      let n64 = n.to_int64() & 0x7FFFFFFFL
-      ( // 31-bit value
-        n64 << 1
-      ) |
-      1L
-    }
-    StructRef(gc_ref) | ArrayRef(gc_ref) =>
-      // Heap reference encoding: gc_ref << 1 (gc_ref >= 1, so result >= 2)
-      gc_ref.to_int64() << 1
-    FuncRef(func_idx) => {
-      // Function reference: get function pointer and tag with FUNCREF_TAG
-      let func_ptr = jit_module.get_func_ptr(func_idx)
-      if func_ptr == 0L {
-        NULL_REF // null funcref if function not found
-      } else {
-        // FUNCREF_TAG = 0x2000000000000000 (bit 61)
-        func_ptr | FUNCREF_TAG
+    let mut encoded : Int64 = NULL_REF
+    let mut type_idx : Int = -1
+    match value {
+      Null => {
+        encoded = NULL_REF
+        type_idx = -1
       }
+      I31(n) => encoded = @jit.encode_i31(n)
+      StructRef(idx) | ArrayRef(idx) =>
+        // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
+        encoded = (idx + 1).to_int64() << 1
+      ExternRef(host_idx) => encoded = @jit.encode_externref(host_idx)
+      FuncRef(store_addr) => {
+        encoded = encode_store_funcref_for_jit(value, jit_module, instance)
+        if store_addr >= 0 && store_addr < store.func_type_indices.length() {
+          type_idx = store.func_type_indices[store_addr]
+        }
+      }
+      // Numeric types shouldn't be present in reference tables.
+      _ => encoded = NULL_REF
     }
-    ExternRef(host_idx) =>
-      // Extern reference: EXTERNREF_TAG | (host_idx << 1)
-      EXTERNREF_TAG | (host_idx.to_int64() << 1)
-    // Numeric types shouldn't be in reference tables
-    I32(n) => n.to_int64()
-    I64(n) => n
-    F32(n) => n.reinterpret_as_int().to_int64()
-    F64(n) => n.reinterpret_as_int64()
-    V128(_) => abort("V128 not supported in JIT")
-    ExnRef(_) => NULL_REF // Exception refs not supported in tables
+    jit_table.set(i, encoded, type_idx)
   }
 }
 
