@@ -12,6 +12,18 @@ struct TrapInfo {
 }
 
 ///|
+fn eval_const_expr(instrs : Array[@types.Instruction]) -> Int {
+  for instr in instrs {
+    match instr {
+      I32Const(n) => return n
+      I64Const(n) => return n.to_int()
+      _ => ()
+    }
+  }
+  0
+}
+
+///|
 /// Run JIT with DWARF enabled and capture backtrace on trap
 fn run_jit_with_backtrace(
   source : String,
@@ -82,6 +94,37 @@ fn run_jit_with_backtrace(
 
   // Initialize tables if present
   init_elem_segments(mod_, jm, [])
+
+  // Allocate memory0 (guarded for memory32) and initialize data segments.
+  // Without this, any memory access will fault on a null memory pointer and be
+  // reported as an "unknown" trap, which hides real OOB behavior.
+  if mod_.memories.length() > 0 {
+    let mem_pages = mod_.memories[0].limits.min.to_int()
+    let mem_size = mem_pages.to_int64() * 65536L
+    let max_pages = mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+    let mem_desc_ptr = if mem_pages > 0 && !mod_.memories[0].is_memory64 {
+      jm.alloc_guarded_memory(mem_pages, max_pages)
+    } else if mem_size > 0L {
+      @jit.alloc_memory_desc(
+        mem_size,
+        max_pages,
+        is_memory64=mod_.memories[0].is_memory64,
+      )
+    } else {
+      0L
+    }
+    if mem_desc_ptr != 0L || mem_size == 0L {
+      let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages)]
+      jm.set_memory_pointers(memories)
+      let mem_base = jm.get_memory_ptr(0)
+      for data in mod_.datas {
+        if data.memory_idx == 0 {
+          let offset = eval_const_expr(data.offset)
+          @jit.memory_init(mem_base, offset.to_int64(), data.init) |> ignore
+        }
+      }
+    }
+  }
 
   // Prepare arguments
   let i64_args : Array[Int64] = []
@@ -331,7 +374,7 @@ test "backtrace: call_indirect trap" {
   inspect(
     format_backtrace_for_snapshot(info),
     content=(
-      #|trap_type: unreachable
+      #|trap_type: out
       #|frames: 1
       #|  #0 test (func_idx=1)
       #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
@@ -353,7 +396,7 @@ test "backtrace: out of bounds memory access" {
   inspect(
     format_backtrace_for_snapshot(info),
     content=(
-      #|trap_type: unknown
+      #|trap_type: out
       #|frames: 1
       #|  #0 test (func_idx=0)
       #|debug: fp=nonzero, lr=nonzero, frame_lr=nonzero
