@@ -117,13 +117,28 @@ pub fn Output::summary(self : Output) -> String {
   let mut spills = 0
   let mut reg_moves = 0
   let mut spill_to_spill = 0
+  let slot_traffic : Map[Int, (Int, Int)] = {} // slot -> (reloads, spills)
   for _, entry in self.edits {
     let (_point, edit) = entry
     match edit {
       Move(from, to, _) =>
         match (from, to) {
-          (Spill(_), Reg(_)) => reloads += 1
-          (Reg(_), Spill(_)) => spills += 1
+          (Spill(slot), Reg(_)) => {
+            reloads += 1
+            let (r, w) = match slot_traffic.get(slot) {
+              Some(v) => v
+              None => (0, 0)
+            }
+            slot_traffic.set(slot, (r + 1, w))
+          }
+          (Reg(_), Spill(slot)) => {
+            spills += 1
+            let (r, w) = match slot_traffic.get(slot) {
+              Some(v) => v
+              None => (0, 0)
+            }
+            slot_traffic.set(slot, (r, w + 1))
+          }
           (Reg(_), Reg(_)) => reg_moves += 1
           (Spill(_), Spill(_)) => spill_to_spill += 1
         }
@@ -154,12 +169,130 @@ pub fn Output::summary(self : Output) -> String {
       }
     }
   }
+
+  // Operand allocation breakdown and unique preg usage.
+  let mut alloc_reg = 0
+  let mut alloc_spill = 0
+  let used_int_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_fp_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_vec_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  fn record_preg(
+    used_int : @hashset.HashSet[Int],
+    used_fp : @hashset.HashSet[Int],
+    used_vec : @hashset.HashSet[Int],
+    preg : @abi.PReg,
+  ) -> Unit {
+    match preg.class {
+      @abi.Int => used_int.add(preg.index) |> ignore
+      @abi.Float32 | @abi.Float64 => used_fp.add(preg.index) |> ignore
+      @abi.Vector => used_vec.add(preg.index) |> ignore
+    }
+  }
+
+  for loc in self.param_locs {
+    match loc {
+      Reg(p) => record_preg(used_int_pregs, used_fp_pregs, used_vec_pregs, p)
+      Spill(_) => ()
+    }
+  }
+  for loc in self.allocs {
+    match loc {
+      Reg(p) => {
+        alloc_reg += 1
+        record_preg(used_int_pregs, used_fp_pregs, used_vec_pregs, p)
+      }
+      Spill(_) => alloc_spill += 1
+    }
+  }
+
+  // Top spill slots by traffic (loads+stores).
+  let hot_slots : Array[(Int, Int, Int, Int)] = [] // (total, slot, reloads, spills)
+  for slot, counts in slot_traffic {
+    let (r, w) = counts
+    hot_slots.push((r + w, slot, r, w))
+  }
+  hot_slots.sort_by(fn(a, b) {
+    let (at, a_slot, _, _) = a
+    let (bt, b_slot, _, _) = b
+    if at > bt {
+      -1
+    } else if at < bt {
+      1
+    } else if a_slot < b_slot {
+      -1
+    } else if a_slot > b_slot {
+      1
+    } else {
+      0
+    }
+  })
+
+  // Top edit points by edit count.
+  let hot_points : Array[(Int, Int, ProgPos, Int)] = [] // (block, inst, pos, count)
+  for point, edits in self.edits_by_point {
+    let (block_id, inst_idx, pos) = point
+    hot_points.push((block_id, inst_idx, pos, edits.length()))
+  }
+  hot_points.sort_by(fn(a, b) {
+    let (_, _, _, ac) = a
+    let (_, _, _, bc) = b
+    if ac > bc {
+      -1
+    } else if ac < bc {
+      1
+    } else {
+      0
+    }
+  })
   s = s +
     "  spillslots: \{self.num_spillslots} (\{self.num_spillslots * 8} bytes)\n"
   s = s + "  spillslots_used: \{used_slots.length()}\n"
   s = s +
     "  edits: \{self.edits.length()} (reloads=\{reloads}, spills=\{spills}, reg_moves=\{reg_moves}, spill_to_spill=\{spill_to_spill})\n"
+  s = s +
+    "  operand_allocs: \{self.allocs.length()} (reg=\{alloc_reg}, spill=\{alloc_spill})\n"
+  s = s +
+    "  regs_used: int=\{used_int_pregs.length()}, fp=\{used_fp_pregs.length()}, vec=\{used_vec_pregs.length()}\n"
   s = s + "  operand_ranges: \{self.operand_ranges.length()}\n"
+  if !hot_slots.is_empty() {
+    s = s + "  hot_spillslots: "
+    let mut shown = 0
+    for entry in hot_slots {
+      let (total, slot, r, w) = entry
+      if shown >= 8 {
+        break
+      }
+      if shown > 0 {
+        s = s + ", "
+      }
+      s = s + "\{slot}:\{total}(\{r}L+\{w}S)"
+      shown += 1
+    }
+    s = s + "\n"
+  }
+  if !hot_points.is_empty() {
+    fn pos_str(pos : ProgPos) -> String {
+      match pos {
+        Before => "b"
+        After => "a"
+      }
+    }
+
+    s = s + "  hot_edit_points: "
+    let mut shown = 0
+    for p in hot_points {
+      let (b, i, pos, c) = p
+      if shown >= 6 {
+        break
+      }
+      if shown > 0 {
+        s = s + ", "
+      }
+      s = s + "\{b}:\{i}\{pos_str(pos)}=\{c}"
+      shown += 1
+    }
+    s = s + "\n"
+  }
   s = s + "  params: "
   for i in 0..<self.param_locs.length() {
     if i > 0 {

@@ -964,7 +964,6 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|    br_cmp_imm.eq x0, #2, block3, block4
       #|}
       #|
-
     ),
   )
 
@@ -1065,7 +1064,6 @@ test "minimal: dead float constant should not affect live values" {
       #|    ret d0
       #|}
       #|
-
     ),
   )
 }

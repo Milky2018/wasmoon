@@ -136,7 +136,6 @@ test "cross_block_cse" {
       #|    ret x3
       #|}
       #|
-
     ),
   )
 
@@ -157,7 +156,6 @@ test "cross_block_cse" {
       #|  0010: e00303aa  mov x0, x3
       #|  0014: c0035fd6  ret
       #|
-
     ),
   )
 }

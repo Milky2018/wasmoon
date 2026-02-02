@@ -93,7 +93,6 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
       #|    br_cmp_imm.eq x1, #2, block3, block4
       #|}
       #|
-
     ),
   )
 
@@ -392,7 +391,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|    br_cmp_imm.eq x1, #2, block7, block8
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -464,7 +462,6 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  00cc: 20feff54  b.eq block7
       #|  00d0: f6ffff17  b block8
       #|
-
     ),
   )
 

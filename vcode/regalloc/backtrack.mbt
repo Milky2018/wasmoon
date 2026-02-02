@@ -116,6 +116,60 @@ pub fn BacktrackingAllocator::new(
 }
 
 ///|
+/// Derive a hint preg from fixed-reg constraints inside a bundle.
+///
+/// This is a Cranelift-like *hint* only: it helps reduce reg-to-reg moves by
+/// encouraging allocation into the same preg required by operand constraints,
+/// but it is never treated as a hard constraint for the whole bundle.
+fn BacktrackingAllocator::constraint_hint_preg(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> @abi.PReg? {
+  let avail_regs = self.get_available_regs(bundle)
+  if avail_regs.is_empty() {
+    return None
+  }
+  let avail_idx : Set[Int] = Set::new()
+  for r in avail_regs {
+    avail_idx.add(r.index) |> ignore
+  }
+
+  // Count how often each fixed preg appears in uses.
+  let counts : Map[Int, Int] = {}
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    for use_pos in range.uses {
+      match use_pos.constraint {
+        FixedReg(preg) =>
+          if preg.class == bundle.reg_class && avail_idx.contains(preg.index) {
+            let cur = match counts.get(preg.index) {
+              Some(v) => v
+              None => 0
+            }
+            counts.set(preg.index, cur + 1)
+          }
+        AnyReg => ()
+      }
+    }
+  }
+  let mut best : (@abi.PReg, Int)? = None
+  for idx, cnt in counts {
+    let preg : @abi.PReg = { index: idx, class: bundle.reg_class }
+    match best {
+      None => best = Some((preg, cnt))
+      Some((bp, bc)) =>
+        if cnt > bc || (cnt == bc && idx < bp.index) {
+          best = Some((preg, cnt))
+        }
+    }
+  }
+  match best {
+    Some((preg, _)) => Some(preg)
+    None => None
+  }
+}
+
+///|
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
@@ -127,7 +181,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
     self.queue.push({
       bundle_id: i,
       weight: bundle.spill_weight,
-      hint_preg: None,
+      hint_preg: self.constraint_hint_preg(bundle),
     })
   }
   // Sort by weight descending (highest priority first)
@@ -305,32 +359,6 @@ fn BacktrackingAllocator::remove_allocation(
 }
 
 ///|
-/// Check if a register is callee-saved
-fn BacktrackingAllocator::is_callee_saved(
-  self : BacktrackingAllocator,
-  preg : @abi.PReg,
-) -> Bool {
-  match preg.class {
-    @abi.Int =>
-      for cs in self.callee_saved_int {
-        if cs.index == preg.index {
-          return true
-        }
-      }
-    @abi.Float32 | @abi.Float64 =>
-      for cs in self.callee_saved_float {
-        if cs.index == preg.index {
-          return true
-        }
-      }
-    // AAPCS64 only guarantees preserving the low 64 bits of V8-V15.
-    // Treat vectors as never callee-saved.
-    @abi.Vector => ()
-  }
-  false
-}
-
-///|
 /// Try to allocate a register for a bundle
 /// Returns the allocated register if successful
 fn BacktrackingAllocator::try_allocate(
@@ -338,24 +366,6 @@ fn BacktrackingAllocator::try_allocate(
   bundle : Bundle,
   hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
-  // Check if bundle crosses a call - if so, need special handling
-  let crosses_call = bundle.crosses_call(self.ranges)
-
-  // Check for fixed constraint
-  if bundle.get_fixed_reg(self.ranges) is Some(fixed_preg) {
-    // If bundle crosses a call and the fixed register is caller-saved,
-    // we should NOT allocate to the fixed register. Instead, allocate to
-    // a callee-saved register and let process_constraints insert the move.
-    if crosses_call && not(self.is_callee_saved(fixed_preg)) {
-      // Fall through to normal allocation (will use callee-saved regs)
-      ()
-    } else {
-      if self.is_reg_free(fixed_preg, bundle) {
-        return Some(fixed_preg)
-      }
-      return None // Must use fixed reg but it's occupied
-    }
-  }
   let avail_regs = self.get_available_regs(bundle)
 
   // Probe hint first if present and available.
@@ -773,6 +783,10 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
           None
         }
       }
+    }
+    let hint_preg = match hint_preg {
+      Some(p) => Some(p)
+      None => self.constraint_hint_preg(bundle)
     }
 
     // Skip if already allocated

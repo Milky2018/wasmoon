@@ -652,7 +652,6 @@ test "regalloc: f64 registers" {
       #|    ret d4
       #|}
       #|
-
     ),
   )
 }
@@ -767,7 +766,6 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|    ret d20
       #|}
       #|
-
     ),
   )
 }
@@ -864,7 +862,6 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
       #|    ret d28
       #|}
       #|
-
     ),
   )
 }
@@ -957,7 +954,6 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|    ret d8, d6
       #|}
       #|
-
     ),
   )
 }
@@ -1318,7 +1314,6 @@ test "reload coalescing: call with spilled arg used twice" {
       #|  x2 = add x0, x26
       #|  x4 = add x2, x22
       #|
-
     ),
   )
 }

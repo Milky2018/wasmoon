@@ -67,7 +67,6 @@ test "f32 add" {
       #|    ret d4
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -170,7 +169,6 @@ test "f64 add" {
       #|    ret d4
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -271,7 +269,6 @@ test "f32 sub" {
       #|    ret d4
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -375,7 +372,6 @@ test "f32 mul" {
       #|    ret d4
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -390,7 +386,6 @@ test "f32 mul" {
       #|  0010: 801ca44e  orr v0.16b, v4.16b, v4.16b
       #|  0014: c0035fd6  ret
       #|
-
     ),
   )
   let code_bytes = mc.get_bytes()

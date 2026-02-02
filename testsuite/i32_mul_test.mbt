@@ -67,7 +67,6 @@ test "i32 mul" {
       #|    ret x4
       #|}
       #|
-
     ),
   )
   let mc = @emit.emit_function(allocated_func)
@@ -80,7 +79,6 @@ test "i32 mul" {
       #|  0008: e00304aa  mov x0, x4
       #|  000c: c0035fd6  ret
       #|
-
     ),
   )
   let code_bytes = mc.get_bytes()
