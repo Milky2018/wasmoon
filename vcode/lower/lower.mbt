@@ -24,6 +24,9 @@ struct LoweringContext {
   func_table_cache : Map[Int, @abi.VReg]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
+  // Values that should not be lowered because they are subsumed by a fused instruction
+  // (Cranelift-style ISel fusion; e.g. imul/ishl used only by madd/add_shift).
+  skipped_values : @hashset.HashSet[Int]
   // Use counts for IR values (used to skip unused call results)
   use_counts : Map[Int, Int]
 }
@@ -45,8 +48,73 @@ pub fn LoweringContext::new(
     stack_param_map: {},
     func_table_cache: {},
     fused_icmps: @hashset.new(),
+    skipped_values: @hashset.new(),
     use_counts,
   }
+}
+
+///|
+/// Pre-compute values that should be skipped during lowering because they are subsumed
+/// by a fused instruction selection rule.
+///
+/// This mirrors Cranelift ISLE lowering rules like:
+/// - iadd x (ishl y (iconst k)) => add_shift
+/// - iadd x (imul y z) => madd
+/// - isub x (imul y z) => msub
+fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
+  let skipped : @hashset.HashSet[Int] = @hashset.new()
+  for block in ctx.ir_func.blocks {
+    for inst in block.instructions {
+      let is_i64 = inst.first_result() is Some(result) &&
+        result.ty is @ir.Type::I64
+      match inst.opcode {
+        @ir.Opcode::Iadd => {
+          if !is_i64 {
+            continue
+          }
+          // Skip single-use producers subsumed by fused patterns.
+          for op in inst.operands {
+            if ctx.use_counts.get(op.id).unwrap_or(0) != 1 {
+              continue
+            }
+            if match_mul_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+            if match_shl_const_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+          }
+        }
+        @ir.Opcode::Isub => {
+          if !is_i64 {
+            continue
+          }
+          let rhs = inst.operands[1]
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+          }
+        }
+        @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
+          if !is_i64 {
+            continue
+          }
+          for op in inst.operands {
+            if ctx.use_counts.get(op.id).unwrap_or(0) == 1 &&
+              match_shl_const_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  skipped
 }
 
 ///|
@@ -440,6 +508,11 @@ pub fn lower_function(
   for id in fused {
     ctx.fused_icmps.add(id)
   }
+  // Phase 0.5: Pre-compute values to skip (subsumed by fused instruction selection)
+  let skipped = compute_skipped_values(ctx)
+  for id in skipped {
+    ctx.skipped_values.add(id)
+  }
 
   // Phase 1: Create VCode blocks and set up block mapping
   for ir_block in ir_func.blocks {
@@ -540,6 +613,10 @@ fn lower_block_body(
 
   // Lower instructions
   for inst in ir_block.instructions {
+    if inst.first_result() is Some(result) &&
+      ctx.skipped_values.contains(result.id) {
+      continue
+    }
     lower_inst(ctx, inst, vcode_block)
   }
 

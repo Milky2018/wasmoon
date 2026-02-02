@@ -518,9 +518,8 @@ test "lower add(x, mul(y, z)) to madd" {
     content=(
       #|vcode madd_test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v1, v2
-      #|    v4 = madd v0, v1, v2
-      #|    ret v4
+      #|    v3 = madd v0, v1, v2
+      #|    ret v3
       #|}
       #|
     ),
@@ -548,9 +547,8 @@ test "lower sub(x, mul(y, z)) to msub" {
     content=(
       #|vcode msub_test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v1, v2
-      #|    v4 = msub v0, v1, v2
-      #|    ret v4
+      #|    v3 = msub v0, v1, v2
+      #|    ret v3
       #|}
       #|
     ),
@@ -578,9 +576,8 @@ test "lower sub(0, mul(x, y)) to mneg" {
     content=(
       #|vcode mneg_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = mul v0, v1
-      #|    v4 = mneg v0, v1
-      #|    ret v4
+      #|    v3 = mneg v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -608,9 +605,8 @@ test "lower add(x, shl(y, n)) to add_shifted" {
     content=(
       #|vcode add_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #3 v1
-      #|    v4 = add.lsl #3 v0, v1
-      #|    ret v4
+      #|    v3 = add.lsl #3 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -638,9 +634,8 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
     content=(
       #|vcode sub_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #2 v1
-      #|    v4 = sub.lsl #2 v0, v1
-      #|    ret v4
+      #|    v3 = sub.lsl #2 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -668,9 +663,8 @@ test "lower and(x, shl(y, n)) to and_shifted" {
     content=(
       #|vcode and_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #4 v1
-      #|    v4 = and.lsl #4 v0, v1
-      #|    ret v4
+      #|    v3 = and.lsl #4 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -698,9 +692,8 @@ test "lower or(x, shl(y, n)) to or_shifted" {
     content=(
       #|vcode or_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #5 v1
-      #|    v4 = or.lsl #5 v0, v1
-      #|    ret v4
+      #|    v3 = or.lsl #5 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -728,9 +721,8 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
     content=(
       #|vcode xor_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #1 v1
-      #|    v4 = xor.lsl #1 v0, v1
-      #|    ret v4
+      #|    v3 = xor.lsl #1 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -758,9 +750,8 @@ test "madd commutative: add(mul(x, y), z) to madd" {
     content=(
       #|vcode madd_commutative(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v0, v1
-      #|    v4 = madd v2, v0, v1
-      #|    ret v4
+      #|    v3 = madd v2, v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -788,9 +779,8 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     content=(
       #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = shl #3 v0
-      #|    v4 = add.lsl #3 v1, v0
-      #|    ret v4
+      #|    v3 = add.lsl #3 v1, v0
+      #|    ret v3
       #|}
       #|
     ),
