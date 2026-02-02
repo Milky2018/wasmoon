@@ -1063,14 +1063,24 @@ fn collect_used_callee_saved_from_output(
     record_edits_at(term_inst)
 
     // Instruction defs.
+    //
+    // Ignore *physical* defs here. Calls model clobbers as physical defs so
+    // regalloc can treat them as kills. However, prologue saves must be driven
+    // by allocated callee-saved registers that actually hold virtual values
+    // (params / vreg defs / regalloc edits), matching Cranelift's machinst ABI
+    // design.
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        match output.inst_def_loc(block.id, inst_idx, false, di) {
-          @regalloc.Reg(p) =>
-            if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-              if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
-                used.add(p.index)
-              }
+        match inst.defs[di].reg {
+          @abi.Virtual(_) =>
+            match output.inst_def_loc(block.id, inst_idx, false, di) {
+              @regalloc.Reg(p) =>
+                if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
+                  if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+                    used.add(p.index)
+                  }
+                }
+              _ => ()
             }
           _ => ()
         }
@@ -1137,14 +1147,19 @@ fn collect_used_callee_saved_fprs_from_output(
     }
     record_edits_at(term_inst)
 
-    // Instruction defs.
+    // Instruction defs: only count allocations of virtual values (see comment
+    // above in collect_used_callee_saved_from_output).
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        match output.inst_def_loc(block.id, inst_idx, false, di) {
-          @regalloc.Reg(p) =>
-            if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-              is_callee_saved_fpr(p.index) {
-              used.add(p.index)
+        match inst.defs[di].reg {
+          @abi.Virtual(_) =>
+            match output.inst_def_loc(block.id, inst_idx, false, di) {
+              @regalloc.Reg(p) =>
+                if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+                  is_callee_saved_fpr(p.index) {
+                  used.add(p.index)
+                }
+              _ => ()
             }
           _ => ()
         }

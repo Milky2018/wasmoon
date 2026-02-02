@@ -150,8 +150,10 @@ fn run_explore(
     }
 
     // Stage 5: Register Allocation
-    let allocated = @regalloc.allocate_registers_backtracking(vcode_func)
-    let allocated_text = allocated.to_string()
+    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
+      vcode_func,
+    )
+    let allocated_text = ra_output.summary()
     if !html_output && show_regalloc {
       println("")
       println("── Register Allocation ──")
@@ -160,7 +162,11 @@ fn run_explore(
 
     // Stage 6: Machine Code
     let debug_func_idx = if debug { Some(actual_func_idx) } else { None }
-    let mc = @emit.emit_function(allocated, debug_func_idx~)
+    let mc = @emit.emit_function_with_regalloc(
+      vcode_ra,
+      ra_output,
+      debug_func_idx~,
+    )
     let mc_text = mc.dump_disasm()
     if !html_output && show_mc {
       println("")

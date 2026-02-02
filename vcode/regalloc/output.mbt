@@ -108,6 +108,23 @@ pub fn Output::new() -> Output {
 }
 
 ///|
+/// A compact human-readable summary for debugging (used by the CLI explore command).
+pub fn Output::summary(self : Output) -> String {
+  let mut s = "Regalloc output (Cranelift-style):\n"
+  s = s + "  spillslots: \{self.num_spillslots}\n"
+  s = s + "  edits: \{self.edits.length()}\n"
+  s = s + "  operand_ranges: \{self.operand_ranges.length()}\n"
+  s = s + "  params: "
+  for i in 0..<self.param_locs.length() {
+    if i > 0 {
+      s = s + ", "
+    }
+    s = s + self.param_locs[i].to_string()
+  }
+  s + "\n"
+}
+
+///|
 pub fn Output::get_num_spillslots(self : Output) -> Int {
   self.num_spillslots
 }
