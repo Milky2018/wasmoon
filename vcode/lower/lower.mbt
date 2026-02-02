@@ -77,7 +77,10 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
           let access_size = match ty {
             @ir.Type::I32 | @ir.Type::F32 => 4
-            @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+            @ir.Type::I64
+            | @ir.Type::F64
+            | @ir.Type::FuncRef
+            | @ir.Type::ExternRef => 8
             @ir.Type::V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 1 {
@@ -90,7 +93,6 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           } else {
             0L
           }
-
           if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
             if is_valid_load_store_offset(combined, access_size) {
@@ -98,10 +100,9 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
-            match_addr_reg_offset(ctx, base_value, access_size) is
-              Some((_, _, _, _, subsumed, has_extra)) {
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {
               addrmode_skipped.add(base_value.id)
               for vid in subsumed {
@@ -120,7 +121,10 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
           let access_size = match ty {
             @ir.Type::I32 | @ir.Type::F32 => 4
-            @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
+            @ir.Type::I64
+            | @ir.Type::F64
+            | @ir.Type::FuncRef
+            | @ir.Type::ExternRef => 8
             @ir.Type::V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 2 {
@@ -133,7 +137,6 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           } else {
             0L
           }
-
           if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
             if is_valid_load_store_offset(combined, access_size) {
@@ -141,10 +144,9 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
-            match_addr_reg_offset(ctx, base_value, access_size) is
-              Some((_, _, _, _, subsumed, has_extra)) {
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {
               addrmode_skipped.add(base_value.id)
               for vid in subsumed {
@@ -221,7 +223,6 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
       }
     }
   }
-
   for id in addrmode_skipped {
     skipped.add(id)
   }

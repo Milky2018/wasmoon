@@ -937,29 +937,34 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d0 = ldf 10
-      #|    x1 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d1 = ldf 10
+      #|    x3 = ldi 0
+      #|    store_ptr.f32 +0 x3, d1
+      #|    d6 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d4 = ldf 10
+      #|    x6 = ldi 0
+      #|    store_ptr.f32 +0 x6, d4
+      #|    d6 = load_ptr.f32 +0 x6
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d6 = ldf 10
+      #|    x8 = ldi 0
+      #|    store_ptr.f32 +0 x8, d6
+      #|    d6 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d0
+      #|    ret d6
       #|block5:
       #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
       #|    br_cmp_imm.eq x0, #2, block3, block4
       #|}
       #|
+
     ),
   )
 
@@ -986,21 +991,21 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
   inspect(block1_last.opcode, content="load_ptr.f32 +0")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines d2
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines d2
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1053,13 +1058,14 @@ test "minimal: dead float constant should not affect live values" {
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    d1 = ldf 2
-      #|    d0 = ldf 10
-      #|    x0 = ldi 0
-      #|    store_ptr.f32 +0 x0, d0
-      #|    ret d1
+      #|    d0 = ldf 2
+      #|    d2 = ldf 10
+      #|    x4 = ldi 0
+      #|    store_ptr.f32 +0 x4, d2
+      #|    ret d0
       #|}
       #|
+
     ),
   )
 }

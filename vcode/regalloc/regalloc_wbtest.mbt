@@ -646,12 +646,13 @@ test "regalloc: f64 registers" {
     content=(
       #|vcode f64_test() -> double {
       #|block0:
-      #|    d1 = ldf 1.5
-      #|    d0 = ldf 2.5
-      #|    d0 = fadd.d d1, d0
-      #|    ret d0
+      #|    d0 = ldf 1.5
+      #|    d2 = ldf 2.5
+      #|    d4 = fadd.d d0, d2
+      #|    ret d4
       #|}
       #|
+
     ),
   )
 }
@@ -757,15 +758,16 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|vcode mixed_types() -> double {
       #|block0:
       #|    x0 = ldi 10
-      #|    d1 = ldf 3.140000104904175
-      #|    d0 = ldf 2.718
-      #|    x0 = add x0, x0
-      #|    d0 = fadd.d d1, d0
-      #|    d0 = fadd.d d0, d0
-      #|    store.i32 +0 x0, x0
-      #|    ret d0
+      #|    d2 = ldf 3.140000104904175
+      #|    d4 = ldf 2.718
+      #|    x6 = add x0, x0
+      #|    d18 = fadd.d d2, d4
+      #|    d20 = fadd.d d18, d18
+      #|    store.i32 +0 x6, x6
+      #|    ret d20
       #|}
       #|
+
     ),
   )
 }
@@ -849,19 +851,20 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
     content=(
       #|vcode test_many_f64_args() -> double {
       #|block0:
-      #|    d7 = ldf 1
-      #|    d6 = ldf 2
-      #|    d5 = ldf 3
-      #|    d4 = ldf 4
-      #|    d3 = ldf 5
-      #|    d2 = ldf 6
-      #|    d1 = ldf 7
-      #|    d0 = ldf 8
-      #|    x0 = ldi 4096
-      #|    d0 = call_ptr[Wasm](8) -> 1 results x0
-      #|    ret d0
+      #|    d0 = ldf 1
+      #|    d2 = ldf 2
+      #|    d4 = ldf 3
+      #|    d6 = ldf 4
+      #|    d18 = ldf 5
+      #|    d20 = ldf 6
+      #|    d22 = ldf 7
+      #|    d24 = ldf 8
+      #|    x19 = ldi 4096
+      #|    d28 = call_ptr[Wasm](8) -> 1 results x19
+      #|    ret d28
       #|}
       #|
+
     ),
   )
 }
@@ -948,12 +951,13 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|vcode test_f32_across_call() -> (float, double) {
       #|block0:
       #|    d8 = ldf 42
-      #|    d0 = ldf 3.14
-      #|    x0 = ldi 8192
-      #|    d0 = call_ptr[Wasm](1) -> 1 results x0
-      #|    ret d8, d0
+      #|    d2 = ldf 3.14
+      #|    x4 = ldi 8192
+      #|    d6 = call_ptr[Wasm](1) -> 1 results x4
+      #|    ret d8, d6
       #|}
       #|
+
     ),
   )
 }
@@ -1277,43 +1281,44 @@ test "reload coalescing: call with spilled arg used twice" {
     output.to_string(),
     content=(
       #|block0:
-      #|  x2 = ldi 0
-      #|  x1 = ldi 1
+      #|  x1 = ldi 0
+      #|  x3 = ldi 1
       #|  x16 = ldi 2
       #|  stack_store [sp+0] x16
-      #|  x23 = ldi 3
-      #|  x24 = ldi 4
-      #|  x25 = ldi 5
-      #|  x19 = ldi 6
-      #|  x27 = ldi 7
-      #|  x28 = ldi 8
+      #|  x27 = ldi 3
+      #|  x19 = ldi 4
+      #|  x23 = ldi 5
+      #|  x24 = ldi 6
+      #|  x20 = ldi 7
+      #|  x25 = ldi 8
       #|  x17 = ldi 9
       #|  stack_store [sp+8] x17
       #|  x16 = ldi 10
       #|  stack_store [sp+16] x16
       #|  x17 = ldi 11
       #|  stack_store [sp+24] x17
-      #|  x20 = ldi 12
+      #|  x28 = ldi 12
       #|  x26 = ldi 13
       #|  x22 = ldi 14
       #|  call_ptr[Wasm](4) -> 0 results x0
       #|  x16 = stack_load [sp+0]
-      #|  x0 = add x16, x23
-      #|  x0 = add x0, x24
-      #|  x0 = add x0, x25
-      #|  x0 = add x0, x19
-      #|  x0 = add x0, x27
-      #|  x0 = add x0, x28
+      #|  x7 = add x16, x27
+      #|  x9 = add x7, x19
+      #|  x11 = add x9, x23
+      #|  x13 = add x11, x24
+      #|  x15 = add x13, x20
+      #|  x20 = add x15, x25
       #|  x16 = stack_load [sp+8]
-      #|  x0 = add x0, x16
+      #|  x23 = add x20, x16
       #|  x16 = stack_load [sp+16]
-      #|  x0 = add x0, x16
+      #|  x25 = add x23, x16
       #|  x16 = stack_load [sp+24]
-      #|  x0 = add x0, x16
-      #|  x0 = add x0, x20
-      #|  x0 = add x0, x26
-      #|  x0 = add x0, x22
+      #|  x27 = add x25, x16
+      #|  x0 = add x27, x28
+      #|  x2 = add x0, x26
+      #|  x4 = add x2, x22
       #|
+
     ),
   )
 }

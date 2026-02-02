@@ -40,6 +40,8 @@ pub fn get_alloc_stats(VCodeFunction, settings? : @abi.ABISettings) -> AllocStat
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
+pub fn rematerialize_cross_block_constants(VCodeFunction) -> VCodeFunction
+
 pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
 
 // Errors
@@ -184,9 +186,6 @@ pub(all) enum ProgPos {
 }
 pub impl Eq for ProgPos
 pub impl Hash for ProgPos
-
-type QueueEntry
-pub impl Eq for QueueEntry
 
 pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]

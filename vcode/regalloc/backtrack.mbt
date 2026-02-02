@@ -21,10 +21,11 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 
 ///|
 /// Priority queue entry for allocation
-struct QueueEntry {
+priv struct QueueEntry {
   bundle_id : Int
   weight : Double
-} derive(Eq)
+  hint_preg : @abi.PReg?
+}
 
 ///|
 /// The backtracking register allocator
@@ -45,6 +46,10 @@ struct BacktrackingAllocator {
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry]
 
+  // Cranelift-style spillset hint: remember last successful preg for an
+  // "original" bundle (spillset), and prefer it for split pieces.
+  spillset_hints : Array[@abi.PReg?]
+
   // Configuration
   int_regs : Array[@abi.PReg]
   float_regs : Array[@abi.PReg]
@@ -57,6 +62,27 @@ struct BacktrackingAllocator {
 
   // Reference to function for constraint lookups
   func : VCodeFunction
+}
+
+///|
+/// Insert a queue entry, keeping the queue sorted by weight descending.
+fn BacktrackingAllocator::queue_push(
+  self : BacktrackingAllocator,
+  entry : QueueEntry,
+) -> Unit {
+  self.queue.push(entry)
+  let mut i = self.queue.length() - 1
+  while i > 0 {
+    let prev = self.queue[i - 1]
+    let cur = self.queue[i]
+    if cur.weight > prev.weight {
+      self.queue[i - 1] = cur
+      self.queue[i] = prev
+      i = i - 1
+    } else {
+      break
+    }
+  }
 }
 
 ///|
@@ -78,6 +104,7 @@ pub fn BacktrackingAllocator::new(
     int_reg_bundles: {},
     float_reg_bundles: {},
     queue: [],
+    spillset_hints: Array::make(bundles.length(), None),
     int_regs,
     float_regs,
     vector_regs,
@@ -97,7 +124,11 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
     bundle.spill_weight = compute_spill_weight(bundle, self.ranges, loop_depths)
-    self.queue.push({ bundle_id: i, weight: bundle.spill_weight })
+    self.queue.push({
+      bundle_id: i,
+      weight: bundle.spill_weight,
+      hint_preg: None,
+    })
   }
   // Sort by weight descending (highest priority first)
   self.queue.sort_by(fn(a, b) {
@@ -208,6 +239,13 @@ fn BacktrackingAllocator::record_allocation(
   }
   bundle.allocation = Reg(preg)
 
+  // Update spillset hint (Cranelift-style): this helps split pieces prefer
+  // the same preg, reducing move traffic and improving locality.
+  let spillset_id = bundle.spillset_id
+  if spillset_id >= 0 && spillset_id < self.spillset_hints.length() {
+    self.spillset_hints[spillset_id] = Some(preg)
+  }
+
   // Update bundle index for fast conflict lookup
   let bundle_index = self.get_reg_bundles(preg.class)
   if bundle_index.get(preg.index) is None {
@@ -298,6 +336,7 @@ fn BacktrackingAllocator::is_callee_saved(
 fn BacktrackingAllocator::try_allocate(
   self : BacktrackingAllocator,
   bundle : Bundle,
+  hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
   // Check if bundle crosses a call - if so, need special handling
   let crosses_call = bundle.crosses_call(self.ranges)
@@ -317,10 +356,51 @@ fn BacktrackingAllocator::try_allocate(
       return None // Must use fixed reg but it's occupied
     }
   }
-
-  // Try each available register
   let avail_regs = self.get_available_regs(bundle)
-  for preg in avail_regs {
+
+  // Probe hint first if present and available.
+  if hint_preg is Some(hint) {
+    for preg in avail_regs {
+      if preg.class == hint.class && preg.index == hint.index {
+        if self.is_reg_free(preg, bundle) {
+          return Some(preg)
+        }
+        break
+      }
+    }
+  }
+
+  // Try each available register (Cranelift-like offset scan to distribute contention).
+  let n = avail_regs.length()
+  if n == 0 {
+    return None
+  }
+  let mut start_inst = 0
+  let mut start_point : ProgPoint? = None
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    for span in range.ranges {
+      let p = span.start
+      match start_point {
+        None => start_point = Some(p)
+        Some(existing) =>
+          if p.compare_with_order(existing, self.block_order) < 0 {
+            start_point = Some(p)
+          }
+      }
+    }
+  }
+  if start_point is Some(p) {
+    start_inst = p.inst
+  }
+  let offset = (bundle.id + start_inst) % n
+  for i in 0..<n {
+    let preg = avail_regs[(offset + i) % n]
+    if hint_preg is Some(hint) &&
+      preg.class == hint.class &&
+      preg.index == hint.index {
+      continue
+    }
     if self.is_reg_free(preg, bundle) {
       return Some(preg)
     }
@@ -356,9 +436,36 @@ fn BacktrackingAllocator::find_conflicts(
 fn BacktrackingAllocator::try_evict(
   self : BacktrackingAllocator,
   bundle : Bundle,
+  hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
   let avail_regs = self.get_available_regs(bundle)
-  for preg in avail_regs {
+
+  // Prefer hint preg when attempting eviction; it helps keep split pieces sticky.
+  if hint_preg is Some(hint) {
+    for preg in avail_regs {
+      if preg.class == hint.class && preg.index == hint.index {
+        let conflicts = self.find_conflicts(bundle, preg)
+        if !conflicts.is_empty() {
+          // (Continue with normal logic below by starting at this preg.)
+          break
+        }
+      }
+    }
+  }
+  let n = avail_regs.length()
+  if n == 0 {
+    return None
+  }
+  let offset = bundle.id % n
+  for i in 0..<n {
+    let preg = avail_regs[(offset + i) % n]
+    if hint_preg is Some(hint) &&
+      preg.class == hint.class &&
+      preg.index == hint.index {
+      // Keep hint preg as a preferred candidate but don't special-case it here;
+      // the scan order already includes it.
+      ()
+    }
     let conflicts = self.find_conflicts(bundle, preg)
     if conflicts.is_empty() {
       continue // Should have been caught by try_allocate
@@ -390,7 +497,11 @@ fn BacktrackingAllocator::try_evict(
         // Re-add to queue with slightly lower weight
         let new_weight = conflict.spill_weight * 0.9
         conflict.spill_weight = new_weight
-        self.queue.push({ bundle_id: conflict_id, weight: new_weight })
+        self.queue_push({
+          bundle_id: conflict_id,
+          weight: new_weight,
+          hint_preg: None,
+        })
       }
       return Some(preg)
     }
@@ -399,42 +510,37 @@ fn BacktrackingAllocator::try_evict(
 }
 
 ///|
-/// Find the first conflict point for a bundle
-fn BacktrackingAllocator::find_first_conflict_point(
+/// Find the first conflict point for a bundle on a specific physical register.
+fn BacktrackingAllocator::find_first_conflict_point_for_preg(
   self : BacktrackingAllocator,
   bundle : Bundle,
+  preg : @abi.PReg,
 ) -> ProgPoint? {
-  let avail_regs = self.get_available_regs(bundle)
   let mut earliest_conflict : ProgPoint? = None
-  for preg in avail_regs {
-    let allocs = self.get_reg_allocs(preg.class)
-    if allocs.get(preg.index) is Some(occupied) {
-      for range_id in bundle.range_ids {
-        let range = self.ranges.get(range_id)
-        for span in range.ranges {
-          for occ in occupied {
-            if span.overlaps(occ, self.block_order) {
-              // Find the overlap start point
-              let conflict_start = if span.start.compare_with_order(
-                  occ.start,
-                  self.block_order,
-                ) >
-                0 {
-                span.start
-              } else {
-                occ.start
-              }
-              match earliest_conflict {
-                None => earliest_conflict = Some(conflict_start)
-                Some(existing) =>
-                  if conflict_start.compare_with_order(
-                      existing,
-                      self.block_order,
-                    ) <
-                    0 {
-                    earliest_conflict = Some(conflict_start)
-                  }
-              }
+  let allocs = self.get_reg_allocs(preg.class)
+  if allocs.get(preg.index) is Some(occupied) {
+    for range_id in bundle.range_ids {
+      let range = self.ranges.get(range_id)
+      for span in range.ranges {
+        for occ in occupied {
+          if span.overlaps(occ, self.block_order) {
+            // Find the overlap start point
+            let conflict_start = if span.start.compare_with_order(
+                occ.start,
+                self.block_order,
+              ) >
+              0 {
+              span.start
+            } else {
+              occ.start
+            }
+            match earliest_conflict {
+              None => earliest_conflict = Some(conflict_start)
+              Some(existing) =>
+                if conflict_start.compare_with_order(existing, self.block_order) <
+                  0 {
+                  earliest_conflict = Some(conflict_start)
+                }
             }
           }
         }
@@ -445,15 +551,104 @@ fn BacktrackingAllocator::find_first_conflict_point(
 }
 
 ///|
+/// Choose a split point and a reg hint (Cranelift-like):
+/// - Try all available regs (hint-first if provided).
+/// - Prefer lower maximum-conflict weight.
+/// - Tie-break by later first-conflict point (larger conflict-free prefix).
+fn BacktrackingAllocator::choose_split_option(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  hint_preg : @abi.PReg?,
+) -> (ProgPoint, @abi.PReg)? {
+  let avail_regs = self.get_available_regs(bundle)
+  if avail_regs.is_empty() {
+    return None
+  }
+  let mut best : (ProgPoint, @abi.PReg)? = None
+  let mut best_cost : Double? = None
+  fn consider(
+    self : BacktrackingAllocator,
+    bundle : Bundle,
+    preg : @abi.PReg,
+    best : (ProgPoint, @abi.PReg)?,
+    best_cost : Double?,
+  ) -> ((ProgPoint, @abi.PReg)?, Double?) {
+    let conflicts = self.find_conflicts(bundle, preg)
+    if conflicts.is_empty() {
+      return (best, best_cost)
+    }
+    let point = self.find_first_conflict_point_for_preg(bundle, preg)
+    if point is None {
+      return (best, best_cost)
+    }
+    let split_point = point.unwrap()
+    let mut cost = 0.0
+    for conflict_id in conflicts {
+      let b = self.bundles.get(conflict_id)
+      // Treat pinned bundles as extremely expensive to conflict with.
+      if b.is_pinned {
+        cost = 1.0e100
+        break
+      }
+      if b.spill_weight > cost {
+        cost = b.spill_weight
+      }
+    }
+    match (best, best_cost) {
+      (None, None) => (Some((split_point, preg)), Some(cost))
+      (Some((best_point, best_preg)), Some(best_cost_v)) =>
+        if cost < best_cost_v {
+          (Some((split_point, preg)), Some(cost))
+        } else if cost == best_cost_v &&
+          split_point.compare_with_order(best_point, self.block_order) > 0 {
+          (Some((split_point, preg)), Some(cost))
+        } else {
+          (Some((best_point, best_preg)), Some(best_cost_v))
+        }
+      _ => (best, best_cost)
+    }
+  }
+
+  // Hint-first.
+  if hint_preg is Some(hint) {
+    for preg in avail_regs {
+      if preg.class == hint.class && preg.index == hint.index {
+        let (b, c) = consider(self, bundle, preg, best, best_cost)
+        best = b
+        best_cost = c
+        break
+      }
+    }
+  }
+
+  // Offset scan through the remaining regs.
+  let n = avail_regs.length()
+  let offset = bundle.id % n
+  for i in 0..<n {
+    let preg = avail_regs[(offset + i) % n]
+    if hint_preg is Some(hint) &&
+      preg.class == hint.class &&
+      preg.index == hint.index {
+      continue
+    }
+    let (b, c) = consider(self, bundle, preg, best, best_cost)
+    best = b
+    best_cost = c
+  }
+  best
+}
+
+///|
 /// Split a bundle at conflict points
 fn BacktrackingAllocator::split_bundle(
   self : BacktrackingAllocator,
   bundle : Bundle,
+  hint_preg : @abi.PReg?,
 ) -> Unit {
-  // Try to find a conflict point to split at
-  let conflict_point = self.find_first_conflict_point(bundle)
-  match conflict_point {
-    Some(split_point) => {
+  // Try to find a split point (and a reg hint) to split at.
+  let split_opt = self.choose_split_option(bundle, hint_preg)
+  match split_opt {
+    Some((split_point, split_hint_reg)) => {
       // Split the bundle at this point
       // Create two new bundles: before and after the split point
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
@@ -504,13 +699,18 @@ fn BacktrackingAllocator::split_bundle(
       )
       before_bundle.spill_weight = new_weight
       before_bundle.spill_bundle_id = spill_bundle.id
+      before_bundle.spillset_id = bundle.spillset_id
       for range_id in before_ranges {
         before_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = before_bundle.id
       }
       self.bundles.add_bundle(before_bundle)
       spill_bundle.add_bundle(before_bundle.id)
-      self.queue.push({ bundle_id: before_bundle.id, weight: new_weight })
+      self.queue_push({
+        bundle_id: before_bundle.id,
+        weight: new_weight,
+        hint_preg: Some(split_hint_reg),
+      })
 
       // After bundle
       let after_bundle = Bundle::new(
@@ -519,13 +719,18 @@ fn BacktrackingAllocator::split_bundle(
       )
       after_bundle.spill_weight = new_weight
       after_bundle.spill_bundle_id = spill_bundle.id
+      after_bundle.spillset_id = bundle.spillset_id
       for range_id in after_ranges {
         after_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = after_bundle.id
       }
       self.bundles.add_bundle(after_bundle)
       spill_bundle.add_bundle(after_bundle.id)
-      self.queue.push({ bundle_id: after_bundle.id, weight: new_weight })
+      self.queue_push({
+        bundle_id: after_bundle.id,
+        weight: new_weight,
+        hint_preg: Some(split_hint_reg),
+      })
 
       // Mark original bundle as processed (it's been split)
       bundle.allocation = Spill(spill_bundle.slot)
@@ -558,6 +763,17 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     // Pop highest priority bundle
     let entry = self.queue.remove(0)
     let bundle = self.bundles.get(entry.bundle_id)
+    let hint_preg = match entry.hint_preg {
+      Some(p) => Some(p)
+      None => {
+        let spillset_id = bundle.spillset_id
+        if spillset_id >= 0 && spillset_id < self.spillset_hints.length() {
+          self.spillset_hints[spillset_id]
+        } else {
+          None
+        }
+      }
+    }
 
     // Skip if already allocated
     if bundle.allocation is Reg(_) || bundle.allocation is Spill(_) {
@@ -581,7 +797,7 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
 
     // Try to allocate a register
-    if self.try_allocate(bundle) is Some(preg) {
+    if self.try_allocate(bundle, hint_preg) is Some(preg) {
       self.record_allocation(bundle, preg)
       processed.add(entry.bundle_id)
       continue
@@ -594,14 +810,14 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
 
     // Try to evict lower-weight bundles
-    if self.try_evict(bundle) is Some(preg) {
+    if self.try_evict(bundle, hint_preg) is Some(preg) {
       self.record_allocation(bundle, preg)
       processed.add(entry.bundle_id)
       continue
     }
 
     // Split (spill) the bundle
-    self.split_bundle(bundle)
+    self.split_bundle(bundle, hint_preg)
     processed.add(entry.bundle_id)
   }
 }
