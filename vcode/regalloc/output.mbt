@@ -331,6 +331,19 @@ pub fn Output::push_edit(
   pos : ProgPos,
   edit : Edit,
 ) -> Unit {
+  // Cranelift/regalloc2 does not emit no-op moves; drop them early to reduce
+  // code size and make `explore` diagnostics less noisy.
+  fn loc_eq(a : Loc, b : Loc) -> Bool {
+    match (a, b) {
+      (Reg(ra), Reg(rb)) => ra.class == rb.class && ra.index == rb.index
+      (Spill(sa), Spill(sb)) => sa == sb
+      _ => false
+    }
+  }
+
+  match edit {
+    Move(from, to, _cls) => if loc_eq(from, to) { return }
+  }
   self.edits.push(((block_id, inst_idx, pos), edit))
   let key = (block_id, inst_idx, pos)
   let bucket = match self.edits_by_point.get(key) {
