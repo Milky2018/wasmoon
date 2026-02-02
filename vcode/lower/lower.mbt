@@ -576,11 +576,23 @@ fn lower_inst(
     @ir.Opcode::Band => lower_band(ctx, inst, block)
     @ir.Opcode::Bor => lower_bor(ctx, inst, block)
     @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
-    @ir.Opcode::Ishl => lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) })
-    @ir.Opcode::Sshr => lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) })
-    @ir.Opcode::Ushr => lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) })
+    @ir.Opcode::Ishl =>
+      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
+        ShlImm(amt, is_64)
+      })
+    @ir.Opcode::Sshr =>
+      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
+        AShrImm(amt, is_64)
+      })
+    @ir.Opcode::Ushr =>
+      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
+        LShrImm(amt, is_64)
+      })
     @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
-    @ir.Opcode::Rotr => lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) })
+    @ir.Opcode::Rotr =>
+      lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(amt, is_64) {
+        RotrImm(amt, is_64)
+      })
     @ir.Opcode::Bnot =>
       lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
 

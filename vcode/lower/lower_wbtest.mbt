@@ -608,8 +608,7 @@ test "lower add(x, shl(y, n)) to add_shifted" {
     content=(
       #|vcode add_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 3
-      #|    v3 = shl v1, v2
+      #|    v3 = shl #3 v1
       #|    v4 = add.lsl #3 v0, v1
       #|    ret v4
       #|}
@@ -639,8 +638,7 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
     content=(
       #|vcode sub_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 2
-      #|    v3 = shl v1, v2
+      #|    v3 = shl #2 v1
       #|    v4 = sub.lsl #2 v0, v1
       #|    ret v4
       #|}
@@ -670,8 +668,7 @@ test "lower and(x, shl(y, n)) to and_shifted" {
     content=(
       #|vcode and_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 4
-      #|    v3 = shl v1, v2
+      #|    v3 = shl #4 v1
       #|    v4 = and.lsl #4 v0, v1
       #|    ret v4
       #|}
@@ -701,8 +698,7 @@ test "lower or(x, shl(y, n)) to or_shifted" {
     content=(
       #|vcode or_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 5
-      #|    v3 = shl v1, v2
+      #|    v3 = shl #5 v1
       #|    v4 = or.lsl #5 v0, v1
       #|    ret v4
       #|}
@@ -732,8 +728,7 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
     content=(
       #|vcode xor_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 1
-      #|    v3 = shl v1, v2
+      #|    v3 = shl #1 v1
       #|    v4 = xor.lsl #1 v0, v1
       #|    ret v4
       #|}
@@ -793,8 +788,7 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     content=(
       #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 3
-      #|    v3 = shl v0, v2
+      #|    v3 = shl #3 v0
       #|    v4 = add.lsl #3 v1, v0
       #|    ret v4
       #|}

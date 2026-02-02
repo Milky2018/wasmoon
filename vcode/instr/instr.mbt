@@ -190,9 +190,13 @@ pub(all) enum VCodeOpcode {
   Xor(Bool)
   XorImm(Int64, Bool) // EOR (immediate logical), value is the immediate pattern
   Shl(Bool) // LSL with size
+  ShlImm(Int, Bool) // LSL with immediate shift amount (masked per Wasm semantics)
   AShr(Bool) // Arithmetic shift right with size
+  AShrImm(Int, Bool) // ASR with immediate shift amount (masked per Wasm semantics)
   LShr(Bool) // Logical shift right with size
+  LShrImm(Int, Bool) // LSR with immediate shift amount (masked per Wasm semantics)
   Rotr(Bool) // Rotate right with size
+  RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
   Not(Bool) // Bitwise NOT with size: true = 64-bit, false = 32-bit
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
@@ -864,9 +868,13 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Xor(is_64) => if is_64 { "xor" } else { "xor32" }
     XorImm(imm, is_64) => if is_64 { "xor #\{imm}" } else { "xor32 #\{imm}" }
     Shl(is_64) => if is_64 { "shl" } else { "shl32" }
+    ShlImm(imm, is_64) => if is_64 { "shl #\{imm}" } else { "shl32 #\{imm}" }
     AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
+    AShrImm(imm, is_64) => if is_64 { "ashr #\{imm}" } else { "ashr32 #\{imm}" }
     LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }
+    LShrImm(imm, is_64) => if is_64 { "lshr #\{imm}" } else { "lshr32 #\{imm}" }
     Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
+    RotrImm(imm, is_64) => if is_64 { "rotr #\{imm}" } else { "rotr32 #\{imm}" }
     Not(is_64) => if is_64 { "not" } else { "not32" }
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }

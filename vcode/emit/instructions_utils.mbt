@@ -80,8 +80,20 @@ enum Instruction {
   RorReg32(Int, Int, Int)
   // Shift - Immediate (64-bit): LSR Xd, Xn, #shift
   LsrImm(Int, Int, Int)
+  // Shift - Immediate (64-bit): LSL Xd, Xn, #shift
+  LslImm(Int, Int, Int)
+  // Shift - Immediate (64-bit): ASR Xd, Xn, #shift
+  AsrImm(Int, Int, Int)
+  // Rotate - Immediate (64-bit): ROR Xd, Xn, #shift (alias of EXTR with rm=rn)
+  RorImm(Int, Int, Int)
   // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
   LsrImm32(Int, Int, Int)
+  // Shift - Immediate (32-bit): LSL Wd, Wn, #shift
+  LslImm32(Int, Int, Int)
+  // Shift - Immediate (32-bit): ASR Wd, Wn, #shift
+  AsrImm32(Int, Int, Int)
+  // Rotate - Immediate (32-bit): ROR Wd, Wn, #shift (alias of EXTR with rm=rn)
+  RorImm32(Int, Int, Int)
   // Unsigned Bitfield Extract: UBFX Xd, Xn, #0, #width
   // Extracts bits [0, width-1] from Xn to Xd (zero-extended)
   UbfxWidth(Int, Int, Int)
@@ -619,7 +631,13 @@ fn Instruction::annotate(self : Instruction) -> String {
     AsrReg32(rd, rn, rm) => "asr w\{rd}, w\{rn}, w\{rm}"
     RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
     LsrImm(rd, rn, shift) => "lsr x\{rd}, x\{rn}, #\{shift}"
+    LslImm(rd, rn, shift) => "lsl x\{rd}, x\{rn}, #\{shift}"
+    AsrImm(rd, rn, shift) => "asr x\{rd}, x\{rn}, #\{shift}"
+    RorImm(rd, rn, shift) => "ror x\{rd}, x\{rn}, #\{shift}"
     LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
+    LslImm32(rd, rn, shift) => "lsl w\{rd}, w\{rn}, #\{shift}"
+    AsrImm32(rd, rn, shift) => "asr w\{rd}, w\{rn}, #\{shift}"
+    RorImm32(rd, rn, shift) => "ror w\{rd}, w\{rn}, #\{shift}"
     UbfxWidth(rd, rn, width) => "ubfx x\{rd}, x\{rn}, #0, #\{width}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"

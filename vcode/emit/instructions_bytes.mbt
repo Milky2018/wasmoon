@@ -469,6 +469,49 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0xD3 // sf=1, opc=10, 100110
       (b0, b1, b2, b3)
     }
+    LslImm(rd, rn, shift) => {
+      // LSL Xd, Xn, #shift (alias of UBFM):
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Lsl).
+      let amt = shift & 63
+      let bits = 64
+      let immr = ((bits - amt) % bits) & 63
+      let imms = (bits - 1 - amt) & 63
+      let top10 = 0b0101001100 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AsrImm(rd, rn, shift) => {
+      // ASR Xd, Xn, #shift (alias of SBFM).
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Asr).
+      let amt = shift & 63
+      let immr = amt & 63
+      let imms = (0b011111 | (1 << 5)) & 63 // 63 for 64-bit
+      let top10 = 0b0001001100 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    RorImm(rd, rn, shift) => {
+      // ROR Xd, Xn, #shift (alias of EXTR Xd, Xn, Xn, #shift).
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Extr and rm=rn).
+      let amt = shift & 63
+      let immr = rn & 31 // rm == rn
+      let imms = amt & 63
+      let top10 = 0b0001001110 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 31) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     LsrImm32(rd, rn, shift) => {
       // LSR Wd, Wn, #shift = UBFM Wd, Wn, #shift, #31
       let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -476,6 +519,46 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = shift & 31 // N=0, immr=shift
       let b3 = 0x53 // sf=0, opc=10, 100110
       (b0, b1, b2, b3)
+    }
+    LslImm32(rd, rn, shift) => {
+      // LSL Wd, Wn, #shift (alias of UBFM).
+      let amt = shift & 31
+      let bits = 32
+      let immr = ((bits - amt) % bits) & 31
+      let imms = (bits - 1 - amt) & 31
+      let top10 = 0b0101001100 // sf=0 => no extra bits
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AsrImm32(rd, rn, shift) => {
+      // ASR Wd, Wn, #shift (alias of SBFM).
+      let amt = shift & 31
+      let immr = amt & 63
+      let imms = 0b011111 // 31 for 32-bit
+      let top10 = 0b0001001100
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    RorImm32(rd, rn, shift) => {
+      // ROR Wd, Wn, #shift (alias of EXTR Wd, Wn, Wn, #shift).
+      let amt = shift & 31
+      let immr = rn & 31
+      let imms = amt & 63
+      let top10 = 0b0001001110
+      let inst = (top10 << 22) |
+        ((immr & 31) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     UbfxWidth(rd, rn, width) => {
       // UBFX Xd, Xn, #0, #width = UBFM Xd, Xn, #0, #(width-1)

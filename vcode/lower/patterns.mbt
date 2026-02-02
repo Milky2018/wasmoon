@@ -693,11 +693,26 @@ fn lower_inst_default(
     @ir.Opcode::Bor => lower_bor(ctx, inst, block)
     @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
     @ir.Opcode::Ishl =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) })
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) }, fn(
+        amt,
+        is_64,
+      ) {
+        @instr.ShlImm(amt, is_64)
+      })
     @ir.Opcode::Sshr =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) })
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) }, fn(
+        amt,
+        is_64,
+      ) {
+        @instr.AShrImm(amt, is_64)
+      })
     @ir.Opcode::Ushr =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) })
+      lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) }, fn(
+        amt,
+        is_64,
+      ) {
+        @instr.LShrImm(amt, is_64)
+      })
 
     // Integer comparisons
     @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)

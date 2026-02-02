@@ -219,6 +219,15 @@ fn MachineCode::emit_instruction(
         self.emit_lsl_reg32(rd, rn, rm)
       }
     }
+    ShlImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_lsl_imm(rd, rn, shift)
+      } else {
+        self.emit_lsl_imm32(rd, rn, shift)
+      }
+    }
     AShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -227,6 +236,15 @@ fn MachineCode::emit_instruction(
         self.emit_asr_reg(rd, rn, rm)
       } else {
         self.emit_asr_reg32(rd, rn, rm)
+      }
+    }
+    AShrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_asr_imm(rd, rn, shift)
+      } else {
+        self.emit_asr_imm32(rd, rn, shift)
       }
     }
     LShr(is_64) => {
@@ -239,6 +257,15 @@ fn MachineCode::emit_instruction(
         self.emit_lsr_reg32(rd, rn, rm)
       }
     }
+    LShrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_lsr_imm(rd, rn, shift)
+      } else {
+        self.emit_lsr_imm32(rd, rn, shift)
+      }
+    }
     Rotr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -247,6 +274,15 @@ fn MachineCode::emit_instruction(
         self.emit_ror_reg(rd, rn, rm)
       } else {
         self.emit_ror_reg32(rd, rn, rm)
+      }
+    }
+    RotrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_ror_imm(rd, rn, shift)
+      } else {
+        self.emit_ror_imm32(rd, rn, shift)
       }
     }
     Not(is_64) => {

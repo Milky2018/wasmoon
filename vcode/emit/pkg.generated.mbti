@@ -129,6 +129,8 @@ pub fn MachineCode::emit_and_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_asr_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_asr_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_asr_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_asr_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_b(Self, Int) -> Unit
@@ -228,6 +230,8 @@ pub fn MachineCode::emit_ldrsh_x_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ldrsw_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_load_imm64(Self, Int, Int64) -> Unit
 pub fn MachineCode::emit_load_imm64_fixed(Self, Int, Int64) -> Unit
+pub fn MachineCode::emit_lsl_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_lsl_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsl_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsl_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsr_imm(Self, Int, Int, Int) -> Unit
@@ -254,6 +258,8 @@ pub fn MachineCode::emit_orr_shifted(Self, Int, Int, Int, @instr.ShiftType, Int)
 pub fn MachineCode::emit_rbit(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_rbit32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_ret(Self, Int) -> Unit
+pub fn MachineCode::emit_ror_imm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_ror_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ror_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_ror_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_scvtf(Self, Int, Int, int64~ : Bool, double~ : Bool) -> Unit

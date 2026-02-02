@@ -685,6 +685,66 @@ pub fn MachineCode::emit_lsr_imm32(
 }
 
 ///|
+pub fn MachineCode::emit_lsl_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LslImm(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_lsl_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  LslImm32(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_asr_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  AsrImm(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_asr_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  AsrImm32(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ror_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  RorImm(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_ror_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  shift : Int,
+) -> Unit {
+  RorImm32(rd, rn, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_clz32(self : MachineCode, rd : Int, rn : Int) -> Unit {
   Clz32(rd, rn).emit(self)
 }
