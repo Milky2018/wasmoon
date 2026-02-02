@@ -27,12 +27,30 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 ///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
-  match level {
+  let result = match level {
     O0 => OptResult::new() // No optimization
     O1 => optimize_o1(func)
     O2 => optimize(func)
     O3 => optimize_o3(func)
   }
+
+  // Cranelift-style rematerialization is a post-optimization, IR-level pass.
+  // Run it once, after reaching a fixed point, to avoid repeated cloning.
+  match level {
+    O0 => ()
+    _ => {
+      let remat_result = rematerialize_across_blocks(func)
+      if remat_result.changed {
+        result.mark_changed()
+      }
+      // Cleanup: remat may leave now-unused original defs behind.
+      let dce_result = eliminate_dead_code(func)
+      if dce_result.changed {
+        result.mark_changed()
+      }
+    }
+  }
+  result
 }
 
 ///|

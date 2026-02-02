@@ -1280,7 +1280,7 @@ test "reload coalescing: call with spilled arg used twice" {
       #|  x2 = ldi 0
       #|  x1 = ldi 1
       #|  x16 = ldi 2
-      #|  stack_store [sp+24] x16
+      #|  stack_store [sp+0] x16
       #|  x23 = ldi 3
       #|  x24 = ldi 4
       #|  x25 = ldi 5
@@ -1288,27 +1288,27 @@ test "reload coalescing: call with spilled arg used twice" {
       #|  x27 = ldi 7
       #|  x28 = ldi 8
       #|  x17 = ldi 9
-      #|  stack_store [sp+0] x17
+      #|  stack_store [sp+8] x17
       #|  x16 = ldi 10
-      #|  stack_store [sp+8] x16
+      #|  stack_store [sp+16] x16
       #|  x17 = ldi 11
-      #|  stack_store [sp+16] x17
+      #|  stack_store [sp+24] x17
       #|  x20 = ldi 12
       #|  x26 = ldi 13
       #|  x22 = ldi 14
       #|  call_ptr[Wasm](4) -> 0 results x0
-      #|  x16 = stack_load [sp+24]
+      #|  x16 = stack_load [sp+0]
       #|  x0 = add x16, x23
       #|  x0 = add x0, x24
       #|  x0 = add x0, x25
       #|  x0 = add x0, x19
       #|  x0 = add x0, x27
       #|  x0 = add x0, x28
-      #|  x16 = stack_load [sp+0]
-      #|  x0 = add x0, x16
       #|  x16 = stack_load [sp+8]
       #|  x0 = add x0, x16
       #|  x16 = stack_load [sp+16]
+      #|  x0 = add x0, x16
+      #|  x16 = stack_load [sp+24]
       #|  x0 = add x0, x16
       #|  x0 = add x0, x20
       #|  x0 = add x0, x26

@@ -770,7 +770,225 @@ pub fn BacktrackingAllocator::generate_result(
       }
     }
   }
-  result
+
+  // Reuse spill slots across non-overlapping spilled bundles (regalloc2-style).
+  //
+  // Important: this is a post-allocation compaction step. The allocator
+  // initially assigns a distinct spill slot per spill bundle (to keep the
+  // allocator logic simple). Here we perform a conservative "slot coloring"
+  // based on live-range overlap so that multiple spill bundles can share a
+  // physical stack slot when their lifetimes do not overlap.
+  //
+  // This mirrors regalloc2's concept of assigning spillsets to spillslots
+  // (see regalloc2 doc/ION.md), but adapted to Wasmoon’s existing BundleSet.
+  let compacted_spillslots = self.compact_spill_slots(result)
+  {
+    assignments: result.assignments,
+    spill_slots: result.spill_slots,
+    num_spill_slots: compacted_spillslots,
+    inst_edits: result.inst_edits,
+  }
+}
+
+///|
+/// Compact spill slots by reusing them across non-overlapping spill bundles.
+fn BacktrackingAllocator::compact_spill_slots(
+  self : BacktrackingAllocator,
+  result : RegAllocResult,
+) -> Int {
+  // Per spill-slot (spill-bundle slot) we record the union of live ranges
+  // (as ProgPointRange spans) for all vregs assigned to that spill slot.
+  struct SpillSetInfo {
+    old_slot : Int
+    reg_class : @abi.RegClass
+    spans : Array[ProgPointRange]
+    start : ProgPoint
+  }
+  struct AssignedSlot {
+    start : Int
+    spans : Array[ProgPointRange]
+  }
+  fn slots_used(cls : @abi.RegClass) -> Int {
+    match cls {
+      @abi.Vector => 2
+      _ => 1
+    }
+  }
+
+  fn spans_overlap(
+    a : Array[ProgPointRange],
+    b : Array[ProgPointRange],
+    block_order : FixedArray[Int],
+  ) -> Bool {
+    for ra in a {
+      for rb in b {
+        if ra.overlaps(rb, block_order) {
+          return true
+        }
+      }
+    }
+    false
+  }
+
+  fn compute_start(
+    spans : Array[ProgPointRange],
+    block_order : FixedArray[Int],
+  ) -> ProgPoint {
+    let mut s = spans[0].start
+    for i in 1..<spans.length() {
+      let p = spans[i].start
+      if p.compare_with_order(s, block_order) < 0 {
+        s = p
+      }
+    }
+    s
+  }
+
+  // 1) Build spillsets keyed by the old spill-slot id.
+  let spillsets_by_slot : Map[Int, SpillSetInfo] = {}
+  for vreg_id, old_slot in result.spill_slots {
+    let range = match self.ranges.get_by_vreg(vreg_id) {
+      Some(r) => r
+      None => abort("missing LiveRange for spilled vreg \{vreg_id}")
+    }
+    let info = match spillsets_by_slot.get(old_slot) {
+      Some(existing) => existing
+      None => {
+        // Initialize with a dummy start; we fill it after collecting spans.
+        let dummy = range.ranges[0].start
+        let created : SpillSetInfo = {
+          old_slot,
+          reg_class: range.vreg.class,
+          spans: [],
+          start: dummy,
+        }
+        spillsets_by_slot.set(old_slot, created)
+        created
+      }
+    }
+    // Sanity: a spill slot should not mix register classes.
+    if info.reg_class != range.vreg.class {
+      abort(
+        "spill slot \{old_slot} mixes classes: \{info.reg_class} vs \{range.vreg.class}",
+      )
+    }
+    for span in range.ranges {
+      info.spans.push(span)
+    }
+  }
+  if spillsets_by_slot.is_empty() {
+    return 0
+  }
+
+  // 2) Materialize spillsets and sort by start (linear-scan-friendly).
+  let spillsets : Array[SpillSetInfo] = []
+  for _, info in spillsets_by_slot {
+    // Skip empty (should not happen).
+    if info.spans.is_empty() {
+      continue
+    }
+    let start = compute_start(info.spans, self.ranges.block_order)
+    spillsets.push({
+      old_slot: info.old_slot,
+      reg_class: info.reg_class,
+      spans: info.spans,
+      start,
+    })
+  }
+  spillsets.sort_by(fn(a, b) {
+    a.start.compare_with_order(b.start, self.ranges.block_order)
+  })
+
+  // 3) Assign spillsets to a compact set of physical spill slots.
+  let scalar_slots : Array[AssignedSlot] = []
+  let vector_slots : Array[AssignedSlot] = []
+  let slot_remap : Map[Int, Int] = {}
+  let mut next_slot = 0
+  for ss in spillsets {
+    let used = slots_used(ss.reg_class)
+    let pool = if used == 2 { vector_slots } else { scalar_slots }
+    let mut placed = false
+    for slot in pool {
+      if !spans_overlap(ss.spans, slot.spans, self.ranges.block_order) {
+        slot_remap.set(ss.old_slot, slot.start)
+        // Extend occupancy for future overlap checks.
+        for span in ss.spans {
+          slot.spans.push(span)
+        }
+        placed = true
+        break
+      }
+    }
+    if placed {
+      continue
+    }
+
+    // Allocate a fresh slot (respect vector alignment).
+    if used == 2 && next_slot % 2 != 0 {
+      next_slot += 1
+    }
+    let new_slot = next_slot
+    next_slot += used
+    let new_spans : Array[ProgPointRange] = []
+    for span in ss.spans {
+      new_spans.push(span)
+    }
+    pool.push({ start: new_slot, spans: new_spans })
+    slot_remap.set(ss.old_slot, new_slot)
+  }
+
+  // 4) Rewrite all spill-slot references (spill map + constraint edits).
+  for vreg_id, old_slot in result.spill_slots {
+    match slot_remap.get(old_slot) {
+      Some(new_slot) => result.spill_slots.set(vreg_id, new_slot)
+      None => ()
+    }
+  }
+  for _key, edits in result.inst_edits {
+    for i in 0..<edits.before.length() {
+      let mv = edits.before[i]
+      let from = match mv.from {
+        Spill(s) =>
+          match slot_remap.get(s) {
+            Some(ns) => Loc::Spill(ns)
+            None => mv.from
+          }
+        _ => mv.from
+      }
+      let to = match mv.to {
+        Spill(s) =>
+          match slot_remap.get(s) {
+            Some(ns) => Loc::Spill(ns)
+            None => mv.to
+          }
+        _ => mv.to
+      }
+      edits.before[i] = { from, to, class: mv.class }
+    }
+    for i in 0..<edits.after.length() {
+      let mv = edits.after[i]
+      let from = match mv.from {
+        Spill(s) =>
+          match slot_remap.get(s) {
+            Some(ns) => Loc::Spill(ns)
+            None => mv.from
+          }
+        _ => mv.from
+      }
+      let to = match mv.to {
+        Spill(s) =>
+          match slot_remap.get(s) {
+            Some(ns) => Loc::Spill(ns)
+            None => mv.to
+          }
+        _ => mv.to
+      }
+      edits.after[i] = { from, to, class: mv.class }
+    }
+  }
+
+  // 5) Return total spill-slot count.
+  next_slot
 }
 
 ///|

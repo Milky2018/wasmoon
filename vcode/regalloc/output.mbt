@@ -111,8 +111,54 @@ pub fn Output::new() -> Output {
 /// A compact human-readable summary for debugging (used by the CLI explore command).
 pub fn Output::summary(self : Output) -> String {
   let mut s = "Regalloc output (Cranelift-style):\n"
-  s = s + "  spillslots: \{self.num_spillslots}\n"
-  s = s + "  edits: \{self.edits.length()}\n"
+
+  // Edits breakdown: this approximates stack traffic induced by spills/reloads.
+  let mut reloads = 0
+  let mut spills = 0
+  let mut reg_moves = 0
+  let mut spill_to_spill = 0
+  for _, entry in self.edits {
+    let (_point, edit) = entry
+    match edit {
+      Move(from, to, _) =>
+        match (from, to) {
+          (Spill(_), Reg(_)) => reloads += 1
+          (Reg(_), Spill(_)) => spills += 1
+          (Reg(_), Reg(_)) => reg_moves += 1
+          (Spill(_), Spill(_)) => spill_to_spill += 1
+        }
+    }
+  }
+
+  // Count distinct spill slots referenced (may be less than reserved slots due to reuse).
+  let used_slots : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  fn record_slot(used : @hashset.HashSet[Int], loc : Loc) -> Unit {
+    match loc {
+      Spill(slot) => used.add(slot) |> ignore
+      _ => ()
+    }
+  }
+
+  for loc in self.param_locs {
+    record_slot(used_slots, loc)
+  }
+  for loc in self.allocs {
+    record_slot(used_slots, loc)
+  }
+  for _, entry in self.edits {
+    let (_point, edit) = entry
+    match edit {
+      Move(from, to, _) => {
+        record_slot(used_slots, from)
+        record_slot(used_slots, to)
+      }
+    }
+  }
+  s = s +
+    "  spillslots: \{self.num_spillslots} (\{self.num_spillslots * 8} bytes)\n"
+  s = s + "  spillslots_used: \{used_slots.length()}\n"
+  s = s +
+    "  edits: \{self.edits.length()} (reloads=\{reloads}, spills=\{spills}, reg_moves=\{reg_moves}, spill_to_spill=\{spill_to_spill})\n"
   s = s + "  operand_ranges: \{self.operand_ranges.length()}\n"
   s = s + "  params: "
   for i in 0..<self.param_locs.length() {

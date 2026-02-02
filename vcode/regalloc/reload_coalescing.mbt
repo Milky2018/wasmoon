@@ -25,12 +25,23 @@ fn compute_reload_intervals(
   let intervals : Map[(Int, Int), ReloadInterval] = {}
   for block_idx, block in func.blocks {
     // Track uses of spilled vregs in this block.
-    // Key: spill_slot, Value: (first_inst, last_inst, vreg_class)
-    let slot_uses : Map[Int, (Int, Int, @abi.RegClass)] = {}
+    // Key: spill_slot, Value: (first_inst, last_inst, vreg_class, vreg_id)
+    //
+    // Important: spill slots may be reused across different spilled values
+    // (post-regalloc compaction). Reload coalescing is only safe when a spill
+    // slot refers to a single vreg within a block; otherwise we might keep a
+    // stale value in a register across a point where the slot's content
+    // changes. Therefore, we disable coalescing for any spill slot that is
+    // used by multiple vregs within the block.
+    let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = {}
+    let conflicting_slots : @hashset.HashSet[Int] = @hashset.HashSet::new()
     for inst_idx, inst in block.insts {
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
           if alloc.spill_slots.get(vreg.id) is Some(slot) {
+            if conflicting_slots.contains(slot) {
+              continue
+            }
             // Do not reload-coalesce vector values: there is no safe
             // non-allocatable vector scratch register bank, and AAPCS64 only
             // guarantees preserving the low 64 bits of V8-V15.
@@ -38,9 +49,16 @@ fn compute_reload_intervals(
               continue
             }
             match slot_uses.get(slot) {
-              Some((first, _, cls)) =>
-                slot_uses.set(slot, (first, inst_idx, cls))
-              None => slot_uses.set(slot, (inst_idx, inst_idx, vreg.class))
+              Some((first, _, cls, owner_id)) =>
+                if owner_id == vreg.id {
+                  slot_uses.set(slot, (first, inst_idx, cls, owner_id))
+                } else {
+                  // Slot reused within block by different values: disable.
+                  slot_uses.remove(slot) |> ignore
+                  conflicting_slots.add(slot) |> ignore
+                }
+              None =>
+                slot_uses.set(slot, (inst_idx, inst_idx, vreg.class, vreg.id))
             }
           }
         }
@@ -48,7 +66,7 @@ fn compute_reload_intervals(
     }
     // Create reload intervals for slots used multiple times.
     for slot, info in slot_uses {
-      let (first_inst, last_inst, vreg_class) = info
+      let (first_inst, last_inst, vreg_class, _vreg_id) = info
       if last_inst > first_inst {
         // Multiple uses - worth coalescing.
         intervals.set((block_idx, slot), { vreg_class, preg: None })
