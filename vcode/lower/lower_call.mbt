@@ -765,7 +765,8 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
   // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
-    CallPtr(_, _, @instr.C) => @abi.call_clobbered_fprs()
+    CallPtr(_, _, @instr.C) | CallDirect(_, _, _, @instr.C) =>
+      @abi.call_clobbered_fprs()
     _ => @abi.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {

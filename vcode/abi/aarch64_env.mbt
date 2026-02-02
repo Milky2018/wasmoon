@@ -71,23 +71,7 @@ pub fn build_aarch64_machine_env(
     callee_saved_int.push(r)
   }
 
-  // Callee-saved allocatable GPRs: X19-X28 (depends on pinned-reg setting)
-  for
-    r in allocatable_callee_saved_regs(
-      enable_pinned_reg=settings.enable_pinned_reg,
-    ) {
-    if reserve_x23 && r.index == 23 {
-      continue
-    }
-    if reserve_mem0_desc && r.index == REG_MEM0_DESC {
-      continue
-    }
-    if reserve_func_table && r.index == REG_FUNC_TABLE {
-      continue
-    }
-    nonpreferred_int.push(r)
-    callee_saved_int.push(r)
-  }
+  // Note: callee_saved_int matches nonpreferred_int for the AAPCS64 callee-saved subset.
 
   // Float regs:
   // Prefer argument regs V0-V7, then caller-saved V18-V31.
