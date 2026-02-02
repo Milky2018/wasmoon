@@ -10,8 +10,9 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     Store(_, _) | StackStore(_) | StorePtr(_, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
+    TypeCheckSubtypeIndirect(_) => true
     // Function calls have side effects
-    ReturnCallIndirect(_, _) | CallPtr(_, _, _) => true
+    ReturnCallIndirect(_, _) | CallPtr(_, _, _) | CallDirect(_, _, _, _) => true
     // Traps must not be eliminated
     TrapIfZero(_, _) | TrapIfUge(_) | TrapIfUgt(_) | TrapIf(_, _) => true
     // Everything else is pure computation

@@ -132,6 +132,9 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
     ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
+    TypeCheckSubtypeIndirect(_) =>
+      // Only clobbers are attached (no results); keep output compact.
+      []
     _ => self.defs
   }
   if defs_to_print.length() > 0 {
@@ -326,6 +329,18 @@ pub(all) enum VCodeOpcode {
   // Uses: [actual_type_vreg], Parameters: expected_type (immediate)
   // Emits: CMP actual, expected; B.EQ +8; BRK #2 (type mismatch trap)
   TypeCheckIndirect(Int)
+  // TypeCheckSubtypeIndirect: fast-path for call_indirect type checks.
+  //
+  // Uses: [actual_type_vreg]
+  // Parameters: expected_type (immediate)
+  //
+  // Semantics:
+  // - If actual_type == expected_type: do nothing.
+  // - Otherwise: call the GC subtype checker (C libcall) which traps on failure.
+  //
+  // This removes the unconditional C call on the hot exact-match path while
+  // preserving full GC subtyping semantics via the existing runtime helper.
+  TypeCheckSubtypeIndirect(Int)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -946,6 +961,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     ReturnCallIndirect(num_args, num_results) =>
       "return_call_indirect(\{num_args}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
+    TypeCheckSubtypeIndirect(expected_type) =>
+      "type_check_subtype_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
@@ -1510,6 +1527,8 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
     CallPtr(_, _, _) | CallDirect(_, _, _, _) => Regular
+    // TypeCheckSubtypeIndirect can call a C helper on the slow path; treat it as a call.
+    TypeCheckSubtypeIndirect(_) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Everything else is not a call

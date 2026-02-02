@@ -939,7 +939,10 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
       // Any other store invalidates the map (conservative)
       Store(_, _) | StorePtr(_, _) => store_map.clear()
       // Calls may have side effects
-      CallPtr(_, _, _) | ReturnCallIndirect(_, _) => store_map.clear()
+      CallPtr(_, _, _)
+      | CallDirect(_, _, _, _)
+      | ReturnCallIndirect(_, _)
+      | TypeCheckSubtypeIndirect(_) => store_map.clear()
       _ => ()
     }
   }

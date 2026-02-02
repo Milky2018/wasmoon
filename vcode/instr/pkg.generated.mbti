@@ -305,6 +305,7 @@ pub(all) enum VCodeOpcode {
   Smull
   ReturnCallIndirect(Int, Int)
   TypeCheckIndirect(Int)
+  TypeCheckSubtypeIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass)

@@ -447,6 +447,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       if inst.opcode.call_type() is @instr.Regular {
         let conv = match inst.opcode {
           @instr.CallPtr(_, _, call_conv) => call_conv
+          @instr.CallDirect(_, _, _, call_conv) => call_conv
+          // This pseudo-op may call a C helper on a slow path.
+          @instr.TypeCheckSubtypeIndirect(_) => @instr.C
           _ => @instr.Wasm
         }
         result.call_points.push(

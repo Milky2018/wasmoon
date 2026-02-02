@@ -960,8 +960,36 @@ fn MachineCode::emit_instruction(
       }
       // B.EQ +8: skip BRK (4 bytes) if types match
       self.emit_b_cond_offset(0, 8) // cond=0 is EQ
-      // BRK #4: trap with code 4 for indirect call type mismatch
-      self.emit_brk(4)
+      // BRK #2: trap (indirect call type mismatch)
+      self.emit_brk(2)
+    }
+    TypeCheckSubtypeIndirect(expected_type) => {
+      // Fast path for call_indirect type checks:
+      // - If actual_type == expected_type: do nothing.
+      // - Otherwise: call the runtime subtype checker (traps on failure).
+      //
+      // Uses: [actual_type_vreg]
+      let actual_type_reg = reg_num(inst.uses[0])
+      // Compare as i32 (type indices are 32-bit).
+      if expected_type >= 0 && expected_type <= 4095 {
+        self.emit_cmp_imm32(actual_type_reg, expected_type)
+      } else {
+        self.emit_load_imm64(17, expected_type.to_int64())
+        self.emit_cmp_reg32(actual_type_reg, 17)
+      }
+
+      // Branch to done if equal.
+      let done_label = -self.current_pos() - 1
+      self.emit_b_cond(@instr.Cond::Eq.to_bits(), done_label)
+
+      // Slow path: call gc_type_check_subtype_impl(actual, expected).
+      // Args: x0 = actual_type, x1 = expected_type
+      self.emit_mov_reg(0, actual_type_reg)
+      self.emit_load_imm64(1, expected_type.to_int64())
+      let func_ptr = @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+      self.emit_load_imm64(17, func_ptr)
+      self.emit_blr(17)
+      self.define_label(done_label)
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register
