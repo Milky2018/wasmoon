@@ -1138,7 +1138,19 @@ fn Translator::translate_block(
   // Save the unreachable state from outer context
   let outer_is_unreachable = self.is_unreachable
   let result_types = get_block_result_types(block_type, self.func_types)
+  let param_types = get_block_param_types(block_type, self.func_types)
   let continuation = self.builder.create_block()
+
+  // Typed blocks: pop params from the outer stack, then make them available in the body.
+  // This mirrors validation semantics (params are not part of the outer stack height).
+  let param_values : Array[Value] = []
+  if !outer_is_unreachable {
+    for _ in 0..<param_types.length() {
+      param_values.push(self.pop())
+    }
+    param_values.rev_in_place()
+  }
+  let stack_height_after_params = self.value_stack.length()
 
   // Add block parameters for explicit results
   for ty in result_types {
@@ -1155,13 +1167,18 @@ fn Translator::translate_block(
   let frame : BlockFrame = {
     block: continuation,
     result_types,
-    stack_height: self.value_stack.length(),
+    stack_height: stack_height_after_params,
   }
   self.block_stack.push(frame)
 
   // Reset unreachable for block body (block entry is reachable if outer is)
   // If outer is unreachable, the whole block is dead code
   self.is_unreachable = outer_is_unreachable
+
+  // Push block params onto the value stack (they become available inside the body).
+  for v in param_values {
+    self.push(v)
+  }
 
   // Translate body
   for instr in body {

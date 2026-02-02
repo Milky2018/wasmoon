@@ -258,12 +258,30 @@ fn rule_const_fold() -> RewriteRule {
         // Unary operations
         if node.children.length() == 1 {
           if eg.find_const(node.children[0]) is Some(x) {
+            let bits = eg.get_bits(node.children[0]).unwrap_or(64)
+            let mask = ty_umax(bits)
+            let masked = x & mask
             let result : Int64? = match node.op {
               Neg => Some(-x)
               Bnot => Some(x.lnot())
-              Clz => Some(x.clz().to_int64())
-              Ctz => Some(x.ctz().to_int64())
-              Popcnt => Some(x.popcnt().to_int64())
+              // Bitcount ops must respect the operand bit width.
+              // For i32, we mask to 32 bits and adjust clz/ctz semantics accordingly.
+              Clz =>
+                if bits == 32 {
+                  // clz64(masked) is in [32..64], subtract the top 32 zeros.
+                  Some((masked.clz() - 32).to_int64())
+                } else {
+                  Some(masked.clz().to_int64())
+                }
+              Ctz =>
+                if bits == 32 {
+                  // ctz64(masked) returns 64 for 0; clamp to 32 for i32.ctz(0).
+                  let c = masked.ctz()
+                  Some((if c > 32 { 32 } else { c }).to_int64())
+                } else {
+                  Some(masked.ctz().to_int64())
+                }
+              Popcnt => Some(masked.popcnt().to_int64())
               Bswap => Some(bswap64(x))
               Bitrev => Some(bitrev64(x))
               _ => None

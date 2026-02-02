@@ -31,15 +31,35 @@ pub fn Memory::page_size_bytes(self : Memory) -> Int64 {
 }
 
 ///|
+/// Convert a WASM address to a byte offset.
+///
+/// For memory32, addresses are u32, so negative Int values represent large
+/// addresses (high bit set) and must be treated as unsigned.
+fn Memory::addr_to_offset(self : Memory, addr : Int) -> Int64 {
+  if self.is_memory64 {
+    addr.to_int64()
+  } else {
+    // Interpret as u32 and widen to i64.
+    addr.to_int64() & 0xFFFF_FFFFL
+  }
+}
+
+///|
 fn Memory::check_bounds(
   self : Memory,
   addr : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
-  if addr < 0 || len < 0 {
+  if len < 0 {
     raise OutOfBoundsMemoryAccess
   }
-  let end = addr.to_int64() + len.to_int64()
+  // For memory64, keep the existing conservative check for negative Int.
+  // For memory32, negative Int is a valid u32 address (handled in addr_to_offset).
+  if self.is_memory64 && addr < 0 {
+    raise OutOfBoundsMemoryAccess
+  }
+  let base = self.addr_to_offset(addr)
+  let end = base + len.to_int64()
   if end > self.byte_len() {
     raise OutOfBoundsMemoryAccess
   }
@@ -51,7 +71,8 @@ fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] 
     return FixedArray::make(0, b'\x00')
   }
   let out = FixedArray::make(len, b'\x00')
-  let _ = @jit_ffi.c_mem_desc_read(self.mem_desc_ptr, addr.to_int64(), out, len)
+  let offset = self.addr_to_offset(addr)
+  let _ = @jit_ffi.c_mem_desc_read(self.mem_desc_ptr, offset, out, len)
   out
 }
 
@@ -65,12 +86,8 @@ fn Memory::write_fixed(
   if self.mem_desc_ptr == 0L || len <= 0 {
     return
   }
-  let _ = @jit_ffi.c_mem_desc_write(
-    self.mem_desc_ptr,
-    addr.to_int64(),
-    data,
-    len,
-  )
+  let offset = self.addr_to_offset(addr)
+  let _ = @jit_ffi.c_mem_desc_write(self.mem_desc_ptr, offset, data, len)
 
 }
 
@@ -439,6 +456,10 @@ pub fn Memory::init_data(
   data : Bytes,
 ) -> Unit raise RuntimeError {
   let len = data.length()
+  // Per the spec, bounds checks must still happen even when `len == 0`.
+  // For example, an active data segment `(data (i32.const 1))` must trap at
+  // instantiation time if the offset is out of bounds, even though it writes 0
+  // bytes.
   self.check_bounds(dest, len)
   if len == 0 {
     return
@@ -447,12 +468,8 @@ pub fn Memory::init_data(
   for i in 0..<len {
     fixed[i] = data[i]
   }
-  let _ = @jit_ffi.c_mem_desc_write(
-    self.mem_desc_ptr,
-    dest.to_int64(),
-    fixed,
-    len,
-  )
+  let offset = self.addr_to_offset(dest)
+  let _ = @jit_ffi.c_mem_desc_write(self.mem_desc_ptr, offset, fixed, len)
 
 }
 
@@ -465,17 +482,15 @@ pub fn Memory::copy(
   src : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
+  // Per the spec, bounds checks must still happen even when `len == 0`.
   self.check_bounds(dest, len)
   self.check_bounds(src, len)
   if len == 0 {
     return
   }
-  let _ = @jit_ffi.c_mem_desc_memmove(
-    self.mem_desc_ptr,
-    dest.to_int64(),
-    src.to_int64(),
-    len,
-  )
+  let dest_off = self.addr_to_offset(dest)
+  let src_off = self.addr_to_offset(src)
+  let _ = @jit_ffi.c_mem_desc_memmove(self.mem_desc_ptr, dest_off, src_off, len)
 
 }
 
@@ -487,13 +502,15 @@ pub fn Memory::fill(
   value : Byte,
   len : Int,
 ) -> Unit raise RuntimeError {
+  // Per the spec, bounds checks must still happen even when `len == 0`.
   self.check_bounds(dest, len)
   if len == 0 {
     return
   }
+  let offset = self.addr_to_offset(dest)
   let _ = @jit_ffi.c_mem_desc_memset(
     self.mem_desc_ptr,
-    dest.to_int64(),
+    offset,
     value.to_int(),
     len,
   )

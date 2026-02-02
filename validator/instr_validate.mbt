@@ -1329,12 +1329,18 @@ fn validate_instr(
 
     // Branch instructions with proper label validation
     Br(label_idx) => {
-      if label_idx >= ctx.labels.length() {
+      if label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
-      // Get label from stack (index 0 is innermost)
-      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-      let branch_types = get_label_types(ctx, label)
+      // label_idx == labels.length() targets the implicit function label.
+      // This is how `br 0` at function top-level behaves (acts like return).
+      let branch_types = if label_idx == ctx.labels.length() {
+        ctx.returns
+      } else {
+        // Get label from stack (index 0 is innermost)
+        let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+        get_label_types(ctx, label)
+      }
       // Pop values that will be passed to target
       for i = branch_types.length() - 1; i >= 0; i = i - 1 {
         stack.pop(branch_types[i])
@@ -1343,11 +1349,15 @@ fn validate_instr(
     }
     BrIf(label_idx) => {
       stack.pop(@types.ValueType::I32) // condition
-      if label_idx >= ctx.labels.length() {
+      if label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
-      let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
-      let branch_types = get_label_types(ctx, label)
+      let branch_types = if label_idx == ctx.labels.length() {
+        ctx.returns
+      } else {
+        let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
+        get_label_types(ctx, label)
+      }
       // Pop and push values (conditional branch)
       for i = branch_types.length() - 1; i >= 0; i = i - 1 {
         stack.pop(branch_types[i])
@@ -1359,18 +1369,26 @@ fn validate_instr(
     BrTable(labels, default_label) => {
       stack.pop(@types.ValueType::I32) // index
       // Validate default label
-      if default_label >= ctx.labels.length() {
+      if default_label > ctx.labels.length() {
         raise InvalidLabelIndex(default_label)
       }
-      let default_info = ctx.labels[ctx.labels.length() - 1 - default_label]
-      let default_types = get_label_types(ctx, default_info)
+      let default_types = if default_label == ctx.labels.length() {
+        ctx.returns
+      } else {
+        let default_info = ctx.labels[ctx.labels.length() - 1 - default_label]
+        get_label_types(ctx, default_info)
+      }
       // Validate all labels have same arity as default
       for label_idx in labels {
-        if label_idx >= ctx.labels.length() {
+        if label_idx > ctx.labels.length() {
           raise InvalidLabelIndex(label_idx)
         }
-        let label_info = ctx.labels[ctx.labels.length() - 1 - label_idx]
-        let label_types = get_label_types(ctx, label_info)
+        let label_types = if label_idx == ctx.labels.length() {
+          ctx.returns
+        } else {
+          let label_info = ctx.labels[ctx.labels.length() - 1 - label_idx]
+          get_label_types(ctx, label_info)
+        }
         if label_types.length() != default_types.length() {
           raise TypeMismatch(
             "br_table labels must have same arity: expected \{default_types.length()}, got \{label_types.length()}",

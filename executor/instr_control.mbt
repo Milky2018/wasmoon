@@ -37,30 +37,46 @@ fn ExecContext::exec_control(
     // Block: execute body, br 0 jumps to end
     Block(bt, body) => {
       let arity = self.block_arity(bt)
+      // Blocks with params consume their params from the *outer* stack (typed blocks).
+      // Track the stack height after popping params so br/end unwinding discards them.
+      let param_arity = self.block_param_arity(bt)
+      let params = self.stack.pop_n(param_arity)
       let stack_height = self.stack.size()
+      for v in params {
+        self.stack.push(v)
+      }
       self.push_label(false, arity) // Block branches use result arity
       let result = try? self.exec_block(body)
       self.pop_label()
-      if !(result is Ok(_)) {
-        match result {
-          Ok(_) => ()
-          Err(BranchWith(0, values)) => {
-            // Restore stack to block entry point (discard intermediate values)
-            self.restore_stack_to(stack_height)
-            // Push the branch values back onto the stack
-            for v in values {
-              self.stack.push(v)
-            }
+      match result {
+        Ok(_) => {
+          // Normal completion: keep only block results on the outer stack.
+          let results = self.stack.pop_n(arity)
+          self.restore_stack_to(stack_height)
+          for v in results {
+            self.stack.push(v)
           }
-          Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-          Err(e) => raise e
         }
+        Err(BranchWith(0, values)) => {
+          // br 0: jump to end, keep carried values only.
+          self.restore_stack_to(stack_height)
+          for v in values {
+            self.stack.push(v)
+          }
+        }
+        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
+        Err(e) => raise e
       }
     }
     // Loop: execute body, br 0 jumps to start
     Loop(bt, body) => {
+      let result_arity = self.block_arity(bt)
       let param_arity = self.block_param_arity(bt)
+      let params = self.stack.pop_n(param_arity)
       let stack_height = self.stack.size()
+      for v in params {
+        self.stack.push(v)
+      }
       self.push_label(true, param_arity) // Loop branches use param arity
       loop () {
         _ => {
@@ -68,6 +84,12 @@ fn ExecContext::exec_control(
           match result {
             Ok(_) => {
               self.pop_label()
+              // Normal loop exit: keep only loop results on the outer stack.
+              let results = self.stack.pop_n(result_arity)
+              self.restore_stack_to(stack_height)
+              for v in results {
+                self.stack.push(v)
+              }
               break () // Normal exit
             }
             Err(BranchWith(0, values)) => {
@@ -95,12 +117,24 @@ fn ExecContext::exec_control(
       let cond = self.stack.pop_i32()
       let body = if cond != 0 { then_body } else { else_body }
       let arity = self.block_arity(bt)
+      let param_arity = self.block_param_arity(bt)
+      let params = self.stack.pop_n(param_arity)
       let stack_height = self.stack.size()
+      for v in params {
+        self.stack.push(v)
+      }
       self.push_label(false, arity) // If branches use result arity
       let result = try? self.exec_block(body)
       self.pop_label()
       match result {
-        Ok(_) => () // Normal completion
+        Ok(_) => {
+          // Normal completion: keep only if results on the outer stack.
+          let results = self.stack.pop_n(arity)
+          self.restore_stack_to(stack_height)
+          for v in results {
+            self.stack.push(v)
+          }
+        }
         Err(BranchWith(0, values)) => {
           self.restore_stack_to(stack_height)
           for v in values {

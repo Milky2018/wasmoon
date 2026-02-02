@@ -1,0 +1,39 @@
+{
+  "allow-floats": true,
+  "bulk-memory-enabled": false,
+  "canonicalize-nans": false,
+  "custom-descriptors-enabled": false,
+  "custom-page-sizes-enabled": false,
+  "disallow-traps": false,
+  "exceptions-enabled": false,
+  "extended-const-enabled": false,
+  "gc-enabled": false,
+  "generate-custom-sections": false,
+  "memory64-enabled": false,
+  "multi-value-enabled": true,
+  "reference-types-enabled": false,
+  "relaxed-simd-enabled": false,
+  "saturating-float-to-int-enabled": true,
+  "shared-everything-threads-enabled": false,
+  "simd-enabled": false,
+  "sign-extension-ops-enabled": true,
+  "tail-call-enabled": false,
+  "threads-enabled": false,
+  "wide-arithmetic-enabled": false,
+
+  "min-imports": 0,
+  "max-imports": 0,
+
+  "min-funcs": 0,
+  "max-funcs": 50,
+  "max-instructions": 400,
+
+  "max-memories": 1,
+  "max-tables": 0,
+  "max-globals": 50,
+  "max-data-segments": 10,
+  "max-element-segments": 0,
+
+  "export-everything": false,
+  "max-exports": 10
+}
