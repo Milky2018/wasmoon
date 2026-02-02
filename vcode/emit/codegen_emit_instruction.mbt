@@ -125,6 +125,28 @@ fn MachineCode::emit_instruction(
         self.emit_and_reg32(rd, rn, rm)
       }
     }
+    AndImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_and_imm(rd, rn, bits)
+          } else {
+            self.emit_and_imm32(rd, rn, bits)
+          }
+        None => {
+          // Fallback: materialize immediate and use AND (register).
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_and_reg(rd, rn, scratch)
+          } else {
+            self.emit_and_reg32(rd, rn, scratch)
+          }
+        }
+      }
+    }
     Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -135,6 +157,27 @@ fn MachineCode::emit_instruction(
         self.emit_orr_reg32(rd, rn, rm)
       }
     }
+    OrImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_orr_imm(rd, rn, bits)
+          } else {
+            self.emit_orr_imm32(rd, rn, bits)
+          }
+        None => {
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_orr_reg(rd, rn, scratch)
+          } else {
+            self.emit_orr_reg32(rd, rn, scratch)
+          }
+        }
+      }
+    }
     Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -143,6 +186,27 @@ fn MachineCode::emit_instruction(
         self.emit_eor_reg(rd, rn, rm)
       } else {
         self.emit_eor_reg32(rd, rn, rm)
+      }
+    }
+    XorImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_eor_imm(rd, rn, bits)
+          } else {
+            self.emit_eor_imm32(rd, rn, bits)
+          }
+        None => {
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_eor_reg(rd, rn, scratch)
+          } else {
+            self.emit_eor_reg32(rd, rn, scratch)
+          }
+        }
       }
     }
     Shl(is_64) => {

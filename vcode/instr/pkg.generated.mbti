@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 
 // Errors
 
@@ -235,8 +236,11 @@ pub(all) enum VCodeOpcode {
   SDiv(Bool)
   UDiv(Bool)
   And(Bool)
+  AndImm(Int64, Bool)
   Or(Bool)
+  OrImm(Int64, Bool)
   Xor(Bool)
+  XorImm(Int64, Bool)
   Shl(Bool)
   AShr(Bool)
   LShr(Bool)

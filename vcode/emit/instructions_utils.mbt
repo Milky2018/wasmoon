@@ -52,12 +52,19 @@ enum Instruction {
   // Bitwise - Register
   AndReg(Int, Int, Int)
   AndReg32(Int, Int, Int)
+  // Bitwise - Immediate (logical/bitmask immediate). imm_bits is N:immr:imms (13 bits).
+  AndImm(Int, Int, Int)
+  AndImm32(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
   OrrReg32(Int, Int, Int)
+  OrrImm(Int, Int, Int)
+  OrrImm32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
   EorReg32(Int, Int, Int)
+  EorImm(Int, Int, Int)
+  EorImm32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
   Mvn32(Int, Int) // 32-bit bitwise NOT
@@ -567,6 +574,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndReg32(rd, rn, rm) => "and w\{rd}, w\{rn}, w\{rm}"
+    AndImm(rd, rn, imm_bits) => "and x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    AndImm32(rd, rn, imm_bits) => "and w\{rd}, w\{rn}, #imml(\{imm_bits})"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -577,6 +586,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
     OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
+    OrrImm(rd, rn, imm_bits) => "orr x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    OrrImm32(rd, rn, imm_bits) => "orr w\{rd}, w\{rn}, #imml(\{imm_bits})"
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -587,6 +598,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
     EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
+    EorImm(rd, rn, imm_bits) => "eor x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    EorImm32(rd, rn, imm_bits) => "eor w\{rd}, w\{rn}, #imml(\{imm_bits})"
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"

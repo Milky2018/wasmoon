@@ -184,8 +184,11 @@ pub(all) enum VCodeOpcode {
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And(Bool)
+  AndImm(Int64, Bool) // AND (immediate logical), value is the immediate pattern
   Or(Bool)
+  OrImm(Int64, Bool) // ORR (immediate logical), value is the immediate pattern
   Xor(Bool)
+  XorImm(Int64, Bool) // EOR (immediate logical), value is the immediate pattern
   Shl(Bool) // LSL with size
   AShr(Bool) // Arithmetic shift right with size
   LShr(Bool) // Logical shift right with size
@@ -855,8 +858,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
     And(is_64) => if is_64 { "and" } else { "and32" }
+    AndImm(imm, is_64) => if is_64 { "and #\{imm}" } else { "and32 #\{imm}" }
     Or(is_64) => if is_64 { "or" } else { "or32" }
+    OrImm(imm, is_64) => if is_64 { "or #\{imm}" } else { "or32 #\{imm}" }
     Xor(is_64) => if is_64 { "xor" } else { "xor32" }
+    XorImm(imm, is_64) => if is_64 { "xor #\{imm}" } else { "xor32 #\{imm}" }
     Shl(is_64) => if is_64 { "shl" } else { "shl32" }
     AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
     LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }

@@ -270,6 +270,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x0A // AND 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    AndImm(rd, rn, imm_bits) => {
+      // AND (immediate): bits_31_23 = 000_100100 with sf=1.
+      let top9 = 0b000_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AndImm32(rd, rn, imm_bits) => {
+      // AND (immediate) 32-bit: bits_31_23 = 000_100100 with sf=0.
+      let top9 = 0b000_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -297,6 +315,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x2A // ORR 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    OrrImm(rd, rn, imm_bits) => {
+      // ORR (immediate): bits_31_23 = 001_100100 with sf=1.
+      let top9 = 0b001_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    OrrImm32(rd, rn, imm_bits) => {
+      // ORR (immediate) 32-bit: bits_31_23 = 001_100100 with sf=0.
+      let top9 = 0b001_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -323,6 +359,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = rm & 31
       let b3 = 0x4A // EOR 32-bit: sf=0
       (b0, b1, b2, b3)
+    }
+    EorImm(rd, rn, imm_bits) => {
+      // EOR (immediate): bits_31_23 = 010_100100 with sf=1.
+      let top9 = 0b010_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    EorImm32(rd, rn, imm_bits) => {
+      // EOR (immediate) 32-bit: bits_31_23 = 010_100100 with sf=0.
+      let top9 = 0b010_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {

@@ -375,6 +375,26 @@ pub fn MachineCode::emit_and_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_and_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  AndImm(rd, rn, imm_bits).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_and_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  AndImm32(rd, rn, imm_bits).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_orr_reg(
   self : MachineCode,
   rd : Int,
@@ -395,6 +415,26 @@ pub fn MachineCode::emit_orr_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_orr_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  OrrImm(rd, rn, imm_bits).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_orr_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  OrrImm32(rd, rn, imm_bits).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_eor_reg(
   self : MachineCode,
   rd : Int,
@@ -412,6 +452,26 @@ pub fn MachineCode::emit_eor_reg32(
   rm : Int,
 ) -> Unit {
   EorReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eor_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  EorImm(rd, rn, imm_bits).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eor_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm_bits : Int,
+) -> Unit {
+  EorImm32(rd, rn, imm_bits).emit(self)
 }
 
 ///|
