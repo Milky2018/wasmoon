@@ -173,7 +173,7 @@ pub fn instantiate_module(
 /// Evaluate a constant initialization expression
 /// Supports extended constant expressions with arithmetic operations
 /// and GC instructions (array.new, array.new_default, array.new_fixed, struct.new, struct.new_default)
-fn eval_const_expr(
+pub fn eval_const_expr(
   instrs : Array[@types.Instruction],
   func_addrs? : Array[Int] = [],
   globals? : Array[@runtime.GlobalInstance] = [],

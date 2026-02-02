@@ -37,6 +37,8 @@ pub fn has_cross_module_imports(@types.Module) -> Bool
 
 pub fn has_unsupported_instructions(@types.Module) -> Bool
 
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+
 pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@jit.MemoryInfo]?
@@ -55,7 +57,7 @@ pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
-pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule) -> Unit
+pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 

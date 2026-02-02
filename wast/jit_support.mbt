@@ -39,26 +39,6 @@ pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
       return true
     }
   }
-  // Check if elem segments contain unsupported initializers
-  if has_unsupported_elem_init(mod_) {
-    return true
-  }
-  false
-}
-
-///|
-/// Check if elem segments contain unsupported initializers
-/// JIT doesn't support cross-module function references in elem segments
-fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
-  for elem in mod_.elems {
-    for init_expr in elem.init {
-      // GlobalGet in elem init is not supported by JIT
-      // because it may reference imported funcref globals (cross-module)
-      if init_expr is [GlobalGet(_)] {
-        return true
-      }
-    }
-  }
   false
 }
 
@@ -67,18 +47,7 @@ fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
 fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool {
   for instr in instrs {
     match instr {
-      // Table bulk operations - not supported by JIT
-      TableInit(_, _) | TableCopy(_, _) | TableFill(_) | ElemDrop(_) =>
-        return true
-      // Memory bulk operations with segments - not supported by JIT
-      // (memory.fill and memory.copy are now supported)
-      MemoryInit(_, _) | DataDrop(_) => return true
-      // GC array operations with data/elem segments - not supported by JIT
-      // These require runtime access to segment data which JIT doesn't have
-      ArrayNewData(_, _)
-      | ArrayNewElem(_, _)
-      | ArrayInitData(_, _)
-      | ArrayInitElem(_, _) => return true
+      // All bulk memory/table + segment-based GC array ops are supported via libcalls.
       // Block instructions - need to check nested instructions
       Block(_, body) | Loop(_, body) =>
         if contains_unsupported_instruction(body) {
@@ -260,7 +229,7 @@ pub fn sync_tables_to_jit(
       None => continue
     }
     // Sync the table
-    sync_table_to_jit(table, jit_table, jit_module)
+    sync_table_to_jit(table, jit_table, jit_module, instance, store)
   }
 }
 
@@ -417,6 +386,137 @@ pub fn init_elem_segments(
 }
 
 ///|
+/// Initialize per-context data/elem segments for bulk memory/table and GC segment ops.
+///
+/// This feeds JIT libcalls used by:
+/// - memory.init / data.drop
+/// - table.init / table.copy / table.fill / elem.drop
+/// - array.new_data / array.init_data / array.new_elem / array.init_elem
+///
+/// Element segments are stored as (value, type_idx) pairs so call_indirect can
+/// type-check after table.init/table.fill.
+pub fn init_bulk_segments(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Unit {
+  // Precompute canonical indices for type equivalence.
+  let canonical = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+
+  // Build func_idx -> canonical type idx mapping in module index space.
+  let func_canonical_types : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      let canon = if type_idx >= 0 && type_idx < canonical.length() {
+        canonical[type_idx]
+      } else {
+        -1
+      }
+      func_canonical_types.push(canon)
+    }
+  }
+  for type_idx in mod_.funcs {
+    let canon = if type_idx >= 0 && type_idx < canonical.length() {
+      canonical[type_idx]
+    } else {
+      -1
+    }
+    func_canonical_types.push(canon)
+  }
+
+  // Build store func_addr -> module func_idx map (for GlobalGet funcref).
+  let func_addr_to_idx : Map[Int, Int] = {}
+  for i, addr in instance.func_addrs {
+    func_addr_to_idx.set(addr, i)
+  }
+
+  // Get globals for GlobalGet evaluation.
+  let globals : Array[@runtime.GlobalInstance] = []
+  for addr in instance.global_addrs {
+    let g = store.get_global(addr) catch { _ => continue }
+    globals.push(g)
+  }
+
+  // Initial dropped flags from the instantiated instance state.
+  let data_dropped : Array[Bool] = []
+  for i in 0..<mod_.datas.length() {
+    data_dropped.push(
+      i >= 0 && i < instance.dropped_datas.length() && instance.dropped_datas[i],
+    )
+  }
+  let elem_dropped : Array[Bool] = []
+  for i, elem in mod_.elems {
+    let dropped = i >= 0 &&
+      i < instance.dropped_elems.length() &&
+      instance.dropped_elems[i]
+    // Declarative segments behave as dropped for table.init/array.new_elem.
+    let declarative = elem.mode is @types.ElemMode::Declarative
+    elem_dropped.push(dropped || declarative)
+  }
+
+  // Build element segment (value,type) pairs.
+  // We evaluate element init expressions using the executor's extended const-expr
+  // evaluator so GC const exprs (array.new, struct.new, ref.i31, etc.) work.
+  let elem_pairs : Array[Array[Int64]] = []
+  for elem in mod_.elems {
+    let pairs : Array[Int64] = []
+    for init_expr in elem.init {
+      // Evaluate the const expression to a runtime Value.
+      let value = @executor.eval_const_expr(
+        init_expr,
+        func_addrs=instance.func_addrs,
+        globals~,
+        store=Some(store),
+        types=mod_.types,
+      ) catch {
+        _ => @types.Value::Null
+      }
+
+      // Encode the value to the JIT segment format (value bits + type idx for funcref).
+      let mut raw = @types.NULL_REF
+      let mut ty = -1L
+      match value {
+        @types.Value::Null => ()
+        @types.Value::I31(n) => raw = @jit.encode_i31(n)
+        @types.Value::ExternRef(host_idx) =>
+          raw = @jit.encode_externref(host_idx)
+        @types.Value::StructRef(idx) =>
+          // JIT GC refs are encoded as (gc_ref << 1), where gc_ref = idx + 1.
+          raw = (idx + 1).to_int64() << 1
+        @types.Value::ArrayRef(idx) => raw = (idx + 1).to_int64() << 1
+        @types.Value::FuncRef(store_addr) =>
+          match func_addr_to_idx.get(store_addr) {
+            Some(func_idx) => {
+              let ptr = jm.get_func_ptr(func_idx)
+              if ptr != 0L {
+                raw = @jit.tag_funcref_ptr(ptr)
+                let t = if func_idx >= 0 &&
+                  func_idx < func_canonical_types.length() {
+                  func_canonical_types[func_idx]
+                } else {
+                  -1
+                }
+                ty = t.to_int64()
+              }
+            }
+            None => ()
+          }
+        // Numeric / unsupported values are not valid in element segments.
+        _ => ()
+      }
+      pairs.push(raw)
+      pairs.push(ty)
+    }
+    elem_pairs.push(pairs)
+  }
+  jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~)
+}
+
+///|
 /// Build func_signatures array for JIT module loading
 /// Returns Array[(param_types, result_types)] for each function
 pub fn build_func_signatures(
@@ -472,55 +572,34 @@ pub fn sync_table_to_jit(
   table : @runtime.Table,
   jit_table : @jit.JITTable,
   jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
 ) -> Unit {
   let size = table.size()
   for i in 0..<size {
     let value = table.get(i) catch { _ => continue }
-    let encoded : Int64 = encode_value_for_jit(value, jit_module)
-    // Use type_hash 0 for GC values (not used for type checking)
-    jit_table.set(i, encoded, 0)
-  }
-}
-
-///|
-/// Encode a Value for JIT table storage
-fn encode_value_for_jit(
-  value : @types.Value,
-  jit_module : @jit.JITModule,
-) -> Int64 {
-  match value {
-    Null => NULL_REF
-    I31(n) => {
-      // i31 encoding: (value << 1) | 1
-      let n64 = n.to_int64() & 0x7FFFFFFFL
-      ( // 31-bit value
-        n64 << 1
-      ) |
-      1L
-    }
-    StructRef(gc_ref) | ArrayRef(gc_ref) =>
-      // Heap reference encoding: gc_ref << 1 (gc_ref >= 1, so result >= 2)
-      gc_ref.to_int64() << 1
-    FuncRef(func_idx) => {
-      // Function reference: get function pointer and tag with FUNCREF_TAG
-      let func_ptr = jit_module.get_func_ptr(func_idx)
-      if func_ptr == 0L {
-        NULL_REF // null funcref if function not found
-      } else {
-        // FUNCREF_TAG = 0x2000000000000000 (bit 61)
-        func_ptr | FUNCREF_TAG
+    let mut encoded : Int64 = NULL_REF
+    let mut type_idx : Int = -1
+    match value {
+      Null => {
+        encoded = NULL_REF
+        type_idx = -1
       }
+      I31(n) => encoded = @jit.encode_i31(n)
+      StructRef(idx) | ArrayRef(idx) =>
+        // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
+        encoded = (idx + 1).to_int64() << 1
+      ExternRef(host_idx) => encoded = @jit.encode_externref(host_idx)
+      FuncRef(store_addr) => {
+        encoded = encode_store_funcref_for_jit(value, jit_module, instance)
+        if store_addr >= 0 && store_addr < store.func_type_indices.length() {
+          type_idx = store.func_type_indices[store_addr]
+        }
+      }
+      // Numeric types shouldn't be present in reference tables.
+      _ => encoded = NULL_REF
     }
-    ExternRef(host_idx) =>
-      // Extern reference: EXTERNREF_TAG | (host_idx << 1)
-      EXTERNREF_TAG | (host_idx.to_int64() << 1)
-    // Numeric types shouldn't be in reference tables
-    I32(n) => n.to_int64()
-    I64(n) => n
-    F32(n) => n.reinterpret_as_int().to_int64()
-    F64(n) => n.reinterpret_as_int64()
-    V128(_) => abort("V128 not supported in JIT")
-    ExnRef(_) => NULL_REF // Exception refs not supported in tables
+    jit_table.set(i, encoded, type_idx)
   }
 }
 

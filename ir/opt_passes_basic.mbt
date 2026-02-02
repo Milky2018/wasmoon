@@ -126,8 +126,11 @@ fn has_side_effects(inst : Inst) -> Bool {
     // GC operations that allocate memory - each call allocates a new object
     StructNew(_) | StructNewDefault(_) => true
     ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
+    // GC segment ops can allocate and/or trap (bounds checks, dropped segments, etc.)
+    ArrayNewData(_, _) | ArrayNewElem(_, _) => true
     // GC operations that modify state
     StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    ArrayInitData(_, _) | ArrayInitElem(_, _) => true
     // GC read operations can trap on null reference
     StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
     ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true

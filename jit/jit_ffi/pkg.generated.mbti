@@ -74,10 +74,6 @@ pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_sweep(Int64) -> Int
 
-pub fn c_jit_add_data_segment(Int, FixedArray[Byte], Int) -> Unit
-
-pub fn c_jit_add_elem_segment(Int, FixedArray[Int64], Int) -> Unit
-
 pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
 
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
@@ -108,8 +104,6 @@ pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray
 
 pub fn c_jit_clear_hostcall_callback(Int64) -> Unit
 
-pub fn c_jit_clear_segments() -> Unit
-
 pub fn c_jit_clear_trap() -> Unit
 
 pub fn c_jit_clear_wasi_exit(Int64) -> Unit
@@ -122,9 +116,15 @@ pub fn c_jit_context_ptr(JITContext) -> Int64
 
 pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
 
+pub fn c_jit_ctx_add_data_segment(Int64, Int, FixedArray[Byte], Int, Int) -> Unit
+
+pub fn c_jit_ctx_add_elem_segment(Int64, Int, FixedArray[Int64], Int, Int) -> Unit
+
 pub fn c_jit_ctx_alloc_guarded_memory(Int64, Int64, Int64) -> Int64
 
 pub fn c_jit_ctx_alloc_indirect_table(Int64, Int) -> Int
+
+pub fn c_jit_ctx_clear_segments(Int64) -> Unit
 
 pub fn c_jit_ctx_get_func_count(Int64) -> Int
 
@@ -133,6 +133,10 @@ pub fn c_jit_ctx_get_func_table(Int64) -> Int64
 pub fn c_jit_ctx_get_memory_ptr(Int64, Int) -> Int64
 
 pub fn c_jit_ctx_get_memory_size(Int64, Int) -> Int64
+
+pub fn c_jit_ctx_init_data_segments(Int64, Int) -> Unit
+
+pub fn c_jit_ctx_init_elem_segments(Int64, Int) -> Unit
 
 pub fn c_jit_ctx_set_func(Int64, Int, Int64) -> Unit
 
@@ -399,10 +403,6 @@ pub fn c_jit_get_trap_signal() -> Int
 pub fn c_jit_get_wasi_exit_code(Int64) -> Int
 
 pub fn c_jit_get_wasm_stack_top(Int64) -> Int64
-
-pub fn c_jit_init_data_segments(Int) -> Unit
-
-pub fn c_jit_init_elem_segments(Int) -> Unit
 
 pub fn c_jit_init_wasi_fds(Int64, Int) -> Unit
 

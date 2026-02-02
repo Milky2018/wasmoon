@@ -938,6 +938,8 @@ fn run_with_jit(
           }
           // Initialize tables for call_indirect and table operations
           init_jit_tables(instance, store, jm)
+          // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
+          @wast.init_bulk_segments(mod_, jm, instance, store)
           let jit_ctx = @wast.JITModuleContext::new(
             jm,
             globals_ptr,
@@ -959,7 +961,16 @@ fn run_with_jit(
                   let canonical = @types.compute_canonical_type_indices(
                     store.module_types,
                   )
-                  @jit.gc_setup(heap, store.module_types, canonical)
+                  // Provide func_type_indices + func_table_ptr so libcalls can infer funcref types
+                  // (e.g. table.fill) and ref.test can resolve tagged-pointer funcrefs.
+                  @jit.gc_setup(
+                    heap,
+                    store.module_types,
+                    canonical,
+                    func_type_indices=instance.func_type_indices,
+                    func_table_ptr=jm.get_func_table_ptr(),
+                    num_funcs=jm.get_func_count(),
+                  )
                   // Set GC heap in VMContext for inline allocation
                   jm.set_gc_heap(heap.get_ptr())
                 }

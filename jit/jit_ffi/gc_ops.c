@@ -33,7 +33,7 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
     if (num_fields == 0 && g_gc_type_cache && type_idx >= 0 && type_idx < g_gc_num_types) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
-        actual_num_fields = g_gc_type_cache[type_idx * 3 + 2];
+        actual_num_fields = g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc(actual_num_fields, sizeof(int64_t));
@@ -385,7 +385,7 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
     if (num_fields == 0 && g_gc_type_cache && type_idx >= 0 && type_idx < g_gc_num_types) {
         // Get actual field count from type cache
         // Format: [super_idx, kind, num_fields] per type
-        actual_num_fields = g_gc_type_cache[type_idx * 3 + 2];
+        actual_num_fields = g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_STRUCT_NUM_FIELDS_OFF];
         if (actual_num_fields > 0) {
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc(actual_num_fields, sizeof(int64_t));

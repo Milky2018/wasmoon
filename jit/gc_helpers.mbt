@@ -178,8 +178,10 @@ pub fn setup_type_cache_from_types(
   canonical_indices : Array[Int],
 ) -> Unit {
   let num_types = types.length()
-  // Extended format: [super_idx, kind, num_fields] per type
-  let types_data = FixedArray::make(num_types * 3, 0)
+  // Extended format (stride = 6, keep in sync with `jit_ffi/jit_internal.h`):
+  //   [super_idx, kind, struct_num_fields, array_elem_tag, array_elem_bytes, array_elem_flags]
+  let type_stride = 6
+  let types_data = FixedArray::make(num_types * type_stride, 0)
   for i in 0..<num_types {
     let subtype = types[i]
     // Store supertype index (-1 if none)
@@ -188,16 +190,45 @@ pub fn setup_type_cache_from_types(
     } else {
       subtype.supertypes[0]
     }
-    types_data[i * 3] = super_idx
-    // Store composite type kind: 0=func, 1=struct, 2=array
-    // And field count for struct types
-    let (kind, num_fields) = match subtype.composite {
-      Func(_) => (0, 0)
-      Struct(st) => (1, st.fields.length())
-      Array(_) => (2, 0)
+    let base = i * type_stride
+    types_data[base + 0] = super_idx
+
+    // kind: 0=func, 1=struct, 2=array
+    // array_elem_tag: 0=none/unknown, 1=i8, 2=i16, 3=i32, 4=i64, 5=f32, 6=f64, 7=ref/other
+    // array_elem_bytes: byte width of element data in segments (0 for ref/unknown)
+    // array_elem_flags: reserved for future (0 for now)
+    match subtype.composite {
+      Func(_) => {
+        types_data[base + 1] = 0
+        types_data[base + 2] = 0
+        types_data[base + 3] = 0
+        types_data[base + 4] = 0
+        types_data[base + 5] = 0
+      }
+      Struct(st) => {
+        types_data[base + 1] = 1
+        types_data[base + 2] = st.fields.length()
+        types_data[base + 3] = 0
+        types_data[base + 4] = 0
+        types_data[base + 5] = 0
+      }
+      Array(at) => {
+        types_data[base + 1] = 2
+        types_data[base + 2] = 0
+        let (tag, bytes) = match at.element.storage_type {
+          Packed(I8) => (1, 1)
+          Packed(I16) => (2, 2)
+          Val(I32) => (3, 4)
+          Val(I64) => (4, 8)
+          Val(F32) => (5, 4)
+          Val(F64) => (6, 8)
+          _ => (7, 0)
+        }
+        types_data[base + 3] = tag
+        types_data[base + 4] = bytes
+        types_data[base + 5] = 0
+      }
     }
-    types_data[i * 3 + 1] = kind
-    types_data[i * 3 + 2] = num_fields
   }
   // Set the type cache in C
   @jit_ffi.c_jit_gc_set_type_cache(types_data, num_types)

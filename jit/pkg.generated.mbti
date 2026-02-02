@@ -24,8 +24,6 @@ pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
 
-pub fn clear_segments() -> Unit
-
 pub fn decode_externref(Int64) -> Int?
 
 pub fn decode_funcref_idx(Int64) -> Int?
@@ -221,10 +219,6 @@ pub fn is_null_ref(Int64) -> Bool
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
-
-pub fn setup_data_segments(Array[@types.Data]) -> Unit
-
-pub fn setup_elem_segments(Array[Array[Int64]]) -> Unit
 
 pub fn setup_type_cache_from_types(Array[@types.SubType], Array[Int]) -> Unit
 
@@ -463,6 +457,7 @@ pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
+pub fn JITModule::clear_segments(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
@@ -489,6 +484,7 @@ pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
 pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
+pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 
 type JITTable
 pub fn JITTable::get_max(Self) -> Int?

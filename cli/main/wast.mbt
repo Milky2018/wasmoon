@@ -154,6 +154,11 @@ fn try_compile_jit(
           }
           // Initialize indirect table for call_indirect
           @wast.init_elem_segments(mod_, jm, instance, store)
+          // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
+          @wast.init_bulk_segments(mod_, jm, instance, store)
+          // One-time sync: copy interpreter table contents (including active elem init)
+          // into the shared JIT table memory before any JIT execution.
+          @wast.sync_tables_to_jit(instance, store, jm)
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int] = []
