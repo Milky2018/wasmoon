@@ -1042,41 +1042,51 @@ pub extern "c" fn c_gc_heap_new(capacity : Int64) -> Int64 = "wasmoon_gc_heap_ne
 /// Free a GC heap and all its memory
 pub extern "c" fn c_gc_heap_free(heap : Int64) -> Unit = "wasmoon_gc_heap_free"
 
-// ============ Segment Setup (for memory.init/data.drop/table.init/elem.drop) ============
+// ============ Segment Setup (bulk memory/table + GC segment ops) ============
 
 ///|
-/// Initialize data segment storage with count segments
-pub extern "c" fn c_jit_init_data_segments(count : Int) -> Unit = "wasmoon_jit_init_data_segments"
+/// Initialize per-context data segment storage.
+pub extern "c" fn c_jit_ctx_init_data_segments(
+  ctx_ptr : Int64,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_init_data_segments"
 
 ///|
-/// Add a single data segment - C takes ownership (no copy, uses pointer directly)
-/// idx: segment index, data: FixedArray[Byte] (ownership transferred to C)
-/// C will call moonbit_decref when clearing segments
+/// Add a single data segment to a context (ownership transferred to C).
+/// is_dropped: 0/1 initial dropped flag.
 #owned(data)
-pub extern "c" fn c_jit_add_data_segment(
+pub extern "c" fn c_jit_ctx_add_data_segment(
+  ctx_ptr : Int64,
   idx : Int,
   data : FixedArray[Byte],
   size : Int,
-) -> Unit = "wasmoon_jit_add_data_segment"
+  is_dropped : Int,
+) -> Unit = "wasmoon_jit_ctx_add_data_segment"
 
 ///|
-/// Initialize element segment storage with count segments
-pub extern "c" fn c_jit_init_elem_segments(count : Int) -> Unit = "wasmoon_jit_init_elem_segments"
+/// Initialize per-context element segment storage.
+pub extern "c" fn c_jit_ctx_init_elem_segments(
+  ctx_ptr : Int64,
+  count : Int,
+) -> Unit = "wasmoon_jit_ctx_init_elem_segments"
 
 ///|
-/// Add a single element segment - C takes ownership (no copy, uses pointer directly)
-/// idx: segment index, data: FixedArray[Int64] (ownership transferred to C)
-/// C will call moonbit_decref when clearing segments
+/// Add a single element segment to a context (ownership transferred to C).
+/// Each segment stores pairs: (value, type_idx) for each element.
+/// size: number of elements (not Int64 slots).
+/// is_dropped: 0/1 initial dropped flag.
 #owned(data)
-pub extern "c" fn c_jit_add_elem_segment(
+pub extern "c" fn c_jit_ctx_add_elem_segment(
+  ctx_ptr : Int64,
   idx : Int,
   data : FixedArray[Int64],
   size : Int,
-) -> Unit = "wasmoon_jit_add_elem_segment"
+  is_dropped : Int,
+) -> Unit = "wasmoon_jit_ctx_add_elem_segment"
 
 ///|
-/// Clear all segment state after JIT execution
-pub extern "c" fn c_jit_clear_segments() -> Unit = "wasmoon_jit_clear_segments"
+/// Clear all segment state from the context (frees owned arrays).
+pub extern "c" fn c_jit_ctx_clear_segments(ctx_ptr : Int64) -> Unit = "wasmoon_jit_ctx_clear_segments"
 
 // ============ Struct Operations ============
 

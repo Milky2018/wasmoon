@@ -1088,67 +1088,65 @@ pub fn JITModule::init_indirect_table(
 // For memory.init, data.drop, table.init, elem.drop instructions
 
 ///|
-/// Set up data segments before JIT execution.
-/// This must be called before running code that uses memory.init or data.drop.
-/// The segments are stored globally and accessed by libcalls.
-pub fn setup_data_segments(datas : Array[@types.Data]) -> Unit {
-  if datas.is_empty() {
-    return
-  }
-  let count = datas.length()
-  // Initialize storage for all segments
-  @jit_ffi.c_jit_init_data_segments(count)
-  // Add each segment one by one - C copies immediately during each call
+/// Initialize per-context segment state for bulk memory/table and GC segment ops.
+/// This persists with the JIT context until it is freed (wasmtime-style).
+///
+/// - data_dropped/elem_dropped: optional initial dropped flags (default false).
+/// - elem_segments: each segment is a flattened Int64 array of pairs:
+///     [val0, ty0, val1, ty1, ...] (len must be even).
+pub fn JITModule::setup_segments(
+  self : JITModule,
+  datas : Array[@types.Data],
+  elem_segments : Array[Array[Int64]],
+  data_dropped? : Array[Bool] = [],
+  elem_dropped? : Array[Bool] = [],
+) -> Unit {
+  guard self.context is Some(ctx) else { return }
+  let ctx_ptr = ctx.ptr()
+
+  // Data segments
+  @jit_ffi.c_jit_ctx_init_data_segments(ctx_ptr, datas.length())
   for i, data in datas {
     let bytes = data.init
     let size = bytes.length()
-    if size > 0 {
-      // Create FixedArray and copy bytes
-      let buf = FixedArray::make(size, b'\x00')
-      for j in 0..<size {
-        buf[j] = bytes[j]
-      }
-      // C copies immediately during this call, so buf can be GC'd after
-      @jit_ffi.c_jit_add_data_segment(i, buf, size)
+    let dropped = if i < data_dropped.length() && data_dropped[i] {
+      1
+    } else {
+      0
     }
-    // Empty segments are handled by init (initialized to NULL)
+    let buf = FixedArray::make(size.max(1), b'\x00')
+    for j in 0..<size {
+      buf[j] = bytes[j]
+    }
+    @jit_ffi.c_jit_ctx_add_data_segment(ctx_ptr, i, buf, size, dropped)
+  }
+
+  // Element segments (pairs)
+  @jit_ffi.c_jit_ctx_init_elem_segments(ctx_ptr, elem_segments.length())
+  for i, seg in elem_segments {
+    let dropped = if i < elem_dropped.length() && elem_dropped[i] {
+      1
+    } else {
+      0
+    }
+    let nslots = seg.length()
+    // Represent empty segments with a 1-slot buffer, but report size=0.
+    let buf = FixedArray::make(nslots.max(1), 0L)
+    for j in 0..<nslots {
+      buf[j] = seg[j]
+    }
+    // size is number of elements, not Int64 slots.
+    let nelems = nslots / 2
+    @jit_ffi.c_jit_ctx_add_elem_segment(ctx_ptr, i, buf, nelems, dropped)
   }
 }
 
 ///|
-/// Set up element segments before JIT execution.
-/// This must be called before running code that uses table.init or elem.drop.
-/// The segments are stored globally and accessed by libcalls.
-/// elem_values: Array of Int64 arrays, one per element segment
-///   Each Int64 represents an encoded funcref table entry (tagged func ptr) or null (0)
-pub fn setup_elem_segments(elem_values : Array[Array[Int64]]) -> Unit {
-  if elem_values.is_empty() {
-    return
+/// Clear per-context segment state (frees owned segment buffers).
+pub fn JITModule::clear_segments(self : JITModule) -> Unit {
+  if self.context is Some(ctx) {
+    @jit_ffi.c_jit_ctx_clear_segments(ctx.ptr())
   }
-  let count = elem_values.length()
-  // Initialize storage for all segments
-  @jit_ffi.c_jit_init_elem_segments(count)
-  // Add each segment one by one - C copies immediately during each call
-  for i, values in elem_values {
-    let size = values.length()
-    if size > 0 {
-      // Create FixedArray and copy values
-      let buf = FixedArray::make(size, 0L)
-      for j in 0..<size {
-        buf[j] = values[j]
-      }
-      // C copies immediately during this call, so buf can be GC'd after
-      @jit_ffi.c_jit_add_elem_segment(i, buf, size)
-    }
-    // Empty segments are handled by init (initialized to NULL)
-  }
-}
-
-///|
-/// Clear segment state after JIT execution.
-/// Call this after JIT execution completes to release global segment storage.
-pub fn clear_segments() -> Unit {
-  @jit_ffi.c_jit_clear_segments()
 }
 
 ///|

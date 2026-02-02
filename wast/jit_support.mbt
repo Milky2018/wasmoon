@@ -39,26 +39,6 @@ pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
       return true
     }
   }
-  // Check if elem segments contain unsupported initializers
-  if has_unsupported_elem_init(mod_) {
-    return true
-  }
-  false
-}
-
-///|
-/// Check if elem segments contain unsupported initializers
-/// JIT doesn't support cross-module function references in elem segments
-fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
-  for elem in mod_.elems {
-    for init_expr in elem.init {
-      // GlobalGet in elem init is not supported by JIT
-      // because it may reference imported funcref globals (cross-module)
-      if init_expr is [GlobalGet(_)] {
-        return true
-      }
-    }
-  }
   false
 }
 
@@ -67,18 +47,7 @@ fn has_unsupported_elem_init(mod_ : @types.Module) -> Bool {
 fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool {
   for instr in instrs {
     match instr {
-      // Table bulk operations - not supported by JIT
-      TableInit(_, _) | TableCopy(_, _) | TableFill(_) | ElemDrop(_) =>
-        return true
-      // Memory bulk operations with segments - not supported by JIT
-      // (memory.fill and memory.copy are now supported)
-      MemoryInit(_, _) | DataDrop(_) => return true
-      // GC array operations with data/elem segments - not supported by JIT
-      // These require runtime access to segment data which JIT doesn't have
-      ArrayNewData(_, _)
-      | ArrayNewElem(_, _)
-      | ArrayInitData(_, _)
-      | ArrayInitElem(_, _) => return true
+      // All bulk memory/table + segment-based GC array ops are supported via libcalls.
       // Block instructions - need to check nested instructions
       Block(_, body) | Loop(_, body) =>
         if contains_unsupported_instruction(body) {
@@ -414,6 +383,160 @@ pub fn init_elem_segments(
 
   // Initialize shared tables
   jm.init_shared_tables(jit_tables, elem_init)
+}
+
+///|
+/// Initialize per-context data/elem segments for bulk memory/table and GC segment ops.
+///
+/// This feeds JIT libcalls used by:
+/// - memory.init / data.drop
+/// - table.init / table.copy / table.fill / elem.drop
+/// - array.new_data / array.init_data / array.new_elem / array.init_elem
+///
+/// Element segments are stored as (value, type_idx) pairs so call_indirect can
+/// type-check after table.init/table.fill.
+pub fn init_bulk_segments(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Unit {
+  // Precompute canonical indices for type equivalence.
+  let canonical = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+
+  // Build func_idx -> canonical type idx mapping in module index space.
+  let func_canonical_types : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      let canon = if type_idx >= 0 && type_idx < canonical.length() {
+        canonical[type_idx]
+      } else {
+        -1
+      }
+      func_canonical_types.push(canon)
+    }
+  }
+  for type_idx in mod_.funcs {
+    let canon = if type_idx >= 0 && type_idx < canonical.length() {
+      canonical[type_idx]
+    } else {
+      -1
+    }
+    func_canonical_types.push(canon)
+  }
+
+  // Build store func_addr -> module func_idx map (for GlobalGet funcref).
+  let func_addr_to_idx : Map[Int, Int] = {}
+  for i, addr in instance.func_addrs {
+    func_addr_to_idx.set(addr, i)
+  }
+
+  // Get globals for GlobalGet evaluation.
+  let globals : Array[@runtime.GlobalInstance] = []
+  for addr in instance.global_addrs {
+    let g = store.get_global(addr) catch { _ => continue }
+    globals.push(g)
+  }
+
+  // Initial dropped flags from the instantiated instance state.
+  let data_dropped : Array[Bool] = []
+  for i in 0..<mod_.datas.length() {
+    data_dropped.push(
+      i >= 0 && i < instance.dropped_datas.length() && instance.dropped_datas[i],
+    )
+  }
+  let elem_dropped : Array[Bool] = []
+  for i, elem in mod_.elems {
+    let dropped = i >= 0 &&
+      i < instance.dropped_elems.length() &&
+      instance.dropped_elems[i]
+    // Declarative segments behave as dropped for table.init/array.new_elem.
+    let declarative = elem.mode is @types.ElemMode::Declarative
+    elem_dropped.push(dropped || declarative)
+  }
+
+  // Build element segment (value,type) pairs.
+  let elem_pairs : Array[Array[Int64]] = []
+  for elem in mod_.elems {
+    let pairs : Array[Int64] = []
+    for init_expr in elem.init {
+      let mut raw = @types.NULL_REF
+      let mut ty = -1L
+      match init_expr {
+        [RefFunc(idx)] => {
+          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          let t = if idx >= 0 && idx < func_canonical_types.length() {
+            func_canonical_types[idx]
+          } else {
+            -1
+          }
+          ty = t.to_int64()
+        }
+        [I32Const(idx)] => {
+          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          let t = if idx >= 0 && idx < func_canonical_types.length() {
+            func_canonical_types[idx]
+          } else {
+            -1
+          }
+          ty = t.to_int64()
+        }
+        [RefNull(_)] => ()
+        // GC: i31ref element segments.
+        [I32Const(n), RefI31] => {
+          raw = @jit.encode_i31(n & 0x7FFFFFFF)
+          ty = -1L
+        }
+        [GlobalGet(idx), RefI31] =>
+          if idx >= 0 && idx < globals.length() {
+            match globals[idx].get() {
+              @types.Value::I32(n) => {
+                raw = @jit.encode_i31(n & 0x7FFFFFFF)
+                ty = -1L
+              }
+              _ => ()
+            }
+          }
+        [GlobalGet(idx)] =>
+          if idx >= 0 && idx < globals.length() {
+            match globals[idx].get() {
+              @types.Value::FuncRef(store_addr) =>
+                match func_addr_to_idx.get(store_addr) {
+                  Some(func_idx) => {
+                    raw = @jit.tag_funcref_ptr(jm.get_func_ptr(func_idx))
+                    let t = if func_idx >= 0 &&
+                      func_idx < func_canonical_types.length() {
+                      func_canonical_types[func_idx]
+                    } else {
+                      -1
+                    }
+                    ty = t.to_int64()
+                  }
+                  None => ()
+                }
+              @types.Value::ExternRef(host_idx) => {
+                raw = @jit.encode_externref(host_idx)
+                ty = -1L
+              }
+              @types.Value::I31(n) => {
+                raw = @jit.encode_i31(n)
+                ty = -1L
+              }
+              @types.Value::Null => ()
+              _ => ()
+            }
+          }
+        _ => ()
+      }
+      pairs.push(raw)
+      pairs.push(ty)
+    }
+    elem_pairs.push(pairs)
+  }
+  jm.setup_segments(mod_.datas, elem_pairs, data_dropped~, elem_dropped~)
 }
 
 ///|

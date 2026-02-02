@@ -62,7 +62,7 @@ int is_subtype_cached(int type1, int type2) {
     int current = type1;
     while (current >= 0 && current < g_gc_num_types) {
         if (current == type2) return 1;
-        int super_idx = g_gc_type_cache[current * 3];  // offset 0 = super_idx
+        int super_idx = g_gc_type_cache[current * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
         if (super_idx < 0) break;  // No more supertypes
         if (super_idx == current) break;  // Avoid infinite loop
         current = super_idx;
@@ -138,7 +138,7 @@ int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
                                 if (current_canonical == target_canonical) {
                                     return 1;
                                 }
-                                int32_t super_idx = g_gc_type_cache[current_type * 3];
+                                int32_t super_idx = g_gc_type_cache[current_type * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
                                 if (super_idx < 0 || super_idx == current_type) break;
                                 current_type = super_idx;
                             }
@@ -206,7 +206,7 @@ int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable) {
             if (current_canonical == target_canonical) {
                 return 1;
             }
-            int32_t super_idx = g_gc_type_cache[current_type * 3];
+            int32_t super_idx = g_gc_type_cache[current_type * GC_TYPE_CACHE_STRIDE + GC_TYPE_SUPER_IDX_OFF];
             if (super_idx < 0 || super_idx == current_type) break;
             current_type = super_idx;
         }
@@ -257,9 +257,9 @@ void set_type_cache_internal(int32_t *types_data, int num_types) {
 
     g_gc_num_types = num_types;
     if (num_types > 0 && types_data) {
-        g_gc_type_cache = (int32_t*)malloc(num_types * 3 * sizeof(int32_t));
+        g_gc_type_cache = (int32_t*)malloc((size_t)num_types * GC_TYPE_CACHE_STRIDE * sizeof(int32_t));
         if (g_gc_type_cache) {
-            memcpy(g_gc_type_cache, types_data, num_types * 3 * sizeof(int32_t));
+            memcpy(g_gc_type_cache, types_data, (size_t)num_types * GC_TYPE_CACHE_STRIDE * sizeof(int32_t));
         }
     } else {
         g_gc_type_cache = NULL;

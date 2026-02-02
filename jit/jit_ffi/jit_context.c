@@ -97,6 +97,17 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->wasi_stderr_len = 0;
     ctx->wasi_stderr_cap = 0;
 
+    // Bulk segment state (per-context; initialized on demand).
+    ctx->data_segments = NULL;
+    ctx->data_segment_sizes = NULL;
+    ctx->data_dropped = NULL;
+    ctx->data_segment_count = 0;
+
+    ctx->elem_segments = NULL;
+    ctx->elem_segment_sizes = NULL;
+    ctx->elem_dropped = NULL;
+    ctx->elem_segment_count = 0;
+
     return ctx;
 }
 
@@ -105,6 +116,45 @@ jit_context_t *alloc_context_internal(int func_count) {
 
 void free_context_internal(jit_context_t *ctx) {
     if (!ctx) return;
+
+    // Free per-context segment storage (owned MoonBit FixedArray payloads).
+    if (ctx->data_segments) {
+        for (int i = 0; i < ctx->data_segment_count; i++) {
+            if (ctx->data_segments[i]) {
+                moonbit_decref(ctx->data_segments[i]);
+            }
+        }
+        free(ctx->data_segments);
+        ctx->data_segments = NULL;
+    }
+    if (ctx->data_segment_sizes) {
+        free(ctx->data_segment_sizes);
+        ctx->data_segment_sizes = NULL;
+    }
+    if (ctx->data_dropped) {
+        free(ctx->data_dropped);
+        ctx->data_dropped = NULL;
+    }
+    ctx->data_segment_count = 0;
+
+    if (ctx->elem_segments) {
+        for (int i = 0; i < ctx->elem_segment_count; i++) {
+            if (ctx->elem_segments[i]) {
+                moonbit_decref(ctx->elem_segments[i]);
+            }
+        }
+        free(ctx->elem_segments);
+        ctx->elem_segments = NULL;
+    }
+    if (ctx->elem_segment_sizes) {
+        free(ctx->elem_segment_sizes);
+        ctx->elem_segment_sizes = NULL;
+    }
+    if (ctx->elem_dropped) {
+        free(ctx->elem_dropped);
+        ctx->elem_dropped = NULL;
+    }
+    ctx->elem_segment_count = 0;
 
     // Free context-owned memory0 (guarded allocations are large and must not leak)
     if (ctx->owns_memory0 && ctx->memory0) {

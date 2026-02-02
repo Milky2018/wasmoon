@@ -150,6 +150,26 @@ typedef struct {
     // This is invoked by `wasmoon_jit_hostcall` during JIT execution.
     void *hostcall_callback;          // Function pointer for hostcall callback
     void *hostcall_callback_data;     // Closure data for hostcall callback
+
+    // ============ Bulk Memory/Table Segment State ============
+    // Per-instance (per jit_context_t) storage for bulk memory/table operations:
+    //   memory.init/data.drop/table.init/elem.drop and GC array.*_{data,elem}.
+    //
+    // This is intentionally *not* in the fixed-offset hot VMContext prefix since
+    // JIT-generated code never accesses these fields directly; only libcalls do.
+
+    // Data segments (owned MoonBit FixedArray[Byte] payload pointers).
+    uint8_t **data_segments;
+    size_t *data_segment_sizes;   // number of bytes per segment
+    uint8_t *data_dropped;        // 0/1 per segment
+    int data_segment_count;
+
+    // Element segments (owned MoonBit FixedArray[Int64] payload pointers).
+    // Each element segment stores pairs: (value, type_idx) for each element.
+    int64_t **elem_segments;
+    size_t *elem_segment_sizes;   // number of elements (not Int64 slots)
+    uint8_t *elem_dropped;        // 0/1 per segment
+    int elem_segment_count;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

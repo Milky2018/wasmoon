@@ -133,6 +133,16 @@ void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 #define GC_KIND_STRUCT 1
 #define GC_KIND_ARRAY  2
 
+// Type cache layout (per type) used by JIT libcalls.
+// Keep this in sync with `jit/gc_helpers.mbt` (setup_type_cache_from_types).
+#define GC_TYPE_CACHE_STRIDE 6
+#define GC_TYPE_SUPER_IDX_OFF 0
+#define GC_TYPE_KIND_OFF 1
+#define GC_TYPE_STRUCT_NUM_FIELDS_OFF 2
+#define GC_TYPE_ARRAY_ELEM_TAG_OFF 3
+#define GC_TYPE_ARRAY_ELEM_BYTES_OFF 4
+#define GC_TYPE_ARRAY_ELEM_FLAGS_OFF 5
+
 // Value encoding tags
 #define EXTERNREF_TAG 0x4000000000000000LL
 #define FUNCREF_TAG   0x2000000000000000LL

@@ -342,6 +342,7 @@ pub fn run_jit(
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
   ignore(func_idx)
+  let mut jm_opt : @jit.JITModule? = None
   try {
     // Compile ALL functions in the module (not just the target function)
     // This is necessary because the target function may call other functions
@@ -398,6 +399,7 @@ pub fn run_jit(
     guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
       return Err("Failed to create JIT module")
     }
+    jm_opt = Some(jm)
 
     // Allocate independent WASM stack with guard page (1MB)
     // This provides controlled stack overflow behavior
@@ -428,12 +430,11 @@ pub fn run_jit(
     // Initialize indirect table for call_indirect support
     init_elem_segments(mod_, jm, [])
 
-    // Set up data segments for memory.init and data.drop
-    @jit.setup_data_segments(mod_.datas)
-
-    // Set up element segment values for table.init and elem.drop
-    let elem_values = extract_elem_segment_values(mod_)
-    @jit.setup_elem_segments(elem_values)
+    // Set up per-context data/elem segments for bulk memory/table and GC segment ops.
+    // Element segments are stored as pairs: (value, type_idx) for each element.
+    let elem_pairs = extract_elem_segment_pairs(mod_, jm)
+    let elem_dropped = extract_elem_segment_initial_dropped(mod_)
+    jm.setup_segments(mod_.datas, elem_pairs, elem_dropped~)
 
     // Set up GC heap for GC operations (struct, array, i31)
     let c_heap = @jit.CHeap::new()
@@ -448,7 +449,7 @@ pub fn run_jit(
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
       @jit.gc_teardown()
-      @jit.clear_segments()
+      jm.clear_segments()
       return Err("Failed to get JIT function")
     }
     // Encode args with type context for correct null handling
@@ -478,9 +479,9 @@ pub fn run_jit(
     }
     let raw_results = jm.call_with_context(f, jit_args)
 
-    // Tear down GC context and segments after JIT call
+    // Tear down GC context and per-context segments after JIT call
     @jit.gc_teardown()
-    @jit.clear_segments()
+    jm.clear_segments()
 
     // Convert to Values
     let values = jit_results_to_values(raw_results, result_types)
@@ -489,7 +490,10 @@ pub fn run_jit(
     e => {
       // Ensure GC teardown and segment cleanup on error path
       @jit.gc_teardown()
-      @jit.clear_segments()
+      match jm_opt {
+        Some(jm) => jm.clear_segments()
+        None => ()
+      }
       Err("JIT error: \{e}")
     }
   }
@@ -499,22 +503,68 @@ pub fn run_jit(
 /// Extract element segment values for JIT segment setup
 /// Returns an array of Int64 arrays, one per element segment
 /// Each Int64 is a function index or 0 for null
-fn extract_elem_segment_values(mod_ : @types.Module) -> Array[Array[Int64]] {
+fn extract_elem_segment_pairs(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+) -> Array[Array[Int64]] {
+  // Build func_idx -> type_idx mapping in the module's index space.
+  let func_type_indices : Array[Int] = []
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      func_type_indices.push(type_idx)
+    }
+  }
+  for type_idx in mod_.funcs {
+    func_type_indices.push(type_idx)
+  }
   let result : Array[Array[Int64]] = []
   for elem in mod_.elems {
-    let values : Array[Int64] = []
+    let pairs : Array[Int64] = []
     for init_expr in elem.init {
-      let func_idx : Int64 = match init_expr {
-        [RefFunc(idx)] => idx.to_int64()
-        [I32Const(idx)] => idx.to_int64()
-        [RefNull(_)] => 0L // null reference
-        _ => 0L
+      let mut raw = @types.NULL_REF
+      let mut ty = -1L
+      match init_expr {
+        [RefFunc(idx)] => {
+          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          let t = if idx >= 0 && idx < func_type_indices.length() {
+            func_type_indices[idx]
+          } else {
+            -1
+          }
+          ty = t.to_int64()
+        }
+        [I32Const(idx)] => {
+          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          let t = if idx >= 0 && idx < func_type_indices.length() {
+            func_type_indices[idx]
+          } else {
+            -1
+          }
+          ty = t.to_int64()
+        }
+        [RefNull(_)] => ()
+        _ => ()
       }
-      values.push(func_idx)
+      pairs.push(raw)
+      pairs.push(ty)
     }
-    result.push(values)
+    result.push(pairs)
   }
   result
+}
+
+///|
+fn extract_elem_segment_initial_dropped(mod_ : @types.Module) -> Array[Bool] {
+  let dropped : Array[Bool] = []
+  for elem in mod_.elems {
+    // Active elem segments are implicitly dropped after instantiation-time init.
+    // Declarative elem segments behave as dropped (unusable for table.init, etc).
+    dropped.push(
+      elem.mode is @types.ElemMode::Active(_, _) ||
+      elem.mode is @types.ElemMode::Declarative,
+    )
+  }
+  dropped
 }
 
 ///|
