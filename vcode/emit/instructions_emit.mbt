@@ -958,6 +958,19 @@ pub fn MachineCode::emit_ldr_reg_scaled(
 }
 
 ///|
+pub fn MachineCode::emit_ldr_reg_offset(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  option : Int,
+  size_bits : Int,
+  shift : Int,
+) -> Unit {
+  LdrRegOffset(rt, rn, rm, option, size_bits, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_str_reg_scaled(
   self : MachineCode,
   rt : Int,
@@ -966,6 +979,19 @@ pub fn MachineCode::emit_str_reg_scaled(
   shift : Int,
 ) -> Unit {
   StrRegScaled(rt, rn, rm, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_str_reg_offset(
+  self : MachineCode,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  option : Int,
+  size_bits : Int,
+  shift : Int,
+) -> Unit {
+  StrRegOffset(rt, rn, rm, option, size_bits, shift).emit(self)
 }
 
 ///|

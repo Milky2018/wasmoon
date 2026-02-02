@@ -1184,12 +1184,28 @@ fn MachineCode::emit_instruction(
       let base_reg = reg_num(inst.uses[0])
       self.emit_load(ty, result_reg, base_reg, offset)
     }
+    LoadPtrRegOffset(ty, ext, shift) => {
+      // Raw pointer load with register offset (no bounds checking)
+      // Uses: [base, index], Defs: [result]
+      let result_reg = wreg_num(inst.defs[0])
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      self.emit_load_reg_offset(ty, result_reg, base_reg, index_reg, ext, shift)
+    }
     StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking)
       // Uses: [base, value], Defs: []
       let base_reg = reg_num(inst.uses[0])
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
+    }
+    StorePtrRegOffset(ty, ext, shift) => {
+      // Raw pointer store with register offset (no bounds checking)
+      // Uses: [base, index, value], Defs: []
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      let value_reg = reg_num(inst.uses[2])
+      self.emit_store_reg_offset(ty, value_reg, base_reg, index_reg, ext, shift)
     }
     LoadPtrNarrow(bits, signed, offset) => {
       // Raw pointer narrow load (no bounds checking)

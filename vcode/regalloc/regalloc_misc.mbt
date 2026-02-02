@@ -5,9 +5,9 @@
 fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
-    LoadPtr(_, _) | LoadPtrNarrow(_, _, _) => true
+    LoadPtr(_, _) | LoadPtrRegOffset(_, _, _) | LoadPtrNarrow(_, _, _) => true
     // Memory stores have side effects
-    Store(_, _) | StackStore(_) | StorePtr(_, _) => true
+    Store(_, _) | StackStore(_) | StorePtr(_, _) | StorePtrRegOffset(_, _, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
     TypeCheckSubtypeIndirect(_) => true

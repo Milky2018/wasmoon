@@ -685,6 +685,37 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rt & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    LdrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let natural = match size_bits {
+        0 => 0
+        1 => 1
+        2 => 2
+        3 => 3
+        _ => abort("invalid size_bits in LdrRegOffset: \{size_bits}")
+      }
+      let s_bit = if shift == 0 {
+        0
+      } else if shift == natural {
+        1
+      } else {
+        abort(
+          "invalid shift in LdrRegOffset: \{shift} for size_bits=\{size_bits}",
+        )
+      }
+      let inst = ((size_bits & 0b11) << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b01 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        ((option & 7) << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     LdrWRegScaled(rt, rn, rm, shift) => {
       let s_bit = if shift == 2 { 1 } else { 0 }
       let inst = (0b10 << 30) |
@@ -799,6 +830,37 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (1 << 21) |
         ((rm & 31) << 16) |
         (0b011 << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let natural = match size_bits {
+        0 => 0
+        1 => 1
+        2 => 2
+        3 => 3
+        _ => abort("invalid size_bits in StrRegOffset: \{size_bits}")
+      }
+      let s_bit = if shift == 0 {
+        0
+      } else if shift == natural {
+        1
+      } else {
+        abort(
+          "invalid shift in StrRegOffset: \{shift} for size_bits=\{size_bits}",
+        )
+      }
+      let inst = ((size_bits & 0b11) << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b00 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        ((option & 7) << 13) |
         (s_bit << 12) |
         (0b10 << 10) |
         ((rn & 31) << 5) |

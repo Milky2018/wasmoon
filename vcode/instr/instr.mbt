@@ -371,9 +371,17 @@ pub(all) enum VCodeOpcode {
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtr(MemType, Int)
+  // LoadPtrRegOffset(type, extend, shift): Load from [base + index{, extend}{, scale}]
+  // Uses: [base, index], Defs: [result]
+  // - extend: None uses X index; Uxtw/Sxtw use W index extended to X
+  // - shift: 0 (no scale) or log2(access_size) (scaled register offset)
+  LoadPtrRegOffset(MemType, IndexExtend, Int)
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
+  // StorePtrRegOffset(type, extend, shift): Store to [base + index{, extend}{, scale}]
+  // Uses: [base, index, value], Defs: []
+  StorePtrRegOffset(MemType, IndexExtend, Int)
   // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
@@ -983,7 +991,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
+    LoadPtrRegOffset(ty, ext, shift) =>
+      "load_ptr_regoff.\{ty} (\{ext},\{shift})"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
+    StorePtrRegOffset(ty, ext, shift) =>
+      "store_ptr_regoff.\{ty} (\{ext},\{shift})"
     LoadPtrNarrow(bits, signed, offset) => {
       let sign_str = if signed { "s" } else { "u" }
       "load_ptr\{bits}_\{sign_str} +\{offset}"
@@ -1556,6 +1568,32 @@ pub(all) enum ShiftType {
   Lsl // Logical shift left
   Lsr // Logical shift right
   Asr // Arithmetic shift right
+}
+
+///|
+/// AArch64 addressing-mode extend for register-offset loads/stores.
+///
+/// Mirrors Cranelift's AMode.{RegExtended,RegScaledExtended} options:
+/// - None: use X register offset (LSL option)
+/// - Uxtw/Sxtw: extend Wm to X, optionally scaled by access size (S bit)
+pub(all) enum IndexExtend {
+  None
+  Uxtw
+  Sxtw
+}
+
+///|
+fn IndexExtend::to_string(self : IndexExtend) -> String {
+  match self {
+    None => "none"
+    Uxtw => "uxtw"
+    Sxtw => "sxtw"
+  }
+}
+
+///|
+pub impl Show for IndexExtend with output(self, logger) {
+  logger.write_string(self.to_string())
 }
 
 ///|

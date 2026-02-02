@@ -114,6 +114,11 @@ enum Instruction {
   LdrImm(Int, Int, Int)
   LdrImmSigned(Int, Int, Int)
   LdrRegScaled(Int, Int, Int, Int)
+  // Register-offset load/store with configurable extension/scaling.
+  // option: 0b011 = LSL (X offset), 0b010 = UXTW, 0b110 = SXTW.
+  // size_bits: 0=8b, 1=16b, 2=32b, 3=64b. shift must be 0 or the natural scale for size_bits.
+  LdrRegOffset(Int, Int, Int, Int, Int, Int) // rt, rn, rm, option, size_bits, shift
+  StrRegOffset(Int, Int, Int, Int, Int, Int) // rt, rn, rm, option, size_bits, shift
   // Register-offset load/store using X register offset (UXTX), optional scaling.
   // shift is either 0 (no scale) or the natural scale for the access size.
   LdrWRegScaled(Int, Int, Int, Int)
@@ -653,6 +658,31 @@ fn Instruction::annotate(self : Instruction) -> String {
     LdrImmSigned(rt, rn, simm9) => "ldur x\{rt}, [x\{rn}, #\{simm9}]"
     LdrRegScaled(rt, rn, rm, shift) =>
       "ldr x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    LdrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let (mnem, rt_name) = match size_bits {
+        0 => ("ldrb", "w\{rt}")
+        1 => ("ldrh", "w\{rt}")
+        2 => ("ldr", "w\{rt}")
+        3 => ("ldr", "x\{rt}")
+        _ => ("ldr", "x\{rt}")
+      }
+      let opt_str = match option {
+        0b011 => "lsl"
+        0b010 => "uxtw"
+        0b110 => "sxtw"
+        _ => "opt\{option}"
+      }
+      let rm_name = if option == 0b010 || option == 0b110 {
+        "w\{rm}"
+      } else {
+        "x\{rm}"
+      }
+      if shift == 0 {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str}]"
+      } else {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str} #\{shift}]"
+      }
+    }
     LdrWRegScaled(rt, rn, rm, shift) =>
       "ldr w\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
     StrWRegScaled(rt, rn, rm, shift) =>
@@ -664,6 +694,31 @@ fn Instruction::annotate(self : Instruction) -> String {
     StrImm(rt, rn, imm12) => "str x\{rt}, [x\{rn}, #\{imm12}]"
     StrRegScaled(rt, rn, rm, shift) =>
       "str x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    StrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let (mnem, rt_name) = match size_bits {
+        0 => ("strb", "w\{rt}")
+        1 => ("strh", "w\{rt}")
+        2 => ("str", "w\{rt}")
+        3 => ("str", "x\{rt}")
+        _ => ("str", "x\{rt}")
+      }
+      let opt_str = match option {
+        0b011 => "lsl"
+        0b010 => "uxtw"
+        0b110 => "sxtw"
+        _ => "opt\{option}"
+      }
+      let rm_name = if option == 0b010 || option == 0b110 {
+        "w\{rm}"
+      } else {
+        "x\{rm}"
+      }
+      if shift == 0 {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str}]"
+      } else {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str} #\{shift}]"
+      }
+    }
     LdrbImm(rt, rn, imm12) => "ldrb w\{rt}, [x\{rn}, #\{imm12}]"
     LdrhImm(rt, rn, imm12) => "ldrh w\{rt}, [x\{rn}, #\{imm12}]"
     LdrWImm(rt, rn, imm12) => "ldr w\{rt}, [x\{rn}, #\{imm12}]"
