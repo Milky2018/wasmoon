@@ -180,9 +180,9 @@ pub(all) enum VCodeOpcode {
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
-  And
-  Or
-  Xor
+  And(Bool)
+  Or(Bool)
+  Xor(Bool)
   Shl(Bool) // LSL with size
   AShr(Bool) // Arithmetic shift right with size
   LShr(Bool) // Logical shift right with size
@@ -839,9 +839,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
-    And => "and"
-    Or => "or"
-    Xor => "xor"
+    And(is_64) => if is_64 { "and" } else { "and32" }
+    Or(is_64) => if is_64 { "or" } else { "or32" }
+    Xor(is_64) => if is_64 { "xor" } else { "xor32" }
     Shl(is_64) => if is_64 { "shl" } else { "shl32" }
     AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
     LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }

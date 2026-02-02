@@ -689,9 +689,9 @@ fn lower_inst_default(
     @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
 
     // Bitwise operations
-    @ir.Opcode::Band => lower_binary_int(ctx, inst, block, @instr.And)
-    @ir.Opcode::Bor => lower_binary_int(ctx, inst, block, @instr.Or)
-    @ir.Opcode::Bxor => lower_binary_int(ctx, inst, block, @instr.Xor)
+    @ir.Opcode::Band => lower_band(ctx, inst, block)
+    @ir.Opcode::Bor => lower_bor(ctx, inst, block)
+    @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
     @ir.Opcode::Ishl =>
       lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) })
     @ir.Opcode::Sshr =>

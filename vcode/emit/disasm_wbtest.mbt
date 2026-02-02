@@ -416,32 +416,36 @@ test "type_check_large_immediate" {
 }
 
 ///|
-/// Test that CMP immediate truncates values > 4095 (this is the bug we fixed)
-/// This test documents the limitation of emit_cmp_imm
-test "cmp_imm_truncates_large_values" {
+/// Test that emit_cmp_imm handles large immediates without truncation.
+/// For non-encodable immediates it falls back to materializing the constant.
+test "cmp_imm_handles_large_values" {
   let mc = MachineCode::new()
-  // 7905 = 0x1EE1, masked to 12 bits = 0xEE1 = 3809
-  // This shows the WRONG behavior if we use CMP immediate for large values
-  mc.emit_cmp_imm(9, 7905) // Will compare against 3809, not 7905!
+  mc.emit_cmp_imm(9, 7905)
   mc.resolve_fixups()
-  // Note: The annotation says 7905 but the actual immediate is 3809 (0xEE1)
-  // This is why we must use load+cmp_reg for values > 4095
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: 3f853bf1  cmp x9, #7905
+      #|  0000: 30dc83d2  movz x16, #7905, lsl #0
+      #|  0004: 3f0110eb  cmp x9, x16
       #|
     ),
   )
-  // Verify the actual encoded immediate by checking the instruction bytes
-  // Bits [21:10] contain imm12. Let's decode 0xf13b853f:
-  // The instruction encodes imm12 = 0xEE1 = 3809, not 7905
-  let inst = mc.bytes[0] |
-    (mc.bytes[1] << 8) |
-    (mc.bytes[2] << 16) |
-    (mc.bytes[3] << 24)
-  let encoded_imm12 = (inst >> 10) & 0xFFF
-  inspect(encoded_imm12, content="3809") // This proves truncation happened!
+}
+
+///|
+/// Test that emit_cmp_imm uses the shifted-12 form when possible.
+test "cmp_imm_shifted12" {
+  let mc = MachineCode::new()
+  // 0x400000 = 1024 << 12 fits the shifted immediate form.
+  mc.emit_cmp_imm(9, 0x400000)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 3f0150f1  cmp x9, #1024, lsl #12
+      #|
+    ),
+  )
 }
 
 ///|

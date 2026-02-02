@@ -268,7 +268,7 @@ pub fn apply_aarch64_rule(
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(And, 0, 1, shift)
+          AArch64RewriteResult::LogicalShifted(And(true), 0, 1, shift)
         } else {
           AArch64RewriteResult::NoMatch
         }
@@ -279,7 +279,7 @@ pub fn apply_aarch64_rule(
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(Or, 0, 1, shift)
+          AArch64RewriteResult::LogicalShifted(Or(true), 0, 1, shift)
         } else {
           AArch64RewriteResult::NoMatch
         }
@@ -290,7 +290,7 @@ pub fn apply_aarch64_rule(
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(Xor, 0, 1, shift)
+          AArch64RewriteResult::LogicalShifted(Xor(true), 0, 1, shift)
         } else {
           AArch64RewriteResult::NoMatch
         }
