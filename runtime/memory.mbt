@@ -456,10 +456,14 @@ pub fn Memory::init_data(
   data : Bytes,
 ) -> Unit raise RuntimeError {
   let len = data.length()
+  // Per the spec, bounds checks must still happen even when `len == 0`.
+  // For example, an active data segment `(data (i32.const 1))` must trap at
+  // instantiation time if the offset is out of bounds, even though it writes 0
+  // bytes.
+  self.check_bounds(dest, len)
   if len == 0 {
     return
   }
-  self.check_bounds(dest, len)
   let fixed = FixedArray::make(len, b'\x00')
   for i in 0..<len {
     fixed[i] = data[i]
@@ -478,11 +482,12 @@ pub fn Memory::copy(
   src : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
+  // Per the spec, bounds checks must still happen even when `len == 0`.
+  self.check_bounds(dest, len)
+  self.check_bounds(src, len)
   if len == 0 {
     return
   }
-  self.check_bounds(dest, len)
-  self.check_bounds(src, len)
   let dest_off = self.addr_to_offset(dest)
   let src_off = self.addr_to_offset(src)
   let _ = @jit_ffi.c_mem_desc_memmove(self.mem_desc_ptr, dest_off, src_off, len)
@@ -497,10 +502,11 @@ pub fn Memory::fill(
   value : Byte,
   len : Int,
 ) -> Unit raise RuntimeError {
+  // Per the spec, bounds checks must still happen even when `len == 0`.
+  self.check_bounds(dest, len)
   if len == 0 {
     return
   }
-  self.check_bounds(dest, len)
   let offset = self.addr_to_offset(dest)
   let _ = @jit_ffi.c_mem_desc_memset(
     self.mem_desc_ptr,
