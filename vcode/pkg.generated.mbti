@@ -136,10 +136,10 @@ pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn VCodeBuilder::add_result(Self, @abi.RegClass) -> Unit
 pub fn VCodeBuilder::ashr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::band(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::bor(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::band(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::bor(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::branch(Self, @abi.VReg, @block.VCodeBlock, @block.VCodeBlock) -> Unit
-pub fn VCodeBuilder::bxor(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::bxor(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::cmp(Self, @instr.CmpKind, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
 pub fn VCodeBuilder::create_block(Self) -> @block.VCodeBlock
 pub fn VCodeBuilder::current_block(Self) -> @block.VCodeBlock?

@@ -163,9 +163,10 @@ pub fn VCodeBuilder::band(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(And)
+  let inst = @instr.VCodeInst::new(And(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -178,9 +179,10 @@ pub fn VCodeBuilder::bor(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Or)
+  let inst = @instr.VCodeInst::new(Or(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))
@@ -193,9 +195,10 @@ pub fn VCodeBuilder::bxor(
   self : VCodeBuilder,
   a : @abi.VReg,
   b : @abi.VReg,
+  is_64? : Bool = true,
 ) -> @abi.VReg {
   let result = self.new_vreg(Int)
-  let inst = @instr.VCodeInst::new(Xor)
+  let inst = @instr.VCodeInst::new(Xor(is_64))
   inst.add_def({ reg: Virtual(result) })
   inst.add_use(Virtual(a))
   inst.add_use(Virtual(b))

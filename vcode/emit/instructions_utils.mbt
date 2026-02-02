@@ -45,14 +45,19 @@ enum Instruction {
   SubReg32(Int, Int, Int) // 32-bit subtract
   AddReg32(Int, Int, Int) // 32-bit add
   AddImm32(Int, Int, Int) // 32-bit add immediate
+  AddImm32Shifted12(Int, Int, Int) // 32-bit add immediate shifted left by 12
   SubImm32(Int, Int, Int) // 32-bit sub immediate
+  SubImm32Shifted12(Int, Int, Int) // 32-bit sub immediate shifted left by 12
   Mul32(Int, Int, Int) // 32-bit multiply
   // Bitwise - Register
   AndReg(Int, Int, Int)
+  AndReg32(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
+  OrrReg32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
+  EorReg32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
   Mvn32(Int, Int) // 32-bit bitwise NOT
@@ -196,7 +201,9 @@ enum Instruction {
   CmpReg(Int, Int)
   CmpReg32(Int, Int) // 32-bit compare
   CmpImm(Int, Int)
+  CmpImmShifted12(Int, Int) // rn, imm12 (encoded as imm12 << 12)
   CmpImm32(Int, Int) // 32-bit compare immediate
+  CmpImm32Shifted12(Int, Int) // rn, imm12 (encoded as imm12 << 12)
   // ADDS XZR/WZR, Xn, #imm - add immediate and set flags (result discarded)
   AddsImmZr(Int, Int, Bool) // rn, imm12, is_64
   // CCMP Xn, #imm, #nzcv, cond - conditional compare immediate
@@ -554,9 +561,12 @@ fn Instruction::annotate(self : Instruction) -> String {
     SubReg32(rd, rn, rm) => "sub w\{rd}, w\{rn}, w\{rm}"
     AddReg32(rd, rn, rm) => "add w\{rd}, w\{rn}, w\{rm}"
     AddImm32(rd, rn, imm) => "add w\{rd}, w\{rn}, #\{imm}"
+    AddImm32Shifted12(rd, rn, imm) => "add w\{rd}, w\{rn}, #\{imm}, lsl #12"
     SubImm32(rd, rn, imm) => "sub w\{rd}, w\{rn}, #\{imm}"
+    SubImm32Shifted12(rd, rn, imm) => "sub w\{rd}, w\{rn}, #\{imm}, lsl #12"
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
+    AndReg32(rd, rn, rm) => "and w\{rd}, w\{rn}, w\{rm}"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -566,6 +576,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       "and x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
+    OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -575,6 +586,7 @@ fn Instruction::annotate(self : Instruction) -> String {
       "orr x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
+    EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -756,7 +768,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     CmpReg(rn, rm) => "cmp x\{rn}, x\{rm}"
     CmpReg32(rn, rm) => "cmp w\{rn}, w\{rm}"
     CmpImm(rn, imm12) => "cmp x\{rn}, #\{imm12}"
+    CmpImmShifted12(rn, imm12) => "cmp x\{rn}, #\{imm12}, lsl #12"
     CmpImm32(rn, imm12) => "cmp w\{rn}, #\{imm12}"
+    CmpImm32Shifted12(rn, imm12) => "cmp w\{rn}, #\{imm12}, lsl #12"
     AddsImmZr(rn, imm12, is_64) => {
       let reg = if is_64 { "x" } else { "w" }
       let zr = if is_64 { "xzr" } else { "wzr" }

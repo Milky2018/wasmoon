@@ -234,9 +234,9 @@ pub(all) enum VCodeOpcode {
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
-  And
-  Or
-  Xor
+  And(Bool)
+  Or(Bool)
+  Xor(Bool)
   Shl(Bool)
   AShr(Bool)
   LShr(Bool)

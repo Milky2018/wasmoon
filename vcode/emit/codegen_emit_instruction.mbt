@@ -35,8 +35,16 @@ fn MachineCode::emit_instruction(
           // Lowering should have rejected immediates > 0xFFF000
           abort("AddImm immediate \{imm} cannot be encoded (max 0xFFF000)")
         }
-      } else {
+        // 32-bit ADD immediate has the same encoding rules as 64-bit (just sf=0).
+      } else if imm >= 0 && imm <= 4095 {
         self.emit_add_imm32(rd, rn, imm)
+      } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+        self.emit_add_imm32_shifted12(rd, rn, imm >> 12)
+      } else {
+        // Fallback: materialize immediate and use ADD (register).
+        let scratch = @abi.SCRATCH_REG_1
+        self.emit_load_imm64(scratch, imm.to_int64())
+        self.emit_add_reg32(rd, rn, scratch)
       }
     }
     Sub(is_64) => {
@@ -53,9 +61,28 @@ fn MachineCode::emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if is_64 {
-        self.emit_sub_imm(rd, rn, imm)
-      } else {
+        // AArch64 SUB immediate can encode:
+        // - imm12 directly (0-4095) when sh=0
+        // - imm12 << 12 (multiples of 4096 up to 0xFFF000) when sh=1
+        if imm >= 0 && imm <= 4095 {
+          self.emit_sub_imm(rd, rn, imm)
+        } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+          self.emit_sub_imm_shifted12(rd, rn, imm >> 12)
+        } else {
+          // Fallback: materialize immediate and use SUB (register).
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm.to_int64())
+          self.emit_sub_reg(rd, rn, scratch)
+        }
+      } else if imm >= 0 && imm <= 4095 {
         self.emit_sub_imm32(rd, rn, imm)
+      } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+        self.emit_sub_imm32_shifted12(rd, rn, imm >> 12)
+      } else {
+        // Fallback: materialize immediate and use SUB (register).
+        let scratch = @abi.SCRATCH_REG_1
+        self.emit_load_imm64(scratch, imm.to_int64())
+        self.emit_sub_reg32(rd, rn, scratch)
       }
     }
     Mul(is_64) => {
@@ -88,23 +115,35 @@ fn MachineCode::emit_instruction(
         self.emit_udiv32(rd, rn, rm)
       }
     }
-    And => {
+    And(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_and_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_and_reg(rd, rn, rm)
+      } else {
+        self.emit_and_reg32(rd, rn, rm)
+      }
     }
-    Or => {
+    Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_orr_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_orr_reg(rd, rn, rm)
+      } else {
+        self.emit_orr_reg32(rd, rn, rm)
+      }
     }
-    Xor => {
+    Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      self.emit_eor_reg(rd, rn, rm)
+      if is_64 {
+        self.emit_eor_reg(rd, rn, rm)
+      } else {
+        self.emit_eor_reg32(rd, rn, rm)
+      }
     }
     Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])

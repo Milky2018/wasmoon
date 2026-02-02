@@ -599,7 +599,7 @@ fn is_inplace_safe(opcode : @instr.VCodeOpcode) -> Bool {
     Add(_) | Sub(_) | Mul(_) => true
     AddImm(_, _) | SubImm(_, _) => true
     // Logical operations
-    And | Or | Xor | Shl(_) => true
+    And(_) | Or(_) | Xor(_) | Shl(_) => true
     // Moves are not safe (we're eliminating them, not transforming them)
     Move => false
     // Load/store have side effects
