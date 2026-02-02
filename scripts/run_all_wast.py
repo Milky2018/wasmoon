@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 
-def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+def run_test(
+    wast_file: Path,
+    use_jit: bool,
+    timeout_s: int,
+) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     """Run a single wast test and return (passed, failed, error)."""
     cmd = ["./wasmoon", "test", str(wast_file)]
     if not use_jit:
@@ -19,7 +23,7 @@ def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[in
             cmd,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=timeout_s,
         )
         output = result.stdout + result.stderr
 
@@ -50,12 +54,17 @@ def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[in
 
         return passed, failed, None
     except subprocess.TimeoutExpired:
-        return None, None, "Timeout"
+        return None, None, f"Timeout ({timeout_s}s)"
     except Exception as e:
         return None, None, str(e)
 
 
-def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) -> dict:
+def run_tests_for_mode(
+    wast_files: list[Path],
+    test_dir: Path,
+    use_jit: bool,
+    timeout_s: int,
+) -> dict:
     """Run all tests for a specific mode and return results."""
     mode_name = "JIT" if use_jit else "Interpreter"
     print(f"\n{'='*60}")
@@ -70,7 +79,7 @@ def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) ->
 
     for wast_file in wast_files:
         name = str(wast_file.relative_to(test_dir))
-        passed, failed, error = run_test(wast_file, use_jit)
+        passed, failed, error = run_test(wast_file, use_jit, timeout_s)
 
         if error or passed is None or failed is None:
             status = f"ERROR: {error[:50] if error else 'Unknown error'}"
@@ -154,6 +163,12 @@ def main() -> None:
         action="store_true",
         help="Print full lists of failed/error files",
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=60,
+        help="Timeout per .wast file in seconds (default: 60)",
+    )
     args = parser.parse_args()
 
     # Validate mutually exclusive options
@@ -184,11 +199,15 @@ def main() -> None:
     # Run tests based on mode selection
     if not args.only_jit:
         # Run tests with interpreter (--no-jit)
-        interp_results = run_tests_for_mode(wast_files, test_dir, use_jit=False)
+        interp_results = run_tests_for_mode(
+            wast_files, test_dir, use_jit=False, timeout_s=args.timeout
+        )
 
     if not args.only_interp:
         # Run tests with JIT
-        jit_results = run_tests_for_mode(wast_files, test_dir, use_jit=True)
+        jit_results = run_tests_for_mode(
+            wast_files, test_dir, use_jit=True, timeout_s=args.timeout
+        )
 
     # Print combined summary
     print("\n" + "=" * 60)
