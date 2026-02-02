@@ -214,6 +214,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x11 // ADD imm 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    AddImm32Shifted12(rd, rn, imm12) => {
+      // ADD Wd, Wn, #imm12, lsl #12
+      let imm = imm12 & 0xFFF
+      let inst = (0b0 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     SubImm32(rd, rn, imm) => {
       // SUB Wd, Wn, #imm (32-bit)
       let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -221,6 +234,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = (imm >> 6) & 0x3F
       let b3 = 0x51 // SUB imm 32-bit: sf=0, op=1
       (b0, b1, b2, b3)
+    }
+    SubImm32Shifted12(rd, rn, imm12) => {
+      // SUB Wd, Wn, #imm12, lsl #12
+      let imm = imm12 & 0xFFF
+      let inst = (0b0 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     Mul32(rd, rn, rm) => {
       // MUL Wd, Wn, Wm (32-bit) = MADD Wd, Wn, Wm, WZR
@@ -235,6 +261,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 138
+      (b0, b1, b2, b3)
+    }
+    AndReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x0A // AND 32-bit: sf=0
       (b0, b1, b2, b3)
     }
     AndShifted(rd, rn, rm, shift, amount) => {
@@ -257,6 +290,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 170
       (b0, b1, b2, b3)
     }
+    OrrReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x2A // ORR 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -275,6 +315,13 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 202
+      (b0, b1, b2, b3)
+    }
+    EorReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = rm & 31
+      let b3 = 0x4A // EOR 32-bit: sf=0
       (b0, b1, b2, b3)
     }
     EorShifted(rd, rn, rm, shift, amount) => {
@@ -1265,6 +1312,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 241
       (b0, b1, b2, b3)
     }
+    CmpImmShifted12(rn, imm12) => {
+      // CMP Xn, #imm12, lsl #12 (encoded as SUBS XZR, Xn, #imm12, LSL #12)
+      let imm = imm12 & 0xFFF
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (1 << 29) | // S=1 (sets flags)
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        31 // Rd = XZR
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
+    }
     CmpReg32(rn, rm) => {
       let b0 = 31 | ((rn & 7) << 5)
       let b1 = (rn >> 3) & 3
@@ -1279,6 +1344,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = (imm >> 6) & 63
       let b3 = 0x71 // 32-bit: sf=0
       (b0, b1, b2, b3)
+    }
+    CmpImm32Shifted12(rn, imm12) => {
+      // CMP Wn, #imm12, lsl #12 (encoded as SUBS WZR, Wn, #imm12, LSL #12)
+      let imm = imm12 & 0xFFF
+      let inst = (0b0 << 31) |
+        (1 << 30) |
+        (1 << 29) | // S=1 (sets flags)
+        (0b100010 << 23) |
+        (1 << 22) | // sh=1: shift imm12 left by 12
+        (imm << 10) |
+        ((rn & 31) << 5) |
+        31 // Rd = WZR
+      (
+        inst & 0xFF,
+        (inst >> 8) & 0xFF,
+        (inst >> 16) & 0xFF,
+        (inst >> 24) & 0xFF,
+      )
     }
     AddsImmZr(rn, imm12, is_64) => {
       // ADDS XZR/WZR, Xn, #imm - add immediate with flags, result discarded

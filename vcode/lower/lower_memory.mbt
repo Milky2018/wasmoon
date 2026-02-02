@@ -66,7 +66,7 @@ fn lower_get_func_ref(
   let load_tag = @instr.VCodeInst::new(LoadConst(0x2000000000000000L))
   load_tag.add_def({ reg: Virtual(tag_vreg) })
   block.add_inst(load_tag)
-  let or_inst = @instr.VCodeInst::new(Or)
+  let or_inst = @instr.VCodeInst::new(Or(true))
   or_inst.add_def({ reg: Virtual(result_vreg) })
   or_inst.add_use(Virtual(raw_func_ptr))
   or_inst.add_use(Virtual(tag_vreg))

@@ -220,16 +220,19 @@ test "lower bitwise operations" {
   builder.return_([xor_res])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
-  let expected =
-    #|vcode bitwise(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = and v0, v1
-    #|    v3 = or v0, v1
-    #|    v4 = xor v2, v3
-    #|    ret v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode bitwise(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = and32 v0, v1
+      #|    v3 = or32 v0, v1
+      #|    v4 = xor32 v2, v3
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|

@@ -170,6 +170,31 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
+  fn trap_msg_to_brk_imm(msg : String) -> Int {
+    // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
+    //   0 unreachable
+    //   1 out of bounds (memory/table)
+    //   2 indirect call type mismatch
+    //   3 invalid conversion to integer
+    //   4 integer divide by zero
+    //   5 integer overflow
+    if msg == "unreachable" {
+      0
+    } else if msg.contains("out of bounds") {
+      1
+    } else if msg.contains("type mismatch") {
+      2
+    } else if msg.contains("invalid conversion") {
+      3
+    } else if msg.contains("divide by zero") {
+      4
+    } else if msg.contains("overflow") {
+      5
+    } else {
+      0
+    }
+  }
+
   match term {
     Jump(target, _args) =>
       // Unconditional branch.
@@ -473,7 +498,7 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
     }
-    Trap(_) => self.emit_inst(0, 0, 32, 212) // BRK #0 = 0xD4200000
+    Trap(msg) => self.emit_brk(trap_msg_to_brk_imm(msg))
     BrTable(index, targets, default) => {
       // Jump table implementation for br_table
       let index_reg = reg_num(index)

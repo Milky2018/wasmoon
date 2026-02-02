@@ -295,7 +295,7 @@ pub fn MachineCode::emit_add_imm_shifted12(
 }
 
 ///|
-fn MachineCode::emit_sub_imm_shifted12(
+pub fn MachineCode::emit_sub_imm_shifted12(
   self : MachineCode,
   rd : Int,
   rn : Int,
@@ -365,6 +365,16 @@ pub fn MachineCode::emit_and_reg(
 }
 
 ///|
+pub fn MachineCode::emit_and_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  AndReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_orr_reg(
   self : MachineCode,
   rd : Int,
@@ -375,6 +385,16 @@ pub fn MachineCode::emit_orr_reg(
 }
 
 ///|
+pub fn MachineCode::emit_orr_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  OrrReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_eor_reg(
   self : MachineCode,
   rd : Int,
@@ -382,6 +402,16 @@ pub fn MachineCode::emit_eor_reg(
   rm : Int,
 ) -> Unit {
   EorReg(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eor_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  EorReg32(rd, rn, rm).emit(self)
 }
 
 ///|
@@ -495,6 +525,16 @@ pub fn MachineCode::emit_add_imm32(
 }
 
 ///|
+pub fn MachineCode::emit_add_imm32_shifted12(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  AddImm32Shifted12(rd, rn, imm12).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_sub_imm32(
   self : MachineCode,
   rd : Int,
@@ -502,6 +542,16 @@ pub fn MachineCode::emit_sub_imm32(
   imm : Int,
 ) -> Unit {
   SubImm32(rd, rn, imm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_sub_imm32_shifted12(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  imm12 : Int,
+) -> Unit {
+  SubImm32Shifted12(rd, rn, imm12).emit(self)
 }
 
 ///|
@@ -597,9 +647,21 @@ pub fn MachineCode::emit_cmp_reg32(
 pub fn MachineCode::emit_cmp_imm32(
   self : MachineCode,
   rn : Int,
-  imm12 : Int,
+  imm : Int,
 ) -> Unit {
-  CmpImm32(rn, imm12).emit(self)
+  // AArch64 CMP immediate supports a 12-bit unsigned immediate, optionally shifted left by 12.
+  //
+  // For larger/negative immediates, materialize the value in a reserved scratch register and
+  // use CMP (register) instead. This avoids silent truncation of imm12.
+  if imm >= 0 && imm <= 4095 {
+    CmpImm32(rn, imm).emit(self)
+  } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+    CmpImm32Shifted12(rn, imm >> 12).emit(self)
+  } else {
+    let scratch = @abi.SCRATCH_REG_1
+    self.emit_load_imm64(scratch, imm.to_int64())
+    self.emit_cmp_reg32(rn, scratch)
+  }
 }
 
 ///|
@@ -1146,9 +1208,21 @@ pub fn MachineCode::emit_cmp_reg(
 pub fn MachineCode::emit_cmp_imm(
   self : MachineCode,
   rn : Int,
-  imm12 : Int,
+  imm : Int,
 ) -> Unit {
-  CmpImm(rn, imm12).emit(self)
+  // AArch64 CMP immediate supports a 12-bit unsigned immediate, optionally shifted left by 12.
+  //
+  // For larger/negative immediates, materialize the value in a reserved scratch register and
+  // use CMP (register) instead. This avoids silent truncation of imm12.
+  if imm >= 0 && imm <= 4095 {
+    CmpImm(rn, imm).emit(self)
+  } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
+    CmpImmShifted12(rn, imm >> 12).emit(self)
+  } else {
+    let scratch = @abi.SCRATCH_REG_1
+    self.emit_load_imm64(scratch, imm.to_int64())
+    self.emit_cmp_reg(rn, scratch)
+  }
 }
 
 ///|
