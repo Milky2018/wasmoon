@@ -403,7 +403,9 @@ fn BacktrackingAllocator::try_allocate(
   if start_point is Some(p) {
     start_inst = p.inst
   }
-  let offset = (bundle.id + start_inst) % n
+  // `ProgPoint.inst` may be -1 (block params). Ensure non-negative offset.
+  let raw = bundle.id + start_inst
+  let offset = (raw % n + n) % n
   for i in 0..<n {
     let preg = avail_regs[(offset + i) % n]
     if hint_preg is Some(hint) &&
