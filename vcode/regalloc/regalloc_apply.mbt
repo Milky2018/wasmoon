@@ -660,7 +660,11 @@ pub fn apply_allocation(
               new_block : @block.VCodeBlock,
               def_new_idx : Int,
             ) -> @abi.PReg? {
-              let scratch_regs = [@abi.SCRATCH_REG_1, @abi.SCRATCH_REG_2]
+              let isa = @isa.ISA::current()
+              let scratch_regs = [
+                isa.scratch_reg_1_index(),
+                isa.scratch_reg_2_index(),
+              ]
               for reg_idx in scratch_regs {
                 let preg : @abi.PReg = { index: reg_idx, class: @abi.Int }
                 if scratch_available(new_block, def_new_idx, preg) {

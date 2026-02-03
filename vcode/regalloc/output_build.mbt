@@ -73,6 +73,13 @@ fn pick_temp_preg(
   need_preserve : Bool,
   cursor : Int,
 ) -> (@abi.PReg, Int, Int?) {
+  let isa = @isa.ISA::current()
+  let scratch1 = isa.scratch_reg_1_index()
+  let scratch2 = isa.scratch_reg_2_index()
+  let vmctx = isa.vmctx_reg_index()
+  let mem0_desc = isa.mem0_desc_reg_index()
+  let func_table = isa.func_table_reg_index()
+  let extra_results_ptr = isa.extra_results_ptr_reg_index()
   fn alloc_temp_spill_slot(out : Output, cls : @abi.RegClass) -> Int {
     // Spill slots are counted in 8-byte units.
     // Keep the same rules as BundleSet::new_spill_bundle.
@@ -106,13 +113,12 @@ fn pick_temp_preg(
       // Fallback: steal any GPR not used by this instruction, save/restore via a fresh spill slot.
       for idx in 0..<29 {
         // Skip special-purpose registers.
-        if idx == 16 ||
-          idx == 17 ||
-          idx == 19 ||
-          idx == @abi.REG_VMCTX ||
-          idx == @abi.REG_MEM0_DESC ||
-          idx == @abi.REG_FUNC_TABLE ||
-          idx == 23 {
+        if idx == scratch1 ||
+          idx == scratch2 ||
+          idx == func_table ||
+          idx == vmctx ||
+          idx == mem0_desc ||
+          idx == extra_results_ptr {
           continue
         }
         if !used_int.contains(idx) {
@@ -206,22 +212,25 @@ fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
   for _, preg in alloc.assignments {
     add_used_reg(used_int_regs, used_fp_regs, preg)
   }
+  let isa = @isa.ISA::current()
   // Reserve dedicated scratch regs (used by the move resolver).
-  used_int_regs.add(@abi.SCRATCH_REG_1) |> ignore
-  used_int_regs.add(@abi.SCRATCH_REG_2) |> ignore
+  let scratch1 = isa.scratch_reg_1_index()
+  let scratch2 = isa.scratch_reg_2_index()
+  used_int_regs.add(scratch1) |> ignore
+  used_int_regs.add(scratch2) |> ignore
   used_fp_regs.add(16) |> ignore
   used_fp_regs.add(17) |> ignore
   // Reserve pinned vmctx.
-  used_int_regs.add(@abi.REG_VMCTX) |> ignore
+  used_int_regs.add(isa.vmctx_reg_index()) |> ignore
   // Reserve cached mem0 desc when enabled.
   if func.uses_mem0() {
-    used_int_regs.add(@abi.REG_MEM0_DESC) |> ignore
+    used_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
   }
   // Reserve extra-results pointer register when needed.
   if func.needs_extra_results_ptr() || func.calls_multi_value_function() {
-    used_int_regs.add(23) |> ignore
+    used_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
   }
-  let temp_int_pool : Array[Int] = [@abi.SCRATCH_REG_1, @abi.SCRATCH_REG_2]
+  let temp_int_pool : Array[Int] = [scratch1, scratch2]
   for idx in [20, 22, 23, 24, 25, 26, 27, 28] {
     if !used_int_regs.contains(idx) {
       temp_int_pool.push(idx)

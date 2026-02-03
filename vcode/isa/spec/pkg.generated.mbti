@@ -10,6 +10,18 @@ import {
 // Errors
 
 // Types and methods
+pub(all) enum IntRegRole {
+  Vmctx
+  Mem0Desc
+  FuncTable
+  ExtraResultsPtr
+  Scratch1
+  Scratch2
+  FP
+  LR
+  SRet
+}
+
 pub(all) struct MachineEnvData {
   preferred_int : Array[@abi.PReg]
   nonpreferred_int : Array[@abi.PReg]

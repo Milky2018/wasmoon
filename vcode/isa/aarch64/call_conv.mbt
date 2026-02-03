@@ -81,13 +81,16 @@ pub fn allocatable_scratch_regs() -> Array[@abi.PReg] {
 pub fn allocatable_callee_saved_regs(
   enable_pinned_reg? : Bool = true,
 ) -> Array[@abi.PReg] {
+  let fp_idx = int_reg_index(@spec.IntRegRole::FP)
+  let lr_idx = int_reg_index(@spec.IntRegRole::LR)
+  let vmctx_idx = int_reg_index(@spec.IntRegRole::Vmctx)
   let regs : Array[@abi.PReg] = []
   for r in aapcs64_callee_saved() {
     // x29/x30 are fp/lr: allocator never uses them; keep them out.
-    if r.index == @abi.REG_FP || r.index == @abi.REG_LR {
+    if r.index == fp_idx || r.index == lr_idx {
       continue
     }
-    if enable_pinned_reg && r.index == @abi.REG_VMCTX {
+    if enable_pinned_reg && r.index == vmctx_idx {
       continue
     }
     regs.push(r)

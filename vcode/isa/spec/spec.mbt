@@ -18,3 +18,27 @@ pub(all) struct MachineEnvData {
   scratch_int : Array[Int]
   scratch_float : Array[Int]
 }
+
+///|
+/// Integer physical-register roles used by the JIT backend.
+///
+/// Step 2 goal: eliminate direct uses of AArch64-specific register constants
+/// (e.g. `REG_VMCTX`) in shared lowering/emission code.
+pub(all) enum IntRegRole {
+  /// Pinned/cached VMContext register.
+  Vmctx
+  /// Cached memory0 descriptor pointer register (optional).
+  Mem0Desc
+  /// Cached func_table pointer register (optional).
+  FuncTable
+  /// Extra results pointer register for multi-value calls.
+  ExtraResultsPtr
+  /// Scratch temporaries reserved for emission/lowering.
+  Scratch1
+  Scratch2
+  /// Frame pointer / link register (when architecture has them).
+  FP
+  LR
+  /// Struct-return register (when used by ABI).
+  SRet
+}

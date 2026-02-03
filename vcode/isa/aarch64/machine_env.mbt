@@ -11,6 +11,9 @@ pub fn build_machine_env(
   reserve_func_table : Bool,
   reserve_extra_results_ptr : Bool,
 ) -> @spec.MachineEnvData {
+  let mem0_desc_idx = int_reg_index(@spec.IntRegRole::Mem0Desc)
+  let func_table_idx = int_reg_index(@spec.IntRegRole::FuncTable)
+  let extra_results_ptr_idx = int_reg_index(@spec.IntRegRole::ExtraResultsPtr)
   let preferred_int : Array[@abi.PReg] = []
   let nonpreferred_int : Array[@abi.PReg] = []
   let callee_saved_int : Array[@abi.PReg] = []
@@ -30,13 +33,13 @@ pub fn build_machine_env(
     r in allocatable_callee_saved_regs(
       enable_pinned_reg=settings.enable_pinned_reg,
     ) {
-    if reserve_extra_results_ptr && r.index == 23 {
+    if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
       continue
     }
-    if reserve_mem0_desc && r.index == @abi.REG_MEM0_DESC {
+    if reserve_mem0_desc && r.index == mem0_desc_idx {
       continue
     }
-    if reserve_func_table && r.index == @abi.REG_FUNC_TABLE {
+    if reserve_func_table && r.index == func_table_idx {
       continue
     }
     nonpreferred_int.push(r)
@@ -87,7 +90,10 @@ pub fn build_machine_env(
     nonpreferred_vector,
     callee_saved_int,
     callee_saved_float,
-    scratch_int: [@abi.SCRATCH_REG_1, @abi.SCRATCH_REG_2],
+    scratch_int: [
+      int_reg_index(@spec.IntRegRole::Scratch1),
+      int_reg_index(@spec.IntRegRole::Scratch2),
+    ],
     scratch_float: [16, 17],
   }
 }
