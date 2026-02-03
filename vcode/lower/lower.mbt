@@ -176,16 +176,30 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
             continue
           }
-          for op in inst.operands {
-            if ctx.use_counts.get(op.id).unwrap_or(0) != 1 {
-              continue
-            }
-            if match_mul_value(ctx, op) is Some(_) {
-              skipped.add(op.id)
-            }
-            if match_shl_const_value(ctx, op) is Some(_) {
-              skipped.add(op.id)
-            }
+          // Mirror lower_iadd's fusion priority so we never skip both sides.
+          // This matters for patterns like add(mul(a,b), mul(c,d)) where only one
+          // multiply can be fused into a single MADD; the other must be materialized.
+          let lhs = inst.operands[0]
+          let rhs = inst.operands[1]
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
+            continue
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
+            continue
           }
         }
         @ir.Opcode::Isub => {
@@ -212,11 +226,31 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
             continue
           }
-          for op in inst.operands {
-            if ctx.use_counts.get(op.id).unwrap_or(0) == 1 &&
-              match_shl_const_value(ctx, op) is Some(_) {
-              skipped.add(op.id)
-            }
+          // Mirror lower_band/lower_bor/lower_bxor: fuse at most one shl const.
+          let lhs = inst.operands[0]
+          let rhs = inst.operands[1]
+          // If this op will lower to a logical-immediate form (and/orr/eor immediate),
+          // then no shift producer is subsumed. Skipping it would create an undefined vreg.
+          let lhs_is_imm = match get_const_value(ctx, lhs) {
+            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            None => false
+          }
+          let rhs_is_imm = match get_const_value(ctx, rhs) {
+            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            None => false
+          }
+          if lhs_is_imm || rhs_is_imm {
+            continue
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
+            continue
           }
         }
         _ => ()

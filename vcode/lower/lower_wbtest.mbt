@@ -56,6 +56,39 @@ test "lower integer arithmetic" {
 }
 
 ///|
+test "lower madd does not skip mul accumulator" {
+  // Regression test for compute_skipped_values(): for add(mul(a,b), mul(c,d))
+  // only one side can be fused into a single MADD. The other multiply must be
+  // materialized and used as the accumulator.
+  let builder = @ir.IRBuilder::new("mul_add")
+  let a = builder.add_param(@ir.Type::I64)
+  let b = builder.add_param(@ir.Type::I64)
+  let c = builder.add_param(@ir.Type::I64)
+  let d = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let p1 = builder.imul(a, b)
+  let p2 = builder.imul(c, d)
+  let sum = builder.iadd(p1, p2)
+  builder.return_([sum])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode mul_add(v0:int, v1:int, v2:int, v3:int) -> int {
+      #|block0:
+      #|    v4 = mul v0, v1
+      #|    v5 = madd v4, v2, v3
+      #|    ret v5
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower constants" {
   let builder = @ir.IRBuilder::new("const_test")
   builder.add_result(@ir.Type::I32)
