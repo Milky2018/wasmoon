@@ -25,6 +25,23 @@ priv struct QueueEntry {
   bundle_id : Int
   weight : Double
   hint_preg : @abi.PReg?
+  // Insertion order for stable tie-breaking (monotonic).
+  seq : Int
+}
+
+///|
+/// Ordering for the allocator queue (max-heap).
+/// Higher weight gets popped first; ties keep the historical stable behavior.
+fn queue_entry_higher(a : QueueEntry, b : QueueEntry) -> Bool {
+  if a.weight > b.weight {
+    true
+  } else if a.weight < b.weight {
+    false
+  } else if a.seq != b.seq {
+    a.seq < b.seq
+  } else {
+    a.bundle_id < b.bundle_id
+  }
 }
 
 ///|
@@ -44,7 +61,8 @@ struct BacktrackingAllocator {
   float_reg_bundles : Map[Int, Set[Int]]
 
   // Priority queue of bundles to process
-  mut queue : Array[QueueEntry]
+  mut queue : Array[QueueEntry] // max-heap by QueueEntry.weight
+  mut queue_next_seq : Int
 
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
@@ -65,22 +83,76 @@ struct BacktrackingAllocator {
 }
 
 ///|
-/// Insert a queue entry, keeping the queue sorted by weight descending.
+/// Heap push into the allocator queue.
 fn BacktrackingAllocator::queue_push(
   self : BacktrackingAllocator,
-  entry : QueueEntry,
+  bundle_id : Int,
+  weight : Double,
+  hint_preg : @abi.PReg?,
 ) -> Unit {
+  let entry : QueueEntry = {
+    bundle_id,
+    weight,
+    hint_preg,
+    seq: self.queue_next_seq,
+  }
+  self.queue_next_seq = self.queue_next_seq + 1
   self.queue.push(entry)
+  // Sift up.
   let mut i = self.queue.length() - 1
   while i > 0 {
-    let prev = self.queue[i - 1]
-    let cur = self.queue[i]
-    if cur.weight > prev.weight {
-      self.queue[i - 1] = cur
-      self.queue[i] = prev
-      i = i - 1
+    let parent = (i - 1) / 2
+    if queue_entry_higher(self.queue[i], self.queue[parent]) {
+      let tmp = self.queue[i]
+      self.queue[i] = self.queue[parent]
+      self.queue[parent] = tmp
+      i = parent
     } else {
       break
+    }
+  }
+}
+
+///|
+/// Heap pop-max from the allocator queue.
+fn BacktrackingAllocator::queue_pop(
+  self : BacktrackingAllocator,
+) -> QueueEntry? {
+  if self.queue.is_empty() {
+    return None
+  }
+  // Remove root.
+  let top = self.queue[0]
+  let last = self.queue.pop()
+  match last {
+    None => None
+    Some(v) => {
+      if !self.queue.is_empty() {
+        self.queue[0] = v
+        // Sift down.
+        let mut i = 0
+        while true {
+          let left = i * 2 + 1
+          if left >= self.queue.length() {
+            break
+          }
+          let right = left + 1
+          let mut best = left
+          if right < self.queue.length() &&
+            queue_entry_higher(self.queue[right], self.queue[left]) {
+            best = right
+          }
+          if queue_entry_higher(self.queue[best], self.queue[i]) {
+            let tmp = self.queue[i]
+            self.queue[i] = self.queue[best]
+            self.queue[best] = tmp
+            i = best
+          } else {
+            break
+          }
+        }
+      }
+      Some(top)
     }
   }
 }
@@ -104,6 +176,7 @@ pub fn BacktrackingAllocator::new(
     int_reg_bundles: {},
     float_reg_bundles: {},
     queue: [],
+    queue_next_seq: 0,
     spillset_hints: Array::make(bundles.length(), None),
     int_regs,
     float_regs,
@@ -173,6 +246,7 @@ fn BacktrackingAllocator::constraint_hint_preg(
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
+  self.queue_next_seq = 0
   // Pre-compute loop depths once (O(blocks + edges))
   let loop_depths = compute_loop_depths(self.func)
   for i in 0..<self.bundles.length() {
@@ -182,18 +256,43 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
       bundle_id: i,
       weight: bundle.spill_weight,
       hint_preg: self.constraint_hint_preg(bundle),
+      seq: self.queue_next_seq,
     })
+    self.queue_next_seq = self.queue_next_seq + 1
   }
-  // Sort by weight descending (highest priority first)
-  self.queue.sort_by(fn(a, b) {
-    if a.weight > b.weight {
-      -1
-    } else if a.weight < b.weight {
-      1
-    } else {
-      0
+  // Heapify (max-heap).
+  let n = self.queue.length()
+  if n <= 1 {
+    return
+  }
+  let mut i = n / 2 - 1
+  while i >= 0 {
+    // Sift down from i.
+    let mut p = i
+    while true {
+      let left = p * 2 + 1
+      if left >= n {
+        break
+      }
+      let right = left + 1
+      let mut best = left
+      if right < n && queue_entry_higher(self.queue[right], self.queue[left]) {
+        best = right
+      }
+      if queue_entry_higher(self.queue[best], self.queue[p]) {
+        let tmp = self.queue[p]
+        self.queue[p] = self.queue[best]
+        self.queue[best] = tmp
+        p = best
+      } else {
+        break
+      }
     }
-  })
+    if i == 0 {
+      break
+    }
+    i = i - 1
+  }
 }
 
 ///|
@@ -509,11 +608,7 @@ fn BacktrackingAllocator::try_evict(
         // Re-add to queue with slightly lower weight
         let new_weight = conflict.spill_weight * 0.9
         conflict.spill_weight = new_weight
-        self.queue_push({
-          bundle_id: conflict_id,
-          weight: new_weight,
-          hint_preg: None,
-        })
+        self.queue_push(conflict_id, new_weight, None)
       }
       return Some(preg)
     }
@@ -718,11 +813,7 @@ fn BacktrackingAllocator::split_bundle(
       }
       self.bundles.add_bundle(before_bundle)
       spill_bundle.add_bundle(before_bundle.id)
-      self.queue_push({
-        bundle_id: before_bundle.id,
-        weight: new_weight,
-        hint_preg: Some(split_hint_reg),
-      })
+      self.queue_push(before_bundle.id, new_weight, Some(split_hint_reg))
 
       // After bundle
       let after_bundle = Bundle::new(
@@ -738,11 +829,7 @@ fn BacktrackingAllocator::split_bundle(
       }
       self.bundles.add_bundle(after_bundle)
       spill_bundle.add_bundle(after_bundle.id)
-      self.queue_push({
-        bundle_id: after_bundle.id,
-        weight: new_weight,
-        hint_preg: Some(split_hint_reg),
-      })
+      self.queue_push(after_bundle.id, new_weight, Some(split_hint_reg))
 
       // Mark original bundle as processed (it's been split)
       bundle.allocation = Spill(spill_bundle.slot)
@@ -773,7 +860,10 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     iterations += 1
 
     // Pop highest priority bundle
-    let entry = self.queue.remove(0)
+    let entry = match self.queue_pop() {
+      Some(e) => e
+      None => break
+    }
     let bundle = self.bundles.get(entry.bundle_id)
     let hint_preg = match entry.hint_preg {
       Some(p) => Some(p)
