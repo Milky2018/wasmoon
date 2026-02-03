@@ -20,6 +20,22 @@ test "AArch64 call-clobbered sets basic shape" {
 }
 
 ///|
+test "Wasm ABI arg/ret reg counts (shape)" {
+  let a = ISA::AArch64
+  inspect(a.wasm_vmctx_arg_preg().index, content="0")
+  inspect(a.wasm_user_arg_gprs().length(), content="7")
+  inspect(a.wasm_arg_fprs().length(), content="8")
+  inspect(a.wasm_ret_gprs().length(), content="8")
+  inspect(a.wasm_ret_fprs().length(), content="8")
+  let x = ISA::X86_64
+  inspect(x.wasm_vmctx_arg_preg().index, content="7")
+  inspect(x.wasm_user_arg_gprs().length(), content="5")
+  inspect(x.wasm_arg_fprs().length(), content="8")
+  inspect(x.wasm_ret_gprs().length(), content="2")
+  inspect(x.wasm_ret_fprs().length(), content="2")
+}
+
+///|
 test "AArch64 MachineEnv reserves scratch regs" {
   let env = ISA::AArch64.machine_env()
   inspect(env.scratch_int, content="[16, 17]")

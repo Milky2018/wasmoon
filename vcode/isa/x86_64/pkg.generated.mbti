@@ -17,6 +17,16 @@ pub fn call_clobbered_gprs() -> Array[@abi.PReg]
 
 pub fn int_reg_index(@spec.IntRegRole) -> Int
 
+pub fn wasm_arg_fprs() -> Array[@abi.PReg]
+
+pub fn wasm_ret_fprs() -> Array[@abi.PReg]
+
+pub fn wasm_ret_gprs() -> Array[@abi.PReg]
+
+pub fn wasm_user_arg_gprs() -> Array[@abi.PReg]
+
+pub fn wasm_vmctx_arg_preg() -> @abi.PReg
+
 // Errors
 
 // Types and methods

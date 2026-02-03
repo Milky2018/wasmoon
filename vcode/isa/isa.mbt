@@ -108,6 +108,51 @@ pub fn ISA::call_clobbered_fprs_same_abi(self : ISA) -> Array[@abi.PReg] {
 }
 
 ///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: VMContext argument register.
+pub fn ISA::wasm_vmctx_arg_preg(self : ISA) -> @abi.PReg {
+  match self {
+    AArch64 => @aarch64.wasm_vmctx_arg_preg()
+    X86_64 => @x86_64.wasm_vmctx_arg_preg()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: user integer argument registers.
+pub fn ISA::wasm_user_arg_gprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_user_arg_gprs()
+    X86_64 => @x86_64.wasm_user_arg_gprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: float argument registers.
+pub fn ISA::wasm_arg_fprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_arg_fprs()
+    X86_64 => @x86_64.wasm_arg_fprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: integer return registers.
+pub fn ISA::wasm_ret_gprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_ret_gprs()
+    X86_64 => @x86_64.wasm_ret_gprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: float return registers.
+pub fn ISA::wasm_ret_fprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_ret_fprs()
+    X86_64 => @x86_64.wasm_ret_fprs()
+  }
+}
+
+///|
 /// Query an ISA-dependent integer register index for a given role.
 pub fn ISA::int_reg_index(self : ISA, role : @spec.IntRegRole) -> Int {
   match self {

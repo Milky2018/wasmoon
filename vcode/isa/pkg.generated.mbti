@@ -33,6 +33,11 @@ pub fn ISA::scratch_reg_2_index(Self) -> Int
 pub fn ISA::sret_reg_index(Self) -> Int
 pub fn ISA::vmctx_preg(Self) -> @abi.PReg
 pub fn ISA::vmctx_reg_index(Self) -> Int
+pub fn ISA::wasm_arg_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_ret_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_ret_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_user_arg_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_vmctx_arg_preg(Self) -> @abi.PReg
 
 pub struct MachineEnv {
   preferred_int : Array[@abi.PReg]

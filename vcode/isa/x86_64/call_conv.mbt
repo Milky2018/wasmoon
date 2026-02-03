@@ -37,3 +37,52 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg] {
   // SysV has no callee-saved XMM registers, even for internal calls.
   call_clobbered_fprs()
 }
+
+///|
+/// Internal Wasm ABI (initial x86_64 design): vmctx argument register.
+pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
+  { index: 7, class: @abi.Int } // rdi
+}
+
+///|
+/// Internal Wasm ABI (initial x86_64 design): user integer argument registers.
+///
+/// We start with the SysV register set (excluding vmctx in rdi), which provides
+/// 5 integer user arguments in registers. Extra args spill to the stack.
+pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
+  [
+    { index: 6, class: @abi.Int }, // rsi
+    { index: 2, class: @abi.Int }, // rdx
+    { index: 1, class: @abi.Int }, // rcx
+    { index: 8, class: @abi.Int }, // r8
+    { index: 9, class: @abi.Int },
+  ] // r9
+}
+
+///|
+/// Internal Wasm ABI: float argument registers (XMM0-XMM7).
+pub fn wasm_arg_fprs() -> Array[@abi.PReg] {
+  let regs : Array[@abi.PReg] = []
+  for i in 0..<8 {
+    regs.push({ index: i, class: @abi.Float64 })
+  }
+  regs
+}
+
+///|
+/// Internal Wasm ABI: integer return registers.
+pub fn wasm_ret_gprs() -> Array[@abi.PReg] {
+  [
+    { index: 0, class: @abi.Int }, // rax
+    { index: 2, class: @abi.Int },
+  ] // rdx
+}
+
+///|
+/// Internal Wasm ABI: float return registers.
+pub fn wasm_ret_fprs() -> Array[@abi.PReg] {
+  [
+    { index: 0, class: @abi.Float64 }, // xmm0
+    { index: 1, class: @abi.Float64 },
+  ] // xmm1
+}
