@@ -5,6 +5,7 @@ import {
   "Milky2018/wasmoon/types",
   "Milky2018/wasmoon/vcode/abi",
   "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/isa",
   "Milky2018/wasmoon/vcode/regalloc",
 }
 
@@ -89,7 +90,7 @@ pub struct JITStackFrame {
   cache_mem0_desc : Bool
   cache_func_table : Bool
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, cache_mem0_desc? : Bool, cache_func_table? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool) -> Self
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, cache_mem0_desc? : Bool, cache_func_table? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
 pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int

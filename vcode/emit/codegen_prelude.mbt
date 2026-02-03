@@ -25,20 +25,25 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 fn collect_used_callee_saved(
   func : @regalloc.VCodeFunction,
-  enable_pinned_reg : Bool,
   _needs_sret : Bool,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  // ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
+  // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
-  let pinned_vmctx = vmctx_index()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_int {
+    callee_saved_int.add(r.index)
+  }
 
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
-    if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      if !enable_pinned_reg || p.index != pinned_vmctx {
-        used.add(p.index)
-      }
+    if preg is Some(p) &&
+      p.class is @abi.Int &&
+      callee_saved_int.contains(p.index) {
+      used.add(p.index)
     }
   }
   for block in func.get_blocks() {
@@ -52,18 +57,16 @@ fn collect_used_callee_saved(
       for def in inst.defs {
         if def.reg is Physical(preg) &&
           preg.class is Int &&
-          is_callee_saved_alloc(preg.index) {
-          if !enable_pinned_reg || preg.index != pinned_vmctx {
-            used.add(preg.index)
-          }
+          callee_saved_int.contains(preg.index) {
+          used.add(preg.index)
         }
       }
     }
   }
-  // If the function makes any calls, we must save LR (X30)
+  // If the function makes any calls, we must save LR on AArch64.
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
-  if has_calls {
+  if has_calls && isa is @isa.AArch64 {
     used.add(lr_index())
   }
   // Sort the registers for consistent ordering
@@ -77,14 +80,23 @@ fn collect_used_callee_saved(
 
 ///|
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
-fn collect_used_callee_saved_fprs(func : @regalloc.VCodeFunction) -> Array[Int] {
+fn collect_used_callee_saved_fprs(
+  func : @regalloc.VCodeFunction,
+  abi_settings : @abi.ABISettings,
+) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_float {
+    callee_saved_fprs.add(r.index)
+  }
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
   for preg in func.get_param_pregs() {
     if preg is Some(p) &&
       (p.class is Float32 || p.class is Float64) &&
-      is_callee_saved_fpr(p.index) {
+      callee_saved_fprs.contains(p.index) {
       used.add(p.index)
     }
   }
@@ -93,7 +105,7 @@ fn collect_used_callee_saved_fprs(func : @regalloc.VCodeFunction) -> Array[Int] 
       for def in inst.defs {
         if def.reg is Physical(preg) &&
           (preg.class is Float32 || preg.class is Float64) &&
-          is_callee_saved_fpr(preg.index) {
+          callee_saved_fprs.contains(preg.index) {
           used.add(preg.index)
         }
       }
@@ -465,13 +477,9 @@ pub fn emit_function(
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(
-    func,
-    abi_settings.enable_pinned_reg,
-    uses_sret,
-  )
+  let clobbered = collect_used_callee_saved(func, uses_sret, abi_settings)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
-  let clobbered_fprs = collect_used_callee_saved_fprs(func)
+  let clobbered_fprs = collect_used_callee_saved_fprs(func, abi_settings)
 
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
@@ -506,6 +514,7 @@ pub fn emit_function(
     cache_func_table=uses_func_table,
     force_frame_setup~,
     has_incoming_stack_args~,
+    abi_settings~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
@@ -1010,19 +1019,22 @@ fn output_uses_preg(
 fn collect_used_callee_saved_from_output(
   func : @regalloc.VCodeFunction,
   output : @regalloc.Output,
-  enable_pinned_reg : Bool,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
-  let pinned_vmctx = vmctx_index()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_int {
+    callee_saved_int.add(r.index)
+  }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     match output.get_param_loc(i) {
       @regalloc.Reg(p) =>
-        if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-          if !enable_pinned_reg || p.index != pinned_vmctx {
-            used.add(p.index)
-          }
+        if p.class is @abi.Int && callee_saved_int.contains(p.index) {
+          used.add(p.index)
         }
       _ => ()
     }
@@ -1040,10 +1052,9 @@ fn collect_used_callee_saved_from_output(
                 @regalloc.Move(_from, to, _class) =>
                   match to {
                     @regalloc.Reg(p) =>
-                      if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                        if !enable_pinned_reg || p.index != pinned_vmctx {
-                          used.add(p.index)
-                        }
+                      if p.class is @abi.Int &&
+                        callee_saved_int.contains(p.index) {
+                        used.add(p.index)
                       }
                     _ => ()
                   }
@@ -1072,10 +1083,8 @@ fn collect_used_callee_saved_from_output(
           @abi.Virtual(_) =>
             match output.inst_def_loc(block.id, inst_idx, false, di) {
               @regalloc.Reg(p) =>
-                if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                  if !enable_pinned_reg || p.index != pinned_vmctx {
-                    used.add(p.index)
-                  }
+                if p.class is @abi.Int && callee_saved_int.contains(p.index) {
+                  used.add(p.index)
                 }
               _ => ()
             }
@@ -1084,7 +1093,7 @@ fn collect_used_callee_saved_from_output(
       }
     }
   }
-  if func_has_calls(func) {
+  if func_has_calls(func) && isa is @isa.AArch64 {
     used.add(lr_index())
   }
   let result : Array[Int] = []
@@ -1099,15 +1108,22 @@ fn collect_used_callee_saved_from_output(
 fn collect_used_callee_saved_fprs_from_output(
   func : @regalloc.VCodeFunction,
   output : @regalloc.Output,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_float {
+    callee_saved_fprs.add(r.index)
+  }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     match output.get_param_loc(i) {
       @regalloc.Reg(p) =>
         if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-          is_callee_saved_fpr(p.index) {
+          callee_saved_fprs.contains(p.index) {
           used.add(p.index)
         }
       _ => ()
@@ -1127,7 +1143,7 @@ fn collect_used_callee_saved_fprs_from_output(
                   match to {
                     @regalloc.Reg(p) =>
                       if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                        is_callee_saved_fpr(p.index) {
+                        callee_saved_fprs.contains(p.index) {
                         used.add(p.index)
                       }
                     _ => ()
@@ -1153,7 +1169,7 @@ fn collect_used_callee_saved_fprs_from_output(
             match output.inst_def_loc(block.id, inst_idx, false, di) {
               @regalloc.Reg(p) =>
                 if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                  is_callee_saved_fpr(p.index) {
+                  callee_saved_fprs.contains(p.index) {
                   used.add(p.index)
                 }
               _ => ()
@@ -1536,11 +1552,11 @@ pub fn emit_function_with_regalloc(
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
-    func,
-    output,
-    abi_settings.enable_pinned_reg,
+    func, output, abi_settings,
   )
-  let clobbered_fprs = collect_used_callee_saved_fprs_from_output(func, output)
+  let clobbered_fprs = collect_used_callee_saved_fprs_from_output(
+    func, output, abi_settings,
+  )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
@@ -1569,6 +1585,7 @@ pub fn emit_function_with_regalloc(
     cache_func_table=uses_func_table,
     force_frame_setup~,
     has_incoming_stack_args~,
+    abi_settings~,
   )
 
   // Emit prologue.

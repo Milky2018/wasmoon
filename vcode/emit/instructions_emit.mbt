@@ -1991,19 +1991,3 @@ pub fn MachineCode::emit_cnt_8b(self : MachineCode, rd : Int, rn : Int) -> Unit 
 pub fn MachineCode::emit_addv_b(self : MachineCode, rd : Int, rn : Int) -> Unit {
   AddvB(rd, rn).emit(self)
 }
-
-// ============ VCode to Machine Code ============
-
-///|
-/// Check if a register is a callee-saved integer register (X19-X28).
-///
-/// Note: when `enable_pinned_reg` is enabled, the pinned VMContext register
-/// (X21) is treated as globally-reserved and should be filtered out by callers.
-fn is_callee_saved_alloc(reg : Int) -> Bool {
-  reg >= 19 && reg <= 28
-}
-
-///|
-fn is_callee_saved_fpr(reg : Int) -> Bool {
-  reg >= 8 && reg <= 15
-}
