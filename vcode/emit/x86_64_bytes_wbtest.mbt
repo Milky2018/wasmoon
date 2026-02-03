@@ -44,3 +44,62 @@ test "x86_64 trap imm16 encoding" {
   mc.x86_emit_trap_imm16(0x1234)
   inspect(mc.get_bytes(), content="[204, 52, 18]")
 }
+
+///|
+test "x86_64 push/pop encoding (rbx, r14, r15)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_push_r64(3) // rbx
+  mc.x86_emit_push_r64(14) // r14
+  mc.x86_emit_pop_r64(15) // r15
+  inspect(mc.get_bytes(), content="[83, 65, 86, 65, 95]")
+}
+
+///|
+test "x86_64 mov rr encoding (r14 <- rdi)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_rr(14, 7)
+  inspect(mc.get_bytes(), content="[73, 137, 254]")
+}
+
+///|
+test "x86_64 sub/add rsp imm32 encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_sub_rsp_imm32(16)
+  mc.x86_emit_add_rsp_imm32(32)
+  inspect(
+    mc.get_bytes(),
+    content="[72, 129, 236, 16, 0, 0, 0, 72, 129, 196, 32, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 mov [rsp+disp], r10 encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_m64_r64(4, 8, 10)
+  inspect(mc.get_bytes(), content="[76, 137, 148, 36, 8, 0, 0, 0]")
+}
+
+///|
+test "x86_64 mov r12, [r14+disp] encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_r64_m64(12, 14, 0x1234)
+  inspect(mc.get_bytes(), content="[77, 139, 166, 52, 18, 0, 0]")
+}
+
+///|
+test "x86_64 movaps xmm15, xmm0 encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movaps_xmm_xmm(15, 0)
+  inspect(mc.get_bytes(), content="[68, 15, 40, 248]")
+}
+
+///|
+test "x86_64 movsd/movdqu stores to [rsp+disp]" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movsd_m64_xmm(4, 0, 15)
+  mc.x86_emit_movdqu_m128_xmm(4, 16, 15)
+  inspect(
+    mc.get_bytes(),
+    content="[242, 68, 15, 17, 188, 36, 0, 0, 0, 0, 243, 68, 15, 127, 188, 36, 16, 0, 0, 0]",
+  )
+}

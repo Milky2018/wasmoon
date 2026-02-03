@@ -318,9 +318,19 @@ pub fn MachineCode::new() -> Self
 pub fn MachineCode::resolve_fixups(Self) -> Unit
 pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_add_rsp_imm32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
+pub fn MachineCode::x86_emit_mov_m64_r64(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_mov_r64_m64(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_mov_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movaps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movdqu_m128_xmm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movsd_m64_xmm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pop_r64(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_push_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_ret(Self) -> Unit
+pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_trap_imm16(Self, Int) -> Unit
 
 type X86Rel32Fixup
