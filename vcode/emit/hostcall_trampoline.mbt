@@ -53,10 +53,11 @@ fn bytes_for_type(ty : @types.ValueType) -> Int {
 
 ///|
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
-  for preg in @abi.call_clobbered_gprs() {
+  let isa = @isa.ISA::current()
+  for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
-  for preg in @abi.call_clobbered_fprs() {
+  for preg in isa.call_clobbered_fprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
 }

@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/isa"
+
+import {
+  "Milky2018/wasmoon/vcode/abi",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum ISA {
+  AArch64
+  X86_64
+}
+pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]
+pub fn ISA::call_clobbered_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::current() -> Self
+pub fn ISA::machine_env(Self, settings? : @abi.ABISettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnv
+
+pub struct MachineEnv {
+  preferred_int : Array[@abi.PReg]
+  nonpreferred_int : Array[@abi.PReg]
+  preferred_float : Array[@abi.PReg]
+  nonpreferred_float : Array[@abi.PReg]
+  preferred_vector : Array[@abi.PReg]
+  nonpreferred_vector : Array[@abi.PReg]
+  callee_saved_int : Array[@abi.PReg]
+  callee_saved_float : Array[@abi.PReg]
+  scratch_int : Array[Int]
+  scratch_float : Array[Int]
+}
+
+// Type aliases
+
+// Traits
+

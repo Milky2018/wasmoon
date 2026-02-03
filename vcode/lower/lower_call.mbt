@@ -740,8 +740,9 @@ fn lower_call_ref(
 /// so any values that need to survive across the call must be spilled or allocated
 /// to callee-saved registers.
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
+  let isa = @isa.ISA::current()
   // Add clobbers for all caller-saved GPRs (X0-X17)
-  for preg in @abi.call_clobbered_gprs() {
+  for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
   // Add clobbers for caller-saved FPRs.
@@ -750,8 +751,8 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
     CallPtr(_, _, @instr.C) | CallDirect(_, _, _, @instr.C) =>
-      @abi.call_clobbered_fprs()
-    _ => @abi.call_clobbered_fprs_same_abi()
+      isa.call_clobbered_fprs()
+    _ => isa.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {
     call_inst.add_def({ reg: Physical(preg) })
@@ -762,10 +763,11 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 /// Add clobbers for a C call unconditionally (used for pseudo-ops that may call
 /// a C helper on a slow path).
 fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
-  for preg in @abi.call_clobbered_gprs() {
+  let isa = @isa.ISA::current()
+  for preg in isa.call_clobbered_gprs() {
     inst.add_def({ reg: Physical(preg) })
   }
-  for preg in @abi.call_clobbered_fprs() {
+  for preg in isa.call_clobbered_fprs() {
     inst.add_def({ reg: Physical(preg) })
   }
 }

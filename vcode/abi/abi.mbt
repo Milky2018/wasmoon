@@ -90,6 +90,11 @@ pub const VMCTX_GC_HEAP_OFFSET : Int = 104
 
 // ============ Reserved Registers ============
 
+// TODO(amd64): These pinned/cached register assignments are currently AArch64-specific.
+// In Step 2 of the AMD64 JIT effort, we will replace direct uses of these constants
+// with ISA "role" queries (vmctx/mem0_desc/func_table/etc) so the backend can pick
+// appropriate physical registers per target.
+
 ///|
 /// Register holding cached VMContext (Cranelift pinned-reg: X21).
 /// In prologue (pinned mode): mov x21, x0

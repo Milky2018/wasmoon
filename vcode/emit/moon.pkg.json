@@ -4,6 +4,7 @@
     "Milky2018/wasmoon/jit/jit_ffi",
     "Milky2018/wasmoon/types",
     "Milky2018/wasmoon/vcode/abi",
+    "Milky2018/wasmoon/vcode/isa",
     "Milky2018/wasmoon/vcode/layout",
     "Milky2018/wasmoon/vcode/lower",
     "Milky2018/wasmoon/vcode/regalloc",
