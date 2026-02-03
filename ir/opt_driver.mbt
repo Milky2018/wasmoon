@@ -27,11 +27,35 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 ///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
+  // NOTE: Even at O0 we still need a small set of IR cleanups to keep the
+  // backend (lowering/regalloc) robust. These are semantics-preserving and
+  // align with Cranelift's "mandatory" pre-optimization / canonicalization
+  // philosophy.
+  if level is O0 {
+    let result = OptResult::new()
+    // Translator produces many SSA temps/block params (e.g. from WASM locals).
+    // Removing trivially-dead IR avoids pathological regalloc pressure and
+    // prevents backend miscompiles in very large unoptimized functions.
+    let dce_result = eliminate_dead_code(func)
+    if dce_result.changed {
+      result.mark_changed()
+    }
+    let cbpe_result = eliminate_constant_block_params(func)
+    if cbpe_result.changed {
+      result.mark_changed()
+    }
+    let dbpe_result = eliminate_dead_block_params(func)
+    if dbpe_result.changed {
+      result.mark_changed()
+    }
+    return result
+  }
+
   let result = match level {
-    O0 => OptResult::new() // No optimization
     O1 => optimize_o1(func)
     O2 => optimize(func)
     O3 => optimize_o3(func)
+    O0 => OptResult::new()
   }
 
   // Cranelift-style rematerialization is a post-optimization, IR-level pass.
