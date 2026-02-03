@@ -80,3 +80,17 @@ pub fn MachineCode::x86_emit_jmp_rel32(
   let next_ip_offset = self.current_pos()
   self.add_x86_rel32_fixup(target_block, disp_offset, next_ip_offset)
 }
+
+///|
+/// Emit a trap instruction with a 16-bit payload.
+///
+/// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The JIT trap signal
+/// handler decodes the payload to map to a WebAssembly trap code.
+pub fn MachineCode::x86_emit_trap_imm16(
+  self : MachineCode,
+  imm16 : Int,
+) -> Unit {
+  self.emit_byte(0xCC)
+  self.emit_byte(imm16 & 255)
+  self.emit_byte((imm16 >> 8) & 255)
+}

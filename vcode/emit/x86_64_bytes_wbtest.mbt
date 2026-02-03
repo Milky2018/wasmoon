@@ -37,3 +37,10 @@ test "x86_64 jmp rel32 fixup patches disp32" {
   mc.resolve_fixups()
   inspect(mc.get_bytes(), content="[233, 3, 0, 0, 0, 144, 144, 144]")
 }
+
+///|
+test "x86_64 trap imm16 encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_trap_imm16(0x1234)
+  inspect(mc.get_bytes(), content="[204, 52, 18]")
+}
