@@ -72,7 +72,6 @@ test "lower madd does not skip mul accumulator" {
   let p2 = builder.imul(c, d)
   let sum = builder.iadd(p1, p2)
   builder.return_([sum])
-
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   inspect(
