@@ -7,6 +7,7 @@ import {
 }
 
 // Values
+pub fn c_host_arch() -> Int
 
 // Errors
 

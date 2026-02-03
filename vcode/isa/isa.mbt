@@ -16,8 +16,11 @@ pub(all) enum ISA {
 
 ///|
 pub fn ISA::current() -> ISA {
-  // TODO: Use conditional compilation / target detection when MoonBit supports it.
-  AArch64
+  match c_host_arch() {
+    1 => X86_64
+    0 => AArch64
+    _ => AArch64
+  }
 }
 
 ///|

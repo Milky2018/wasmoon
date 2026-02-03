@@ -2,8 +2,12 @@
 /// Whitebox tests for the ISA policy layer.
 ///
 /// Keep these tests lightweight; CI acceptance uses full WAST runners.
-test "ISA::current is AArch64 for now" {
-  inspect(ISA::current() is ISA::AArch64, content="true")
+test "ISA::current matches host arch" {
+  match c_host_arch() {
+    0 => inspect(ISA::current() is ISA::AArch64, content="true")
+    1 => inspect(ISA::current() is ISA::X86_64, content="true")
+    _ => inspect(ISA::current() is ISA::AArch64, content="true")
+  }
 }
 
 ///|
@@ -20,4 +24,20 @@ test "AArch64 MachineEnv reserves scratch regs" {
   let env = ISA::AArch64.machine_env()
   inspect(env.scratch_int, content="[16, 17]")
   inspect(env.scratch_float, content="[16, 17]")
+}
+
+///|
+test "x86_64 call-clobbered sets basic shape" {
+  let isa = ISA::X86_64
+  // SysV AMD64 caller-saved GPRs: rax,rcx,rdx,rsi,rdi,r8-r11 => 9 regs.
+  inspect(isa.call_clobbered_gprs().length(), content="9")
+  // SysV AMD64 clobbers all XMM0-XMM15 => 16 regs.
+  inspect(isa.call_clobbered_fprs().length(), content="16")
+}
+
+///|
+test "x86_64 MachineEnv reserves scratch regs" {
+  let env = ISA::X86_64.machine_env()
+  inspect(env.scratch_int, content="[10, 11]")
+  inspect(env.scratch_float, content="[]")
 }
