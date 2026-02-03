@@ -319,7 +319,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   process_constraints(func, alloc_result)
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
-  let output = build_output(func, alloc_result)
+  let output = build_output(func, alloc_result, isa, settings)
   (func, output)
 }
 
