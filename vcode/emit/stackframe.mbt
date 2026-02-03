@@ -38,7 +38,9 @@ const MIN_SPILL_SIZE : Int = 16
 const SETUP_AREA_SIZE : Int = 16
 
 ///|
-const X86_SETUP_AREA_SIZE : Int = 8
+// x86_64 has no link register; reserve 16 bytes when frame setup is needed
+// (push rbp + 8 bytes padding) to keep 16-byte alignment for calls.
+const X86_SETUP_AREA_SIZE : Int = 16
 
 // ============ JITStackFrame ============
 

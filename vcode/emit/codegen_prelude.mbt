@@ -232,6 +232,39 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
+  if current_isa() is @isa.X86_64 {
+    let (abs_amount, is_sub) = if amount < 0 {
+      (-amount, true)
+    } else {
+      (amount, false)
+    }
+    let step = 4096
+    let scratch = scratch1_index()
+    if is_sub {
+      // Probe in 4KB steps to avoid skipping over a stack guard page.
+      let mut remaining = abs_amount
+      while remaining >= step {
+        self.x86_emit_sub_rsp_imm32(step)
+        self.x86_emit_mov_m64_r64(4, 0, scratch)
+        remaining = remaining - step
+      }
+      if remaining > 0 {
+        self.x86_emit_sub_rsp_imm32(remaining)
+        self.x86_emit_mov_m64_r64(4, 0, scratch)
+      }
+      return
+    }
+    // Stack deallocation (or other upward adjustment): no probing needed.
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.x86_emit_add_rsp_imm32(step)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      self.x86_emit_add_rsp_imm32(remaining)
+    }
+    return
+  }
   let (abs_amount, is_sub) = if amount < 0 {
     (-amount, true)
   } else {
@@ -290,6 +323,114 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
+  if current_isa() is @isa.X86_64 {
+    let isa = current_isa()
+    let saved_gprs = stack_frame.saved_gprs
+
+    // Setup area: push rbp + padding (keep 16-byte alignment for calls).
+    if stack_frame.has_setup_area {
+      self.x86_emit_push_r64(isa.fp_reg_index())
+      // rbp = rsp
+      self.x86_emit_mov_rr(isa.fp_reg_index(), 4)
+      // Setup area is 16 bytes on x86_64: push rbp accounts for 8, pad 8 more.
+      self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
+    }
+
+    // Best-effort: trap diagnostics debug func idx currently AArch64-only.
+    debug_func_idx |> ignore
+
+    // Save callee-saved GPRs.
+    for r in saved_gprs {
+      self.x86_emit_push_r64(r)
+    }
+    // Padding for 16-byte alignment when saving an odd number of 8-byte regs.
+    let gpr_padding = stack_frame.gpr_save_size - saved_gprs.length() * 8
+    if gpr_padding > 0 {
+      self.x86_emit_sub_rsp_imm32(gpr_padding)
+    }
+
+    // SysV has no callee-saved XMM regs. Keep the stack layout plumbing generic.
+    if stack_frame.saved_fprs.length() > 0 {
+      abort("x86_64 prologue: unexpected callee-saved fprs")
+    }
+
+    // Allocate spill slots + outgoing args (with stack probing for large frames).
+    let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
+    if remaining_size > 0 {
+      self.emit_sp_adjust(-remaining_size)
+    }
+
+    // Cache vmctx (pinned reg) and optional cached pointers.
+    if stack_frame.needs_vmctx {
+      if !abi_settings.enable_pinned_reg {
+        abort("unpinned VMContext ABI not implemented yet")
+      }
+      let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let vmctx = vmctx_index()
+      if vmctx != vmctx_src {
+        self.x86_emit_mov_rr(vmctx, vmctx_src)
+      }
+      if stack_frame.cache_mem0_desc {
+        self.x86_emit_mov_r64_m64(
+          mem0_desc_index(),
+          vmctx,
+          @abi.VMCTX_MEMORY0_OFFSET,
+        )
+      }
+      if stack_frame.cache_func_table {
+        self.x86_emit_mov_r64_m64(
+          func_table_index(),
+          vmctx,
+          @abi.VMCTX_FUNC_TABLE_OFFSET,
+        )
+      }
+    }
+
+    // Move arguments from ABI registers to allocated registers (if any).
+    let user_gprs = isa.wasm_user_arg_gprs()
+    let float_regs = isa.wasm_arg_fprs()
+    let mut int_idx = 0
+    let mut float_idx = 0
+    for param_idx, param in params {
+      let dest_preg = if param_idx < param_pregs.length() {
+        param_pregs[param_idx]
+      } else {
+        None
+      }
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match dest_preg {
+              Some(preg) =>
+                if preg.index != src {
+                  self.x86_emit_mov_rr(preg.index, src)
+                }
+              None => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match dest_preg {
+              Some(preg) =>
+                if preg.index != src {
+                  // Copy full XMM reg; works for scalars and vectors.
+                  self.x86_emit_movaps_xmm_xmm(preg.index, src)
+                }
+              None => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    return
+  }
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
 
@@ -1319,6 +1460,240 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
+  if current_isa() is @isa.X86_64 {
+    let isa = current_isa()
+    // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
+    // then do a Cranelift-style "param moves + param spills" stage.
+    //
+    // We must spill any spilled params *before* we clobber their incoming ABI regs.
+
+    // Emit the prologue without param moves.
+    let dummy_param_pregs : Array[@abi.PReg?] = []
+    for _ in 0..<params.length() {
+      dummy_param_pregs.push(None)
+    }
+    self.emit_prologue(
+      stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
+    )
+    let user_gprs = isa.wasm_user_arg_gprs()
+    let float_regs = isa.wasm_arg_fprs()
+
+    // Store spilled params from incoming ABI regs to spill slots.
+    let mut int_idx = 0
+    let mut float_idx = 0
+    for param_idx, param in params {
+      let loc = output.get_param_loc(param_idx)
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_mov_m64_r64(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_movsd_m64_xmm(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            float_idx += 1
+          }
+        @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_movdqu_m128_xmm(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    fn emit_parallel_moves_gpr(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_mov_rr(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_mov_rr(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 gpr): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_mov_rr(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_mov_rr(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
+    fn emit_parallel_moves_xmm(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_movaps_xmm_xmm(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 xmm): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
+    // Collect moves from ABI incoming regs to allocated regs.
+    let int_moves : Array[(Int, Int)] = []
+    let fp_moves : Array[(Int, Int)] = []
+    int_idx = 0
+    float_idx = 0
+    for param_idx, param in params {
+      let loc = output.get_param_loc(param_idx)
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match loc {
+              @regalloc.Reg(dst) =>
+                if dst.index != src {
+                  int_moves.push((src, dst.index))
+                }
+              _ => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Reg(dst) =>
+                if dst.index != src {
+                  fp_moves.push((src, dst.index))
+                }
+              _ => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
+    emit_parallel_moves_xmm(self, 15, fp_moves)
+    return
+  }
   // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
   // then do a Cranelift-style "param moves + param spills" stage.
   //
