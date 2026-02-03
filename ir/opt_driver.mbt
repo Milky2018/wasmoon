@@ -50,7 +50,6 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
     }
     return result
   }
-
   let result = match level {
     O1 => optimize_o1(func)
     O2 => optimize(func)
