@@ -784,8 +784,8 @@ pub fn lower_function(
   // - int params: X0-X7 (vmctx consumes X0)
   // - float params: V0-V7
   // - overflow: int overflow first, then float overflow
-  let max_int_reg_params = @abi.MAX_REG_PARAMS // X0-X7 (includes vmctx which ARE in ir_func.params)
-  let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
+  let max_int_reg_params = 1 + wasm_user_arg_gprs().length()
+  let max_float_reg_params = wasm_arg_fprs().length()
   let mut int_reg_count = 0
   let mut float_reg_count = 0
   let int_stack_values : Array[@ir.Value] = []

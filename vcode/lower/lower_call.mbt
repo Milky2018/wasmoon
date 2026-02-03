@@ -39,8 +39,8 @@ fn emit_wasm_overflow_arg_stores(
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Unit {
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS // 7 (X1-X7)
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS // 8 (V0-V7)
+  let max_int_reg_args = wasm_user_arg_gprs().length()
+  let max_float_reg_args = wasm_arg_fprs().length()
   let int_overflow = if int_args.length() > max_int_reg_args {
     int_args.length() - max_int_reg_args
   } else {
@@ -100,8 +100,8 @@ fn lower_wasm_call_common(
   }
 
   // Materialize constant overflow args before storing to stack.
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  let max_int_reg_args = wasm_user_arg_gprs().length()
+  let max_float_reg_args = wasm_arg_fprs().length()
   for i in max_int_reg_args..<int_args.length() {
     let (vreg, _) = int_args[i]
     if const_args.get(vreg.id) is Some(value) {
@@ -118,14 +118,11 @@ fn lower_wasm_call_common(
   // Store overflow args to stack (pre-allocated outgoing args area at SP).
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
 
-  // vmctx constrained to X0.
-  let vmctx_arg_preg : @abi.PReg = {
-    index: @abi.REG_CALLEE_VMCTX,
-    class: @abi.Int,
-  }
-  call_inst.add_use_fixed(Physical(vmctx_preg), vmctx_arg_preg)
+  // vmctx constrained to the ISA's vmctx-arg register.
+  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
 
-  // Register int args: X1-X7
+  // Register int args (ISA-specific).
+  let user_arg_gprs = wasm_user_arg_gprs()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -133,15 +130,15 @@ fn lower_wasm_call_common(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = @abi.USER_PARAM_BASE_REG + i
-    let preg = @abi.PReg::{ index: preg_idx, class: @abi.Int }
+    let preg = user_arg_gprs[i]
     if const_args.get(vreg.id) is Some(value) {
       emit_call_const(block, vreg, value)
     }
     call_inst.add_use_fixed(Virtual(vreg), preg)
   }
 
-  // Register float args: V0-V7
+  // Register float args (ISA-specific; float/vector share the same bank).
+  let arg_fprs = wasm_arg_fprs()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -149,7 +146,7 @@ fn lower_wasm_call_common(
   }
   for i in 0..<float_reg_count {
     let (vreg, arg_class) = float_args[i]
-    let preg = @abi.PReg::{ index: i, class: arg_class }
+    let preg = @abi.PReg::{ index: arg_fprs[i].index, class: arg_class }
     if const_args.get(vreg.id) is Some(value) {
       emit_call_const(block, vreg, value)
     }
@@ -161,15 +158,17 @@ fn lower_wasm_call_common(
     call_inst.add_use_fixed(Virtual(vreg), preg)
   }
 
-  // Define results with fixed register constraints
-  // Classify results by type and assign to X0-X7 / V0-V7
+  // Define results with fixed register constraints (ISA-specific).
+  // Classify results by type and assign to return GPR/FPR lists.
+  let ret_gprs = wasm_ret_gprs()
+  let ret_fprs = wasm_ret_fprs()
   let mut int_result_idx = 0
   let mut float_result_idx = 0
   for result in results {
     match result.class {
       @abi.Int => {
         call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
-          index: int_result_idx,
+          index: ret_gprs[int_result_idx].index,
           class: @abi.Int,
         })
         int_result_idx += 1
@@ -178,7 +177,7 @@ fn lower_wasm_call_common(
         // Float/Vector results go to V0, V1, ...
         // Use actual class for proper move size (32/64/128 bits)
         call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
-          index: float_result_idx,
+          index: ret_fprs[float_result_idx].index,
           class: result.class,
         })
         float_result_idx += 1
@@ -287,14 +286,12 @@ fn lower_return_call(
     class: @abi.Int,
   })
 
-  // vmctx constrained to X0
-  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
-    index: 0,
-    class: @abi.Int,
-  })
+  // vmctx constrained to the ISA's vmctx-arg register.
+  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
 
-  // Register int args: X1-X7
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  // Register int args (ISA-specific).
+  let user_arg_gprs = wasm_user_arg_gprs()
+  let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -302,15 +299,15 @@ fn lower_return_call(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: preg_idx,
+      index: user_arg_gprs[i].index,
       class: @abi.Int,
     })
   }
 
-  // Register float args: V0-V7
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  // Register float args (ISA-specific).
+  let arg_fprs = wasm_arg_fprs()
+  let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -318,7 +315,10 @@ fn lower_return_call(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: arg_fprs[i].index,
+      class,
+    })
   }
 
   // No result defs for tail call (doesn't return to this function)
@@ -434,14 +434,12 @@ fn lower_return_call_indirect(
     class: @abi.Int,
   })
 
-  // vmctx -> X0
-  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
-    index: 0,
-    class: @abi.Int,
-  })
+  // vmctx constrained to the ISA's vmctx-arg register.
+  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
 
-  // Register int args: X1-X7
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  // Register int args (ISA-specific).
+  let user_arg_gprs = wasm_user_arg_gprs()
+  let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -449,15 +447,15 @@ fn lower_return_call_indirect(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: preg_idx,
+      index: user_arg_gprs[i].index,
       class: @abi.Int,
     })
   }
 
-  // Register float args: V0-V7
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  // Register float args (ISA-specific).
+  let arg_fprs = wasm_arg_fprs()
+  let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -465,7 +463,10 @@ fn lower_return_call_indirect(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: arg_fprs[i].index,
+      class,
+    })
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
@@ -523,14 +524,12 @@ fn lower_return_call_ref(
     class: @abi.Int,
   })
 
-  // vmctx -> X0
-  call_inst.add_use_fixed(Physical(vmctx_preg), @abi.PReg::{
-    index: 0,
-    class: @abi.Int,
-  })
+  // vmctx constrained to the ISA's vmctx-arg register.
+  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
 
-  // Register int args: X1-X7
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  // Register int args (ISA-specific).
+  let user_arg_gprs = wasm_user_arg_gprs()
+  let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -538,15 +537,15 @@ fn lower_return_call_ref(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: preg_idx,
+      index: user_arg_gprs[i].index,
       class: @abi.Int,
     })
   }
 
-  // Register float args: V0-V7
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  // Register float args (ISA-specific).
+  let arg_fprs = wasm_arg_fprs()
+  let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -554,7 +553,10 @@ fn lower_return_call_ref(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: arg_fprs[i].index,
+      class,
+    })
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
@@ -827,14 +829,12 @@ fn lower_call_ptr(
     class: @abi.Int,
   })
 
-  // callee_vmctx constrained to X0
-  call_inst.add_use_fixed(Virtual(callee_vmctx), @abi.PReg::{
-    index: 0,
-    class: @abi.Int,
-  })
+  // callee_vmctx constrained to the ISA's vmctx-arg register.
+  call_inst.add_use_fixed(Virtual(callee_vmctx), wasm_vmctx_arg_preg())
 
-  // Register int args: X1-X7
-  let max_int_reg_args = @abi.MAX_USER_REG_PARAMS
+  // Register int args (ISA-specific).
+  let user_arg_gprs = wasm_user_arg_gprs()
+  let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -842,15 +842,15 @@ fn lower_call_ptr(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    let preg_idx = @abi.USER_PARAM_BASE_REG + i
     call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: preg_idx,
+      index: user_arg_gprs[i].index,
       class: @abi.Int,
     })
   }
 
-  // Register float args: V0-V7
-  let max_float_reg_args = @abi.MAX_FLOAT_REG_PARAMS
+  // Register float args (ISA-specific).
+  let arg_fprs = wasm_arg_fprs()
+  let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -858,26 +858,29 @@ fn lower_call_ptr(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{ index: i, class })
+    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+      index: arg_fprs[i].index,
+      class,
+    })
   }
 
   // Step 4: Define results with constraints
+  let ret_gprs = wasm_ret_gprs()
+  let ret_fprs = wasm_ret_fprs()
   let mut int_result_idx = 0
   let mut float_result_idx = 0
   for dst in result_vregs {
     match dst.class {
       @abi.Int => {
-        // Integer results go to X0, X1, ...
         call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
-          index: int_result_idx,
+          index: ret_gprs[int_result_idx].index,
           class: @abi.Int,
         })
         int_result_idx = int_result_idx + 1
       }
       @abi.Float32 | @abi.Float64 | @abi.Vector => {
-        // Float/Vector results go to V0, V1, ...
         call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
-          index: float_result_idx,
+          index: ret_fprs[float_result_idx].index,
           class: dst.class,
         })
         float_result_idx = float_result_idx + 1

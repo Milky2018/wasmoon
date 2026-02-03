@@ -47,16 +47,17 @@ pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
 ///|
 /// Internal Wasm ABI (initial x86_64 design): user integer argument registers.
 ///
-/// We start with the SysV register set (excluding vmctx in rdi), which provides
-/// 5 integer user arguments in registers. Extra args spill to the stack.
+/// We start with a SysV-like prefix (excluding vmctx in rdi), and add `rax` as an
+/// extra user argument register to reduce stack traffic in internal calls.
 pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
   [
     { index: 6, class: @abi.Int }, // rsi
     { index: 2, class: @abi.Int }, // rdx
     { index: 1, class: @abi.Int }, // rcx
     { index: 8, class: @abi.Int }, // r8
-    { index: 9, class: @abi.Int },
-  ] // r9
+    { index: 9, class: @abi.Int }, // r9
+    { index: 0, class: @abi.Int },
+  ] // rax
 }
 
 ///|
@@ -72,17 +73,26 @@ pub fn wasm_arg_fprs() -> Array[@abi.PReg] {
 ///|
 /// Internal Wasm ABI: integer return registers.
 pub fn wasm_ret_gprs() -> Array[@abi.PReg] {
+  // Internal multi-value return convention: allow up to 8 integer return regs.
+  // Keep r11 free as a scratch register for parallel-move breaking.
   [
     { index: 0, class: @abi.Int }, // rax
-    { index: 2, class: @abi.Int },
-  ] // rdx
+    { index: 2, class: @abi.Int }, // rdx
+    { index: 1, class: @abi.Int }, // rcx
+    { index: 8, class: @abi.Int }, // r8
+    { index: 9, class: @abi.Int }, // r9
+    { index: 6, class: @abi.Int }, // rsi
+    { index: 7, class: @abi.Int }, // rdi
+    { index: 10, class: @abi.Int },
+  ] // r10
 }
 
 ///|
 /// Internal Wasm ABI: float return registers.
 pub fn wasm_ret_fprs() -> Array[@abi.PReg] {
-  [
-    { index: 0, class: @abi.Float64 }, // xmm0
-    { index: 1, class: @abi.Float64 },
-  ] // xmm1
+  let regs : Array[@abi.PReg] = []
+  for i in 0..<8 {
+    regs.push({ index: i, class: @abi.Float64 })
+  }
+  regs
 }
