@@ -100,6 +100,7 @@ pub struct MachineCode {
   mut pos : Int
   labels : Map[Int, Int]
   fixups : Array[Fixup]
+  x86_rel32_fixups : Array[X86Rel32Fixup]
   func_addr_fixups : Array[FuncAddrFixup]
   call_fixups : Array[CallFixup]
   disasm : Array[(Int, String)]
@@ -107,6 +108,7 @@ pub struct MachineCode {
 pub fn MachineCode::add_call_fixup(Self, Int, Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::add_x86_rel32_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
 pub fn MachineCode::align_block(Self) -> Unit
 pub fn MachineCode::align_function(Self) -> Unit
@@ -314,6 +316,12 @@ pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::new() -> Self
 pub fn MachineCode::resolve_fixups(Self) -> Unit
 pub fn MachineCode::size(Self) -> Int
+pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
+pub fn MachineCode::x86_emit_ret(Self) -> Unit
+
+type X86Rel32Fixup
 
 // Type aliases
 
