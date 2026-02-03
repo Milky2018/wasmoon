@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 
 // Errors
 
@@ -143,6 +144,13 @@ pub(all) enum GCLibcall {
 pub impl Eq for GCLibcall
 pub impl Show for GCLibcall
 
+pub(all) enum IndexExtend {
+  None
+  Uxtw
+  Sxtw
+}
+pub impl Show for IndexExtend
+
 pub(all) enum IntToFloatKind {
   I32SToF32
   I32UToF32
@@ -235,12 +243,19 @@ pub(all) enum VCodeOpcode {
   SDiv(Bool)
   UDiv(Bool)
   And(Bool)
+  AndImm(Int64, Bool)
   Or(Bool)
+  OrImm(Int64, Bool)
   Xor(Bool)
+  XorImm(Int64, Bool)
   Shl(Bool)
+  ShlImm(Int, Bool)
   AShr(Bool)
+  AShrImm(Int, Bool)
   LShr(Bool)
+  LShrImm(Int, Bool)
   Rotr(Bool)
+  RotrImm(Int, Bool)
   Not(Bool)
   FAdd(Bool)
   FSub(Bool)
@@ -305,12 +320,15 @@ pub(all) enum VCodeOpcode {
   Smull
   ReturnCallIndirect(Int, Int)
   TypeCheckIndirect(Int)
+  TypeCheckSubtypeIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass)
   LoadMemBase(Int)
   LoadPtr(MemType, Int)
+  LoadPtrRegOffset(MemType, IndexExtend, Int)
   StorePtr(MemType, Int)
+  StorePtrRegOffset(MemType, IndexExtend, Int)
   LoadPtrNarrow(Int, Bool, Int)
   StorePtrNarrow(Int, Int)
   LoadGCFuncPtr(GCLibcall)

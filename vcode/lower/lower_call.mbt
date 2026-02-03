@@ -402,20 +402,11 @@ fn lower_return_call_indirect(
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
 
-  // Type check via libcall (supports GC subtyping and structural equivalence)
-  // gc_type_check_subtype(actual_type, expected_type) - traps if not a subtype
-  let check_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_check_ptr = @instr.VCodeInst::new(LoadGCFuncPtr(TypeCheckSubtype))
-  load_check_ptr.add_def({ reg: Virtual(check_func_ptr_vreg) })
-  block.add_inst(load_check_ptr)
-  let expected_type_vreg = materialize_imm(ctx, block, type_idx.to_int64())
-  lower_c_libcall(
-    ctx,
-    block,
-    check_func_ptr_vreg,
-    [actual_type_vreg, expected_type_vreg],
-    None,
-  )
+  // Type check (fast path); see lower_call_indirect.
+  let type_check = @instr.VCodeInst::new(TypeCheckSubtypeIndirect(type_idx))
+  type_check.add_use(Virtual(actual_type_vreg))
+  add_c_call_clobbers(type_check)
+  block.add_inst(type_check)
 
   // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
@@ -677,24 +668,17 @@ fn lower_call_indirect(
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
 
-  // Step 5: Type check via libcall (supports subtyping for GC proposal)
-  // gc_type_check_subtype(actual_type, expected_type) - traps if not a subtype
-  let check_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_check_ptr = @instr.VCodeInst::new(LoadGCFuncPtr(TypeCheckSubtype))
-  load_check_ptr.add_def({ reg: Virtual(check_func_ptr_vreg) })
-  block.add_inst(load_check_ptr)
-  let expected_type_vreg = materialize_imm(
-    ctx,
-    block,
-    expected_type_idx.to_int64(),
+  // Step 5: Type check (fast path).
+  //
+  // Exact-match is by far the common case for call_indirect; avoid an
+  // unconditional C call. On mismatch, fall back to the existing runtime helper
+  // that implements full GC subtyping and traps on failure.
+  let type_check = @instr.VCodeInst::new(
+    TypeCheckSubtypeIndirect(expected_type_idx),
   )
-  lower_c_libcall(
-    ctx,
-    block,
-    check_func_ptr_vreg,
-    [actual_type_vreg, expected_type_vreg],
-    None,
-  )
+  type_check.add_use(Virtual(actual_type_vreg))
+  add_c_call_clobbers(type_check)
+  block.add_inst(type_check)
 
   // Step 6: Use Standard call lowering
   lower_wasm_call(
@@ -765,11 +749,24 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
   // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
-    CallPtr(_, _, @instr.C) => @abi.call_clobbered_fprs()
+    CallPtr(_, _, @instr.C) | CallDirect(_, _, _, @instr.C) =>
+      @abi.call_clobbered_fprs()
     _ => @abi.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {
     call_inst.add_def({ reg: Physical(preg) })
+  }
+}
+
+///|
+/// Add clobbers for a C call unconditionally (used for pseudo-ops that may call
+/// a C helper on a slow path).
+fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
+  for preg in @abi.call_clobbered_gprs() {
+    inst.add_def({ reg: Physical(preg) })
+  }
+  for preg in @abi.call_clobbered_fprs() {
+    inst.add_def({ reg: Physical(preg) })
   }
 }
 

@@ -125,15 +125,15 @@ test "cross_block_cse" {
     content=(
       #|vcode test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    x0 = add32 x1, x2
+      #|    x3 = add32 x1, x2
       #|    cbnz x1, block1, block2
       #|block1:
-      #|    x0 = add32 #1 x0
+      #|    x3 = add32 #1 x3
       #|    jump block3
       #|block2:
       #|    jump block3
       #|block3(v3:int):
-      #|    ret x0
+      #|    ret x3
       #|}
       #|
     ),
@@ -146,14 +146,15 @@ test "cross_block_cse" {
     mc.dump_disasm(),
     content=(
       #|block0:
-      #|  0000: 2000020b  add w0, w1, w2
+      #|  0000: 2300020b  add w3, w1, w2
       #|  0004: 61000034  cbz w1, block2
       #|block1:
-      #|  0008: 00040011  add w0, w0, #1
+      #|  0008: 63040011  add w3, w3, #1
       #|  000c: 01000014  b block3
       #|block2:
       #|block3:
-      #|  0010: c0035fd6  ret
+      #|  0010: e00303aa  mov x0, x3
+      #|  0014: c0035fd6  ret
       #|
     ),
   )

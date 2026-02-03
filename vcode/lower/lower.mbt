@@ -24,6 +24,9 @@ struct LoweringContext {
   func_table_cache : Map[Int, @abi.VReg]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
+  // Values that should not be lowered because they are subsumed by a fused instruction
+  // (Cranelift-style ISel fusion; e.g. imul/ishl used only by madd/add_shift).
+  skipped_values : @hashset.HashSet[Int]
   // Use counts for IR values (used to skip unused call results)
   use_counts : Map[Int, Int]
 }
@@ -45,8 +48,185 @@ pub fn LoweringContext::new(
     stack_param_map: {},
     func_table_cache: {},
     fused_icmps: @hashset.new(),
+    skipped_values: @hashset.new(),
     use_counts,
   }
+}
+
+///|
+/// Pre-compute values that should be skipped during lowering because they are subsumed
+/// by a fused instruction selection rule.
+///
+/// This mirrors Cranelift ISLE lowering rules like:
+/// - iadd x (ishl y (iconst k)) => add_shift
+/// - iadd x (imul y z) => madd
+/// - isub x (imul y z) => msub
+fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
+  let skipped : @hashset.HashSet[Int] = @hashset.new()
+  let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
+
+  // Pass 1: find address values that will be subsumed by load/store lowering.
+  for block in ctx.ir_func.blocks {
+    for inst in block.instructions {
+      match inst.opcode {
+        @ir.Opcode::LoadPtr(ty) => {
+          guard inst.operands.length() >= 1 else { continue }
+          let base_value = inst.operands[0]
+          if ctx.use_counts.get(base_value.id).unwrap_or(0) != 1 {
+            continue
+          }
+          let access_size = match ty {
+            @ir.Type::I32 | @ir.Type::F32 => 4
+            @ir.Type::I64
+            | @ir.Type::F64
+            | @ir.Type::FuncRef
+            | @ir.Type::ExternRef => 8
+            @ir.Type::V128 => 16
+          }
+          let explicit_offset = if inst.operands.length() > 1 {
+            if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              off
+            } else {
+              0L
+            }
+          } else {
+            0L
+          }
+          if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              addrmode_skipped.add(base_value.id)
+              continue
+            }
+          }
+          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, _, _, _, subsumed, has_extra)) {
+            if explicit_offset == 0L || has_extra {
+              addrmode_skipped.add(base_value.id)
+              for vid in subsumed {
+                if ctx.use_counts.get(vid).unwrap_or(0) == 1 {
+                  addrmode_skipped.add(vid)
+                }
+              }
+            }
+          }
+        }
+        @ir.Opcode::StorePtr(ty) => {
+          guard inst.operands.length() >= 2 else { continue }
+          let base_value = inst.operands[0]
+          if ctx.use_counts.get(base_value.id).unwrap_or(0) != 1 {
+            continue
+          }
+          let access_size = match ty {
+            @ir.Type::I32 | @ir.Type::F32 => 4
+            @ir.Type::I64
+            | @ir.Type::F64
+            | @ir.Type::FuncRef
+            | @ir.Type::ExternRef => 8
+            @ir.Type::V128 => 16
+          }
+          let explicit_offset = if inst.operands.length() > 2 {
+            if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
+              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              off
+            } else {
+              0L
+            }
+          } else {
+            0L
+          }
+          if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              addrmode_skipped.add(base_value.id)
+              continue
+            }
+          }
+          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, _, _, _, subsumed, has_extra)) {
+            if explicit_offset == 0L || has_extra {
+              addrmode_skipped.add(base_value.id)
+              for vid in subsumed {
+                if ctx.use_counts.get(vid).unwrap_or(0) == 1 {
+                  addrmode_skipped.add(vid)
+                }
+              }
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+
+  // Pass 2: skip single-use producers subsumed by fused instruction selection,
+  // but avoid skipping them when their consumer value is itself addrmode-skipped.
+  for block in ctx.ir_func.blocks {
+    for inst in block.instructions {
+      let is_i64 = inst.first_result() is Some(result) &&
+        result.ty is @ir.Type::I64
+      match inst.opcode {
+        @ir.Opcode::Iadd => {
+          if !is_i64 {
+            continue
+          }
+          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+            continue
+          }
+          for op in inst.operands {
+            if ctx.use_counts.get(op.id).unwrap_or(0) != 1 {
+              continue
+            }
+            if match_mul_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+            if match_shl_const_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+          }
+        }
+        @ir.Opcode::Isub => {
+          if !is_i64 {
+            continue
+          }
+          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+            continue
+          }
+          let rhs = inst.operands[1]
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_shl_const_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+          }
+        }
+        @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
+          if !is_i64 {
+            continue
+          }
+          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+            continue
+          }
+          for op in inst.operands {
+            if ctx.use_counts.get(op.id).unwrap_or(0) == 1 &&
+              match_shl_const_value(ctx, op) is Some(_) {
+              skipped.add(op.id)
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  for id in addrmode_skipped {
+    skipped.add(id)
+  }
+  skipped
 }
 
 ///|
@@ -378,6 +558,119 @@ fn match_iadd_const(
 }
 
 ///|
+/// Match uextend/sextend(i32)->i64 used in address calculations.
+fn match_extend_i32_to_i64(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, @instr.IndexExtend)? {
+  if find_defining_inst(ctx, value) is Some(inst) {
+    match inst.opcode {
+      @ir.Opcode::Uextend =>
+        if value.ty is @ir.Type::I64 && inst.operands[0].ty is @ir.Type::I32 {
+          return Some((inst.operands[0], @instr.IndexExtend::Uxtw))
+        }
+      @ir.Opcode::Sextend =>
+        if value.ty is @ir.Type::I64 && inst.operands[0].ty is @ir.Type::I32 {
+          return Some((inst.operands[0], @instr.IndexExtend::Sxtw))
+        }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+fn log2_access_size(access_size : Int) -> Int? {
+  match access_size {
+    1 => Some(0)
+    2 => Some(1)
+    4 => Some(2)
+    8 => Some(3)
+    16 => Some(4)
+    _ => None
+  }
+}
+
+///|
+/// Match AArch64-style register-offset addressing (Cranelift AMode rules).
+///
+/// Returns:
+/// - base: base pointer value
+/// - index: index value (i32 if extended, otherwise i64)
+/// - ext: None/Uxtw/Sxtw
+/// - shift: 0 or log2(access_size)
+/// - subsumed: intermediate SSA values that can be skipped (uextend/sextend/ishl)
+/// - has_extra: whether we fused something beyond plain iadd(base, index)
+fn match_addr_reg_offset(
+  ctx : LoweringContext,
+  value : @ir.Value,
+  access_size : Int,
+) -> (@ir.Value, @ir.Value, @instr.IndexExtend, Int, Array[Int], Bool)? {
+  guard find_defining_inst(ctx, value) is Some(inst) else { return None }
+  guard inst.opcode is @ir.Opcode::Iadd else { return None }
+  let scale = log2_access_size(access_size)
+  if scale is None {
+    return None
+  }
+  let scale = scale.unwrap()
+  fn analyze(
+    ctx : LoweringContext,
+    base : @ir.Value,
+    index0 : @ir.Value,
+    scale : Int,
+  ) -> (@ir.Value, @ir.Value, @instr.IndexExtend, Int, Array[Int], Int) {
+    let mut index = index0
+    let mut ext = @instr.IndexExtend::None
+    let mut shift = 0
+    let subsumed : Array[Int] = []
+    let mut score = 0
+
+    // Match scaled-index: iadd(base, (ishl idx scale)).
+    if match_shl_const_value(ctx, index) is Some((inner, sh)) && sh == scale {
+      subsumed.push(index.id)
+      index = inner
+      shift = scale
+      score = score + 1
+    }
+
+    // Match extend after optional shift: uextend/sextend(i32)->i64.
+    if match_extend_i32_to_i64(ctx, index) is Some((inner, e)) {
+      subsumed.push(index.id)
+      index = inner
+      ext = e
+      score = score + 1
+    }
+    (base, index, ext, shift, subsumed, score)
+  }
+
+  let a = inst.operands[0]
+  let b = inst.operands[1]
+  let (base1, index1, ext1, shift1, subs1, score1) = analyze(ctx, a, b, scale)
+  let (base2, index2, ext2, shift2, subs2, score2) = analyze(ctx, b, a, scale)
+  fn is_iconst(ctx : LoweringContext, v : @ir.Value) -> Bool {
+    if find_defining_inst(ctx, v) is Some(di) &&
+      di.opcode is @ir.Opcode::Iconst(_) {
+      return true
+    }
+    false
+  }
+
+  if score1 >= score2 {
+    if is_iconst(ctx, index1) {
+      return None
+    }
+    let has_extra = score1 > 0
+    Some((base1, index1, ext1, shift1, subs1, has_extra))
+  } else {
+    if is_iconst(ctx, index2) {
+      return None
+    }
+    let has_extra = score2 > 0
+    Some((base2, index2, ext2, shift2, subs2, has_extra))
+  }
+}
+
+///|
 /// Check if an offset is valid for AArch64 LDR/STR unsigned immediate
 /// offset must be non-negative, aligned to access_size, and fit in 12-bit scaled
 fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
@@ -439,6 +732,11 @@ pub fn lower_function(
   let fused = compute_fused_icmps(ir_func, ctx.use_counts)
   for id in fused {
     ctx.fused_icmps.add(id)
+  }
+  // Phase 0.5: Pre-compute values to skip (subsumed by fused instruction selection)
+  let skipped = compute_skipped_values(ctx)
+  for id in skipped {
+    ctx.skipped_values.add(id)
   }
 
   // Phase 1: Create VCode blocks and set up block mapping
@@ -540,6 +838,10 @@ fn lower_block_body(
 
   // Lower instructions
   for inst in ir_block.instructions {
+    if inst.first_result() is Some(result) &&
+      ctx.skipped_values.contains(result.id) {
+      continue
+    }
     lower_inst(ctx, inst, vcode_block)
   }
 
@@ -576,11 +878,23 @@ fn lower_inst(
     @ir.Opcode::Band => lower_band(ctx, inst, block)
     @ir.Opcode::Bor => lower_bor(ctx, inst, block)
     @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
-    @ir.Opcode::Ishl => lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) })
-    @ir.Opcode::Sshr => lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) })
-    @ir.Opcode::Ushr => lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) })
+    @ir.Opcode::Ishl =>
+      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
+        ShlImm(amt, is_64)
+      })
+    @ir.Opcode::Sshr =>
+      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
+        AShrImm(amt, is_64)
+      })
+    @ir.Opcode::Ushr =>
+      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
+        LShrImm(amt, is_64)
+      })
     @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
-    @ir.Opcode::Rotr => lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) })
+    @ir.Opcode::Rotr =>
+      lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(amt, is_64) {
+        RotrImm(amt, is_64)
+      })
     @ir.Opcode::Bnot =>
       lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
 
@@ -1690,6 +2004,57 @@ fn lower_load_ptr(
   } else {
     0L
   }
+  fn adjust_base_with_offset(
+    ctx : LoweringContext,
+    block : @block.VCodeBlock,
+    base : @abi.VReg,
+    offset : Int64,
+  ) -> @abi.VReg {
+    if offset == 0L {
+      return base
+    }
+    let result = ctx.vcode_func.new_vreg(Int)
+    if offset > 0L && is_valid_add_imm(offset) {
+      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
+      add_inst.add_def({ reg: Virtual(result) })
+      add_inst.add_use(Virtual(base))
+      block.add_inst(add_inst)
+      return result
+    }
+    if offset < 0L && is_valid_add_imm(-offset) {
+      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
+      sub_inst.add_def({ reg: Virtual(result) })
+      sub_inst.add_use(Virtual(base))
+      block.add_inst(sub_inst)
+      return result
+    }
+    let imm_vreg = materialize_imm(ctx, block, offset)
+    let add_inst = @instr.VCodeInst::new(Add(true))
+    add_inst.add_def({ reg: Virtual(result) })
+    add_inst.add_use(Virtual(base))
+    add_inst.add_use(Virtual(imm_vreg))
+    block.add_inst(add_inst)
+    result
+  }
+
+  // Try Cranelift-style AArch64 register-offset addressing:
+  //   load [base + (uextend/ishl index)]  => load_regoff base, index, (ext/scale)
+  //
+  // This avoids materializing address temporaries and reduces register pressure.
+  if (mem_ty is I32 || mem_ty is I64) &&
+    match_addr_reg_offset(ctx, base_value, access_size)
+    is Some((am_base, am_index, ext, shift, _, has_extra)) &&
+    (explicit_offset == 0L || has_extra) {
+    let base0 = ctx.get_vreg_for_use(am_base, block)
+    let base = adjust_base_with_offset(ctx, block, base0, explicit_offset)
+    let index = ctx.get_vreg_for_use(am_index, block)
+    let load_inst = @instr.VCodeInst::new(LoadPtrRegOffset(mem_ty, ext, shift))
+    load_inst.add_def({ reg: Virtual(result_vreg) })
+    load_inst.add_use(Virtual(base))
+    load_inst.add_use(Virtual(index))
+    block.add_inst(load_inst)
+    return
+  }
 
   // Try to fold address calculation: if base is iadd(real_base, const),
   // we can fold the const into the load offset
@@ -1748,6 +2113,57 @@ fn lower_store_ptr(
     }
   } else {
     0L
+  }
+  fn adjust_base_with_offset(
+    ctx : LoweringContext,
+    block : @block.VCodeBlock,
+    base : @abi.VReg,
+    offset : Int64,
+  ) -> @abi.VReg {
+    if offset == 0L {
+      return base
+    }
+    let result = ctx.vcode_func.new_vreg(Int)
+    if offset > 0L && is_valid_add_imm(offset) {
+      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
+      add_inst.add_def({ reg: Virtual(result) })
+      add_inst.add_use(Virtual(base))
+      block.add_inst(add_inst)
+      return result
+    }
+    if offset < 0L && is_valid_add_imm(-offset) {
+      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
+      sub_inst.add_def({ reg: Virtual(result) })
+      sub_inst.add_use(Virtual(base))
+      block.add_inst(sub_inst)
+      return result
+    }
+    let imm_vreg = materialize_imm(ctx, block, offset)
+    let add_inst = @instr.VCodeInst::new(Add(true))
+    add_inst.add_def({ reg: Virtual(result) })
+    add_inst.add_use(Virtual(base))
+    add_inst.add_use(Virtual(imm_vreg))
+    block.add_inst(add_inst)
+    result
+  }
+
+  // Try Cranelift-style AArch64 register-offset addressing for stores.
+  if (mem_ty is I32 || mem_ty is I64) &&
+    match_addr_reg_offset(ctx, base_value, access_size)
+    is Some((am_base, am_index, ext, shift, _, has_extra)) &&
+    (explicit_offset == 0L || has_extra) {
+    let base0 = ctx.get_vreg_for_use(am_base, block)
+    let base = adjust_base_with_offset(ctx, block, base0, explicit_offset)
+    let index = ctx.get_vreg_for_use(am_index, block)
+    let value = ctx.get_vreg_for_use(store_value, block)
+    let store_inst = @instr.VCodeInst::new(
+      StorePtrRegOffset(mem_ty, ext, shift),
+    )
+    store_inst.add_use(Virtual(base))
+    store_inst.add_use(Virtual(index))
+    store_inst.add_use(Virtual(value))
+    block.add_inst(store_inst)
+    return
   }
 
   // Try to fold address calculation: if base is iadd(real_base, const),

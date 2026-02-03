@@ -52,12 +52,19 @@ enum Instruction {
   // Bitwise - Register
   AndReg(Int, Int, Int)
   AndReg32(Int, Int, Int)
+  // Bitwise - Immediate (logical/bitmask immediate). imm_bits is N:immr:imms (13 bits).
+  AndImm(Int, Int, Int)
+  AndImm32(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
   OrrReg32(Int, Int, Int)
+  OrrImm(Int, Int, Int)
+  OrrImm32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
   EorReg32(Int, Int, Int)
+  EorImm(Int, Int, Int)
+  EorImm32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
   Mvn32(Int, Int) // 32-bit bitwise NOT
@@ -73,8 +80,20 @@ enum Instruction {
   RorReg32(Int, Int, Int)
   // Shift - Immediate (64-bit): LSR Xd, Xn, #shift
   LsrImm(Int, Int, Int)
+  // Shift - Immediate (64-bit): LSL Xd, Xn, #shift
+  LslImm(Int, Int, Int)
+  // Shift - Immediate (64-bit): ASR Xd, Xn, #shift
+  AsrImm(Int, Int, Int)
+  // Rotate - Immediate (64-bit): ROR Xd, Xn, #shift (alias of EXTR with rm=rn)
+  RorImm(Int, Int, Int)
   // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
   LsrImm32(Int, Int, Int)
+  // Shift - Immediate (32-bit): LSL Wd, Wn, #shift
+  LslImm32(Int, Int, Int)
+  // Shift - Immediate (32-bit): ASR Wd, Wn, #shift
+  AsrImm32(Int, Int, Int)
+  // Rotate - Immediate (32-bit): ROR Wd, Wn, #shift (alias of EXTR with rm=rn)
+  RorImm32(Int, Int, Int)
   // Unsigned Bitfield Extract: UBFX Xd, Xn, #0, #width
   // Extracts bits [0, width-1] from Xn to Xd (zero-extended)
   UbfxWidth(Int, Int, Int)
@@ -95,6 +114,11 @@ enum Instruction {
   LdrImm(Int, Int, Int)
   LdrImmSigned(Int, Int, Int)
   LdrRegScaled(Int, Int, Int, Int)
+  // Register-offset load/store with configurable extension/scaling.
+  // option: 0b011 = LSL (X offset), 0b010 = UXTW, 0b110 = SXTW.
+  // size_bits: 0=8b, 1=16b, 2=32b, 3=64b. shift must be 0 or the natural scale for size_bits.
+  LdrRegOffset(Int, Int, Int, Int, Int, Int) // rt, rn, rm, option, size_bits, shift
+  StrRegOffset(Int, Int, Int, Int, Int, Int) // rt, rn, rm, option, size_bits, shift
   // Register-offset load/store using X register offset (UXTX), optional scaling.
   // shift is either 0 (no scale) or the natural scale for the access size.
   LdrWRegScaled(Int, Int, Int, Int)
@@ -567,6 +591,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndReg32(rd, rn, rm) => "and w\{rd}, w\{rn}, w\{rm}"
+    AndImm(rd, rn, imm_bits) => "and x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    AndImm32(rd, rn, imm_bits) => "and w\{rd}, w\{rn}, #imml(\{imm_bits})"
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -577,6 +603,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
     OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
+    OrrImm(rd, rn, imm_bits) => "orr x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    OrrImm32(rd, rn, imm_bits) => "orr w\{rd}, w\{rn}, #imml(\{imm_bits})"
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -587,6 +615,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
     EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
+    EorImm(rd, rn, imm_bits) => "eor x\{rd}, x\{rn}, #imml(\{imm_bits})"
+    EorImm32(rd, rn, imm_bits) => "eor w\{rd}, w\{rn}, #imml(\{imm_bits})"
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_name = match shift {
         Lsl => "lsl"
@@ -606,7 +636,13 @@ fn Instruction::annotate(self : Instruction) -> String {
     AsrReg32(rd, rn, rm) => "asr w\{rd}, w\{rn}, w\{rm}"
     RorReg32(rd, rn, rm) => "ror w\{rd}, w\{rn}, w\{rm}"
     LsrImm(rd, rn, shift) => "lsr x\{rd}, x\{rn}, #\{shift}"
+    LslImm(rd, rn, shift) => "lsl x\{rd}, x\{rn}, #\{shift}"
+    AsrImm(rd, rn, shift) => "asr x\{rd}, x\{rn}, #\{shift}"
+    RorImm(rd, rn, shift) => "ror x\{rd}, x\{rn}, #\{shift}"
     LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
+    LslImm32(rd, rn, shift) => "lsl w\{rd}, w\{rn}, #\{shift}"
+    AsrImm32(rd, rn, shift) => "asr w\{rd}, w\{rn}, #\{shift}"
+    RorImm32(rd, rn, shift) => "ror w\{rd}, w\{rn}, #\{shift}"
     UbfxWidth(rd, rn, width) => "ubfx x\{rd}, x\{rn}, #0, #\{width}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"
@@ -622,6 +658,31 @@ fn Instruction::annotate(self : Instruction) -> String {
     LdrImmSigned(rt, rn, simm9) => "ldur x\{rt}, [x\{rn}, #\{simm9}]"
     LdrRegScaled(rt, rn, rm, shift) =>
       "ldr x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    LdrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let (mnem, rt_name) = match size_bits {
+        0 => ("ldrb", "w\{rt}")
+        1 => ("ldrh", "w\{rt}")
+        2 => ("ldr", "w\{rt}")
+        3 => ("ldr", "x\{rt}")
+        _ => ("ldr", "x\{rt}")
+      }
+      let opt_str = match option {
+        0b011 => "lsl"
+        0b010 => "uxtw"
+        0b110 => "sxtw"
+        _ => "opt\{option}"
+      }
+      let rm_name = if option == 0b010 || option == 0b110 {
+        "w\{rm}"
+      } else {
+        "x\{rm}"
+      }
+      if shift == 0 {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str}]"
+      } else {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str} #\{shift}]"
+      }
+    }
     LdrWRegScaled(rt, rn, rm, shift) =>
       "ldr w\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
     StrWRegScaled(rt, rn, rm, shift) =>
@@ -633,6 +694,31 @@ fn Instruction::annotate(self : Instruction) -> String {
     StrImm(rt, rn, imm12) => "str x\{rt}, [x\{rn}, #\{imm12}]"
     StrRegScaled(rt, rn, rm, shift) =>
       "str x\{rt}, [x\{rn}, x\{rm}, lsl #\{shift}]"
+    StrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let (mnem, rt_name) = match size_bits {
+        0 => ("strb", "w\{rt}")
+        1 => ("strh", "w\{rt}")
+        2 => ("str", "w\{rt}")
+        3 => ("str", "x\{rt}")
+        _ => ("str", "x\{rt}")
+      }
+      let opt_str = match option {
+        0b011 => "lsl"
+        0b010 => "uxtw"
+        0b110 => "sxtw"
+        _ => "opt\{option}"
+      }
+      let rm_name = if option == 0b010 || option == 0b110 {
+        "w\{rm}"
+      } else {
+        "x\{rm}"
+      }
+      if shift == 0 {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str}]"
+      } else {
+        "\{mnem} \{rt_name}, [x\{rn}, \{rm_name}, \{opt_str} #\{shift}]"
+      }
+    }
     LdrbImm(rt, rn, imm12) => "ldrb w\{rt}, [x\{rn}, #\{imm12}]"
     LdrhImm(rt, rn, imm12) => "ldrh w\{rt}, [x\{rn}, #\{imm12}]"
     LdrWImm(rt, rn, imm12) => "ldr w\{rt}, [x\{rn}, #\{imm12}]"

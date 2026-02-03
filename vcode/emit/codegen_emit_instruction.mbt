@@ -125,6 +125,28 @@ fn MachineCode::emit_instruction(
         self.emit_and_reg32(rd, rn, rm)
       }
     }
+    AndImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_and_imm(rd, rn, bits)
+          } else {
+            self.emit_and_imm32(rd, rn, bits)
+          }
+        None => {
+          // Fallback: materialize immediate and use AND (register).
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_and_reg(rd, rn, scratch)
+          } else {
+            self.emit_and_reg32(rd, rn, scratch)
+          }
+        }
+      }
+    }
     Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -133,6 +155,27 @@ fn MachineCode::emit_instruction(
         self.emit_orr_reg(rd, rn, rm)
       } else {
         self.emit_orr_reg32(rd, rn, rm)
+      }
+    }
+    OrImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_orr_imm(rd, rn, bits)
+          } else {
+            self.emit_orr_imm32(rd, rn, bits)
+          }
+        None => {
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_orr_reg(rd, rn, scratch)
+          } else {
+            self.emit_orr_reg32(rd, rn, scratch)
+          }
+        }
       }
     }
     Xor(is_64) => {
@@ -145,6 +188,27 @@ fn MachineCode::emit_instruction(
         self.emit_eor_reg32(rd, rn, rm)
       }
     }
+    XorImm(imm, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match @instr.aarch64_logic_imm_enc_bits(imm, is_64) {
+        Some(bits) =>
+          if is_64 {
+            self.emit_eor_imm(rd, rn, bits)
+          } else {
+            self.emit_eor_imm32(rd, rn, bits)
+          }
+        None => {
+          let scratch = @abi.SCRATCH_REG_1
+          self.emit_load_imm64(scratch, imm)
+          if is_64 {
+            self.emit_eor_reg(rd, rn, scratch)
+          } else {
+            self.emit_eor_reg32(rd, rn, scratch)
+          }
+        }
+      }
+    }
     Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -153,6 +217,15 @@ fn MachineCode::emit_instruction(
         self.emit_lsl_reg(rd, rn, rm)
       } else {
         self.emit_lsl_reg32(rd, rn, rm)
+      }
+    }
+    ShlImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_lsl_imm(rd, rn, shift)
+      } else {
+        self.emit_lsl_imm32(rd, rn, shift)
       }
     }
     AShr(is_64) => {
@@ -165,6 +238,15 @@ fn MachineCode::emit_instruction(
         self.emit_asr_reg32(rd, rn, rm)
       }
     }
+    AShrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_asr_imm(rd, rn, shift)
+      } else {
+        self.emit_asr_imm32(rd, rn, shift)
+      }
+    }
     LShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -175,6 +257,15 @@ fn MachineCode::emit_instruction(
         self.emit_lsr_reg32(rd, rn, rm)
       }
     }
+    LShrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_lsr_imm(rd, rn, shift)
+      } else {
+        self.emit_lsr_imm32(rd, rn, shift)
+      }
+    }
     Rotr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -183,6 +274,15 @@ fn MachineCode::emit_instruction(
         self.emit_ror_reg(rd, rn, rm)
       } else {
         self.emit_ror_reg32(rd, rn, rm)
+      }
+    }
+    RotrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.emit_ror_imm(rd, rn, shift)
+      } else {
+        self.emit_ror_imm32(rd, rn, shift)
       }
     }
     Not(is_64) => {
@@ -960,8 +1060,36 @@ fn MachineCode::emit_instruction(
       }
       // B.EQ +8: skip BRK (4 bytes) if types match
       self.emit_b_cond_offset(0, 8) // cond=0 is EQ
-      // BRK #4: trap with code 4 for indirect call type mismatch
-      self.emit_brk(4)
+      // BRK #2: trap (indirect call type mismatch)
+      self.emit_brk(2)
+    }
+    TypeCheckSubtypeIndirect(expected_type) => {
+      // Fast path for call_indirect type checks:
+      // - If actual_type == expected_type: do nothing.
+      // - Otherwise: call the runtime subtype checker (traps on failure).
+      //
+      // Uses: [actual_type_vreg]
+      let actual_type_reg = reg_num(inst.uses[0])
+      // Compare as i32 (type indices are 32-bit).
+      if expected_type >= 0 && expected_type <= 4095 {
+        self.emit_cmp_imm32(actual_type_reg, expected_type)
+      } else {
+        self.emit_load_imm64(17, expected_type.to_int64())
+        self.emit_cmp_reg32(actual_type_reg, 17)
+      }
+
+      // Branch to done if equal.
+      let done_label = -self.current_pos() - 1
+      self.emit_b_cond(@instr.Cond::Eq.to_bits(), done_label)
+
+      // Slow path: call gc_type_check_subtype_impl(actual, expected).
+      // Args: x0 = actual_type, x1 = expected_type
+      self.emit_mov_reg(0, actual_type_reg)
+      self.emit_load_imm64(1, expected_type.to_int64())
+      let func_ptr = @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+      self.emit_load_imm64(17, func_ptr)
+      self.emit_blr(17)
+      self.define_label(done_label)
     }
     StackLoad(offset) => {
       // Load from [SP + spill_base_offset + offset] into the def register
@@ -1056,12 +1184,28 @@ fn MachineCode::emit_instruction(
       let base_reg = reg_num(inst.uses[0])
       self.emit_load(ty, result_reg, base_reg, offset)
     }
+    LoadPtrRegOffset(ty, ext, shift) => {
+      // Raw pointer load with register offset (no bounds checking)
+      // Uses: [base, index], Defs: [result]
+      let result_reg = wreg_num(inst.defs[0])
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      self.emit_load_reg_offset(ty, result_reg, base_reg, index_reg, ext, shift)
+    }
     StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking)
       // Uses: [base, value], Defs: []
       let base_reg = reg_num(inst.uses[0])
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
+    }
+    StorePtrRegOffset(ty, ext, shift) => {
+      // Raw pointer store with register offset (no bounds checking)
+      // Uses: [base, index, value], Defs: []
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      let value_reg = reg_num(inst.uses[2])
+      self.emit_store_reg_offset(ty, value_reg, base_reg, index_reg, ext, shift)
     }
     LoadPtrNarrow(bits, signed, offset) => {
       // Raw pointer narrow load (no bounds checking)

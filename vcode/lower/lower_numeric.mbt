@@ -540,14 +540,27 @@ fn lower_shift(
   ctx : LoweringContext,
   inst : @ir.Inst,
   block : @block.VCodeBlock,
-  make_opcode : (Bool) -> @instr.VCodeOpcode,
+  make_reg_opcode : (Bool) -> @instr.VCodeOpcode,
+  make_imm_opcode : (Int, Bool) -> @instr.VCodeOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let is_64 = result.ty is @ir.Type::I64
-    let vcode_inst = @instr.VCodeInst::new(make_opcode(is_64))
+    let mask = if is_64 { 63 } else { 31 }
+
+    // Cranelift-style: if shift amount is constant, use immediate encoding and
+    // mask it by bitwidth-1 (WebAssembly semantics).
+    if get_const_value(ctx, inst.operands[1]) is Some(amount) {
+      let shift = amount.to_int() & mask
+      let vcode_inst = @instr.VCodeInst::new(make_imm_opcode(shift, is_64))
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(lhs))
+      block.add_inst(vcode_inst)
+      return
+    }
+    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+    let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
@@ -810,10 +823,32 @@ fn lower_band(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
+  let is_64 = result.ty is @ir.Type::I64
+
+  // Pattern: and(x, const) -> AndImm if const is encodable as a logical immediate.
+  if get_const_value(ctx, rhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: and(const, x) -> AndImm (commutative).
+  if get_const_value(ctx, lhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let rhs = ctx.get_vreg_for_use(rhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
 
   // Pattern: and(x, shl(y, n)) -> AndShifted (i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
@@ -825,8 +860,7 @@ fn lower_band(
   }
 
   // Pattern: and(shl(x, n), y) -> AndShifted (commutative, i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
@@ -840,7 +874,7 @@ fn lower_band(
   // Default: regular and
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(And(result.ty is @ir.Type::I64))
+  let vcode_inst = @instr.VCodeInst::new(And(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -858,10 +892,32 @@ fn lower_bor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
+  let is_64 = result.ty is @ir.Type::I64
+
+  // Pattern: or(x, const) -> OrImm if const is encodable as a logical immediate.
+  if get_const_value(ctx, rhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: or(const, x) -> OrImm (commutative).
+  if get_const_value(ctx, lhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let rhs = ctx.get_vreg_for_use(rhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
 
   // Pattern: or(x, shl(y, n)) -> OrShifted (i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
@@ -873,8 +929,7 @@ fn lower_bor(
   }
 
   // Pattern: or(shl(x, n), y) -> OrShifted (commutative, i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
@@ -888,7 +943,7 @@ fn lower_bor(
   // Default: regular or
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Or(result.ty is @ir.Type::I64))
+  let vcode_inst = @instr.VCodeInst::new(Or(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -906,10 +961,32 @@ fn lower_bxor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
+  let is_64 = result.ty is @ir.Type::I64
+
+  // Pattern: xor(x, const) -> XorImm if const is encodable as a logical immediate.
+  if get_const_value(ctx, rhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: xor(const, x) -> XorImm (commutative).
+  if get_const_value(ctx, lhs_val) is Some(imm) &&
+    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    let rhs = ctx.get_vreg_for_use(rhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
 
   // Pattern: xor(x, shl(y, n)) -> XorShifted (i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
@@ -921,8 +998,7 @@ fn lower_bxor(
   }
 
   // Pattern: xor(shl(x, n), y) -> XorShifted (commutative, i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
@@ -936,7 +1012,7 @@ fn lower_bxor(
   // Default: regular xor
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Xor(result.ty is @ir.Type::I64))
+  let vcode_inst = @instr.VCodeInst::new(Xor(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
   vcode_inst.add_use(Virtual(rhs))
@@ -963,8 +1039,29 @@ fn lower_rotl(
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
-  let amount = ctx.get_vreg_for_use(inst.operands[1], block)
   let is_64 = result.ty is @ir.Type::I64
+  let mask = if is_64 { 63 } else { 31 }
+
+  // Cranelift-style: for constant shift amounts, emit a single rotate-immediate.
+  // rotl(x, k) = rotr(x, (bits - k) & mask).
+  if get_const_value(ctx, inst.operands[1]) is Some(k_imm) {
+    let k = k_imm.to_int() & mask
+    if k == 0 {
+      let mov = @instr.VCodeInst::new(Move)
+      mov.add_def({ reg: Virtual(dst) })
+      mov.add_use(Virtual(src))
+      block.add_inst(mov)
+      return
+    }
+    let bits = if is_64 { 64 } else { 32 }
+    let rotr_k = (bits - k) & mask
+    let ror = @instr.VCodeInst::new(RotrImm(rotr_k, is_64))
+    ror.add_def({ reg: Virtual(dst) })
+    ror.add_use(Virtual(src))
+    block.add_inst(ror)
+    return
+  }
+  let amount = ctx.get_vreg_for_use(inst.operands[1], block)
 
   // Step 1: Load constant 0 into temp
   let zero = ctx.vcode_func.new_vreg(Int)

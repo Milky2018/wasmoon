@@ -7,6 +7,7 @@
 /// connected by Move instructions, block arguments, or tied operands.
 struct Bundle {
   id : Int
+  mut spillset_id : Int // Original bundle ID before splitting (Cranelift-style spillset)
   range_ids : Array[Int] // Indices into LiveRangeSet
   mut spill_weight : Double // Priority for allocation (higher = more important)
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
@@ -19,6 +20,7 @@ struct Bundle {
 pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
   {
     id,
+    spillset_id: id,
     range_ids: [],
     spill_weight: 0.0,
     spill_bundle_id: -1,

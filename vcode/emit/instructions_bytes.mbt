@@ -270,6 +270,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x0A // AND 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    AndImm(rd, rn, imm_bits) => {
+      // AND (immediate): bits_31_23 = 000_100100 with sf=1.
+      let top9 = 0b000_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AndImm32(rd, rn, imm_bits) => {
+      // AND (immediate) 32-bit: bits_31_23 = 000_100100 with sf=0.
+      let top9 = 0b000_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     AndShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -297,6 +315,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x2A // ORR 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    OrrImm(rd, rn, imm_bits) => {
+      // ORR (immediate): bits_31_23 = 001_100100 with sf=1.
+      let top9 = 0b001_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    OrrImm32(rd, rn, imm_bits) => {
+      // ORR (immediate) 32-bit: bits_31_23 = 001_100100 with sf=0.
+      let top9 = 0b001_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     OrrShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
         Lsl => 0
@@ -323,6 +359,24 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = rm & 31
       let b3 = 0x4A // EOR 32-bit: sf=0
       (b0, b1, b2, b3)
+    }
+    EorImm(rd, rn, imm_bits) => {
+      // EOR (immediate): bits_31_23 = 010_100100 with sf=1.
+      let top9 = 0b010_100100 | (1 << 8)
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    EorImm32(rd, rn, imm_bits) => {
+      // EOR (immediate) 32-bit: bits_31_23 = 010_100100 with sf=0.
+      let top9 = 0b010_100100
+      let inst = (top9 << 23) |
+        ((imm_bits & 0x1FFF) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     EorShifted(rd, rn, rm, shift, amount) => {
       let shift_bits = match shift {
@@ -415,6 +469,49 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0xD3 // sf=1, opc=10, 100110
       (b0, b1, b2, b3)
     }
+    LslImm(rd, rn, shift) => {
+      // LSL Xd, Xn, #shift (alias of UBFM):
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Lsl).
+      let amt = shift & 63
+      let bits = 64
+      let immr = ((bits - amt) % bits) & 63
+      let imms = (bits - 1 - amt) & 63
+      let top10 = 0b0101001100 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AsrImm(rd, rn, shift) => {
+      // ASR Xd, Xn, #shift (alias of SBFM).
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Asr).
+      let amt = shift & 63
+      let immr = amt & 63
+      let imms = (0b011111 | (1 << 5)) & 63 // 63 for 64-bit
+      let top10 = 0b0001001100 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    RorImm(rd, rn, shift) => {
+      // ROR Xd, Xn, #shift (alias of EXTR Xd, Xn, Xn, #shift).
+      // Use Cranelift encoding (Inst::AluRRImmShift with ALUOp::Extr and rm=rn).
+      let amt = shift & 63
+      let immr = rn & 31 // rm == rn
+      let imms = amt & 63
+      let top10 = 0b0001001110 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((immr & 31) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     LsrImm32(rd, rn, shift) => {
       // LSR Wd, Wn, #shift = UBFM Wd, Wn, #shift, #31
       let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -422,6 +519,46 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b2 = shift & 31 // N=0, immr=shift
       let b3 = 0x53 // sf=0, opc=10, 100110
       (b0, b1, b2, b3)
+    }
+    LslImm32(rd, rn, shift) => {
+      // LSL Wd, Wn, #shift (alias of UBFM).
+      let amt = shift & 31
+      let bits = 32
+      let immr = ((bits - amt) % bits) & 31
+      let imms = (bits - 1 - amt) & 31
+      let top10 = 0b0101001100 // sf=0 => no extra bits
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AsrImm32(rd, rn, shift) => {
+      // ASR Wd, Wn, #shift (alias of SBFM).
+      let amt = shift & 31
+      let immr = amt & 63
+      let imms = 0b011111 // 31 for 32-bit
+      let top10 = 0b0001001100
+      let inst = (top10 << 22) |
+        ((immr & 63) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    RorImm32(rd, rn, shift) => {
+      // ROR Wd, Wn, #shift (alias of EXTR Wd, Wn, Wn, #shift).
+      let amt = shift & 31
+      let immr = rn & 31
+      let imms = amt & 63
+      let top10 = 0b0001001110
+      let inst = (top10 << 22) |
+        ((immr & 31) << 16) |
+        ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
     UbfxWidth(rd, rn, width) => {
       // UBFX Xd, Xn, #0, #width = UBFM Xd, Xn, #0, #(width-1)
@@ -548,6 +685,37 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rt & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    LdrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let natural = match size_bits {
+        0 => 0
+        1 => 1
+        2 => 2
+        3 => 3
+        _ => abort("invalid size_bits in LdrRegOffset: \{size_bits}")
+      }
+      let s_bit = if shift == 0 {
+        0
+      } else if shift == natural {
+        1
+      } else {
+        abort(
+          "invalid shift in LdrRegOffset: \{shift} for size_bits=\{size_bits}",
+        )
+      }
+      let inst = ((size_bits & 0b11) << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b01 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        ((option & 7) << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     LdrWRegScaled(rt, rn, rm, shift) => {
       let s_bit = if shift == 2 { 1 } else { 0 }
       let inst = (0b10 << 30) |
@@ -662,6 +830,37 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (1 << 21) |
         ((rm & 31) << 16) |
         (0b011 << 13) |
+        (s_bit << 12) |
+        (0b10 << 10) |
+        ((rn & 31) << 5) |
+        (rt & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    StrRegOffset(rt, rn, rm, option, size_bits, shift) => {
+      let natural = match size_bits {
+        0 => 0
+        1 => 1
+        2 => 2
+        3 => 3
+        _ => abort("invalid size_bits in StrRegOffset: \{size_bits}")
+      }
+      let s_bit = if shift == 0 {
+        0
+      } else if shift == natural {
+        1
+      } else {
+        abort(
+          "invalid shift in StrRegOffset: \{shift} for size_bits=\{size_bits}",
+        )
+      }
+      let inst = ((size_bits & 0b11) << 30) |
+        (0b111 << 27) |
+        (0 << 26) |
+        (0b00 << 24) |
+        (0b00 << 22) |
+        (1 << 21) |
+        ((rm & 31) << 16) |
+        ((option & 7) << 13) |
         (s_bit << 12) |
         (0b10 << 10) |
         ((rn & 31) << 5) |

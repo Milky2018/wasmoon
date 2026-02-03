@@ -132,6 +132,9 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
     ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
+    TypeCheckSubtypeIndirect(_) =>
+      // Only clobbers are attached (no results); keep output compact.
+      []
     _ => self.defs
   }
   if defs_to_print.length() > 0 {
@@ -181,12 +184,19 @@ pub(all) enum VCodeOpcode {
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And(Bool)
+  AndImm(Int64, Bool) // AND (immediate logical), value is the immediate pattern
   Or(Bool)
+  OrImm(Int64, Bool) // ORR (immediate logical), value is the immediate pattern
   Xor(Bool)
+  XorImm(Int64, Bool) // EOR (immediate logical), value is the immediate pattern
   Shl(Bool) // LSL with size
+  ShlImm(Int, Bool) // LSL with immediate shift amount (masked per Wasm semantics)
   AShr(Bool) // Arithmetic shift right with size
+  AShrImm(Int, Bool) // ASR with immediate shift amount (masked per Wasm semantics)
   LShr(Bool) // Logical shift right with size
+  LShrImm(Int, Bool) // LSR with immediate shift amount (masked per Wasm semantics)
   Rotr(Bool) // Rotate right with size
+  RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
   Not(Bool) // Bitwise NOT with size: true = 64-bit, false = 32-bit
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
@@ -326,6 +336,18 @@ pub(all) enum VCodeOpcode {
   // Uses: [actual_type_vreg], Parameters: expected_type (immediate)
   // Emits: CMP actual, expected; B.EQ +8; BRK #2 (type mismatch trap)
   TypeCheckIndirect(Int)
+  // TypeCheckSubtypeIndirect: fast-path for call_indirect type checks.
+  //
+  // Uses: [actual_type_vreg]
+  // Parameters: expected_type (immediate)
+  //
+  // Semantics:
+  // - If actual_type == expected_type: do nothing.
+  // - Otherwise: call the GC subtype checker (C libcall) which traps on failure.
+  //
+  // This removes the unconditional C call on the hot exact-match path while
+  // preserving full GC subtyping semantics via the existing runtime helper.
+  TypeCheckSubtypeIndirect(Int)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -349,9 +371,17 @@ pub(all) enum VCodeOpcode {
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtr(MemType, Int)
+  // LoadPtrRegOffset(type, extend, shift): Load from [base + index{, extend}{, scale}]
+  // Uses: [base, index], Defs: [result]
+  // - extend: None uses X index; Uxtw/Sxtw use W index extended to X
+  // - shift: 0 (no scale) or log2(access_size) (scaled register offset)
+  LoadPtrRegOffset(MemType, IndexExtend, Int)
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
+  // StorePtrRegOffset(type, extend, shift): Store to [base + index{, extend}{, scale}]
+  // Uses: [base, index, value], Defs: []
+  StorePtrRegOffset(MemType, IndexExtend, Int)
   // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
@@ -840,12 +870,19 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
     And(is_64) => if is_64 { "and" } else { "and32" }
+    AndImm(imm, is_64) => if is_64 { "and #\{imm}" } else { "and32 #\{imm}" }
     Or(is_64) => if is_64 { "or" } else { "or32" }
+    OrImm(imm, is_64) => if is_64 { "or #\{imm}" } else { "or32 #\{imm}" }
     Xor(is_64) => if is_64 { "xor" } else { "xor32" }
+    XorImm(imm, is_64) => if is_64 { "xor #\{imm}" } else { "xor32 #\{imm}" }
     Shl(is_64) => if is_64 { "shl" } else { "shl32" }
+    ShlImm(imm, is_64) => if is_64 { "shl #\{imm}" } else { "shl32 #\{imm}" }
     AShr(is_64) => if is_64 { "ashr" } else { "ashr32" }
+    AShrImm(imm, is_64) => if is_64 { "ashr #\{imm}" } else { "ashr32 #\{imm}" }
     LShr(is_64) => if is_64 { "lshr" } else { "lshr32" }
+    LShrImm(imm, is_64) => if is_64 { "lshr #\{imm}" } else { "lshr32 #\{imm}" }
     Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
+    RotrImm(imm, is_64) => if is_64 { "rotr #\{imm}" } else { "rotr32 #\{imm}" }
     Not(is_64) => if is_64 { "not" } else { "not32" }
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
@@ -946,13 +983,19 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     ReturnCallIndirect(num_args, num_results) =>
       "return_call_indirect(\{num_args}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
+    TypeCheckSubtypeIndirect(expected_type) =>
+      "type_check_subtype_indirect \{expected_type}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
     // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
+    LoadPtrRegOffset(ty, ext, shift) =>
+      "load_ptr_regoff.\{ty} (\{ext},\{shift})"
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
+    StorePtrRegOffset(ty, ext, shift) =>
+      "store_ptr_regoff.\{ty} (\{ext},\{shift})"
     LoadPtrNarrow(bits, signed, offset) => {
       let sign_str = if signed { "s" } else { "u" }
       "load_ptr\{bits}_\{sign_str} +\{offset}"
@@ -1510,6 +1553,8 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
     CallPtr(_, _, _) | CallDirect(_, _, _, _) => Regular
+    // TypeCheckSubtypeIndirect can call a C helper on the slow path; treat it as a call.
+    TypeCheckSubtypeIndirect(_) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Everything else is not a call
@@ -1523,6 +1568,32 @@ pub(all) enum ShiftType {
   Lsl // Logical shift left
   Lsr // Logical shift right
   Asr // Arithmetic shift right
+}
+
+///|
+/// AArch64 addressing-mode extend for register-offset loads/stores.
+///
+/// Mirrors Cranelift's AMode.{RegExtended,RegScaledExtended} options:
+/// - None: use X register offset (LSL option)
+/// - Uxtw/Sxtw: extend Wm to X, optionally scaled by access size (S bit)
+pub(all) enum IndexExtend {
+  None
+  Uxtw
+  Sxtw
+}
+
+///|
+fn IndexExtend::to_string(self : IndexExtend) -> String {
+  match self {
+    None => "none"
+    Uxtw => "uxtw"
+    Sxtw => "sxtw"
+  }
+}
+
+///|
+pub impl Show for IndexExtend with output(self, logger) {
+  logger.write_string(self.to_string())
 }
 
 ///|

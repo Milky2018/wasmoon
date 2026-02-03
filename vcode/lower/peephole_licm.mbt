@@ -769,7 +769,10 @@ fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
     let new_insts : Array[@instr.VCodeInst] = []
     for inst in blk.insts {
       match inst.opcode {
-        CallPtr(_, _, _) | ReturnCallIndirect(_, _) => {
+        CallPtr(_, _, _)
+        | CallDirect(_, _, _, _)
+        | ReturnCallIndirect(_, _)
+        | TypeCheckSubtypeIndirect(_) => {
           last_base.clear()
           new_insts.push(inst)
         }

@@ -46,11 +46,28 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   }
   let result : Array[RegMove] = []
   let pending : Array[RegMove] = []
+  let seen : Set[Int] = Set::new()
   fn same_loc(a : Loc, b : Loc) -> Bool {
     match (a, b) {
       (Reg(ra), Reg(rb)) => ra.index == rb.index && ra.class == rb.class
       (Spill(sa), Spill(sb)) => sa == sb
       _ => false
+    }
+  }
+
+  fn class_key(cls : @abi.RegClass) -> Int {
+    match cls {
+      @abi.Int => 0
+      @abi.Float32 => 1
+      @abi.Float64 => 2
+      @abi.Vector => 3
+    }
+  }
+
+  fn loc_exact_key(loc : Loc) -> Int {
+    match loc {
+      Reg(preg) => 1_000_000 + preg.index * 4 + class_key(preg.class)
+      Spill(slot) => slot
     }
   }
 
@@ -83,7 +100,12 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   for mv in moves {
     // Skip identity moves.
     if !same_loc(mv.from, mv.to) {
-      pending.push(mv)
+      let k = (loc_exact_key(mv.from) * 131071 + loc_exact_key(mv.to)) * 8 +
+        class_key(mv.class)
+      if !seen.contains(k) {
+        seen.add(k) |> ignore
+        pending.push(mv)
+      }
     }
   }
   if pending.length() <= 1 {

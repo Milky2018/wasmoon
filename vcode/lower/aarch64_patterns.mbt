@@ -54,74 +54,7 @@ pub fn is_valid_add_imm(val : Int64) -> Bool {
 /// Uses bitmask immediate encoding: a repeating pattern of consecutive 1s
 /// that can be rotated within an element of size 2, 4, 8, 16, 32, or 64 bits.
 pub fn is_valid_logical_imm(val : Int64) -> Bool {
-  // All-zeros and all-ones cannot be encoded
-  if val == 0L || val == -1L {
-    return false
-  }
-  // Try each element size: 2, 4, 8, 16, 32, 64 bits
-  is_valid_logical_imm_with_size(val, 64) ||
-  is_valid_logical_imm_with_size(val, 32) ||
-  is_valid_logical_imm_with_size(val, 16) ||
-  is_valid_logical_imm_with_size(val, 8) ||
-  is_valid_logical_imm_with_size(val, 4) ||
-  is_valid_logical_imm_with_size(val, 2)
-}
-
-///|
-/// Check if value is valid for a specific element size
-fn is_valid_logical_imm_with_size(val : Int64, size : Int) -> Bool {
-  // For smaller sizes, the pattern must repeat
-  let mask = if size == 64 { -1L } else { (1L << size) - 1L }
-  let elem = val & mask
-  // Check that the pattern repeats across all elements
-  let mut check = val
-  let mut remaining = 64
-  while remaining > 0 {
-    if (check & mask) != elem {
-      return false
-    }
-    check = logical_shift_right(check, size.to_int64())
-    remaining = remaining - size
-  }
-  // Check that the element itself is a valid rotated consecutive-ones pattern
-  // A valid pattern has exactly one contiguous run of 1s (possibly rotated)
-  is_rotated_consecutive_ones(elem, size)
-}
-
-///|
-/// Check if value is a rotated consecutive-ones pattern within given size
-fn is_rotated_consecutive_ones(val : Int64, size : Int) -> Bool {
-  if val == 0L {
-    return false
-  }
-  let mask = if size == 64 { -1L } else { (1L << size) - 1L }
-  let elem = val & mask
-  // All-ones within element size is invalid
-  if elem == mask {
-    return false
-  }
-  // A rotated consecutive-ones pattern, when we OR the value with its
-  // left-rotation by the number of trailing zeros, gives all-ones
-  // Alternatively: (val | (val - 1)) + 1 is a power of 2, or
-  // val | rotate_right(val, 1) when normalized gives consecutive ones
-  // Simpler check: count transitions between 0 and 1 - should be exactly 2
-  let transitions = count_bit_transitions(elem, size)
-  transitions == 2
-}
-
-///|
-/// Count the number of 0->1 and 1->0 transitions in a value
-fn count_bit_transitions(val : Int64, size : Int) -> Int {
-  let mut count = 0
-  let mut prev = (val >> (size - 1)) & 1L // MSB
-  for i in 0..<size {
-    let curr = (val >> i) & 1L
-    if curr != prev {
-      count = count + 1
-    }
-    prev = curr
-  }
-  count
+  @instr.aarch64_logic_imm_enc_bits(val, true) is Some(_)
 }
 
 ///|

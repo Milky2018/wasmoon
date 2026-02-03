@@ -518,9 +518,8 @@ test "lower add(x, mul(y, z)) to madd" {
     content=(
       #|vcode madd_test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v1, v2
-      #|    v4 = madd v0, v1, v2
-      #|    ret v4
+      #|    v3 = madd v0, v1, v2
+      #|    ret v3
       #|}
       #|
     ),
@@ -548,9 +547,8 @@ test "lower sub(x, mul(y, z)) to msub" {
     content=(
       #|vcode msub_test(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v1, v2
-      #|    v4 = msub v0, v1, v2
-      #|    ret v4
+      #|    v3 = msub v0, v1, v2
+      #|    ret v3
       #|}
       #|
     ),
@@ -578,9 +576,8 @@ test "lower sub(0, mul(x, y)) to mneg" {
     content=(
       #|vcode mneg_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v3 = mul v0, v1
-      #|    v4 = mneg v0, v1
-      #|    ret v4
+      #|    v3 = mneg v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -608,10 +605,8 @@ test "lower add(x, shl(y, n)) to add_shifted" {
     content=(
       #|vcode add_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 3
-      #|    v3 = shl v1, v2
-      #|    v4 = add.lsl #3 v0, v1
-      #|    ret v4
+      #|    v3 = add.lsl #3 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -639,10 +634,8 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
     content=(
       #|vcode sub_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 2
-      #|    v3 = shl v1, v2
-      #|    v4 = sub.lsl #2 v0, v1
-      #|    ret v4
+      #|    v3 = sub.lsl #2 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -670,10 +663,8 @@ test "lower and(x, shl(y, n)) to and_shifted" {
     content=(
       #|vcode and_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 4
-      #|    v3 = shl v1, v2
-      #|    v4 = and.lsl #4 v0, v1
-      #|    ret v4
+      #|    v3 = and.lsl #4 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -701,10 +692,8 @@ test "lower or(x, shl(y, n)) to or_shifted" {
     content=(
       #|vcode or_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 5
-      #|    v3 = shl v1, v2
-      #|    v4 = or.lsl #5 v0, v1
-      #|    ret v4
+      #|    v3 = or.lsl #5 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -732,10 +721,8 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
     content=(
       #|vcode xor_shifted_test(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 1
-      #|    v3 = shl v1, v2
-      #|    v4 = xor.lsl #1 v0, v1
-      #|    ret v4
+      #|    v3 = xor.lsl #1 v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -763,9 +750,8 @@ test "madd commutative: add(mul(x, y), z) to madd" {
     content=(
       #|vcode madd_commutative(v0:int, v1:int, v2:int) -> int {
       #|block0:
-      #|    v3 = mul v0, v1
-      #|    v4 = madd v2, v0, v1
-      #|    ret v4
+      #|    v3 = madd v2, v0, v1
+      #|    ret v3
       #|}
       #|
     ),
@@ -793,10 +779,8 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
     content=(
       #|vcode add_shifted_commutative(v0:int, v1:int) -> int {
       #|block0:
-      #|    v2 = ldi 3
-      #|    v3 = shl v0, v2
-      #|    v4 = add.lsl #3 v1, v0
-      #|    ret v4
+      #|    v3 = add.lsl #3 v1, v0
+      #|    ret v3
       #|}
       #|
     ),
@@ -953,23 +937,27 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d0 = ldf 10
-      #|    x1 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d1 = ldf 10
+      #|    x3 = ldi 0
+      #|    store_ptr.f32 +0 x3, d1
+      #|    d6 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d4 = ldf 10
+      #|    x6 = ldi 0
+      #|    store_ptr.f32 +0 x6, d4
+      #|    d6 = load_ptr.f32 +0 x6
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x1, d0
-      #|    d0 = load_ptr.f32 +0 x1
+      #|    d6 = ldf 10
+      #|    x8 = ldi 0
+      #|    store_ptr.f32 +0 x8, d6
+      #|    d6 = load_ptr.f32 +0 x8
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d0
+      #|    ret d6
       #|block5:
       #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
@@ -1002,21 +990,21 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
   inspect(block1_last.opcode, content="load_ptr.f32 +0")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines d2
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines d2
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d0")
+    Physical(preg) => inspect(preg.to_string(), content="d6")
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1069,11 +1057,11 @@ test "minimal: dead float constant should not affect live values" {
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    d1 = ldf 2
-      #|    d0 = ldf 10
-      #|    x0 = ldi 0
-      #|    store_ptr.f32 +0 x0, d0
-      #|    ret d1
+      #|    d0 = ldf 2
+      #|    d2 = ldf 10
+      #|    x4 = ldi 0
+      #|    store_ptr.f32 +0 x4, d2
+      #|    ret d0
       #|}
       #|
     ),

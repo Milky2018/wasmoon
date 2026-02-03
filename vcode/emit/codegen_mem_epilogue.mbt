@@ -33,6 +33,51 @@ fn MachineCode::emit_store(
 }
 
 ///|
+fn index_extend_to_option(ext : @instr.IndexExtend) -> Int {
+  match ext {
+    None => 0b011 // LSL (X offset)
+    Uxtw => 0b010 // UXTW
+    Sxtw => 0b110 // SXTW
+  }
+}
+
+///|
+fn MachineCode::emit_load_reg_offset(
+  self : MachineCode,
+  ty : @instr.MemType,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  ext : @instr.IndexExtend,
+  shift : Int,
+) -> Unit {
+  let option = index_extend_to_option(ext)
+  match ty {
+    I32 => self.emit_ldr_reg_offset(rt, rn, rm, option, 2, shift)
+    I64 => self.emit_ldr_reg_offset(rt, rn, rm, option, 3, shift)
+    _ => abort("emit_load_reg_offset unsupported type: \{ty}")
+  }
+}
+
+///|
+fn MachineCode::emit_store_reg_offset(
+  self : MachineCode,
+  ty : @instr.MemType,
+  rt : Int,
+  rn : Int,
+  rm : Int,
+  ext : @instr.IndexExtend,
+  shift : Int,
+) -> Unit {
+  let option = index_extend_to_option(ext)
+  match ty {
+    I32 => self.emit_str_reg_offset(rt, rn, rm, option, 2, shift)
+    I64 => self.emit_str_reg_offset(rt, rn, rm, option, 3, shift)
+    _ => abort("emit_store_reg_offset unsupported type: \{ty}")
+  }
+}
+
+///|
 fn cmp_kind_to_cond(kind : @instr.CmpKind) -> Int {
   match kind {
     Eq => EQ.to_int()

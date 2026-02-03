@@ -40,6 +40,8 @@ pub fn get_alloc_stats(VCodeFunction, settings? : @abi.ABISettings) -> AllocStat
 
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
+pub fn rematerialize_cross_block_constants(VCodeFunction) -> VCodeFunction
+
 pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
 
 // Errors
@@ -163,6 +165,7 @@ pub fn Output::inst_use_loc(Self, Int, Int, Bool, Int) -> Loc
 pub fn Output::new() -> Self
 pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
 pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
+pub fn Output::summary(Self) -> String
 
 pub struct ProgPoint {
   block : Int
@@ -183,9 +186,6 @@ pub(all) enum ProgPos {
 }
 pub impl Eq for ProgPos
 pub impl Hash for ProgPos
-
-type QueueEntry
-pub impl Eq for QueueEntry
 
 pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]
