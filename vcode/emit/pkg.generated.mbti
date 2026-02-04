@@ -320,9 +320,13 @@ pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rsp_imm32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_and_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_and_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_call_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_imul_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_imul_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
@@ -343,15 +347,23 @@ pub fn MachineCode::x86_emit_movsx_r64_m8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsxd_r64_m32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movzx_r32_m16(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movzx_r32_m8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movzx_r32_r8(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_not_r32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_not_r64(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_or_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_or_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pop_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_push_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_ret(Self) -> Unit
+pub fn MachineCode::x86_emit_setcc_r8(Self, @instr.Cond, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_test_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_test_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_trap_imm16(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_xor_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_xor_rr32(Self, Int, Int) -> Unit
 
 type X86Rel32Fixup
 

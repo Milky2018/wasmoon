@@ -183,3 +183,32 @@ test "x86_64 movsd/movdqu loads from [rsp+disp]" {
     content="[242, 68, 15, 16, 188, 36, 0, 0, 0, 0, 243, 68, 15, 111, 188, 36, 16, 0, 0, 0]",
   )
 }
+
+///|
+test "x86_64 and/or/xor encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_and_rr(0, 8) // and rax, r8
+  mc.x86_emit_or_rr(0, 8) // or rax, r8
+  mc.x86_emit_xor_rr(0, 8) // xor rax, r8
+  inspect(mc.get_bytes(), content="[76, 33, 192, 76, 9, 192, 76, 49, 192]")
+}
+
+///|
+test "x86_64 imul/not encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_imul_rr(0, 8) // imul rax, r8
+  mc.x86_emit_not_r64(11) // not r11
+  inspect(mc.get_bytes(), content="[73, 15, 175, 192, 73, 247, 211]")
+}
+
+///|
+test "x86_64 setcc + movzx encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_setcc_r8(@instr.Cond::Eq, 9) // setz r9b
+  mc.x86_emit_movzx_r32_r8(9, 9) // movzx r9d, r9b
+  mc.x86_emit_setcc_r8(@instr.Cond::Ne, 4) // setnz spl (needs REX)
+  inspect(
+    mc.get_bytes(),
+    content="[65, 15, 148, 193, 69, 15, 182, 201, 64, 15, 149, 196]",
+  )
+}

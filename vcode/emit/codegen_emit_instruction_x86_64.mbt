@@ -14,6 +14,21 @@ fn MachineCode::emit_instruction_x86_64(
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
   let isa = @isa.ISA::current()
+  fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
+    match kind {
+      @instr.CmpKind::Eq => @instr.Cond::Eq
+      @instr.CmpKind::Ne => @instr.Cond::Ne
+      @instr.CmpKind::Slt => @instr.Cond::Lt
+      @instr.CmpKind::Sle => @instr.Cond::Le
+      @instr.CmpKind::Sgt => @instr.Cond::Gt
+      @instr.CmpKind::Sge => @instr.Cond::Ge
+      @instr.CmpKind::Ult => @instr.Cond::Lo
+      @instr.CmpKind::Ule => @instr.Cond::Ls
+      @instr.CmpKind::Ugt => @instr.Cond::Hi
+      @instr.CmpKind::Uge => @instr.Cond::Hs
+    }
+  }
+
   match inst.opcode {
     @instr.Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -71,6 +86,70 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sub_rr32(rd, scratch)
       }
     }
+    @instr.Mul(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rd != rn {
+        abort("x86_64 Mul: expected dst == lhs")
+      }
+      if is_64 {
+        self.x86_emit_imul_rr(rd, rm)
+      } else {
+        self.x86_emit_imul_rr32(rd, rm)
+      }
+    }
+    @instr.And(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rd != rn {
+        abort("x86_64 And: expected dst == lhs")
+      }
+      if is_64 {
+        self.x86_emit_and_rr(rd, rm)
+      } else {
+        self.x86_emit_and_rr32(rd, rm)
+      }
+    }
+    @instr.Or(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rd != rn {
+        abort("x86_64 Or: expected dst == lhs")
+      }
+      if is_64 {
+        self.x86_emit_or_rr(rd, rm)
+      } else {
+        self.x86_emit_or_rr32(rd, rm)
+      }
+    }
+    @instr.Xor(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rd != rn {
+        abort("x86_64 Xor: expected dst == lhs")
+      }
+      if is_64 {
+        self.x86_emit_xor_rr(rd, rm)
+      } else {
+        self.x86_emit_xor_rr32(rd, rm)
+      }
+    }
+    @instr.Not(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        abort("x86_64 Not: expected dst == src")
+      }
+      if is_64 {
+        self.x86_emit_not_r64(rd)
+      } else {
+        self.x86_emit_not_r32(rd)
+      }
+    }
     @instr.Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
@@ -90,6 +169,19 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.LoadConst(v) => {
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
+    }
+    @instr.Cmp(kind, is_64) => {
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.x86_emit_cmp_rr(rn, rm)
+      } else {
+        self.x86_emit_cmp_rr32(rn, rm)
+      }
+      let rd = wreg_num(inst.defs[0])
+      let cond = cmp_kind_to_cond(kind)
+      self.x86_emit_setcc_r8(cond, rd)
+      self.x86_emit_movzx_r32_r8(rd, rd)
     }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])

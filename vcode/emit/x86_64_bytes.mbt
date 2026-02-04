@@ -128,6 +128,148 @@ pub fn MachineCode::x86_emit_sub_rr32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_and_rr(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // and r/m64, r64: REX.W + 21 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x21)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_and_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // and r/m32, r32: 21 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x21)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_or_rr(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // or r/m64, r64: REX.W + 09 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x09)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_or_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // or r/m32, r32: 09 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x09)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_xor_rr(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // xor r/m64, r64: REX.W + 31 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x31)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_xor_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // xor r/m32, r32: 31 /r
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x31)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_imul_rr(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // imul r64, r/m64: REX.W + 0F AF /r
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0xAF)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_imul_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // imul r32, r/m32: 0F AF /r
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xAF)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_not_r64(self : MachineCode, reg : Int) -> Unit {
+  // not r/m64: REX.W + F7 /2
+  let b = (reg >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 2, reg)
+}
+
+///|
+pub fn MachineCode::x86_emit_not_r32(self : MachineCode, reg : Int) -> Unit {
+  // not r/m32: F7 /2
+  let b = (reg >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 2, reg)
+}
+
+///|
 pub fn MachineCode::x86_emit_mov_rr(
   self : MachineCode,
   dst : Int,
@@ -589,6 +731,43 @@ pub fn MachineCode::x86_emit_jcc_rel32(
   emit_u32_le(self, 0)
   let next_ip_offset = self.current_pos()
   self.add_x86_rel32_fixup(target_block, disp_offset, next_ip_offset)
+}
+
+///|
+pub fn MachineCode::x86_emit_setcc_r8(
+  self : MachineCode,
+  cond : @instr.Cond,
+  dst : Int,
+) -> Unit {
+  // setcc r/m8: 0F 90+cc /r
+  //
+  // Note: low 8-bit register forms SPL/BPL/SIL/DIL require a REX prefix. We
+  // always emit a REX prefix when needed to select those forms or r8b-r15b.
+  let opcode = x86_cond_to_jcc_opcode(cond) + 0x10 // 0x90+cc
+  let b = (dst >> 3) & 1
+  if b != 0 || (dst & 7) >= 4 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(opcode)
+  emit_modrm(self, 3, 0, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_movzx_r32_r8(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // movzx r32, r/m8: 0F B6 /r (modrm mod=11 for register source)
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 || (src & 7) >= 4 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xB6)
+  emit_modrm(self, 3, dst, src)
 }
 
 ///|
