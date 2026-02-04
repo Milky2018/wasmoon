@@ -542,6 +542,42 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
     }
+    @instr.TypeCheckIndirect(expected_type) => {
+      // Check if actual_type == expected_type, trap if not.
+      //
+      // Uses: [actual_type_vreg]
+      let actual_type_reg = reg_num(inst.uses[0])
+      self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
+      let ok = self.new_internal_label()
+      self.x86_emit_jcc_rel32(@instr.Cond::Eq, ok)
+      // Trap code matches the AArch64 brk immediate used for indirect-call type
+      // mismatch.
+      self.x86_emit_trap_imm16(2)
+      self.define_label(ok)
+    }
+    @instr.TypeCheckSubtypeIndirect(expected_type) => {
+      // Fast path for call_indirect type checks:
+      // - If actual_type == expected_type: do nothing.
+      // - Otherwise: call the runtime subtype checker (traps on failure).
+      //
+      // Uses: [actual_type_vreg]
+      let actual_type_reg = reg_num(inst.uses[0])
+      self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
+      let done = self.new_internal_label()
+      self.x86_emit_jcc_rel32(@instr.Cond::Eq, done)
+
+      // Slow path: call gc_type_check_subtype_impl(actual, expected).
+      // SysV AMD64 args: rdi, rsi.
+      let arg0 = 7 // rdi
+      let arg1 = 6 // rsi
+      self.x86_emit_mov_rr32(arg0, actual_type_reg)
+      self.x86_emit_mov_imm64(arg1, expected_type.to_int64())
+      let func_ptr = @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+      let scratch = isa.scratch_reg_1_index()
+      self.x86_emit_mov_imm64(scratch, func_ptr)
+      self.x86_emit_call_r64(scratch)
+      self.define_label(done)
+    }
     @instr.Extend(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
