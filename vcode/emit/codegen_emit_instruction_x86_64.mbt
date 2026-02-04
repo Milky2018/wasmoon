@@ -197,6 +197,20 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
     }
+    @instr.LoadConstF32(bits) => {
+      let rd = wreg_num(inst.defs[0])
+      let scratch = isa.scratch_reg_1_index()
+      // Materialize the raw f32 bits into a GPR then move into XMM.
+      self.x86_emit_mov_imm64(scratch, bits.to_int64())
+      self.x86_emit_movd_xmm_r32(rd, scratch)
+    }
+    @instr.LoadConstF64(bits) => {
+      let rd = wreg_num(inst.defs[0])
+      let scratch = isa.scratch_reg_1_index()
+      // Materialize the raw f64 bits into a GPR then move into XMM.
+      self.x86_emit_mov_imm64(scratch, bits)
+      self.x86_emit_movq_xmm_r64(rd, scratch)
+    }
     @instr.LoadGCFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
       let func_ptr = match libcall {
@@ -627,6 +641,23 @@ fn MachineCode::emit_instruction_x86_64(
       }
       // Remainder is in rdx already.
     }
+    @instr.LoadMemBase(memidx) => {
+      // Load linear memory base pointer from VMContext.
+      // Uses: [vmctx], Defs: [result]
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = reg_num(inst.uses[0])
+      if memidx == 0 && stack_frame.cache_mem0_desc {
+        // Fast path: memory0 descriptor pointer is cached in Mem0Desc role.
+        self.x86_emit_mov_r64_m64(dst, mem0_desc_index(), 0)
+      } else if memidx == 0 {
+        self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
+        self.x86_emit_mov_r64_m64(dst, dst, 0)
+      } else {
+        self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
+        self.x86_emit_mov_r64_m64(dst, dst, memidx * 8)
+        self.x86_emit_mov_r64_m64(dst, dst, 0)
+      }
+    }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -657,6 +688,55 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
         @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
         @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+      }
+    }
+    @instr.LoadPtr(ty, offset) => {
+      // Raw pointer load (no bounds checking).
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
+        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
+        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
+        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
+      }
+    }
+    @instr.StorePtr(ty, offset) => {
+      // Raw pointer store (no bounds checking).
+      let rn = reg_num(inst.uses[0])
+      let rt = reg_num(inst.uses[1])
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
+        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
+        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
+        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+      }
+    }
+    @instr.LoadPtrNarrow(bits, signed, offset) => {
+      // Raw pointer narrow load (no bounds checking).
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match (bits, signed) {
+        (8, true) => self.x86_emit_movsx_r64_m8(rt, rn, offset)
+        (8, false) => self.x86_emit_movzx_r32_m8(rt, rn, offset)
+        (16, true) => self.x86_emit_movsx_r64_m16(rt, rn, offset)
+        (16, false) => self.x86_emit_movzx_r32_m16(rt, rn, offset)
+        (32, true) => self.x86_emit_movsxd_r64_m32(rt, rn, offset)
+        (32, false) => self.x86_emit_mov_r32_m32(rt, rn, offset)
+        _ => abort("x86_64 LoadPtrNarrow: unsupported bits \{bits}")
+      }
+    }
+    @instr.StorePtrNarrow(bits, offset) => {
+      // Raw pointer narrow store (no bounds checking).
+      let rn = reg_num(inst.uses[0])
+      let rt = reg_num(inst.uses[1])
+      match bits {
+        8 => self.x86_emit_mov_m8_r8(rn, offset, rt)
+        16 => self.x86_emit_mov_m16_r16(rn, offset, rt)
+        32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
+        _ => abort("x86_64 StorePtrNarrow: unsupported bits \{bits}")
       }
     }
     @instr.Load8S(offset) => {
