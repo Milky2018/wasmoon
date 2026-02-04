@@ -1565,6 +1565,51 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_setcc_r8(@instr.Cond::Ne, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
+    @instr.SIMDAllTrue(lane_size) => {
+      // i*x*.all_true: return 1 if all lanes are non-zero, 0 otherwise.
+      //
+      // Match Cranelift-style lowering: compare lanes against zero, then use
+      // PMOVMSKB to check whether any lane is zero.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      let zero = 15 // reserved via MachineEnvData.scratch_float
+      match lane_size {
+        @instr.B8 | @instr.H16 | @instr.S32 => {
+          // tmp is provided by lowering for B8/H16/S32.
+          let tmp = wreg_num(inst.defs[1])
+          self.x86_emit_movaps_xmm_xmm(tmp, src)
+          self.x86_emit_pxor_xmm_xmm(zero, zero)
+          self.x86_emit_pcmpeq_xmm_xmm(lane_size, tmp, zero) // lane == 0 => 0xFF..
+          self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
+          self.x86_emit_cmp_r32_imm32(scratch, 0)
+          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+        }
+        @instr.D64 => {
+          // No pcmpeqq without SSE4.1; emulate lane==0 with 32-bit compares.
+          //
+          // tmp = pcmpeqd(src, 0)
+          // tmp_swapped = pshufd(tmp, 0xB1)
+          // tmp = pand(tmp, tmp_swapped)  (both halves == 0)
+          // any_zero = pmovmskb(tmp) != 0
+          let tmp = 14 // reserved via MachineEnvData.scratch_float
+          let tmp2 = 15 // reserved via MachineEnvData.scratch_float
+          self.x86_emit_movaps_xmm_xmm(tmp, src)
+          self.x86_emit_pxor_xmm_xmm(tmp2, tmp2) // tmp2 = 0
+          self.x86_emit_pcmpeqd_xmm_xmm(tmp, tmp2)
+          self.x86_emit_pshufd_xmm_xmm_imm8(tmp2, tmp, 0xB1)
+          self.x86_emit_pand_xmm_xmm(tmp, tmp2)
+          self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
+          self.x86_emit_cmp_r32_imm32(scratch, 0)
+          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+        }
+      }
+    }
     @instr.SIMDBitmask(lane_size) => {
       // Extract the MSB/sign bit of each lane into a scalar i32.
       let rd = wreg_num(inst.defs[0])
