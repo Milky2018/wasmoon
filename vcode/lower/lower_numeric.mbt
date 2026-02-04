@@ -1110,7 +1110,12 @@ fn lower_rotl(
   let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
   rotr_inst.add_def({ reg: Virtual(dst) })
   rotr_inst.add_use(Virtual(src))
-  rotr_inst.add_use(Virtual(neg_n))
+  if @isa.ISA::current() is @isa.AMD64 {
+    // x86_64 variable shifts/rotates use CL as the implicit count register.
+    rotr_inst.add_use_fixed(Virtual(neg_n), { index: 1, class: Int }) // rcx
+  } else {
+    rotr_inst.add_use(Virtual(neg_n))
+  }
   block.add_inst(rotr_inst)
 }
 
