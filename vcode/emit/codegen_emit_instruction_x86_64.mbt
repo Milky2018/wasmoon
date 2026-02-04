@@ -368,6 +368,94 @@ fn MachineCode::emit_instruction_x86_64(
       emit_reg_move(self, rd, true_reg, class)
       self.define_label(done_l)
     }
+    @instr.TrapIfZero(is_64, trap_code) => {
+      let rn = reg_num(inst.uses[0])
+      if is_64 {
+        self.x86_emit_test_rr(rn, rn)
+      } else {
+        self.x86_emit_test_rr32(rn, rn)
+      }
+      let done_l = -1 - self.current_pos()
+      self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+      self.x86_emit_trap_imm16(trap_code)
+      self.define_label(done_l)
+    }
+    @instr.TrapIfDivOverflow(is_64, trap_code) => {
+      // Trap if lhs == INT_MIN && rhs == -1.
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+      let done_l = -1 - self.current_pos()
+      if is_64 {
+        self.x86_emit_mov_imm64(scratch, 0x8000000000000000L)
+        self.x86_emit_cmp_rr(lhs, scratch)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_mov_imm64(scratch, -1L)
+        self.x86_emit_cmp_rr(rhs, scratch)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+      } else {
+        self.x86_emit_mov_imm64(scratch, 0x80000000L)
+        self.x86_emit_cmp_rr32(lhs, scratch)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_mov_imm64(scratch, -1L)
+        self.x86_emit_cmp_rr32(rhs, scratch)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+      }
+      self.x86_emit_trap_imm16(trap_code)
+      self.define_label(done_l)
+    }
+    @instr.SDiv(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+
+      // Preserve divisor if it lives in rax/rdx, since those are overwritten.
+      let mut divisor = rhs
+      if rhs == 0 || rhs == 2 {
+        self.x86_emit_mov_rr(scratch, rhs)
+        divisor = scratch
+      }
+
+      // Move dividend into rax and sign-extend into rdx.
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      if is_64 {
+        self.x86_emit_cqo()
+        self.x86_emit_idiv_r64(divisor)
+      } else {
+        self.x86_emit_cdq()
+        self.x86_emit_idiv_r32(divisor)
+      }
+      if rd != 0 {
+        self.x86_emit_mov_rr(rd, 0)
+      }
+    }
+    @instr.UDiv(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+      let mut divisor = rhs
+      if rhs == 0 || rhs == 2 {
+        self.x86_emit_mov_rr(scratch, rhs)
+        divisor = scratch
+      }
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      if is_64 {
+        self.x86_emit_xor_rr(2, 2) // rdx = 0
+        self.x86_emit_div_r64(divisor)
+      } else {
+        self.x86_emit_xor_rr32(2, 2) // edx = 0
+        self.x86_emit_div_r32(divisor)
+      }
+      if rd != 0 {
+        self.x86_emit_mov_rr(rd, 0)
+      }
+    }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

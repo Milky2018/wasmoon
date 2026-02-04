@@ -228,6 +228,16 @@ test "x86_64 shifts/rotates encodings (cl + imm8)" {
 }
 
 ///|
+test "x86_64 div/idiv setup encodings (cqo/cdq + div)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cqo()
+  mc.x86_emit_idiv_r64(8) // idiv r8
+  mc.x86_emit_cdq()
+  mc.x86_emit_div_r32(9) // div r9d
+  inspect(mc.get_bytes(), content="[72, 153, 73, 247, 248, 153, 65, 247, 241]")
+}
+
+///|
 test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
   let mc = MachineCode::new()
   // cl-count

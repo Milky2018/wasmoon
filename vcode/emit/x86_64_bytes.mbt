@@ -971,6 +971,65 @@ pub fn MachineCode::x86_emit_movzx_r32_r8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_cqo(self : MachineCode) -> Unit {
+  // cqo: sign-extend rax into rdx:rax (64-bit)
+  self.emit_byte(0x48)
+  self.emit_byte(0x99)
+}
+
+///|
+pub fn MachineCode::x86_emit_cdq(self : MachineCode) -> Unit {
+  // cdq: sign-extend eax into edx:eax (32-bit)
+  self.emit_byte(0x99)
+}
+
+///|
+pub fn MachineCode::x86_emit_idiv_r64(
+  self : MachineCode,
+  divisor : Int,
+) -> Unit {
+  // idiv r/m64: REX.W + F7 /7
+  let b = (divisor >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 7, divisor)
+}
+
+///|
+pub fn MachineCode::x86_emit_idiv_r32(
+  self : MachineCode,
+  divisor : Int,
+) -> Unit {
+  // idiv r/m32: F7 /7
+  let b = (divisor >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 7, divisor)
+}
+
+///|
+pub fn MachineCode::x86_emit_div_r64(self : MachineCode, divisor : Int) -> Unit {
+  // div r/m64: REX.W + F7 /6
+  let b = (divisor >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 6, divisor)
+}
+
+///|
+pub fn MachineCode::x86_emit_div_r32(self : MachineCode, divisor : Int) -> Unit {
+  // div r/m32: F7 /6
+  let b = (divisor >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 6, divisor)
+}
+
+///|
 pub fn MachineCode::x86_emit_cmovcc_rr(
   self : MachineCode,
   cond : @instr.Cond,

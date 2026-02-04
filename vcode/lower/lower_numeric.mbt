@@ -449,8 +449,12 @@ fn lower_div(
   let lhs_val = inst.operands[1]
   let is_64 = inst.operands[0].ty is @ir.Type::I64
 
+  // x86_64 backend is still incomplete; avoid magic-division lowering which
+  // currently relies on AArch64-specific opcodes and patterns.
+  let enable_magic_div = !(@isa.ISA::current() is @isa.X86_64)
+
   // Check if divisor is a constant suitable for magic division
-  if inst.first_result() is Some(result) {
+  if enable_magic_div && inst.first_result() is Some(result) {
     if get_const_value(ctx, lhs_val) is Some(divisor) {
       if is_64 {
         // 64-bit magic division
@@ -530,6 +534,11 @@ fn lower_div(
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
+    if @isa.ISA::current() is @isa.X86_64 {
+      // x86_64 division uses implicit rax/rdx.
+      vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+      vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+    }
     block.add_inst(vcode_inst)
   }
 }
@@ -1278,13 +1287,17 @@ fn lower_rem(
     div_inst.add_def({ reg: Virtual(quotient) })
     div_inst.add_use(Virtual(lhs))
     div_inst.add_use(Virtual(rhs))
+    if @isa.ISA::current() is @isa.X86_64 {
+      div_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+      div_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+    }
     block.add_inst(div_inst)
 
     // Step 2: Compute remainder = a - quotient * b
     // - For i64, use MSUB (single instruction): a - quotient*b
     // - For i32, avoid MSUB because our MSUB opcode is 64-bit (X regs) and
     //   would mis-handle signed values by zero-extending w-reg results.
-    if is_64 {
+    if is_64 && !(@isa.ISA::current() is @isa.X86_64) {
       // MSUB rd, rn, rm, ra computes: ra - rn * rm
       // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
       let msub_inst = @instr.VCodeInst::new(Msub)
@@ -1295,12 +1308,12 @@ fn lower_rem(
       block.add_inst(msub_inst)
     } else {
       let product = ctx.vcode_func.new_vreg(Int)
-      let mul_inst = @instr.VCodeInst::new(Mul(false))
+      let mul_inst = @instr.VCodeInst::new(Mul(is_64))
       mul_inst.add_def({ reg: Virtual(product) })
       mul_inst.add_use(Virtual(quotient))
       mul_inst.add_use(Virtual(rhs))
       block.add_inst(mul_inst)
-      let sub_inst = @instr.VCodeInst::new(Sub(false))
+      let sub_inst = @instr.VCodeInst::new(Sub(is_64))
       sub_inst.add_def({ reg: Virtual(dst) })
       sub_inst.add_use(Virtual(lhs))
       sub_inst.add_use(Virtual(product))
