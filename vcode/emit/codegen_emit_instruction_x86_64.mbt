@@ -91,6 +91,68 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
     }
+    @instr.Load(ty, offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if stack_frame.cache_func_table &&
+        ty is @instr.MemType::I64 &&
+        rn == vmctx_index() &&
+        offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
+        let ft = func_table_index()
+        if rt != ft {
+          self.x86_emit_mov_rr(rt, ft)
+        }
+        return
+      }
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
+        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
+        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
+        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
+      }
+    }
+    @instr.Store(ty, offset) => {
+      let rn = reg_num(inst.uses[0])
+      let rt = reg_num(inst.uses[1])
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
+        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
+        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
+        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+      }
+    }
+    @instr.Load8S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_movsx_r64_m8(rt, rn, offset)
+    }
+    @instr.Load8U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_movzx_r32_m8(rt, rn, offset)
+    }
+    @instr.Load16S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_movsx_r64_m16(rt, rn, offset)
+    }
+    @instr.Load16U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_movzx_r32_m16(rt, rn, offset)
+    }
+    @instr.Load32S(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_movsxd_r64_m32(rt, rn, offset)
+    }
+    @instr.Load32U(offset) => {
+      let rt = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_mov_r32_m32(rt, rn, offset)
+    }
     @instr.LoadFuncAddr(func_idx) => {
       // Load function pointer from vmctx->func_table[func_idx].
       let rd = wreg_num(inst.defs[0])

@@ -130,6 +130,39 @@ test "x86_64 call r64 encoding" {
 }
 
 ///|
+test "x86_64 mov loads/stores (m32) encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_r32_m32(9, 8, 0x1234) // r9d = [r8 + disp32]
+  mc.x86_emit_mov_m32_r32(8, 16, 9) // [r8 + disp32] = r9d
+  inspect(
+    mc.get_bytes(),
+    content="[69, 139, 136, 52, 18, 0, 0, 69, 137, 136, 16, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 movss encodings (m32)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movss_xmm_m32(1, 4, 0)
+  mc.x86_emit_movss_m32_xmm(4, 8, 1)
+  inspect(
+    mc.get_bytes(),
+    content="[243, 15, 16, 140, 36, 0, 0, 0, 0, 243, 15, 17, 140, 36, 8, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 movsx/movzx encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movsx_r64_m8(0, 4, 0)
+  mc.x86_emit_movzx_r32_m16(10, 11, 8)
+  inspect(
+    mc.get_bytes(),
+    content="[72, 15, 190, 132, 36, 0, 0, 0, 0, 69, 15, 183, 147, 8, 0, 0, 0]",
+  )
+}
+
+///|
 test "x86_64 movsd/movdqu stores to [rsp+disp]" {
   let mc = MachineCode::new()
   mc.x86_emit_movsd_m64_xmm(4, 0, 15)
