@@ -1076,6 +1076,42 @@ pub fn MachineCode::x86_emit_psllq_xmm_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_psrlw_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // psrlw xmm, imm8: 66 0F 71 /2 ib
+  let b = (dst_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x71)
+  emit_modrm(self, 3, 2, dst_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_psrad_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // psrad xmm, imm8: 66 0F 72 /4 ib
+  let b = (dst_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x72)
+  emit_modrm(self, 3, 4, dst_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_cmpps_xmm_xmm_imm8(
   self : MachineCode,
   dst_xmm : Int,
@@ -1992,6 +2028,63 @@ pub fn MachineCode::x86_emit_pmaxud_xmm_xmm(
   self.emit_byte(0x0F)
   self.emit_byte(0x38)
   self.emit_byte(0x3F)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pabsb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pabsb xmm, xmm/m128 (SSSE3): 66 0F 38 1C /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x1C)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pabsw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pabsw xmm, xmm/m128 (SSSE3): 66 0F 38 1D /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x1D)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pabsd_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pabsd xmm, xmm/m128 (SSSE3): 66 0F 38 1E /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x1E)
   emit_modrm(self, 3, dst_xmm, src_xmm)
 }
 

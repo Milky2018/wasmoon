@@ -83,6 +83,24 @@ fn MachineCode::emit_instruction_x86_64(
     b
   }
 
+  fn materialize_xmm_const(
+    self : MachineCode,
+    dst_xmm : Int,
+    low : Int64,
+    high : Int64,
+    scratch_gpr : Int,
+  ) -> Unit {
+    self.x86_emit_xorpd_xmm_xmm(dst_xmm, dst_xmm)
+    if low != 0L {
+      self.x86_emit_mov_imm64(scratch_gpr, low)
+      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 0)
+    }
+    if high != 0L {
+      self.x86_emit_mov_imm64(scratch_gpr, high)
+      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 1)
+    }
+  }
+
   match inst.opcode {
     @instr.Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -1387,6 +1405,94 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.B8 => self.x86_emit_pavgb_xmm_xmm(rd, src) // SSE2
         @instr.H16 => self.x86_emit_pavgw_xmm_xmm(rd, src) // SSE2
         _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
+      }
+    }
+    @instr.SIMDAbs(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match lane_size {
+        @instr.B8 => self.x86_emit_pabsb_xmm_xmm(rd, src) // SSSE3
+        @instr.H16 => self.x86_emit_pabsw_xmm_xmm(rd, src) // SSSE3
+        @instr.S32 => self.x86_emit_pabsd_xmm_xmm(rd, src) // SSSE3
+        @instr.D64 => {
+          // Align with Cranelift x64 lowering for i64x2.abs without AVX512:
+          // generate a per-lane sign mask via psrad+pshufd, then xor/sub.
+          let sign = 14 // reserved via MachineEnvData.scratch_float
+          if rd != src {
+            self.x86_emit_movaps_xmm_xmm(rd, src)
+          }
+          self.x86_emit_movaps_xmm_xmm(sign, rd)
+          self.x86_emit_psrad_xmm_imm8(sign, 31)
+          self.x86_emit_pshufd_xmm_xmm_imm8(sign, sign, 0xF5)
+          self.x86_emit_pxor_xmm_xmm(rd, sign)
+          self.x86_emit_psub_xmm_xmm(@instr.D64, rd, sign)
+        }
+      }
+    }
+    @instr.SIMDNeg(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      let mut tmp = 14 // reserved via MachineEnvData.scratch_float
+      if tmp == rd {
+        tmp = 15
+      }
+      let src_reg = if rd == src {
+        self.x86_emit_movaps_xmm_xmm(tmp, src)
+        tmp
+      } else {
+        src
+      }
+      self.x86_emit_pxor_xmm_xmm(rd, rd)
+      self.x86_emit_psub_xmm_xmm(lane_size, rd, src_reg)
+    }
+    @instr.SIMDCnt => {
+      // Align with Cranelift x64 i8x16.popcnt when SSSE3 is available
+      // (Mula's algorithm with a nibble lookup table).
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      let tmp0 = 14 // reserved via MachineEnvData.scratch_float
+      let tmp1 = 15 // reserved via MachineEnvData.scratch_float
+      let scratch_gpr = isa.scratch_reg_1_index()
+
+      // Keep a copy if the output aliases the input.
+      let src_saved = if rd == src {
+        self.x86_emit_movaps_xmm_xmm(tmp0, src)
+        tmp0
+      } else {
+        src
+      }
+
+      // low_nibbles = src & 0x0f
+      materialize_xmm_const(
+        self, tmp1, 0x0F0F0F0F0F0F0F0FL, 0x0F0F0F0F0F0F0F0FL, scratch_gpr,
+      )
+      self.x86_emit_movaps_xmm_xmm(rd, src_saved)
+      self.x86_emit_pand_xmm_xmm(rd, tmp1)
+
+      // bit_counts_low = pshufb(lookup, low_nibbles)
+      materialize_xmm_const(
+        self, tmp1, 0x0302020102010100L, 0x0403030203020201L, scratch_gpr,
+      )
+      self.x86_emit_pshufb_xmm_xmm(tmp1, rd)
+
+      // high_nibbles = (src >> 4) & 0x0f  (shift within 16-bit lanes)
+      self.x86_emit_movaps_xmm_xmm(rd, src_saved)
+      self.x86_emit_psrlw_xmm_imm8(rd, 4)
+      materialize_xmm_const(
+        self, tmp0, 0x0F0F0F0F0F0F0F0FL, 0x0F0F0F0F0F0F0F0FL, scratch_gpr,
+      )
+      self.x86_emit_pand_xmm_xmm(rd, tmp0)
+
+      // bit_counts_high = pshufb(lookup, high_nibbles)
+      materialize_xmm_const(
+        self, tmp0, 0x0302020102010100L, 0x0403030203020201L, scratch_gpr,
+      )
+      self.x86_emit_pshufb_xmm_xmm(tmp0, rd)
+
+      // result = bit_counts_low + bit_counts_high
+      self.x86_emit_padd_xmm_xmm(@instr.B8, tmp1, tmp0)
+      if rd != tmp1 {
+        self.x86_emit_movaps_xmm_xmm(rd, tmp1)
       }
     }
     @instr.SIMDFCmp(is_f32, kind) => {
