@@ -247,7 +247,7 @@ pub fn verify_allocation(
 
   // Overlap check: for each physical register location (bank+index), spans must not overlap.
   for entry in preg_spans {
-    let (_, spans) = entry
+    let (key, spans) = entry
     if spans.length() <= 1 {
       continue
     }
@@ -256,7 +256,9 @@ pub fn verify_allocation(
       let prev = spans[i - 1]
       let cur = spans[i]
       if prev.overlaps(cur, block_order) {
-        abort("regalloc verifier: overlapping allocations in same preg")
+        abort(
+          "regalloc verifier: overlapping allocations in same preg (key=\{key})",
+        )
       }
     }
   }
