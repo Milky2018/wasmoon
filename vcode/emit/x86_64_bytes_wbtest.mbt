@@ -274,6 +274,29 @@ test "x86_64 SIMD saturating add/sub encodings (SSE2)" {
 }
 
 ///|
+test "x86_64 SIMD integer min/max + average encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_pavgb_xmm_xmm(1, 2) // pavgb xmm1, xmm2
+  mc.x86_emit_pavgw_xmm_xmm(1, 2) // pavgw xmm1, xmm2
+  mc.x86_emit_pminub_xmm_xmm(1, 2) // pminub xmm1, xmm2
+  mc.x86_emit_pmaxub_xmm_xmm(1, 2) // pmaxub xmm1, xmm2
+  mc.x86_emit_pminsw_xmm_xmm(1, 2) // pminsw xmm1, xmm2
+  mc.x86_emit_pmaxsw_xmm_xmm(1, 2) // pmaxsw xmm1, xmm2
+  mc.x86_emit_pminsb_xmm_xmm(1, 2) // pminsb xmm1, xmm2
+  mc.x86_emit_pmaxsb_xmm_xmm(1, 2) // pmaxsb xmm1, xmm2
+  mc.x86_emit_pminuw_xmm_xmm(1, 2) // pminuw xmm1, xmm2
+  mc.x86_emit_pmaxuw_xmm_xmm(1, 2) // pmaxuw xmm1, xmm2
+  mc.x86_emit_pminsd_xmm_xmm(1, 2) // pminsd xmm1, xmm2
+  mc.x86_emit_pmaxsd_xmm_xmm(1, 2) // pmaxsd xmm1, xmm2
+  mc.x86_emit_pminud_xmm_xmm(1, 2) // pminud xmm1, xmm2
+  mc.x86_emit_pmaxud_xmm_xmm(1, 2) // pmaxud xmm1, xmm2
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 224, 202, 102, 15, 227, 202, 102, 15, 218, 202, 102, 15, 222, 202, 102, 15, 234, 202, 102, 15, 238, 202, 102, 15, 56, 56, 202, 102, 15, 56, 60, 202, 102, 15, 56, 58, 202, 102, 15, 56, 62, 202, 102, 15, 56, 57, 202, 102, 15, 56, 61, 202, 102, 15, 56, 59, 202, 102, 15, 56, 63, 202]",
+  )
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8

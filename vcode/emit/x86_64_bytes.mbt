@@ -1338,6 +1338,266 @@ pub fn MachineCode::x86_emit_psubusw_xmm_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_pavgb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pavgb xmm, xmm/m128: 66 0F E0 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xE0)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pavgw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pavgw xmm, xmm/m128: 66 0F E3 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xE3)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminub_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminub xmm, xmm/m128: 66 0F DA /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xDA)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxub_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxub xmm, xmm/m128: 66 0F DE /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xDE)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminsw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminsw xmm, xmm/m128: 66 0F EA /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xEA)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxsw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxsw xmm, xmm/m128: 66 0F EE /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xEE)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminsb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminsb xmm, xmm/m128 (SSE4.1): 66 0F 38 38 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x38)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxsb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxsb xmm, xmm/m128 (SSE4.1): 66 0F 38 3C /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3C)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminuw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminuw xmm, xmm/m128 (SSE4.1): 66 0F 38 3A /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3A)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxuw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxuw xmm, xmm/m128 (SSE4.1): 66 0F 38 3E /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3E)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminsd_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminsd xmm, xmm/m128 (SSE4.1): 66 0F 38 39 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x39)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxsd_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxsd xmm, xmm/m128 (SSE4.1): 66 0F 38 3D /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3D)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pminud_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pminud xmm, xmm/m128 (SSE4.1): 66 0F 38 3B /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3B)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmaxud_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmaxud xmm, xmm/m128 (SSE4.1): 66 0F 38 3F /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x3F)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
 pub fn MachineCode::x86_emit_pshufb_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,

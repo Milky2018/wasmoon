@@ -400,10 +400,24 @@ pub fn MachineCode::x86_emit_paddusb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_paddusw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pand_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pandn_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pavgb_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pavgw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeq_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeqd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpgt_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pinsrq_xmm_r64_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxsb_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxsw_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxub_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxud_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmaxuw_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminsb_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminsw_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminub_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminud_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pminuw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmovmskb_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmulld_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmullw_xmm_xmm(Self, Int, Int) -> Unit

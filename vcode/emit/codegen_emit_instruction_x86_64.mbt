@@ -1304,6 +1304,119 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 SIMDUqsub: unsupported lane size \{lane_size}")
       }
     }
+    @instr.SIMDSmin(lane_size) => {
+      // Signed integer minimum.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      let src = if rd == b && rd != a {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        tmp
+      } else {
+        b
+      }
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_pminsb_xmm_xmm(rd, src) // SSE4.1
+        @instr.H16 => self.x86_emit_pminsw_xmm_xmm(rd, src) // SSE2
+        @instr.S32 => self.x86_emit_pminsd_xmm_xmm(rd, src) // SSE4.1
+        @instr.D64 =>
+          abort("x86_64 SIMDSmin: i64x2 min not supported by wasm SIMD")
+      }
+    }
+    @instr.SIMDUmin(lane_size) => {
+      // Unsigned integer minimum.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      let src = if rd == b && rd != a {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        tmp
+      } else {
+        b
+      }
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_pminub_xmm_xmm(rd, src) // SSE2
+        @instr.H16 => self.x86_emit_pminuw_xmm_xmm(rd, src) // SSE4.1
+        @instr.S32 => self.x86_emit_pminud_xmm_xmm(rd, src) // SSE4.1
+        @instr.D64 =>
+          abort("x86_64 SIMDUmin: i64x2 min not supported by wasm SIMD")
+      }
+    }
+    @instr.SIMDSmax(lane_size) => {
+      // Signed integer maximum.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      let src = if rd == b && rd != a {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        tmp
+      } else {
+        b
+      }
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_pmaxsb_xmm_xmm(rd, src) // SSE4.1
+        @instr.H16 => self.x86_emit_pmaxsw_xmm_xmm(rd, src) // SSE2
+        @instr.S32 => self.x86_emit_pmaxsd_xmm_xmm(rd, src) // SSE4.1
+        @instr.D64 =>
+          abort("x86_64 SIMDSmax: i64x2 max not supported by wasm SIMD")
+      }
+    }
+    @instr.SIMDUmax(lane_size) => {
+      // Unsigned integer maximum.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      let src = if rd == b && rd != a {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        tmp
+      } else {
+        b
+      }
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_pmaxub_xmm_xmm(rd, src) // SSE2
+        @instr.H16 => self.x86_emit_pmaxuw_xmm_xmm(rd, src) // SSE4.1
+        @instr.S32 => self.x86_emit_pmaxud_xmm_xmm(rd, src) // SSE4.1
+        @instr.D64 =>
+          abort("x86_64 SIMDUmax: i64x2 max not supported by wasm SIMD")
+      }
+    }
+    @instr.SIMDUrhadd(lane_size) => {
+      // Unsigned rounding halving add: (a + b + 1) >> 1.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      let src = if rd == b && rd != a {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        tmp
+      } else {
+        b
+      }
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_pavgb_xmm_xmm(rd, src) // SSE2
+        @instr.H16 => self.x86_emit_pavgw_xmm_xmm(rd, src) // SSE2
+        _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
+      }
+    }
     @instr.SIMDMul(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
