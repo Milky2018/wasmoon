@@ -204,6 +204,27 @@ test "x86_64 ucomiss/ucomisd encodings" {
 }
 
 ///|
+test "x86_64 SIMD bitwise encodings (SSE2)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_pcmpeqd_xmm_xmm(15, 15) // pcmpeqd xmm15, xmm15
+  mc.x86_emit_pand_xmm_xmm(1, 2) // pand xmm1, xmm2
+  mc.x86_emit_por_xmm_xmm(1, 2) // por xmm1, xmm2
+  mc.x86_emit_pxor_xmm_xmm(1, 2) // pxor xmm1, xmm2
+  mc.x86_emit_pandn_xmm_xmm(1, 2) // pandn xmm1, xmm2
+  inspect(
+    mc.get_bytes(),
+    content="[102, 69, 15, 118, 255, 102, 15, 219, 202, 102, 15, 235, 202, 102, 15, 239, 202, 102, 15, 223, 202]",
+  )
+}
+
+///|
+test "x86_64 pinsrq encoding (SSE4.1)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_pinsrq_xmm_r64_imm8(1, 0, 1) // pinsrq xmm1, rax, 1
+  inspect(mc.get_bytes(), content="[102, 72, 15, 58, 34, 200, 1]")
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8

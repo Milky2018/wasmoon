@@ -1162,6 +1162,74 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_rr(rd, 4)
     }
+    @instr.LoadConstV128(bytes) => {
+      // Materialize a 128-bit constant.
+      //
+      // Cranelift uses constant pools / mem loads; for now we use a minimal
+      // SSE4.1 sequence with `PINSRQ` to avoid a constant pool.
+      let rd = wreg_num(inst.defs[0])
+      let low = bytes_to_int64_le(bytes, 0)
+      let high = bytes_to_int64_le(bytes, 8)
+
+      // rd = 0
+      self.x86_emit_xorpd_xmm_xmm(rd, rd)
+      let scratch = isa.scratch_reg_1_index()
+      if low != 0L {
+        self.x86_emit_mov_imm64(scratch, low)
+        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 0)
+      }
+      if high != 0L {
+        self.x86_emit_mov_imm64(scratch, high)
+        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 1)
+      }
+    }
+    @instr.SIMDAnd => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_pand_xmm_xmm(rd, b)
+    }
+    @instr.SIMDOr => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_por_xmm_xmm(rd, b)
+    }
+    @instr.SIMDXor => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_pxor_xmm_xmm(rd, b)
+    }
+    @instr.SIMDBic => {
+      // a & ~b == (~b) & a, matching the x86 `PANDN` operand order.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != b {
+        self.x86_emit_movaps_xmm_xmm(rd, b)
+      }
+      self.x86_emit_pandn_xmm_xmm(rd, a)
+    }
+    @instr.SIMDNot => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      let tmp = 15 // reserved via MachineEnvData.scratch_float
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      self.x86_emit_pcmpeqd_xmm_xmm(tmp, tmp) // tmp = all ones
+      self.x86_emit_pxor_xmm_xmm(rd, tmp)
+    }
     @instr.StackLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let def_class = match inst.defs[0].reg {
