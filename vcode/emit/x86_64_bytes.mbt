@@ -352,6 +352,103 @@ pub fn MachineCode::x86_emit_jmp_rel32(
 }
 
 ///|
+fn x86_cond_to_jcc_opcode(cond : @instr.Cond) -> Int {
+  match cond {
+    // Signed/unsigned conditions match the usual interpretation after CMP.
+    @instr.Cond::Eq => 0x84 // JE
+    @instr.Cond::Ne => 0x85 // JNE
+    @instr.Cond::Hs => 0x83 // JAE/JNB
+    @instr.Cond::Lo => 0x82 // JB
+    @instr.Cond::Mi => 0x88 // JS
+    @instr.Cond::Pl => 0x89 // JNS
+    @instr.Cond::Vs => 0x80 // JO
+    @instr.Cond::Vc => 0x81 // JNO
+    @instr.Cond::Hi => 0x87 // JA
+    @instr.Cond::Ls => 0x86 // JBE
+    @instr.Cond::Ge => 0x8D // JGE
+    @instr.Cond::Lt => 0x8C // JL
+    @instr.Cond::Gt => 0x8F // JG
+    @instr.Cond::Le => 0x8E // JLE
+    @instr.Cond::Al => abort("x86_64 jcc: AL is not a conditional branch")
+  }
+}
+
+///|
+pub fn MachineCode::x86_emit_jcc_rel32(
+  self : MachineCode,
+  cond : @instr.Cond,
+  target_block : Int,
+) -> Unit {
+  // jcc rel32: 0F 8? disp32
+  self.emit_byte(0x0F)
+  self.emit_byte(x86_cond_to_jcc_opcode(cond))
+  let disp_offset = self.current_pos()
+  emit_u32_le(self, 0)
+  let next_ip_offset = self.current_pos()
+  self.add_x86_rel32_fixup(target_block, disp_offset, next_ip_offset)
+}
+
+///|
+pub fn MachineCode::x86_emit_cmp_rr(
+  self : MachineCode,
+  lhs : Int,
+  rhs : Int,
+) -> Unit {
+  // cmp r/m64, r64: REX.W + 39 /r (cmp lhs, rhs)
+  let r = (rhs >> 3) & 1
+  let b = (lhs >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x39)
+  emit_modrm(self, 3, rhs, lhs)
+}
+
+///|
+pub fn MachineCode::x86_emit_cmp_rr32(
+  self : MachineCode,
+  lhs : Int,
+  rhs : Int,
+) -> Unit {
+  // cmp r/m32, r32: 39 /r
+  let r = (rhs >> 3) & 1
+  let b = (lhs >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x39)
+  emit_modrm(self, 3, rhs, lhs)
+}
+
+///|
+pub fn MachineCode::x86_emit_test_rr(
+  self : MachineCode,
+  lhs : Int,
+  rhs : Int,
+) -> Unit {
+  // test r/m64, r64: REX.W + 85 /r
+  let r = (rhs >> 3) & 1
+  let b = (lhs >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x85)
+  emit_modrm(self, 3, rhs, lhs)
+}
+
+///|
+pub fn MachineCode::x86_emit_test_rr32(
+  self : MachineCode,
+  lhs : Int,
+  rhs : Int,
+) -> Unit {
+  // test r/m32, r32: 85 /r
+  let r = (rhs >> 3) & 1
+  let b = (lhs >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x85)
+  emit_modrm(self, 3, rhs, lhs)
+}
+
+///|
 /// Emit a trap instruction with a 16-bit payload.
 ///
 /// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The JIT trap signal

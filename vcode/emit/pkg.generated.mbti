@@ -320,6 +320,9 @@ pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rsp_imm32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_cmp_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cmp_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
 pub fn MachineCode::x86_emit_mov_m64_r64(Self, Int, Int, Int) -> Unit
@@ -336,6 +339,8 @@ pub fn MachineCode::x86_emit_ret(Self) -> Unit
 pub fn MachineCode::x86_emit_sub_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_test_rr(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_test_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_trap_imm16(Self, Int) -> Unit
 
 type X86Rel32Fixup

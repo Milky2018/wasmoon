@@ -26,6 +26,27 @@ test "x86_64 add rr encoding (rax += r8)" {
 }
 
 ///|
+test "x86_64 cmp/test encodings (r8 vs rax)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cmp_rr(8, 0) // cmp r8, rax
+  mc.x86_emit_test_rr(8, 8) // test r8, r8
+  inspect(mc.get_bytes(), content="[73, 57, 192, 77, 133, 192]")
+}
+
+///|
+test "x86_64 jcc rel32 fixup patches disp32" {
+  let mc = MachineCode::new()
+  mc.x86_emit_jcc_rel32(@instr.Cond::Eq, 1)
+  // 2 bytes padding between branch and label.
+  mc.emit_byte(0x90)
+  mc.emit_byte(0x90)
+  mc.define_label(1)
+  mc.resolve_fixups()
+  // jcc takes 6 bytes total: 0F 84 disp32. disp = 2.
+  inspect(mc.get_bytes(), content="[15, 132, 2, 0, 0, 0, 144, 144]")
+}
+
+///|
 test "x86_64 sub rr encoding (rax -= r8)" {
   let mc = MachineCode::new()
   mc.x86_emit_sub_rr(0, 8)

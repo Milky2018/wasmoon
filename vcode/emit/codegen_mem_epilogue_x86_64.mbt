@@ -33,6 +33,78 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
   }
 
   match term {
+    @instr.Branch(cond, then_b, else_b) => {
+      // Treat Branch as "cond != 0".
+      let rt = reg_num(cond)
+      // Branch inversion: if then_b is next block, invert to branch to else_b.
+      if next_block == Some(then_b) {
+        // cond == 0 => else_b
+        self.x86_emit_test_rr(rt, rt)
+        self.x86_emit_jcc_rel32(@instr.Cond::Eq, else_b)
+      } else {
+        self.x86_emit_test_rr(rt, rt)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, then_b)
+        if next_block != Some(else_b) {
+          self.x86_emit_jmp_rel32(else_b)
+        }
+      }
+    }
+    @instr.BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
+      let rt = reg_num(reg)
+      if is_64 {
+        self.x86_emit_test_rr(rt, rt)
+      } else {
+        self.x86_emit_test_rr32(rt, rt)
+      }
+      let cond_to_then = if is_nonzero {
+        @instr.Cond::Ne
+      } else {
+        @instr.Cond::Eq
+      }
+      if next_block == Some(then_b) {
+        self.x86_emit_jcc_rel32(cond_to_then.invert(), else_b)
+      } else {
+        self.x86_emit_jcc_rel32(cond_to_then, then_b)
+        if next_block != Some(else_b) {
+          self.x86_emit_jmp_rel32(else_b)
+        }
+      }
+    }
+    @instr.BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+      let rn = reg_num(lhs)
+      let rm = reg_num(rhs)
+      if is_64 {
+        self.x86_emit_cmp_rr(rn, rm)
+      } else {
+        self.x86_emit_cmp_rr32(rn, rm)
+      }
+      if next_block == Some(then_b) {
+        self.x86_emit_jcc_rel32(cond.invert(), else_b)
+      } else {
+        self.x86_emit_jcc_rel32(cond, then_b)
+        if next_block != Some(else_b) {
+          self.x86_emit_jmp_rel32(else_b)
+        }
+      }
+    }
+    @instr.BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+      let rn = reg_num(lhs)
+      let scratch = isa.scratch_reg_1_index()
+      self.x86_emit_mov_imm64(scratch, imm.to_int64())
+      if is_64 {
+        self.x86_emit_cmp_rr(rn, scratch)
+      } else {
+        self.x86_emit_cmp_rr32(rn, scratch)
+      }
+      if next_block == Some(then_b) {
+        self.x86_emit_jcc_rel32(cond.invert(), else_b)
+      } else {
+        self.x86_emit_jcc_rel32(cond, then_b)
+        if next_block != Some(else_b) {
+          self.x86_emit_jmp_rel32(else_b)
+        }
+      }
+    }
     @instr.Jump(target, _args) =>
       if next_block != Some(target) {
         self.x86_emit_jmp_rel32(target)
