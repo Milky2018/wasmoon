@@ -106,9 +106,12 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      // Expect the standard 2-operand lowering: rd == rn.
       if rd != rn {
-        abort("x86_64 Add: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_add_rr(rd, rm)
@@ -121,7 +124,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if rd != rn {
-        abort("x86_64 Sub: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_sub_rr(rd, rm)
@@ -134,7 +141,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
-        abort("x86_64 AddImm: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       let scratch = isa.scratch_reg_1_index()
       self.x86_emit_mov_imm64(scratch, imm.to_int64())
@@ -148,7 +159,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
-        abort("x86_64 SubImm: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       let scratch = isa.scratch_reg_1_index()
       self.x86_emit_mov_imm64(scratch, imm.to_int64())
@@ -163,7 +178,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if rd != rn {
-        abort("x86_64 Mul: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_imul_rr(rd, rm)
@@ -176,7 +195,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if rd != rn {
-        abort("x86_64 And: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_and_rr(rd, rm)
@@ -189,7 +212,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if rd != rn {
-        abort("x86_64 Or: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_or_rr(rd, rm)
@@ -202,7 +229,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if rd != rn {
-        abort("x86_64 Xor: expected dst == lhs")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_xor_rr(rd, rm)
@@ -214,7 +245,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
-        abort("x86_64 Not: expected dst == src")
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
       }
       if is_64 {
         self.x86_emit_not_r64(rd)
