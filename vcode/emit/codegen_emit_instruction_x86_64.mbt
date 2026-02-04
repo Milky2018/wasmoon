@@ -197,6 +197,86 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
     }
+    @instr.LoadGCFuncPtr(libcall) => {
+      let rd = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        @instr.GCLibcall::RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
+        @instr.GCLibcall::RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
+        @instr.GCLibcall::StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
+        @instr.GCLibcall::StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
+        @instr.GCLibcall::StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
+        @instr.GCLibcall::ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
+        @instr.GCLibcall::ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
+        @instr.GCLibcall::ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
+        @instr.GCLibcall::ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
+        @instr.GCLibcall::ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
+        @instr.GCLibcall::ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
+        @instr.GCLibcall::ArrayNewData =>
+          @jit_ffi.c_jit_get_gc_array_new_data_ptr()
+        @instr.GCLibcall::ArrayNewElem =>
+          @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
+        @instr.GCLibcall::ArrayInitData =>
+          @jit_ffi.c_jit_get_gc_array_init_data_ptr()
+        @instr.GCLibcall::ArrayInitElem =>
+          @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
+        @instr.GCLibcall::TypeCheckSubtype =>
+          @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+        @instr.GCLibcall::RegisterStructInline =>
+          @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
+        @instr.GCLibcall::RegisterArrayInline =>
+          @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
+        @instr.GCLibcall::AllocStructSlow =>
+          @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
+        @instr.GCLibcall::AllocArraySlow =>
+          @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
+      }
+      self.x86_emit_mov_imm64(rd, func_ptr)
+    }
+    @instr.LoadJITFuncPtr(libcall) => {
+      let rd = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        @instr.JITLibcall::MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
+        @instr.JITLibcall::MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
+        @instr.JITLibcall::MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
+        @instr.JITLibcall::MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
+        @instr.JITLibcall::MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
+        @instr.JITLibcall::DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
+        @instr.JITLibcall::TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
+        @instr.JITLibcall::TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
+        @instr.JITLibcall::TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
+        @instr.JITLibcall::TableInit => @jit_ffi.c_jit_get_table_init_ptr()
+        @instr.JITLibcall::ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
+        @instr.JITLibcall::HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
+      }
+      self.x86_emit_mov_imm64(rd, func_ptr)
+    }
+    @instr.LoadExceptionFuncPtr(libcall) => {
+      let rd = wreg_num(inst.defs[0])
+      let func_ptr = match libcall {
+        @instr.ExceptionLibcall::TryBegin =>
+          @jit_ffi.c_jit_get_exception_try_begin_ptr()
+        @instr.ExceptionLibcall::TryEnd =>
+          @jit_ffi.c_jit_get_exception_try_end_ptr()
+        @instr.ExceptionLibcall::Throw =>
+          @jit_ffi.c_jit_get_exception_throw_ptr()
+        @instr.ExceptionLibcall::ThrowRef =>
+          @jit_ffi.c_jit_get_exception_throw_ref_ptr()
+        @instr.ExceptionLibcall::Delegate =>
+          @jit_ffi.c_jit_get_exception_delegate_ptr()
+        @instr.ExceptionLibcall::GetTag =>
+          @jit_ffi.c_jit_get_exception_get_tag_ptr()
+        @instr.ExceptionLibcall::GetValue =>
+          @jit_ffi.c_jit_get_exception_get_value_ptr()
+        @instr.ExceptionLibcall::GetValueCount =>
+          @jit_ffi.c_jit_get_exception_get_value_count_ptr()
+        @instr.ExceptionLibcall::Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
+        @instr.ExceptionLibcall::SpillLocals =>
+          @jit_ffi.c_jit_get_exception_spill_locals_ptr()
+        @instr.ExceptionLibcall::GetSpilledLocal =>
+          @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
+      }
+      self.x86_emit_mov_imm64(rd, func_ptr)
+    }
     @instr.Cmp(kind, is_64) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
