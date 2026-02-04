@@ -1655,6 +1655,54 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.define_label(done)
     }
+    @instr.SIMDLoadSplat(lane_size, offset) => {
+      // Note: current lowering passes `offset=0` because the effective address
+      // already includes the wasm memory offset.
+      let rd = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let scratch1 = isa.scratch_reg_1_index()
+      let scratch2 = isa.scratch_reg_2_index()
+      match lane_size {
+        @instr.B8 => {
+          // i8x16 splat: load u8 -> movd -> pshufb with a zero mask.
+          self.x86_emit_movzx_r32_m8(scratch1, base, offset)
+          self.x86_emit_movd_xmm_r32(rd, scratch1)
+          let mask = 14 // reserved via MachineEnvData.scratch_float
+          self.x86_emit_pxor_xmm_xmm(mask, mask)
+          self.x86_emit_pshufb_xmm_xmm(rd, mask)
+        }
+        @instr.H16 => {
+          // i16x8 splat: duplicate into a dword, then pshufd broadcast.
+          self.x86_emit_movzx_r32_m16(scratch1, base, offset)
+          self.x86_emit_mov_rr32(scratch2, scratch1)
+          self.x86_emit_shl_r32_imm8(scratch2, 16)
+          self.x86_emit_or_rr32(scratch2, scratch1)
+          self.x86_emit_movd_xmm_r32(rd, scratch2)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x00)
+        }
+        @instr.S32 => {
+          self.x86_emit_mov_r32_m32(scratch1, base, offset)
+          self.x86_emit_movd_xmm_r32(rd, scratch1)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x00)
+        }
+        @instr.D64 => {
+          self.x86_emit_mov_r64_m64(scratch1, base, offset)
+          self.x86_emit_movq_xmm_r64(rd, scratch1)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x44)
+        }
+      }
+    }
+    @instr.SIMDLoadZero(is_64, offset) => {
+      // Zero-extend 32-bit/64-bit scalar load into v128.
+      let rd = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      self.x86_emit_pxor_xmm_xmm(rd, rd)
+      if is_64 {
+        self.x86_emit_movsd_xmm_m64(rd, base, offset)
+      } else {
+        self.x86_emit_movss_xmm_m32(rd, base, offset)
+      }
+    }
     @instr.SIMDFCmp(is_f32, kind) => {
       // Align with Cranelift x64 vector fcmp lowering: use CMPP* immediates,
       // and for `gt/ge` swap operands and use `lt/le` predicate indices.
