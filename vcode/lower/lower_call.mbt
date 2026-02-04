@@ -910,8 +910,18 @@ fn lower_c_libcall(
   args : Array[@abi.VReg],
   result : @abi.VReg?,
 ) -> Unit {
-  guard args.length() <= 8 else {
-    abort("lower_c_libcall: too many arguments (max 8)")
+  fn c_arg_gpr_indices() -> Array[Int] {
+    match @isa.ISA::current() {
+      // AAPCS64: X0-X7
+      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
+      @isa.X86_64 => [7, 6, 2, 1, 8, 9]
+    }
+  }
+
+  let arg_regs = c_arg_gpr_indices()
+  guard args.length() <= arg_regs.length() else {
+    abort("lower_c_libcall: too many arguments")
   }
 
   // Create CallPtr instruction with C calling convention
@@ -925,15 +935,15 @@ fn lower_c_libcall(
     class: @abi.Int,
   })
 
-  // Args constrained to X0, X1, X2, ... (C calling convention)
+  // Args constrained to C ABI arg regs (ISA-dependent).
   for i, arg in args {
     call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
-      index: i,
+      index: arg_regs[i],
       class: @abi.Int,
     })
   }
 
-  // Result constrained to X0
+  // Result constrained to the C ABI integer return register.
   if result is Some(dst) {
     call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
       index: 0,

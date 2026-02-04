@@ -525,6 +525,26 @@ fn lower_div(
   // Only emit division if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
+    if @isa.ISA::current() is @isa.X86_64 {
+      // Bootstrap via C helpers: avoid implementing idiv just to run spec tests.
+      let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+      let ptr = if is_64 {
+        if signed {
+          @jit_ffi.c_jit_get_i64_sdiv_ptr()
+        } else {
+          @jit_ffi.c_jit_get_i64_udiv_ptr()
+        }
+      } else if signed {
+        @jit_ffi.c_jit_get_i32_sdiv_ptr()
+      } else {
+        @jit_ffi.c_jit_get_i32_udiv_ptr()
+      }
+      let load_ptr = @instr.VCodeInst::new(LoadConst(ptr))
+      load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+      block.add_inst(load_ptr)
+      lower_c_libcall(ctx, block, func_ptr_vreg, [lhs, rhs], Some(dst))
+      return
+    }
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
     } else {
@@ -534,11 +554,6 @@ fn lower_div(
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
-    if @isa.ISA::current() is @isa.X86_64 {
-      // x86_64 division uses implicit rax/rdx.
-      vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-      vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
-    }
     block.add_inst(vcode_inst)
   }
 }
@@ -1275,6 +1290,26 @@ fn lower_rem(
   // Only emit remainder computation if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
+    if @isa.ISA::current() is @isa.X86_64 {
+      // Bootstrap via C helpers: avoid idiv/imul juggling for now.
+      let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+      let ptr = if is_64 {
+        if signed {
+          @jit_ffi.c_jit_get_i64_srem_ptr()
+        } else {
+          @jit_ffi.c_jit_get_i64_urem_ptr()
+        }
+      } else if signed {
+        @jit_ffi.c_jit_get_i32_srem_ptr()
+      } else {
+        @jit_ffi.c_jit_get_i32_urem_ptr()
+      }
+      let load_ptr = @instr.VCodeInst::new(LoadConst(ptr))
+      load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+      block.add_inst(load_ptr)
+      lower_c_libcall(ctx, block, func_ptr_vreg, [lhs, rhs], Some(dst))
+      return
+    }
 
     // Step 1: Compute quotient = a / b
     let quotient = ctx.vcode_func.new_vreg(Int)
@@ -1287,10 +1322,6 @@ fn lower_rem(
     div_inst.add_def({ reg: Virtual(quotient) })
     div_inst.add_use(Virtual(lhs))
     div_inst.add_use(Virtual(rhs))
-    if @isa.ISA::current() is @isa.X86_64 {
-      div_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-      div_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
-    }
     block.add_inst(div_inst)
 
     // Step 2: Compute remainder = a - quotient * b

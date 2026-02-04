@@ -388,6 +388,80 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
     return (int64_t)wasmoon_jit_memory_copy;
 }
 
+// ============ Integer div/rem helpers ============
+//
+// These helpers are used as a bootstrap on x86_64 to get the JIT backend
+// working before implementing full idiv lowering/encoding.
+//
+// NOTE: For signed remainder, INT_MIN % -1 is undefined behavior in C, but is
+// well-defined in WebAssembly (result 0). We special-case b == -1 to avoid UB.
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_srem(int32_t a, int32_t b) {
+    if (b == -1) return 0;
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_srem(int64_t a, int64_t b) {
+    if (b == -1) return 0;
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_sdiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_sdiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_udiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_udiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_srem_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_srem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_urem_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_urem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_sdiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_sdiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_udiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_udiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_srem_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_srem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_urem_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_urem;
+}
+
 // ============ Multi-Memory Array Setup ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(

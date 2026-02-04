@@ -274,6 +274,32 @@ pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory
 /// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
 
+// ============ Integer div/rem helpers (x86_64 bootstrap) ============
+
+///|
+pub extern "c" fn c_jit_get_i32_sdiv_ptr() -> Int64 = "wasmoon_jit_get_i32_sdiv_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i32_udiv_ptr() -> Int64 = "wasmoon_jit_get_i32_udiv_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i32_srem_ptr() -> Int64 = "wasmoon_jit_get_i32_srem_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i32_urem_ptr() -> Int64 = "wasmoon_jit_get_i32_urem_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i64_sdiv_ptr() -> Int64 = "wasmoon_jit_get_i64_sdiv_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i64_udiv_ptr() -> Int64 = "wasmoon_jit_get_i64_udiv_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i64_srem_ptr() -> Int64 = "wasmoon_jit_get_i64_srem_ptr"
+
+///|
+pub extern "c" fn c_jit_get_i64_urem_ptr() -> Int64 = "wasmoon_jit_get_i64_urem_ptr"
+
 ///|
 /// Get memory_init function pointer for JIT
 /// Signature: memory_init(ctx: *jit_context_t, memidx: i32, data_idx: i32, dst: i32, src: i32, size: i32) -> void
