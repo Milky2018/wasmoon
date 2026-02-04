@@ -316,6 +316,25 @@ test "x86_64 SIMD float min/max + unordered compare encodings" {
 }
 
 ///|
+test "x86_64 SIMD float arithmetic encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_addps_xmm_xmm(1, 2) // addps xmm1, xmm2
+  mc.x86_emit_addpd_xmm_xmm(1, 2) // addpd xmm1, xmm2
+  mc.x86_emit_mulps_xmm_xmm(1, 2) // mulps xmm1, xmm2
+  mc.x86_emit_mulpd_xmm_xmm(1, 2) // mulpd xmm1, xmm2
+  mc.x86_emit_divps_xmm_xmm(1, 2) // divps xmm1, xmm2
+  mc.x86_emit_divpd_xmm_xmm(1, 2) // divpd xmm1, xmm2
+  mc.x86_emit_sqrtps_xmm_xmm(1, 2) // sqrtps xmm1, xmm2
+  mc.x86_emit_sqrtpd_xmm_xmm(1, 2) // sqrtpd xmm1, xmm2
+  mc.x86_emit_pslld_xmm_imm8(1, 31) // pslld xmm1, 31
+  mc.x86_emit_psllq_xmm_imm8(1, 63) // psllq xmm1, 63
+  inspect(
+    mc.get_bytes(),
+    content="[15, 88, 202, 102, 15, 88, 202, 15, 89, 202, 102, 15, 89, 202, 15, 94, 202, 102, 15, 94, 202, 15, 81, 202, 102, 15, 81, 202, 102, 15, 114, 241, 31, 102, 15, 115, 241, 63]",
+  )
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8

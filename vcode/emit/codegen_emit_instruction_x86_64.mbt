@@ -1389,6 +1389,97 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
       }
     }
+    @instr.SIMDFAdd(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_addps_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_addpd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.SIMDFSub(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_subps_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_subpd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.SIMDFMul(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_mulps_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_mulpd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.SIMDFDiv(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_divps_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_divpd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.SIMDFAbs(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      let mut mask = 14 // reserved via MachineEnvData.scratch_float
+      if mask == rd {
+        mask = 15
+      }
+      // mask = 0x7FFF.. (clear sign bit)
+      self.x86_emit_pcmpeqd_xmm_xmm(mask, mask) // all ones
+      if is_f32 {
+        self.x86_emit_psrld_xmm_imm8(mask, 1)
+      } else {
+        self.x86_emit_psrlq_xmm_imm8(mask, 1)
+      }
+      self.x86_emit_pand_xmm_xmm(rd, mask)
+    }
+    @instr.SIMDFNeg(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      let mut sign = 14 // reserved via MachineEnvData.scratch_float
+      if sign == rd {
+        sign = 15
+      }
+      // sign = 0x8000.. (sign bit mask)
+      self.x86_emit_pcmpeqd_xmm_xmm(sign, sign) // all ones
+      if is_f32 {
+        self.x86_emit_pslld_xmm_imm8(sign, 31)
+      } else {
+        self.x86_emit_psllq_xmm_imm8(sign, 63)
+      }
+      self.x86_emit_pxor_xmm_xmm(rd, sign)
+    }
+    @instr.SIMDFSqrt(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_sqrtps_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_sqrtpd_xmm_xmm(rd, src)
+      }
+    }
     @instr.SIMDFMin(is_f32) => {
       // Floating-point minimum with NaN propagation and signed-zero rules,
       // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
