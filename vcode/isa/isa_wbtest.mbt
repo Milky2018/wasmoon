@@ -5,7 +5,7 @@
 test "ISA::current matches host arch" {
   match c_host_arch() {
     0 => inspect(ISA::current() is ISA::AArch64, content="true")
-    1 => inspect(ISA::current() is ISA::X86_64, content="true")
+    1 => inspect(ISA::current() is ISA::AMD64, content="true")
     _ => inspect(ISA::current() is ISA::AArch64, content="true")
   }
 }
@@ -27,7 +27,7 @@ test "Wasm ABI arg/ret reg counts (shape)" {
   inspect(a.wasm_arg_fprs().length(), content="8")
   inspect(a.wasm_ret_gprs().length(), content="8")
   inspect(a.wasm_ret_fprs().length(), content="8")
-  let x = ISA::X86_64
+  let x = ISA::AMD64
   inspect(x.wasm_vmctx_arg_preg().index, content="7")
   inspect(x.wasm_user_arg_gprs().length(), content="6")
   inspect(x.wasm_arg_fprs().length(), content="8")
@@ -43,8 +43,8 @@ test "AArch64 MachineEnv reserves scratch regs" {
 }
 
 ///|
-test "x86_64 call-clobbered sets basic shape" {
-  let isa = ISA::X86_64
+test "amd64 call-clobbered sets basic shape" {
+  let isa = ISA::AMD64
   // SysV AMD64 caller-saved GPRs: rax,rcx,rdx,rsi,rdi,r8-r11 => 9 regs.
   inspect(isa.call_clobbered_gprs().length(), content="9")
   // SysV AMD64 clobbers all XMM0-XMM15 => 16 regs.
@@ -52,8 +52,8 @@ test "x86_64 call-clobbered sets basic shape" {
 }
 
 ///|
-test "x86_64 MachineEnv reserves scratch regs" {
-  let env = ISA::X86_64.machine_env()
+test "amd64 MachineEnv reserves scratch regs" {
+  let env = ISA::AMD64.machine_env()
   inspect(env.scratch_int, content="[10, 11]")
   inspect(env.scratch_float, content="[14, 15]")
 }

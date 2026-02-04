@@ -451,7 +451,7 @@ fn lower_div(
 
   // x86_64 backend is still incomplete; avoid magic-division lowering which
   // currently relies on AArch64-specific opcodes and patterns.
-  let enable_magic_div = !(@isa.ISA::current() is @isa.X86_64)
+  let enable_magic_div = !(@isa.ISA::current() is @isa.AMD64)
 
   // Check if divisor is a constant suitable for magic division
   if enable_magic_div && inst.first_result() is Some(result) {
@@ -525,7 +525,7 @@ fn lower_div(
   // Only emit division if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if @isa.ISA::current() is @isa.X86_64 {
+    if @isa.ISA::current() is @isa.AMD64 {
       // Bootstrap via C helpers: avoid implementing idiv just to run spec tests.
       let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
       let ptr = if is_64 {
@@ -587,7 +587,7 @@ fn lower_shift(
     let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
-    if @isa.ISA::current() is @isa.X86_64 {
+    if @isa.ISA::current() is @isa.AMD64 {
       // x86_64 variable shifts/rotates use CL as the implicit count register.
       vcode_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
     } else {
@@ -1290,7 +1290,7 @@ fn lower_rem(
   // Only emit remainder computation if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if @isa.ISA::current() is @isa.X86_64 {
+    if @isa.ISA::current() is @isa.AMD64 {
       // Match Cranelift x64: use IDIV/DIV remainder directly.
       //
       // Note: the remainder value is produced in RDX/EDX by the hardware.
@@ -1323,7 +1323,7 @@ fn lower_rem(
     // - For i64, use MSUB (single instruction): a - quotient*b
     // - For i32, avoid MSUB because our MSUB opcode is 64-bit (X regs) and
     //   would mis-handle signed values by zero-extending w-reg results.
-    if is_64 && !(@isa.ISA::current() is @isa.X86_64) {
+    if is_64 && !(@isa.ISA::current() is @isa.AMD64) {
       // MSUB rd, rn, rm, ra computes: ra - rn * rm
       // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
       let msub_inst = @instr.VCodeInst::new(Msub)

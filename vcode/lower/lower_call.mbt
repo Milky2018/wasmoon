@@ -915,7 +915,7 @@ fn lower_c_libcall(
       // AAPCS64: X0-X7
       @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
-      @isa.X86_64 => [7, 6, 2, 1, 8, 9]
+      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
     }
   }
 

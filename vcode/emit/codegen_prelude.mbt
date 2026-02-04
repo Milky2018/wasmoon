@@ -232,7 +232,7 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     let (abs_amount, is_sub) = if amount < 0 {
       (-amount, true)
     } else {
@@ -323,7 +323,7 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     let isa = current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
@@ -1460,7 +1460,7 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     let isa = current_isa()
     // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
     // then do a Cranelift-style "param moves + param spills" stage.

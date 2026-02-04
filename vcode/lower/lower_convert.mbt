@@ -119,7 +119,7 @@ fn lower_float_to_int(
   block.add_inst(nan_check)
 
   // Step 2: TrapIf(Vs) - trap if NaN
-  let trap_nan_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+  let trap_nan_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
     // Cranelift x64 checks unorderedness via UCOMIS* parity (PF=1).
     @instr.Cond::Ps
   } else {
@@ -153,7 +153,7 @@ fn lower_float_to_int(
   // Step 5: TrapIf for underflow
   // For signed: trap if src < min (Lt)
   // For unsigned: trap if src <= -1.0 (Le)
-  let trap_min_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+  let trap_min_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
     // After x86 UCOMIS* (src, min), use CF/ZF based conditions.
     if use_le_for_min {
       @instr.Cond::Ls
@@ -185,7 +185,7 @@ fn lower_float_to_int(
   block.add_inst(cmp_max)
 
   // Step 8: TrapIf(Ge) for overflow - trap if src >= max
-  let trap_max_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+  let trap_max_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
     // After x86 UCOMIS* (src, max), src >= max iff CF=0.
     @instr.Cond::Hs
   } else {

@@ -14,7 +14,7 @@ pub fn c_host_arch() -> Int
 // Types and methods
 pub(all) enum ISA {
   AArch64
-  X86_64
+  AMD64
 }
 pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]

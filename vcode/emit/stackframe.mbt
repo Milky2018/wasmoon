@@ -121,7 +121,7 @@ pub fn JITStackFrame::build(
   let setup_area_size = if has_setup_area {
     match isa {
       @isa.AArch64 => SETUP_AREA_SIZE
-      @isa.X86_64 => X86_SETUP_AREA_SIZE
+      @isa.AMD64 => X86_SETUP_AREA_SIZE
     }
   } else {
     0

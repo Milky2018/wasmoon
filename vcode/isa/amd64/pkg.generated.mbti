@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/vcode/isa/x86_64"
+package "Milky2018/wasmoon/vcode/isa/amd64"
 
 import {
   "Milky2018/wasmoon/vcode/abi",

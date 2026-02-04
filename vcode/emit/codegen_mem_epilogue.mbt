@@ -141,7 +141,7 @@ fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     let isa = current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
@@ -252,7 +252,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     self.emit_terminator_with_epilogue_x86_64(
       term, stack_frame, result_types, next_block, shared_exit_block,
     )

@@ -1,5 +1,5 @@
 ///|
-/// x86_64 ABI/ISA policy (SysV AMD64).
+/// amd64 ABI/ISA policy (SysV AMD64).
 ///
 /// Note: this file only defines the "policy" bits currently needed by the ISA
 /// facade (call-clobbered sets). Lowering/emission will be added in Step 3.
@@ -8,7 +8,7 @@
 pub fn call_clobbered_gprs() -> Array[@abi.PReg] {
   // SysV AMD64: caller-saved GPRs.
   //
-  // We use the 0..15 numbering described in `vcode/isa/x86_64/roles.mbt`.
+  // We use the 0..15 numbering described in `vcode/isa/amd64/roles.mbt`.
   [
     { index: 0, class: @abi.Int }, // rax
     { index: 1, class: @abi.Int }, // rcx
@@ -39,13 +39,13 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg] {
 }
 
 ///|
-/// Internal Wasm ABI (initial x86_64 design): vmctx argument register.
+/// Internal Wasm ABI (initial amd64 design): vmctx argument register.
 pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
   { index: 7, class: @abi.Int } // rdi
 }
 
 ///|
-/// Internal Wasm ABI (initial x86_64 design): user integer argument registers.
+/// Internal Wasm ABI (initial amd64 design): user integer argument registers.
 ///
 /// We start with a SysV-like prefix (excluding vmctx in rdi), and add `rax` as an
 /// extra user argument register to reduce stack traffic in internal calls.

@@ -2075,7 +2075,7 @@ fn lower_load_ptr(
   //   load [base + (uextend/ishl index)]  => load_regoff base, index, (ext/scale)
   //
   // This avoids materializing address temporaries and reduces register pressure.
-  if !(@isa.ISA::current() is @isa.X86_64) &&
+  if !(@isa.ISA::current() is @isa.AMD64) &&
     (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&
@@ -2183,7 +2183,7 @@ fn lower_store_ptr(
   }
 
   // Try Cranelift-style AArch64 register-offset addressing for stores.
-  if !(@isa.ISA::current() is @isa.X86_64) &&
+  if !(@isa.ISA::current() is @isa.AMD64) &&
     (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&

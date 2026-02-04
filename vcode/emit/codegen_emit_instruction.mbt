@@ -4,7 +4,7 @@ fn MachineCode::emit_instruction(
   inst : @instr.VCodeInst,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if current_isa() is @isa.X86_64 {
+  if current_isa() is @isa.AMD64 {
     self.emit_instruction_x86_64(inst, stack_frame)
     return
   }

@@ -8,7 +8,7 @@
 
 // Return codes:
 //   0: AArch64
-//   1: x86_64
+//   1: amd64
 //  -1: unknown/other
 MOONBIT_FFI_EXPORT int wasmoon_host_arch(void) {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -19,4 +19,3 @@ MOONBIT_FFI_EXPORT int wasmoon_host_arch(void) {
   return -1;
 #endif
 }
-
