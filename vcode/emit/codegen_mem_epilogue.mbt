@@ -252,6 +252,12 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
+  if current_isa() is @isa.X86_64 {
+    self.emit_terminator_with_epilogue_x86_64(
+      term, stack_frame, result_types, next_block, shared_exit_block,
+    )
+    return
+  }
   fn trap_msg_to_brk_imm(msg : String) -> Int {
     // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
     //   0 unreachable

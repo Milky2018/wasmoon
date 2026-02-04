@@ -4,6 +4,10 @@ fn MachineCode::emit_instruction(
   inst : @instr.VCodeInst,
   stack_frame : JITStackFrame,
 ) -> Unit {
+  if current_isa() is @isa.X86_64 {
+    self.emit_instruction_x86_64(inst, stack_frame)
+    return
+  }
   // Extract offsets from stack frame for backward compatibility
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
