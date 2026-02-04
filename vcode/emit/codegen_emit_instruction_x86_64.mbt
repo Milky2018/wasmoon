@@ -514,6 +514,115 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
+    @instr.Rbit(is_64) => {
+      // Reverse bits.
+      //
+      // Software bit-reversal using shift/mask swaps.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let x = isa.scratch_reg_1_index()
+      let t = isa.scratch_reg_2_index()
+      if is_64 {
+        self.x86_emit_mov_rr(x, rn)
+
+        // Swap odd/even bits.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 1)
+        self.x86_emit_mov_imm64(rd, 0x5555555555555555L)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 1)
+        self.x86_emit_or_rr(x, t)
+
+        // Swap consecutive pairs.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 2)
+        self.x86_emit_mov_imm64(rd, 0x3333333333333333L)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 2)
+        self.x86_emit_or_rr(x, t)
+
+        // Swap nibbles.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 4)
+        self.x86_emit_mov_imm64(rd, 0x0F0F0F0F0F0F0F0FL)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 4)
+        self.x86_emit_or_rr(x, t)
+
+        // Swap bytes.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 8)
+        self.x86_emit_mov_imm64(rd, 0x00FF00FF00FF00FFL)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 8)
+        self.x86_emit_or_rr(x, t)
+
+        // Swap 16-bit words.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 16)
+        self.x86_emit_mov_imm64(rd, 0x0000FFFF0000FFFFL)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 16)
+        self.x86_emit_or_rr(x, t)
+
+        // Swap 32-bit dwords.
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 32)
+        self.x86_emit_mov_imm64(rd, 0x00000000FFFFFFFFL)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_shl_r_imm8(x, 32)
+        self.x86_emit_or_rr(x, t)
+        if rd != x {
+          self.x86_emit_mov_rr(rd, x)
+        }
+      } else {
+        self.x86_emit_mov_rr32(x, rn)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 1)
+        self.x86_emit_mov_imm64(rd, 0x55555555L)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_shl_r32_imm8(x, 1)
+        self.x86_emit_or_rr32(x, t)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 2)
+        self.x86_emit_mov_imm64(rd, 0x33333333L)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_shl_r32_imm8(x, 2)
+        self.x86_emit_or_rr32(x, t)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 4)
+        self.x86_emit_mov_imm64(rd, 0x0F0F0F0FL)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_shl_r32_imm8(x, 4)
+        self.x86_emit_or_rr32(x, t)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 8)
+        self.x86_emit_mov_imm64(rd, 0x00FF00FFL)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_shl_r32_imm8(x, 8)
+        self.x86_emit_or_rr32(x, t)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 16)
+        self.x86_emit_mov_imm64(rd, 0x0000FFFFL)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_shl_r32_imm8(x, 16)
+        self.x86_emit_or_rr32(x, t)
+        if rd != x {
+          self.x86_emit_mov_rr32(rd, x)
+        }
+      }
+    }
     @instr.Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
