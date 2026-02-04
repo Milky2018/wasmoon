@@ -776,6 +776,41 @@ pub fn MachineCode::x86_emit_movsd_xmm_m64(
 }
 
 ///|
+pub fn MachineCode::x86_emit_ucomiss_xmm_xmm(
+  self : MachineCode,
+  lhs_xmm : Int,
+  rhs_xmm : Int,
+) -> Unit {
+  // ucomiss xmm1, xmm2: 0F 2E /r
+  let r = (lhs_xmm >> 3) & 1
+  let b = (rhs_xmm >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x2E)
+  emit_modrm(self, 3, lhs_xmm, rhs_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_ucomisd_xmm_xmm(
+  self : MachineCode,
+  lhs_xmm : Int,
+  rhs_xmm : Int,
+) -> Unit {
+  // ucomisd xmm1, xmm2: 66 0F 2E /r
+  let r = (lhs_xmm >> 3) & 1
+  let b = (rhs_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x2E)
+  emit_modrm(self, 3, lhs_xmm, rhs_xmm)
+}
+
+///|
 pub fn MachineCode::x86_emit_movdqu_m128_xmm(
   self : MachineCode,
   base : Int,
@@ -952,8 +987,10 @@ fn x86_cond_to_jcc_opcode(cond : @instr.Cond) -> Int {
     @instr.Cond::Lo => 0x82 // JB
     @instr.Cond::Mi => 0x88 // JS
     @instr.Cond::Pl => 0x89 // JNS
-    @instr.Cond::Vs => 0x80 // JO
-    @instr.Cond::Vc => 0x81 // JNO
+    // AArch64 uses V (overflow) to represent unordered results from FCMP.
+    // x86 uses PF (parity) for unordered results from UCOMIS*.
+    @instr.Cond::Vs => 0x8A // JP/JPE (parity set)
+    @instr.Cond::Vc => 0x8B // JNP/JPO (parity clear)
     @instr.Cond::Hi => 0x87 // JA
     @instr.Cond::Ls => 0x86 // JBE
     @instr.Cond::Ge => 0x8D // JGE

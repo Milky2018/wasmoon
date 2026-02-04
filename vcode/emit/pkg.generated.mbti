@@ -396,6 +396,8 @@ pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_test_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_test_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_trap_imm16(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_ucomisd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_ucomiss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr32(Self, Int, Int) -> Unit
 

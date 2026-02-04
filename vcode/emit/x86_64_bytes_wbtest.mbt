@@ -196,6 +196,14 @@ test "x86_64 movsd/movdqu loads from [rsp+disp]" {
 }
 
 ///|
+test "x86_64 ucomiss/ucomisd encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_ucomiss_xmm_xmm(3, 4) // ucomiss xmm3, xmm4
+  mc.x86_emit_ucomisd_xmm_xmm(11, 12) // ucomisd xmm11, xmm12
+  inspect(mc.get_bytes(), content="[15, 46, 220, 102, 69, 15, 46, 220]")
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8
@@ -222,6 +230,14 @@ test "x86_64 setcc + movzx encodings" {
     mc.get_bytes(),
     content="[65, 15, 148, 193, 69, 15, 182, 201, 64, 15, 149, 196]",
   )
+}
+
+///|
+test "x86_64 parity condition encodings (Vs/Vc)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_setcc_r8(@instr.Cond::Vs, 0) // setp al
+  mc.x86_emit_setcc_r8(@instr.Cond::Vc, 0) // setnp al
+  inspect(mc.get_bytes(), content="[15, 154, 192, 15, 155, 192]")
 }
 
 ///|

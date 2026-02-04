@@ -29,6 +29,21 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> @instr.Cond {
+    // x86 UCOMIS* sets flags like an unsigned compare:
+    // - CF=1 => less-than
+    // - ZF=1 => equal
+    // - PF=1 => unordered (NaN)
+    match kind {
+      @instr.FCmpKind::Eq => @instr.Cond::Eq
+      @instr.FCmpKind::Ne => @instr.Cond::Ne
+      @instr.FCmpKind::Lt => @instr.Cond::Lo
+      @instr.FCmpKind::Le => @instr.Cond::Ls
+      @instr.FCmpKind::Gt => @instr.Cond::Hi
+      @instr.FCmpKind::Ge => @instr.Cond::Hs
+    }
+  }
+
   fn reg_class_of(reg : @abi.Reg) -> @abi.RegClass {
     match reg {
       @abi.Physical(preg) => preg.class
@@ -303,6 +318,62 @@ fn MachineCode::emit_instruction_x86_64(
       let cond = cmp_kind_to_cond(kind)
       self.x86_emit_setcc_r8(cond, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
+    }
+    @instr.FCmp(kind) => {
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      // FCmp operands are in XMM regs. Use ucomiss/ucomisd based on reg class.
+      if reg_class_of(inst.uses[0]) is @abi.Float32 {
+        self.x86_emit_ucomiss_xmm_xmm(rn, rm)
+      } else {
+        self.x86_emit_ucomisd_xmm_xmm(rn, rm)
+      }
+      let rd = wreg_num(inst.defs[0])
+      let cond = fcmp_kind_to_cond(kind)
+
+      // For unordered (NaN), UCOMIS* sets PF=1, ZF=1, CF=1.
+      // WebAssembly semantics:
+      // - eq/lt/le are false on NaN
+      // - ne is true on NaN
+      // - gt/ge are false on NaN already via CF/ZF
+      let scratch = isa.scratch_reg_1_index()
+      match kind {
+        @instr.FCmpKind::Eq => {
+          self.x86_emit_setcc_r8(cond, rd)
+          self.x86_emit_setcc_r8(@instr.Cond::Vc, scratch) // ordered (PF==0)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+          self.x86_emit_movzx_r32_r8(scratch, scratch)
+          self.x86_emit_and_rr32(rd, scratch)
+        }
+        @instr.FCmpKind::Ne => {
+          self.x86_emit_setcc_r8(cond, rd)
+          self.x86_emit_setcc_r8(@instr.Cond::Vs, scratch) // unordered (PF==1)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+          self.x86_emit_movzx_r32_r8(scratch, scratch)
+          self.x86_emit_or_rr32(rd, scratch)
+        }
+        @instr.FCmpKind::Lt | @instr.FCmpKind::Le => {
+          self.x86_emit_setcc_r8(cond, rd)
+          self.x86_emit_setcc_r8(@instr.Cond::Vc, scratch) // ordered (PF==0)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+          self.x86_emit_movzx_r32_r8(scratch, scratch)
+          self.x86_emit_and_rr32(rd, scratch)
+        }
+        _ => {
+          self.x86_emit_setcc_r8(cond, rd)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+        }
+      }
+    }
+    @instr.FpuCmp(is_f32) => {
+      // Floating-point compare that only sets flags (no result).
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_f32 {
+        self.x86_emit_ucomiss_xmm_xmm(rn, rm)
+      } else {
+        self.x86_emit_ucomisd_xmm_xmm(rn, rm)
+      }
     }
     @instr.Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
