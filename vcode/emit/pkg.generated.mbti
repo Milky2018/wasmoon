@@ -368,6 +368,8 @@ pub fn MachineCode::x86_emit_movd_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movd_xmm_r32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movdqu_m128_xmm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movdqu_xmm_m128(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movmskpd_r32_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movmskps_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movq_r64_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movq_xmm_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsd_m64_xmm(Self, Int, Int, Int) -> Unit
@@ -390,17 +392,21 @@ pub fn MachineCode::x86_emit_not_r32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_not_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_or_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_or_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_packsswb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_padd_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_paddusb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pand_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pandn_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeq_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeqd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpgt_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pinsrq_xmm_r64_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovmskb_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmulld_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmullw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pop_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_por_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pshufb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_psub_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_push_r64(Self, Int) -> Unit

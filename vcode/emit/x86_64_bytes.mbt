@@ -1194,6 +1194,117 @@ pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_paddusb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // paddusb xmm, xmm/m128: 66 0F DC /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xDC)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pshufb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  mask_xmm : Int,
+) -> Unit {
+  // pshufb xmm, xmm/m128 (SSSE3): 66 0F 38 00 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (mask_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x00)
+  emit_modrm(self, 3, dst_xmm, mask_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_packsswb_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // packsswb xmm, xmm/m128: 66 0F 63 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x63)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmovmskb_r32_xmm(
+  self : MachineCode,
+  dst : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmovmskb r32, xmm: 66 0F D7 /r
+  //
+  // Note: Intel manual notes operand-size is 64-bit by default in 64-bit mode
+  // but we only need 16 bits. Do not set REX.W.
+  let r = (dst >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xD7)
+  emit_modrm(self, 3, dst, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_movmskps_r32_xmm(
+  self : MachineCode,
+  dst : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movmskps r32, xmm: 0F 50 /r
+  let r = (dst >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x50)
+  emit_modrm(self, 3, dst, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_movmskpd_r32_xmm(
+  self : MachineCode,
+  dst : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movmskpd r32, xmm: 66 0F 50 /r
+  let r = (dst >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x50)
+  emit_modrm(self, 3, dst, src_xmm)
+}
+
+///|
 pub fn MachineCode::x86_emit_xorpd_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,

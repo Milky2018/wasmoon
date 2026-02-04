@@ -1406,6 +1406,183 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
+    @instr.SIMDShuffle(lanes) => {
+      // i8x16.shuffle: select lanes from two source vectors using constant indices.
+      //
+      // Match Cranelift x64 lowering strategy: build two SSSE3 `pshufb` masks and
+      // combine with `por`.
+      //
+      // out = pshufb(a, mask_a) | pshufb(b, mask_b)
+      // where each mask byte is either 0..15 (select) or 0x80 (zero).
+      let rd = wreg_num(inst.defs[0])
+      let tmp_a = wreg_num(inst.defs[1])
+      let tmp_b = wreg_num(inst.defs[2])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let mask = 15 // reserved via MachineEnvData.scratch_float
+      fn emit_const_v128(
+        self : MachineCode,
+        xmm : Int,
+        low : Int64,
+        high : Int64,
+      ) -> Unit {
+        self.x86_emit_xorpd_xmm_xmm(xmm, xmm)
+        let scratch = isa.scratch_reg_1_index()
+        if low != 0L {
+          self.x86_emit_mov_imm64(scratch, low)
+          self.x86_emit_pinsrq_xmm_r64_imm8(xmm, scratch, 0)
+        }
+        if high != 0L {
+          self.x86_emit_mov_imm64(scratch, high)
+          self.x86_emit_pinsrq_xmm_r64_imm8(xmm, scratch, 1)
+        }
+      }
+
+      // tmp_a = a, tmp_b = b
+      if tmp_a != a {
+        self.x86_emit_movaps_xmm_xmm(tmp_a, a)
+      }
+      if tmp_b != b {
+        self.x86_emit_movaps_xmm_xmm(tmp_b, b)
+      }
+
+      // Build two 16-byte masks as two i64 halves (little-endian).
+      let mut low_a = 0L
+      let mut high_a = 0L
+      let mut low_b = 0L
+      let mut high_b = 0L
+      for i in 0..<8 {
+        let lane0 = lanes[i]
+        let b0_a = if lane0 < 16 { lane0 } else { 0x80 }
+        let b0_b = if lane0 < 16 { 0x80 } else { lane0 - 16 }
+        low_a = low_a | ((b0_a.to_int64() & 0xFFL) << (i * 8))
+        low_b = low_b | ((b0_b.to_int64() & 0xFFL) << (i * 8))
+        let lane1 = lanes[i + 8]
+        let b1_a = if lane1 < 16 { lane1 } else { 0x80 }
+        let b1_b = if lane1 < 16 { 0x80 } else { lane1 - 16 }
+        high_a = high_a | ((b1_a.to_int64() & 0xFFL) << (i * 8))
+        high_b = high_b | ((b1_b.to_int64() & 0xFFL) << (i * 8))
+      }
+
+      // Shuffle a then b with their respective masks.
+      emit_const_v128(self, mask, low_a, high_a)
+      self.x86_emit_pshufb_xmm_xmm(tmp_a, mask)
+      emit_const_v128(self, mask, low_b, high_b)
+      self.x86_emit_pshufb_xmm_xmm(tmp_b, mask)
+
+      // rd = tmp_a | tmp_b
+      if rd != tmp_a {
+        self.x86_emit_movaps_xmm_xmm(rd, tmp_a)
+      }
+      self.x86_emit_por_xmm_xmm(rd, tmp_b)
+    }
+    @instr.SIMDSwizzle => {
+      // i8x16.swizzle: select lanes from one vector using runtime indices.
+      //
+      // Match Cranelift x64 lowering: use SSSE3 `pshufb` with a saturating-add
+      // tweak so indices >= 16 zero the output lanes.
+      //
+      // mask = indices; mask = paddusb(mask, splat(0x70)); pshufb(values, mask)
+      let rd = wreg_num(inst.defs[0])
+      let values = reg_num(inst.uses[0])
+      let indices = reg_num(inst.uses[1])
+      let mask = 15 // reserved via MachineEnvData.scratch_float
+      let c70 = 14 // reserved via MachineEnvData.scratch_float
+      fn emit_const_v128(self : MachineCode, xmm : Int, low : Int64) -> Unit {
+        self.x86_emit_xorpd_xmm_xmm(xmm, xmm)
+        if low != 0L {
+          let scratch = isa.scratch_reg_1_index()
+          self.x86_emit_mov_imm64(scratch, low)
+          self.x86_emit_pinsrq_xmm_r64_imm8(xmm, scratch, 0)
+          self.x86_emit_pinsrq_xmm_r64_imm8(xmm, scratch, 1)
+        }
+      }
+
+      if rd != values {
+        self.x86_emit_movaps_xmm_xmm(rd, values)
+      }
+      self.x86_emit_movaps_xmm_xmm(mask, indices)
+      emit_const_v128(self, c70, 0x7070707070707070L)
+      self.x86_emit_paddusb_xmm_xmm(mask, c70)
+      self.x86_emit_pshufb_xmm_xmm(rd, mask)
+    }
+    @instr.SIMDBsl => {
+      // v128.bitselect(a, b, c) = (a & c) | (b & ~c)
+      //
+      // Match Cranelift-style bitselect using boolean ops; handle common aliasing
+      // cases with a reserved scratch vector register.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let c = reg_num(inst.uses[2])
+      let tmp = 15 // reserved via MachineEnvData.scratch_float
+
+      // Preserve `b`/`c` if they alias `rd`, since the sequence needs them twice.
+      let mut b_keep = b
+      let mut c_keep = c
+      if rd == b {
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        b_keep = tmp
+      }
+      if rd == c {
+        // If we already used `tmp` to save `b`, it still holds `b_keep`. Save
+        // `c` into the other reserved scratch register.
+        let tmp2 = 14
+        self.x86_emit_movaps_xmm_xmm(tmp2, c)
+        c_keep = tmp2
+      }
+
+      // rd = b ^ ((a ^ b) & c)
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_pxor_xmm_xmm(rd, b_keep) // a ^ b
+      self.x86_emit_pand_xmm_xmm(rd, c_keep) // (a ^ b) & c
+      self.x86_emit_pxor_xmm_xmm(rd, b_keep) // b ^ ...
+    }
+    @instr.SIMDAnyTrue => {
+      // v128.any_true: return 1 if any bit is set, 0 otherwise.
+      //
+      // Match Cranelift x64 lowering: compare against zero per byte then
+      // extract the "all zero?" mask with PMOVMSKB.
+      //
+      // tmp = pcmpeqb(src, 0)
+      // bits = pmovmskb(tmp)
+      // rd = (bits != 0xFFFF)
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      let tmp = wreg_num(inst.defs[1])
+      let zero = 15 // reserved via MachineEnvData.scratch_float
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_movaps_xmm_xmm(tmp, src)
+      self.x86_emit_pxor_xmm_xmm(zero, zero)
+      self.x86_emit_pcmpeq_xmm_xmm(@instr.B8, tmp, zero)
+      self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
+      self.x86_emit_cmp_r32_imm32(scratch, 0xFFFF)
+      self.x86_emit_setcc_r8(@instr.Cond::Ne, rd)
+      self.x86_emit_movzx_r32_r8(rd, rd)
+    }
+    @instr.SIMDBitmask(lane_size) => {
+      // Extract the MSB/sign bit of each lane into a scalar i32.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match lane_size {
+        @instr.B8 => self.x86_emit_pmovmskb_r32_xmm(rd, src)
+        @instr.H16 => {
+          let tmp = 15 // reserved via MachineEnvData.scratch_float
+          self.x86_emit_movaps_xmm_xmm(tmp, src)
+          self.x86_emit_packsswb_xmm_xmm(tmp, tmp)
+          self.x86_emit_pmovmskb_r32_xmm(rd, tmp)
+          // packsswb(x, x) duplicates the 8-lane mask into both halves.
+          self.x86_emit_shr_r32_imm8(rd, 8)
+        }
+        @instr.S32 => self.x86_emit_movmskps_r32_xmm(rd, src)
+        @instr.D64 => self.x86_emit_movmskpd_r32_xmm(rd, src)
+      }
+    }
     @instr.StackLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let def_class = match inst.defs[0].reg {

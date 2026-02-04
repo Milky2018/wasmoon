@@ -242,6 +242,21 @@ test "x86_64 SIMD integer encodings (padd/psub/pmul/pshufd)" {
 }
 
 ///|
+test "x86_64 SIMD pshufb/paddusb/bitmask encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_paddusb_xmm_xmm(1, 2) // paddusb xmm1, xmm2
+  mc.x86_emit_pshufb_xmm_xmm(1, 2) // pshufb xmm1, xmm2
+  mc.x86_emit_pmovmskb_r32_xmm(0, 1) // pmovmskb eax, xmm1
+  mc.x86_emit_packsswb_xmm_xmm(1, 2) // packsswb xmm1, xmm2
+  mc.x86_emit_movmskps_r32_xmm(0, 1) // movmskps eax, xmm1
+  mc.x86_emit_movmskpd_r32_xmm(0, 1) // movmskpd eax, xmm1
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 220, 202, 102, 15, 56, 0, 202, 102, 15, 215, 193, 102, 15, 99, 202, 15, 80, 193, 102, 15, 80, 193]",
+  )
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8
