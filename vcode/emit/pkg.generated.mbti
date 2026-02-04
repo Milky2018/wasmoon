@@ -421,7 +421,14 @@ pub fn MachineCode::x86_emit_pavgw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeq_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpeqd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pcmpgt_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pextrb_r32_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pextrd_r32_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pextrq_r64_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pextrw_r32_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pinsrb_xmm_r32_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pinsrd_xmm_r32_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pinsrq_xmm_r64_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pinsrw_xmm_r32_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmaxsb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmaxsd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmaxsw_xmm_xmm(Self, Int, Int) -> Unit
@@ -435,6 +442,12 @@ pub fn MachineCode::x86_emit_pminub_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pminud_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pminuw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmovmskb_r32_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovsxbw_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovsxdq_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovsxwd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovzxbw_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovzxdq_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pmovzxwd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmulld_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pmullw_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pop_r64(Self, Int) -> Unit

@@ -1667,7 +1667,10 @@ fn MachineCode::emit_instruction_x86_64(
           // i8x16 splat: load u8 -> movd -> pshufb with a zero mask.
           self.x86_emit_movzx_r32_m8(scratch1, base, offset)
           self.x86_emit_movd_xmm_r32(rd, scratch1)
-          let mask = 14 // reserved via MachineEnvData.scratch_float
+          let mut mask = 14 // reserved via MachineEnvData.scratch_float
+          if mask == rd {
+            mask = 15
+          }
           self.x86_emit_pxor_xmm_xmm(mask, mask)
           self.x86_emit_pshufb_xmm_xmm(rd, mask)
         }
@@ -1701,6 +1704,96 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movsd_xmm_m64(rd, base, offset)
       } else {
         self.x86_emit_movss_xmm_m32(rd, base, offset)
+      }
+    }
+    @instr.SIMDLoadExtend(bits, signed, offset) => {
+      // Extend lane values loaded from memory:
+      // - 8x8 -> i16x8
+      // - 16x4 -> i32x4
+      // - 32x2 -> i64x2
+      // Align with Cranelift x64 lowering using PMOVSX*/PMOVZX* (SSE4.1).
+      let rd = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let scratch_gpr = isa.scratch_reg_1_index()
+      let mut tmp_xmm = 14 // reserved via MachineEnvData.scratch_float
+      if tmp_xmm == rd {
+        tmp_xmm = 15
+      }
+      // Load 64 bits and move into an XMM register.
+      self.x86_emit_mov_r64_m64(scratch_gpr, base, offset)
+      self.x86_emit_movq_xmm_r64(tmp_xmm, scratch_gpr)
+      match bits {
+        8 =>
+          if signed {
+            self.x86_emit_pmovsxbw_xmm_xmm(rd, tmp_xmm)
+          } else {
+            self.x86_emit_pmovzxbw_xmm_xmm(rd, tmp_xmm)
+          }
+        16 =>
+          if signed {
+            self.x86_emit_pmovsxwd_xmm_xmm(rd, tmp_xmm)
+          } else {
+            self.x86_emit_pmovzxwd_xmm_xmm(rd, tmp_xmm)
+          }
+        32 =>
+          if signed {
+            self.x86_emit_pmovsxdq_xmm_xmm(rd, tmp_xmm)
+          } else {
+            self.x86_emit_pmovzxdq_xmm_xmm(rd, tmp_xmm)
+          }
+        _ => abort("x86_64 SIMDLoadExtend: unsupported src bits \{bits}")
+      }
+    }
+    @instr.SIMDLoadLane(lane_size, lane, offset) => {
+      // Insert a scalar loaded from memory into one lane of an existing vector.
+      let rd = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let vec = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+      if rd != vec {
+        self.x86_emit_movaps_xmm_xmm(rd, vec)
+      }
+      match lane_size {
+        @instr.B8 => {
+          self.x86_emit_movzx_r32_m8(scratch, base, offset)
+          self.x86_emit_pinsrb_xmm_r32_imm8(rd, scratch, lane)
+        }
+        @instr.H16 => {
+          self.x86_emit_movzx_r32_m16(scratch, base, offset)
+          self.x86_emit_pinsrw_xmm_r32_imm8(rd, scratch, lane)
+        }
+        @instr.S32 => {
+          self.x86_emit_mov_r32_m32(scratch, base, offset)
+          self.x86_emit_pinsrd_xmm_r32_imm8(rd, scratch, lane)
+        }
+        @instr.D64 => {
+          self.x86_emit_mov_r64_m64(scratch, base, offset)
+          self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, lane)
+        }
+      }
+    }
+    @instr.SIMDStoreLane(lane_size, lane, offset) => {
+      // Extract one lane from a vector and store it to memory.
+      let base = reg_num(inst.uses[0])
+      let vec = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+      match lane_size {
+        @instr.B8 => {
+          self.x86_emit_pextrb_r32_xmm_imm8(scratch, vec, lane)
+          self.x86_emit_mov_m8_r8(base, offset, scratch)
+        }
+        @instr.H16 => {
+          self.x86_emit_pextrw_r32_xmm_imm8(scratch, vec, lane)
+          self.x86_emit_mov_m16_r16(base, offset, scratch)
+        }
+        @instr.S32 => {
+          self.x86_emit_pextrd_r32_xmm_imm8(scratch, vec, lane)
+          self.x86_emit_mov_m32_r32(base, offset, scratch)
+        }
+        @instr.D64 => {
+          self.x86_emit_pextrq_r64_xmm_imm8(scratch, vec, lane)
+          self.x86_emit_mov_m64_r64(base, offset, scratch)
+        }
       }
     }
     @instr.SIMDFCmp(is_f32, kind) => {

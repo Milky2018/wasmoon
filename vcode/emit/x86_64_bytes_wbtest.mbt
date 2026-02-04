@@ -271,6 +271,29 @@ test "x86_64 SIMD abs + shift encodings" {
 }
 
 ///|
+test "x86_64 SIMD widen + lane insert/extract encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_pmovsxbw_xmm_xmm(1, 2) // pmovsxbw xmm1, xmm2
+  mc.x86_emit_pmovzxbw_xmm_xmm(1, 2) // pmovzxbw xmm1, xmm2
+  mc.x86_emit_pmovsxwd_xmm_xmm(1, 2) // pmovsxwd xmm1, xmm2
+  mc.x86_emit_pmovzxwd_xmm_xmm(1, 2) // pmovzxwd xmm1, xmm2
+  mc.x86_emit_pmovsxdq_xmm_xmm(1, 2) // pmovsxdq xmm1, xmm2
+  mc.x86_emit_pmovzxdq_xmm_xmm(1, 2) // pmovzxdq xmm1, xmm2
+  mc.x86_emit_pinsrb_xmm_r32_imm8(1, 0, 5) // pinsrb xmm1, eax, 5
+  mc.x86_emit_pinsrw_xmm_r32_imm8(1, 0, 2) // pinsrw xmm1, eax, 2
+  mc.x86_emit_pinsrd_xmm_r32_imm8(1, 0, 3) // pinsrd xmm1, eax, 3
+  mc.x86_emit_pinsrq_xmm_r64_imm8(1, 0, 1) // pinsrq xmm1, rax, 1
+  mc.x86_emit_pextrb_r32_xmm_imm8(0, 1, 7) // pextrb eax, xmm1, 7
+  mc.x86_emit_pextrw_r32_xmm_imm8(0, 1, 2) // pextrw eax, xmm1, 2
+  mc.x86_emit_pextrd_r32_xmm_imm8(0, 1, 1) // pextrd eax, xmm1, 1
+  mc.x86_emit_pextrq_r64_xmm_imm8(0, 1, 1) // pextrq rax, xmm1, 1
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 56, 32, 202, 102, 15, 56, 48, 202, 102, 15, 56, 35, 202, 102, 15, 56, 51, 202, 102, 15, 56, 37, 202, 102, 15, 56, 53, 202, 102, 15, 58, 32, 200, 5, 102, 15, 196, 200, 2, 102, 15, 58, 34, 200, 3, 102, 72, 15, 58, 34, 200, 1, 102, 15, 58, 20, 193, 7, 102, 15, 197, 193, 2, 102, 15, 58, 22, 193, 1, 102, 72, 15, 58, 22, 193, 1]",
+  )
+}
+
+///|
 test "x86_64 SIMD variable shift + unpack encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_psllw_xmm_imm8(1, 8) // psllw xmm1, 8
