@@ -56,6 +56,33 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  ///|
+  /// Prepare a two-operand SSE instruction destination.
+  ///
+  /// Many amd64 SIMD instructions are 2-operand (dst is overwritten). Our VCode
+  /// IR does not enforce `dst == lhs`, so the emitter must handle aliasing
+  /// where `dst` equals the rhs operand.
+  ///
+  /// Returns the register index to use as the rhs input (either `b` or `tmp`).
+  fn prepare_xmm_two_operand(
+    self : MachineCode,
+    rd : Int,
+    a : Int,
+    b : Int,
+    tmp : Int,
+  ) -> Int {
+    if rd == a {
+      return b
+    }
+    if rd == b {
+      self.x86_emit_movaps_xmm_xmm(tmp, b)
+      self.x86_emit_movaps_xmm_xmm(rd, a)
+      return tmp
+    }
+    self.x86_emit_movaps_xmm_xmm(rd, a)
+    b
+  }
+
   match inst.opcode {
     @instr.Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -1187,38 +1214,40 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
-      self.x86_emit_pand_xmm_xmm(rd, b)
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      self.x86_emit_pand_xmm_xmm(rd, src)
     }
     @instr.SIMDOr => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
-      self.x86_emit_por_xmm_xmm(rd, b)
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      self.x86_emit_por_xmm_xmm(rd, src)
     }
     @instr.SIMDXor => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
-      self.x86_emit_pxor_xmm_xmm(rd, b)
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      self.x86_emit_pxor_xmm_xmm(rd, src)
     }
     @instr.SIMDBic => {
       // a & ~b == (~b) & a, matching the x86 `PANDN` operand order.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != b {
+      if rd == b {
+        self.x86_emit_pandn_xmm_xmm(rd, a)
+      } else if rd == a {
+        // Preserve `b` in a scratch reg before clobbering `rd`.
+        let tmp = 14 // reserved via MachineEnvData.scratch_float
+        self.x86_emit_movaps_xmm_xmm(tmp, b)
+        self.x86_emit_pandn_xmm_xmm(tmp, a)
+        self.x86_emit_movaps_xmm_xmm(rd, tmp)
+      } else {
         self.x86_emit_movaps_xmm_xmm(rd, b)
+        self.x86_emit_pandn_xmm_xmm(rd, a)
       }
-      self.x86_emit_pandn_xmm_xmm(rd, a)
     }
     @instr.SIMDNot => {
       let rd = wreg_num(inst.defs[0])
@@ -1234,31 +1263,25 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
-      self.x86_emit_padd_xmm_xmm(lane_size, rd, b)
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      self.x86_emit_padd_xmm_xmm(lane_size, rd, src)
     }
     @instr.SIMDSub(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
-      self.x86_emit_psub_xmm_xmm(lane_size, rd, b)
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      self.x86_emit_psub_xmm_xmm(lane_size, rd, src)
     }
     @instr.SIMDSqadd(lane_size) => {
       // Signed saturating add (wasm: i8x16.add_sat_s, i16x8.add_sat_s).
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_paddsb_xmm_xmm(rd, b)
-        @instr.H16 => self.x86_emit_paddsw_xmm_xmm(rd, b)
+        @instr.B8 => self.x86_emit_paddsb_xmm_xmm(rd, src)
+        @instr.H16 => self.x86_emit_paddsw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDSqadd: unsupported lane size \{lane_size}")
       }
     }
@@ -1267,12 +1290,10 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_paddusb_xmm_xmm(rd, b)
-        @instr.H16 => self.x86_emit_paddusw_xmm_xmm(rd, b)
+        @instr.B8 => self.x86_emit_paddusb_xmm_xmm(rd, src)
+        @instr.H16 => self.x86_emit_paddusw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDUqadd: unsupported lane size \{lane_size}")
       }
     }
@@ -1281,12 +1302,10 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_psubsb_xmm_xmm(rd, b)
-        @instr.H16 => self.x86_emit_psubsw_xmm_xmm(rd, b)
+        @instr.B8 => self.x86_emit_psubsb_xmm_xmm(rd, src)
+        @instr.H16 => self.x86_emit_psubsw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDSqsub: unsupported lane size \{lane_size}")
       }
     }
@@ -1295,12 +1314,10 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_psubusb_xmm_xmm(rd, b)
-        @instr.H16 => self.x86_emit_psubusw_xmm_xmm(rd, b)
+        @instr.B8 => self.x86_emit_psubusb_xmm_xmm(rd, src)
+        @instr.H16 => self.x86_emit_psubusw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDUqsub: unsupported lane size \{lane_size}")
       }
     }
@@ -1309,16 +1326,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let tmp = 14 // reserved via MachineEnvData.scratch_float
-      let src = if rd == b && rd != a {
-        self.x86_emit_movaps_xmm_xmm(tmp, b)
-        tmp
-      } else {
-        b
-      }
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
         @instr.B8 => self.x86_emit_pminsb_xmm_xmm(rd, src) // SSE4.1
         @instr.H16 => self.x86_emit_pminsw_xmm_xmm(rd, src) // SSE2
@@ -1332,16 +1340,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let tmp = 14 // reserved via MachineEnvData.scratch_float
-      let src = if rd == b && rd != a {
-        self.x86_emit_movaps_xmm_xmm(tmp, b)
-        tmp
-      } else {
-        b
-      }
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
         @instr.B8 => self.x86_emit_pminub_xmm_xmm(rd, src) // SSE2
         @instr.H16 => self.x86_emit_pminuw_xmm_xmm(rd, src) // SSE4.1
@@ -1355,16 +1354,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let tmp = 14 // reserved via MachineEnvData.scratch_float
-      let src = if rd == b && rd != a {
-        self.x86_emit_movaps_xmm_xmm(tmp, b)
-        tmp
-      } else {
-        b
-      }
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
         @instr.B8 => self.x86_emit_pmaxsb_xmm_xmm(rd, src) // SSE4.1
         @instr.H16 => self.x86_emit_pmaxsw_xmm_xmm(rd, src) // SSE2
@@ -1378,16 +1368,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let tmp = 14 // reserved via MachineEnvData.scratch_float
-      let src = if rd == b && rd != a {
-        self.x86_emit_movaps_xmm_xmm(tmp, b)
-        tmp
-      } else {
-        b
-      }
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
         @instr.B8 => self.x86_emit_pmaxub_xmm_xmm(rd, src) // SSE2
         @instr.H16 => self.x86_emit_pmaxuw_xmm_xmm(rd, src) // SSE4.1
@@ -1401,16 +1382,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let tmp = 14 // reserved via MachineEnvData.scratch_float
-      let src = if rd == b && rd != a {
-        self.x86_emit_movaps_xmm_xmm(tmp, b)
-        tmp
-      } else {
-        b
-      }
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
         @instr.B8 => self.x86_emit_pavgb_xmm_xmm(rd, src) // SSE2
         @instr.H16 => self.x86_emit_pavgw_xmm_xmm(rd, src) // SSE2
@@ -1548,12 +1520,10 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      if rd != a {
-        self.x86_emit_movaps_xmm_xmm(rd, a)
-      }
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.H16 => self.x86_emit_pmullw_xmm_xmm(rd, b)
-        @instr.S32 => self.x86_emit_pmulld_xmm_xmm(rd, b) // SSE4.1
+        @instr.H16 => self.x86_emit_pmullw_xmm_xmm(rd, src)
+        @instr.S32 => self.x86_emit_pmulld_xmm_xmm(rd, src) // SSE4.1
         _ => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
       }
     }
