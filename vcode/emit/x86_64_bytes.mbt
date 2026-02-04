@@ -1115,6 +1115,48 @@ pub fn MachineCode::x86_emit_cmppd_xmm_xmm_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_roundps_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // roundps xmm, xmm/m128, imm8: 66 0F 3A 08 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x3A)
+  self.emit_byte(0x08)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_roundpd_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // roundpd xmm, xmm/m128, imm8: 66 0F 3A 09 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x3A)
+  self.emit_byte(0x09)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_psrld_xmm_imm8(
   self : MachineCode,
   dst_xmm : Int,

@@ -1480,6 +1480,44 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sqrtpd_xmm_xmm(rd, src)
       }
     }
+    @instr.SIMDFCeil(is_f32) => {
+      // Align with Cranelift x64 RoundImm encoding:
+      //   ceil: 2 (RoundUp), floor: 1 (RoundDown), nearest: 0, trunc: 3 (RoundZero).
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundps_xmm_xmm_imm8(rd, src, 2)
+      } else {
+        self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 2)
+      }
+    }
+    @instr.SIMDFFloor(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundps_xmm_xmm_imm8(rd, src, 1)
+      } else {
+        self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 1)
+      }
+    }
+    @instr.SIMDFNearest(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundps_xmm_xmm_imm8(rd, src, 0)
+      } else {
+        self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 0)
+      }
+    }
+    @instr.SIMDFTrunc(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundps_xmm_xmm_imm8(rd, src, 3)
+      } else {
+        self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 3)
+      }
+    }
     @instr.SIMDFMin(is_f32) => {
       // Floating-point minimum with NaN propagation and signed-zero rules,
       // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
