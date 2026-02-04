@@ -91,6 +91,56 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
     }
+    @instr.LoadFuncAddr(func_idx) => {
+      // Load function pointer from vmctx->func_table[func_idx].
+      let rd = wreg_num(inst.defs[0])
+      let vmctx = vmctx_index()
+      let table = isa.scratch_reg_1_index()
+      self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      self.x86_emit_mov_r64_m64(rd, table, func_idx * 8)
+    }
+    @instr.CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
+      // Call via vmctx->func_table[func_idx] to avoid rel32 patching.
+      let vmctx = vmctx_index()
+      let table = isa.scratch_reg_1_index()
+      let callee = isa.scratch_reg_2_index()
+      self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      self.x86_emit_mov_r64_m64(callee, table, func_idx * 8)
+      self.x86_emit_call_r64(callee)
+    }
+    @instr.CallPtr(_, _, _call_conv) => {
+      // Standard call: arguments already placed by lowering.
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.x86_emit_call_r64(target)
+    }
+    @instr.AdjustSP(delta) =>
+      if delta > 0 {
+        self.x86_emit_add_rsp_imm32(delta)
+      } else if delta < 0 {
+        self.x86_emit_sub_rsp_imm32(-delta)
+      }
+    @instr.StoreToStack(offset) => {
+      // Store to pre-allocated outgoing args area at [rsp + outgoing_args_offset + offset].
+      let actual_offset = stack_frame.outgoing_args_offset + offset
+      let src = reg_num(inst.uses[0])
+      let src_class = match inst.uses[0] {
+        @abi.Physical(preg) => preg.class
+        @abi.Virtual(vreg) => vreg.class
+      }
+      match src_class {
+        @abi.Int => self.x86_emit_mov_m64_r64(4, actual_offset, src)
+        @abi.Float32 | @abi.Float64 =>
+          self.x86_emit_movsd_m64_xmm(4, actual_offset, src)
+        @abi.Vector => self.x86_emit_movdqu_m128_xmm(4, actual_offset, src)
+      }
+    }
+    @instr.LoadSP => {
+      let rd = wreg_num(inst.defs[0])
+      self.x86_emit_mov_rr(rd, 4)
+    }
     @instr.StackLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let def_class = match inst.defs[0].reg {

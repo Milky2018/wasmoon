@@ -162,6 +162,18 @@ pub fn MachineCode::x86_emit_pop_r64(self : MachineCode, reg : Int) -> Unit {
 }
 
 ///|
+pub fn MachineCode::x86_emit_call_r64(self : MachineCode, reg : Int) -> Unit {
+  // call r/m64: FF /2
+  let b = (reg >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xFF)
+  // /2 in reg field.
+  emit_modrm(self, 3, 2, reg)
+}
+
+///|
 pub fn MachineCode::x86_emit_sub_rsp_imm32(
   self : MachineCode,
   imm : Int,

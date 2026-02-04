@@ -122,6 +122,14 @@ test "x86_64 movaps xmm15, xmm0 encoding" {
 }
 
 ///|
+test "x86_64 call r64 encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_call_r64(0) // rax
+  mc.x86_emit_call_r64(11) // r11
+  inspect(mc.get_bytes(), content="[255, 208, 65, 255, 211]")
+}
+
+///|
 test "x86_64 movsd/movdqu stores to [rsp+disp]" {
   let mc = MachineCode::new()
   mc.x86_emit_movsd_m64_xmm(4, 0, 15)

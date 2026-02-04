@@ -320,6 +320,7 @@ pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rsp_imm32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_call_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
