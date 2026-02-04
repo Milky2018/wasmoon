@@ -225,6 +225,23 @@ test "x86_64 pinsrq encoding (SSE4.1)" {
 }
 
 ///|
+test "x86_64 SIMD integer encodings (padd/psub/pmul/pshufd)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_padd_xmm_xmm(@instr.B8, 1, 2) // paddb xmm1, xmm2
+  mc.x86_emit_padd_xmm_xmm(@instr.D64, 1, 2) // paddq xmm1, xmm2
+  mc.x86_emit_psub_xmm_xmm(@instr.S32, 1, 2) // psubd xmm1, xmm2
+  mc.x86_emit_pmullw_xmm_xmm(1, 2) // pmullw xmm1, xmm2
+  mc.x86_emit_pmulld_xmm_xmm(1, 2) // pmulld xmm1, xmm2
+  mc.x86_emit_pcmpgt_xmm_xmm(@instr.S32, 1, 2) // pcmpgtd xmm1, xmm2
+  mc.x86_emit_pcmpeq_xmm_xmm(@instr.H16, 1, 2) // pcmpeqw xmm1, xmm2
+  mc.x86_emit_pshufd_xmm_xmm_imm8(1, 2, 0xB1) // pshufd xmm1, xmm2, 0xB1
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 252, 202, 102, 15, 212, 202, 102, 15, 250, 202, 102, 15, 213, 202, 102, 15, 56, 64, 202, 102, 15, 102, 202, 102, 15, 117, 202, 102, 15, 112, 202, 177]",
+  )
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8

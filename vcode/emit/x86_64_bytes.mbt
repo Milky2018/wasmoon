@@ -1031,6 +1031,169 @@ pub fn MachineCode::x86_emit_pinsrq_xmm_r64_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_padd_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // padd{b,w,d,q}: 66 0F FC/FD/FE/D4 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.B8 => self.emit_byte(0xFC)
+    @instr.H16 => self.emit_byte(0xFD)
+    @instr.S32 => self.emit_byte(0xFE)
+    @instr.D64 => self.emit_byte(0xD4)
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_psub_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // psub{b,w,d,q}: 66 0F F8/F9/FA/FB /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.B8 => self.emit_byte(0xF8)
+    @instr.H16 => self.emit_byte(0xF9)
+    @instr.S32 => self.emit_byte(0xFA)
+    @instr.D64 => self.emit_byte(0xFB)
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmullw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmullw: 66 0F D5 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xD5)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pmulld_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pmulld (SSE4.1): 66 0F 38 40 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x38)
+  self.emit_byte(0x40)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pcmpeq_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pcmpeq{b,w,d,q}: 66 0F 74/75/76/38 29 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.B8 => {
+      self.emit_byte(0x74)
+      emit_modrm(self, 3, dst_xmm, src_xmm)
+    }
+    @instr.H16 => {
+      self.emit_byte(0x75)
+      emit_modrm(self, 3, dst_xmm, src_xmm)
+    }
+    @instr.S32 => {
+      self.emit_byte(0x76)
+      emit_modrm(self, 3, dst_xmm, src_xmm)
+    }
+    @instr.D64 =>
+      // pcmpeqq is SSE4.1; avoid relying on it and use an emulation sequence at a higher level.
+      abort("x86_64 pcmpeq.i64: use emulation sequence instead")
+  }
+}
+
+///|
+pub fn MachineCode::x86_emit_pcmpgt_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // pcmpgt{b,w,d}: 66 0F 64/65/66 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.B8 => self.emit_byte(0x64)
+    @instr.H16 => self.emit_byte(0x65)
+    @instr.S32 => self.emit_byte(0x66)
+    @instr.D64 => abort("x86_64 pcmpgt.i64: use emulation sequence instead")
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // pshufd xmm1, xmm2/m128, imm8: 66 0F 70 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x70)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_xorpd_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,

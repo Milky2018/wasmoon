@@ -1230,6 +1230,182 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pcmpeqd_xmm_xmm(tmp, tmp) // tmp = all ones
       self.x86_emit_pxor_xmm_xmm(rd, tmp)
     }
+    @instr.SIMDAdd(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_padd_xmm_xmm(lane_size, rd, b)
+    }
+    @instr.SIMDSub(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      self.x86_emit_psub_xmm_xmm(lane_size, rd, b)
+    }
+    @instr.SIMDMul(lane_size) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.H16 => self.x86_emit_pmullw_xmm_xmm(rd, b)
+        @instr.S32 => self.x86_emit_pmulld_xmm_xmm(rd, b) // SSE4.1
+        _ => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
+      }
+    }
+    @instr.SIMDCmp(lane_size, kind) => {
+      // Integer SIMD comparisons return all-ones/all-zeros lanes.
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      fn emit_broadcast_dword_pattern(
+        self : MachineCode,
+        dst_xmm : Int,
+        dword : Int,
+      ) -> Unit {
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, dword.to_int64())
+        self.x86_emit_movd_xmm_r32(dst_xmm, scratch)
+        self.x86_emit_pshufd_xmm_xmm_imm8(dst_xmm, dst_xmm, 0)
+      }
+
+      match kind {
+        @instr.SIMDCmpKind::Eq =>
+          if lane_size is @instr.D64 {
+            // Match Cranelift x64: emulate pcmpeqq without SSE4.1.
+            //
+            // cmp32 = pcmpeqd(x, y)
+            // cmp32_swapped = pshufd(cmp32, 0b10_11_00_01)
+            // result = pand(cmp32, cmp32_swapped)
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+            self.x86_emit_pcmpeqd_xmm_xmm(rd, y)
+            self.x86_emit_pshufd_xmm_xmm_imm8(t0, rd, 0xB1)
+            self.x86_emit_pand_xmm_xmm(rd, t0)
+          } else {
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+            self.x86_emit_pcmpeq_xmm_xmm(lane_size, rd, y)
+          }
+        @instr.SIMDCmpKind::GtS =>
+          if lane_size is @instr.D64 {
+            // Match Cranelift x64: emulate i64x2 gt via 32-bit compares.
+            //
+            // See: cranelift/codegen/src/isa/x64/inst.isle (x64_pcmpgt $I64X2)
+            //
+            // mask = [0x80000000, 0x0, 0x80000000, 0x0] in u32 lanes.
+            // x_masked = x ^ mask
+            // y_masked = y ^ mask
+            // cmp32 = pcmpgtd(x_masked, y_masked)
+            // low_halves_gt = pshufd(cmp32, 0xA0)
+            // high_halves_gt = pshufd(cmp32, 0xF5)
+            // cmp_eq = pcmpeqd(x, y)
+            // high_halves_eq = pshufd(cmp_eq, 0xF5)
+            // result = por(pand(low_halves_gt, high_halves_eq), high_halves_gt)
+            emit_broadcast_dword_pattern(self, rd, 0x80000000)
+            self.x86_emit_movaps_xmm_xmm(t0, x)
+            self.x86_emit_pxor_xmm_xmm(t0, rd)
+            self.x86_emit_movaps_xmm_xmm(t1, y)
+            self.x86_emit_pxor_xmm_xmm(t1, rd)
+            self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, t0, t1)
+            self.x86_emit_pshufd_xmm_xmm_imm8(t1, t0, 0xA0) // low_halves_gt
+            self.x86_emit_pshufd_xmm_xmm_imm8(rd, t0, 0xF5) // high_halves_gt
+            self.x86_emit_movaps_xmm_xmm(t0, x)
+            self.x86_emit_pcmpeqd_xmm_xmm(t0, y)
+            self.x86_emit_pshufd_xmm_xmm_imm8(t0, t0, 0xF5) // high_halves_eq
+            self.x86_emit_pand_xmm_xmm(t1, t0)
+            self.x86_emit_por_xmm_xmm(t1, rd)
+            self.x86_emit_movaps_xmm_xmm(rd, t1)
+          } else {
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+            self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, y)
+          }
+        @instr.SIMDCmpKind::GeS =>
+          // a >= b  <=>  !(b > a)
+          if lane_size is @instr.D64 {
+            // Use the i64x2 gt sequence on swapped operands, then invert.
+            // tmp = b > a
+            let tmp = t1
+            let ones = t0
+            // Compute tmp into `tmp` by temporarily using rd.
+            // Reuse the GtS sequence by swapping x/y.
+            emit_broadcast_dword_pattern(self, rd, 0x80000000)
+            self.x86_emit_movaps_xmm_xmm(ones, y)
+            self.x86_emit_pxor_xmm_xmm(ones, rd)
+            self.x86_emit_movaps_xmm_xmm(tmp, x)
+            self.x86_emit_pxor_xmm_xmm(tmp, rd)
+            self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, ones, tmp) // ones = cmp32
+            self.x86_emit_pshufd_xmm_xmm_imm8(tmp, ones, 0xA0) // low_halves_gt
+            self.x86_emit_pshufd_xmm_xmm_imm8(rd, ones, 0xF5) // high_halves_gt
+            self.x86_emit_movaps_xmm_xmm(ones, y)
+            self.x86_emit_pcmpeqd_xmm_xmm(ones, x)
+            self.x86_emit_pshufd_xmm_xmm_imm8(ones, ones, 0xF5) // high_halves_eq
+            self.x86_emit_pand_xmm_xmm(tmp, ones)
+            self.x86_emit_por_xmm_xmm(tmp, rd)
+            // Invert tmp.
+            self.x86_emit_pcmpeqd_xmm_xmm(ones, ones)
+            self.x86_emit_pxor_xmm_xmm(tmp, ones)
+            self.x86_emit_movaps_xmm_xmm(rd, tmp)
+          } else {
+            self.x86_emit_movaps_xmm_xmm(rd, y)
+            self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, x)
+            self.x86_emit_pcmpeqd_xmm_xmm(t0, t0)
+            self.x86_emit_pxor_xmm_xmm(rd, t0)
+          }
+        @instr.SIMDCmpKind::GtU => {
+          if lane_size is @instr.D64 {
+            abort(
+              "x86_64 SIMDCmp.gt.u: i64x2 unsigned compare not supported by wasm SIMD",
+            )
+          }
+          // Match Cranelift x64: flip sign bit and do signed compare.
+          let pattern = match lane_size {
+            @instr.B8 => 0x80808080
+            @instr.H16 => 0x80008000
+            @instr.S32 => 0x80000000
+            @instr.D64 => 0
+          }
+          emit_broadcast_dword_pattern(self, rd, pattern)
+          self.x86_emit_movaps_xmm_xmm(t0, x)
+          self.x86_emit_pxor_xmm_xmm(t0, rd)
+          self.x86_emit_movaps_xmm_xmm(t1, y)
+          self.x86_emit_pxor_xmm_xmm(t1, rd)
+          self.x86_emit_movaps_xmm_xmm(rd, t0)
+          self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, t1)
+        }
+        @instr.SIMDCmpKind::GeU => {
+          if lane_size is @instr.D64 {
+            abort(
+              "x86_64 SIMDCmp.ge.u: i64x2 unsigned compare not supported by wasm SIMD",
+            )
+          }
+          // a >= b <=> !(b > a) after unsigned compare.
+          let pattern = match lane_size {
+            @instr.B8 => 0x80808080
+            @instr.H16 => 0x80008000
+            @instr.S32 => 0x80000000
+            @instr.D64 => 0
+          }
+          emit_broadcast_dword_pattern(self, rd, pattern)
+          self.x86_emit_movaps_xmm_xmm(t0, y)
+          self.x86_emit_pxor_xmm_xmm(t0, rd)
+          self.x86_emit_movaps_xmm_xmm(t1, x)
+          self.x86_emit_pxor_xmm_xmm(t1, rd)
+          self.x86_emit_movaps_xmm_xmm(rd, t0)
+          self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, t1) // b > a
+          self.x86_emit_pcmpeqd_xmm_xmm(t0, t0) // ones
+          self.x86_emit_pxor_xmm_xmm(rd, t0) // invert
+        }
+      }
+    }
     @instr.StackLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let def_class = match inst.defs[0].reg {
