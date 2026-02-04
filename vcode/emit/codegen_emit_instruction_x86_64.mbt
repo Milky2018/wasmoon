@@ -29,6 +29,33 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  fn reg_class_of(reg : @abi.Reg) -> @abi.RegClass {
+    match reg {
+      @abi.Physical(preg) => preg.class
+      @abi.Virtual(vreg) => vreg.class
+    }
+  }
+
+  fn reg_class_of_w(wreg : @abi.Writable) -> @abi.RegClass {
+    reg_class_of(wreg.reg)
+  }
+
+  fn emit_reg_move(
+    self : MachineCode,
+    dst : Int,
+    src : Int,
+    class : @abi.RegClass,
+  ) -> Unit {
+    if dst == src {
+      return
+    }
+    match class {
+      @abi.Int => self.x86_emit_mov_rr(dst, src)
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        self.x86_emit_movaps_xmm_xmm(dst, src)
+    }
+  }
+
   match inst.opcode {
     @instr.Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
@@ -294,6 +321,52 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         self.x86_emit_ror_r32_imm8(rd, amt)
       }
+    }
+    @instr.Select => {
+      // Branch-based select (works for GPR/XMM without needing cmov).
+      //
+      // dst = cond != 0 ? true_val : false_val
+      // uses: [cond, true, false]
+      let rd = wreg_num(inst.defs[0])
+      let cond_reg = reg_num(inst.uses[0])
+      let true_reg = reg_num(inst.uses[1])
+      let false_reg = reg_num(inst.uses[2])
+      let class = reg_class_of_w(inst.defs[0])
+      // default to false
+      emit_reg_move(self, rd, false_reg, class)
+      self.x86_emit_test_rr32(cond_reg, cond_reg)
+      // Use negative label ids to avoid colliding with block ids.
+      let then_l = -1 - self.current_pos()
+      let done_l = then_l - 1
+      self.x86_emit_jcc_rel32(@instr.Cond::Ne, then_l)
+      self.x86_emit_jmp_rel32(done_l)
+      self.define_label(then_l)
+      emit_reg_move(self, rd, true_reg, class)
+      self.define_label(done_l)
+    }
+    @instr.SelectCmp(kind, is_64) => {
+      // Branch-based compare+select:
+      // cmp(lhs, rhs); dst = cond ? true_val : false_val
+      // uses: [cmp_lhs, cmp_rhs, true, false]
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.x86_emit_cmp_rr(rn, rm)
+      } else {
+        self.x86_emit_cmp_rr32(rn, rm)
+      }
+      let rd = wreg_num(inst.defs[0])
+      let true_reg = reg_num(inst.uses[2])
+      let false_reg = reg_num(inst.uses[3])
+      let class = reg_class_of_w(inst.defs[0])
+      emit_reg_move(self, rd, false_reg, class)
+      let then_l = -1 - self.current_pos()
+      let done_l = then_l - 1
+      self.x86_emit_jcc_rel32(cmp_kind_to_cond(kind), then_l)
+      self.x86_emit_jmp_rel32(done_l)
+      self.define_label(then_l)
+      emit_reg_move(self, rd, true_reg, class)
+      self.define_label(done_l)
     }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])

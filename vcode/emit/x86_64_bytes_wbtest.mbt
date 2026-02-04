@@ -245,3 +245,24 @@ test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
     content="[72, 211, 224, 73, 211, 232, 65, 211, 249, 211, 200, 72, 193, 224, 3, 73, 193, 232, 1, 65, 193, 249, 7, 193, 200, 5]",
   )
 }
+
+///|
+test "x86_64 cmovcc encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cmovcc_rr(@instr.Cond::Ne, 0, 8) // cmovne rax, r8
+  mc.x86_emit_cmovcc_rr(@instr.Cond::Lt, 9, 10) // cmovl r9, r10
+  inspect(mc.get_bytes(), content="[73, 15, 69, 192, 77, 15, 76, 202]")
+}
+
+///|
+test "x86_64 movd/movq gpr<->xmm encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movd_r32_xmm(0, 1) // movd eax, xmm1
+  mc.x86_emit_movd_xmm_r32(1, 0) // movd xmm1, eax
+  mc.x86_emit_movq_r64_xmm(10, 15) // movq r10, xmm15
+  mc.x86_emit_movq_xmm_r64(15, 10) // movq xmm15, r10
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 126, 200, 102, 15, 110, 200, 102, 77, 15, 126, 250, 102, 77, 15, 110, 250]",
+  )
+}

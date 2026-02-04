@@ -971,6 +971,110 @@ pub fn MachineCode::x86_emit_movzx_r32_r8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_cmovcc_rr(
+  self : MachineCode,
+  cond : @instr.Cond,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // cmovcc r64, r/m64: REX.W + 0F 40+cc /r
+  let cc = x86_cond_to_jcc_opcode(cond) & 15
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0x40 + cc)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_cmovcc_rr32(
+  self : MachineCode,
+  cond : @instr.Cond,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // cmovcc r32, r/m32: 0F 40+cc /r
+  let cc = x86_cond_to_jcc_opcode(cond) & 15
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x40 + cc)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_movd_r32_xmm(
+  self : MachineCode,
+  dst : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movd r/m32, xmm: 66 0F 7E /r
+  let r = (src_xmm >> 3) & 1
+  let b = (dst >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x7E)
+  emit_modrm(self, 3, src_xmm, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_movd_xmm_r32(
+  self : MachineCode,
+  dst_xmm : Int,
+  src : Int,
+) -> Unit {
+  // movd xmm, r/m32: 66 0F 6E /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x6E)
+  emit_modrm(self, 3, dst_xmm, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_movq_r64_xmm(
+  self : MachineCode,
+  dst : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movq r/m64, xmm: REX.W + 66 0F 7E /r
+  let r = (src_xmm >> 3) & 1
+  let b = (dst >> 3) & 1
+  self.emit_byte(0x66)
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0x7E)
+  emit_modrm(self, 3, src_xmm, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_movq_xmm_r64(
+  self : MachineCode,
+  dst_xmm : Int,
+  src : Int,
+) -> Unit {
+  // movq xmm, r/m64: REX.W + 66 0F 6E /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src >> 3) & 1
+  self.emit_byte(0x66)
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0x6E)
+  emit_modrm(self, 3, dst_xmm, src)
+}
+
+///|
 pub fn MachineCode::x86_emit_cmp_rr(
   self : MachineCode,
   lhs : Int,
