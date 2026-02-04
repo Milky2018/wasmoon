@@ -257,6 +257,23 @@ test "x86_64 SIMD pshufb/paddusb/bitmask encodings" {
 }
 
 ///|
+test "x86_64 SIMD saturating add/sub encodings (SSE2)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_paddsb_xmm_xmm(1, 2) // paddsb xmm1, xmm2
+  mc.x86_emit_paddusb_xmm_xmm(1, 2) // paddusb xmm1, xmm2
+  mc.x86_emit_paddsw_xmm_xmm(1, 2) // paddsw xmm1, xmm2
+  mc.x86_emit_paddusw_xmm_xmm(1, 2) // paddusw xmm1, xmm2
+  mc.x86_emit_psubsb_xmm_xmm(1, 2) // psubsb xmm1, xmm2
+  mc.x86_emit_psubusb_xmm_xmm(1, 2) // psubusb xmm1, xmm2
+  mc.x86_emit_psubsw_xmm_xmm(1, 2) // psubsw xmm1, xmm2
+  mc.x86_emit_psubusw_xmm_xmm(1, 2) // psubusw xmm1, xmm2
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 236, 202, 102, 15, 220, 202, 102, 15, 237, 202, 102, 15, 221, 202, 102, 15, 232, 202, 102, 15, 216, 202, 102, 15, 233, 202, 102, 15, 217, 202]",
+  )
+}
+
+///|
 test "x86_64 and/or/xor encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_and_rr(0, 8) // and rax, r8

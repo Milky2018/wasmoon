@@ -1248,6 +1248,62 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_psub_xmm_xmm(lane_size, rd, b)
     }
+    @instr.SIMDSqadd(lane_size) => {
+      // Signed saturating add (wasm: i8x16.add_sat_s, i16x8.add_sat_s).
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_paddsb_xmm_xmm(rd, b)
+        @instr.H16 => self.x86_emit_paddsw_xmm_xmm(rd, b)
+        _ => abort("x86_64 SIMDSqadd: unsupported lane size \{lane_size}")
+      }
+    }
+    @instr.SIMDUqadd(lane_size) => {
+      // Unsigned saturating add (wasm: i8x16.add_sat_u, i16x8.add_sat_u).
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_paddusb_xmm_xmm(rd, b)
+        @instr.H16 => self.x86_emit_paddusw_xmm_xmm(rd, b)
+        _ => abort("x86_64 SIMDUqadd: unsupported lane size \{lane_size}")
+      }
+    }
+    @instr.SIMDSqsub(lane_size) => {
+      // Signed saturating subtract (wasm: i8x16.sub_sat_s, i16x8.sub_sat_s).
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_psubsb_xmm_xmm(rd, b)
+        @instr.H16 => self.x86_emit_psubsw_xmm_xmm(rd, b)
+        _ => abort("x86_64 SIMDSqsub: unsupported lane size \{lane_size}")
+      }
+    }
+    @instr.SIMDUqsub(lane_size) => {
+      // Unsigned saturating subtract (wasm: i8x16.sub_sat_u, i16x8.sub_sat_u).
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      if rd != a {
+        self.x86_emit_movaps_xmm_xmm(rd, a)
+      }
+      match lane_size {
+        @instr.B8 => self.x86_emit_psubusb_xmm_xmm(rd, b)
+        @instr.H16 => self.x86_emit_psubusw_xmm_xmm(rd, b)
+        _ => abort("x86_64 SIMDUqsub: unsupported lane size \{lane_size}")
+      }
+    }
     @instr.SIMDMul(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
