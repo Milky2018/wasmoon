@@ -1417,6 +1417,133 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
       }
     }
+    @instr.SIMDFMin(is_f32) => {
+      // Floating-point minimum with NaN propagation and signed-zero rules,
+      // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
+      // for `fmin`).
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      if is_f32 {
+        // min1 = minps(x, y)
+        self.x86_emit_movaps_xmm_xmm(t0, x)
+        self.x86_emit_minps_xmm_xmm(t0, y)
+        // min2 = minps(y, x)
+        self.x86_emit_movaps_xmm_xmm(t1, y)
+        self.x86_emit_minps_xmm_xmm(t1, x)
+        // min_or = min1 | min2
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        // is_nan_mask = cmp_unord(min2, min_or) (unordered is symmetric)
+        self.x86_emit_cmpps_xmm_xmm_imm8(t1, t0, 3)
+        // min_or_2 = min_or | is_nan_mask
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        // nan_fraction_mask = is_nan_mask >> 10
+        self.x86_emit_psrld_xmm_imm8(t1, 10)
+        // final = andn(nan_fraction_mask, min_or_2)
+        self.x86_emit_pandn_xmm_xmm(t1, t0)
+        if rd != t1 {
+          self.x86_emit_movaps_xmm_xmm(rd, t1)
+        }
+      } else {
+        self.x86_emit_movaps_xmm_xmm(t0, x)
+        self.x86_emit_minpd_xmm_xmm(t0, y)
+        self.x86_emit_movaps_xmm_xmm(t1, y)
+        self.x86_emit_minpd_xmm_xmm(t1, x)
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        self.x86_emit_cmppd_xmm_xmm_imm8(t1, t0, 3)
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        self.x86_emit_psrlq_xmm_imm8(t1, 13)
+        self.x86_emit_pandn_xmm_xmm(t1, t0)
+        if rd != t1 {
+          self.x86_emit_movaps_xmm_xmm(rd, t1)
+        }
+      }
+    }
+    @instr.SIMDFMax(is_f32) => {
+      // Floating-point maximum with NaN propagation and signed-zero rules,
+      // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
+      // for `fmax`).
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      if is_f32 {
+        // max1 = maxps(x, y)
+        self.x86_emit_movaps_xmm_xmm(t0, x)
+        self.x86_emit_maxps_xmm_xmm(t0, y)
+        // max2 = maxps(y, x)
+        self.x86_emit_movaps_xmm_xmm(t1, y)
+        self.x86_emit_maxps_xmm_xmm(t1, x)
+        // max_xor = max1 ^ max2
+        self.x86_emit_pxor_xmm_xmm(t1, t0)
+        // max_blended_nan = max1 | max_xor
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        // max_blended_nan_positive = max_blended_nan - max_xor
+        self.x86_emit_subps_xmm_xmm(t0, t1)
+        // is_nan_mask = cmp_unord(max_blended_nan_positive, max_blended_nan_positive)
+        self.x86_emit_movaps_xmm_xmm(t1, t0)
+        self.x86_emit_cmpps_xmm_xmm_imm8(t1, t1, 3)
+        // nan_fraction_mask = is_nan_mask >> 10
+        self.x86_emit_psrld_xmm_imm8(t1, 10)
+        // final = andn(nan_fraction_mask, max_blended_nan_positive)
+        self.x86_emit_pandn_xmm_xmm(t1, t0)
+        if rd != t1 {
+          self.x86_emit_movaps_xmm_xmm(rd, t1)
+        }
+      } else {
+        self.x86_emit_movaps_xmm_xmm(t0, x)
+        self.x86_emit_maxpd_xmm_xmm(t0, y)
+        self.x86_emit_movaps_xmm_xmm(t1, y)
+        self.x86_emit_maxpd_xmm_xmm(t1, x)
+        self.x86_emit_pxor_xmm_xmm(t1, t0)
+        self.x86_emit_por_xmm_xmm(t0, t1)
+        self.x86_emit_subpd_xmm_xmm(t0, t1)
+        self.x86_emit_movaps_xmm_xmm(t1, t0)
+        self.x86_emit_cmppd_xmm_xmm_imm8(t1, t1, 3)
+        self.x86_emit_psrlq_xmm_imm8(t1, 13)
+        self.x86_emit_pandn_xmm_xmm(t1, t0)
+        if rd != t1 {
+          self.x86_emit_movaps_xmm_xmm(rd, t1)
+        }
+      }
+    }
+    @instr.SIMDFPMin(is_f32) => {
+      // Pseudo-min: match wasm pmin semantics on amd64 using native minp*
+      // instructions (SSE behavior selects the second operand on NaNs).
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      self.x86_emit_movaps_xmm_xmm(tmp, x)
+      if is_f32 {
+        self.x86_emit_minps_xmm_xmm(tmp, y)
+      } else {
+        self.x86_emit_minpd_xmm_xmm(tmp, y)
+      }
+      if rd != tmp {
+        self.x86_emit_movaps_xmm_xmm(rd, tmp)
+      }
+    }
+    @instr.SIMDFPMax(is_f32) => {
+      // Pseudo-max: match wasm pmax semantics on amd64 using native maxp*
+      // instructions (SSE behavior selects the second operand on NaNs).
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let tmp = 14 // reserved via MachineEnvData.scratch_float
+      self.x86_emit_movaps_xmm_xmm(tmp, x)
+      if is_f32 {
+        self.x86_emit_maxps_xmm_xmm(tmp, y)
+      } else {
+        self.x86_emit_maxpd_xmm_xmm(tmp, y)
+      }
+      if rd != tmp {
+        self.x86_emit_movaps_xmm_xmm(rd, tmp)
+      }
+    }
     @instr.SIMDMul(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
