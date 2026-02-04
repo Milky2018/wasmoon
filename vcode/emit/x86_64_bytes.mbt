@@ -82,6 +82,52 @@ pub fn MachineCode::x86_emit_add_rr(
 }
 
 ///|
+pub fn MachineCode::x86_emit_add_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // add r/m32, r32: 01 /r (dst += src), zero-extends to 64-bit.
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x01)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_sub_rr(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // sub r/m64, r64: REX.W + 29 /r (dst -= src)
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x29)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_sub_rr32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // sub r/m32, r32: 29 /r (dst -= src), zero-extends to 64-bit.
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x29)
+  emit_modrm(self, 3, src, dst)
+}
+
+///|
 pub fn MachineCode::x86_emit_mov_rr(
   self : MachineCode,
   dst : Int,
@@ -219,6 +265,29 @@ pub fn MachineCode::x86_emit_movsd_m64_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movsd_xmm_m64(
+  self : MachineCode,
+  dst_xmm : Int,
+  base : Int,
+  disp : Int,
+) -> Unit {
+  // movsd xmm, m64: F2 0F 10 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF2)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x10)
+  emit_modrm(self, 2, dst_xmm, base)
+  if (base & 7) == 4 {
+    emit_sib(self, 0, 4, base)
+  }
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movdqu_m128_xmm(
   self : MachineCode,
   base : Int,
@@ -235,6 +304,29 @@ pub fn MachineCode::x86_emit_movdqu_m128_xmm(
   self.emit_byte(0x0F)
   self.emit_byte(0x7F)
   emit_modrm(self, 2, src_xmm, base)
+  if (base & 7) == 4 {
+    emit_sib(self, 0, 4, base)
+  }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_movdqu_xmm_m128(
+  self : MachineCode,
+  dst_xmm : Int,
+  base : Int,
+  disp : Int,
+) -> Unit {
+  // movdqu xmm, m128: F3 0F 6F /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x6F)
+  emit_modrm(self, 2, dst_xmm, base)
   if (base & 7) == 4 {
     emit_sib(self, 0, 4, base)
   }

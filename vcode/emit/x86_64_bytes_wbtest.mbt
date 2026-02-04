@@ -26,6 +26,13 @@ test "x86_64 add rr encoding (rax += r8)" {
 }
 
 ///|
+test "x86_64 sub rr encoding (rax -= r8)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_sub_rr(0, 8)
+  inspect(mc.get_bytes(), content="[76, 41, 192]")
+}
+
+///|
 test "x86_64 jmp rel32 fixup patches disp32" {
   let mc = MachineCode::new()
   mc.x86_emit_jmp_rel32(1)
@@ -101,5 +108,16 @@ test "x86_64 movsd/movdqu stores to [rsp+disp]" {
   inspect(
     mc.get_bytes(),
     content="[242, 68, 15, 17, 188, 36, 0, 0, 0, 0, 243, 68, 15, 127, 188, 36, 16, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 movsd/movdqu loads from [rsp+disp]" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movsd_xmm_m64(15, 4, 0)
+  mc.x86_emit_movdqu_xmm_m128(15, 4, 16)
+  inspect(
+    mc.get_bytes(),
+    content="[242, 68, 15, 16, 188, 36, 0, 0, 0, 0, 243, 68, 15, 111, 188, 36, 16, 0, 0, 0]",
   )
 }
