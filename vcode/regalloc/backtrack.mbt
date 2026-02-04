@@ -35,8 +35,11 @@ struct BacktrackingAllocator {
   bundles : BundleSet
 
   // Physical register occupancy: preg.index -> list of occupied ranges
-  int_reg_allocs : Map[Int, Array[ProgPointRange]]
-  float_reg_allocs : Map[Int, Array[ProgPointRange]]
+  //
+  // Each entry stores (bundle_id, span) so eviction/removal cannot accidentally
+  // remove spans that belong to a different bundle with identical boundaries.
+  int_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
+  float_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
 
   // Index: preg.index -> set of bundle IDs allocated to this register
   // Used for fast conflict lookup in find_conflicts
@@ -201,7 +204,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
 fn BacktrackingAllocator::get_reg_allocs(
   self : BacktrackingAllocator,
   class : @abi.RegClass,
-) -> Map[Int, Array[ProgPointRange]] {
+) -> Map[Int, Array[(Int, ProgPointRange)]] {
   match class {
     @abi.Int => self.int_reg_allocs
     @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
@@ -260,7 +263,7 @@ fn BacktrackingAllocator::is_reg_free(
         let range = self.ranges.get(range_id)
         for span in range.ranges {
           for occ in ranges {
-            if span.overlaps(occ, self.block_order) {
+            if span.overlaps(occ.1, self.block_order) {
               return false
             }
           }
@@ -286,7 +289,7 @@ fn BacktrackingAllocator::record_allocation(
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for span in range.ranges {
-      occupied.push(span)
+      occupied.push((bundle.id, span))
     }
     // Also update the LiveRange's allocation
     range.allocation = Reg(preg)
@@ -317,26 +320,10 @@ fn BacktrackingAllocator::remove_allocation(
   if bundle.allocation is Reg(preg) {
     let allocs = self.get_reg_allocs(preg.class)
     if allocs.get(preg.index) is Some(occupied) {
-      // Remove ranges belonging to this bundle
-      let new_occupied : Array[ProgPointRange] = []
+      // Remove ranges belonging to this bundle.
+      let new_occupied : Array[(Int, ProgPointRange)] = []
       for occ in occupied {
-        let mut belongs_to_bundle = false
-        for range_id in bundle.range_ids {
-          let range = self.ranges.get(range_id)
-          for span in range.ranges {
-            if span.start.block == occ.start.block &&
-              span.start.inst == occ.start.inst &&
-              span.end.block == occ.end.block &&
-              span.end.inst == occ.end.inst {
-              belongs_to_bundle = true
-              break
-            }
-          }
-          if belongs_to_bundle {
-            break
-          }
-        }
-        if !belongs_to_bundle {
+        if occ.0 != bundle.id {
           new_occupied.push(occ)
         }
       }
@@ -535,16 +522,16 @@ fn BacktrackingAllocator::find_first_conflict_point_for_preg(
       let range = self.ranges.get(range_id)
       for span in range.ranges {
         for occ in occupied {
-          if span.overlaps(occ, self.block_order) {
+          if span.overlaps(occ.1, self.block_order) {
             // Find the overlap start point
             let conflict_start = if span.start.compare_with_order(
-                occ.start,
+                occ.1.start,
                 self.block_order,
               ) >
               0 {
               span.start
             } else {
-              occ.start
+              occ.1.start
             }
             match earliest_conflict {
               None => earliest_conflict = Some(conflict_start)
