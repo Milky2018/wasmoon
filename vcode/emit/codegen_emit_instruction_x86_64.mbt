@@ -1389,6 +1389,28 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
       }
     }
+    @instr.SIMDFCmp(is_f32, kind) => {
+      // Align with Cranelift x64 vector fcmp lowering: use CMPP* immediates,
+      // and for `gt/ge` swap operands and use `lt/le` predicate indices.
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let mut tmp = 14 // reserved via MachineEnvData.scratch_float
+      if tmp == rd {
+        tmp = 15
+      }
+      let (lhs, rhs, imm) = match kind {
+        @instr.SIMDFCmpKind::Eq => (x, y, 0)
+        @instr.SIMDFCmpKind::Gt => (y, x, 1) // a > b <=> b < a
+        @instr.SIMDFCmpKind::Ge => (y, x, 2) // a >= b <=> b <= a
+      }
+      let rhs_reg = prepare_xmm_two_operand(self, rd, lhs, rhs, tmp)
+      if is_f32 {
+        self.x86_emit_cmpps_xmm_xmm_imm8(rd, rhs_reg, imm)
+      } else {
+        self.x86_emit_cmppd_xmm_xmm_imm8(rd, rhs_reg, imm)
+      }
+    }
     @instr.SIMDFAdd(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
