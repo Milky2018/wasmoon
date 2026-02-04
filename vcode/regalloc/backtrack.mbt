@@ -1359,8 +1359,10 @@ fn BacktrackingAllocator::force_spill_bundle(
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
 ) -> Unit {
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let isa = @isa.ISA::current()
+  let vmctx_preg = isa.wasm_vmctx_arg_preg()
+  let user_arg_gprs = isa.wasm_user_arg_gprs()
+  let arg_fprs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
   let mut callee_saved_int_idx = 0
@@ -1369,14 +1371,18 @@ fn BacktrackingAllocator::preassign_params(
     // Determine which ABI register this param comes in
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
       @abi.Int =>
-        if int_idx < max_int_params {
-          (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+        if int_idx == 0 {
+          // First integer argument is always vmctx in the internal Wasm ABI.
+          (Some(vmctx_preg), true)
+        } else if int_idx - 1 < user_arg_gprs.length() {
+          (Some(user_arg_gprs[int_idx - 1]), true)
         } else {
           (None, true) // Stack param
         }
       @abi.Float32 | @abi.Float64 | @abi.Vector =>
-        if float_idx < max_float_params {
-          (Some(@abi.PReg::{ index: float_idx, class: param.class }), false)
+        if float_idx < arg_fprs.length() {
+          let base = arg_fprs[float_idx]
+          (Some({ index: base.index, class: param.class }), false)
         } else {
           (None, false) // Stack param
         }

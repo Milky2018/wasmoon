@@ -82,6 +82,21 @@ pub fn MachineCode::x86_emit_add_rr(
 }
 
 ///|
+pub fn MachineCode::x86_emit_add_r_imm8(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // add r/m64, imm8: REX.W + 83 /0 ib (sign-extended imm8)
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0x83)
+  // /0 in reg field.
+  emit_modrm(self, 3, 0, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_add_rr32(
   self : MachineCode,
   dst : Int,
@@ -633,6 +648,35 @@ pub fn MachineCode::x86_emit_call_r64(self : MachineCode, reg : Int) -> Unit {
   self.emit_byte(0xFF)
   // /2 in reg field.
   emit_modrm(self, 3, 2, reg)
+}
+
+///|
+pub fn MachineCode::x86_emit_jmp_r64(self : MachineCode, reg : Int) -> Unit {
+  // jmp r/m64: FF /4
+  let b = (reg >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xFF)
+  // /4 in reg field.
+  emit_modrm(self, 3, 4, reg)
+}
+
+///|
+pub fn MachineCode::x86_emit_lea_r64_riprel32(
+  self : MachineCode,
+  dst : Int,
+  target_label : Int,
+) -> Unit {
+  // lea r64, [rip + disp32]: REX.W + 8D /r with mod=00, rm=101.
+  let r = (dst >> 3) & 1
+  emit_rex_w(self, r, 0)
+  self.emit_byte(0x8D)
+  emit_modrm(self, 0, dst, 5)
+  let disp_offset = self.current_pos()
+  emit_disp32(self, 0)
+  let next_ip_offset = self.current_pos()
+  self.add_x86_rel32_fixup(target_label, disp_offset, next_ip_offset)
 }
 
 ///|

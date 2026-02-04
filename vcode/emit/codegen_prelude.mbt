@@ -859,6 +859,7 @@ pub fn emit_function(
       }
     }
   }
+  let is_amd64 = current_isa() is @isa.AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -871,7 +872,8 @@ pub fn emit_function(
       //   load/store [addr + 0]
       //
       // Emit as a single reg-offset load/store: [base + off].
-      if inst.opcode is Add(true) &&
+      if !is_amd64 &&
+        inst.opcode is Add(true) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 2 &&
         inst_idx + 1 < block.insts.length() {
@@ -987,7 +989,8 @@ pub fn emit_function(
       // IMPORTANT: Only apply if the extend result is not used by any other
       // instruction. Otherwise we'd skip the extend and later uses would
       // read garbage.
-      if inst.opcode is Extend(Unsigned32To64) &&
+      if !is_amd64 &&
+        inst.opcode is Extend(Unsigned32To64) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         inst_idx + 1 < block.insts.length() {
@@ -1062,7 +1065,11 @@ pub fn emit_function(
   if shared_exit_block is Some(exit_block) {
     mc.define_label(exit_block)
     mc.emit_epilogue(stack_frame)
-    mc.emit_ret(30)
+    if is_amd64 {
+      mc.x86_emit_ret()
+    } else {
+      mc.emit_ret(30)
+    }
   }
   mc.resolve_fixups()
   mc

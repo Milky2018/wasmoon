@@ -32,6 +32,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
     }
   }
 
+  self.annotate(term.to_string())
   match term {
     @instr.Branch(cond, then_b, else_b) => {
       // Treat Branch as "cond != 0".
@@ -110,6 +111,57 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         self.x86_emit_jmp_rel32(target)
       }
     @instr.Trap(msg) => self.x86_emit_trap_imm16(trap_msg_to_imm16(msg))
+    @instr.BrTable(index, targets, default) => {
+      // Jump table implementation for br_table (Cranelift-style rel32 table).
+      //
+      // Layout:
+      //   cmp index, n; jae default
+      //   lea base, [rip + table]
+      //   tmp = base + (index << 2)
+      //   rel32 = *(i32*)tmp
+      //   target = (tmp + 4) + rel32
+      //   jmp target
+      // table: dd target0 - (entry_end), dd target1 - (entry_end), ...
+      let index_reg = reg_num(index)
+      let num_targets = targets.length()
+      let table = self.new_internal_label()
+      let base = isa.scratch_reg_1_index()
+      let tmp = isa.scratch_reg_2_index()
+
+      // Bounds check: if index >= num_targets (unsigned), jump to default.
+      self.x86_emit_mov_imm64(tmp, num_targets.to_int64())
+      self.x86_emit_cmp_rr32(index_reg, tmp)
+      self.x86_emit_jcc_rel32(@instr.Cond::Hs, default)
+
+      // tmp = &table
+      self.x86_emit_lea_r64_riprel32(base, table)
+
+      // tmp = base + index*4
+      // `br_table` index is i32 in Wasm; ensure zero-extension to avoid
+      // accidentally using garbage in the high 32 bits.
+      self.x86_emit_mov_rr32(tmp, index_reg)
+      self.x86_emit_shl_r32_imm8(tmp, 2)
+      self.x86_emit_add_rr(tmp, base)
+
+      // base = rel32 (sign-extended)
+      self.x86_emit_mov_r32_m32(base, tmp, 0)
+      self.x86_emit_movsxd_r64_r32(base, base)
+
+      // tmp = entry_end
+      self.x86_emit_add_r_imm8(tmp, 4)
+      // tmp = target
+      self.x86_emit_add_rr(tmp, base)
+      self.x86_emit_jmp_r64(tmp)
+
+      // Emit jump table data (rel32 entries).
+      self.define_label(table)
+      for target in targets {
+        let disp_offset = self.current_pos()
+        self.emit_inst(0, 0, 0, 0)
+        let next_ip_offset = self.current_pos()
+        self.add_x86_rel32_fixup(target, disp_offset, next_ip_offset)
+      }
+    }
     @instr.Return(values) => {
       // Minimal return convention:
       // - ints go to ISA.wasm_ret_gprs()
@@ -273,6 +325,5 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       self.emit_epilogue(stack_frame)
       self.x86_emit_ret()
     }
-    _ => abort("x86_64 terminator not implemented: \{term}")
   }
 }

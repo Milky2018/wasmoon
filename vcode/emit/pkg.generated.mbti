@@ -319,6 +319,7 @@ pub fn MachineCode::new() -> Self
 pub fn MachineCode::new_internal_label(Self) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit
 pub fn MachineCode::size(Self) -> Int
+pub fn MachineCode::x86_emit_add_r_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rsp_imm32(Self, Int) -> Unit
@@ -361,7 +362,9 @@ pub fn MachineCode::x86_emit_idiv_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_imul_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_imul_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
+pub fn MachineCode::x86_emit_jmp_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_lea_r64_riprel32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_maxpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_maxps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_minpd_xmm_xmm(Self, Int, Int) -> Unit

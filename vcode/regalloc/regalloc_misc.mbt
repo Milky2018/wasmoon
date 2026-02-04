@@ -206,6 +206,39 @@ fn build_reg_pools(
   for r in env.nonpreferred_vector {
     vector_regs.push(r)
   }
+  // amd64 backend currently uses the native 0..15 register numbering. If any
+  // higher preg indices leak into pools, x86 encoding will silently truncate and
+  // can clobber rsp/rbp (e.g. x20 -> rsp). Fail fast.
+  if isa is @isa.AMD64 {
+    fn validate(pregs : Array[@abi.PReg], kind : String) -> Unit {
+      for p in pregs {
+        if p.class is @abi.Int {
+          guard p.index >= 0 && p.index < 16 else {
+            abort(
+              "amd64 regalloc pool contains invalid Int preg: \{kind} index=\{p.index}",
+            )
+          }
+          guard p.index != 4 && p.index != 5 else {
+            abort(
+              "amd64 regalloc pool contains reserved Int preg: \{kind} index=\{p.index}",
+            )
+          }
+        } else {
+          guard p.index >= 0 && p.index < 16 else {
+            abort(
+              "amd64 regalloc pool contains invalid FP/Vec preg: \{kind} index=\{p.index}",
+            )
+          }
+        }
+      }
+    }
+
+    validate(int_regs, "int_regs")
+    validate(float_regs, "float_regs")
+    validate(vector_regs, "vector_regs")
+    validate(callee_saved_int_regs, "callee_saved_int_regs")
+    validate(callee_saved_float_regs, "callee_saved_float_regs")
+  }
   (
     int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
@@ -320,6 +353,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
   let output = build_output(func, alloc_result, isa, settings)
+  output.validate_for_isa(isa)
   (func, output)
 }
 

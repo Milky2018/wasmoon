@@ -64,6 +64,7 @@ pub fn LoweringContext::new(
 fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
   let skipped : @hashset.HashSet[Int] = @hashset.new()
   let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
+  let is_amd64 = @isa.ISA::current() is @isa.AMD64
 
   // Pass 1: find address values that will be subsumed by load/store lowering.
   for block in ctx.ir_func.blocks {
@@ -100,7 +101,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          // NOTE: match_addr_reg_offset is an AArch64-only fusion today.
+          // On amd64 we must not skip the address producer, otherwise we'll
+          // generate undefined vregs (the load/store will not use RegOffset).
+          if !is_amd64 &&
+            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {
@@ -144,7 +149,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if !is_amd64 &&
+            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {

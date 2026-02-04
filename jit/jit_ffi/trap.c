@@ -452,6 +452,31 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                  }
              }
         }
+#elif defined(__APPLE__) && defined(__x86_64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+            // amd64 has no link register; keep LR at 0.
+            g_trap_lr = 0;
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+            g_trap_fp = fp;
+            g_trap_frame_lr = 0;
+            if (fp) {
+                uintptr_t low = 0;
+                uintptr_t high = 0;
+                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                    low = g_trap_wasm_stack_base;
+                    high = g_trap_wasm_stack_top;
+                } else if (g_stack_base != NULL && g_stack_size != 0) {
+                    uintptr_t base = (uintptr_t)g_stack_base;
+                    low = base - (uintptr_t)g_stack_size;
+                    high = base;
+                }
+                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
+                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                }
+            }
+        }
 #elif defined(__linux__) && defined(__aarch64__)
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
@@ -472,6 +497,30 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                     high = base;
                 }
                 if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                }
+            }
+        }
+#elif defined(__linux__) && defined(__x86_64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+            g_trap_lr = 0;
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+            g_trap_fp = fp;
+            g_trap_frame_lr = 0;
+            if (fp) {
+                uintptr_t low = 0;
+                uintptr_t high = 0;
+                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                    low = g_trap_wasm_stack_base;
+                    high = g_trap_wasm_stack_top;
+                } else if (g_stack_base != NULL && g_stack_size != 0) {
+                    uintptr_t base = (uintptr_t)g_stack_base;
+                    low = base - (uintptr_t)g_stack_size;
+                    high = base;
+                }
+                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
                     g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
                 }
             }

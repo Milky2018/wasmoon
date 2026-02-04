@@ -669,7 +669,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
 // ============ Stack-Switching Trampoline Call ============
 
 // External assembly function for stack switching (from stack_switch_aarch64.S)
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
 extern int stack_switch_call(
     void *wasm_stack_top,
     void *trampoline_ptr,
@@ -698,7 +698,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
         return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
     }
 
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
     install_trap_handler();
     g_trap_code = 0;
     g_trap_signal = 0;
@@ -741,7 +741,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
 
     return result;
 #else
-    // On non-AArch64, fall back to regular call
+    // On targets without a stack-switch helper, fall back to regular call.
     return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 #endif
 }
