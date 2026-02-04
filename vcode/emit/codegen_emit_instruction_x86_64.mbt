@@ -207,6 +207,28 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_and_rr32(rd, rm)
       }
     }
+    @instr.AndImm(imm, is_64) => {
+      // Fallback: materialize imm into scratch and use and.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_imm64(scratch, imm)
+      if is_64 {
+        self.x86_emit_and_rr(rd, scratch)
+      } else {
+        self.x86_emit_and_rr32(rd, scratch)
+      }
+    }
     @instr.Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -224,6 +246,28 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, rm)
       }
     }
+    @instr.OrImm(imm, is_64) => {
+      // Fallback: materialize imm into scratch and use or.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_imm64(scratch, imm)
+      if is_64 {
+        self.x86_emit_or_rr(rd, scratch)
+      } else {
+        self.x86_emit_or_rr32(rd, scratch)
+      }
+    }
     @instr.Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -239,6 +283,28 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr(rd, rm)
       } else {
         self.x86_emit_xor_rr32(rd, rm)
+      }
+    }
+    @instr.XorImm(imm, is_64) => {
+      // Fallback: materialize imm into scratch and use xor.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_imm64(scratch, imm)
+      if is_64 {
+        self.x86_emit_xor_rr(rd, scratch)
+      } else {
+        self.x86_emit_xor_rr32(rd, scratch)
       }
     }
     @instr.Not(is_64) => {
