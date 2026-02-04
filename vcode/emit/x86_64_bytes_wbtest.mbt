@@ -271,6 +271,21 @@ test "x86_64 SIMD abs + shift encodings" {
 }
 
 ///|
+test "x86_64 SIMD variable shift + unpack encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_psllw_xmm_imm8(1, 8) // psllw xmm1, 8
+  mc.x86_emit_psll_xmm_xmm(@instr.H16, 1, 2) // psllw xmm1, xmm2
+  mc.x86_emit_psrl_xmm_xmm(@instr.S32, 1, 2) // psrld xmm1, xmm2
+  mc.x86_emit_psra_xmm_xmm(@instr.H16, 1, 2) // psraw xmm1, xmm2
+  mc.x86_emit_punpcklbw_xmm_xmm(1, 1) // punpcklbw xmm1, xmm1
+  mc.x86_emit_punpckhbw_xmm_xmm(1, 1) // punpckhbw xmm1, xmm1
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 113, 241, 8, 102, 15, 241, 202, 102, 15, 210, 202, 102, 15, 225, 202, 102, 15, 96, 201, 102, 15, 104, 201]",
+  )
+}
+
+///|
 test "x86_64 SIMD saturating add/sub encodings (SSE2)" {
   let mc = MachineCode::new()
   mc.x86_emit_paddsb_xmm_xmm(1, 2) // paddsb xmm1, xmm2
@@ -375,7 +390,11 @@ test "x86_64 imul/not encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_imul_rr(0, 8) // imul rax, r8
   mc.x86_emit_not_r64(11) // not r11
-  inspect(mc.get_bytes(), content="[73, 15, 175, 192, 73, 247, 211]")
+  mc.x86_emit_neg_r64(11) // neg r11
+  inspect(
+    mc.get_bytes(),
+    content="[73, 15, 175, 192, 73, 247, 211, 73, 247, 219]",
+  )
 }
 
 ///|

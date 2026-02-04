@@ -259,6 +259,15 @@ pub fn MachineCode::x86_emit_not_r64(self : MachineCode, reg : Int) -> Unit {
 }
 
 ///|
+pub fn MachineCode::x86_emit_neg_r64(self : MachineCode, reg : Int) -> Unit {
+  // neg r/m64: REX.W + F7 /3
+  let b = (reg >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 3, reg)
+}
+
+///|
 pub fn MachineCode::x86_emit_not_r32(self : MachineCode, reg : Int) -> Unit {
   // not r/m32: F7 /2
   let b = (reg >> 3) & 1
@@ -1073,6 +1082,95 @@ pub fn MachineCode::x86_emit_psllq_xmm_imm8(
   self.emit_byte(0x73)
   emit_modrm(self, 3, 6, dst_xmm)
   self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_psllw_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // psllw xmm, imm8: 66 0F 71 /6 ib
+  let b = (dst_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x71)
+  emit_modrm(self, 3, 6, dst_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_psll_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // psll{w,d,q} xmm, xmm/m128: 66 0F F1/F2/F3 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.H16 => self.emit_byte(0xF1)
+    @instr.S32 => self.emit_byte(0xF2)
+    @instr.D64 => self.emit_byte(0xF3)
+    _ => abort("x86_64 psll: unsupported lane size \{lane_size}")
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_psrl_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // psrl{w,d,q} xmm, xmm/m128: 66 0F D1/D2/D3 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.H16 => self.emit_byte(0xD1)
+    @instr.S32 => self.emit_byte(0xD2)
+    @instr.D64 => self.emit_byte(0xD3)
+    _ => abort("x86_64 psrl: unsupported lane size \{lane_size}")
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_psra_xmm_xmm(
+  self : MachineCode,
+  lane_size : @instr.LaneSize,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // psra{w,d} xmm, xmm/m128: 66 0F E1/E2 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  match lane_size {
+    @instr.H16 => self.emit_byte(0xE1)
+    @instr.S32 => self.emit_byte(0xE2)
+    _ => abort("x86_64 psra: unsupported lane size \{lane_size}")
+  }
+  emit_modrm(self, 3, dst_xmm, src_xmm)
 }
 
 ///|
@@ -2105,6 +2203,42 @@ pub fn MachineCode::x86_emit_pshufb_xmm_xmm(
   self.emit_byte(0x38)
   self.emit_byte(0x00)
   emit_modrm(self, 3, dst_xmm, mask_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_punpcklbw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // punpcklbw xmm, xmm/m128: 66 0F 60 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x60)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_punpckhbw_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // punpckhbw xmm, xmm/m128: 66 0F 68 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x68)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
 }
 
 ///|

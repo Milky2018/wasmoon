@@ -1495,6 +1495,166 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movaps_xmm_xmm(rd, tmp1)
       }
     }
+    @instr.SIMDBroadcastShift(lane_size, negate) => {
+      // x86 packed shifts take a scalar count from the low bits of an XMM
+      // register, so we materialize the masked (and optionally negated) count
+      // into `shift_vec`.
+      let tmp_gpr = wreg_num(inst.defs[0])
+      let shift_vec = wreg_num(inst.defs[1])
+      let shift = reg_num(inst.uses[0])
+      let mask = match lane_size {
+        @instr.B8 => 7
+        @instr.H16 => 15
+        @instr.S32 => 31
+        @instr.D64 => 63
+      }
+      if tmp_gpr != shift {
+        self.x86_emit_mov_rr(tmp_gpr, shift)
+      }
+      self.x86_emit_and_r_imm8_sxb64(tmp_gpr, mask)
+      if negate {
+        self.x86_emit_neg_r64(tmp_gpr)
+      }
+      self.x86_emit_movq_xmm_r64(shift_vec, tmp_gpr)
+    }
+    @instr.SIMDShiftByVec(lane_size, use_ushl) => {
+      // Interpret the shift amount as a signed scalar:
+      // - non-negative => left shift
+      // - negative => right shift by -amount
+      //
+      // This matches the semantics used by AArch64 SSHL/USHL lowering.
+      let rd = wreg_num(inst.defs[0])
+      let vec = reg_num(inst.uses[0])
+      let shift_vec = reg_num(inst.uses[1])
+      let tmp_gpr = isa.scratch_reg_1_index()
+      let tmp_gpr2 = isa.scratch_reg_2_index()
+      let cnt_xmm = 14 // reserved via MachineEnvData.scratch_float
+      let tmp_xmm = 15 // reserved via MachineEnvData.scratch_float
+      let do_right = self.new_internal_label()
+      let done = self.new_internal_label()
+
+      // tmp_gpr = shift amount (signed)
+      self.x86_emit_movq_r64_xmm(tmp_gpr, shift_vec)
+      self.x86_emit_test_rr(tmp_gpr, tmp_gpr)
+      self.x86_emit_jcc_rel32(@instr.Cond::Mi, do_right) // JS
+
+      // Left shift (count >= 0).
+      match lane_size {
+        @instr.B8 => {
+          // i8x16 shl via 16x8 shift + dynamic mask (Cranelift-style idea).
+          if rd != vec {
+            self.x86_emit_movaps_xmm_xmm(rd, vec)
+          }
+          // rd = psllw(rd, shift_vec)
+          self.x86_emit_psll_xmm_xmm(@instr.H16, rd, shift_vec)
+
+          // tmp_xmm = hi_mask = (0xFF00 << count)
+          self.x86_emit_pcmpeqd_xmm_xmm(tmp_xmm, tmp_xmm)
+          self.x86_emit_psllw_xmm_imm8(tmp_xmm, 8) // 0xFF00
+          self.x86_emit_psll_xmm_xmm(@instr.H16, tmp_xmm, shift_vec)
+
+          // cnt_xmm = lo_mask = 0x00FF
+          self.x86_emit_pcmpeqd_xmm_xmm(cnt_xmm, cnt_xmm)
+          self.x86_emit_psrlw_xmm_imm8(cnt_xmm, 8) // 0x00FF
+
+          // tmp_xmm |= cnt_xmm; rd &= tmp_xmm
+          self.x86_emit_por_xmm_xmm(tmp_xmm, cnt_xmm)
+          self.x86_emit_pand_xmm_xmm(rd, tmp_xmm)
+        }
+        _ => {
+          if rd != vec {
+            self.x86_emit_movaps_xmm_xmm(rd, vec)
+          }
+          self.x86_emit_psll_xmm_xmm(lane_size, rd, shift_vec)
+        }
+      }
+      self.x86_emit_jmp_rel32(done)
+
+      // Right shift (count < 0): count = -count.
+      self.define_label(do_right)
+      self.x86_emit_neg_r64(tmp_gpr)
+      self.x86_emit_movq_xmm_r64(cnt_xmm, tmp_gpr)
+      match lane_size {
+        @instr.B8 =>
+          if use_ushl {
+            // i8x16 ushr via 16x8 shift + dynamic mask (Cranelift-style idea).
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            self.x86_emit_psrl_xmm_xmm(@instr.H16, rd, cnt_xmm)
+
+            // tmp_xmm = low_mask = (0x00FF >> count)
+            self.x86_emit_pcmpeqd_xmm_xmm(tmp_xmm, tmp_xmm)
+            self.x86_emit_psrlw_xmm_imm8(tmp_xmm, 8) // 0x00FF
+            self.x86_emit_psrl_xmm_xmm(@instr.H16, tmp_xmm, cnt_xmm)
+
+            // cnt_xmm = high_mask = 0xFF00
+            self.x86_emit_pcmpeqd_xmm_xmm(cnt_xmm, cnt_xmm)
+            self.x86_emit_psllw_xmm_imm8(cnt_xmm, 8) // 0xFF00
+            self.x86_emit_por_xmm_xmm(tmp_xmm, cnt_xmm)
+            self.x86_emit_pand_xmm_xmm(rd, tmp_xmm)
+          } else {
+            // i8x16 sshr: match Cranelift's widen+psraw+packsswb trick.
+            //
+            // Use the output reg as a temporary XMM for the (count + 8).
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            // tmp_xmm = lo = punpcklbw(vec, vec)
+            self.x86_emit_movaps_xmm_xmm(tmp_xmm, vec)
+            self.x86_emit_punpcklbw_xmm_xmm(tmp_xmm, tmp_xmm)
+            // cnt_xmm = hi = punpckhbw(vec, vec)
+            self.x86_emit_movaps_xmm_xmm(cnt_xmm, vec)
+            self.x86_emit_punpckhbw_xmm_xmm(cnt_xmm, cnt_xmm)
+
+            // tmp_gpr = count + 8
+            self.x86_emit_mov_imm64(tmp_gpr2, 8)
+            self.x86_emit_add_rr(tmp_gpr, tmp_gpr2)
+            self.x86_emit_movd_xmm_r32(rd, tmp_gpr)
+            self.x86_emit_psra_xmm_xmm(@instr.H16, tmp_xmm, rd)
+            self.x86_emit_psra_xmm_xmm(@instr.H16, cnt_xmm, rd)
+            self.x86_emit_packsswb_xmm_xmm(tmp_xmm, cnt_xmm)
+            if rd != tmp_xmm {
+              self.x86_emit_movaps_xmm_xmm(rd, tmp_xmm)
+            }
+          }
+        @instr.H16 | @instr.S32 =>
+          if use_ushl {
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            self.x86_emit_psrl_xmm_xmm(lane_size, rd, cnt_xmm)
+          } else {
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            self.x86_emit_psra_xmm_xmm(lane_size, rd, cnt_xmm)
+          }
+        @instr.D64 =>
+          if use_ushl {
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            self.x86_emit_psrl_xmm_xmm(@instr.D64, rd, cnt_xmm)
+          } else {
+            // i64x2 sshr via Cranelift `lower_i64x2_sshr_gpr` sequence.
+            if rd != vec {
+              self.x86_emit_movaps_xmm_xmm(rd, vec)
+            }
+            materialize_xmm_const(
+              self, tmp_xmm, 0x8000000000000000L, 0x8000000000000000L, tmp_gpr2,
+            )
+            // sign_bit_loc = mask >> count
+            self.x86_emit_psrl_xmm_xmm(@instr.D64, tmp_xmm, cnt_xmm)
+            // ushr = vec >> count
+            self.x86_emit_psrl_xmm_xmm(@instr.D64, rd, cnt_xmm)
+            // (ushr ^ sign_bit_loc) - sign_bit_loc
+            self.x86_emit_pxor_xmm_xmm(rd, tmp_xmm)
+            self.x86_emit_psub_xmm_xmm(@instr.D64, rd, tmp_xmm)
+          }
+      }
+      self.define_label(done)
+    }
     @instr.SIMDFCmp(is_f32, kind) => {
       // Align with Cranelift x64 vector fcmp lowering: use CMPP* immediates,
       // and for `gt/ge` swap operands and use `lt/le` predicate indices.
