@@ -182,6 +182,11 @@ pub(all) enum VCodeOpcode {
   Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
+  // x86_64: explicit remainder opcodes (lowered only on x86_64).
+  // This matches Cranelift's checked remainder sequences to avoid x86 IDIV
+  // overflow traps for `INT_MIN % -1`.
+  SRem(Bool) // SREM with size: true = 64-bit, false = 32-bit
+  URem(Bool) // UREM with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And(Bool)
   AndImm(Int64, Bool) // AND (immediate logical), value is the immediate pattern
@@ -869,6 +874,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
+    SRem(is_64) => if is_64 { "srem" } else { "srem32" }
+    URem(is_64) => if is_64 { "urem" } else { "urem32" }
     And(is_64) => if is_64 { "and" } else { "and32" }
     AndImm(imm, is_64) => if is_64 { "and #\{imm}" } else { "and32 #\{imm}" }
     Or(is_64) => if is_64 { "or" } else { "or32" }

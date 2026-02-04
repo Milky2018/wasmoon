@@ -249,6 +249,17 @@ test "x86_64 div/idiv setup encodings (cqo/cdq + div)" {
 }
 
 ///|
+test "x86_64 cmp reg, imm32 encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cmp_r_imm32(8, -1) // cmp r8, -1
+  mc.x86_emit_cmp_r32_imm32(9, 0x12345678) // cmp r9d, imm32
+  inspect(
+    mc.get_bytes(),
+    content="[73, 129, 248, 255, 255, 255, 255, 65, 129, 249, 120, 86, 52, 18]",
+  )
+}
+
+///|
 test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
   let mc = MachineCode::new()
   // cl-count

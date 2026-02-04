@@ -242,6 +242,8 @@ pub(all) enum VCodeOpcode {
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
+  SRem(Bool)
+  URem(Bool)
   And(Bool)
   AndImm(Int64, Bool)
   Or(Bool)

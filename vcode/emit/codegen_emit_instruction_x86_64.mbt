@@ -403,31 +403,34 @@ fn MachineCode::emit_instruction_x86_64(
       }
     }
     @instr.Select => {
-      // Branch-based select (works for GPR/XMM without needing cmov).
-      //
-      // dst = cond != 0 ? true_val : false_val
-      // uses: [cond, true, false]
       let rd = wreg_num(inst.defs[0])
       let cond_reg = reg_num(inst.uses[0])
       let true_reg = reg_num(inst.uses[1])
       let false_reg = reg_num(inst.uses[2])
       let class = reg_class_of_w(inst.defs[0])
-      // default to false
-      emit_reg_move(self, rd, false_reg, class)
-      self.x86_emit_test_rr32(cond_reg, cond_reg)
-      // Use negative label ids to avoid colliding with block ids.
-      let then_l = -1 - self.current_pos()
-      let done_l = then_l - 1
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, then_l)
-      self.x86_emit_jmp_rel32(done_l)
-      self.define_label(then_l)
-      emit_reg_move(self, rd, true_reg, class)
-      self.define_label(done_l)
+      match class {
+        // Match Cranelift x64: integer select uses cmov.
+        @abi.Int => {
+          // dst = false
+          emit_reg_move(self, rd, false_reg, class)
+          // Set flags based on cond != 0.
+          self.x86_emit_test_rr32(cond_reg, cond_reg)
+          // dst = cond ? true : dst
+          self.x86_emit_cmovcc_rr(@instr.Cond::Ne, rd, true_reg)
+        }
+        // Match Cranelift x64: XMM select uses a branch (no cmov for XMM).
+        @abi.Float32 | @abi.Float64 | @abi.Vector => {
+          // dst = false
+          emit_reg_move(self, rd, false_reg, class)
+          self.x86_emit_test_rr32(cond_reg, cond_reg)
+          let next = self.new_internal_label()
+          self.x86_emit_jcc_rel32(@instr.Cond::Eq, next)
+          emit_reg_move(self, rd, true_reg, class)
+          self.define_label(next)
+        }
+      }
     }
     @instr.SelectCmp(kind, is_64) => {
-      // Branch-based compare+select:
-      // cmp(lhs, rhs); dst = cond ? true_val : false_val
-      // uses: [cmp_lhs, cmp_rhs, true, false]
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_64 {
@@ -439,14 +442,26 @@ fn MachineCode::emit_instruction_x86_64(
       let true_reg = reg_num(inst.uses[2])
       let false_reg = reg_num(inst.uses[3])
       let class = reg_class_of_w(inst.defs[0])
-      emit_reg_move(self, rd, false_reg, class)
-      let then_l = -1 - self.current_pos()
-      let done_l = then_l - 1
-      self.x86_emit_jcc_rel32(cmp_kind_to_cond(kind), then_l)
-      self.x86_emit_jmp_rel32(done_l)
-      self.define_label(then_l)
-      emit_reg_move(self, rd, true_reg, class)
-      self.define_label(done_l)
+      let cond = cmp_kind_to_cond(kind)
+      match class {
+        // Match Cranelift x64: integer selectcmp uses cmov.
+        @abi.Int => {
+          emit_reg_move(self, rd, false_reg, class)
+          if is_64 {
+            self.x86_emit_cmovcc_rr(cond, rd, true_reg)
+          } else {
+            self.x86_emit_cmovcc_rr32(cond, rd, true_reg)
+          }
+        }
+        // XMM: branch-based move (no cmov).
+        @abi.Float32 | @abi.Float64 | @abi.Vector => {
+          emit_reg_move(self, rd, false_reg, class)
+          let next = self.new_internal_label()
+          self.x86_emit_jcc_rel32(cond.invert(), next)
+          emit_reg_move(self, rd, true_reg, class)
+          self.define_label(next)
+        }
+      }
     }
     @instr.TrapIfZero(is_64, trap_code) => {
       let rn = reg_num(inst.uses[0])
@@ -455,7 +470,7 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         self.x86_emit_test_rr32(rn, rn)
       }
-      let done_l = -1 - self.current_pos()
+      let done_l = self.new_internal_label()
       self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done_l)
@@ -465,7 +480,7 @@ fn MachineCode::emit_instruction_x86_64(
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
-      let done_l = -1 - self.current_pos()
+      let done_l = self.new_internal_label()
       if is_64 {
         self.x86_emit_mov_imm64(scratch, 0x8000000000000000L)
         self.x86_emit_cmp_rr(lhs, scratch)
@@ -535,6 +550,82 @@ fn MachineCode::emit_instruction_x86_64(
       if rd != 0 {
         self.x86_emit_mov_rr(rd, 0)
       }
+    }
+    @instr.SRem(is_64) => {
+      // Match Cranelift x64 CheckedSRemSeq behavior: guard `divisor == -1` and
+      // return 0 without executing IDIV (avoids INT_MIN/-1 overflow trap).
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+
+      // rdx is the architectural remainder output.
+      if rd != 2 {
+        abort("x86_64 SRem: expected dst in rdx")
+      }
+
+      // if rhs == -1: rdx = 0; goto done
+      let do_idiv = self.new_internal_label()
+      let done = self.new_internal_label()
+      if is_64 {
+        self.x86_emit_cmp_r_imm32(rhs, -1)
+      } else {
+        self.x86_emit_cmp_r32_imm32(rhs, -1)
+      }
+      self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_idiv)
+      if is_64 {
+        self.x86_emit_xor_rr(2, 2)
+      } else {
+        self.x86_emit_xor_rr32(2, 2)
+      }
+      self.x86_emit_jmp_rel32(done)
+      self.define_label(do_idiv)
+
+      // Preserve divisor if it conflicts with rax/rdx.
+      let mut divisor = rhs
+      if rhs == 0 || rhs == 2 {
+        self.x86_emit_mov_rr(scratch, rhs)
+        divisor = scratch
+      }
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      if is_64 {
+        self.x86_emit_cqo()
+        self.x86_emit_idiv_r64(divisor)
+      } else {
+        self.x86_emit_cdq()
+        self.x86_emit_idiv_r32(divisor)
+      }
+      // Remainder is in rdx already.
+      self.define_label(done)
+    }
+    @instr.URem(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      let scratch = isa.scratch_reg_1_index()
+      if rd != 2 {
+        abort("x86_64 URem: expected dst in rdx")
+      }
+
+      // Preserve divisor if it conflicts with rax/rdx.
+      let mut divisor = rhs
+      if rhs == 0 || rhs == 2 {
+        self.x86_emit_mov_rr(scratch, rhs)
+        divisor = scratch
+      }
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      if is_64 {
+        self.x86_emit_xor_rr(2, 2)
+        self.x86_emit_div_r64(divisor)
+      } else {
+        self.x86_emit_xor_rr32(2, 2)
+        self.x86_emit_div_r32(divisor)
+      }
+      // Remainder is in rdx already.
     }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])

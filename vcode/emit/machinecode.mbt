@@ -15,6 +15,8 @@ pub struct MachineCode {
   mut pos : Int
   // Labels for branch targets
   labels : Map[Int, Int] // block_id -> offset
+  // Internal labels are always negative and do not overlap with block ids.
+  mut next_internal_label : Int
   // Pending fixups for forward branches
   fixups : Array[Fixup]
   // Pending x86_64 rel32 fixups for forward branches (disp32 patched at end).
@@ -82,12 +84,20 @@ pub fn MachineCode::new() -> MachineCode {
     bytes: [],
     pos: 0,
     labels: {},
+    next_internal_label: -1,
     fixups: [],
     x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
     disasm: [],
   }
+}
+
+///|
+pub fn MachineCode::new_internal_label(self : MachineCode) -> Int {
+  let l = self.next_internal_label
+  self.next_internal_label = self.next_internal_label - 1
+  l
 }
 
 ///|

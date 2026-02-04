@@ -100,6 +100,7 @@ pub struct MachineCode {
   bytes : Array[Int]
   mut pos : Int
   labels : Map[Int, Int]
+  mut next_internal_label : Int
   fixups : Array[Fixup]
   x86_rel32_fixups : Array[X86Rel32Fixup]
   func_addr_fixups : Array[FuncAddrFixup]
@@ -315,6 +316,7 @@ pub fn MachineCode::get_call_fixups(Self) -> Array[CallFixup]
 pub fn MachineCode::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
 pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::new() -> Self
+pub fn MachineCode::new_internal_label(Self) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit
 pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
@@ -326,6 +328,8 @@ pub fn MachineCode::x86_emit_call_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_cdq(Self) -> Unit
 pub fn MachineCode::x86_emit_cmovcc_rr(Self, @instr.Cond, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmovcc_rr32(Self, @instr.Cond, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cmp_r32_imm32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cmp_r_imm32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmp_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cqo(Self) -> Unit

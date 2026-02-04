@@ -1291,23 +1291,18 @@ fn lower_rem(
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     if @isa.ISA::current() is @isa.X86_64 {
-      // Bootstrap via C helpers: avoid idiv/imul juggling for now.
-      let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-      let ptr = if is_64 {
-        if signed {
-          @jit_ffi.c_jit_get_i64_srem_ptr()
-        } else {
-          @jit_ffi.c_jit_get_i64_urem_ptr()
-        }
-      } else if signed {
-        @jit_ffi.c_jit_get_i32_srem_ptr()
-      } else {
-        @jit_ffi.c_jit_get_i32_urem_ptr()
-      }
-      let load_ptr = @instr.VCodeInst::new(LoadConst(ptr))
-      load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
-      block.add_inst(load_ptr)
-      lower_c_libcall(ctx, block, func_ptr_vreg, [lhs, rhs], Some(dst))
+      // Match Cranelift x64: use IDIV/DIV remainder directly.
+      //
+      // Note: the remainder value is produced in RDX/EDX by the hardware.
+      let opcode = if signed { @instr.SRem(is_64) } else { @instr.URem(is_64) }
+      let rem_inst = @instr.VCodeInst::new(opcode)
+      rem_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
+      rem_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
+      rem_inst.add_use(Virtual(rhs))
+      // Clobbers: rax/rdx are implicit in div/idiv.
+      rem_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+      rem_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+      block.add_inst(rem_inst)
       return
     }
 

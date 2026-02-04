@@ -1076,6 +1076,36 @@ pub fn MachineCode::x86_emit_div_r32(self : MachineCode, divisor : Int) -> Unit 
 }
 
 ///|
+pub fn MachineCode::x86_emit_cmp_r_imm32(
+  self : MachineCode,
+  reg : Int,
+  imm : Int,
+) -> Unit {
+  // cmp r/m64, imm32: REX.W + 81 /7 id
+  let b = (reg >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 7, reg)
+  emit_u32_le(self, imm)
+}
+
+///|
+pub fn MachineCode::x86_emit_cmp_r32_imm32(
+  self : MachineCode,
+  reg : Int,
+  imm : Int,
+) -> Unit {
+  // cmp r/m32, imm32: 81 /7 id
+  let b = (reg >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 7, reg)
+  emit_u32_le(self, imm)
+}
+
+///|
 pub fn MachineCode::x86_emit_cmovcc_rr(
   self : MachineCode,
   cond : @instr.Cond,
