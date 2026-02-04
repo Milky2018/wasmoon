@@ -259,7 +259,7 @@ pub fn verify_allocation(
       let cur = spans[i]
       if prev.1.overlaps(cur.1, block_order) {
         abort(
-          "regalloc verifier: overlapping allocations in same preg (key=\{key}, v\{prev.0} overlaps v\{cur.0})",
+          "regalloc verifier: overlapping allocations in same preg (key=\{key}, v\{prev.0} \{prev.1} overlaps v\{cur.0} \{cur.1})",
         )
       }
     }
