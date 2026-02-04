@@ -309,6 +309,30 @@ test "x86_64 SIMD variable shift + unpack encodings" {
 }
 
 ///|
+test "x86_64 SIMD pack/unpack/extmul encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_punpcklwd_xmm_xmm(1, 2) // punpcklwd xmm1, xmm2
+  mc.x86_emit_punpckhwd_xmm_xmm(1, 2) // punpckhwd xmm1, xmm2
+  mc.x86_emit_punpckldq_xmm_xmm(1, 2) // punpckldq xmm1, xmm2
+  mc.x86_emit_punpckhdq_xmm_xmm(1, 2) // punpckhdq xmm1, xmm2
+  mc.x86_emit_packuswb_xmm_xmm(1, 2) // packuswb xmm1, xmm2
+  mc.x86_emit_packssdw_xmm_xmm(1, 2) // packssdw xmm1, xmm2
+  mc.x86_emit_packusdw_xmm_xmm(1, 2) // packusdw xmm1, xmm2
+  mc.x86_emit_palignr_xmm_xmm_imm8(1, 2, 8) // palignr xmm1, xmm2, 8
+  mc.x86_emit_pmulhw_xmm_xmm(1, 2) // pmulhw xmm1, xmm2
+  mc.x86_emit_pmulhuw_xmm_xmm(1, 2) // pmulhuw xmm1, xmm2
+  mc.x86_emit_pmuldq_xmm_xmm(1, 2) // pmuldq xmm1, xmm2
+  mc.x86_emit_pmuludq_xmm_xmm(1, 2) // pmuludq xmm1, xmm2
+  mc.x86_emit_pmaddwd_xmm_xmm(1, 2) // pmaddwd xmm1, xmm2
+  mc.x86_emit_pmaddubsw_xmm_xmm(1, 2) // pmaddubsw xmm1, xmm2
+  mc.x86_emit_pmulhrsw_xmm_xmm(1, 2) // pmulhrsw xmm1, xmm2
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 97, 202, 102, 15, 105, 202, 102, 15, 98, 202, 102, 15, 106, 202, 102, 15, 103, 202, 102, 15, 107, 202, 102, 15, 56, 43, 202, 102, 15, 58, 15, 202, 8, 102, 15, 229, 202, 102, 15, 228, 202, 102, 15, 56, 40, 202, 102, 15, 244, 202, 102, 15, 245, 202, 102, 15, 56, 4, 202, 102, 15, 56, 11, 202]",
+  )
+}
+
+///|
 test "x86_64 SIMD saturating add/sub encodings (SSE2)" {
   let mc = MachineCode::new()
   mc.x86_emit_paddsb_xmm_xmm(1, 2) // paddsb xmm1, xmm2

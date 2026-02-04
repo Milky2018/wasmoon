@@ -1655,6 +1655,329 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.define_label(done)
     }
+    @instr.SIMDNarrow(dst_lane_size, is_signed) => {
+      // Narrow two vectors to one, with saturation.
+      //
+      // Match Cranelift x64 lowering using PACK* instructions.
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let tmp = 15 // reserved via MachineEnvData.scratch_float
+      let rhs = prepare_xmm_two_operand(self, rd, a, b, tmp)
+      match dst_lane_size {
+        @instr.B8 =>
+          if is_signed {
+            self.x86_emit_packsswb_xmm_xmm(rd, rhs)
+          } else {
+            self.x86_emit_packuswb_xmm_xmm(rd, rhs)
+          }
+        @instr.H16 =>
+          if is_signed {
+            self.x86_emit_packssdw_xmm_xmm(rd, rhs)
+          } else {
+            self.x86_emit_packusdw_xmm_xmm(rd, rhs)
+          }
+        _ =>
+          abort("amd64 SIMDNarrow: unsupported dst lane size \{dst_lane_size}")
+      }
+    }
+    @instr.SIMDExtendLow(dst_lane_size, is_signed) => {
+      // Widen the lower half lanes.
+      //
+      // Match Cranelift x64 `swiden_low`/`uwiden_low` rules using SSE4.1
+      // `pmovsx*`/`pmovzx*`.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match dst_lane_size {
+        @instr.H16 =>
+          if is_signed {
+            self.x86_emit_pmovsxbw_xmm_xmm(rd, src)
+          } else {
+            self.x86_emit_pmovzxbw_xmm_xmm(rd, src)
+          }
+        @instr.S32 =>
+          if is_signed {
+            self.x86_emit_pmovsxwd_xmm_xmm(rd, src)
+          } else {
+            self.x86_emit_pmovzxwd_xmm_xmm(rd, src)
+          }
+        @instr.D64 =>
+          if is_signed {
+            self.x86_emit_pmovsxdq_xmm_xmm(rd, src)
+          } else {
+            self.x86_emit_pmovzxdq_xmm_xmm(rd, src)
+          }
+        _ =>
+          abort(
+            "amd64 SIMDExtendLow: unsupported dst lane size \{dst_lane_size}",
+          )
+      }
+    }
+    @instr.SIMDExtendHigh(dst_lane_size, is_signed) => {
+      // Widen the upper half lanes.
+      //
+      // Match Cranelift x64 `swiden_high` rules: move the high lanes down then
+      // apply the SSE4.1 pmovsx/pmovzx widening instructions.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match dst_lane_size {
+        @instr.H16 => {
+          if rd != src {
+            self.x86_emit_movaps_xmm_xmm(rd, src)
+          }
+          self.x86_emit_palignr_xmm_xmm_imm8(rd, rd, 8)
+          if is_signed {
+            self.x86_emit_pmovsxbw_xmm_xmm(rd, rd)
+          } else {
+            self.x86_emit_pmovzxbw_xmm_xmm(rd, rd)
+          }
+        }
+        @instr.S32 => {
+          if rd != src {
+            self.x86_emit_movaps_xmm_xmm(rd, src)
+          }
+          self.x86_emit_palignr_xmm_xmm_imm8(rd, rd, 8)
+          if is_signed {
+            self.x86_emit_pmovsxwd_xmm_xmm(rd, rd)
+          } else {
+            self.x86_emit_pmovzxwd_xmm_xmm(rd, rd)
+          }
+        }
+        @instr.D64 => {
+          if rd != src {
+            self.x86_emit_movaps_xmm_xmm(rd, src)
+          }
+          // Bring lanes 2 and 3 down.
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0xEE)
+          if is_signed {
+            self.x86_emit_pmovsxdq_xmm_xmm(rd, rd)
+          } else {
+            self.x86_emit_pmovzxdq_xmm_xmm(rd, rd)
+          }
+        }
+        _ =>
+          abort(
+            "amd64 SIMDExtendHigh: unsupported dst lane size \{dst_lane_size}",
+          )
+      }
+    }
+    @instr.SIMDExtMulLow(dst_lane_size, is_signed) => {
+      // Multiply lower half lanes and widen the result.
+      //
+      // Match Cranelift x64 special cases for extmul.
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      match dst_lane_size {
+        @instr.H16 => {
+          if is_signed {
+            self.x86_emit_pmovsxbw_xmm_xmm(rd, x)
+            self.x86_emit_pmovsxbw_xmm_xmm(t0, y)
+          } else {
+            self.x86_emit_pmovzxbw_xmm_xmm(rd, x)
+            self.x86_emit_pmovzxbw_xmm_xmm(t0, y)
+          }
+          self.x86_emit_pmullw_xmm_xmm(rd, t0)
+        }
+        @instr.S32 => {
+          // lo = pmullw(x, y); hi = pmulh*(x, y); punpcklwd(lo, hi)
+          let mut y_keep = y
+          if rd == y {
+            self.x86_emit_movaps_xmm_xmm(t1, y)
+            y_keep = t1
+          }
+          self.x86_emit_movaps_xmm_xmm(t0, x)
+          if is_signed {
+            self.x86_emit_pmulhw_xmm_xmm(t0, y_keep)
+          } else {
+            self.x86_emit_pmulhuw_xmm_xmm(t0, y_keep)
+          }
+          if rd != x {
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+          }
+          self.x86_emit_pmullw_xmm_xmm(rd, y_keep)
+          self.x86_emit_punpcklwd_xmm_xmm(rd, t0)
+        }
+        @instr.D64 => {
+          let imm = 0x50
+          self.x86_emit_pshufd_xmm_xmm_imm8(t0, x, imm)
+          self.x86_emit_pshufd_xmm_xmm_imm8(t1, y, imm)
+          if is_signed {
+            self.x86_emit_pmuldq_xmm_xmm(t0, t1)
+          } else {
+            self.x86_emit_pmuludq_xmm_xmm(t0, t1)
+          }
+          self.x86_emit_movaps_xmm_xmm(rd, t0)
+        }
+        _ =>
+          abort(
+            "amd64 SIMDExtMulLow: unsupported dst lane size \{dst_lane_size}",
+          )
+      }
+    }
+    @instr.SIMDExtMulHigh(dst_lane_size, is_signed) => {
+      // Multiply upper half lanes and widen the result.
+      //
+      // Match Cranelift x64 special cases for extmul.
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      match dst_lane_size {
+        @instr.H16 => {
+          if rd != x {
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+          }
+          self.x86_emit_palignr_xmm_xmm_imm8(rd, rd, 8)
+          self.x86_emit_movaps_xmm_xmm(t0, y)
+          self.x86_emit_palignr_xmm_xmm_imm8(t0, t0, 8)
+          if is_signed {
+            self.x86_emit_pmovsxbw_xmm_xmm(rd, rd)
+            self.x86_emit_pmovsxbw_xmm_xmm(t0, t0)
+          } else {
+            self.x86_emit_pmovzxbw_xmm_xmm(rd, rd)
+            self.x86_emit_pmovzxbw_xmm_xmm(t0, t0)
+          }
+          self.x86_emit_pmullw_xmm_xmm(rd, t0)
+        }
+        @instr.S32 => {
+          // lo = pmullw(x, y); hi = pmulh*(x, y); punpckhwd(lo, hi)
+          let mut y_keep = y
+          if rd == y {
+            self.x86_emit_movaps_xmm_xmm(t1, y)
+            y_keep = t1
+          }
+          self.x86_emit_movaps_xmm_xmm(t0, x)
+          if is_signed {
+            self.x86_emit_pmulhw_xmm_xmm(t0, y_keep)
+          } else {
+            self.x86_emit_pmulhuw_xmm_xmm(t0, y_keep)
+          }
+          if rd != x {
+            self.x86_emit_movaps_xmm_xmm(rd, x)
+          }
+          self.x86_emit_pmullw_xmm_xmm(rd, y_keep)
+          self.x86_emit_punpckhwd_xmm_xmm(rd, t0)
+        }
+        @instr.D64 => {
+          let imm = 0xFA
+          self.x86_emit_pshufd_xmm_xmm_imm8(t0, x, imm)
+          self.x86_emit_pshufd_xmm_xmm_imm8(t1, y, imm)
+          if is_signed {
+            self.x86_emit_pmuldq_xmm_xmm(t0, t1)
+          } else {
+            self.x86_emit_pmuludq_xmm_xmm(t0, t1)
+          }
+          self.x86_emit_movaps_xmm_xmm(rd, t0)
+        }
+        _ =>
+          abort(
+            "amd64 SIMDExtMulHigh: unsupported dst lane size \{dst_lane_size}",
+          )
+      }
+    }
+    @instr.SIMDExtAddPairwise(dst_lane_size, is_signed) => {
+      // Pairwise add adjacent lanes and widen the result.
+      //
+      // Match Cranelift x64 special cases for extadd_pairwise.
+      let rd = wreg_num(inst.defs[0])
+      let val = reg_num(inst.uses[0])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      match dst_lane_size {
+        @instr.H16 => {
+          // i16x8.extadd_pairwise_i8x16_{s,u}
+          let ones = 0x0101010101010101L
+          materialize_xmm_const(self, t0, ones, ones, scratch)
+          if is_signed {
+            // pmaddubsw(ones, val)
+            if rd == val {
+              self.x86_emit_movaps_xmm_xmm(t1, val)
+              self.x86_emit_movaps_xmm_xmm(rd, t0)
+              self.x86_emit_pmaddubsw_xmm_xmm(rd, t1)
+            } else {
+              self.x86_emit_movaps_xmm_xmm(rd, t0)
+              self.x86_emit_pmaddubsw_xmm_xmm(rd, val)
+            }
+          } else {
+            // pmaddubsw(val, ones)
+            if rd != val {
+              self.x86_emit_movaps_xmm_xmm(rd, val)
+            }
+            self.x86_emit_pmaddubsw_xmm_xmm(rd, t0)
+          }
+        }
+        @instr.S32 => {
+          // i32x4.extadd_pairwise_i16x8_{s,u}
+          let madd_ones = 0x0001000100010001L
+          if is_signed {
+            materialize_xmm_const(self, t0, madd_ones, madd_ones, scratch)
+            if rd != val {
+              self.x86_emit_movaps_xmm_xmm(rd, val)
+            }
+            self.x86_emit_pmaddwd_xmm_xmm(rd, t0)
+          } else {
+            // Bias into signed domain, pmaddwd, then fixup.
+            let xor_const = 0x8000800080008000L
+            let addd_const = 0x0001000000010000L
+            if rd != val {
+              self.x86_emit_movaps_xmm_xmm(rd, val)
+            }
+            materialize_xmm_const(self, t0, xor_const, xor_const, scratch)
+            self.x86_emit_pxor_xmm_xmm(rd, t0)
+            materialize_xmm_const(self, t1, madd_ones, madd_ones, scratch)
+            self.x86_emit_pmaddwd_xmm_xmm(rd, t1)
+            materialize_xmm_const(self, t0, addd_const, addd_const, scratch)
+            self.x86_emit_padd_xmm_xmm(@instr.S32, rd, t0)
+          }
+        }
+        _ =>
+          abort(
+            "amd64 SIMDExtAddPairwise: unsupported dst lane size \{dst_lane_size}",
+          )
+      }
+    }
+    @instr.SIMDDot => {
+      // i32x4.dot_i16x8_s: use PMADDWD directly (Cranelift special case).
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let tmp = 15 // reserved via MachineEnvData.scratch_float
+      let rhs = prepare_xmm_two_operand(self, rd, x, y, tmp)
+      self.x86_emit_pmaddwd_xmm_xmm(rd, rhs)
+    }
+    @instr.SIMDQ15MulrSat => {
+      // i16x8.q15mulr_sat_s / relaxed_q15mulr_s: rounding multiply high with
+      // signed saturation.
+      //
+      // Match Cranelift x64 lowering using PMULHRSW + fixup for the
+      // -32768 corner case.
+      let rd = wreg_num(inst.defs[0])
+      let x = reg_num(inst.uses[0])
+      let y = reg_num(inst.uses[1])
+      let t0 = 14 // reserved via MachineEnvData.scratch_float
+      let t1 = 15 // reserved via MachineEnvData.scratch_float
+      let rhs = prepare_xmm_two_operand(self, rd, x, y, t1)
+      self.x86_emit_pmulhrsw_xmm_xmm(rd, rhs)
+
+      // If a lane equals 0x8000, xor with all-ones to produce 0x7FFF.
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
+      let mask = 0x8000800080008000L
+      materialize_xmm_const(self, t0, mask, mask, scratch)
+      self.x86_emit_movaps_xmm_xmm(t1, rd)
+      self.x86_emit_pcmpeq_xmm_xmm(@instr.H16, t1, t0)
+      self.x86_emit_pxor_xmm_xmm(rd, t1)
+    }
     @instr.SIMDLoadSplat(lane_size, offset) => {
       // Note: current lowering passes `offset=0` because the effective address
       // already includes the wasm memory offset.
