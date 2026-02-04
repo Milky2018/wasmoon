@@ -323,6 +323,147 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_not_r32(rd)
       }
     }
+    @instr.Clz(is_64) => {
+      // Count leading zeros.
+      //
+      // Use a baseline x86_64 sequence:
+      // - if x == 0 -> result = bit_width
+      // - else result = (bit_width - 1) - bsr(x)
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let tmp = isa.scratch_reg_1_index()
+      let tmp2 = isa.scratch_reg_2_index()
+      let nonzero = self.new_internal_label()
+      let done = self.new_internal_label()
+      if is_64 {
+        self.x86_emit_mov_rr(tmp, rn)
+        self.x86_emit_test_rr(tmp, tmp)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
+        self.x86_emit_mov_imm64(rd, 64L)
+        self.x86_emit_jmp_rel32(done)
+        self.define_label(nonzero)
+        self.x86_emit_bsr_r64_r64(tmp2, tmp)
+        self.x86_emit_mov_imm64(rd, 63L)
+        self.x86_emit_sub_rr(rd, tmp2)
+        self.define_label(done)
+      } else {
+        self.x86_emit_mov_rr32(tmp, rn)
+        self.x86_emit_test_rr32(tmp, tmp)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
+        self.x86_emit_mov_imm64(rd, 32L)
+        self.x86_emit_jmp_rel32(done)
+        self.define_label(nonzero)
+        self.x86_emit_bsr_r32_r32(tmp2, tmp)
+        self.x86_emit_mov_imm64(rd, 31L)
+        self.x86_emit_sub_rr32(rd, tmp2)
+        self.define_label(done)
+      }
+    }
+    @instr.Popcnt(is_64) => {
+      // Population count.
+      //
+      // Software popcount to avoid CPU feature gating.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let x = isa.scratch_reg_1_index()
+      let t = isa.scratch_reg_2_index()
+      if is_64 {
+        // x = rn
+        self.x86_emit_mov_rr(x, rn)
+
+        // x = x - ((x >> 1) & 0x5555...)
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 1)
+        self.x86_emit_mov_imm64(rd, 0x5555555555555555L)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_mov_rr(rd, x)
+        self.x86_emit_sub_rr(rd, t)
+        self.x86_emit_mov_rr(x, rd)
+
+        // x = (x & 0x3333...) + ((x >> 2) & 0x3333...)
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 2)
+        self.x86_emit_mov_imm64(rd, 0x3333333333333333L)
+        self.x86_emit_and_rr(x, rd)
+        self.x86_emit_and_rr(t, rd)
+        self.x86_emit_mov_rr(rd, x)
+        self.x86_emit_add_rr(rd, t)
+        self.x86_emit_mov_rr(x, rd)
+
+        // x = (x + (x >> 4)) & 0x0f0f...
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 4)
+        self.x86_emit_mov_rr(rd, x)
+        self.x86_emit_add_rr(rd, t)
+        self.x86_emit_mov_imm64(t, 0x0F0F0F0F0F0F0F0FL)
+        self.x86_emit_and_rr(rd, t)
+        self.x86_emit_mov_rr(x, rd)
+
+        // x = x + (x >> 8); x = x + (x >> 16); x = x + (x >> 32)
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 8)
+        self.x86_emit_add_rr(x, t)
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 16)
+        self.x86_emit_add_rr(x, t)
+        self.x86_emit_mov_rr(t, x)
+        self.x86_emit_shr_r_imm8(t, 32)
+        self.x86_emit_add_rr(x, t)
+
+        // rd = x & 0x7f
+        self.x86_emit_mov_imm64(rd, 0x7FL)
+        self.x86_emit_and_rr(x, rd)
+        if rd != x {
+          self.x86_emit_mov_rr32(rd, x)
+        }
+      } else {
+        // x = rn
+        self.x86_emit_mov_rr32(x, rn)
+
+        // x = x - ((x >> 1) & 0x55555555)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 1)
+        self.x86_emit_mov_imm64(rd, 0x55555555L)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_mov_rr32(rd, x)
+        self.x86_emit_sub_rr32(rd, t)
+        self.x86_emit_mov_rr32(x, rd)
+
+        // x = (x & 0x33333333) + ((x >> 2) & 0x33333333)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 2)
+        self.x86_emit_mov_imm64(rd, 0x33333333L)
+        self.x86_emit_and_rr32(x, rd)
+        self.x86_emit_and_rr32(t, rd)
+        self.x86_emit_mov_rr32(rd, x)
+        self.x86_emit_add_rr32(rd, t)
+        self.x86_emit_mov_rr32(x, rd)
+
+        // x = (x + (x >> 4)) & 0x0f0f0f0f
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 4)
+        self.x86_emit_mov_rr32(rd, x)
+        self.x86_emit_add_rr32(rd, t)
+        self.x86_emit_mov_imm64(t, 0x0F0F0F0FL)
+        self.x86_emit_and_rr32(rd, t)
+        self.x86_emit_mov_rr32(x, rd)
+
+        // x = x + (x >> 8); x = x + (x >> 16)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 8)
+        self.x86_emit_add_rr32(x, t)
+        self.x86_emit_mov_rr32(t, x)
+        self.x86_emit_shr_r32_imm8(t, 16)
+        self.x86_emit_add_rr32(x, t)
+
+        // rd = x & 0x3f
+        self.x86_emit_mov_imm64(rd, 0x3FL)
+        self.x86_emit_and_rr32(x, rd)
+        if rd != x {
+          self.x86_emit_mov_rr32(rd, x)
+        }
+      }
+    }
     @instr.Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])

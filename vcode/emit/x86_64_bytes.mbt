@@ -3624,6 +3624,38 @@ pub fn MachineCode::x86_emit_test_rr32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_bsr_r32_r32(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // bsr r32, r/m32: 0F BD /r
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xBD)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_bsr_r64_r64(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  // bsr r64, r/m64: REX.W 0F BD /r
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0xBD)
+  emit_modrm(self, 3, dst, src)
+}
+
+///|
 /// Emit a trap instruction with a 16-bit payload.
 ///
 /// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The JIT trap signal

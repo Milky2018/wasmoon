@@ -34,6 +34,14 @@ test "x86_64 cmp/test encodings (r8 vs rax)" {
 }
 
 ///|
+test "x86_64 bsr encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_bsr_r32_r32(0, 1) // bsr eax, ecx
+  mc.x86_emit_bsr_r64_r64(8, 9) // bsr r8, r9
+  inspect(mc.get_bytes(), content="[15, 189, 193, 77, 15, 189, 193]")
+}
+
+///|
 test "x86_64 jcc rel32 fixup patches disp32" {
   let mc = MachineCode::new()
   mc.x86_emit_jcc_rel32(@instr.Cond::Eq, 1)

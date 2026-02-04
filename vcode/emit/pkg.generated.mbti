@@ -329,6 +329,8 @@ pub fn MachineCode::x86_emit_addss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_r_imm8_sxb64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_bsr_r32_r32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_bsr_r64_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_call_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_cdq(Self) -> Unit
 pub fn MachineCode::x86_emit_cmovcc_rr(Self, @instr.Cond, Int, Int) -> Unit
