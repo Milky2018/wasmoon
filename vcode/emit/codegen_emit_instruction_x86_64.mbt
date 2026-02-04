@@ -183,6 +183,118 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_setcc_r8(cond, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
+    @instr.Shl(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rm != 1 {
+        abort("x86_64 Shl: expected shift count in rcx")
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_shl_r_cl(rd)
+      } else {
+        self.x86_emit_shl_r32_cl(rd)
+      }
+    }
+    @instr.ShlImm(amt, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_shl_r_imm8(rd, amt)
+      } else {
+        self.x86_emit_shl_r32_imm8(rd, amt)
+      }
+    }
+    @instr.LShr(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rm != 1 {
+        abort("x86_64 LShr: expected shift count in rcx")
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_shr_r_cl(rd)
+      } else {
+        self.x86_emit_shr_r32_cl(rd)
+      }
+    }
+    @instr.LShrImm(amt, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_shr_r_imm8(rd, amt)
+      } else {
+        self.x86_emit_shr_r32_imm8(rd, amt)
+      }
+    }
+    @instr.AShr(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rm != 1 {
+        abort("x86_64 AShr: expected shift count in rcx")
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_sar_r_cl(rd)
+      } else {
+        self.x86_emit_sar_r32_cl(rd)
+      }
+    }
+    @instr.AShrImm(amt, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_sar_r_imm8(rd, amt)
+      } else {
+        self.x86_emit_sar_r32_imm8(rd, amt)
+      }
+    }
+    @instr.Rotr(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if rm != 1 {
+        abort("x86_64 Rotr: expected shift count in rcx")
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_ror_r_cl(rd)
+      } else {
+        self.x86_emit_ror_r32_cl(rd)
+      }
+    }
+    @instr.RotrImm(amt, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      if is_64 {
+        self.x86_emit_ror_r_imm8(rd, amt)
+      } else {
+        self.x86_emit_ror_r32_imm8(rd, amt)
+      }
+    }
     @instr.Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

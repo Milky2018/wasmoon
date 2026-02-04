@@ -212,3 +212,36 @@ test "x86_64 setcc + movzx encodings" {
     content="[65, 15, 148, 193, 69, 15, 182, 201, 64, 15, 149, 196]",
   )
 }
+
+///|
+test "x86_64 shifts/rotates encodings (cl + imm8)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_shl_r_cl(0) // shl rax, cl
+  mc.x86_emit_shr_r_cl(8) // shr r8, cl
+  mc.x86_emit_sar_r32_cl(8) // sar r8d, cl
+  mc.x86_emit_ror_r_imm8(0, 7) // ror rax, 7
+  mc.x86_emit_shl_r32_imm8(8, 1) // shl r8d, 1
+  inspect(
+    mc.get_bytes(),
+    content="[72, 211, 224, 73, 211, 232, 65, 211, 248, 72, 193, 200, 7, 65, 193, 224, 1]",
+  )
+}
+
+///|
+test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
+  let mc = MachineCode::new()
+  // cl-count
+  mc.x86_emit_shl_r_cl(0) // shl rax, cl
+  mc.x86_emit_shr_r_cl(8) // shr r8, cl
+  mc.x86_emit_sar_r32_cl(9) // sar r9d, cl
+  mc.x86_emit_ror_r32_cl(0) // ror eax, cl
+  // imm8-count
+  mc.x86_emit_shl_r_imm8(0, 3) // shl rax, 3
+  mc.x86_emit_shr_r_imm8(8, 1) // shr r8, 1
+  mc.x86_emit_sar_r32_imm8(9, 7) // sar r9d, 7
+  mc.x86_emit_ror_r32_imm8(0, 5) // ror eax, 5
+  inspect(
+    mc.get_bytes(),
+    content="[72, 211, 224, 73, 211, 232, 65, 211, 249, 211, 200, 72, 193, 224, 3, 73, 193, 232, 1, 65, 193, 249, 7, 193, 200, 5]",
+  )
+}

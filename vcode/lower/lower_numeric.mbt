@@ -563,7 +563,12 @@ fn lower_shift(
     let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
+    if @isa.ISA::current() is @isa.X86_64 {
+      // x86_64 variable shifts/rotates use CL as the implicit count register.
+      vcode_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
+    } else {
+      vcode_inst.add_use(Virtual(rhs))
+    }
     block.add_inst(vcode_inst)
   }
 }
