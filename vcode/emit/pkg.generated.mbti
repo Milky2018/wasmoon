@@ -338,8 +338,10 @@ pub fn MachineCode::x86_emit_imul_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
+pub fn MachineCode::x86_emit_mov_m16_r16(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_m32_r32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_m64_r64(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_mov_m8_r8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_r32_m32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_r64_m64(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_rr(Self, Int, Int) -> Unit

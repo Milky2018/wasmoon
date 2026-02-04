@@ -621,6 +621,52 @@ pub fn MachineCode::x86_emit_mov_m32_r32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_mov_m8_r8(
+  self : MachineCode,
+  base : Int,
+  disp : Int,
+  src : Int,
+) -> Unit {
+  // mov r/m8, r8: 88 /r
+  //
+  // Low 8-bit register forms SPL/BPL/SIL/DIL require a REX prefix, so we emit
+  // a REX prefix whenever the src reg needs it (or when selecting r8b-r15b).
+  let r = (src >> 3) & 1
+  let b = (base >> 3) & 1
+  if r != 0 || b != 0 || (src & 7) >= 4 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x88)
+  emit_modrm(self, 2, src, base)
+  if (base & 7) == 4 {
+    emit_sib(self, 0, 4, base)
+  }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_mov_m16_r16(
+  self : MachineCode,
+  base : Int,
+  disp : Int,
+  src : Int,
+) -> Unit {
+  // mov r/m16, r16: 66 89 /r
+  let r = (src >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x89)
+  emit_modrm(self, 2, src, base)
+  if (base & 7) == 4 {
+    emit_sib(self, 0, 4, base)
+  }
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movaps_xmm_xmm(
   self : MachineCode,
   dst : Int,

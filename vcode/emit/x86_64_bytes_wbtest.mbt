@@ -141,6 +141,17 @@ test "x86_64 mov loads/stores (m32) encodings" {
 }
 
 ///|
+test "x86_64 mov stores (m8/m16) encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_m8_r8(8, 0x1234, 9) // [r8+disp32] = r9b
+  mc.x86_emit_mov_m16_r16(4, 8, 11) // [rsp+disp32] = r11w
+  inspect(
+    mc.get_bytes(),
+    content="[69, 136, 136, 52, 18, 0, 0, 102, 68, 137, 156, 36, 8, 0, 0, 0]",
+  )
+}
+
+///|
 test "x86_64 movss encodings (m32)" {
   let mc = MachineCode::new()
   mc.x86_emit_movss_xmm_m32(1, 4, 0)
