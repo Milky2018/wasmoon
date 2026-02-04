@@ -148,7 +148,7 @@ pub fn verify_allocation(
   }
 
   // Build per-preg span lists for overlap checking.
-  let preg_spans : Map[Int, Array[ProgPointRange]] = {}
+  let preg_spans : Map[Int, Array[(Int, ProgPointRange)]] = {}
   for entry in alloc.assignments {
     let (vreg_id, preg) = entry
     match ranges.get_by_vreg(vreg_id) {
@@ -238,7 +238,7 @@ pub fn verify_allocation(
         }
         let spans = preg_spans.get(key).unwrap()
         for span in lr.ranges {
-          spans.push(span)
+          spans.push((vreg_id, span))
         }
       }
       None => ()
@@ -251,13 +251,15 @@ pub fn verify_allocation(
     if spans.length() <= 1 {
       continue
     }
-    spans.sort_by(fn(a, b) { a.start.compare_with_order(b.start, block_order) })
+    spans.sort_by(fn(a, b) {
+      a.1.start.compare_with_order(b.1.start, block_order)
+    })
     for i in 1..<spans.length() {
       let prev = spans[i - 1]
       let cur = spans[i]
-      if prev.overlaps(cur, block_order) {
+      if prev.1.overlaps(cur.1, block_order) {
         abort(
-          "regalloc verifier: overlapping allocations in same preg (key=\{key})",
+          "regalloc verifier: overlapping allocations in same preg (key=\{key}, v\{prev.0} overlaps v\{cur.0})",
         )
       }
     }
