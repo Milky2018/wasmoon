@@ -1386,6 +1386,9 @@ pub(all) enum Cond {
   Pl // Plus/positive or zero (N=0)
   Vs // Overflow (V=1) - used for NaN check in float compare
   Vc // No overflow (V=0)
+  // x86_64-only: parity flag conditions (used after UCOMIS* for NaN/unordered checks).
+  Ps // Parity set (PF=1)
+  Pc // Parity clear (PF=0)
   Hi // Unsigned higher (C=1 && Z=0)
   Ls // Unsigned lower or same (C=0 || Z=1)
   Ge // Signed greater or equal (N=V)
@@ -1406,6 +1409,8 @@ fn Cond::to_string(self : Cond) -> String {
     Pl => "pl"
     Vs => "vs"
     Vc => "vc"
+    Ps => "ps"
+    Pc => "pc"
     Hi => "hi"
     Ls => "ls"
     Ge => "ge"
@@ -1433,6 +1438,7 @@ pub fn Cond::to_bits(self : Cond) -> Int {
     Pl => 5
     Vs => 6
     Vc => 7
+    Ps | Pc => abort("Cond::to_bits: parity conditions are x86_64-only")
     Hi => 8
     Ls => 9
     Ge => 10
@@ -1456,6 +1462,8 @@ pub fn Cond::invert(self : Cond) -> Cond {
     Pl => Mi
     Vs => Vc
     Vc => Vs
+    Ps => Pc
+    Pc => Ps
     Hi => Ls
     Ls => Hi
     Ge => Lt

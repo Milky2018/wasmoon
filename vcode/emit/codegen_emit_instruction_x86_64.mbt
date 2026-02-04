@@ -29,21 +29,6 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
-  fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> @instr.Cond {
-    // x86 UCOMIS* sets flags like an unsigned compare:
-    // - CF=1 => less-than
-    // - ZF=1 => equal
-    // - PF=1 => unordered (NaN)
-    match kind {
-      @instr.FCmpKind::Eq => @instr.Cond::Eq
-      @instr.FCmpKind::Ne => @instr.Cond::Ne
-      @instr.FCmpKind::Lt => @instr.Cond::Lo
-      @instr.FCmpKind::Le => @instr.Cond::Ls
-      @instr.FCmpKind::Gt => @instr.Cond::Hi
-      @instr.FCmpKind::Ge => @instr.Cond::Hs
-    }
-  }
-
   fn reg_class_of(reg : @abi.Reg) -> @abi.RegClass {
     match reg {
       @abi.Physical(preg) => preg.class
@@ -320,47 +305,72 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
     @instr.FCmp(kind) => {
-      let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
-      // FCmp operands are in XMM regs. Use ucomiss/ucomisd based on reg class.
-      if reg_class_of(inst.uses[0]) is @abi.Float32 {
-        self.x86_emit_ucomiss_xmm_xmm(rn, rm)
-      } else {
-        self.x86_emit_ucomisd_xmm_xmm(rn, rm)
-      }
+      // Match Cranelift x64 scalar fcmp lowering (see wasmtime cranelift x64 inst.isle `emit_fcmp`):
+      // - UCOMIS* sets ZF/CF/PF; unordered => PF=1.
+      // - Eq: NP && Z
+      // - Ne: P || NZ
+      // - Lt/Le use swapped operands + (NBE/NB), avoiding explicit orderedness checks.
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
       let rd = wreg_num(inst.defs[0])
-      let cond = fcmp_kind_to_cond(kind)
+      let class = reg_class_of(inst.uses[0])
+      let is_f32 = class == @abi.Float32
+      if class != @abi.Float32 && class != @abi.Float64 {
+        abort("x86_64 FCmp: expected scalar float register class")
+      }
+      fn emit_ucomis(
+        self : MachineCode,
+        is_f32 : Bool,
+        a : Int,
+        b : Int,
+      ) -> Unit {
+        if is_f32 {
+          self.x86_emit_ucomiss_xmm_xmm(a, b)
+        } else {
+          self.x86_emit_ucomisd_xmm_xmm(a, b)
+        }
+      }
 
-      // For unordered (NaN), UCOMIS* sets PF=1, ZF=1, CF=1.
-      // WebAssembly semantics:
-      // - eq/lt/le are false on NaN
-      // - ne is true on NaN
-      // - gt/ge are false on NaN already via CF/ZF
-      let scratch = isa.scratch_reg_1_index()
+      // Pick a scratch GPR distinct from rd (SETcc writes into low 8-bit).
+      let mut scratch = isa.scratch_reg_1_index()
+      if scratch == rd {
+        scratch = isa.scratch_reg_2_index()
+      }
       match kind {
         @instr.FCmpKind::Eq => {
-          self.x86_emit_setcc_r8(cond, rd)
-          self.x86_emit_setcc_r8(@instr.Cond::Vc, scratch) // ordered (PF==0)
+          emit_ucomis(self, is_f32, lhs, rhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd) // Z
+          self.x86_emit_setcc_r8(@instr.Cond::Pc, scratch) // NP (parity clear)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_and_rr32(rd, scratch)
         }
         @instr.FCmpKind::Ne => {
-          self.x86_emit_setcc_r8(cond, rd)
-          self.x86_emit_setcc_r8(@instr.Cond::Vs, scratch) // unordered (PF==1)
+          emit_ucomis(self, is_f32, lhs, rhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Ne, rd) // NZ
+          self.x86_emit_setcc_r8(@instr.Cond::Ps, scratch) // P (parity set)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_or_rr32(rd, scratch)
         }
-        @instr.FCmpKind::Lt | @instr.FCmpKind::Le => {
-          self.x86_emit_setcc_r8(cond, rd)
-          self.x86_emit_setcc_r8(@instr.Cond::Vc, scratch) // ordered (PF==0)
+        @instr.FCmpKind::Gt => {
+          emit_ucomis(self, is_f32, lhs, rhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Hi, rd) // NBE (ordered >)
           self.x86_emit_movzx_r32_r8(rd, rd)
-          self.x86_emit_movzx_r32_r8(scratch, scratch)
-          self.x86_emit_and_rr32(rd, scratch)
         }
-        _ => {
-          self.x86_emit_setcc_r8(cond, rd)
+        @instr.FCmpKind::Ge => {
+          emit_ucomis(self, is_f32, lhs, rhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Hs, rd) // NB (ordered >=)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+        }
+        @instr.FCmpKind::Lt => {
+          emit_ucomis(self, is_f32, rhs, lhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Hi, rd) // NBE (ordered <)
+          self.x86_emit_movzx_r32_r8(rd, rd)
+        }
+        @instr.FCmpKind::Le => {
+          emit_ucomis(self, is_f32, rhs, lhs)
+          self.x86_emit_setcc_r8(@instr.Cond::Hs, rd) // NB (ordered <=)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
       }
@@ -373,6 +383,268 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_ucomiss_xmm_xmm(rn, rm)
       } else {
         self.x86_emit_ucomisd_xmm_xmm(rn, rm)
+      }
+    }
+    @instr.TrapIf(cond, trap_code) => {
+      // Trap if condition is true (based on the most recent flags).
+      if cond is @instr.Cond::Al {
+        self.x86_emit_trap_imm16(trap_code)
+        return
+      }
+      let done = self.new_internal_label()
+      self.x86_emit_jcc_rel32(cond.invert(), done)
+      self.x86_emit_trap_imm16(trap_code)
+      self.define_label(done)
+    }
+    @instr.Extend(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match kind {
+        @instr.ExtendKind::Signed8To32 => self.x86_emit_movsx_r32_r8(rd, rn)
+        @instr.ExtendKind::Signed8To64 => self.x86_emit_movsx_r64_r8(rd, rn)
+        @instr.ExtendKind::Signed16To32 => self.x86_emit_movsx_r32_r16(rd, rn)
+        @instr.ExtendKind::Signed16To64 => self.x86_emit_movsx_r64_r16(rd, rn)
+        @instr.ExtendKind::Signed32To64 => self.x86_emit_movsxd_r64_r32(rd, rn)
+        @instr.ExtendKind::Unsigned8To32 | @instr.ExtendKind::Unsigned8To64 =>
+          self.x86_emit_movzx_r32_r8(rd, rn)
+        @instr.ExtendKind::Unsigned16To32 | @instr.ExtendKind::Unsigned16To64 =>
+          self.x86_emit_movzx_r32_r16(rd, rn)
+        @instr.ExtendKind::Unsigned32To64 => self.x86_emit_mov_rr32(rd, rn)
+      }
+    }
+    @instr.Truncate => {
+      // i64 -> i32 truncation: write through a 32-bit move to clear upper bits.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+    }
+    @instr.FPromote => {
+      // f32 -> f64
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_cvtss2sd_xmm_xmm(rd, rn)
+    }
+    @instr.FDemote => {
+      // f64 -> f32
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      self.x86_emit_cvtsd2ss_xmm_xmm(rd, rn)
+    }
+    @instr.IntToFloat(kind) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      match kind {
+        @instr.IntToFloatKind::I32SToF32 =>
+          self.x86_emit_cvtsi2ss_xmm_r32(rd, rn)
+        @instr.IntToFloatKind::I32SToF64 =>
+          self.x86_emit_cvtsi2sd_xmm_r32(rd, rn)
+        @instr.IntToFloatKind::I64SToF32 =>
+          self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
+        @instr.IntToFloatKind::I64SToF64 =>
+          self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
+        // u32 fits in signed i64 when zero-extended; use the r64 form.
+        @instr.IntToFloatKind::I32UToF32 =>
+          self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
+        @instr.IntToFloatKind::I32UToF64 =>
+          self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
+        @instr.IntToFloatKind::I64UToF32 | @instr.IntToFloatKind::I64UToF64 => {
+          let scratch1 = isa.scratch_reg_1_index()
+          let scratch2 = isa.scratch_reg_2_index()
+          // Match Cranelift x64 `CvtUint64ToFloatSeq`:
+          // - if src is non-negative, signed conversion is fine
+          // - else convert (src>>1 | src&1) as signed and double the float result
+          let nonneg = self.new_internal_label()
+          let done = self.new_internal_label()
+          self.x86_emit_test_rr(rn, rn)
+          self.x86_emit_jcc_rel32(@instr.Cond::Pl, nonneg) // JNS
+
+          // scratch1 = src >> 1
+          self.x86_emit_mov_rr(scratch1, rn)
+          self.x86_emit_shr_r_imm8(scratch1, 1)
+
+          // scratch2 = src & 1
+          self.x86_emit_mov_rr(scratch2, rn)
+          self.x86_emit_and_r_imm8_sxb64(scratch2, 1)
+
+          // scratch2 = (src>>1) | (src&1)
+          self.x86_emit_or_rr(scratch2, scratch1)
+
+          // dst = cvt(scratch2); dst += dst
+          if kind is @instr.IntToFloatKind::I64UToF32 {
+            self.x86_emit_cvtsi2ss_xmm_r64(rd, scratch2)
+            self.x86_emit_addss_xmm_xmm(rd, rd)
+          } else {
+            self.x86_emit_cvtsi2sd_xmm_r64(rd, scratch2)
+            self.x86_emit_addsd_xmm_xmm(rd, rd)
+          }
+          self.x86_emit_jmp_rel32(done)
+          self.define_label(nonneg)
+          if kind is @instr.IntToFloatKind::I64UToF32 {
+            self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
+          } else {
+            self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
+          }
+          self.define_label(done)
+        }
+      }
+    }
+    @instr.Bitcast => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let dst_class = reg_class_of_w(inst.defs[0])
+      let src_class = reg_class_of(inst.uses[0])
+      match (dst_class, src_class) {
+        (@abi.Int, @abi.Float32) => self.x86_emit_movd_r32_xmm(rd, rn)
+        (@abi.Int, @abi.Float64) => self.x86_emit_movq_r64_xmm(rd, rn)
+        (@abi.Float32, @abi.Int) => self.x86_emit_movd_xmm_r32(rd, rn)
+        (@abi.Float64, @abi.Int) => self.x86_emit_movq_xmm_r64(rd, rn)
+        _ => abort("x86_64 Bitcast: unsupported reg class combination")
+      }
+    }
+    @instr.FcvtToInt(is_f32, is_i64, is_signed) => {
+      // Match Cranelift x64 conversion sequences:
+      // - signed: `CvtFloatToSintSeq` saturating behavior
+      // - unsigned: `CvtFloatToUintSeq` saturating behavior
+      let src_xmm = reg_num(inst.uses[0])
+      let dst = wreg_num(inst.defs[0])
+      let tmp_gpr = isa.scratch_reg_1_index()
+      let tmp_xmm = 15 // reserved via MachineEnvData.scratch_float
+      let tmp_xmm2 = 14 // reserved via MachineEnvData.scratch_float
+      fn emit_ucomis(
+        self : MachineCode,
+        is_f32 : Bool,
+        a : Int,
+        b : Int,
+      ) -> Unit {
+        if is_f32 {
+          self.x86_emit_ucomiss_xmm_xmm(a, b)
+        } else {
+          self.x86_emit_ucomisd_xmm_xmm(a, b)
+        }
+      }
+
+      fn emit_cvtt(
+        self : MachineCode,
+        is_f32 : Bool,
+        is_i64 : Bool,
+        dst : Int,
+        src : Int,
+      ) -> Unit {
+        match (is_f32, is_i64) {
+          (true, false) => self.x86_emit_cvttss2si_r32_xmm(dst, src)
+          (true, true) => self.x86_emit_cvttss2si_r64_xmm(dst, src)
+          (false, false) => self.x86_emit_cvttsd2si_r32_xmm(dst, src)
+          (false, true) => self.x86_emit_cvttsd2si_r64_xmm(dst, src)
+        }
+      }
+
+      fn emit_cmp_imm(
+        self : MachineCode,
+        is_i64 : Bool,
+        reg : Int,
+        imm : Int,
+      ) -> Unit {
+        if is_i64 {
+          self.x86_emit_cmp_r_imm32(reg, imm)
+        } else {
+          self.x86_emit_cmp_r32_imm32(reg, imm)
+        }
+      }
+
+      fn emit_xor_self(self : MachineCode, is_i64 : Bool, reg : Int) -> Unit {
+        if is_i64 {
+          self.x86_emit_xor_rr(reg, reg)
+        } else {
+          self.x86_emit_xor_rr32(reg, reg)
+        }
+      }
+
+      let done = self.new_internal_label()
+      if is_signed {
+        let not_nan = self.new_internal_label()
+        emit_cvtt(self, is_f32, is_i64, dst, src_xmm)
+        // Detect INT_MIN overflow/invalid sentinel via `cmp dst, 1; jno done`.
+        emit_cmp_imm(self, is_i64, dst, 1)
+        self.x86_emit_jcc_rel32(@instr.Cond::Vc, done) // JNO
+
+        // NaN => 0
+        emit_ucomis(self, is_f32, src_xmm, src_xmm)
+        self.x86_emit_jcc_rel32(@instr.Cond::Pc, not_nan) // JNP
+        emit_xor_self(self, is_i64, dst)
+        self.x86_emit_jmp_rel32(done)
+        self.define_label(not_nan)
+
+        // If src <= 0, keep INT_MIN (already in dst); else saturate to INT_MAX.
+        self.x86_emit_xorpd_xmm_xmm(tmp_xmm, tmp_xmm)
+        emit_ucomis(self, is_f32, tmp_xmm, src_xmm)
+        self.x86_emit_jcc_rel32(@instr.Cond::Hs, done) // JAE
+        let int_max = if is_i64 { 0x7fffffffffffffffL } else { 0x7fffffffL }
+        self.x86_emit_mov_imm64(dst, int_max)
+        self.define_label(done)
+      } else {
+        // Unsigned saturating conversion.
+        let handle_large = self.new_internal_label()
+        let not_nan = self.new_internal_label()
+        let next_is_large = self.new_internal_label()
+
+        // Load 2**(width-1) as float into tmp_xmm.
+        let threshold_bits : Int64 = match (is_f32, is_i64) {
+          (true, false) => 0x4F000000L // f32(2^31)
+          (false, false) => 0x41E0000000000000L // f64(2^31)
+          (true, true) => 0x5F000000L // f32(2^63)
+          (false, true) => 0x43E0000000000000L // f64(2^63)
+        }
+        if is_f32 {
+          self.x86_emit_mov_imm64(tmp_gpr, threshold_bits)
+          self.x86_emit_movd_xmm_r32(tmp_xmm, tmp_gpr)
+        } else {
+          self.x86_emit_mov_imm64(tmp_gpr, threshold_bits)
+          self.x86_emit_movq_xmm_r64(tmp_xmm, tmp_gpr)
+        }
+
+        // Compare src with threshold; if src >= threshold, go to large path.
+        emit_ucomis(self, is_f32, src_xmm, tmp_xmm)
+        self.x86_emit_jcc_rel32(@instr.Cond::Hs, handle_large) // JAE/JNB
+
+        // NaN => 0
+        self.x86_emit_jcc_rel32(@instr.Cond::Pc, not_nan) // JNP
+        emit_xor_self(self, is_i64, dst)
+        self.x86_emit_jmp_rel32(done)
+        self.define_label(not_nan)
+
+        // Small path: cvtt + if result >= 0 then done else 0.
+        emit_cvtt(self, is_f32, is_i64, dst, src_xmm)
+        emit_cmp_imm(self, is_i64, dst, 0)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ge, done) // JGE
+        emit_xor_self(self, is_i64, dst)
+        self.x86_emit_jmp_rel32(done)
+
+        // Large path: subtract threshold, convert, then add threshold back.
+        self.define_label(handle_large)
+        self.x86_emit_movaps_xmm_xmm(tmp_xmm2, src_xmm)
+        if is_f32 {
+          self.x86_emit_subss_xmm_xmm(tmp_xmm2, tmp_xmm)
+        } else {
+          self.x86_emit_subsd_xmm_xmm(tmp_xmm2, tmp_xmm)
+        }
+        emit_cvtt(self, is_f32, is_i64, dst, tmp_xmm2)
+        emit_cmp_imm(self, is_i64, dst, 0)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ge, next_is_large)
+        // Too large => UINT_MAX.
+        let uint_max = if is_i64 { -1L } else { 0xFFFFFFFFL }
+        self.x86_emit_mov_imm64(dst, uint_max)
+        self.x86_emit_jmp_rel32(done)
+        self.define_label(next_is_large)
+        if is_i64 {
+          self.x86_emit_mov_imm64(tmp_gpr, 1L << 63)
+          self.x86_emit_add_rr(dst, tmp_gpr)
+        } else {
+          self.x86_emit_mov_imm64(tmp_gpr, 1L << 31)
+          self.x86_emit_add_rr32(dst, tmp_gpr)
+        }
+        self.define_label(done)
       }
     }
     @instr.Shl(is_64) => {

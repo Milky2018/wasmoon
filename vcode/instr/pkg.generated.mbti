@@ -47,6 +47,8 @@ pub(all) enum Cond {
   Pl
   Vs
   Vc
+  Ps
+  Pc
   Hi
   Ls
   Ge

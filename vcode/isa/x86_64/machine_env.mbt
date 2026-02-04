@@ -109,8 +109,8 @@ pub fn build_machine_env(
   }
   for r in allocatable_scratch_fprs() {
     // Avoid duplicating XMM0-7 already in preferred list.
-    // Reserve XMM15 as a scratch reg for move resolution/prologue spills.
-    if r.index < 8 || r.index == 15 {
+    // Reserve XMM14/XMM15 as scratch regs for move breaking / lowering temps.
+    if r.index < 8 || r.index == 14 || r.index == 15 {
       continue
     }
     preferred_float.push(r)
@@ -126,7 +126,7 @@ pub fn build_machine_env(
     preferred_vector.push({ index: r.index, class: @abi.Vector })
   }
   for r in allocatable_scratch_fprs() {
-    if r.index < 8 || r.index == 15 {
+    if r.index < 8 || r.index == 14 || r.index == 15 {
       continue
     }
     preferred_vector.push({ index: r.index, class: @abi.Vector })
@@ -145,7 +145,7 @@ pub fn build_machine_env(
       int_reg_index(@spec.IntRegRole::Scratch1),
       int_reg_index(@spec.IntRegRole::Scratch2),
     ],
-    // Reserve one XMM scratch register for move breaking.
-    scratch_float: [15],
+    // Reserve two XMM scratch registers for move breaking / lowering sequences.
+    scratch_float: [14, 15],
   }
 }

@@ -233,11 +233,43 @@ test "x86_64 setcc + movzx encodings" {
 }
 
 ///|
-test "x86_64 parity condition encodings (Vs/Vc)" {
+test "x86_64 parity condition encodings (Ps/Pc)" {
   let mc = MachineCode::new()
-  mc.x86_emit_setcc_r8(@instr.Cond::Vs, 0) // setp al
-  mc.x86_emit_setcc_r8(@instr.Cond::Vc, 0) // setnp al
+  mc.x86_emit_setcc_r8(@instr.Cond::Ps, 0) // setp al
+  mc.x86_emit_setcc_r8(@instr.Cond::Pc, 0) // setnp al
   inspect(mc.get_bytes(), content="[15, 154, 192, 15, 155, 192]")
+}
+
+///|
+test "x86_64 scalar conversion encodings (SSE)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_xorpd_xmm_xmm(0, 0) // xorpd xmm0, xmm0
+  mc.x86_emit_cvttss2si_r64_xmm(0, 0) // cvttss2si rax, xmm0
+  mc.x86_emit_cvttsd2si_r32_xmm(0, 1) // cvttsd2si eax, xmm1
+  mc.x86_emit_cvtsi2sd_xmm_r64(0, 0) // cvtsi2sd xmm0, rax
+  mc.x86_emit_cvtss2sd_xmm_xmm(1, 2) // cvtss2sd xmm1, xmm2
+  mc.x86_emit_cvtsd2ss_xmm_xmm(3, 4) // cvtsd2ss xmm3, xmm4
+  inspect(
+    mc.get_bytes(),
+    content="[102, 15, 87, 192, 243, 72, 15, 44, 192, 242, 15, 44, 193, 242, 72, 15, 42, 192, 243, 15, 90, 202, 242, 15, 90, 220]",
+  )
+}
+
+///|
+test "x86_64 reg extend encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_rr32(0, 3) // mov eax, ebx
+  mc.x86_emit_movsxd_r64_r32(0, 3) // movsxd rax, ebx
+  mc.x86_emit_movsx_r32_r8(0, 3) // movsx eax, bl
+  mc.x86_emit_movsx_r64_r8(0, 3) // movsx rax, bl
+  mc.x86_emit_movsx_r32_r16(0, 3) // movsx eax, bx
+  mc.x86_emit_movsx_r64_r16(0, 3) // movsx rax, bx
+  mc.x86_emit_movzx_r32_r16(0, 3) // movzx eax, bx
+  mc.x86_emit_and_r_imm8_sxb64(0, 1) // and rax, 1
+  inspect(
+    mc.get_bytes(),
+    content="[137, 216, 72, 99, 195, 15, 190, 195, 72, 15, 190, 195, 15, 191, 195, 72, 15, 191, 195, 15, 183, 195, 72, 131, 224, 1]",
+  )
 }
 
 ///|

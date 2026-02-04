@@ -119,7 +119,14 @@ fn lower_float_to_int(
   block.add_inst(nan_check)
 
   // Step 2: TrapIf(Vs) - trap if NaN
-  let trap_nan = @instr.VCodeInst::new(TrapIf(@instr.Vs, 3))
+  let trap_nan_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+    // Cranelift x64 checks unorderedness via UCOMIS* parity (PF=1).
+    @instr.Cond::Ps
+  } else {
+    // AArch64 FCMP reports unorderedness via the V flag.
+    @instr.Cond::Vs
+  }
+  let trap_nan = @instr.VCodeInst::new(TrapIf(trap_nan_cond, 3))
   block.add_inst(trap_nan)
 
   // Get bounds based on conversion type
@@ -146,7 +153,14 @@ fn lower_float_to_int(
   // Step 5: TrapIf for underflow
   // For signed: trap if src < min (Lt)
   // For unsigned: trap if src <= -1.0 (Le)
-  let trap_min_cond = if use_le_for_min {
+  let trap_min_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+    // After x86 UCOMIS* (src, min), use CF/ZF based conditions.
+    if use_le_for_min {
+      @instr.Cond::Ls
+    } else {
+      @instr.Cond::Lo
+    }
+  } else if use_le_for_min {
     @instr.Cond::Le
   } else {
     @instr.Cond::Lt
@@ -171,7 +185,13 @@ fn lower_float_to_int(
   block.add_inst(cmp_max)
 
   // Step 8: TrapIf(Ge) for overflow - trap if src >= max
-  let trap_max = @instr.VCodeInst::new(TrapIf(@instr.Cond::Ge, 3))
+  let trap_max_cond = if @isa.ISA::current() is @isa.ISA::X86_64 {
+    // After x86 UCOMIS* (src, max), src >= max iff CF=0.
+    @instr.Cond::Hs
+  } else {
+    @instr.Cond::Ge
+  }
+  let trap_max = @instr.VCodeInst::new(TrapIf(trap_max_cond, 3))
   block.add_inst(trap_max)
 
   // Step 9: FcvtToInt - raw conversion (no checks)

@@ -55,5 +55,5 @@ test "x86_64 call-clobbered sets basic shape" {
 test "x86_64 MachineEnv reserves scratch regs" {
   let env = ISA::X86_64.machine_env()
   inspect(env.scratch_int, content="[10, 11]")
-  inspect(env.scratch_float, content="[15]")
+  inspect(env.scratch_float, content="[14, 15]")
 }

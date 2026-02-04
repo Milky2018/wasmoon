@@ -847,6 +847,7 @@ fn MachineCode::emit_instruction(
         Pl => 4 // MI
         Vs => 7 // VC
         Vc => 6 // VS
+        Ps | Pc => abort("aarch64 TrapIf: parity conditions are x86_64-only")
         Hi => 9 // LS
         Ls => 8 // HI
         Ge => 11 // LT
