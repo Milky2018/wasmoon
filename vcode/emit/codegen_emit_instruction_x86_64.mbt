@@ -1132,7 +1132,10 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
+      let rm = match inst.use_constraints[1] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[1])
+      }
       if rm != 1 {
         abort("x86_64 Shl: expected shift count in rcx")
       }
@@ -1160,7 +1163,10 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.LShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
+      let rm = match inst.use_constraints[1] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[1])
+      }
       if rm != 1 {
         abort("x86_64 LShr: expected shift count in rcx")
       }
@@ -1188,7 +1194,10 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.AShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
+      let rm = match inst.use_constraints[1] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[1])
+      }
       if rm != 1 {
         abort("x86_64 AShr: expected shift count in rcx")
       }
@@ -1216,7 +1225,10 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.Rotr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      let rm = reg_num(inst.uses[1])
+      let rm = match inst.use_constraints[1] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[1])
+      }
       if rm != 1 {
         abort("x86_64 Rotr: expected shift count in rcx")
       }
