@@ -321,6 +321,24 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
   if !(isa is @isa.AMD64) {
     return
   }
+  fn alloc_context(self : Output, alloc_idx : Int) -> String {
+    for range in self.operand_ranges {
+      let (block_id, inst_idx, is_terminator, range_start, def_count, use_count) = range
+      let total = def_count + use_count
+      if alloc_idx >= range_start && alloc_idx < range_start + total {
+        let rel = alloc_idx - range_start
+        let kind = if rel < def_count {
+          "def[\{rel}]"
+        } else {
+          "use[\{rel - def_count}]"
+        }
+        let t = if is_terminator { "t" } else { "i" }
+        return "block[\{block_id}] \{t}[\{inst_idx}] \{kind}"
+      }
+    }
+    "unknown"
+  }
+
   fn validate_preg(p : @abi.PReg, ctx_desc : String) -> Unit {
     match p.class {
       @abi.Int => {
@@ -357,7 +375,7 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
     validate_loc(self.param_locs[i], "param_locs[\{i}]")
   }
   for i in 0..<self.allocs.length() {
-    validate_loc(self.allocs[i], "allocs[\{i}]")
+    validate_loc(self.allocs[i], "allocs[\{i}] (\{alloc_context(self, i)})")
   }
   for entry in self.edits {
     let ((block_id, inst_idx, pos), edit) = entry
