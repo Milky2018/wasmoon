@@ -110,6 +110,7 @@ jobs:
           "$MOON_HOME/bin/internal/tcc" @"$NORUN" -o "$BIN"
 
           ulimit -c unlimited || true
+          export LD_LIBRARY_PATH="$PWD/_build/native/debug/test:$PWD/_build/native/debug/test/jit/jit_ffi:$PWD/_build/native/debug/test/vcode/isa:$PWD/_build/native/debug/test/.mooncakes/moonbitlang/x/fs:$PWD/_build/native/debug/test/wasi${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
             gdb -q -batch \
               -ex 'set pagination off' \
