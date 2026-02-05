@@ -71,14 +71,15 @@ pub fn emit_hostcall_import_trampoline(
   result_types : Array[@types.ValueType],
   host_func_addr : Int,
 ) -> MachineCode {
+  let isa = @isa.ISA::current()
   let func = @regalloc.VCodeFunction::new("host_import_trampoline")
 
-  // Params: always include vmctx (X0) as the first parameter.
+  // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
   let _vmctx_param = func.add_param(@abi.Int)
 
   // Pre-compute stack overflow layout for incoming params.
-  let max_int_reg = @abi.MAX_USER_REG_PARAMS // X1-X7
-  let max_float_reg = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
+  let max_int_reg = isa.wasm_user_arg_gprs().length()
+  let max_float_reg = isa.wasm_arg_fprs().length()
   let mut total_int = 0
   let mut total_float = 0
   for ty in param_types {
