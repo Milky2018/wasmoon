@@ -1849,6 +1849,22 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 1)
       }
     }
+    @instr.SIMDSplatF(is_f32) => {
+      // Splat scalar float to all lanes.
+      //
+      // - f32x4.splat: SHUFPS xmm, xmm, 0x00 (SSE1)
+      // - f64x2.splat: SHUFPD xmm, xmm, 0x00 (SSE2)
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      if is_f32 {
+        self.x86_emit_shufps_xmm_xmm_imm8(rd, rd, 0x00)
+      } else {
+        self.x86_emit_shufpd_xmm_xmm_imm8(rd, rd, 0x00)
+      }
+    }
     @instr.SIMDAnd => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])

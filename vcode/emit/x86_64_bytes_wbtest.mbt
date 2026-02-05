@@ -212,6 +212,17 @@ test "x86_64 ucomiss/ucomisd encodings" {
 }
 
 ///|
+test "x86_64 shufps/shufpd encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_shufps_xmm_xmm_imm8(1, 2, 0x00) // shufps xmm1, xmm2, 0
+  mc.x86_emit_shufpd_xmm_xmm_imm8(11, 12, 0x12) // shufpd xmm11, xmm12, 0x12
+  inspect(
+    mc.get_bytes(),
+    content="[15, 198, 202, 0, 102, 69, 15, 198, 220, 18]",
+  )
+}
+
+///|
 test "x86_64 SIMD bitwise encodings (SSE2)" {
   let mc = MachineCode::new()
   mc.x86_emit_pcmpeqd_xmm_xmm(15, 15) // pcmpeqd xmm15, xmm15

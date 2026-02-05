@@ -1833,6 +1833,45 @@ pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_shufps_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // shufps xmm1, xmm2/m128, imm8: 0F C6 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xC6)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_shufpd_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // shufpd xmm1, xmm2/m128, imm8: 66 0F C6 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xC6)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_paddusb_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,

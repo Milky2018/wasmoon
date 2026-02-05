@@ -515,6 +515,8 @@ pub fn MachineCode::x86_emit_shr_r32_cl(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_shr_r32_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_shr_r_cl(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_shr_r_imm8(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_shufpd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_shufps_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr(Self, Int, Int) -> Unit
