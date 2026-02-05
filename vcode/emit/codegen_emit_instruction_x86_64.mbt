@@ -1914,6 +1914,39 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.LaneSize::D64 => self.x86_emit_pinsrq_xmm_r64_imm8(rd, src, lane)
       }
     }
+    @instr.SIMDExtractU(lane_size, lane) => {
+      // Extract scalar integer lane, zero-extending to the destination GPR.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match lane_size {
+        @instr.LaneSize::B8 => self.x86_emit_pextrb_r32_xmm_imm8(rd, src, lane)
+        @instr.LaneSize::H16 => self.x86_emit_pextrw_r32_xmm_imm8(rd, src, lane)
+        @instr.LaneSize::S32 => self.x86_emit_pextrd_r32_xmm_imm8(rd, src, lane)
+        @instr.LaneSize::D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
+      }
+    }
+    @instr.SIMDExtractS(lane_size, lane) => {
+      // Extract scalar integer lane, sign-extending to the destination GPR.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match lane_size {
+        @instr.LaneSize::B8 => {
+          self.x86_emit_pextrb_r32_xmm_imm8(rd, src, lane)
+          self.x86_emit_shl_r_imm8(rd, 56)
+          self.x86_emit_sar_r_imm8(rd, 56)
+        }
+        @instr.LaneSize::H16 => {
+          self.x86_emit_pextrw_r32_xmm_imm8(rd, src, lane)
+          self.x86_emit_shl_r_imm8(rd, 48)
+          self.x86_emit_sar_r_imm8(rd, 48)
+        }
+        @instr.LaneSize::S32 => {
+          self.x86_emit_pextrd_r32_xmm_imm8(rd, src, lane)
+          self.x86_emit_movsxd_r64_r32(rd, rd)
+        }
+        @instr.LaneSize::D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
+      }
+    }
     @instr.SIMDAnd => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
