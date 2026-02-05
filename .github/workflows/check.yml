@@ -61,7 +61,7 @@ jobs:
       - name: install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl clang lld python3
+          sudo apt-get install -y curl clang lld python3 gdb
 
       - name: install moon
         run: |
@@ -91,6 +91,33 @@ jobs:
           find _build/native/debug/test -name '*.rspfile' -maxdepth 4 -print || true
           echo "=== testsuite.whitebox_test.rspfile ==="
           cat _build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile || true
+
+      - name: gdb backtrace (testsuite whitebox)
+        if: steps.moon_test.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          # Build tests without running them, then run the failing whitebox
+          # test executable under gdb to capture a backtrace.
+          moon test --target native --no-parallelize -v --build-only -p testsuite
+
+          RSP="_build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile"
+          NORUN="/tmp/testsuite.whitebox_test.norun.rspfile"
+          BIN="/tmp/testsuite.whitebox_test"
+          grep -v '^-run$' "$RSP" > "$NORUN"
+
+          MOON_BIN="$(dirname "$(command -v moon)")"
+          MOON_HOME="$(dirname "$MOON_BIN")"
+          "$MOON_HOME/bin/internal/tcc" @"$NORUN" -o "$BIN"
+
+          ulimit -c unlimited || true
+          MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
+            gdb -q -batch \
+              -ex 'set pagination off' \
+              -ex run \
+              -ex bt \
+              -ex 'info registers' \
+              -ex 'x/16i $pc' \
+              --args "$BIN"
 
       - name: fail fast if moon test failed
         if: steps.moon_test.outcome != 'success'
