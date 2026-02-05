@@ -25,20 +25,25 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 fn collect_used_callee_saved(
   func : @regalloc.VCodeFunction,
-  enable_pinned_reg : Bool,
   _needs_sret : Bool,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  // ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
+  // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
-  let pinned_vmctx = vmctx_index()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_int {
+    callee_saved_int.add(r.index)
+  }
 
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
-    if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      if !enable_pinned_reg || p.index != pinned_vmctx {
-        used.add(p.index)
-      }
+    if preg is Some(p) &&
+      p.class is @abi.Int &&
+      callee_saved_int.contains(p.index) {
+      used.add(p.index)
     }
   }
   for block in func.get_blocks() {
@@ -52,18 +57,16 @@ fn collect_used_callee_saved(
       for def in inst.defs {
         if def.reg is Physical(preg) &&
           preg.class is Int &&
-          is_callee_saved_alloc(preg.index) {
-          if !enable_pinned_reg || preg.index != pinned_vmctx {
-            used.add(preg.index)
-          }
+          callee_saved_int.contains(preg.index) {
+          used.add(preg.index)
         }
       }
     }
   }
-  // If the function makes any calls, we must save LR (X30)
+  // If the function makes any calls, we must save LR on AArch64.
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
-  if has_calls {
+  if has_calls && isa is @isa.AArch64 {
     used.add(lr_index())
   }
   // Sort the registers for consistent ordering
@@ -77,14 +80,23 @@ fn collect_used_callee_saved(
 
 ///|
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
-fn collect_used_callee_saved_fprs(func : @regalloc.VCodeFunction) -> Array[Int] {
+fn collect_used_callee_saved_fprs(
+  func : @regalloc.VCodeFunction,
+  abi_settings : @abi.ABISettings,
+) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_float {
+    callee_saved_fprs.add(r.index)
+  }
   // Check param_pregs: float parameters that cross calls are moved to callee-saved FPRs
   // These are defined in the prologue via `fmov sN, wM` or `fmov dN, xM`
   for preg in func.get_param_pregs() {
     if preg is Some(p) &&
       (p.class is Float32 || p.class is Float64) &&
-      is_callee_saved_fpr(p.index) {
+      callee_saved_fprs.contains(p.index) {
       used.add(p.index)
     }
   }
@@ -93,7 +105,7 @@ fn collect_used_callee_saved_fprs(func : @regalloc.VCodeFunction) -> Array[Int] 
       for def in inst.defs {
         if def.reg is Physical(preg) &&
           (preg.class is Float32 || preg.class is Float64) &&
-          is_callee_saved_fpr(preg.index) {
+          callee_saved_fprs.contains(preg.index) {
           used.add(preg.index)
         }
       }
@@ -220,6 +232,39 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
+  if current_isa() is @isa.AMD64 {
+    let (abs_amount, is_sub) = if amount < 0 {
+      (-amount, true)
+    } else {
+      (amount, false)
+    }
+    let step = 4096
+    let scratch = scratch1_index()
+    if is_sub {
+      // Probe in 4KB steps to avoid skipping over a stack guard page.
+      let mut remaining = abs_amount
+      while remaining >= step {
+        self.x86_emit_sub_rsp_imm32(step)
+        self.x86_emit_mov_m64_r64(4, 0, scratch)
+        remaining = remaining - step
+      }
+      if remaining > 0 {
+        self.x86_emit_sub_rsp_imm32(remaining)
+        self.x86_emit_mov_m64_r64(4, 0, scratch)
+      }
+      return
+    }
+    // Stack deallocation (or other upward adjustment): no probing needed.
+    let mut remaining = abs_amount
+    while remaining >= step {
+      self.x86_emit_add_rsp_imm32(step)
+      remaining = remaining - step
+    }
+    if remaining > 0 {
+      self.x86_emit_add_rsp_imm32(remaining)
+    }
+    return
+  }
   let (abs_amount, is_sub) = if amount < 0 {
     (-amount, true)
   } else {
@@ -278,6 +323,115 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
+  if current_isa() is @isa.AMD64 {
+    let isa = current_isa()
+    let saved_gprs = stack_frame.saved_gprs
+
+    // Setup area: push rbp so the stack is 16-byte aligned after the prologue
+    // (SysV ABI requires 16-byte alignment at call sites).
+    if stack_frame.has_setup_area {
+      self.x86_emit_push_r64(isa.fp_reg_index())
+      // rbp = rsp
+      self.x86_emit_mov_rr(isa.fp_reg_index(), 4)
+      // Setup area size is ISA-dependent; on amd64 this is typically 8.
+      self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
+    }
+
+    // Best-effort: trap diagnostics debug func idx currently AArch64-only.
+    debug_func_idx |> ignore
+
+    // Save callee-saved GPRs.
+    for r in saved_gprs {
+      self.x86_emit_push_r64(r)
+    }
+    // Padding for 16-byte alignment when saving an odd number of 8-byte regs.
+    let gpr_padding = stack_frame.gpr_save_size - saved_gprs.length() * 8
+    if gpr_padding > 0 {
+      self.x86_emit_sub_rsp_imm32(gpr_padding)
+    }
+
+    // SysV has no callee-saved XMM regs. Keep the stack layout plumbing generic.
+    if stack_frame.saved_fprs.length() > 0 {
+      abort("x86_64 prologue: unexpected callee-saved fprs")
+    }
+
+    // Allocate spill slots + outgoing args (with stack probing for large frames).
+    let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
+    if remaining_size > 0 {
+      self.emit_sp_adjust(-remaining_size)
+    }
+
+    // Cache vmctx (pinned reg) and optional cached pointers.
+    if stack_frame.needs_vmctx {
+      if !abi_settings.enable_pinned_reg {
+        abort("unpinned VMContext ABI not implemented yet")
+      }
+      let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let vmctx = vmctx_index()
+      if vmctx != vmctx_src {
+        self.x86_emit_mov_rr(vmctx, vmctx_src)
+      }
+      if stack_frame.cache_mem0_desc {
+        self.x86_emit_mov_r64_m64(
+          mem0_desc_index(),
+          vmctx,
+          @abi.VMCTX_MEMORY0_OFFSET,
+        )
+      }
+      if stack_frame.cache_func_table {
+        self.x86_emit_mov_r64_m64(
+          func_table_index(),
+          vmctx,
+          @abi.VMCTX_FUNC_TABLE_OFFSET,
+        )
+      }
+    }
+
+    // Move arguments from ABI registers to allocated registers (if any).
+    let user_gprs = isa.wasm_user_arg_gprs()
+    let float_regs = isa.wasm_arg_fprs()
+    let mut int_idx = 0
+    let mut float_idx = 0
+    for param_idx, param in params {
+      let dest_preg = if param_idx < param_pregs.length() {
+        param_pregs[param_idx]
+      } else {
+        None
+      }
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match dest_preg {
+              Some(preg) =>
+                if preg.index != src {
+                  self.x86_emit_mov_rr(preg.index, src)
+                }
+              None => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match dest_preg {
+              Some(preg) =>
+                if preg.index != src {
+                  // Copy full XMM reg; works for scalars and vectors.
+                  self.x86_emit_movaps_xmm_xmm(preg.index, src)
+                }
+              None => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    return
+  }
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
 
@@ -465,13 +619,9 @@ pub fn emit_function(
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(
-    func,
-    abi_settings.enable_pinned_reg,
-    uses_sret,
-  )
+  let clobbered = collect_used_callee_saved(func, uses_sret, abi_settings)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
-  let clobbered_fprs = collect_used_callee_saved_fprs(func)
+  let clobbered_fprs = collect_used_callee_saved_fprs(func, abi_settings)
 
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
@@ -506,6 +656,7 @@ pub fn emit_function(
     cache_func_table=uses_func_table,
     force_frame_setup~,
     has_incoming_stack_args~,
+    abi_settings~,
   )
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
@@ -709,6 +860,7 @@ pub fn emit_function(
       }
     }
   }
+  let is_amd64 = current_isa() is @isa.AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -721,7 +873,8 @@ pub fn emit_function(
       //   load/store [addr + 0]
       //
       // Emit as a single reg-offset load/store: [base + off].
-      if inst.opcode is Add(true) &&
+      if !is_amd64 &&
+        inst.opcode is Add(true) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 2 &&
         inst_idx + 1 < block.insts.length() {
@@ -837,7 +990,8 @@ pub fn emit_function(
       // IMPORTANT: Only apply if the extend result is not used by any other
       // instruction. Otherwise we'd skip the extend and later uses would
       // read garbage.
-      if inst.opcode is Extend(Unsigned32To64) &&
+      if !is_amd64 &&
+        inst.opcode is Extend(Unsigned32To64) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         inst_idx + 1 < block.insts.length() {
@@ -912,7 +1066,11 @@ pub fn emit_function(
   if shared_exit_block is Some(exit_block) {
     mc.define_label(exit_block)
     mc.emit_epilogue(stack_frame)
-    mc.emit_ret(30)
+    if is_amd64 {
+      mc.x86_emit_ret()
+    } else {
+      mc.emit_ret(30)
+    }
   }
   mc.resolve_fixups()
   mc
@@ -1010,19 +1168,22 @@ fn output_uses_preg(
 fn collect_used_callee_saved_from_output(
   func : @regalloc.VCodeFunction,
   output : @regalloc.Output,
-  enable_pinned_reg : Bool,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
-  let pinned_vmctx = vmctx_index()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_int {
+    callee_saved_int.add(r.index)
+  }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     match output.get_param_loc(i) {
       @regalloc.Reg(p) =>
-        if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-          if !enable_pinned_reg || p.index != pinned_vmctx {
-            used.add(p.index)
-          }
+        if p.class is @abi.Int && callee_saved_int.contains(p.index) {
+          used.add(p.index)
         }
       _ => ()
     }
@@ -1040,10 +1201,9 @@ fn collect_used_callee_saved_from_output(
                 @regalloc.Move(_from, to, _class) =>
                   match to {
                     @regalloc.Reg(p) =>
-                      if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                        if !enable_pinned_reg || p.index != pinned_vmctx {
-                          used.add(p.index)
-                        }
+                      if p.class is @abi.Int &&
+                        callee_saved_int.contains(p.index) {
+                        used.add(p.index)
                       }
                     _ => ()
                   }
@@ -1072,10 +1232,8 @@ fn collect_used_callee_saved_from_output(
           @abi.Virtual(_) =>
             match output.inst_def_loc(block.id, inst_idx, false, di) {
               @regalloc.Reg(p) =>
-                if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                  if !enable_pinned_reg || p.index != pinned_vmctx {
-                    used.add(p.index)
-                  }
+                if p.class is @abi.Int && callee_saved_int.contains(p.index) {
+                  used.add(p.index)
                 }
               _ => ()
             }
@@ -1084,7 +1242,7 @@ fn collect_used_callee_saved_from_output(
       }
     }
   }
-  if func_has_calls(func) {
+  if func_has_calls(func) && isa is @isa.AArch64 {
     used.add(lr_index())
   }
   let result : Array[Int] = []
@@ -1099,15 +1257,22 @@ fn collect_used_callee_saved_from_output(
 fn collect_used_callee_saved_fprs_from_output(
   func : @regalloc.VCodeFunction,
   output : @regalloc.Output,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  let isa = @isa.ISA::current()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_float {
+    callee_saved_fprs.add(r.index)
+  }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     match output.get_param_loc(i) {
       @regalloc.Reg(p) =>
         if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-          is_callee_saved_fpr(p.index) {
+          callee_saved_fprs.contains(p.index) {
           used.add(p.index)
         }
       _ => ()
@@ -1127,7 +1292,7 @@ fn collect_used_callee_saved_fprs_from_output(
                   match to {
                     @regalloc.Reg(p) =>
                       if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                        is_callee_saved_fpr(p.index) {
+                        callee_saved_fprs.contains(p.index) {
                         used.add(p.index)
                       }
                     _ => ()
@@ -1153,7 +1318,7 @@ fn collect_used_callee_saved_fprs_from_output(
             match output.inst_def_loc(block.id, inst_idx, false, di) {
               @regalloc.Reg(p) =>
                 if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                  is_callee_saved_fpr(p.index) {
+                  callee_saved_fprs.contains(p.index) {
                   used.add(p.index)
                 }
               _ => ()
@@ -1303,6 +1468,240 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
+  if current_isa() is @isa.AMD64 {
+    let isa = current_isa()
+    // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
+    // then do a Cranelift-style "param moves + param spills" stage.
+    //
+    // We must spill any spilled params *before* we clobber their incoming ABI regs.
+
+    // Emit the prologue without param moves.
+    let dummy_param_pregs : Array[@abi.PReg?] = []
+    for _ in 0..<params.length() {
+      dummy_param_pregs.push(None)
+    }
+    self.emit_prologue(
+      stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
+    )
+    let user_gprs = isa.wasm_user_arg_gprs()
+    let float_regs = isa.wasm_arg_fprs()
+
+    // Store spilled params from incoming ABI regs to spill slots.
+    let mut int_idx = 0
+    let mut float_idx = 0
+    for param_idx, param in params {
+      let loc = output.get_param_loc(param_idx)
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_mov_m64_r64(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_movsd_m64_xmm(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            float_idx += 1
+          }
+        @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Spill(slot) =>
+                self.x86_emit_movdqu_m128_xmm(
+                  4,
+                  stack_frame.spill_offset + slot * 8,
+                  src,
+                )
+              _ => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    fn emit_parallel_moves_gpr(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_mov_rr(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_mov_rr(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 gpr): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_mov_rr(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_mov_rr(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
+    fn emit_parallel_moves_xmm(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_movaps_xmm_xmm(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 xmm): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
+    // Collect moves from ABI incoming regs to allocated regs.
+    let int_moves : Array[(Int, Int)] = []
+    let fp_moves : Array[(Int, Int)] = []
+    int_idx = 0
+    float_idx = 0
+    for param_idx, param in params {
+      let loc = output.get_param_loc(param_idx)
+      match param.class {
+        @abi.Int =>
+          if int_idx < 1 + user_gprs.length() {
+            let src = if int_idx == 0 {
+              isa.wasm_vmctx_arg_preg().index
+            } else {
+              user_gprs[int_idx - 1].index
+            }
+            match loc {
+              @regalloc.Reg(dst) =>
+                if dst.index != src {
+                  int_moves.push((src, dst.index))
+                }
+              _ => ()
+            }
+            int_idx += 1
+          }
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          if float_idx < float_regs.length() {
+            let src = float_regs[float_idx].index
+            match loc {
+              @regalloc.Reg(dst) =>
+                if dst.index != src {
+                  fp_moves.push((src, dst.index))
+                }
+              _ => ()
+            }
+            float_idx += 1
+          }
+      }
+    }
+    emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
+    emit_parallel_moves_xmm(self, 15, fp_moves)
+    return
+  }
   // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
   // then do a Cranelift-style "param moves + param spills" stage.
   //
@@ -1536,11 +1935,11 @@ pub fn emit_function_with_regalloc(
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
-    func,
-    output,
-    abi_settings.enable_pinned_reg,
+    func, output, abi_settings,
   )
-  let clobbered_fprs = collect_used_callee_saved_fprs_from_output(func, output)
+  let clobbered_fprs = collect_used_callee_saved_fprs_from_output(
+    func, output, abi_settings,
+  )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
@@ -1569,6 +1968,7 @@ pub fn emit_function_with_regalloc(
     cache_func_table=uses_func_table,
     force_frame_setup~,
     has_incoming_stack_args~,
+    abi_settings~,
   )
 
   // Emit prologue.

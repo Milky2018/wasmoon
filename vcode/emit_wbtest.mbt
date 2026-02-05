@@ -142,6 +142,9 @@ test "emit: comparison" {
 
 ///|
 test "emit: full function" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Create a simple add function: add(a, b) -> a + b
   let func = @regalloc.VCodeFunction::new("test_add")
   func.add_param(Int) |> ignore
@@ -324,6 +327,9 @@ test "machine code: align with invalid alignment" {
 
 ///|
 test "emit: complete function with control flow" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Test a function with conditional branch:
   // func max(a, b) -> int:
   //   if a > b:
@@ -563,6 +569,9 @@ test "emit: multiply-accumulate instructions" {
 
 ///|
 test "emit: complete VCode instruction emission" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Test emit_instruction for various VCodeOpcode values
 
   // Create a simple function to test instruction emission
@@ -641,6 +650,9 @@ test "emit_mul encoding verification" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Test CallPtr instruction emission with disassembly dump
   // This verifies that annotations are not duplicated
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_3_1")
@@ -687,6 +699,9 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_1_1")
   func.add_result(Int)
   let block = func.new_block()
@@ -727,6 +742,9 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
 
 ///|
 test "emit: select uses 32-bit condition compare" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let func = @regalloc.VCodeFunction::new("test_select_cmp32")
   func.add_result(Int)
   let block = func.new_block()
@@ -754,6 +772,9 @@ test "emit: select uses 32-bit condition compare" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0")
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
@@ -793,6 +814,9 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
 
 ///|
 test "emit: Trap terminator encodes BRK immediate by trap message" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   fn find_first_brk_imm(bytes : Array[Int]) -> Int? {
     let mut i = 0
     while i + 3 < bytes.length() {

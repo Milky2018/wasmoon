@@ -308,6 +308,22 @@ pub fn c_jit_get_hostcall_ptr() -> Int64
 
 pub fn c_jit_get_hostcall_values_ptr() -> Int64
 
+pub fn c_jit_get_i32_sdiv_ptr() -> Int64
+
+pub fn c_jit_get_i32_srem_ptr() -> Int64
+
+pub fn c_jit_get_i32_udiv_ptr() -> Int64
+
+pub fn c_jit_get_i32_urem_ptr() -> Int64
+
+pub fn c_jit_get_i64_sdiv_ptr() -> Int64
+
+pub fn c_jit_get_i64_srem_ptr() -> Int64
+
+pub fn c_jit_get_i64_udiv_ptr() -> Int64
+
+pub fn c_jit_get_i64_urem_ptr() -> Int64
+
 pub fn c_jit_get_memory_copy_ptr() -> Int64
 
 pub fn c_jit_get_memory_fill_ptr() -> Int64

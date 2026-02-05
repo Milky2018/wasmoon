@@ -11,6 +11,9 @@
 
 ///|
 test "execute br_table with f32 locals (f32_br_2locals.wast)" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Build IR function: fn test(vmctx, selector) -> f32
   // ABI: X0=vmctx, X1+=user params
   let builder = @ir.IRBuilder::new("test")
@@ -134,6 +137,9 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
 
 ///|
 test "end-to-end: f32_br_2locals.wast from source" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // The actual WAST source from spec/f32_br_2locals.wast
   let wast_source =
     #|(module

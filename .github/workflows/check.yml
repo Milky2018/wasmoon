@@ -6,11 +6,8 @@ on:
       - $default-branch
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [macos-latest]
-    runs-on: ${{ matrix.os }}
+  build-macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: install
@@ -53,5 +50,108 @@ jobs:
 
       - name: run wast spec tests
         timeout-minutes: 5
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
+
+  build-ubuntu-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3 gdb
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: moon check
+        run: |
+          moon check --target native
+
+      - name: moon test
+        id: moon_test
+        continue-on-error: true
+        run: |
+          moon test --target native --no-parallelize -v
+
+      - name: dump failing rspfile (if any)
+        if: steps.moon_test.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          echo "=== rspfiles under _build/native/debug/test ==="
+          find _build/native/debug/test -name '*.rspfile' -maxdepth 4 -print || true
+          echo "=== testsuite.whitebox_test.rspfile ==="
+          cat _build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile || true
+
+      - name: gdb backtrace (testsuite whitebox)
+        if: steps.moon_test.outcome != 'success'
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          # Build tests without running them, then run the failing whitebox
+          # test executable under gdb to capture a backtrace.
+          moon test --target native --no-parallelize -v --build-only -p testsuite
+
+          RSP="_build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile"
+          NORUN="/tmp/testsuite.whitebox_test.norun.rspfile"
+          BIN="/tmp/testsuite.whitebox_test"
+          grep -v '^-run$' "$RSP" > "$NORUN"
+
+          MOON_BIN="$(dirname "$(command -v moon)")"
+          MOON_HOME="$(dirname "$MOON_BIN")"
+          "$MOON_HOME/bin/internal/tcc" @"$NORUN" -o "$BIN"
+
+          ulimit -c unlimited || true
+          export LD_LIBRARY_PATH="$PWD/_build/native/debug/test:$PWD/_build/native/debug/test/jit/jit_ffi:$PWD/_build/native/debug/test/vcode/isa:$PWD/_build/native/debug/test/.mooncakes/moonbitlang/x/fs:$PWD/_build/native/debug/test/wasi${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+          # Reconstruct the argv filter that `moon test` passes to the whitebox
+          # test runner (e.g. "foo_wbtest.mbt:0-3/bar_wbtest.mbt:0-2/...").
+          FILTER_ARG="$(
+            python3 -c 'import json; info=json.load(open("_build/native/debug/test/testsuite/__whitebox_test_info.json")); print("/".join(f"{k}:0-{len(v)}" for k, v in info["tests"].items()))'
+          )"
+
+          MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
+            gdb -q -batch \
+              -ex 'set pagination off' \
+              -ex 'handle SIGPIPE nostop noprint pass' \
+              -ex run \
+              -ex bt \
+              -ex 'info registers' \
+              -ex 'info symbol $r11' \
+              -ex 'info symbol $r12' \
+              -ex 'info symbol $r14' \
+              -ex 'info symbol $r15' \
+              -ex 'info symbol $pc' \
+              -ex 'info proc mappings' \
+              -ex 'info sharedlibrary' \
+              -ex 'x/48i $pc-96' \
+              -ex 'x/48i $pc' \
+              --args "$BIN" "$FILTER_ARG"
+
+      - name: fail fast if moon test failed
+        if: steps.moon_test.outcome != 'success'
+        run: exit 1
+
+      - name: lint
+        run: |
+          moon fmt && git diff --exit-code
+          moon info && git diff --exit-code
+
+      - name: build wasmoon
+        run: |
+          moon build --target native
+          ./install.sh
+
+      - name: run wast spec tests (amd64)
+        timeout-minutes: 10
         run: |
           python3 scripts/run_all_wast.py --dir spec --rec

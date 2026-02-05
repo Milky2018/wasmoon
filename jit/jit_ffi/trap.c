@@ -4,6 +4,22 @@
 
 #include "jit_internal.h"
 
+#if defined(__linux__)
+#include <sys/ucontext.h>
+#endif
+
+// glibc exposes REG_RIP/REG_RBP indices for x86_64 in sys/ucontext.h when the
+// right feature macros are enabled. Some build environments omit these defines.
+// Provide fallbacks that match glibc's x86_64 gregset_t layout.
+#if defined(__linux__) && defined(__x86_64__)
+#ifndef REG_RIP
+#define REG_RIP 16
+#endif
+#ifndef REG_RBP
+#define REG_RBP 10
+#endif
+#endif
+
 // ============ Trap State (Thread-Local) ============
 // These values are read/written by JIT execution and signal handlers.
 // They must be thread-local because tests (and users) may run JIT concurrently.
@@ -113,31 +129,58 @@ static void install_alt_stack(void) {
 
 #ifndef _WIN32
 
+#if defined(__aarch64__) || defined(_M_ARM64)
 // BRK encoding: 0xD4200000 | (imm16 << 5)
 // Match fixed bits [31:21] and [4:0].
 #define BRK_MASK 0xFFE0001FU
 #define BRK_BASE 0xD4200000U
 
-static int decode_brk_imm(uintptr_t pc, uintptr_t *out_brk_pc, int *out_imm) {
-    if (!out_brk_pc || !out_imm) return 0;
+static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
+    if (!out_trap_pc || !out_imm) return 0;
     // On some platforms, the ucontext PC points to the BRK instruction; on others it points
     // to the next instruction. Probe both `pc` and `pc-4` and validate the encoding.
     uint32_t instr = *(uint32_t *)pc;
     if ((instr & BRK_MASK) == BRK_BASE) {
-        *out_brk_pc = pc;
+        *out_trap_pc = pc;
         *out_imm = (int)((instr >> 5) & 0xFFFF);
         return 1;
     }
     if (pc >= 4) {
         uint32_t instr_prev = *(uint32_t *)(pc - 4);
         if ((instr_prev & BRK_MASK) == BRK_BASE) {
-            *out_brk_pc = pc - 4;
+            *out_trap_pc = pc - 4;
             *out_imm = (int)((instr_prev >> 5) & 0xFFFF);
             return 1;
         }
     }
     return 0;
 }
+#elif defined(__x86_64__) || defined(_M_X64)
+// INT3 encoding: 0xCC. We place an imm16 payload (little-endian) immediately
+// after the trapping byte and decode it here.
+#define INT3_BYTE 0xCCU
+
+static int decode_trap_imm(uintptr_t pc, uintptr_t *out_trap_pc, int *out_imm) {
+    if (!out_trap_pc || !out_imm) return 0;
+    const uint8_t *p = (const uint8_t *)pc;
+    // On some platforms, the ucontext PC points to the trapping instruction; on others
+    // it points to the next instruction. Probe both `pc` and `pc-1`.
+    if (*p == INT3_BYTE) {
+        *out_trap_pc = pc;
+        *out_imm = (int)(p[1] | ((uint16_t)p[2] << 8));
+        return 1;
+    }
+    if (pc >= 1) {
+        const uint8_t *p_prev = (const uint8_t *)(pc - 1);
+        if (*p_prev == INT3_BYTE) {
+            *out_trap_pc = pc - 1;
+            *out_imm = (int)(p_prev[1] | ((uint16_t)p_prev[2] << 8));
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
 
 // External functions to get JIT code range (from dwarf.c)
 extern uint64_t wasmoon_dwarf_get_low_pc(void);
@@ -254,7 +297,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                 g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
             }
         }
-        if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
+        if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
         }
 
@@ -292,10 +335,57 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                  g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
              }
          }
-        if (!decode_brk_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
+        if (!decode_trap_imm((uintptr_t)pc, &trap_pc, &brk_imm)) {
             trap_pc = (uintptr_t)pc;
         }
 
+        switch (brk_imm) {
+            case 0: trap_code = 3; break;   // unreachable
+            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
+            case 2: trap_code = 4; break;   // indirect call type mismatch
+            case 3: trap_code = 5; break;   // invalid conversion to integer
+            case 4: trap_code = 6; break;   // integer divide by zero
+            case 5: trap_code = 7; break;   // integer overflow
+            default: trap_code = 99; break; // unknown
+        }
+#elif defined(__APPLE__) && defined(__x86_64__)
+        // macOS x86_64: INT3 payload.
+        ucontext_t *uc = (ucontext_t *)ucontext;
+        uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+        uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+        g_trap_lr = 0;
+        g_trap_fp = fp;
+        g_trap_frame_lr = 0;
+        if (fp) {
+            // Frame record: [fp] = prev_fp, [fp+8] = return_address.
+            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
+            trap_pc = pc;
+        }
+        switch (brk_imm) {
+            case 0: trap_code = 3; break;   // unreachable
+            case 1: trap_code = 1; break;   // out of bounds (memory/table access)
+            case 2: trap_code = 4; break;   // indirect call type mismatch
+            case 3: trap_code = 5; break;   // invalid conversion to integer
+            case 4: trap_code = 6; break;   // integer divide by zero
+            case 5: trap_code = 7; break;   // integer overflow
+            default: trap_code = 99; break; // unknown
+        }
+#elif defined(__linux__) && defined(__x86_64__)
+        // Linux x86_64: INT3 payload.
+        ucontext_t *uc = (ucontext_t *)ucontext;
+        uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+        uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+        g_trap_lr = 0;
+        g_trap_fp = fp;
+        g_trap_frame_lr = 0;
+        if (fp) {
+            g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+        }
+        if (!decode_trap_imm(pc, &trap_pc, &brk_imm)) {
+            trap_pc = pc;
+        }
         switch (brk_imm) {
             case 0: trap_code = 3; break;   // unreachable
             case 1: trap_code = 1; break;   // out of bounds (memory/table access)
@@ -374,6 +464,31 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                  }
              }
         }
+#elif defined(__APPLE__) && defined(__x86_64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+            // amd64 has no link register; keep LR at 0.
+            g_trap_lr = 0;
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+            g_trap_fp = fp;
+            g_trap_frame_lr = 0;
+            if (fp) {
+                uintptr_t low = 0;
+                uintptr_t high = 0;
+                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                    low = g_trap_wasm_stack_base;
+                    high = g_trap_wasm_stack_top;
+                } else if (g_stack_base != NULL && g_stack_size != 0) {
+                    uintptr_t base = (uintptr_t)g_stack_base;
+                    low = base - (uintptr_t)g_stack_size;
+                    high = base;
+                }
+                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
+                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                }
+            }
+        }
 #elif defined(__linux__) && defined(__aarch64__)
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
@@ -394,6 +509,30 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                     high = base;
                 }
                 if (high > low && fp >= low && fp + sizeof(uintptr_t) < high && (fp & 0xF) == 0) {
+                    g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
+                }
+            }
+        }
+#elif defined(__linux__) && defined(__x86_64__)
+        if (ucontext) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+            g_trap_lr = 0;
+            uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+            g_trap_fp = fp;
+            g_trap_frame_lr = 0;
+            if (fp) {
+                uintptr_t low = 0;
+                uintptr_t high = 0;
+                if (g_trap_wasm_stack_base != 0 && g_trap_wasm_stack_top != 0) {
+                    low = g_trap_wasm_stack_base;
+                    high = g_trap_wasm_stack_top;
+                } else if (g_stack_base != NULL && g_stack_size != 0) {
+                    uintptr_t base = (uintptr_t)g_stack_base;
+                    low = base - (uintptr_t)g_stack_size;
+                    high = base;
+                }
+                if (high > low && fp >= low && fp + sizeof(uintptr_t) < high) {
                     g_trap_frame_lr = *(uintptr_t *)(fp + sizeof(uintptr_t));
                 }
             }

@@ -64,6 +64,7 @@ pub fn LoweringContext::new(
 fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
   let skipped : @hashset.HashSet[Int] = @hashset.new()
   let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
+  let is_amd64 = @isa.ISA::current() is @isa.AMD64
 
   // Pass 1: find address values that will be subsumed by load/store lowering.
   for block in ctx.ir_func.blocks {
@@ -100,7 +101,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          // NOTE: match_addr_reg_offset is an AArch64-only fusion today.
+          // On amd64 we must not skip the address producer, otherwise we'll
+          // generate undefined vregs (the load/store will not use RegOffset).
+          if !is_amd64 &&
+            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {
@@ -144,7 +149,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if !is_amd64 &&
+            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, _, _, _, subsumed, has_extra)) {
             if explicit_offset == 0L || has_extra {
@@ -784,8 +790,8 @@ pub fn lower_function(
   // - int params: X0-X7 (vmctx consumes X0)
   // - float params: V0-V7
   // - overflow: int overflow first, then float overflow
-  let max_int_reg_params = @abi.MAX_REG_PARAMS // X0-X7 (includes vmctx which ARE in ir_func.params)
-  let max_float_reg_params = @abi.MAX_FLOAT_REG_PARAMS // V0-V7
+  let max_int_reg_params = 1 + wasm_user_arg_gprs().length()
+  let max_float_reg_params = wasm_arg_fprs().length()
   let mut int_reg_count = 0
   let mut float_reg_count = 0
   let int_stack_values : Array[@ir.Value] = []
@@ -822,12 +828,22 @@ pub fn lower_function(
     int_stack_values.length(),
     float_stack_classes,
   )
+  // amd64 uses a CALL instruction, so the return address occupies 8 bytes at
+  // the entry SP. Stack parameters are therefore at [entry_sp + 8 + offset].
+  // (Cranelift x64 models this the same way.)
+  let stack_arg_base = if @isa.ISA::current() is @isa.AMD64 { 8 } else { 0 }
   for i in 0..<int_stack_values.length() {
-    ctx.stack_param_map.set(int_stack_values[i].id, (int_offsets[i], Int))
+    ctx.stack_param_map.set(
+      int_stack_values[i].id,
+      (int_offsets[i] + stack_arg_base, Int),
+    )
   }
   for i in 0..<float_stack_values.length() {
     let (value, class) = float_stack_values[i]
-    ctx.stack_param_map.set(value.id, (float_offsets[i], class))
+    ctx.stack_param_map.set(
+      value.id,
+      (float_offsets[i] + stack_arg_base, class),
+    )
   }
   ctx.vcode_func.set_int_stack_params(int_stack_values.length())
 
@@ -858,7 +874,35 @@ pub fn lower_function(
 
   // Phase 5: Peephole optimization
   optimize_vcode(ctx.vcode_func)
+
+  // Phase 6: Target-specific fixups (Cranelift-style).
+  //
+  // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
+  // register. Enforce this constraint universally to avoid relying on each
+  // lowering site to set it correctly.
+  if @isa.ISA::current() is @isa.AMD64 {
+    fixup_amd64_shift_count_constraints(ctx.vcode_func)
+  }
   ctx.vcode_func
+}
+
+///|
+fn fixup_amd64_shift_count_constraints(func : @regalloc.VCodeFunction) -> Unit {
+  for block in func.blocks {
+    for inst in block.insts {
+      match inst.opcode {
+        @instr.Shl(_) | @instr.LShr(_) | @instr.AShr(_) | @instr.Rotr(_) =>
+          if inst.uses.length() >= 2 {
+            match inst.use_constraints[1] {
+              @abi.FixedReg(_) => ()
+              _ =>
+                inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
+            }
+          }
+        _ => ()
+      }
+    }
+  }
 }
 
 ///|
@@ -2075,7 +2119,8 @@ fn lower_load_ptr(
   //   load [base + (uextend/ishl index)]  => load_regoff base, index, (ext/scale)
   //
   // This avoids materializing address temporaries and reduces register pressure.
-  if (mem_ty is I32 || mem_ty is I64) &&
+  if !(@isa.ISA::current() is @isa.AMD64) &&
+    (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&
     (explicit_offset == 0L || has_extra) {
@@ -2182,7 +2227,8 @@ fn lower_store_ptr(
   }
 
   // Try Cranelift-style AArch64 register-offset addressing for stores.
-  if (mem_ty is I32 || mem_ty is I64) &&
+  if !(@isa.ISA::current() is @isa.AMD64) &&
+    (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&
     (explicit_offset == 0L || has_extra) {

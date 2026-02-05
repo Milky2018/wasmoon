@@ -34,11 +34,14 @@ const SPILL_ALIGNMENT : Int = 16
 const MIN_SPILL_SIZE : Int = 16
 
 ///|
-const PAIR_SIZE : Int = 16
-
-///|
 /// Size of setup area (FP + LR)
 const SETUP_AREA_SIZE : Int = 16
+
+///|
+// amd64 has no link register; reserve 8 bytes when frame setup is needed
+// (push rbp) so that, starting from a SysV entry SP of 16n+8, the stack is
+// 16-byte aligned (16n) after the prologue and therefore aligned at call sites.
+const X86_SETUP_AREA_SIZE : Int = 8
 
 // ============ JITStackFrame ============
 
@@ -46,7 +49,7 @@ const SETUP_AREA_SIZE : Int = 16
 /// Encapsulates the stack frame layout for a JIT-compiled function
 pub struct JITStackFrame {
   // Size of each region (in bytes)
-  setup_area_size : Int // FP + LR (16 bytes if present)
+  setup_area_size : Int // ISA-dependent setup (AArch64: FP+LR=16, amd64: push rbp=8)
   gpr_save_size : Int // Callee-saved GPRs (excluding FP/LR)
   fpr_save_size : Int // Callee-saved FPRs
   spill_size : Int // Spill slots
@@ -57,7 +60,9 @@ pub struct JITStackFrame {
   fpr_save_offset : Int
   spill_offset : Int
   outgoing_args_offset : Int
-  // Total frame size (16-byte aligned, including setup area)
+  // Total frame size:
+  // - AArch64: 16-byte aligned (SP must remain aligned at all times)
+  // - amd64: chosen so SP is 16-byte aligned after the prologue (SysV call ABI)
   total_size : Int
   // Size of frame excluding setup area (for sub sp, sp, #size)
   frame_size : Int
@@ -93,10 +98,14 @@ pub fn JITStackFrame::build(
   cache_func_table? : Bool = false,
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
+  isa? : @isa.ISA = @isa.ISA::current(),
+  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> JITStackFrame {
+  let isa = isa
+  let abi_settings = abi_settings
   // Build the list of GPRs to save
   // ABI: saved GPR set + clobbered callee-saved regs
-  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, needs_vmctx)
+  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, isa, abi_settings)
 
   // Determine if we need setup area (FP/LR)
   // Required when:
@@ -112,7 +121,14 @@ pub fn JITStackFrame::build(
     num_spill_slots > 0
 
   // Calculate size of each region
-  let setup_area_size = if has_setup_area { SETUP_AREA_SIZE } else { 0 }
+  let setup_area_size = if has_setup_area {
+    match isa {
+      @isa.AArch64 => SETUP_AREA_SIZE
+      @isa.AMD64 => X86_SETUP_AREA_SIZE
+    }
+  } else {
+    0
+  }
   let gpr_save_size = calc_gpr_save_size(saved_gprs.length())
   let fpr_save_size = calc_fpr_save_size(clobbered_fprs.length())
   let spill_size = calc_spill_size(num_spill_slots)
@@ -184,11 +200,8 @@ pub fn JITStackFrame::get_gpr_save_offset(
   // Find the register in the saved list
   for i, reg in self.saved_gprs {
     if reg == reg_idx {
-      // Registers are saved in pairs at gpr_save_offset
-      // First pair at gpr_save_offset, second at gpr_save_offset + 16, etc.
-      let pair_idx = i / 2
-      let in_pair_offset = i % 2 * 8
-      return self.gpr_save_offset + pair_idx * PAIR_SIZE + in_pair_offset
+      // Registers are saved in 8-byte slots (pairs are padded to 16 bytes).
+      return self.gpr_save_offset + i * 8
     }
   }
   // Register not found, should not happen
@@ -203,9 +216,7 @@ pub fn JITStackFrame::get_fpr_save_offset(
 ) -> Int {
   for i, reg in self.saved_fprs {
     if reg == reg_idx {
-      let pair_idx = i / 2
-      let in_pair_offset = i % 2 * 8
-      return self.fpr_save_offset + pair_idx * PAIR_SIZE + in_pair_offset
+      return self.fpr_save_offset + i * 8
     }
   }
   -1
@@ -220,16 +231,23 @@ pub fn JITStackFrame::get_fpr_save_offset(
 /// register is globally-reserved and is not saved/restored in prologues.
 fn build_gpr_save_list_v3(
   clobbered : Array[Int],
-  needs_vmctx : Bool,
+  isa : @isa.ISA,
+  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  needs_vmctx |> ignore
-  let vmctx = vmctx_index()
+  let fp = isa.fp_reg_index()
+  let lr = isa.lr_reg_index()
+  let env = isa.machine_env(settings=abi_settings)
+  let callee : @hashset.HashSet[Int] = @hashset.new()
+  for r in env.callee_saved_int {
+    callee.add(r.index)
+  }
   let result : Array[Int] = []
-
-  // Add clobbered callee-saved registers (X19-X28), excluding the pinned VMCTX.
   for reg in clobbered {
-    // X29/X30 handled separately in setup area.
-    if reg >= 19 && reg <= 28 && reg != vmctx && !result.contains(reg) {
+    // FP/LR are handled separately in the setup area.
+    if reg == fp || reg == lr {
+      continue
+    }
+    if callee.contains(reg) && !result.contains(reg) {
       result.push(reg)
     }
   }
@@ -243,8 +261,7 @@ fn calc_gpr_save_size(num_gprs : Int) -> Int {
   if num_gprs == 0 {
     return 0
   }
-  let num_pairs = (num_gprs + 1) / 2
-  num_pairs * PAIR_SIZE
+  align_up(num_gprs * 8, 16)
 }
 
 ///|
@@ -253,8 +270,7 @@ fn calc_fpr_save_size(num_fprs : Int) -> Int {
   if num_fprs == 0 {
     return 0
   }
-  let num_pairs = (num_fprs + 1) / 2
-  num_pairs * PAIR_SIZE
+  align_up(num_fprs * 8, 16)
 }
 
 ///|

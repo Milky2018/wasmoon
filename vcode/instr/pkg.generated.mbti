@@ -47,6 +47,8 @@ pub(all) enum Cond {
   Pl
   Vs
   Vc
+  Ps
+  Pc
   Hi
   Ls
   Ge
@@ -242,6 +244,8 @@ pub(all) enum VCodeOpcode {
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
+  SRem(Bool)
+  URem(Bool)
   And(Bool)
   AndImm(Int64, Bool)
   Or(Bool)

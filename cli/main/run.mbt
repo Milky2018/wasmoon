@@ -1042,7 +1042,12 @@ fn compile_module_to_jit(
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let isa = @isa.ISA::current()
+  let target_arch : @cwasm.TargetArch = match isa {
+    @isa.AArch64 => @cwasm.AArch64
+    @isa.AMD64 => @cwasm.X86_64
+  }
+  let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @jit.JITDebugDB? = if dump_on_trap {
     Some(@jit.JITDebugDB::new())
   } else {
@@ -1123,12 +1128,6 @@ fn compile_module_to_jit(
     }
     // Stage 6: Add to precompiled module
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
-    // DEBUG: Check MC sizes
-    if func_name == "_start" || func_idx == 9 {
-      @logger.debug(
-        "[COMPILE] \{func_name} (func_\{func_idx}): mc.size()=\{mc.size()}, mc.get_bytes().length()=\{mc.get_bytes().length()}, compiled.code_size=\{compiled.code_size}, get_code().length()=\{compiled.get_code().length()}",
-      )
-    }
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(

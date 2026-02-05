@@ -253,6 +253,14 @@ pub fn Output::summary(self : Output) -> String {
     "  operand_allocs: \{self.allocs.length()} (reg=\{alloc_reg}, spill=\{alloc_spill})\n"
   s = s +
     "  regs_used: int=\{used_int_pregs.length()}, fp=\{used_fp_pregs.length()}, vec=\{used_vec_pregs.length()}\n"
+  if used_int_pregs.length() > 16 {
+    let regs : Array[Int] = []
+    for r in used_int_pregs {
+      regs.push(r)
+    }
+    regs.sort()
+    s = s + "  regs_used_int_indices: \{regs}\n"
+  }
   s = s + "  operand_ranges: \{self.operand_ranges.length()}\n"
   if !hot_slots.is_empty() {
     s = s + "  hot_spillslots: "
@@ -301,6 +309,91 @@ pub fn Output::summary(self : Output) -> String {
     s = s + self.param_locs[i].to_string()
   }
   s + "\n"
+}
+
+///|
+/// Validate that the regalloc output only uses legal physical registers for the
+/// selected ISA.
+///
+/// This is a fail-fast guard: silent truncation in x86 encoders can clobber rsp/rbp
+/// if an out-of-range preg leaks into emission (e.g. x20 -> rsp).
+pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
+  if !(isa is @isa.AMD64) {
+    return
+  }
+  fn alloc_context(self : Output, alloc_idx : Int) -> String {
+    for range in self.operand_ranges {
+      let (block_id, inst_idx, is_terminator, range_start, def_count, use_count) = range
+      let total = def_count + use_count
+      if alloc_idx >= range_start && alloc_idx < range_start + total {
+        let rel = alloc_idx - range_start
+        let kind = if rel < def_count {
+          "def[\{rel}]"
+        } else {
+          "use[\{rel - def_count}]"
+        }
+        let t = if is_terminator { "t" } else { "i" }
+        return "block[\{block_id}] \{t}[\{inst_idx}] \{kind}"
+      }
+    }
+    "unknown"
+  }
+
+  fn validate_preg(p : @abi.PReg, ctx_desc : String) -> Unit {
+    match p.class {
+      @abi.Int => {
+        guard p.index >= 0 && p.index < 16 else {
+          abort(
+            "amd64 regalloc output contains invalid Int preg \{p} at \{ctx_desc}",
+          )
+        }
+        // rsp/rbp are never allocatable as value registers.
+        guard p.index != 4 && p.index != 5 else {
+          abort(
+            "amd64 regalloc output contains reserved Int preg \{p} at \{ctx_desc}",
+          )
+        }
+      }
+      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        guard p.index >= 0 && p.index < 16 else {
+          abort(
+            "amd64 regalloc output contains invalid FP/Vec preg \{p} at \{ctx_desc}",
+          )
+        }
+      }
+    }
+  }
+
+  fn validate_loc(loc : Loc, ctx_desc : String) -> Unit {
+    match loc {
+      Reg(p) => validate_preg(p, ctx_desc)
+      Spill(_) => ()
+    }
+  }
+
+  for i in 0..<self.param_locs.length() {
+    validate_loc(self.param_locs[i], "param_locs[\{i}]")
+  }
+  for i in 0..<self.allocs.length() {
+    validate_loc(self.allocs[i], "allocs[\{i}] (\{alloc_context(self, i)})")
+  }
+  for entry in self.edits {
+    let ((block_id, inst_idx, pos), edit) = entry
+    fn pos_str(pos : ProgPos) -> String {
+      match pos {
+        Before => "b"
+        After => "a"
+      }
+    }
+
+    let ctx_desc = "edit[\{block_id}:\{inst_idx}:\{pos_str(pos)}]"
+    match edit {
+      Move(from, to, _class) => {
+        validate_loc(from, ctx_desc + ".from")
+        validate_loc(to, ctx_desc + ".to")
+      }
+    }
+  }
 }
 
 ///|

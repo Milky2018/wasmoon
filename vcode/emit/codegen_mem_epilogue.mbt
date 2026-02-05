@@ -141,6 +141,43 @@ fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
+  if current_isa() is @isa.AMD64 {
+    let isa = current_isa()
+    let saved_gprs = stack_frame.saved_gprs
+
+    // Step 1: Deallocate remaining stack space (spill slots + outgoing args).
+    let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
+    if remaining_size > 0 {
+      self.emit_sp_adjust(remaining_size)
+    }
+
+    // SysV has no callee-saved XMM regs.
+    if stack_frame.saved_fprs.length() > 0 {
+      abort("x86_64 epilogue: unexpected callee-saved fprs")
+    }
+
+    // Undo GPR-save padding.
+    let gpr_padding = stack_frame.gpr_save_size - saved_gprs.length() * 8
+    if gpr_padding > 0 {
+      self.x86_emit_add_rsp_imm32(gpr_padding)
+    }
+
+    // Restore callee-saved GPRs (reverse order).
+    let mut i = saved_gprs.length() - 1
+    while i >= 0 {
+      self.x86_emit_pop_r64(saved_gprs[i])
+      i = i - 1
+    }
+
+    // Restore rbp and setup-area padding.
+    if stack_frame.has_setup_area {
+      if stack_frame.setup_area_size > 8 {
+        self.x86_emit_add_rsp_imm32(stack_frame.setup_area_size - 8)
+      }
+      self.x86_emit_pop_r64(isa.fp_reg_index())
+    }
+    return
+  }
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
 
@@ -215,6 +252,12 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
+  if current_isa() is @isa.AMD64 {
+    self.emit_terminator_with_epilogue_x86_64(
+      term, stack_frame, result_types, next_block, shared_exit_block,
+    )
+    return
+  }
   fn trap_msg_to_brk_imm(msg : String) -> Int {
     // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
     //   0 unreachable

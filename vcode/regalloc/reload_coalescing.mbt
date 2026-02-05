@@ -116,11 +116,41 @@ fn allocate_reload_registers(
     used_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
   }
 
-  // Candidate callee-saved registers for reload coalescing.
+  // Candidate registers for reload coalescing.
+  //
   // Only use registers that are NOT allocated to any vreg to avoid clobbering
   // live values (including parameters that may stay live across a block).
-  let reload_int_regs = [20, 22, 23, 24, 25, 26, 27, 28]
-  let reload_float_regs = [8, 9, 10, 11, 12, 13, 14, 15]
+  //
+  // On amd64, we prefer using the ISA's callee-saved pool (minus pinned/cached
+  // roles) as returned by the MachineEnv. SysV has no callee-saved XMM regs, so
+  // we disable float reload coalescing there.
+  let reload_int_regs : Array[Int] = []
+  let reload_float_regs : Array[Int] = []
+  match isa {
+    @isa.AArch64 => {
+      // AArch64: use a subset of callee-saved regs that are not used by Wasmoon's ABI roles.
+      for idx in [20, 22, 23, 24, 25, 26, 27, 28] {
+        reload_int_regs.push(idx)
+      }
+      for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
+        reload_float_regs.push(idx)
+      }
+    }
+    @isa.AMD64 => {
+      let env = isa.machine_env(
+        reserve_mem0_desc=func.uses_mem0(),
+        reserve_func_table=func.uses_func_table(),
+        reserve_extra_results_ptr=needs_x23_reserved,
+      )
+      for r in env.callee_saved_int {
+        // rbp is already excluded from MachineEnv; still, keep it out here too.
+        if r.index == isa.fp_reg_index() {
+          continue
+        }
+        reload_int_regs.push(r.index)
+      }
+    }
+  }
 
   // Per-block allocation to avoid conflicts within a block.
   for block_idx, _block in func.blocks {

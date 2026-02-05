@@ -4,7 +4,10 @@
 
 set -e
 
-moon build --target native --release
+# Build the main packages explicitly. With newer `moon` toolchains, building at
+# the repo root may not build main packages automatically.
+moon build --target native --release cli/main
+moon build --target native --release cli/tools
 
 # Install binaries atomically by swapping symlinks (avoids copying, and avoids
 # overwriting an inode that may still be mapped by an existing process).

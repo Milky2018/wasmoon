@@ -182,6 +182,11 @@ pub(all) enum VCodeOpcode {
   Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
+  // x86_64: explicit remainder opcodes (lowered only on x86_64).
+  // This matches Cranelift's checked remainder sequences to avoid x86 IDIV
+  // overflow traps for `INT_MIN % -1`.
+  SRem(Bool) // SREM with size: true = 64-bit, false = 32-bit
+  URem(Bool) // UREM with size: true = 64-bit, false = 32-bit
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And(Bool)
   AndImm(Int64, Bool) // AND (immediate logical), value is the immediate pattern
@@ -869,6 +874,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
+    SRem(is_64) => if is_64 { "srem" } else { "srem32" }
+    URem(is_64) => if is_64 { "urem" } else { "urem32" }
     And(is_64) => if is_64 { "and" } else { "and32" }
     AndImm(imm, is_64) => if is_64 { "and #\{imm}" } else { "and32 #\{imm}" }
     Or(is_64) => if is_64 { "or" } else { "or32" }
@@ -1379,6 +1386,9 @@ pub(all) enum Cond {
   Pl // Plus/positive or zero (N=0)
   Vs // Overflow (V=1) - used for NaN check in float compare
   Vc // No overflow (V=0)
+  // x86_64-only: parity flag conditions (used after UCOMIS* for NaN/unordered checks).
+  Ps // Parity set (PF=1)
+  Pc // Parity clear (PF=0)
   Hi // Unsigned higher (C=1 && Z=0)
   Ls // Unsigned lower or same (C=0 || Z=1)
   Ge // Signed greater or equal (N=V)
@@ -1399,6 +1409,8 @@ fn Cond::to_string(self : Cond) -> String {
     Pl => "pl"
     Vs => "vs"
     Vc => "vc"
+    Ps => "ps"
+    Pc => "pc"
     Hi => "hi"
     Ls => "ls"
     Ge => "ge"
@@ -1426,6 +1438,7 @@ pub fn Cond::to_bits(self : Cond) -> Int {
     Pl => 5
     Vs => 6
     Vc => 7
+    Ps | Pc => abort("Cond::to_bits: parity conditions are x86_64-only")
     Hi => 8
     Ls => 9
     Ge => 10
@@ -1449,6 +1462,8 @@ pub fn Cond::invert(self : Cond) -> Cond {
     Pl => Mi
     Vs => Vc
     Vc => Vs
+    Ps => Pc
+    Pc => Ps
     Hi => Ls
     Ls => Hi
     Ge => Lt

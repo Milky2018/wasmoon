@@ -7,13 +7,14 @@ import {
 }
 
 // Values
+pub fn c_host_arch() -> Int
 
 // Errors
 
 // Types and methods
 pub(all) enum ISA {
   AArch64
-  X86_64
+  AMD64
 }
 pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]
@@ -32,6 +33,11 @@ pub fn ISA::scratch_reg_2_index(Self) -> Int
 pub fn ISA::sret_reg_index(Self) -> Int
 pub fn ISA::vmctx_preg(Self) -> @abi.PReg
 pub fn ISA::vmctx_reg_index(Self) -> Int
+pub fn ISA::wasm_arg_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_ret_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_ret_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_user_arg_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::wasm_vmctx_arg_preg(Self) -> @abi.PReg
 
 pub struct MachineEnv {
   preferred_int : Array[@abi.PReg]

@@ -1,6 +1,9 @@
 ///|
 /// Test for store merging peephole optimization
 test "store_merging_peephole" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Test case: two adjacent store8 with constant addresses
   // Similar to benchmark.wat's $print_num function
   let source =

@@ -31,16 +31,32 @@ pub fn apply_allocation(
 ) -> VCodeFunction {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
+  let isa = @isa.ISA::current()
+  let wasm_vmctx_arg = isa.wasm_vmctx_arg_preg()
+  let wasm_user_gprs = isa.wasm_user_arg_gprs()
+  let wasm_arg_fprs = isa.wasm_arg_fprs()
+  let env = isa.machine_env()
+  guard env.scratch_int.length() >= 2 && env.scratch_float.length() >= 2 else {
+    abort(
+      "regalloc_apply: ISA machine env must reserve at least 2 scratch regs",
+    )
+  }
+  let scratch_int_indices = env.scratch_int
+  let scratch_float_indices = env.scratch_float
+  fn scratch_indices_for_class(class : @abi.RegClass) -> Array[Int] {
+    match class {
+      @abi.Int => scratch_int_indices
+      _ => scratch_float_indices
+    }
+  }
 
   // Compute reload intervals for spill coalescing
   let reload_intervals = compute_reload_intervals(func, alloc)
   allocate_reload_registers(func, alloc, reload_intervals)
 
   // Convert function parameters
-  // Note: all params use X0-X7 (int) or V0-V7 (float)
-  // vmctx is an explicit param in the function signature
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  // Parameters use Wasmoon's internal Wasm ABI (ISA-dependent).
+  // vmctx is an explicit param in the function signature.
   let mut int_idx = 0
   let mut float_idx = 0
 
@@ -57,24 +73,35 @@ pub fn apply_allocation(
         let (default_preg_opt, is_int) : (@abi.PReg?, Bool) = match
           param.class {
           @abi.Int =>
-            if int_idx < max_int_params {
-              (Some(@abi.PReg::{ index: int_idx, class: @abi.Int }), true)
+            if int_idx == 0 {
+              (Some(wasm_vmctx_arg), true)
             } else {
-              (None, true) // Stack param
+              let user_idx = int_idx - 1
+              if user_idx < wasm_user_gprs.length() {
+                (Some(wasm_user_gprs[user_idx]), true)
+              } else {
+                (None, true) // Stack param
+              }
             }
           @abi.Float32 =>
-            if float_idx < max_float_params {
+            if float_idx < wasm_arg_fprs.length() {
               (
-                Some(@abi.PReg::{ index: float_idx, class: @abi.Float32 }),
+                Some(@abi.PReg::{
+                  index: wasm_arg_fprs[float_idx].index,
+                  class: @abi.Float32,
+                }),
                 false,
               )
             } else {
               (None, false)
             }
           @abi.Float64 =>
-            if float_idx < max_float_params {
+            if float_idx < wasm_arg_fprs.length() {
               (
-                Some(@abi.PReg::{ index: float_idx, class: @abi.Float64 }),
+                Some(@abi.PReg::{
+                  index: wasm_arg_fprs[float_idx].index,
+                  class: @abi.Float64,
+                }),
                 false,
               )
             } else {
@@ -82,8 +109,14 @@ pub fn apply_allocation(
             }
           @abi.Vector =>
             // Vector uses same Vn registers as Float
-            if float_idx < max_float_params {
-              (Some(@abi.PReg::{ index: float_idx, class: @abi.Vector }), false)
+            if float_idx < wasm_arg_fprs.length() {
+              (
+                Some(@abi.PReg::{
+                  index: wasm_arg_fprs[float_idx].index,
+                  class: @abi.Vector,
+                }),
+                false,
+              )
             } else {
               (None, false)
             }
@@ -114,25 +147,40 @@ pub fn apply_allocation(
         // If the param is spilled, capture a store from the incoming ABI register
         // to its spill slot. This makes spilling params safe.
         if alloc.spill_slots.get(param.id) is Some(slot) {
-          match param.class {
+          let incoming_preg_opt : @abi.PReg? = match param.class {
             @abi.Int =>
-              if int_idx < max_int_params {
-                spilled_param_stores.push(
-                  ({ index: int_idx, class: @abi.Int }, slot),
-                )
+              if int_idx == 0 {
+                Some(wasm_vmctx_arg)
+              } else {
+                let user_idx = int_idx - 1
+                if user_idx < wasm_user_gprs.length() {
+                  Some(wasm_user_gprs[user_idx])
+                } else {
+                  None
+                }
               }
             @abi.Float32 | @abi.Float64 =>
-              if float_idx < max_float_params {
-                spilled_param_stores.push(
-                  ({ index: float_idx, class: @abi.Float64 }, slot),
-                )
+              if float_idx < wasm_arg_fprs.length() {
+                Some(@abi.PReg::{
+                  index: wasm_arg_fprs[float_idx].index,
+                  class: @abi.Float64,
+                })
+              } else {
+                None
               }
             @abi.Vector =>
-              if float_idx < max_float_params {
-                spilled_param_stores.push(
-                  ({ index: float_idx, class: @abi.Vector }, slot),
-                )
+              if float_idx < wasm_arg_fprs.length() {
+                Some(@abi.PReg::{
+                  index: wasm_arg_fprs[float_idx].index,
+                  class: @abi.Vector,
+                })
+              } else {
+                None
               }
+          }
+          match incoming_preg_opt {
+            Some(src_preg) => spilled_param_stores.push((src_preg, slot))
+            None => ()
           }
         }
 
@@ -296,7 +344,7 @@ pub fn apply_allocation(
               new_block.add_inst(reload_inst)
             } else {
               // No coalescing available - use scratch registers X16, X17
-              let scratch_candidates = [16, 17]
+              let scratch_candidates = scratch_indices_for_class(scratch_class)
               let mut scratch_idx = inst_spill_idx % 2
               // Find a scratch register that's not already in use
               let mut attempts = 0
@@ -369,7 +417,9 @@ pub fn apply_allocation(
                       @abi.Float32 | @abi.Float64 => @abi.Float64
                       _ => vreg.class
                     }
-                    let scratch_indices = [16, 17]
+                    let scratch_indices = scratch_indices_for_class(
+                      scratch_class,
+                    )
                     let scratch_preg : @abi.PReg = {
                       index: scratch_indices[block_scratch_idx % 2],
                       class: scratch_class,
@@ -426,10 +476,17 @@ pub fn apply_allocation(
                       new_inst.add_use(@abi.Physical(scratch_preg))
                     }
                   None => {
-                    // Fallback: use X16 if somehow not in spill_regs
+                    // Fallback: use the first reserved scratch reg for this bank.
+                    let scratch_class = match vreg.class {
+                      @abi.Float32 | @abi.Float64 => @abi.Float64
+                      _ => vreg.class
+                    }
+                    let scratch_indices = scratch_indices_for_class(
+                      scratch_class,
+                    )
                     let scratch_preg : @abi.PReg = {
-                      index: 16,
-                      class: vreg.class,
+                      index: scratch_indices[0],
+                      class: scratch_class,
                     }
                     new_inst.add_use(@abi.Physical(scratch_preg))
                   }
@@ -475,8 +532,9 @@ pub fn apply_allocation(
                   @abi.Float32 | @abi.Float64 => @abi.Float64
                   _ => mv.class
                 }
+                let scratch_indices = scratch_indices_for_class(scratch_class)
                 let scratch_preg : @abi.PReg = {
-                  index: 16,
+                  index: scratch_indices[0],
                   class: scratch_class,
                 }
                 let reload_inst = @instr.VCodeInst::new(
@@ -784,8 +842,9 @@ pub fn apply_allocation(
                   @abi.Float32 | @abi.Float64 => @abi.Float64
                   _ => mv.class
                 }
+                let scratch_indices = scratch_indices_for_class(scratch_class)
                 let scratch_preg : @abi.PReg = {
-                  index: 16,
+                  index: scratch_indices[0],
                   class: scratch_class,
                 }
                 let reload_inst = @instr.VCodeInst::new(
@@ -819,29 +878,59 @@ pub fn apply_allocation(
         }
         Branch(cond, then_b, else_b) => {
           // Handle spilled condition register (single input).
-          let new_cond = rewrite_reg_with_spill(cond, alloc, new_block, 16)
+          let new_cond = rewrite_reg_with_spill(
+            cond,
+            alloc,
+            new_block,
+            scratch_int_indices[0],
+          )
           Branch(new_cond, then_b, else_b)
         }
         BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
           // Handle spilled registers. IMPORTANT: if both sides are spilled, we must
           // reload into distinct scratch registers, otherwise we clobber one side.
-          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block, 16)
-          let new_rhs = rewrite_reg_with_spill(rhs, alloc, new_block, 17)
+          let new_lhs = rewrite_reg_with_spill(
+            lhs,
+            alloc,
+            new_block,
+            scratch_int_indices[0],
+          )
+          let new_rhs = rewrite_reg_with_spill(
+            rhs,
+            alloc,
+            new_block,
+            scratch_int_indices[1],
+          )
           BranchCmp(new_lhs, new_rhs, cond, is_64, then_b, else_b)
         }
         BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
           // Handle spilled register (single input).
-          let new_lhs = rewrite_reg_with_spill(lhs, alloc, new_block, 16)
+          let new_lhs = rewrite_reg_with_spill(
+            lhs,
+            alloc,
+            new_block,
+            scratch_int_indices[0],
+          )
           BranchCmpImm(new_lhs, imm, cond, is_64, then_b, else_b)
         }
         BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
           // Handle spilled register (single input).
-          let new_reg = rewrite_reg_with_spill(reg, alloc, new_block, 16)
+          let new_reg = rewrite_reg_with_spill(
+            reg,
+            alloc,
+            new_block,
+            scratch_int_indices[0],
+          )
           BranchZero(new_reg, is_nonzero, is_64, then_b, else_b)
         }
         BrTable(index, targets, default) => {
           // Handle spilled index register (single input).
-          let new_index = rewrite_reg_with_spill(index, alloc, new_block, 16)
+          let new_index = rewrite_reg_with_spill(
+            index,
+            alloc,
+            new_block,
+            scratch_int_indices[0],
+          )
           BrTable(new_index, targets, default)
         }
         Return(values) => {
@@ -861,7 +950,7 @@ pub fn apply_allocation(
                 @abi.Float32 | @abi.Float64 => @abi.Float64
                 _ => vreg.class
               }
-              let scratch_indices = [16, 17]
+              let scratch_indices = scratch_indices_for_class(scratch_class)
               let scratch_preg : @abi.PReg = {
                 index: scratch_indices[block_scratch_idx % 2],
                 class: scratch_class,

@@ -4,6 +4,10 @@ fn MachineCode::emit_instruction(
   inst : @instr.VCodeInst,
   stack_frame : JITStackFrame,
 ) -> Unit {
+  if current_isa() is @isa.AMD64 {
+    self.emit_instruction_x86_64(inst, stack_frame)
+    return
+  }
   // Extract offsets from stack frame for backward compatibility
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
@@ -843,6 +847,7 @@ fn MachineCode::emit_instruction(
         Pl => 4 // MI
         Vs => 7 // VC
         Vc => 6 // VS
+        Ps | Pc => abort("aarch64 TrapIf: parity conditions are x86_64-only")
         Hi => 9 // LS
         Ls => 8 // HI
         Ge => 11 // LT

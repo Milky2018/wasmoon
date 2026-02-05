@@ -173,6 +173,7 @@ pub fn Output::new() -> Self
 pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
 pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
 pub fn Output::summary(Self) -> String
+pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit
 
 pub struct ProgPoint {
   block : Int

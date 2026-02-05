@@ -5,19 +5,22 @@
 /// behind a stable interface so future AMD64 support can plug in cleanly.
 ///
 /// Note: Wasmoon currently only generates AArch64 machine code. `ISA::current()`
-/// always returns `AArch64` for now; x86_64 is a stub and must compile only.
+/// always returns `AArch64` for now; amd64 is a stub and must compile only.
 
 ///|
 #warnings("-unused_constructor")
 pub(all) enum ISA {
   AArch64
-  X86_64
+  AMD64
 }
 
 ///|
 pub fn ISA::current() -> ISA {
-  // TODO: Use conditional compilation / target detection when MoonBit supports it.
-  AArch64
+  match c_host_arch() {
+    1 => AMD64
+    0 => AArch64
+    _ => AArch64
+  }
 }
 
 ///|
@@ -71,9 +74,9 @@ pub fn ISA::machine_env(
           settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
         ),
       )
-    X86_64 =>
+    AMD64 =>
       MachineEnv::from_data(
-        @x86_64.build_machine_env(
+        @amd64.build_machine_env(
           settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
         ),
       )
@@ -84,7 +87,7 @@ pub fn ISA::machine_env(
 pub fn ISA::call_clobbered_gprs(self : ISA) -> Array[@abi.PReg] {
   match self {
     AArch64 => @aarch64.call_clobbered_gprs()
-    X86_64 => @x86_64.call_clobbered_gprs()
+    AMD64 => @amd64.call_clobbered_gprs()
   }
 }
 
@@ -92,7 +95,7 @@ pub fn ISA::call_clobbered_gprs(self : ISA) -> Array[@abi.PReg] {
 pub fn ISA::call_clobbered_fprs(self : ISA) -> Array[@abi.PReg] {
   match self {
     AArch64 => @aarch64.call_clobbered_fprs()
-    X86_64 => @x86_64.call_clobbered_fprs()
+    AMD64 => @amd64.call_clobbered_fprs()
   }
 }
 
@@ -100,7 +103,52 @@ pub fn ISA::call_clobbered_fprs(self : ISA) -> Array[@abi.PReg] {
 pub fn ISA::call_clobbered_fprs_same_abi(self : ISA) -> Array[@abi.PReg] {
   match self {
     AArch64 => @aarch64.call_clobbered_fprs_same_abi()
-    X86_64 => @x86_64.call_clobbered_fprs_same_abi()
+    AMD64 => @amd64.call_clobbered_fprs_same_abi()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: VMContext argument register.
+pub fn ISA::wasm_vmctx_arg_preg(self : ISA) -> @abi.PReg {
+  match self {
+    AArch64 => @aarch64.wasm_vmctx_arg_preg()
+    AMD64 => @amd64.wasm_vmctx_arg_preg()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: user integer argument registers.
+pub fn ISA::wasm_user_arg_gprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_user_arg_gprs()
+    AMD64 => @amd64.wasm_user_arg_gprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: float argument registers.
+pub fn ISA::wasm_arg_fprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_arg_fprs()
+    AMD64 => @amd64.wasm_arg_fprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: integer return registers.
+pub fn ISA::wasm_ret_gprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_ret_gprs()
+    AMD64 => @amd64.wasm_ret_gprs()
+  }
+}
+
+///|
+/// Wasmoon's internal Wasm-to-Wasm calling convention: float return registers.
+pub fn ISA::wasm_ret_fprs(self : ISA) -> Array[@abi.PReg] {
+  match self {
+    AArch64 => @aarch64.wasm_ret_fprs()
+    AMD64 => @amd64.wasm_ret_fprs()
   }
 }
 
@@ -109,7 +157,7 @@ pub fn ISA::call_clobbered_fprs_same_abi(self : ISA) -> Array[@abi.PReg] {
 pub fn ISA::int_reg_index(self : ISA, role : @spec.IntRegRole) -> Int {
   match self {
     AArch64 => @aarch64.int_reg_index(role)
-    X86_64 => @x86_64.int_reg_index(role)
+    AMD64 => @amd64.int_reg_index(role)
   }
 }
 

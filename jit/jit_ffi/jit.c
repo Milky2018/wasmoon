@@ -93,6 +93,22 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return (int32_t)g_trap_code;
     }
+    // Defensive: hostcall trampolines pass a pointer into the active WASM stack.
+    // If ABI bugs pass an invalid pointer, the MoonBit dispatcher may scribble
+    // over unrelated memory and corrupt the heap.
+    if (ctx->wasm_stack_base && ctx->wasm_stack_top) {
+        uintptr_t base = (uintptr_t)ctx->wasm_stack_base;
+        uintptr_t top = (uintptr_t)ctx->wasm_stack_top;
+        uintptr_t ptr = (uintptr_t)values_ptr;
+        // Each slot is 8 bytes; `num_args`/`num_results` are already slot counts
+        // (v128 uses 2 slots in the trampoline).
+        uintptr_t bytes = (uintptr_t)(num_args + num_results) * 8u;
+        if (ptr < base || ptr + bytes > top) {
+            g_trap_code = 3; // unreachable
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return (int32_t)g_trap_code;
+        }
+    }
 
     g_hostcall_func_idx = func_idx;
     g_hostcall_values_ptr = values_ptr;
@@ -388,6 +404,80 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
     return (int64_t)wasmoon_jit_memory_copy;
 }
 
+// ============ Integer div/rem helpers ============
+//
+// These helpers are used as a bootstrap on x86_64 to get the JIT backend
+// working before implementing full idiv lowering/encoding.
+//
+// NOTE: For signed remainder, INT_MIN % -1 is undefined behavior in C, but is
+// well-defined in WebAssembly (result 0). We special-case b == -1 to avoid UB.
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_sdiv(int32_t a, int32_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_udiv(uint32_t a, uint32_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_i32_srem(int32_t a, int32_t b) {
+    if (b == -1) return 0;
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_i32_urem(uint32_t a, uint32_t b) {
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_sdiv(int64_t a, int64_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_udiv(uint64_t a, uint64_t b) {
+    return a / b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_i64_srem(int64_t a, int64_t b) {
+    if (b == -1) return 0;
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT uint64_t wasmoon_jit_i64_urem(uint64_t a, uint64_t b) {
+    return a % b;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_sdiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_sdiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_udiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_udiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_srem_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_srem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i32_urem_ptr(void) {
+    return (int64_t)wasmoon_jit_i32_urem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_sdiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_sdiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_udiv_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_udiv;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_srem_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_srem;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_i64_urem_ptr(void) {
+    return (int64_t)wasmoon_jit_i64_urem;
+}
+
 // ============ Multi-Memory Array Setup ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
@@ -595,7 +685,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline_managed(
 // ============ Stack-Switching Trampoline Call ============
 
 // External assembly function for stack switching (from stack_switch_aarch64.S)
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
 extern int stack_switch_call(
     void *wasm_stack_top,
     void *trampoline_ptr,
@@ -624,7 +714,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
         return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
     }
 
-#if defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
     install_trap_handler();
     g_trap_code = 0;
     g_trap_signal = 0;
@@ -667,7 +757,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
 
     return result;
 #else
-    // On non-AArch64, fall back to regular call
+    // On targets without a stack-switch helper, fall back to regular call.
     return wasmoon_jit_call_trampoline(trampoline_ptr, ctx_ptr, func_ptr, values_vec, values_len);
 #endif
 }

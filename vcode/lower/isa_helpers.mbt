@@ -24,3 +24,28 @@ fn vmctx_preg() -> @abi.PReg {
 fn scratch2_index() -> Int {
   current_isa().scratch_reg_2_index()
 }
+
+///|
+fn wasm_vmctx_arg_preg() -> @abi.PReg {
+  current_isa().wasm_vmctx_arg_preg()
+}
+
+///|
+fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
+  current_isa().wasm_user_arg_gprs()
+}
+
+///|
+fn wasm_arg_fprs() -> Array[@abi.PReg] {
+  current_isa().wasm_arg_fprs()
+}
+
+///|
+fn wasm_ret_gprs() -> Array[@abi.PReg] {
+  current_isa().wasm_ret_gprs()
+}
+
+///|
+fn wasm_ret_fprs() -> Array[@abi.PReg] {
+  current_isa().wasm_ret_fprs()
+}

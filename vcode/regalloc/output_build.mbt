@@ -64,6 +64,8 @@ fn add_used_reg(
 ///|
 fn pick_temp_preg(
   out : Output,
+  isa : @isa.ISA,
+  env : @isa.MachineEnv,
   cls : @abi.RegClass,
   used_int : @hashset.HashSet[Int],
   used_fp : @hashset.HashSet[Int],
@@ -73,7 +75,6 @@ fn pick_temp_preg(
   need_preserve : Bool,
   cursor : Int,
 ) -> (@abi.PReg, Int, Int?) {
-  let isa = @isa.ISA::current()
   let scratch1 = isa.scratch_reg_1_index()
   let scratch2 = isa.scratch_reg_2_index()
   let vmctx = isa.vmctx_reg_index()
@@ -110,8 +111,17 @@ fn pick_temp_preg(
           return (preg, cursor + 1, None)
         }
       }
-      // Fallback: steal any GPR not used by this instruction, save/restore via a fresh spill slot.
-      for idx in 0..<29 {
+      // Fallback: steal any allocatable GPR not used by this instruction,
+      // save/restore via a fresh spill slot.
+      let candidates : Array[@abi.PReg] = []
+      for p in env.preferred_int {
+        candidates.push(p)
+      }
+      for p in env.nonpreferred_int {
+        candidates.push(p)
+      }
+      for p in candidates {
+        let idx = p.index
         // Skip special-purpose registers.
         if idx == scratch1 ||
           idx == scratch2 ||
@@ -143,8 +153,16 @@ fn pick_temp_preg(
           return (preg, cursor + 1, None)
         }
       }
-      // Fallback: steal any V-reg index not used by this instruction.
-      for idx in 0..<32 {
+      // Fallback: steal any allocatable vector reg not used by this instruction.
+      let candidates : Array[@abi.PReg] = []
+      for p in env.preferred_vector {
+        candidates.push(p)
+      }
+      for p in env.nonpreferred_vector {
+        candidates.push(p)
+      }
+      for p in candidates {
+        let idx = p.index
         if !used_fp.contains(idx) {
           let preg = @abi.PReg::{ index: idx, class: @abi.Vector }
           used_fp.add(idx) |> ignore
@@ -167,8 +185,16 @@ fn pick_temp_preg(
           return (preg, cursor + 1, None)
         }
       }
-      // Fallback: steal any V-reg index not used by this instruction.
-      for idx in 0..<32 {
+      // Fallback: steal any allocatable FPR not used by this instruction.
+      let candidates : Array[@abi.PReg] = []
+      for p in env.preferred_float {
+        candidates.push(p)
+      }
+      for p in env.nonpreferred_float {
+        candidates.push(p)
+      }
+      for p in candidates {
+        let idx = p.index
         if !used_fp.contains(idx) {
           let preg = @abi.PReg::{ index: idx, class: cls }
           used_fp.add(idx) |> ignore
@@ -193,7 +219,12 @@ fn pick_temp_preg(
 ///   of the instruction. Stack locations are only used between instructions.
 /// - Stack loads/stores are expressed as `Edit::Move` between `Loc::Spill` and
 ///   `Loc::Reg`.
-fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
+fn build_output(
+  func : VCodeFunction,
+  alloc : RegAllocResult,
+  isa : @isa.ISA,
+  settings : @abi.ABISettings,
+) -> Output {
   let out = Output::new()
   out.num_spillslots = alloc.num_spill_slots
 
@@ -212,42 +243,120 @@ fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
   for _, preg in alloc.assignments {
     add_used_reg(used_int_regs, used_fp_regs, preg)
   }
-  let isa = @isa.ISA::current()
+  let reserve_extra_results_ptr = func.needs_extra_results_ptr() ||
+    func.calls_multi_value_function()
+  let reserve_mem0_desc = func.uses_mem0()
+  let reserve_func_table = func.uses_func_table()
+  let env = isa.machine_env(
+    settings~,
+    reserve_mem0_desc~,
+    reserve_func_table~,
+    reserve_extra_results_ptr~,
+  )
+
   // Reserve dedicated scratch regs (used by the move resolver).
-  let scratch1 = isa.scratch_reg_1_index()
-  let scratch2 = isa.scratch_reg_2_index()
-  used_int_regs.add(scratch1) |> ignore
-  used_int_regs.add(scratch2) |> ignore
-  used_fp_regs.add(16) |> ignore
-  used_fp_regs.add(17) |> ignore
-  // Reserve pinned vmctx.
+  for idx in env.scratch_int {
+    used_int_regs.add(idx) |> ignore
+  }
+  for idx in env.scratch_float {
+    used_fp_regs.add(idx) |> ignore
+  }
+
+  // Reserve pinned registers.
   used_int_regs.add(isa.vmctx_reg_index()) |> ignore
-  // Reserve cached mem0 desc when enabled.
-  if func.uses_mem0() {
+  if reserve_mem0_desc {
     used_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
   }
-  // Reserve extra-results pointer register when needed.
-  if func.needs_extra_results_ptr() || func.calls_multi_value_function() {
+  if reserve_func_table {
+    used_int_regs.add(isa.func_table_reg_index()) |> ignore
+  }
+  if reserve_extra_results_ptr {
     used_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
   }
-  let temp_int_pool : Array[Int] = [scratch1, scratch2]
-  for idx in [20, 22, 23, 24, 25, 26, 27, 28] {
-    if !used_int_regs.contains(idx) {
-      temp_int_pool.push(idx)
+
+  // Temp-reg pools for local reloads/move resolution:
+  // - Always include scratch regs.
+  // - Prefer higher-index regs (avoid common arg/return regs on most ABIs).
+  fn push_temp_reg(
+    pool : Array[Int],
+    used : @hashset.HashSet[Int],
+    idx : Int,
+  ) -> Unit {
+    // Pool sizes are tiny; linear scan avoids extra dependencies.
+    let mut already = false
+    for v in pool {
+      if v == idx {
+        already = true
+      }
     }
-  }
-  let temp_fp_pool : Array[Int] = [16, 17]
-  for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
-    if !used_fp_regs.contains(idx) {
-      temp_fp_pool.push(idx)
+    if !used.contains(idx) && !already {
+      pool.push(idx)
     }
   }
 
-  // Vector temps: prefer V16/V17, then any unused V18-V31.
-  let temp_vec_pool : Array[Int] = [16, 17]
-  for idx in 18..<32 {
-    if !used_fp_regs.contains(idx) {
-      temp_vec_pool.push(idx)
+  let temp_int_pool : Array[Int] = []
+  for idx in env.scratch_int {
+    temp_int_pool.push(idx)
+  }
+  let int_candidates : Array[@abi.PReg] = []
+  for r in env.nonpreferred_int {
+    int_candidates.push(r)
+  }
+  for r in env.preferred_int {
+    int_candidates.push(r)
+  }
+  for r in int_candidates {
+    if r.index >= 8 {
+      push_temp_reg(temp_int_pool, used_int_regs, r.index)
+    }
+  }
+  for r in int_candidates {
+    if r.index < 8 {
+      push_temp_reg(temp_int_pool, used_int_regs, r.index)
+    }
+  }
+  let temp_fp_pool : Array[Int] = []
+  for idx in env.scratch_float {
+    temp_fp_pool.push(idx)
+  }
+  let fp_candidates : Array[@abi.PReg] = []
+  for r in env.nonpreferred_float {
+    fp_candidates.push(r)
+  }
+  for r in env.preferred_float {
+    fp_candidates.push(r)
+  }
+  for r in fp_candidates {
+    if r.index >= 8 {
+      push_temp_reg(temp_fp_pool, used_fp_regs, r.index)
+    }
+  }
+  for r in fp_candidates {
+    if r.index < 8 {
+      push_temp_reg(temp_fp_pool, used_fp_regs, r.index)
+    }
+  }
+
+  // Vector temps share the same physical register bank as floats on current ISAs.
+  let temp_vec_pool : Array[Int] = []
+  for idx in env.scratch_float {
+    temp_vec_pool.push(idx)
+  }
+  let vec_candidates : Array[@abi.PReg] = []
+  for r in env.nonpreferred_vector {
+    vec_candidates.push(r)
+  }
+  for r in env.preferred_vector {
+    vec_candidates.push(r)
+  }
+  for r in vec_candidates {
+    if r.index >= 8 {
+      push_temp_reg(temp_vec_pool, used_fp_regs, r.index)
+    }
+  }
+  for r in vec_candidates {
+    if r.index < 8 {
+      push_temp_reg(temp_vec_pool, used_fp_regs, r.index)
     }
   }
 
@@ -380,6 +489,8 @@ fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
           // Otherwise, load into a scratch/temporary register local to this instruction.
           let (tmp, new_cursor, save_slot) = pick_temp_preg(
             out,
+            isa,
+            env,
             vreg.class,
             used_int,
             used_fp,
@@ -431,6 +542,8 @@ fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
           }
           let (tmp, new_cursor, save_slot) = pick_temp_preg(
             out,
+            isa,
+            env,
             vreg.class,
             used_int,
             used_fp,
@@ -587,6 +700,8 @@ fn build_output(func : VCodeFunction, alloc : RegAllocResult) -> Output {
               }
               let (tmp, new_cursor, _save_slot) = pick_temp_preg(
                 out,
+                isa,
+                env,
                 vreg.class,
                 used_int,
                 used_fp,

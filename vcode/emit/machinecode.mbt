@@ -15,8 +15,12 @@ pub struct MachineCode {
   mut pos : Int
   // Labels for branch targets
   labels : Map[Int, Int] // block_id -> offset
+  // Internal labels are always negative and do not overlap with block ids.
+  mut next_internal_label : Int
   // Pending fixups for forward branches
   fixups : Array[Fixup]
+  // Pending x86_64 rel32 fixups for forward branches (disp32 patched at end).
+  x86_rel32_fixups : Array[X86Rel32Fixup]
   // Pending fixups for direct function addresses (offset -> func_idx)
   func_addr_fixups : Array[FuncAddrFixup]
   // Pending fixups for direct function calls (offset -> func_idx)
@@ -34,6 +38,17 @@ struct Fixup {
   target_block : Int
   // Kind of fixup
   kind : FixupKind
+}
+
+///|
+/// x86_64 rel32 fixup for forward branches (jmp/jcc rel32).
+///
+/// `disp_offset` is the start of the 4-byte displacement field.
+/// `next_ip_offset` is the offset of the instruction end (RIP after the branch).
+struct X86Rel32Fixup {
+  disp_offset : Int
+  next_ip_offset : Int
+  target_block : Int
 }
 
 ///|
@@ -69,11 +84,20 @@ pub fn MachineCode::new() -> MachineCode {
     bytes: [],
     pos: 0,
     labels: {},
+    next_internal_label: -1,
     fixups: [],
+    x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
     disasm: [],
   }
+}
+
+///|
+pub fn MachineCode::new_internal_label(self : MachineCode) -> Int {
+  let l = self.next_internal_label
+  self.next_internal_label = self.next_internal_label - 1
+  l
 }
 
 ///|
@@ -208,6 +232,17 @@ pub fn MachineCode::add_fixup(
 }
 
 ///|
+/// Add an x86_64 rel32 fixup for a forward branch.
+pub fn MachineCode::add_x86_rel32_fixup(
+  self : MachineCode,
+  target_block : Int,
+  disp_offset : Int,
+  next_ip_offset : Int,
+) -> Unit {
+  self.x86_rel32_fixups.push({ disp_offset, next_ip_offset, target_block })
+}
+
+///|
 /// Add a fixup for a direct function address load
 pub fn MachineCode::add_func_addr_fixup(
   self : MachineCode,
@@ -260,6 +295,19 @@ pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
           self.bytes[fixup.offset + 3] = (old_b3 & 255) | 0
         }
       } // imm19 high bits already covered
+    }
+  }
+
+  // x86_64 rel32 fixups (byte offsets).
+  for fixup in self.x86_rel32_fixups {
+    if self.labels.get(fixup.target_block) is Some(target_offset) {
+      let disp = target_offset - fixup.next_ip_offset
+      // Patch little-endian disp32.
+      let disp32 = disp & 0xFFFFFFFF
+      self.bytes[fixup.disp_offset] = disp32 & 255
+      self.bytes[fixup.disp_offset + 1] = (disp32 >> 8) & 255
+      self.bytes[fixup.disp_offset + 2] = (disp32 >> 16) & 255
+      self.bytes[fixup.disp_offset + 3] = (disp32 >> 24) & 255
     }
   }
 }
