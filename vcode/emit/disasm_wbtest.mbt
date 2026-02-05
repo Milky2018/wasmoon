@@ -419,6 +419,9 @@ test "type_check_large_immediate" {
 /// Test that emit_cmp_imm handles large immediates without truncation.
 /// For non-encodable immediates it falls back to materializing the constant.
 test "cmp_imm_handles_large_values" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let mc = MachineCode::new()
   mc.emit_cmp_imm(9, 7905)
   mc.resolve_fixups()

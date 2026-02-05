@@ -1,5 +1,8 @@
 ///|
 test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (memory 1)

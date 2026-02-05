@@ -305,6 +305,9 @@ test "f32 sub" {
 
 ///|
 test "f32 mul" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (memory 1)

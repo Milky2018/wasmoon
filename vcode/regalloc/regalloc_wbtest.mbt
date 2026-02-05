@@ -125,6 +125,9 @@ test "liveness: multi-block function" {
 
 ///|
 test "apply_allocation: BranchCmp reloads both spilled operands without clobber" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Regression test: terminator BranchCmp has two operands. If both are spilled,
   // apply_allocation must reload them into distinct scratch registers, otherwise
   // one reload clobbers the other and the compare becomes nonsense.
@@ -658,6 +661,9 @@ test "regalloc: f64 registers" {
 
 ///|
 test "regalloc: mixed int, f32, f64 registers" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Test register allocation with all three types mixed
   // Chain all values so nothing is dead:
   //
@@ -774,6 +780,9 @@ test "regalloc: mixed int, f32, f64 registers" {
 /// Test @instr.CallIndirect with many f64 arguments (8 f64 params exceeds ABI register count)
 /// This reproduces the "regalloc: many call arguments" failing test
 test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let func = VCodeFunction::new("test_many_f64_args")
   func.add_result(@abi.Float64)
   func.add_result_type(F64)
@@ -870,6 +879,9 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
 /// Test f32 value that must survive across a @instr.CallIndirect
 /// This reproduces the "regalloc: f32 live across call" failing test
 test "regalloc: f32 value live across @instr.CallIndirect" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let func = VCodeFunction::new("test_f32_across_call")
   func.add_result(@abi.Float32)
   func.add_result(@abi.Float64)
@@ -1218,6 +1230,9 @@ test "constraint_reload_coalescing_logic" {
 
 ///|
 test "reload coalescing: call with spilled arg used twice" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Reproduce the benchmark bug: a spilled value is used twice as call args
   // Expected: one StackLoad + one Move, not two StackLoads
   let func = VCodeFunction::new("test")

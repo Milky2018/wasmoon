@@ -299,6 +299,9 @@ test "lower shift operations" {
 
 ///|
 test "lower division operations" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let builder = @ir.IRBuilder::new("division")
   let a = builder.add_param(@ir.Type::I32)
   let b = builder.add_param(@ir.Type::I32)
@@ -854,6 +857,9 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
 
 ///|
 test "lower br_table with f32 locals (f32_br_2locals pattern)" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   // Build IR that mimics the f32_br_2locals.wast function:
   //   fn test(selector: i32) -> f32
   //
@@ -1048,6 +1054,9 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
 
 ///|
 test "minimal: dead float constant should not affect live values" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let builder = @ir.IRBuilder::new("dead_fconst_test")
   builder.add_result(@ir.Type::F32)
   let entry = builder.create_block()

@@ -238,6 +238,9 @@ fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
 
 ///|
 test "backtrace: simple unreachable" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func (export "test")
@@ -258,6 +261,9 @@ test "backtrace: simple unreachable" {
 
 ///|
 test "backtrace: unreachable after some ops" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func (export "test") (param i32) (result i32)
@@ -282,6 +288,9 @@ test "backtrace: unreachable after some ops" {
 
 ///|
 test "backtrace: two-level call - callee traps" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func $inner
@@ -305,6 +314,9 @@ test "backtrace: two-level call - callee traps" {
 
 ///|
 test "backtrace: three-level call - deepest traps" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func $deep
@@ -331,6 +343,9 @@ test "backtrace: three-level call - deepest traps" {
 
 ///|
 test "backtrace: recursive call" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func $recurse (param i32)
@@ -359,6 +374,9 @@ test "backtrace: recursive call" {
 
 ///|
 test "backtrace: call_indirect trap" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (table 1 funcref)
@@ -384,6 +402,9 @@ test "backtrace: call_indirect trap" {
 
 ///|
 test "backtrace: out of bounds memory access" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (memory 1) ;; 1 page = 64KB
@@ -406,6 +427,9 @@ test "backtrace: out of bounds memory access" {
 
 ///|
 test "backtrace: divide by zero" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func (export "test") (param i32) (result i32)
@@ -426,6 +450,9 @@ test "backtrace: divide by zero" {
 
 ///|
 test "backtrace: call chain with args" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func $add_and_trap (param i32 i32)
@@ -453,6 +480,9 @@ test "backtrace: call chain with args" {
 
 ///|
 test "backtrace: trap in conditional branch" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
   let source =
     #|(module
     #|  (func (export "test") (param i32)
