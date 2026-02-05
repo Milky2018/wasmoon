@@ -828,12 +828,22 @@ pub fn lower_function(
     int_stack_values.length(),
     float_stack_classes,
   )
+  // amd64 uses a CALL instruction, so the return address occupies 8 bytes at
+  // the entry SP. Stack parameters are therefore at [entry_sp + 8 + offset].
+  // (Cranelift x64 models this the same way.)
+  let stack_arg_base = if @isa.ISA::current() is @isa.AMD64 { 8 } else { 0 }
   for i in 0..<int_stack_values.length() {
-    ctx.stack_param_map.set(int_stack_values[i].id, (int_offsets[i], Int))
+    ctx.stack_param_map.set(
+      int_stack_values[i].id,
+      (int_offsets[i] + stack_arg_base, Int),
+    )
   }
   for i in 0..<float_stack_values.length() {
     let (value, class) = float_stack_values[i]
-    ctx.stack_param_map.set(value.id, (float_offsets[i], class))
+    ctx.stack_param_map.set(
+      value.id,
+      (float_offsets[i] + stack_arg_base, class),
+    )
   }
   ctx.vcode_func.set_int_stack_params(int_stack_values.length())
 
