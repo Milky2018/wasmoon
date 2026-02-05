@@ -1897,6 +1897,23 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shufpd_xmm_xmm_imm8(rd, rd, 0x00)
       }
     }
+    @instr.SIMDInsert(lane_size, lane) => {
+      // Insert scalar integer into a vector lane.
+      //
+      // Use `pinsr*` (SSE2/SSE4.1) to update one lane while preserving others.
+      let rd = wreg_num(inst.defs[0])
+      let vec = reg_num(inst.uses[0])
+      let src = reg_num(inst.uses[1])
+      if rd != vec {
+        self.x86_emit_movaps_xmm_xmm(rd, vec)
+      }
+      match lane_size {
+        @instr.LaneSize::B8 => self.x86_emit_pinsrb_xmm_r32_imm8(rd, src, lane)
+        @instr.LaneSize::H16 => self.x86_emit_pinsrw_xmm_r32_imm8(rd, src, lane)
+        @instr.LaneSize::S32 => self.x86_emit_pinsrd_xmm_r32_imm8(rd, src, lane)
+        @instr.LaneSize::D64 => self.x86_emit_pinsrq_xmm_r64_imm8(rd, src, lane)
+      }
+    }
     @instr.SIMDAnd => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
