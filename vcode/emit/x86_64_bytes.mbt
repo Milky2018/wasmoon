@@ -1833,6 +1833,26 @@ pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_pshuflw_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // pshuflw xmm1, xmm2/m128, imm8: F2 0F 70 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0xF2)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x70)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
 pub fn MachineCode::x86_emit_shufps_xmm_xmm_imm8(
   self : MachineCode,
   dst_xmm : Int,

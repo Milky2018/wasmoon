@@ -223,6 +223,13 @@ test "x86_64 shufps/shufpd encodings" {
 }
 
 ///|
+test "x86_64 pshuflw encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_pshuflw_xmm_xmm_imm8(1, 2, 0x00) // pshuflw xmm1, xmm2, 0
+  inspect(mc.get_bytes(), content="[242, 15, 112, 202, 0]")
+}
+
+///|
 test "x86_64 SIMD bitwise encodings (SSE2)" {
   let mc = MachineCode::new()
   mc.x86_emit_pcmpeqd_xmm_xmm(15, 15) // pcmpeqd xmm15, xmm15

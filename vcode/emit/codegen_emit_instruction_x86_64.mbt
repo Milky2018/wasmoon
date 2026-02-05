@@ -1849,6 +1849,38 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 1)
       }
     }
+    @instr.SIMDSplat(lane_size) => {
+      // Splat scalar integer to all lanes.
+      //
+      // Mirrors Cranelift x64 lowering rules in `lower.isle` (SSE2 baseline):
+      // - i8x16.splat:  movd + punpcklbw + pshuflw + pshufd
+      // - i16x8.splat:  movd + pshuflw + pshufd
+      // - i32x4.splat:  movd + pshufd
+      // - i64x2.splat:  movq + pshufd 0x44
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      match lane_size {
+        @instr.LaneSize::B8 => {
+          self.x86_emit_movd_xmm_r32(rd, src)
+          self.x86_emit_punpcklbw_xmm_xmm(rd, rd)
+          self.x86_emit_pshuflw_xmm_xmm_imm8(rd, rd, 0)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
+        }
+        @instr.LaneSize::H16 => {
+          self.x86_emit_movd_xmm_r32(rd, src)
+          self.x86_emit_pshuflw_xmm_xmm_imm8(rd, rd, 0)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
+        }
+        @instr.LaneSize::S32 => {
+          self.x86_emit_movd_xmm_r32(rd, src)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
+        }
+        @instr.LaneSize::D64 => {
+          self.x86_emit_movq_xmm_r64(rd, src)
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x44)
+        }
+      }
+    }
     @instr.SIMDSplatF(is_f32) => {
       // Splat scalar float to all lanes.
       //

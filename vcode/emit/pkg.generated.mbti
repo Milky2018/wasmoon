@@ -472,6 +472,7 @@ pub fn MachineCode::x86_emit_pop_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_por_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pshufb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pshufd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_pshuflw_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_psll_xmm_xmm(Self, @instr.LaneSize, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pslld_xmm_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_psllq_xmm_imm8(Self, Int, Int) -> Unit
