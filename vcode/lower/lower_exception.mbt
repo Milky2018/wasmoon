@@ -11,7 +11,7 @@ fn emit_load_vmctx(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
   vmctx_vreg
 }

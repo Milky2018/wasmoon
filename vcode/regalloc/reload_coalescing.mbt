@@ -99,20 +99,21 @@ fn allocate_reload_registers(
 
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen.
-  // - X19 is reserved for vmctx-related loads in the prologue when needed.
-  used_int_regs.add(19) |> ignore
-  // - X21 is the pinned VMContext register (enable_pinned_reg).
-  used_int_regs.add(@abi.REG_VMCTX) |> ignore
-  // - X20 is reserved for cached memory0 descriptor pointer when needed.
+  let isa = @isa.ISA::current()
+  // - The func_table cache register (AArch64: x19).
+  used_int_regs.add(isa.func_table_reg_index()) |> ignore
+  // - The pinned VMContext register (AArch64: x21).
+  used_int_regs.add(isa.vmctx_reg_index()) |> ignore
+  // - The cached memory0 descriptor pointer register when needed.
   if func.uses_mem0() {
-    used_int_regs.add(@abi.REG_MEM0_DESC) |> ignore
+    used_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
   }
-  // - X23 is reserved for extra_results_buffer when needed.
+  // - Extra results pointer register when needed.
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
   if needs_x23_reserved {
-    used_int_regs.add(23) |> ignore
+    used_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
   }
 
   // Candidate callee-saved registers for reload coalescing.

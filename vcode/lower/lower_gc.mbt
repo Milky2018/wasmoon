@@ -276,7 +276,7 @@ fn lower_struct_new(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
 
   // Materialize arguments
@@ -351,7 +351,7 @@ fn lower_struct_new_default(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
 
   // Materialize arguments
@@ -595,7 +595,7 @@ fn lower_array_new(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
 
   // Materialize type_idx
@@ -646,7 +646,7 @@ fn lower_array_new_default(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
 
   // Load default value (0) for the init value
@@ -687,7 +687,7 @@ fn lower_array_new_fixed(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
 
   // Materialize common values
@@ -1061,7 +1061,7 @@ fn lower_array_new_data(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
@@ -1101,7 +1101,7 @@ fn lower_array_new_elem(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())
@@ -1139,7 +1139,7 @@ fn lower_array_init_data(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
@@ -1180,7 +1180,7 @@ fn lower_array_init_elem(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let elem_idx_vreg = materialize_imm(ctx, block, elem_idx.to_int64())

@@ -31,11 +31,12 @@ fn collect_used_callee_saved(
   // ABI: SRET uses X8 which is caller-saved, so no special exclusion needed
   let used : @hashset.HashSet[Int] = @hashset.new()
   let mut has_calls = false
+  let pinned_vmctx = vmctx_index()
 
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
     if preg is Some(p) && is_callee_saved_alloc(p.index) {
-      if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+      if !enable_pinned_reg || p.index != pinned_vmctx {
         used.add(p.index)
       }
     }
@@ -52,7 +53,7 @@ fn collect_used_callee_saved(
         if def.reg is Physical(preg) &&
           preg.class is Int &&
           is_callee_saved_alloc(preg.index) {
-          if !enable_pinned_reg || preg.index != @abi.REG_VMCTX {
+          if !enable_pinned_reg || preg.index != pinned_vmctx {
             used.add(preg.index)
           }
         }
@@ -63,7 +64,7 @@ fn collect_used_callee_saved(
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
   if has_calls {
-    used.add(30) // LR
+    used.add(lr_index())
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -141,11 +142,12 @@ fn func_has_incoming_stack_args(func : @regalloc.VCodeFunction) -> Bool {
 /// - It uses X19 as a physical register in any instruction
 /// - It uses X19 in any terminator
 fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
+  let vmctx = vmctx_index()
   for block in func.get_blocks() {
     // Check instructions for X19 usage
     for inst in block.insts {
       for use_ in inst.uses {
-        if use_ is Physical(preg) && preg.index == @abi.REG_VMCTX {
+        if use_ is Physical(preg) && preg.index == vmctx {
           return true
         }
       }
@@ -163,25 +165,24 @@ fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
 ///|
 /// Check if a terminator uses vmctx (x19)
 fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
+  let vmctx = vmctx_index()
   match term {
     Return(values) => {
       for v in values {
-        if v is Physical(preg) && preg.index == @abi.REG_VMCTX {
+        if v is Physical(preg) && preg.index == vmctx {
           return true
         }
       }
       false
     }
-    Branch(cond, _, _) => cond is Physical(preg) && preg.index == @abi.REG_VMCTX
+    Branch(cond, _, _) => cond is Physical(preg) && preg.index == vmctx
     BranchCmp(lhs, rhs, _, _, _, _) =>
-      (lhs is Physical(preg) && preg.index == @abi.REG_VMCTX) ||
-      (rhs is Physical(preg2) && preg2.index == @abi.REG_VMCTX)
-    BranchZero(reg, _, _, _, _) =>
-      reg is Physical(preg) && preg.index == @abi.REG_VMCTX
+      (lhs is Physical(preg) && preg.index == vmctx) ||
+      (rhs is Physical(preg2) && preg2.index == vmctx)
+    BranchZero(reg, _, _, _, _) => reg is Physical(preg) && preg.index == vmctx
     BranchCmpImm(lhs, _, _, _, _, _) =>
-      lhs is Physical(preg) && preg.index == @abi.REG_VMCTX
-    BrTable(index, _, _) =>
-      index is Physical(preg) && preg.index == @abi.REG_VMCTX
+      lhs is Physical(preg) && preg.index == vmctx
+    BrTable(index, _, _) => index is Physical(preg) && preg.index == vmctx
     Jump(_) | Trap(_) => false
   }
 }
@@ -371,23 +372,16 @@ fn MachineCode::emit_prologue(
     if !abi_settings.enable_pinned_reg {
       abort("unpinned VMContext ABI not implemented yet")
     }
-    self.emit_mov_reg(@abi.REG_VMCTX, 0)
+    let vmctx = vmctx_index()
+    self.emit_mov_reg(vmctx, 0)
     // Optionally cache memory0 descriptor pointer in X20.
     // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
     if stack_frame.cache_mem0_desc {
-      self.emit_ldr_imm(
-        @abi.REG_MEM0_DESC,
-        @abi.REG_VMCTX,
-        @abi.VMCTX_MEMORY0_OFFSET,
-      )
+      self.emit_ldr_imm(mem0_desc_index(), vmctx, @abi.VMCTX_MEMORY0_OFFSET)
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
-      self.emit_ldr_imm(
-        @abi.REG_FUNC_TABLE,
-        @abi.REG_VMCTX,
-        @abi.VMCTX_FUNC_TABLE_OFFSET,
-      )
+      self.emit_ldr_imm(func_table_index(), vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
     }
   }
 
@@ -493,11 +487,13 @@ pub fn emit_function(
   // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
   let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
   let clobbered_gprs = clobbered
-  if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
-    clobbered_gprs.push(@abi.REG_MEM0_DESC)
+  let mem0_desc = mem0_desc_index()
+  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+    clobbered_gprs.push(mem0_desc)
   }
-  if uses_func_table && !clobbered_gprs.contains(@abi.REG_FUNC_TABLE) {
-    clobbered_gprs.push(@abi.REG_FUNC_TABLE)
+  let func_table = func_table_index()
+  if uses_func_table && !clobbered_gprs.contains(func_table) {
+    clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,
@@ -1017,13 +1013,14 @@ fn collect_used_callee_saved_from_output(
   enable_pinned_reg : Bool,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = @hashset.new()
+  let pinned_vmctx = vmctx_index()
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     match output.get_param_loc(i) {
       @regalloc.Reg(p) =>
         if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-          if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+          if !enable_pinned_reg || p.index != pinned_vmctx {
             used.add(p.index)
           }
         }
@@ -1044,7 +1041,7 @@ fn collect_used_callee_saved_from_output(
                   match to {
                     @regalloc.Reg(p) =>
                       if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                        if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+                        if !enable_pinned_reg || p.index != pinned_vmctx {
                           used.add(p.index)
                         }
                       }
@@ -1076,7 +1073,7 @@ fn collect_used_callee_saved_from_output(
             match output.inst_def_loc(block.id, inst_idx, false, di) {
               @regalloc.Reg(p) =>
                 if p.class is @abi.Int && is_callee_saved_alloc(p.index) {
-                  if !enable_pinned_reg || p.index != @abi.REG_VMCTX {
+                  if !enable_pinned_reg || p.index != pinned_vmctx {
                     used.add(p.index)
                   }
                 }
@@ -1088,7 +1085,7 @@ fn collect_used_callee_saved_from_output(
     }
   }
   if func_has_calls(func) {
-    used.add(30) // LR
+    used.add(lr_index())
   }
   let result : Array[Int] = []
   for reg in used {
@@ -1548,15 +1545,18 @@ pub fn emit_function_with_regalloc(
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
   let uses_func_table = func.uses_func_table()
+  let vmctx = vmctx_index()
   let needs_vmctx = has_calls ||
-    output_uses_preg(func, output, @abi.REG_VMCTX) ||
+    output_uses_preg(func, output, vmctx) ||
     uses_mem0
   let clobbered_gprs = clobbered
-  if uses_mem0 && !clobbered_gprs.contains(@abi.REG_MEM0_DESC) {
-    clobbered_gprs.push(@abi.REG_MEM0_DESC)
+  let mem0_desc = mem0_desc_index()
+  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+    clobbered_gprs.push(mem0_desc)
   }
-  if uses_func_table && !clobbered_gprs.contains(@abi.REG_FUNC_TABLE) {
-    clobbered_gprs.push(@abi.REG_FUNC_TABLE)
+  let func_table = func_table_index()
+  if uses_func_table && !clobbered_gprs.contains(func_table) {
+    clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,

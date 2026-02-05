@@ -53,10 +53,11 @@ fn bytes_for_type(ty : @types.ValueType) -> Int {
 
 ///|
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
-  for preg in @abi.call_clobbered_gprs() {
+  let isa = @isa.ISA::current()
+  for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
-  for preg in @abi.call_clobbered_fprs() {
+  for preg in isa.call_clobbered_fprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
 }
@@ -224,7 +225,7 @@ pub fn emit_hostcall_import_trampoline(
   let ctx_arg = func.new_vreg(@abi.Int)
   let mv_ctx = @instr.VCodeInst::new(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
-  mv_ctx.add_use(Physical({ index: @abi.REG_VMCTX, class: @abi.Int }))
+  mv_ctx.add_use(Physical({ index: vmctx_index(), class: @abi.Int }))
   block.add_inst(mv_ctx)
   let host_addr_vreg = func.new_vreg(@abi.Int)
   let c_host = @instr.VCodeInst::new(LoadConst(host_func_addr.to_int64()))
@@ -241,7 +242,7 @@ pub fn emit_hostcall_import_trampoline(
   let call = @instr.VCodeInst::new(CallPtr(5, 0, C))
   // Call target in IP1.
   call.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
   call.add_use_fixed(Virtual(ctx_arg), { index: 0, class: @abi.Int })

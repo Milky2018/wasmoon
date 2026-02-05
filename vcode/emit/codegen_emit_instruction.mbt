@@ -42,7 +42,7 @@ fn MachineCode::emit_instruction(
         self.emit_add_imm32_shifted12(rd, rn, imm >> 12)
       } else {
         // Fallback: materialize immediate and use ADD (register).
-        let scratch = @abi.SCRATCH_REG_1
+        let scratch = scratch1_index()
         self.emit_load_imm64(scratch, imm.to_int64())
         self.emit_add_reg32(rd, rn, scratch)
       }
@@ -70,7 +70,7 @@ fn MachineCode::emit_instruction(
           self.emit_sub_imm_shifted12(rd, rn, imm >> 12)
         } else {
           // Fallback: materialize immediate and use SUB (register).
-          let scratch = @abi.SCRATCH_REG_1
+          let scratch = scratch1_index()
           self.emit_load_imm64(scratch, imm.to_int64())
           self.emit_sub_reg(rd, rn, scratch)
         }
@@ -80,7 +80,7 @@ fn MachineCode::emit_instruction(
         self.emit_sub_imm32_shifted12(rd, rn, imm >> 12)
       } else {
         // Fallback: materialize immediate and use SUB (register).
-        let scratch = @abi.SCRATCH_REG_1
+        let scratch = scratch1_index()
         self.emit_load_imm64(scratch, imm.to_int64())
         self.emit_sub_reg32(rd, rn, scratch)
       }
@@ -137,7 +137,7 @@ fn MachineCode::emit_instruction(
           }
         None => {
           // Fallback: materialize immediate and use AND (register).
-          let scratch = @abi.SCRATCH_REG_1
+          let scratch = scratch1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_and_reg(rd, rn, scratch)
@@ -168,7 +168,7 @@ fn MachineCode::emit_instruction(
             self.emit_orr_imm32(rd, rn, bits)
           }
         None => {
-          let scratch = @abi.SCRATCH_REG_1
+          let scratch = scratch1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_orr_reg(rd, rn, scratch)
@@ -199,7 +199,7 @@ fn MachineCode::emit_instruction(
             self.emit_eor_imm32(rd, rn, bits)
           }
         None => {
-          let scratch = @abi.SCRATCH_REG_1
+          let scratch = scratch1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_eor_reg(rd, rn, scratch)
@@ -482,10 +482,11 @@ fn MachineCode::emit_instruction(
       // Fast path: cached func_table pointer.
       if stack_frame.cache_func_table &&
         ty is I64 &&
-        rn == @abi.REG_VMCTX &&
+        rn == vmctx_index() &&
         offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
-        if rt != @abi.REG_FUNC_TABLE {
-          self.emit_mov_reg(rt, @abi.REG_FUNC_TABLE)
+        let func_table = func_table_index()
+        if rt != func_table {
+          self.emit_mov_reg(rt, func_table)
         }
         return
       }
@@ -1167,7 +1168,7 @@ fn MachineCode::emit_instruction(
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
         // Fast path: memory0 descriptor pointer is cached in X20.
-        self.emit_ldr_imm(dst, @abi.REG_MEM0_DESC, 0)
+        self.emit_ldr_imm(dst, mem0_desc_index(), 0)
       } else if memidx == 0 {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
         self.emit_ldr_imm(dst, dst, 0)

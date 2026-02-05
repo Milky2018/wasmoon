@@ -778,7 +778,7 @@ pub fn MachineCode::emit_cmp_imm32(
   } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
     CmpImm32Shifted12(rn, imm >> 12).emit(self)
   } else {
-    let scratch = @abi.SCRATCH_REG_1
+    let scratch = scratch1_index()
     self.emit_load_imm64(scratch, imm.to_int64())
     self.emit_cmp_reg32(rn, scratch)
   }
@@ -1365,7 +1365,7 @@ pub fn MachineCode::emit_cmp_imm(
   } else if imm >= 0 && (imm & 0xFFF) == 0 && imm >> 12 <= 4095 {
     CmpImmShifted12(rn, imm >> 12).emit(self)
   } else {
-    let scratch = @abi.SCRATCH_REG_1
+    let scratch = scratch1_index()
     self.emit_load_imm64(scratch, imm.to_int64())
     self.emit_cmp_reg(rn, scratch)
   }

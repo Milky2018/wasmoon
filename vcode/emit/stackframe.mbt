@@ -223,12 +223,13 @@ fn build_gpr_save_list_v3(
   needs_vmctx : Bool,
 ) -> Array[Int] {
   needs_vmctx |> ignore
+  let vmctx = vmctx_index()
   let result : Array[Int] = []
 
   // Add clobbered callee-saved registers (X19-X28), excluding the pinned VMCTX.
   for reg in clobbered {
     // X29/X30 handled separately in setup area.
-    if reg >= 19 && reg <= 28 && reg != @abi.REG_VMCTX && !result.contains(reg) {
+    if reg >= 19 && reg <= 28 && reg != vmctx && !result.contains(reg) {
       result.push(reg)
     }
   }

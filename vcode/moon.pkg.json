@@ -7,5 +7,8 @@
     "Milky2018/wasmoon/vcode/instr",
     "Milky2018/wasmoon/vcode/block",
     "moonbitlang/core/cmp"
+  ],
+  "wbtest-import": [
+    "Milky2018/wasmoon/vcode/isa/aarch64"
   ]
 }

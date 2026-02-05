@@ -156,7 +156,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 
 ///|
 /// Build the register pools for AArch64 allocation
-fn build_aarch64_reg_pools(
+fn build_reg_pools(
+  isa : @isa.ISA,
   func : VCodeFunction,
   settings : @abi.ABISettings,
 ) -> (
@@ -176,11 +177,11 @@ fn build_aarch64_reg_pools(
   let needs_x21_reserved = func.uses_func_table()
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
-  let env = @abi.build_aarch64_machine_env(
+  let env = isa.machine_env(
     settings~,
     reserve_mem0_desc=needs_x20_reserved,
     reserve_func_table=needs_x21_reserved,
-    reserve_x23=needs_x23_reserved,
+    reserve_extra_results_ptr=needs_x23_reserved,
   )
   let int_regs : Array[@abi.PReg] = []
   for r in env.preferred_int {
@@ -220,6 +221,16 @@ pub fn allocate_registers_backtracking(
   func : VCodeFunction,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> VCodeFunction {
+  allocate_registers_backtracking_with_isa(func, @isa.ISA::current(), settings)
+}
+
+///|
+/// Allocate registers using a specific ISA policy implementation.
+pub fn allocate_registers_backtracking_with_isa(
+  func : VCodeFunction,
+  isa : @isa.ISA,
+  settings : @abi.ABISettings,
+) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
   // Cranelift-style remat for cross-block constants to reduce reg pressure.
@@ -234,7 +245,7 @@ pub fn allocate_registers_backtracking(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_aarch64_reg_pools(func, settings)
+  ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1)
   let liveness = compute_liveness(func)
@@ -246,7 +257,7 @@ pub fn allocate_registers_backtracking(
 
   // Optional safety net (Cranelift-like checker).
   // Keeps invariants honest as allocator logic evolves.
-  verify_allocation_aarch64(func, liveness, alloc_result, settings~)
+  verify_allocation(func, liveness, alloc_result, isa, settings~)
 
   // Process constraints and generate RegMove edits
   process_constraints(func, alloc_result)
@@ -265,6 +276,20 @@ pub fn allocate_registers_backtracking_output(
   func : VCodeFunction,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> (VCodeFunction, Output) {
+  allocate_registers_backtracking_output_with_isa(
+    func,
+    @isa.ISA::current(),
+    settings,
+  )
+}
+
+///|
+/// Allocate registers and return `Output` using a specific ISA policy implementation.
+pub fn allocate_registers_backtracking_output_with_isa(
+  func : VCodeFunction,
+  isa : @isa.ISA,
+  settings : @abi.ABISettings,
+) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
@@ -277,7 +302,7 @@ pub fn allocate_registers_backtracking_output(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_aarch64_reg_pools(func, settings)
+  ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1).
   let liveness = compute_liveness(func)
@@ -288,7 +313,7 @@ pub fn allocate_registers_backtracking_output(
   )
 
   // Optional safety net (Cranelift-like checker).
-  verify_allocation_aarch64(func, liveness, alloc_result, settings~)
+  verify_allocation(func, liveness, alloc_result, isa, settings~)
 
   // Process constraints and generate RegMove edits.
   process_constraints(func, alloc_result)
@@ -362,7 +387,7 @@ pub fn get_alloc_stats(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_aarch64_reg_pools(func, settings)
+  ) = build_reg_pools(@isa.ISA::current(), func, settings)
   let liveness = compute_liveness(func)
 
   // Count vregs

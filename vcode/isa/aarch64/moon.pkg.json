@@ -1,0 +1,8 @@
+{
+  "import": [
+    "Milky2018/wasmoon/vcode/abi",
+    "Milky2018/wasmoon/vcode/isa/spec"
+  ],
+  "wbtest-import": []
+}
+

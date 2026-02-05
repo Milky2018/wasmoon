@@ -52,10 +52,11 @@ fn union_sets(
 }
 
 ///|
-pub fn verify_allocation_aarch64(
+pub fn verify_allocation(
   func : VCodeFunction,
   liveness : LivenessResult,
   alloc : RegAllocResult,
+  isa : @isa.ISA,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
   // Rebuild live ranges to verify with holes.
@@ -68,11 +69,11 @@ pub fn verify_allocation_aarch64(
   let needs_x23_reserved = needs_extra || calls_multi
   let needs_x20_reserved = func.uses_mem0()
   let needs_x21_reserved = func.uses_func_table()
-  let env = @abi.build_aarch64_machine_env(
+  let env = isa.machine_env(
     settings~,
     reserve_mem0_desc=needs_x20_reserved,
     reserve_func_table=needs_x21_reserved,
-    reserve_x23=needs_x23_reserved,
+    reserve_extra_results_ptr=needs_x23_reserved,
   )
   let allowed_int = union_sets(
     build_index_set(env.preferred_int),
@@ -104,17 +105,17 @@ pub fn verify_allocation_aarch64(
 
   // Call-clobbered sets.
   let call_clobbered_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  for r in @abi.call_clobbered_gprs() {
+  for r in isa.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
   // For C calls, be conservative like Cranelift: clobber all V0-V31.
   let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  for r in @abi.call_clobbered_fprs() {
+  for r in isa.call_clobbered_fprs() {
     call_clobbered_float_c.add(r.index) |> ignore
   }
   // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
   let call_clobbered_float_wasm : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  for r in @abi.call_clobbered_fprs_same_abi() {
+  for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_wasm.add(r.index) |> ignore
   }
   fn has_any_fixed_constraint_to(lr : LiveRange, preg : @abi.PReg) -> Bool {
@@ -259,4 +260,15 @@ pub fn verify_allocation_aarch64(
       }
     }
   }
+}
+
+///|
+/// Backwards-compatible wrapper for existing call sites.
+pub fn verify_allocation_aarch64(
+  func : VCodeFunction,
+  liveness : LivenessResult,
+  alloc : RegAllocResult,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+) -> Unit {
+  verify_allocation(func, liveness, alloc, @isa.ISA::AArch64, settings~)
 }

@@ -6,6 +6,7 @@ import {
   "Milky2018/wasmoon/vcode/abi",
   "Milky2018/wasmoon/vcode/block",
   "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/isa",
   "moonbitlang/core/set",
 }
 
@@ -15,6 +16,10 @@ pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Ar
 pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
 
 pub fn allocate_registers_backtracking_output(VCodeFunction, settings? : @abi.ABISettings) -> (VCodeFunction, Output)
+
+pub fn allocate_registers_backtracking_output_with_isa(VCodeFunction, @isa.ISA, @abi.ABISettings) -> (VCodeFunction, Output)
+
+pub fn allocate_registers_backtracking_with_isa(VCodeFunction, @isa.ISA, @abi.ABISettings) -> VCodeFunction
 
 pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
 
@@ -41,6 +46,8 @@ pub fn get_alloc_stats(VCodeFunction, settings? : @abi.ABISettings) -> AllocStat
 pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
 pub fn rematerialize_cross_block_constants(VCodeFunction) -> VCodeFunction
+
+pub fn verify_allocation(VCodeFunction, LivenessResult, RegAllocResult, @isa.ISA, settings? : @abi.ABISettings) -> Unit
 
 pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
 

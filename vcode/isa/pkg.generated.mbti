@@ -1,0 +1,52 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/isa"
+
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/isa/spec",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum ISA {
+  AArch64
+  X86_64
+}
+pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
+pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]
+pub fn ISA::call_clobbered_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::current() -> Self
+pub fn ISA::extra_results_ptr_reg_index(Self) -> Int
+pub fn ISA::fp_reg_index(Self) -> Int
+pub fn ISA::func_table_reg_index(Self) -> Int
+pub fn ISA::int_reg(Self, @spec.IntRegRole) -> @abi.PReg
+pub fn ISA::int_reg_index(Self, @spec.IntRegRole) -> Int
+pub fn ISA::lr_reg_index(Self) -> Int
+pub fn ISA::machine_env(Self, settings? : @abi.ABISettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnv
+pub fn ISA::mem0_desc_reg_index(Self) -> Int
+pub fn ISA::scratch_reg_1_index(Self) -> Int
+pub fn ISA::scratch_reg_2_index(Self) -> Int
+pub fn ISA::sret_reg_index(Self) -> Int
+pub fn ISA::vmctx_preg(Self) -> @abi.PReg
+pub fn ISA::vmctx_reg_index(Self) -> Int
+
+pub struct MachineEnv {
+  preferred_int : Array[@abi.PReg]
+  nonpreferred_int : Array[@abi.PReg]
+  preferred_float : Array[@abi.PReg]
+  nonpreferred_float : Array[@abi.PReg]
+  preferred_vector : Array[@abi.PReg]
+  nonpreferred_vector : Array[@abi.PReg]
+  callee_saved_int : Array[@abi.PReg]
+  callee_saved_float : Array[@abi.PReg]
+  scratch_int : Array[Int]
+  scratch_float : Array[Int]
+}
+
+// Type aliases
+
+// Traits
+

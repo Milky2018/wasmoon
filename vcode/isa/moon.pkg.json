@@ -1,0 +1,9 @@
+{
+  "import": [
+    "Milky2018/wasmoon/vcode/abi",
+    "Milky2018/wasmoon/vcode/isa/spec",
+    "Milky2018/wasmoon/vcode/isa/aarch64",
+    "Milky2018/wasmoon/vcode/isa/x86_64"
+  ],
+  "wbtest-import": []
+}

@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/isa/aarch64"
+
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/isa/spec",
+}
+
+// Values
+pub fn aapcs64_arg_fprs() -> Array[@abi.PReg]
+
+pub fn aapcs64_arg_gprs() -> Array[@abi.PReg]
+
+pub fn aapcs64_callee_saved() -> Array[@abi.PReg]
+
+pub fn aapcs64_ret_fprs() -> Array[@abi.PReg]
+
+pub fn aapcs64_ret_gprs() -> Array[@abi.PReg]
+
+pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[@abi.PReg]
+
+pub fn allocatable_scratch_fprs() -> Array[@abi.PReg]
+
+pub fn allocatable_scratch_regs() -> Array[@abi.PReg]
+
+pub fn build_machine_env(@abi.ABISettings, Bool, Bool, Bool) -> @spec.MachineEnvData
+
+pub fn call_clobbered_fprs() -> Array[@abi.PReg]
+
+pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg]
+
+pub fn call_clobbered_gprs() -> Array[@abi.PReg]
+
+pub fn callee_saved_fprs() -> Array[@abi.PReg]
+
+pub fn int_reg_index(@spec.IntRegRole) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

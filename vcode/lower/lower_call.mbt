@@ -85,7 +85,7 @@ fn lower_wasm_call_common(
     abort("unpinned VMContext ABI not implemented yet")
   }
   // vmctx is pinned in `REG_VMCTX` (X21 when pinned).
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let vmctx_preg : @abi.PReg = vmctx_preg()
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -215,7 +215,7 @@ fn lower_wasm_call(
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
@@ -260,7 +260,7 @@ fn lower_return_call(
   block.add_inst(load_inst)
 
   // Get pinned vmctx.
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let vmctx_preg : @abi.PReg = vmctx_preg()
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -283,7 +283,7 @@ fn lower_return_call(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
 
@@ -350,7 +350,7 @@ fn lower_return_call_indirect(
       Load(I64, @abi.VMCTX_TABLES_OFFSET),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+    load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
     block.add_inst(load_array_inst)
     let table_offset = table_idx * 8
     let ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -409,7 +409,7 @@ fn lower_return_call_indirect(
   block.add_inst(type_check)
 
   // Get pinned vmctx.
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let vmctx_preg : @abi.PReg = vmctx_preg()
 
   // Classify user arguments (skip first operand which is elem_idx)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -430,7 +430,7 @@ fn lower_return_call_indirect(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
 
@@ -498,7 +498,7 @@ fn lower_return_call_ref(
   block.add_inst(and_inst)
 
   // Get vmctx
-  let vmctx_preg : @abi.PReg = { index: @abi.REG_VMCTX, class: @abi.Int }
+  let vmctx_preg : @abi.PReg = vmctx_preg()
 
   // Classify user arguments (skip first operand which is func_ref)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -519,7 +519,7 @@ fn lower_return_call_ref(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
 
@@ -593,7 +593,7 @@ fn lower_call_indirect(
       Load(I64, @abi.VMCTX_TABLES_OFFSET),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: @abi.REG_VMCTX, class: Int }))
+    load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
     block.add_inst(load_array_inst)
     // 2. Calculate offset = table_idx * 8 (pointer size)
     let table_offset = table_idx * 8
@@ -740,8 +740,9 @@ fn lower_call_ref(
 /// so any values that need to survive across the call must be spilled or allocated
 /// to callee-saved registers.
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
+  let isa = @isa.ISA::current()
   // Add clobbers for all caller-saved GPRs (X0-X17)
-  for preg in @abi.call_clobbered_gprs() {
+  for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
   // Add clobbers for caller-saved FPRs.
@@ -750,8 +751,8 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
     CallPtr(_, _, @instr.C) | CallDirect(_, _, _, @instr.C) =>
-      @abi.call_clobbered_fprs()
-    _ => @abi.call_clobbered_fprs_same_abi()
+      isa.call_clobbered_fprs()
+    _ => isa.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {
     call_inst.add_def({ reg: Physical(preg) })
@@ -762,10 +763,11 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 /// Add clobbers for a C call unconditionally (used for pseudo-ops that may call
 /// a C helper on a slow path).
 fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
-  for preg in @abi.call_clobbered_gprs() {
+  let isa = @isa.ISA::current()
+  for preg in isa.call_clobbered_gprs() {
     inst.add_def({ reg: Physical(preg) })
   }
-  for preg in @abi.call_clobbered_fprs() {
+  for preg in isa.call_clobbered_fprs() {
     inst.add_def({ reg: Physical(preg) })
   }
 }
@@ -821,7 +823,7 @@ fn lower_call_ptr(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
 
@@ -916,7 +918,7 @@ fn lower_c_libcall(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: @abi.SCRATCH_REG_2,
+    index: scratch2_index(),
     class: @abi.Int,
   })
 

@@ -122,8 +122,9 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
             }
           }
         }
+        let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
         fn is_vmctx_reg(r : @abi.Reg) -> Bool {
-          r is Physical(p) && p.index == @abi.REG_VMCTX
+          r is Physical(p) && p.index == vmctx_idx
         }
 
         // Def map for virtual registers (only the simple case we care about).
@@ -244,6 +245,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
 /// - only track the `vmctx.func_table` pointer (`VMCTX_FUNC_TABLE_OFFSET`)
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
 fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
+  let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
   // Collect all vregs that are func_table pointers.
   let func_table_ptrs : @hashset.HashSet[Int] = @hashset.new()
   for blk in func.blocks {
@@ -252,7 +254,7 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
         Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
         | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
           if inst.defs.length() == 1 && inst.uses.length() == 1 {
-            if inst.uses[0] is Physical(p) && p.index == @abi.REG_VMCTX {
+            if inst.uses[0] is Physical(p) && p.index == vmctx_idx {
               if get_def_vreg_id(inst.defs[0]) is Some(did) {
                 func_table_ptrs.add(did)
               }
@@ -263,7 +265,7 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   fn is_vmctx(r : @abi.Reg) -> Bool {
-    r is Physical(p) && p.index == @abi.REG_VMCTX
+    r is Physical(p) && p.index == vmctx_idx
   }
 
   fn canonical_id(id : Int, copies : Map[Int, Int]) -> Int {

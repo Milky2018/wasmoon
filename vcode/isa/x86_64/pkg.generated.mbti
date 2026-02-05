@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/isa/x86_64"
+
+import {
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/isa/spec",
+}
+
+// Values
+pub fn build_machine_env(@abi.ABISettings, Bool, Bool, Bool) -> @spec.MachineEnvData
+
+pub fn call_clobbered_fprs() -> Array[@abi.PReg]
+
+pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg]
+
+pub fn call_clobbered_gprs() -> Array[@abi.PReg]
+
+pub fn int_reg_index(@spec.IntRegRole) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
