@@ -125,9 +125,15 @@ jobs:
               -ex run \
               -ex bt \
               -ex 'info registers' \
+              -ex 'info symbol $r11' \
+              -ex 'info symbol $r12' \
+              -ex 'info symbol $r14' \
+              -ex 'info symbol $r15' \
               -ex 'info symbol $pc' \
+              -ex 'info proc mappings' \
               -ex 'info sharedlibrary' \
-              -ex 'x/16i $pc' \
+              -ex 'x/48i $pc-96' \
+              -ex 'x/48i $pc' \
               --args "$BIN" "$FILTER_ARG"
 
       - name: fail fast if moon test failed

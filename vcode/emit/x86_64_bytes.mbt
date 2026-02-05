@@ -38,13 +38,24 @@ fn emit_rex(mc : MachineCode, r : Int, b : Int) -> Unit {
 }
 
 ///|
+fn validate_reg_idx_0_15(kind : String, idx : Int) -> Unit {
+  guard idx >= 0 && idx < 16 else {
+    abort("x86_64 encode: invalid \{kind} reg idx \{idx} (expected 0..15)")
+  }
+}
+
+///|
 fn emit_modrm(mc : MachineCode, mod_ : Int, reg : Int, rm : Int) -> Unit {
+  validate_reg_idx_0_15("modrm.reg", reg)
+  validate_reg_idx_0_15("modrm.rm", rm)
   let b = ((mod_ & 3) << 6) | ((reg & 7) << 3) | (rm & 7)
   mc.emit_byte(b)
 }
 
 ///|
 fn emit_sib(mc : MachineCode, scale : Int, index : Int, base : Int) -> Unit {
+  validate_reg_idx_0_15("sib.index", index)
+  validate_reg_idx_0_15("sib.base", base)
   let b = ((scale & 3) << 6) | ((index & 7) << 3) | (base & 7)
   mc.emit_byte(b)
 }
