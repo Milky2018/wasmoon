@@ -8,6 +8,18 @@
 #include <sys/ucontext.h>
 #endif
 
+// glibc exposes REG_RIP/REG_RBP indices for x86_64 in sys/ucontext.h when the
+// right feature macros are enabled. Some build environments omit these defines.
+// Provide fallbacks that match glibc's x86_64 gregset_t layout.
+#if defined(__linux__) && defined(__x86_64__)
+#ifndef REG_RIP
+#define REG_RIP 16
+#endif
+#ifndef REG_RBP
+#define REG_RBP 10
+#endif
+#endif
+
 // ============ Trap State (Thread-Local) ============
 // These values are read/written by JIT execution and signal handlers.
 // They must be thread-local because tests (and users) may run JIT concurrently.
