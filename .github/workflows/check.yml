@@ -114,15 +114,10 @@ jobs:
 
           # Reconstruct the argv filter that `moon test` passes to the whitebox
           # test runner (e.g. "foo_wbtest.mbt:0-3/bar_wbtest.mbt:0-2/...").
-          FILTER_ARG="$(python3 - <<'PY'
-import json
-info = json.load(open('_build/native/debug/test/testsuite/__whitebox_test_info.json', 'r'))
-parts = []
-for name, tests in info['tests'].items():
-    parts.append(f"{name}:0-{len(tests)}")
-print("/".join(parts))
-PY
-)"
+          FILTER_ARG="$(
+            python3 -c 'import json; info=json.load(open("_build/native/debug/test/testsuite/__whitebox_test_info.json")); print("/".join(f"{k}:0-{len(v)}" for k, v in info["tests"].items()))'
+          )"
+
           MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
             gdb -q -batch \
               -ex 'set pagination off' \
