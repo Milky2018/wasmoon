@@ -240,16 +240,35 @@ pub fn emit_hostcall_import_trampoline(
   c_res_slots.add_def({ reg: Virtual(result_slots_vreg) })
   block.add_inst(c_res_slots)
   let call = @instr.VCodeInst::new(CallPtr(5, 0, C))
+  fn c_arg_gpr_indices() -> Array[Int] {
+    match @isa.ISA::current() {
+      // AAPCS64: X0-X7
+      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
+      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
+    }
+  }
+
+  let arg_regs = c_arg_gpr_indices()
   // Call target in IP1.
   call.add_use_fixed(Virtual(func_ptr_vreg), {
     index: scratch2_index(),
     class: @abi.Int,
   })
-  call.add_use_fixed(Virtual(ctx_arg), { index: 0, class: @abi.Int })
-  call.add_use_fixed(Virtual(host_addr_vreg), { index: 1, class: @abi.Int })
-  call.add_use_fixed(Virtual(sp_vreg), { index: 2, class: @abi.Int })
-  call.add_use_fixed(Virtual(arg_slots_vreg), { index: 3, class: @abi.Int })
-  call.add_use_fixed(Virtual(result_slots_vreg), { index: 4, class: @abi.Int })
+  call.add_use_fixed(Virtual(ctx_arg), { index: arg_regs[0], class: @abi.Int })
+  call.add_use_fixed(Virtual(host_addr_vreg), {
+    index: arg_regs[1],
+    class: @abi.Int,
+  })
+  call.add_use_fixed(Virtual(sp_vreg), { index: arg_regs[2], class: @abi.Int })
+  call.add_use_fixed(Virtual(arg_slots_vreg), {
+    index: arg_regs[3],
+    class: @abi.Int,
+  })
+  call.add_use_fixed(Virtual(result_slots_vreg), {
+    index: arg_regs[4],
+    class: @abi.Int,
+  })
   add_call_clobbers(call)
   block.add_inst(call)
 
