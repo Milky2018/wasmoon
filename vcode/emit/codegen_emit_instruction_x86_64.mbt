@@ -371,6 +371,48 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sqrtsd_xmm_xmm(rd, rd)
       }
     }
+    @instr.FAbs(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      let mut mask = 14 // reserved via MachineEnvData.scratch_float
+      if mask == rd {
+        mask = 15
+      }
+      let scratch_gpr = isa.scratch_reg_1_index()
+      if is_f32 {
+        // Mirrors Cranelift x64: andps x, (imm f32 0x7fffffff).
+        materialize_xmm_const(self, mask, 0x7FFFFFFF, 0L, scratch_gpr)
+        self.x86_emit_andps_xmm_xmm(rd, mask)
+      } else {
+        // Mirrors Cranelift x64: andpd x, (imm f64 0x7fffffffffffffff).
+        materialize_xmm_const(self, mask, 0x7FFFFFFFFFFFFFFFL, 0L, scratch_gpr)
+        self.x86_emit_andpd_xmm_xmm(rd, mask)
+      }
+    }
+    @instr.FNeg(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      let mut mask = 14 // reserved via MachineEnvData.scratch_float
+      if mask == rd {
+        mask = 15
+      }
+      let scratch_gpr = isa.scratch_reg_1_index()
+      if is_f32 {
+        // Mirrors Cranelift x64: xorps x, (imm f32 0x80000000).
+        materialize_xmm_const(self, mask, 0x80000000, 0L, scratch_gpr)
+        self.x86_emit_xorps_xmm_xmm(rd, mask)
+      } else {
+        // Mirrors Cranelift x64: xorpd x, (imm f64 0x8000000000000000).
+        materialize_xmm_const(self, mask, 0x8000000000000000L, 0L, scratch_gpr)
+        self.x86_emit_xorpd_xmm_xmm(rd, mask)
+      }
+    }
     @instr.FMin(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])

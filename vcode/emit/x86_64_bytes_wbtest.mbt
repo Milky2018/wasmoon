@@ -525,6 +525,7 @@ test "x86_64 parity condition encodings (Ps/Pc)" {
 test "x86_64 scalar conversion encodings (SSE)" {
   let mc = MachineCode::new()
   mc.x86_emit_xorpd_xmm_xmm(0, 0) // xorpd xmm0, xmm0
+  mc.x86_emit_xorps_xmm_xmm(1, 2) // xorps xmm1, xmm2
   mc.x86_emit_cvttss2si_r64_xmm(0, 0) // cvttss2si rax, xmm0
   mc.x86_emit_cvttsd2si_r32_xmm(0, 1) // cvttsd2si eax, xmm1
   mc.x86_emit_cvtsi2sd_xmm_r64(0, 0) // cvtsi2sd xmm0, rax
@@ -532,7 +533,7 @@ test "x86_64 scalar conversion encodings (SSE)" {
   mc.x86_emit_cvtsd2ss_xmm_xmm(3, 4) // cvtsd2ss xmm3, xmm4
   inspect(
     mc.get_bytes(),
-    content="[102, 15, 87, 192, 243, 72, 15, 44, 192, 242, 15, 44, 193, 242, 72, 15, 42, 192, 243, 15, 90, 202, 242, 15, 90, 220]",
+    content="[102, 15, 87, 192, 15, 87, 202, 243, 72, 15, 44, 192, 242, 15, 44, 193, 242, 72, 15, 42, 192, 243, 15, 90, 202, 242, 15, 90, 220]",
   )
 }
 

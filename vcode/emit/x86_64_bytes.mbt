@@ -3046,6 +3046,23 @@ pub fn MachineCode::x86_emit_xorpd_xmm_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_xorps_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // xorps xmm1, xmm2: 0F 57 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x57)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
 pub fn MachineCode::x86_emit_subss_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,

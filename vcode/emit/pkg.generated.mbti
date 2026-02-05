@@ -553,6 +553,7 @@ pub fn MachineCode::x86_emit_ucomiss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xorpd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_xorps_xmm_xmm(Self, Int, Int) -> Unit
 
 type X86Rel32Fixup
 
