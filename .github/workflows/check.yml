@@ -121,17 +121,7 @@ jobs:
           MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
             gdb -q -batch \
               -ex 'set pagination off' \
-              -ex 'set breakpoint pending on' \
-              -ex 'break stack_switch_call' \
-              -ex 'commands 1' \
-              -ex 'silent' \
-              -ex 'continue' \
-              -ex 'end' \
-              -ex 'break wasmoon_jit_call_with_stack_switch' \
-              -ex 'commands 2' \
-              -ex 'silent' \
-              -ex 'continue' \
-              -ex 'end' \
+              -ex 'handle SIGPIPE nostop noprint pass' \
               -ex run \
               -ex bt \
               -ex 'info registers' \

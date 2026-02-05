@@ -93,6 +93,22 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return (int32_t)g_trap_code;
     }
+    // Defensive: hostcall trampolines pass a pointer into the active WASM stack.
+    // If ABI bugs pass an invalid pointer, the MoonBit dispatcher may scribble
+    // over unrelated memory and corrupt the heap.
+    if (ctx->wasm_stack_base && ctx->wasm_stack_top) {
+        uintptr_t base = (uintptr_t)ctx->wasm_stack_base;
+        uintptr_t top = (uintptr_t)ctx->wasm_stack_top;
+        uintptr_t ptr = (uintptr_t)values_ptr;
+        // Each slot is 8 bytes; `num_args`/`num_results` are already slot counts
+        // (v128 uses 2 slots in the trampoline).
+        uintptr_t bytes = (uintptr_t)(num_args + num_results) * 8u;
+        if (ptr < base || ptr + bytes > top) {
+            g_trap_code = 3; // unreachable
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return (int32_t)g_trap_code;
+        }
+    }
 
     g_hostcall_func_idx = func_idx;
     g_hostcall_values_ptr = values_ptr;
