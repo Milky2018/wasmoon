@@ -121,9 +121,17 @@ jobs:
           MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
             gdb -q -batch \
               -ex 'set pagination off' \
+              -ex 'set breakpoint pending on' \
+              -ex 'break stack_switch_call' \
+              -ex 'break wasmoon_jit_call_with_stack_switch' \
               -ex run \
               -ex bt \
+              -ex 'info registers rsp rbp rbx r12 r13 r14 r15 rip' \
+              -ex continue \
+              -ex bt \
               -ex 'info registers' \
+              -ex 'info symbol $pc' \
+              -ex 'info sharedlibrary' \
               -ex 'x/16i $pc' \
               --args "$BIN" "$FILTER_ARG"
 
