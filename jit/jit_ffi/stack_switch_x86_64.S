@@ -79,5 +79,8 @@ SYMBOL(get_current_sp):
     movq    %rsp, %rax
     ret
 
-#endif // __x86_64__ || _M_X64
+#if !defined(__APPLE__)
+    .section .note.GNU-stack,"",@progbits
+#endif
 
+#endif // __x86_64__ || _M_X64

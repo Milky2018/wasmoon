@@ -19,9 +19,9 @@
 #else
 #include <sys/mman.h>
 #include <unistd.h>
+#include <pthread.h>
 #ifdef __APPLE__
 #include <libkern/OSCacheControl.h>
-#include <pthread.h>
 #endif
 #endif
 
