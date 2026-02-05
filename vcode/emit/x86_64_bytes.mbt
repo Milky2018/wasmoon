@@ -40,7 +40,13 @@ fn emit_rex(mc : MachineCode, r : Int, b : Int) -> Unit {
 ///|
 fn validate_reg_idx_0_15(kind : String, idx : Int) -> Unit {
   guard idx >= 0 && idx < 16 else {
-    abort("x86_64 encode: invalid \{kind} reg idx \{idx} (expected 0..15)")
+    let isa = @isa.ISA::current()
+    let isa_name = if isa is @isa.AMD64 { "AMD64" } else { "AArch64" }
+    abort(
+      "x86_64 encode: invalid \{kind} reg idx \{idx} (expected 0..15); " +
+      "c_host_arch=\{@isa.c_host_arch()}, isa=\{isa_name}, " +
+      "vmctx=\{isa.vmctx_reg_index()}, mem0_desc=\{isa.mem0_desc_reg_index()}, func_table=\{isa.func_table_reg_index()}",
+    )
   }
 }
 
