@@ -327,12 +327,13 @@ fn MachineCode::emit_prologue(
     let isa = current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
-    // Setup area: push rbp + padding (keep 16-byte alignment for calls).
+    // Setup area: push rbp so the stack is 16-byte aligned after the prologue
+    // (SysV ABI requires 16-byte alignment at call sites).
     if stack_frame.has_setup_area {
       self.x86_emit_push_r64(isa.fp_reg_index())
       // rbp = rsp
       self.x86_emit_mov_rr(isa.fp_reg_index(), 4)
-      // Setup area is 16 bytes on x86_64: push rbp accounts for 8, pad 8 more.
+      // Setup area size is ISA-dependent; on amd64 this is typically 8.
       self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
     }
 

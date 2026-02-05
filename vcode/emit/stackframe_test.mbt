@@ -34,11 +34,17 @@ test "jit_stack_frame_with_spills" {
     has_calls=false,
     outgoing_args_size=0,
   )
+  let isa = @isa.ISA::current()
 
   // 5 spills = 40 bytes, aligned to 16 = 48 bytes
   inspect(frame.spill_size, content="48")
-  // total = setup(16) + gpr(16) + fpr(0) + spill(48) = 80
-  inspect(frame.total_size, content="64")
+  inspect(
+    frame.total_size,
+    content=match isa {
+      @isa.AArch64 => "64"
+      @isa.AMD64 => "56"
+    },
+  )
 }
 
 ///|
@@ -51,12 +57,18 @@ test "jit_stack_frame_with_fprs" {
     has_calls=false,
     outgoing_args_size=0,
   )
+  let isa = @isa.ISA::current()
 
   // 2 FPRs = 1 pair = 16 bytes
   inspect(frame.fpr_save_size, content="16")
   inspect(frame.saved_fprs.length(), content="2")
-  // total = setup(16) + gpr(16) + fpr(16) + spill(16) = 64
-  inspect(frame.total_size, content="32")
+  inspect(
+    frame.total_size,
+    content=match isa {
+      @isa.AArch64 => "32"
+      @isa.AMD64 => "24"
+    },
+  )
 }
 
 ///|
@@ -69,27 +81,37 @@ test "jit_stack_frame_with_calls" {
     has_calls=true,
     outgoing_args_size=0,
   )
+  let isa = @isa.ISA::current()
 
   // has_calls=true means we need setup area
   inspect(frame.has_setup_area, content="true")
-  inspect(frame.setup_area_size, content="16")
+  inspect(
+    frame.setup_area_size,
+    content=match isa {
+      @isa.AArch64 => "16"
+      @isa.AMD64 => "8"
+    },
+  )
   inspect(frame.saved_gprs.length(), content="0") // Only X19
 }
 
 ///|
 test "jit_stack_frame_with_clobbered_gprs" {
   // Frame with additional clobbered GPRs
+  let isa = @isa.ISA::current()
+  let clobbered = match isa {
+    @isa.AArch64 => [20, 25, 26]
+    @isa.AMD64 => [3, 12, 13] // rbx, r12, r13
+  }
   let frame = JITStackFrame::build(
-    [20, 25, 26],
+    clobbered,
     [],
     0,
     has_calls=false,
     outgoing_args_size=0,
   )
-
-  // X19 (always) + clobbered: 20, 25, 26 -> 19, 20, 25, 26 = 4 regs
   inspect(frame.saved_gprs.length(), content="3")
-  inspect(frame.gpr_save_size, content="32") // 4 regs = 2 pairs = 32 bytes
+  inspect(frame.gpr_save_size, content="32")
 }
 
 ///|
@@ -110,7 +132,11 @@ test "jit_stack_frame_odd_fprs" {
 
 ///|
 test "jit_stack_frame_alignment" {
-  // Test that total size is always 16-byte aligned
+  let isa = @isa.ISA::current()
+  let expected_mod = match isa {
+    @isa.AArch64 => "0"
+    @isa.AMD64 => "8"
+  }
   let frame1 = JITStackFrame::build(
     [],
     [],
@@ -118,7 +144,7 @@ test "jit_stack_frame_alignment" {
     has_calls=false,
     outgoing_args_size=0,
   )
-  inspect(frame1.total_size % 16, content="0")
+  inspect(frame1.total_size % 16, content=expected_mod)
   let frame2 = JITStackFrame::build(
     [],
     [],
@@ -126,7 +152,7 @@ test "jit_stack_frame_alignment" {
     has_calls=false,
     outgoing_args_size=0,
   )
-  inspect(frame2.total_size % 16, content="0")
+  inspect(frame2.total_size % 16, content=expected_mod)
   let frame3 = JITStackFrame::build(
     [],
     [8],
@@ -134,7 +160,7 @@ test "jit_stack_frame_alignment" {
     has_calls=false,
     outgoing_args_size=0,
   )
-  inspect(frame3.total_size % 16, content="0")
+  inspect(frame3.total_size % 16, content=expected_mod)
 }
 
 ///|
@@ -168,10 +194,16 @@ test "jit_stack_frame_outgoing_args" {
     has_calls=true,
     outgoing_args_size=32,
   )
+  let isa = @isa.ISA::current()
   inspect(frame.outgoing_args_size, content="32")
   inspect(frame.outgoing_args_offset, content="0") // At SP
-  // total = setup(16) + gpr(16) + fpr(0) + spill(16) + outgoing(32) = 80
-  inspect(frame.total_size, content="48")
+  inspect(
+    frame.total_size,
+    content=match isa {
+      @isa.AArch64 => "48"
+      @isa.AMD64 => "40"
+    },
+  )
 }
 
 ///|
@@ -182,8 +214,13 @@ test "jit_stack_frame_complex" {
   // Spills: 5 slots
   // has_calls: true
   // outgoing_args: 16
+  let isa = @isa.ISA::current()
+  let clobbered = match isa {
+    @isa.AArch64 => [20, 25, 26]
+    @isa.AMD64 => [3, 12, 13] // rbx, r12, r13
+  }
   let frame = JITStackFrame::build(
-    [20, 25, 26],
+    clobbered,
     [8, 9],
     5,
     has_calls=true,
@@ -196,8 +233,13 @@ test "jit_stack_frame_complex" {
   inspect(frame.outgoing_args_size, content="16")
   // frame_size = 32 + 16 + 48 + 16 = 112
   inspect(frame.frame_size, content="112")
-  // total = setup(16) + frame_size(112) = 128
-  inspect(frame.total_size, content="128")
+  inspect(
+    frame.total_size,
+    content=match isa {
+      @isa.AArch64 => "128"
+      @isa.AMD64 => "120"
+    },
+  )
 }
 
 ///|
@@ -225,26 +267,32 @@ test "jit_stack_frame_region_offsets" {
 ///|
 test "jit_stack_frame_gpr_save_offset" {
   // Test get_gpr_save_offset method
+  let isa = @isa.ISA::current()
+  let clobbered = match isa {
+    @isa.AArch64 => [20, 25]
+    @isa.AMD64 => [3, 12] // rbx, r12
+  }
   let frame = JITStackFrame::build(
-    [20, 25],
+    clobbered,
     [],
     0,
     has_calls=false,
     outgoing_args_size=0,
   )
-
-  // saved_gprs includes pinned vmctx (X21) when needed
   inspect(frame.saved_gprs.length(), content="2")
-  // saved_gprs is sorted, so X20 comes before X21
-  let offset_20 = frame.get_gpr_save_offset(20)
-  inspect(offset_20 >= 0, content="true")
-  let offset_21 = frame.get_gpr_save_offset(21)
-  inspect(offset_21 >= 0, content="false")
-  inspect(offset_21 > offset_20, content="false")
-  // X25 is later
-  let offset_25 = frame.get_gpr_save_offset(25)
-  inspect(offset_25 >= 0, content="true")
-  inspect(offset_25 > offset_21, content="true")
+  let reg0 = match isa {
+    @isa.AArch64 => 20
+    @isa.AMD64 => 3
+  }
+  let reg1 = match isa {
+    @isa.AArch64 => 25
+    @isa.AMD64 => 12
+  }
+  let offset0 = frame.get_gpr_save_offset(reg0)
+  let offset1 = frame.get_gpr_save_offset(reg1)
+  inspect(offset0 >= 0, content="true")
+  inspect(offset1 >= 0, content="true")
+  inspect(offset1 > offset0, content="true")
 }
 
 ///|
@@ -260,6 +308,13 @@ test "jit_stack_frame_incoming_stack_args" {
     needs_vmctx=false,
     has_incoming_stack_args=true,
   )
+  let isa = @isa.ISA::current()
   inspect(frame.has_setup_area, content="true")
-  inspect(frame.setup_area_size, content="16")
+  inspect(
+    frame.setup_area_size,
+    content=match isa {
+      @isa.AArch64 => "16"
+      @isa.AMD64 => "8"
+    },
+  )
 }

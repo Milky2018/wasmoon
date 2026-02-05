@@ -38,9 +38,10 @@ const MIN_SPILL_SIZE : Int = 16
 const SETUP_AREA_SIZE : Int = 16
 
 ///|
-// x86_64 has no link register; reserve 16 bytes when frame setup is needed
-// (push rbp + 8 bytes padding) to keep 16-byte alignment for calls.
-const X86_SETUP_AREA_SIZE : Int = 16
+// amd64 has no link register; reserve 8 bytes when frame setup is needed
+// (push rbp) so that, starting from a SysV entry SP of 16n+8, the stack is
+// 16-byte aligned (16n) after the prologue and therefore aligned at call sites.
+const X86_SETUP_AREA_SIZE : Int = 8
 
 // ============ JITStackFrame ============
 
@@ -48,7 +49,7 @@ const X86_SETUP_AREA_SIZE : Int = 16
 /// Encapsulates the stack frame layout for a JIT-compiled function
 pub struct JITStackFrame {
   // Size of each region (in bytes)
-  setup_area_size : Int // FP + LR (16 bytes if present)
+  setup_area_size : Int // ISA-dependent setup (AArch64: FP+LR=16, amd64: push rbp=8)
   gpr_save_size : Int // Callee-saved GPRs (excluding FP/LR)
   fpr_save_size : Int // Callee-saved FPRs
   spill_size : Int // Spill slots
@@ -59,7 +60,9 @@ pub struct JITStackFrame {
   fpr_save_offset : Int
   spill_offset : Int
   outgoing_args_offset : Int
-  // Total frame size (16-byte aligned, including setup area)
+  // Total frame size:
+  // - AArch64: 16-byte aligned (SP must remain aligned at all times)
+  // - amd64: chosen so SP is 16-byte aligned after the prologue (SysV call ABI)
   total_size : Int
   // Size of frame excluding setup area (for sub sp, sp, #size)
   frame_size : Int
