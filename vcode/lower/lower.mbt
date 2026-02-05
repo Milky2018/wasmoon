@@ -864,7 +864,35 @@ pub fn lower_function(
 
   // Phase 5: Peephole optimization
   optimize_vcode(ctx.vcode_func)
+
+  // Phase 6: Target-specific fixups (Cranelift-style).
+  //
+  // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
+  // register. Enforce this constraint universally to avoid relying on each
+  // lowering site to set it correctly.
+  if @isa.ISA::current() is @isa.AMD64 {
+    fixup_amd64_shift_count_constraints(ctx.vcode_func)
+  }
   ctx.vcode_func
+}
+
+///|
+fn fixup_amd64_shift_count_constraints(func : @regalloc.VCodeFunction) -> Unit {
+  for block in func.blocks {
+    for inst in block.insts {
+      match inst.opcode {
+        @instr.Shl(_) | @instr.LShr(_) | @instr.AShr(_) | @instr.Rotr(_) =>
+          if inst.uses.length() >= 2 {
+            match inst.use_constraints[1] {
+              @abi.FixedReg(_) => ()
+              _ =>
+                inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
+            }
+          }
+        _ => ()
+      }
+    }
+  }
 }
 
 ///|
