@@ -330,6 +330,8 @@ pub fn MachineCode::x86_emit_addss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_r_imm8_sxb64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_and_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_andpd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_andps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_bsr_r32_r32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_bsr_r64_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_call_r64(Self, Int) -> Unit
@@ -371,8 +373,12 @@ pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_lea_r64_riprel32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_maxpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_maxps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_maxsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_maxss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_minpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_minps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_minsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_minss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_imm64(Self, Int, Int64) -> Unit
 pub fn MachineCode::x86_emit_mov_m16_r16(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mov_m32_r32(Self, Int, Int, Int) -> Unit
@@ -420,6 +426,8 @@ pub fn MachineCode::x86_emit_not_r32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_not_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_or_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_or_rr32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_orpd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_orps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pabsb_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pabsd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_pabsw_xmm_xmm(Self, Int, Int) -> Unit

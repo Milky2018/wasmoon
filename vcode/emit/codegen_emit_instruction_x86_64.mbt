@@ -137,6 +137,83 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  ///|
+  /// Scalar min/max with WebAssembly semantics, aligned with Cranelift x64.
+  ///
+  /// Implements the `XmmMinMaxSeq` sequence from Cranelift:
+  /// - Handle NaNs symmetrically (propagate a quiet NaN via add).
+  /// - Handle +0/-0 by merging sign bits on ordered-equal.
+  fn emit_scalar_min_max_seq(
+    self : MachineCode,
+    is_f32 : Bool,
+    is_min : Bool,
+    rd : Int,
+    lhs : Int,
+    rhs : Int,
+  ) -> Unit {
+    // The Cranelift sequence expects dst == rhs. We can enforce this with
+    // a couple of moves, preserving `lhs` if it aliases `rd`.
+    let tmp = 14 // reserved via MachineEnvData.scratch_float
+    let lhs_reg = if rd == rhs {
+      lhs
+    } else if rd == lhs {
+      self.x86_emit_movaps_xmm_xmm(tmp, lhs)
+      self.x86_emit_movaps_xmm_xmm(rd, rhs)
+      tmp
+    } else {
+      self.x86_emit_movaps_xmm_xmm(rd, rhs)
+      lhs
+    }
+    let done = self.new_internal_label()
+    let propagate_nan = self.new_internal_label()
+    let do_min_max = self.new_internal_label()
+    if is_f32 {
+      self.x86_emit_ucomiss_xmm_xmm(rd, lhs_reg)
+    } else {
+      self.x86_emit_ucomisd_xmm_xmm(rd, lhs_reg)
+    }
+
+    // If not equal, use native min/max.
+    self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_min_max) // JNZ
+    // If unordered (NaN), propagate NaN via add.
+    self.x86_emit_jcc_rel32(@instr.Cond::Ps, propagate_nan) // JP
+
+    // Ordered and equal: merge sign bits to handle -0 vs +0.
+    if is_f32 {
+      if is_min {
+        self.x86_emit_orps_xmm_xmm(rd, lhs_reg)
+      } else {
+        self.x86_emit_andps_xmm_xmm(rd, lhs_reg)
+      }
+    } else if is_min {
+      self.x86_emit_orpd_xmm_xmm(rd, lhs_reg)
+    } else {
+      self.x86_emit_andpd_xmm_xmm(rd, lhs_reg)
+    }
+    self.x86_emit_jmp_rel32(done)
+    self.define_label(propagate_nan)
+    if is_f32 {
+      self.x86_emit_addss_xmm_xmm(rd, lhs_reg)
+    } else {
+      self.x86_emit_addsd_xmm_xmm(rd, lhs_reg)
+    }
+    // PF is still set from the UCOMIS* above, so JP is always taken here.
+    self.x86_emit_jcc_rel32(@instr.Cond::Ps, done)
+    self.define_label(do_min_max)
+    if is_f32 {
+      if is_min {
+        self.x86_emit_minss_xmm_xmm(rd, lhs_reg)
+      } else {
+        self.x86_emit_maxss_xmm_xmm(rd, lhs_reg)
+      }
+    } else if is_min {
+      self.x86_emit_minsd_xmm_xmm(rd, lhs_reg)
+    } else {
+      self.x86_emit_maxsd_xmm_xmm(rd, lhs_reg)
+    }
+    self.define_label(done)
+  }
+
   self.annotate(inst.to_string())
   match inst.opcode {
     @instr.Umulh => {
@@ -293,6 +370,18 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         self.x86_emit_sqrtsd_xmm_xmm(rd, rd)
       }
+    }
+    @instr.FMin(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      emit_scalar_min_max_seq(self, is_f32, true, rd, lhs, rhs)
+    }
+    @instr.FMax(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      emit_scalar_min_max_seq(self, is_f32, false, rd, lhs, rhs)
     }
     @instr.Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
