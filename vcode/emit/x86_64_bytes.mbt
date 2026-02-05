@@ -1394,6 +1394,24 @@ pub fn MachineCode::x86_emit_movss_xmm_m32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movss_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movss xmm1, xmm2/m32: F3 0F 10 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x10)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
 pub fn MachineCode::x86_emit_movss_m32_xmm(
   self : MachineCode,
   base : Int,
@@ -1460,6 +1478,41 @@ pub fn MachineCode::x86_emit_movsd_xmm_m64(
     emit_sib(self, 0, 4, base)
   }
   emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_movsd_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movsd xmm1, xmm2/m64: F2 0F 10 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0xF2)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x10)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
+}
+
+///|
+pub fn MachineCode::x86_emit_movlhps_xmm_xmm(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movlhps xmm1, xmm2/m64: 0F 16 /r
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x16)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
 }
 
 ///|
@@ -1666,6 +1719,27 @@ pub fn MachineCode::x86_emit_pinsrb_xmm_r32_imm8(
   self.emit_byte(0x3A)
   self.emit_byte(0x20)
   emit_modrm(self, 3, dst_xmm, src)
+  self.emit_byte(imm8 & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_insertps_xmm_xmm_imm8(
+  self : MachineCode,
+  dst_xmm : Int,
+  src_xmm : Int,
+  imm8 : Int,
+) -> Unit {
+  // insertps xmm1, xmm2/m32, imm8 (SSE4.1): 66 0F 3A 21 /r ib
+  let r = (dst_xmm >> 3) & 1
+  let b = (src_xmm >> 3) & 1
+  self.emit_byte(0x66)
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x3A)
+  self.emit_byte(0x21)
+  emit_modrm(self, 3, dst_xmm, src_xmm)
   self.emit_byte(imm8 & 255)
 }
 

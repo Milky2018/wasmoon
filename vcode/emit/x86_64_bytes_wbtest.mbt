@@ -171,6 +171,18 @@ test "x86_64 movss encodings (m32)" {
 }
 
 ///|
+test "x86_64 movss/movsd/movlhps xmm-xmm encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movss_xmm_xmm(1, 2) // movss xmm1, xmm2
+  mc.x86_emit_movsd_xmm_xmm(11, 12) // movsd xmm11, xmm12
+  mc.x86_emit_movlhps_xmm_xmm(1, 2) // movlhps xmm1, xmm2
+  inspect(
+    mc.get_bytes(),
+    content="[243, 15, 16, 202, 242, 69, 15, 16, 220, 15, 22, 202]",
+  )
+}
+
+///|
 test "x86_64 movsx/movzx encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_movsx_r64_m8(0, 4, 0)
@@ -248,6 +260,13 @@ test "x86_64 pinsrq encoding (SSE4.1)" {
   let mc = MachineCode::new()
   mc.x86_emit_pinsrq_xmm_r64_imm8(1, 0, 1) // pinsrq xmm1, rax, 1
   inspect(mc.get_bytes(), content="[102, 72, 15, 58, 34, 200, 1]")
+}
+
+///|
+test "x86_64 insertps encoding (SSE4.1)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_insertps_xmm_xmm_imm8(1, 2, 0x10) // insertps xmm1, xmm2, lane=1
+  inspect(mc.get_bytes(), content="[102, 15, 58, 33, 202, 16]")
 }
 
 ///|

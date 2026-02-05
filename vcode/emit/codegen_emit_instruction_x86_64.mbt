@@ -1947,6 +1947,48 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.LaneSize::D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
       }
     }
+    @instr.SIMDExtractF(is_f32, lane) => {
+      // Extract scalar float lane into an XMM register.
+      //
+      // Mirrors Cranelift x64 lowering rules in `lower.isle`.
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      if is_f32 {
+        if lane != 0 {
+          // Broadcast dword lane to all lanes; the low lane then holds the scalar.
+          self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, (lane & 3) * 0x55)
+        }
+      } else if lane == 1 {
+        // Select the high 64-bit lane into the low lane.
+        self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0xEE)
+      } else if lane != 0 {
+        abort("SIMDExtractF f64 lane out of range: \{lane}")
+      }
+    }
+    @instr.SIMDInsertF(is_f32, lane) => {
+      // Insert scalar float into a vector lane.
+      //
+      // Mirrors Cranelift x64 lowering rules in `lower.isle`.
+      let rd = wreg_num(inst.defs[0])
+      let vec = reg_num(inst.uses[0])
+      let src = reg_num(inst.uses[1])
+      if rd != vec {
+        self.x86_emit_movaps_xmm_xmm(rd, vec)
+      }
+      if is_f32 {
+        // INSERTPS: insert 32-bit lane 0 of `src` into lane `lane` of `rd`.
+        self.x86_emit_insertps_xmm_xmm_imm8(rd, src, (lane & 3) << 4)
+      } else if lane == 0 {
+        self.x86_emit_movsd_xmm_xmm(rd, src)
+      } else if lane == 1 {
+        self.x86_emit_movlhps_xmm_xmm(rd, src)
+      } else {
+        abort("SIMDInsertF f64 lane out of range: \{lane}")
+      }
+    }
     @instr.SIMDAnd => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
