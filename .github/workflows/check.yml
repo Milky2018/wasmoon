@@ -94,6 +94,7 @@ jobs:
 
       - name: gdb backtrace (testsuite whitebox)
         if: steps.moon_test.outcome != 'success'
+        continue-on-error: true
         run: |
           set -euxo pipefail
           # Build tests without running them, then run the failing whitebox
