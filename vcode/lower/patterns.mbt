@@ -558,19 +558,12 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        // Load shift amount as constant
-        let shift_vreg = ctx.vcode_func.new_vreg(Int)
-        let load_shift = @instr.VCodeInst::new(
-          @instr.LoadConst(shift_amount.to_int64()),
-        )
-        load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
-        block.add_inst(load_shift)
-        // Emit shift left
         let is_64 = result.ty is @ir.Type::I64
-        let shl_inst = @instr.VCodeInst::new(@instr.Shl(is_64))
+        let mask = if is_64 { 63 } else { 31 }
+        let shift = shift_amount & mask
+        let shl_inst = @instr.VCodeInst::new(@instr.ShlImm(shift, is_64))
         shl_inst.add_def({ reg: @abi.Virtual(dst) })
         shl_inst.add_use(@abi.Virtual(src))
-        shl_inst.add_use(@abi.Virtual(shift_vreg))
         block.add_inst(shl_inst)
         true
       } else {
@@ -581,19 +574,12 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        // Load shift amount as constant
-        let shift_vreg = ctx.vcode_func.new_vreg(Int)
-        let load_shift = @instr.VCodeInst::new(
-          @instr.LoadConst(shift_amount.to_int64()),
-        )
-        load_shift.add_def({ reg: @abi.Virtual(shift_vreg) })
-        block.add_inst(load_shift)
-        // Emit logical shift right
         let is_64 = result.ty is @ir.Type::I64
-        let lshr_inst = @instr.VCodeInst::new(@instr.LShr(is_64))
+        let mask = if is_64 { 63 } else { 31 }
+        let shift = shift_amount & mask
+        let lshr_inst = @instr.VCodeInst::new(@instr.LShrImm(shift, is_64))
         lshr_inst.add_def({ reg: @abi.Virtual(dst) })
         lshr_inst.add_use(@abi.Virtual(src))
-        lshr_inst.add_use(@abi.Virtual(shift_vreg))
         block.add_inst(lshr_inst)
         true
       } else {
