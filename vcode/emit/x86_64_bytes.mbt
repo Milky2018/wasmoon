@@ -3460,6 +3460,24 @@ pub fn MachineCode::x86_emit_div_r32(self : MachineCode, divisor : Int) -> Unit 
 }
 
 ///|
+pub fn MachineCode::x86_emit_mul_r64(self : MachineCode, src : Int) -> Unit {
+  // mul r/m64: REX.W + F7 /4
+  let b = (src >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 4, src)
+}
+
+///|
+pub fn MachineCode::x86_emit_imul1_r64(self : MachineCode, src : Int) -> Unit {
+  // imul r/m64 (one-operand): REX.W + F7 /5
+  let b = (src >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 5, src)
+}
+
+///|
 pub fn MachineCode::x86_emit_cmp_r_imm32(
   self : MachineCode,
   reg : Int,

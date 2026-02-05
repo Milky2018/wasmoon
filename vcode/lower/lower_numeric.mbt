@@ -749,6 +749,24 @@ fn lower_umulh(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
+  guard inst.first_result() is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+  let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+  if @isa.ISA::current() is @isa.AMD64 {
+    // Match Cranelift x64: use MUL with implicit RAX/RDX.
+    //
+    // Result (high 64 bits) is produced in RDX.
+    let vcode_inst = @instr.VCodeInst::new(Umulh)
+    vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
+    vcode_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
+    vcode_inst.add_use(Virtual(rhs))
+    // Clobbers: rax/rdx are implicit in mul.
+    vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+    vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+    block.add_inst(vcode_inst)
+    return
+  }
   lower_binary_int(ctx, inst, block, Umulh)
 }
 
@@ -758,6 +776,24 @@ fn lower_smulh(
   inst : @ir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
+  guard inst.first_result() is Some(result) else { return }
+  let dst = ctx.get_vreg(result)
+  let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+  let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+  if @isa.ISA::current() is @isa.AMD64 {
+    // Match Cranelift x64: use one-operand IMUL with implicit RAX/RDX.
+    //
+    // Result (high 64 bits) is produced in RDX.
+    let vcode_inst = @instr.VCodeInst::new(Smulh)
+    vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
+    vcode_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
+    vcode_inst.add_use(Virtual(rhs))
+    // Clobbers: rax/rdx are implicit in imul.
+    vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+    vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+    block.add_inst(vcode_inst)
+    return
+  }
   lower_binary_int(ctx, inst, block, Smulh)
 }
 

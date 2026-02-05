@@ -139,6 +139,38 @@ fn MachineCode::emit_instruction_x86_64(
 
   self.annotate(inst.to_string())
   match inst.opcode {
+    @instr.Umulh => {
+      // Unsigned multiply high: rd = (lhs * rhs) >> 64.
+      //
+      // amd64 encoding uses implicit RAX/RDX: MUL r/m64 computes RDX:RAX.
+      // Lowering constrains lhs to RAX and result to RDX (Cranelift-style).
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      self.x86_emit_mul_r64(rhs)
+      if rd != 2 {
+        self.x86_emit_mov_rr(rd, 2)
+      }
+    }
+    @instr.Smulh => {
+      // Signed multiply high: rd = (lhs * rhs) >> 64.
+      //
+      // amd64 encoding uses implicit RAX/RDX: IMUL r/m64 computes RDX:RAX.
+      // Lowering constrains lhs to RAX and result to RDX (Cranelift-style).
+      let rd = wreg_num(inst.defs[0])
+      let lhs = reg_num(inst.uses[0])
+      let rhs = reg_num(inst.uses[1])
+      if lhs != 0 {
+        self.x86_emit_mov_rr(0, lhs)
+      }
+      self.x86_emit_imul1_r64(rhs)
+      if rd != 2 {
+        self.x86_emit_mov_rr(rd, 2)
+      }
+    }
     @instr.Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
