@@ -46,10 +46,14 @@ SYMBOL(stack_switch_call):
     movq    %rdx, %r14        // vmctx
     movq    %rcx, %r15        // values_vec
     movq    %r8,  %r9         // func_ptr (caller-saved temp)
-    movq    %rsp, %rbx        // host stack pointer (after pushes)
+    movq    %rsp, %rax        // host stack pointer (after pushes)
 
     // Switch to WASM stack
     movq    %r12, %rsp
+    // Reserve a small slot on the WASM stack to save the host SP.
+    // Do not rely on the callee preserving any particular register.
+    subq    $16, %rsp
+    movq    %rax, 8(%rsp)
 
     // Prepare args for trampoline call: (vmctx, values_vec, func_ptr)
     movq    %r14, %rdi
@@ -59,7 +63,7 @@ SYMBOL(stack_switch_call):
     call    *%r13
 
     // Restore host stack
-    movq    %rbx, %rsp
+    movq    8(%rsp), %rsp
 
     // Epilogue: restore callee-saved regs
     popq    %r15
