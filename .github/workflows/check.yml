@@ -6,11 +6,8 @@ on:
       - $default-branch
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [macos-latest]
-    runs-on: ${{ matrix.os }}
+  build-macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: install
@@ -53,5 +50,48 @@ jobs:
 
       - name: run wast spec tests
         timeout-minutes: 5
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
+
+  build-ubuntu-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: moon check
+        run: |
+          moon check --target native
+
+      - name: moon test
+        run: |
+          moon test --target native
+
+      - name: lint
+        run: |
+          moon fmt && git diff --exit-code
+          moon info && git diff --exit-code
+
+      - name: build wasmoon
+        run: |
+          moon build --target native
+          ./install.sh
+
+      - name: run wast spec tests (amd64)
+        timeout-minutes: 10
         run: |
           python3 scripts/run_all_wast.py --dir spec --rec
