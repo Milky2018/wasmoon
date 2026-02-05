@@ -2,12 +2,15 @@
 
 This document provides a detailed comparison between Wasmoon's JIT compiler and Cranelift (Wasmtime's compiler backend).
 
+For a deeper, optimization-focused report (IR opts → lowering → regalloc → emit),
+see `docs/optimization-vs-cranelift.md`.
+
 ## Architecture Overview
 
 | Aspect | Wasmoon | Cranelift |
 |--------|---------|-----------|
 | **Language** | MoonBit | Rust |
-| **Target Architectures** | AArch64 only | AArch64, x86_64, RISC-V, s390x |
+| **Target Architectures** | AArch64; amd64 (work in progress) | AArch64, amd64 (x86_64), RISC-V, s390x |
 | **IR Layers** | 2 (IR → VCode) | 2 (CLIF → VCode) |
 | **Codebase Size** | ~75,000 lines | ~500,000+ lines |
 | **DSL** | None (native MoonBit) | ISLE (custom DSL) |
@@ -75,24 +78,26 @@ pub struct DataFlowGraph {
 
 ## 2. Optimization Framework
 
-### Wasmoon E-Graph (`ir/egraph/`)
+### Wasmoon E-Graph (`ir/egraph/` + `ir/egraph_builder.mbt`)
 
 ```moonbit
-pub struct EGraph {
-  classes: Map[Int, EClass]
-  union_find: Map[Int, Int]
-  hashcons: Map[ENode, Int]  // GVN
+struct EGraph {
+  uf : UnionFind
+  classes : Map[Int, EClass]
+  mut hashcons : Map[ENode, EClassId]  // hashcons / dedup
+  opcode_index : Map[EOpcodeTag, HashSet[Int]]  // indexed rewrites
+  // ...
 }
 
-// 27 rule files, ~14,940 lines total
-// e.g., rules_algebraic.mbt, rules_bitwise.mbt
+// ~27 files under `ir/egraph/*.mbt`, ~15k LOC total.
 ```
 
 **Characteristics:**
-- Traditional e-graph saturation approach
-- Rules written as MoonBit functions
-- Ruleset rebuilt per block
-- No match limits (potential explosion)
+- Union-find egraph with hashcons + opcode-indexed rules (`ir/egraph/rules_all.mbt`)
+- Global cached indexed ruleset (`get_global_ruleset()`)
+- Current IR integration is **per-block** and intentionally **one-pass**:
+  `EGraphBuilder::optimize()` calls `saturate_indexed(ruleset, 1)` (“Cranelift-style aegraph”)
+- No explicit `MATCHES_LIMIT` / `ECLASS_ENODE_LIMIT` caps yet (the main bound is one-pass usage)
 
 ### Cranelift E-Graph (`egraph.rs` + ISLE)
 
@@ -129,18 +134,18 @@ const ECLASS_ENODE_LIMIT: usize = 5;
 
 | Feature | Wasmoon | Cranelift |
 |---------|---------|-----------|
-| **Approach** | Saturation iteration | Single-pass directional |
+| **Approach** | Per-block one-pass directional rewrite (plus outer fixed-point driver) | Function-wide single-pass directional |
 | **Rule Language** | MoonBit functions | ISLE DSL |
-| **Match Limit** | None | 5 per call |
-| **E-class Limit** | None | 5 nodes/class |
+| **Match Limit** | None (no explicit cap) | 5 per call |
+| **E-class Limit** | None (no explicit cap) | 5 nodes/class |
 | **Rule Count** | ~296 rules | ~200+ rules |
-| **Ruleset Rebuild** | Per block | Global singleton |
-| **Performance** | May explode | Predictable |
+| **Ruleset** | Cached global singleton (indexed) | Global (generated) |
+| **Performance** | Predictable (one-pass per block) but less global reach | Predictable and global |
 
 **Recommendations:**
-1. Add `MATCHES_LIMIT` and `ECLASS_NODE_LIMIT` constants
-2. Use global ruleset singleton
-3. Consider single-pass directional design
+1. Add explicit `MATCHES_LIMIT` / `ECLASS_ENODE_LIMIT`-style caps (even if keeping one-pass usage)
+2. Consider evolving toward a CFG-scoped “skeleton + extract + elaborate” pass if global wins are needed
+3. Keep the current cached indexed ruleset design (already aligned in spirit)
 
 ---
 
