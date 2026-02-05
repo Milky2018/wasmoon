@@ -26,16 +26,7 @@ jobs:
 
       - name: moon test
         run: |
-          moon test --target native --no-parallelize -v
-
-      - name: dump failing rspfile (if any)
-        if: failure()
-        run: |
-          set -euxo pipefail
-          echo "=== rspfiles under _build/native/debug/test ==="
-          find _build/native/debug/test -name '*.rspfile' -maxdepth 4 -print || true
-          echo "=== testsuite.whitebox_test.rspfile ==="
-          cat _build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile || true
+          moon test --target native
 
       - name: lint
         run: |
@@ -87,8 +78,23 @@ jobs:
           moon check --target native
 
       - name: moon test
+        id: moon_test
+        continue-on-error: true
         run: |
-          moon test --target native
+          moon test --target native --no-parallelize -v
+
+      - name: dump failing rspfile (if any)
+        if: steps.moon_test.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          echo "=== rspfiles under _build/native/debug/test ==="
+          find _build/native/debug/test -name '*.rspfile' -maxdepth 4 -print || true
+          echo "=== testsuite.whitebox_test.rspfile ==="
+          cat _build/native/debug/test/testsuite/testsuite.whitebox_test.rspfile || true
+
+      - name: fail fast if moon test failed
+        if: steps.moon_test.outcome != 'success'
+        run: exit 1
 
       - name: lint
         run: |
