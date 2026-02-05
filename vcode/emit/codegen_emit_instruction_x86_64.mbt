@@ -238,6 +238,62 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sub_rr32(rd, scratch)
       }
     }
+    @instr.FAdd(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_addss_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_addsd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.FSub(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_subss_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_subsd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.FMul(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_mulss_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_mulsd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.FDiv(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let a = reg_num(inst.uses[0])
+      let b = reg_num(inst.uses[1])
+      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+      if is_f32 {
+        self.x86_emit_divss_xmm_xmm(rd, src)
+      } else {
+        self.x86_emit_divsd_xmm_xmm(rd, src)
+      }
+    }
+    @instr.FSqrt(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if rd != src {
+        self.x86_emit_movaps_xmm_xmm(rd, src)
+      }
+      if is_f32 {
+        self.x86_emit_sqrtss_xmm_xmm(rd, rd)
+      } else {
+        self.x86_emit_sqrtsd_xmm_xmm(rd, rd)
+      }
+    }
     @instr.Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

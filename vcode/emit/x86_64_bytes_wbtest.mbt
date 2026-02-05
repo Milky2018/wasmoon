@@ -242,6 +242,18 @@ test "x86_64 pshuflw encoding" {
 }
 
 ///|
+test "x86_64 scalar float arith encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mulsd_xmm_xmm(1, 2) // mulsd xmm1, xmm2
+  mc.x86_emit_divss_xmm_xmm(3, 4) // divss xmm3, xmm4
+  mc.x86_emit_sqrtsd_xmm_xmm(5, 6) // sqrtsd xmm5, xmm6
+  inspect(
+    mc.get_bytes(),
+    content="[242, 15, 89, 202, 243, 15, 94, 220, 242, 15, 81, 238]",
+  )
+}
+
+///|
 test "x86_64 SIMD bitwise encodings (SSE2)" {
   let mc = MachineCode::new()
   mc.x86_emit_pcmpeqd_xmm_xmm(15, 15) // pcmpeqd xmm15, xmm15

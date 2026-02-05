@@ -357,6 +357,8 @@ pub fn MachineCode::x86_emit_div_r32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_div_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_divpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_divps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_divsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_divss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_idiv_r32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_idiv_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_imul1_r64(Self, Int) -> Unit
@@ -411,6 +413,8 @@ pub fn MachineCode::x86_emit_movzx_r32_r8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mul_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_mulpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_mulps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_mulsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_mulss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_neg_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_not_r32(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_not_r64(Self, Int) -> Unit
@@ -524,6 +528,8 @@ pub fn MachineCode::x86_emit_shufpd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_shufps_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sqrtsd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sqrtss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit
