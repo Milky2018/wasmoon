@@ -111,6 +111,18 @@ jobs:
 
           ulimit -c unlimited || true
           export LD_LIBRARY_PATH="$PWD/_build/native/debug/test:$PWD/_build/native/debug/test/jit/jit_ffi:$PWD/_build/native/debug/test/vcode/isa:$PWD/_build/native/debug/test/.mooncakes/moonbitlang/x/fs:$PWD/_build/native/debug/test/wasi${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+          # Reconstruct the argv filter that `moon test` passes to the whitebox
+          # test runner (e.g. "foo_wbtest.mbt:0-3/bar_wbtest.mbt:0-2/...").
+          FILTER_ARG="$(python3 - <<'PY'
+import json
+info = json.load(open('_build/native/debug/test/testsuite/__whitebox_test_info.json', 'r'))
+parts = []
+for name, tests in info['tests'].items():
+    parts.append(f"{name}:0-{len(tests)}")
+print("/".join(parts))
+PY
+)"
           MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
             gdb -q -batch \
               -ex 'set pagination off' \
@@ -118,7 +130,7 @@ jobs:
               -ex bt \
               -ex 'info registers' \
               -ex 'x/16i $pc' \
-              --args "$BIN"
+              --args "$BIN" "$FILTER_ARG"
 
       - name: fail fast if moon test failed
         if: steps.moon_test.outcome != 'success'
