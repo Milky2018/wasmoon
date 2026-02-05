@@ -33,6 +33,12 @@ pub fn JITCompiler::new(
 ///|
 /// Check if a module contains JIT-unsupported instructions
 pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
+  // TODO(amd64): Enable this once the amd64 backend reaches parity with the
+  // AArch64 JIT for the spec test suite. For now, we conservatively fall back
+  // to the interpreter to keep `./wasmoon test` correct on amd64 hosts.
+  if @isa.ISA::current() is @isa.AMD64 {
+    return true
+  }
   // Check all function bodies for unsupported instructions
   for code in mod_.codes {
     if contains_unsupported_instruction(code.body) {

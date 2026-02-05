@@ -51,7 +51,13 @@ fn ExecContext::exec_i32_numeric(
       if b == 0 {
         raise @runtime.DivisionByZero
       }
-      self.stack.push(I32(a % b))
+      // Wasm semantics: INT_MIN % -1 == 0 (must not trap).
+      // On amd64, native IDIV can raise SIGFPE for this case.
+      if a == -2147483648 && b == -1 {
+        self.stack.push(I32(0))
+      } else {
+        self.stack.push(I32(a % b))
+      }
     }
     I32RemU => {
       let b = self.stack.pop_i32()
@@ -325,7 +331,13 @@ fn ExecContext::exec_i64_numeric(
       if b == 0L {
         raise @runtime.DivisionByZero
       }
-      self.stack.push(I64(a % b))
+      // Wasm semantics: INT_MIN % -1 == 0 (must not trap).
+      // On amd64, native IDIV can raise SIGFPE for this case.
+      if a == -9223372036854775808L && b == -1L {
+        self.stack.push(I64(0L))
+      } else {
+        self.stack.push(I64(a % b))
+      }
     }
     I64RemU => {
       let b = self.stack.pop_i64()
