@@ -289,12 +289,13 @@ fn lower_struct_new(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   if num_fields > 0 {
-    // Allocate stack space for fields (8 bytes each, aligned to 16)
+    // Use the pre-allocated outgoing args area for temporary field storage.
+    // Do not adjust SP dynamically inside function bodies: spills/reloads are
+    // emitted against a fixed SP and would become invalid across calls.
     let stack_space = (num_fields * 8 + 15) / 16 * 16
-    let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
-    block.add_inst(alloc)
+    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
 
-    // Store each field value to stack
+    // Store each field value into outgoing args area at SP + offset.
     for i in 0..<num_fields {
       let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
@@ -303,7 +304,7 @@ fn lower_struct_new(
       block.add_inst(store)
     }
 
-    // Get current stack pointer as fields_ptr
+    // Outgoing args area starts at current SP.
     let sp_vreg = ctx.vcode_func.new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
@@ -317,10 +318,6 @@ fn lower_struct_new(
       [vmctx_vreg, type_idx_vreg, sp_vreg, num_fields_vreg],
       Some(dst),
     )
-
-    // Deallocate stack space
-    let dealloc = @instr.VCodeInst::new(AdjustSP(stack_space))
-    block.add_inst(dealloc)
   } else {
     // No fields - pass null pointer
     let null_ptr = materialize_imm(ctx, block, 0L)

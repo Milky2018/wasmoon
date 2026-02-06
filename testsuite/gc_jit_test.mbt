@@ -253,3 +253,54 @@ test "gc jit: ref.eq null refs" {
   let result = compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
+
+///|
+test "gc jit: ref.func + struct.new with deep live stack values" {
+  let lines : Array[String] = [
+    "(module", "  (type $closure (struct (field (ref func))))", "  (type $arr (array (ref $closure)))",
+    "  (type $out (struct (field (ref $arr)) (field i32)))",
+  ]
+  for i in 0..<128 {
+    lines.push("  (func $f\{i} (result i32) i32.const \{i})")
+  }
+  lines.push("  (func (export \"test\") (result i64)")
+  for i in 1..<81 {
+    lines.push("    i64.const \{i}")
+  }
+  for _ in 0..<3 {
+    lines.push("    ref.func $f127")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f126")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f125")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f124")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f123")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f122")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f121")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f120")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f119")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f118")
+    lines.push("    struct.new $closure")
+    lines.push("    ref.func $f117")
+    lines.push("    struct.new $closure")
+    lines.push("    array.new_fixed $arr 11")
+    lines.push("    i32.const 11")
+    lines.push("    struct.new $out")
+    lines.push("    drop")
+  }
+  for _ in 0..<79 {
+    lines.push("    i64.add")
+  }
+  lines.push("  )")
+  lines.push(")")
+  let source = lines.join("\n")
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}
