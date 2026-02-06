@@ -339,8 +339,12 @@ fn run_wasi_jit_quiet(
       )
     }
     let func_signatures = @wast.build_func_signatures(mod_)
-    guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-      return (Err("Failed to create JIT module"), Bytes::from_array([]))
+    let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
+      err =>
+        return (
+          Err("Failed to create JIT module: \{err}"),
+          Bytes::from_array([]),
+        )
     }
     let _ = jm.alloc_wasm_stack(1048576L)
 

@@ -82,8 +82,9 @@ fn run_jit_with_backtrace(
   let func_signatures = @wast.build_func_signatures(mod_)
 
   // Load JIT module
-  guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-    return Err(make_empty_trap_info("Failed to create JIT module"))
+  let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
+    err =>
+      return Err(make_empty_trap_info("Failed to create JIT module: \{err}"))
   }
 
   // Register DWARF info - this is the key for backtraces!

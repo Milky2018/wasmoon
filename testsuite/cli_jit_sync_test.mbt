@@ -40,8 +40,8 @@ test "cli jit sync: memory.grow visible after jit" {
       func_type.results.length(),
     )
   }
-  guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-    abort("jit load failed")
+  let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
+    err => abort("jit load failed: \{err}")
   }
 
   // Init JIT memory from interpreter and execute

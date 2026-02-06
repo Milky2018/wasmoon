@@ -58,6 +58,28 @@ pub fn JITDebugDB::get(self : JITDebugDB, func_idx : Int) -> JITFunctionDebug? {
 }
 
 ///|
+/// Error when loading a precompiled JIT module
+pub suberror JITModuleLoadError {
+  ContextAllocationFailed(total_funcs~ : Int)
+  UnsupportedImport(
+    import_idx~ : Int,
+    module_name~ : String,
+    func_name~ : String
+  )
+  ImportTrampolineAllocationFailed(
+    import_idx~ : Int,
+    module_name~ : String,
+    func_name~ : String,
+    code_size~ : Int
+  )
+  FunctionCodeAllocationFailed(
+    func_idx~ : Int,
+    func_name~ : String,
+    code_size~ : Int
+  )
+} derive(Show)
+
+///|
 fn JITFunction::new(
   func_idx : Int,
   name : String,
@@ -221,7 +243,7 @@ pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   debug_db? : JITDebugDB? = None,
-) -> JITModule? {
+) -> JITModule raise JITModuleLoadError {
   JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
 }
 
@@ -234,7 +256,7 @@ pub fn JITModule::load_with_imports(
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
   debug_db? : JITDebugDB? = None,
-) -> JITModule? {
+) -> JITModule raise JITModuleLoadError {
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
 
@@ -244,7 +266,7 @@ pub fn JITModule::load_with_imports(
   // Create JIT context with function table
   let context = JITContext::new(total_funcs)
   match context {
-    None => return None
+    None => raise ContextAllocationFailed(total_funcs~)
     Some(ctx) => {
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
@@ -279,12 +301,23 @@ pub fn JITModule::load_with_imports(
                   jit_module.import_exec_codes.push(ec)
                   ctx.set_func(i, ec.ptr())
                 }
-                None => return None
+                None =>
+                  raise ImportTrampolineAllocationFailed(
+                    import_idx=i,
+                    module_name=imp.module_name,
+                    func_name=imp.func_name,
+                    code_size=code_ints.length(),
+                  )
               }
             } else {
               ctx.set_func(i, ptr)
             }
-          None => return None // Unsupported import
+          None =>
+            raise UnsupportedImport(
+              import_idx=i,
+              module_name=imp.module_name,
+              func_name=imp.func_name,
+            )
         }
       }
 
@@ -314,7 +347,12 @@ pub fn JITModule::load_with_imports(
             // Set function pointer in context's function table
             ctx.set_func(entry.func_idx, ec.ptr())
           }
-          None => return None
+          None =>
+            raise FunctionCodeAllocationFailed(
+              func_idx=entry.func_idx,
+              func_name=entry.name,
+              code_size=entry.code.length(),
+            )
         }
       }
 
@@ -335,7 +373,7 @@ pub fn JITModule::load_with_imports(
       jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
     }
   }
-  Some(jit_module)
+  jit_module
 }
 
 ///|
