@@ -1,0 +1,80 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/perf"
+
+// Values
+pub fn begin_function(Int, String, Int, Int) -> Unit
+
+pub fn elapsed_us(Instant) -> Int64
+
+pub fn enabled() -> Bool
+
+pub fn export_json() -> String
+
+pub fn finish_function(Int, Int) -> Unit
+
+pub fn instant_elapsed_as_secs_f64(Instant) -> Double
+
+pub fn instant_now() -> Instant
+
+pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?) -> Unit
+
+pub fn record_regalloc_stats(Int, Int, Int, Int, Int) -> Unit
+
+pub fn record_stage_us(String, Int64) -> Unit
+
+pub fn reset_module(Int) -> Unit
+
+pub fn set_module_compile_us(Int64) -> Unit
+
+pub fn tick_now() -> Instant
+
+// Errors
+
+// Types and methods
+pub struct FunctionMetrics {
+  func_idx : Int
+  func_name : String
+  opt_level : Int
+  ir_insts_before : Int
+  mut ir_insts_after : Int
+  mut optimize_us : Int64
+  mut lower_us : Int64
+  mut regalloc_us : Int64
+  mut emit_us : Int64
+  mut code_size : Int
+  mut spill_slots : Int
+  mut spills : Int
+  mut reloads : Int
+  mut reg_moves : Int
+  mut spill_to_spill : Int
+  ir_passes : Array[IRPassMetric]
+}
+pub impl ToJson for FunctionMetrics
+
+pub struct IRPassMetric {
+  name : String
+  duration_us : Int64
+  before_insts : Int
+  after_insts : Int
+  changed : Bool
+  egraph_classes : Int?
+  egraph_nodes : Int?
+  egraph_rule_apps : Int?
+}
+pub impl ToJson for IRPassMetric
+
+#alias(PerfTick)
+type Instant
+
+pub struct ModuleMetricsReport {
+  schema_version : Int
+  expected_functions : Int
+  mut module_compile_us : Int64
+  functions : Array[FunctionMetrics]
+}
+pub impl ToJson for ModuleMetricsReport
+
+// Type aliases
+
+// Traits
+
