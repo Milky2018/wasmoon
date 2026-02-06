@@ -283,8 +283,7 @@ legalization. The table below is meant as an orientation aid.
 | Constant folding | `ir/opt_passes_basic.mbt` | ISLE rules + `EgraphPass` | Similar intent; Cranelift relies more on ISLE rewrite coverage. |
 | Redundant `LoadMemBase` elimination | `ir/opt_passes_cse_gvn.mbt` | No direct analogue; similar concerns around pinned-reg / vmctx reads | Wasmoon has a dedicated conservative pass; Cranelift typically models such reads explicitly. |
 | Alias/copy canonicalization + copy propagation | `ir/opt_passes_basic.mbt` + `ir/opt_driver.mbt` (`alias_canon`) | `dfg.resolve_all_aliases()` (post-phi-removal canonicalization) | Wasmoon has explicit `Copy`; Cranelift uses value aliases. |
-| Global CSE | `ir/opt_passes_cse_gvn.mbt` | `EgraphPass` GVN map (scoped by domtree) | Wasmoon is a standalone domtree walk; Cranelift integrates GVN into aegraph. |
-| Global GVN + load CSE | `ir/opt_passes_cse_gvn.mbt` | `EgraphPass` GVN + `AliasAnalysis`/`LastStores` | Wasmoon uses conservative invalidation; Cranelift uses alias analysis and forwarding. |
+| Unified global CSE+GVN (`cse_gvn_global`) | `ir/opt_passes_cse_gvn.mbt` + `ir/opt_driver.mbt` | `EgraphPass` GVN map + `AliasAnalysis`/`LastStores` | Wasmoon now runs one domtree-scoped pass (instead of separate global CSE then GVN), with lightweight memidx/offset aliasing + selective StorePtr->LoadPtr forwarding. |
 | DCE | `ir/opt_passes_basic.mbt` | aegraph extraction + cleanup | Wasmoon is explicit/iterative; Cranelift is largely implicit during extraction/elaboration. |
 | Constant block-param elimination | `ir/opt_cfg.mbt` | `remove_constant_phis.rs` | Very similar lattice approach; Cranelift benefits from copy-free IR. |
 | Dead block-param elimination | `ir/opt_cfg.mbt` | (No dedicated pass) | Wasmoon’s explicit pass is useful due to SSA conversion of locals. |
@@ -340,8 +339,9 @@ legalization. The table below is meant as an orientation aid.
 
 - Wasmoon:
   - `eliminate_common_subexpressions` (local)
-  - `eliminate_common_subexpressions_global` (domtree-based)
-  - `gvn_global` and `gvn` (includes conservative load CSE; see below)
+  - unified domtree pass: `cse_gvn_global` / `gvn_global` (same engine)
+  - compatibility wrapper: `eliminate_common_subexpressions_global`
+  - `gvn` (local)
 - Cranelift:
   - Aegraph pass uses a **scoped GVN map** keyed by `(Type, InstructionData)`,
     visited in domtree order, with bounded rewriting.
@@ -354,11 +354,12 @@ legalization. The table below is meant as an orientation aid.
   but does not integrate rewrites and does not have hard bounds on rewrite
   exploration.
 
-**Recommendation**:
+**Current status**:
 
-- Reuse the “scoped map on domtree traversal” pattern more broadly:
-  - unify global CSE and GVN into a single scoped-environment pass,
-  - then layer bounded egraph rewrites on top (or integrate as Cranelift does).
+- Wasmoon now uses a single scoped domtree engine for global CSE+GVN in the
+  optimizer driver (`cse_gvn_global`), removing the duplicated two-pass walk.
+- Remaining gap is depth/precision of alias analysis versus Cranelift’s
+  `AliasAnalysis` + `LastStores`.
 
 ### 4.4 Load CSE and alias analysis
 

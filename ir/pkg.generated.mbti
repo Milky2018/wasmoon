@@ -43,6 +43,8 @@ pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 
 pub fn canonicalize_aliases(Function) -> OptResult
 
+pub fn cse_gvn_global(Function) -> OptResult
+
 pub fn eliminate_common_subexpressions(Function) -> OptResult
 
 pub fn eliminate_common_subexpressions_global(Function) -> OptResult

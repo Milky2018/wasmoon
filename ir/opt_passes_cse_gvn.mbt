@@ -42,71 +42,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
 /// Global Common Subexpression Elimination using dominance analysis
 /// Expressions in dominating blocks can be reused in dominated blocks
 pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
-  let result = OptResult::new()
-  if func.blocks.length() == 0 {
-    return result
-  }
-  // Build CFG and compute dominators
-  let cfg = CFG::build(func)
-  let idom = cfg.compute_dominators()
-  let domtree = build_dominator_tree(idom)
-  // Build block_id -> array_index mapping
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
-  }
-  // Expression environment: key -> value
-  // We use an array as a stack to track which expressions to pop on leaving a block
-  let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
-  // DFS the dominator tree
-  fn dfs(block_id : Int) {
-    let idx = block_idx.get(block_id).unwrap()
-    let block = func.blocks[idx]
-    // Track expressions added in this block (to pop later)
-    let local_keys : Array[Inst] = []
-    // Process instructions
-    let mut i = 0
-    while i < block.instructions.length() {
-      let inst = block.instructions[i]
-      // Skip instructions with side effects or no result
-      if has_side_effects(inst) {
-        i = i + 1
-        continue
-      }
-      if inst.first_result() is Some(result_val) {
-        let key = inst
-        if expressions.get(key) is Some(existing) {
-          // Replace this instruction with a copy to the existing value
-          inst.opcode = Opcode::Copy
-          inst.operands.clear()
-          inst.operands.push(existing)
-          result.mark_changed()
-          // Don't add this to expressions (it's now a copy)
-        } else {
-          // Record this expression as available
-          expressions.set(key, result_val)
-          local_keys.push(key)
-        }
-      }
-      i = i + 1
-    }
-    // Recurse to dominated children
-    if block_id < domtree.length() {
-      for child in domtree[block_id] {
-        dfs(child)
-      }
-    }
-    // Pop this block's expressions from environment
-    for key in local_keys {
-      expressions.remove(key)
-    }
-  }
-
-  // Start DFS from entry block (block 0)
-  if cfg.is_valid(0) {
-    dfs(0)
-  }
-  result
+  run_global_value_numbering(func, PureCSE)
 }
 
 // ============ LoadMemBase Elimination ============
@@ -405,63 +341,31 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 }
 
 ///|
-/// Global Value Numbering with Load CSE
-/// Extends CSE to handle memory loads by tracking when stores invalidate loads
-pub fn gvn(func : Function) -> OptResult {
-  let result = OptResult::new()
-  for block in func.blocks {
-    // Value table: expression key -> (result value, reads_memory flag)
-    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
-    for inst in block.instructions {
-      // Check if this instruction may invalidate memory-based expressions
-      if may_write_memory(inst.opcode) {
-        // Invalidate all memory-reading expressions
-        let to_remove : Array[Inst] = []
-        for entry in value_table.iter() {
-          let (key, (_, is_memory_read)) = entry
-          if is_memory_read {
-            to_remove.push(key)
-          }
-        }
-        for key in to_remove {
-          value_table.remove(key)
-        }
-        continue
-      }
-      // Skip non-candidates
-      if !is_gvn_candidate(inst) {
-        continue
-      }
-      if inst.first_result() is Some(result_val) {
-        let key = inst
-        if value_table.get(key) is Some((existing, _)) {
-          // Already computed - replace with copy
-          inst.opcode = Opcode::Copy
-          inst.operands.clear()
-          inst.operands.push(existing)
-          result.mark_changed()
-        } else {
-          // Record in value table with memory-read flag
-          let is_memory_read = reads_memory(inst.opcode)
-          value_table.set(key, (result_val, is_memory_read))
-        }
-      }
-    }
-  }
-  result
+priv enum GlobalValueNumberingMode {
+  PureCSE
+  AliasAwareGVN
 }
 
 ///|
-/// Global Value Numbering with dominance analysis
-/// Expressions in dominating blocks can be reused in dominated blocks,
-/// with proper invalidation of memory-based expressions
-pub fn gvn_global(func : Function) -> OptResult {
+fn run_global_value_numbering(
+  func : Function,
+  mode : GlobalValueNumberingMode,
+) -> OptResult {
   let result = OptResult::new()
   if func.blocks.length() == 0 {
     return result
   }
-  let mem_base_indices = collect_mem_base_indices(func)
-  let iconst_values = collect_iconst_values(func)
+  let enable_memory = mode is AliasAwareGVN
+  let mem_base_indices : @hashmap.HashMap[Int, Int] = if enable_memory {
+    collect_mem_base_indices(func)
+  } else {
+    @hashmap.new()
+  }
+  let iconst_values : @hashmap.HashMap[Int, Int64] = if enable_memory {
+    collect_iconst_values(func)
+  } else {
+    @hashmap.new()
+  }
   // Build CFG and compute dominators
   let cfg = CFG::build(func)
   let idom = cfg.compute_dominators()
@@ -488,91 +392,96 @@ pub fn gvn_global(func : Function) -> OptResult {
     let local_store_entries : Array[(PtrLocationKey, StoreForwardEntry?)] = []
     // Process instructions
     for inst in block.instructions {
-      // Store-to-load forwarding (Cranelift-like "last stores" direction):
-      // only forward exact same-address StorePtr(ty) -> LoadPtr(ty).
-      if inst.opcode is LoadPtr(load_ty) &&
-        ptr_access_from_inst(inst, mem_base_indices) is Some(load_access) {
-        let load_key = load_access.location_key()
-        if last_store.get(load_key) is Some(store_entry) &&
-          store_entry.ty == load_ty {
-          inst.opcode = Opcode::Copy
-          inst.operands.clear()
-          inst.operands.push(store_entry.value)
-          result.mark_changed()
-          continue
+      if enable_memory {
+        // Store-to-load forwarding (Cranelift-like "last stores" direction):
+        // only forward exact same-address StorePtr(ty) -> LoadPtr(ty).
+        if inst.opcode is LoadPtr(load_ty) &&
+          ptr_access_from_inst(inst, mem_base_indices) is Some(load_access) {
+          let load_key = load_access.location_key()
+          if last_store.get(load_key) is Some(store_entry) &&
+            store_entry.ty == load_ty {
+            inst.opcode = Opcode::Copy
+            inst.operands.clear()
+            inst.operands.push(store_entry.value)
+            result.mark_changed()
+            continue
+          }
         }
-      }
-      // Store opcodes get selective alias invalidation instead of full flush.
-      if inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_) {
-        if ptr_access_from_inst(inst, mem_base_indices) is Some(store_access) {
-          let reads_to_remove : Array[Inst] = []
+        // Store opcodes get selective alias invalidation instead of full flush.
+        if inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_) {
+          if ptr_access_from_inst(inst, mem_base_indices) is Some(store_access) {
+            let reads_to_remove : Array[Inst] = []
+            for key in memory_keys {
+              match ptr_access_from_inst(key, mem_base_indices) {
+                Some(read_access) =>
+                  if may_alias_ptr_access(
+                      read_access, store_access, iconst_values,
+                    ) {
+                    reads_to_remove.push(key)
+                  }
+                None => reads_to_remove.push(key)
+              }
+            }
+            for key in reads_to_remove {
+              if value_table.get(key) is Some(prev) {
+                local_entries.push((key, Some(prev)))
+              }
+              value_table.remove(key)
+              memory_keys.remove(key)
+            }
+            let stores_to_remove : Array[PtrLocationKey] = []
+            for entry in last_store.iter() {
+              let (key, saved) = entry
+              let previous_access = ptr_access_from_location_key(
+                key,
+                saved.size,
+              )
+              if may_alias_ptr_access(
+                  previous_access, store_access, iconst_values,
+                ) {
+                stores_to_remove.push(key)
+              }
+            }
+            for key in stores_to_remove {
+              let prev = last_store.get(key)
+              local_store_entries.push((key, prev))
+              last_store.remove(key)
+            }
+            if store_forward_entry_from_inst(inst, store_access) is Some(saved) {
+              let key = store_access.location_key()
+              let prev = last_store.get(key)
+              local_store_entries.push((key, prev))
+              last_store.set(key, saved)
+            }
+            continue
+          }
+        }
+        // Check if this instruction may invalidate memory-based expressions
+        if may_write_memory(inst.opcode) {
+          // Invalidate all memory-reading expressions using tracked set
           for key in memory_keys {
-            match ptr_access_from_inst(key, mem_base_indices) {
-              Some(read_access) =>
-                if may_alias_ptr_access(
-                    read_access, store_access, iconst_values,
-                  ) {
-                  reads_to_remove.push(key)
-                }
-              None => reads_to_remove.push(key)
+            if value_table.get(key) is Some((v, _)) {
+              // Record for restoration
+              local_entries.push((key, Some((v, true))))
             }
           }
-          for key in reads_to_remove {
-            if value_table.get(key) is Some(prev) {
-              local_entries.push((key, Some(prev)))
-            }
+          // Remove all memory-reading expressions
+          for key in memory_keys {
             value_table.remove(key)
-            memory_keys.remove(key)
           }
-          let stores_to_remove : Array[PtrLocationKey] = []
+          memory_keys.clear()
+          let store_keys : Array[PtrLocationKey] = []
           for entry in last_store.iter() {
-            let (key, saved) = entry
-            let previous_access = ptr_access_from_location_key(key, saved.size)
-            if may_alias_ptr_access(
-                previous_access, store_access, iconst_values,
-              ) {
-              stores_to_remove.push(key)
-            }
+            let (key, _) = entry
+            store_keys.push(key)
           }
-          for key in stores_to_remove {
+          for key in store_keys {
             let prev = last_store.get(key)
             local_store_entries.push((key, prev))
             last_store.remove(key)
           }
-          if store_forward_entry_from_inst(inst, store_access) is Some(saved) {
-            let key = store_access.location_key()
-            let prev = last_store.get(key)
-            local_store_entries.push((key, prev))
-            last_store.set(key, saved)
-          }
           continue
         }
-      }
-      // Check if this instruction may invalidate memory-based expressions
-      if may_write_memory(inst.opcode) {
-        // Invalidate all memory-reading expressions using tracked set
-        for key in memory_keys {
-          if value_table.get(key) is Some((v, _)) {
-            // Record for restoration
-            local_entries.push((key, Some((v, true))))
-          }
-        }
-        // Remove all memory-reading expressions
-        for key in memory_keys {
-          value_table.remove(key)
-        }
-        memory_keys.clear()
-        let store_keys : Array[PtrLocationKey] = []
-        for entry in last_store.iter() {
-          let (key, _) = entry
-          store_keys.push(key)
-        }
-        for key in store_keys {
-          let prev = last_store.get(key)
-          local_store_entries.push((key, prev))
-          last_store.remove(key)
-        }
-        continue
       }
       // Skip non-candidates
       if !is_gvn_candidate(inst) {
@@ -635,4 +544,66 @@ pub fn gvn_global(func : Function) -> OptResult {
     dfs(0)
   }
   result
+}
+
+///|
+/// Global Value Numbering with Load CSE
+/// Extends CSE to handle memory loads by tracking when stores invalidate loads
+pub fn gvn(func : Function) -> OptResult {
+  let result = OptResult::new()
+  for block in func.blocks {
+    // Value table: expression key -> (result value, reads_memory flag)
+    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+    for inst in block.instructions {
+      // Check if this instruction may invalidate memory-based expressions
+      if may_write_memory(inst.opcode) {
+        // Invalidate all memory-reading expressions
+        let to_remove : Array[Inst] = []
+        for entry in value_table.iter() {
+          let (key, (_, is_memory_read)) = entry
+          if is_memory_read {
+            to_remove.push(key)
+          }
+        }
+        for key in to_remove {
+          value_table.remove(key)
+        }
+        continue
+      }
+      // Skip non-candidates
+      if !is_gvn_candidate(inst) {
+        continue
+      }
+      if inst.first_result() is Some(result_val) {
+        let key = inst
+        if value_table.get(key) is Some((existing, _)) {
+          // Already computed - replace with copy
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          // Record in value table with memory-read flag
+          let is_memory_read = reads_memory(inst.opcode)
+          value_table.set(key, (result_val, is_memory_read))
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Global Value Numbering with dominance analysis
+/// Expressions in dominating blocks can be reused in dominated blocks,
+/// with proper invalidation of memory-based expressions
+pub fn gvn_global(func : Function) -> OptResult {
+  run_global_value_numbering(func, AliasAwareGVN)
+}
+
+///|
+/// Unified global optimization pass that combines pure CSE and alias-aware GVN
+/// in a single dominator-tree walk.
+pub fn cse_gvn_global(func : Function) -> OptResult {
+  run_global_value_numbering(func, AliasAwareGVN)
 }

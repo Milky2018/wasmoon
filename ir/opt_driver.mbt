@@ -167,15 +167,7 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cse_result = run_opt_pass(
-      func, "cse_global", eliminate_common_subexpressions_global,
-    )
-    if cse_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // GVN with load CSE (extends CSE to handle memory loads)
-    let gvn_result = run_opt_pass(func, "gvn_global", gvn_global)
+    let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
     if gvn_result.changed {
       changed = true
       result.mark_changed()
@@ -238,15 +230,7 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cse_result = run_opt_pass(
-      func, "cse_global", eliminate_common_subexpressions_global,
-    )
-    if cse_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // GVN with load CSE (extends CSE to handle memory loads)
-    let gvn_result = run_opt_pass(func, "gvn_global", gvn_global)
+    let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
     if gvn_result.changed {
       changed = true
       result.mark_changed()
