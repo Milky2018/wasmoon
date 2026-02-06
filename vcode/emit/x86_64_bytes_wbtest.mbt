@@ -646,3 +646,16 @@ test "x86_64 movd/movq gpr<->xmm encodings" {
     content="[102, 15, 126, 200, 102, 15, 110, 200, 102, 77, 15, 126, 250, 102, 77, 15, 110, 250]",
   )
 }
+
+///|
+test "x86_64 const pool deduplicates identical entries" {
+  let mc = MachineCode::new()
+  let l1 = mc.intern_amd64_const_f64(0x3FF0000000000000L)
+  let l2 = mc.intern_amd64_const_f64(0x3FF0000000000000L)
+  inspect(l1 == l2, content="true")
+  mc.x86_emit_lea_r64_riprel32(0, l1)
+  mc.x86_emit_lea_r64_riprel32(1, l2)
+  mc.emit_amd64_const_pool()
+  mc.resolve_fixups()
+  inspect(mc.size() > 16, content="true")
+}

@@ -31,6 +31,8 @@ pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.Val
 // Errors
 
 // Types and methods
+type Amd64ConstEntry
+
 pub(all) struct CallFixup {
   offset : Int
   func_idx : Int
@@ -105,6 +107,8 @@ pub struct MachineCode {
   x86_rel32_fixups : Array[X86Rel32Fixup]
   func_addr_fixups : Array[FuncAddrFixup]
   call_fixups : Array[CallFixup]
+  amd64_const_labels : Map[String, Int]
+  amd64_const_entries : Array[Amd64ConstEntry]
   disasm : Array[(Int, String)]
 }
 pub fn MachineCode::add_call_fixup(Self, Int, Int) -> Unit
@@ -128,6 +132,7 @@ pub fn MachineCode::emit_add_shifted(Self, Int, Int, Int, @instr.ShiftType, Int)
 pub fn MachineCode::emit_add_uxtw(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_addv_b(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_adr(Self, Int, Int) -> Unit
+pub fn MachineCode::emit_amd64_const_pool(Self) -> Unit
 pub fn MachineCode::emit_and_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_reg(Self, Int, Int, Int) -> Unit
@@ -315,6 +320,9 @@ pub fn MachineCode::get_bytes(Self) -> Array[Int]
 pub fn MachineCode::get_call_fixups(Self) -> Array[CallFixup]
 pub fn MachineCode::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
 pub fn MachineCode::hex_dump(Self) -> String
+pub fn MachineCode::intern_amd64_const(Self, Bytes, Int) -> Int
+pub fn MachineCode::intern_amd64_const_f32(Self, Int) -> Int
+pub fn MachineCode::intern_amd64_const_f64(Self, Int64) -> Int
 pub fn MachineCode::new() -> Self
 pub fn MachineCode::new_internal_label(Self) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit

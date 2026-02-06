@@ -126,15 +126,16 @@ fn MachineCode::emit_instruction_x86_64(
     high : Int64,
     scratch_gpr : Int,
   ) -> Unit {
-    self.x86_emit_xorpd_xmm_xmm(dst_xmm, dst_xmm)
-    if low != 0L {
-      self.x86_emit_mov_imm64(scratch_gpr, low)
-      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 0)
-    }
-    if high != 0L {
-      self.x86_emit_mov_imm64(scratch_gpr, high)
-      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 1)
-    }
+    let data = Bytes::makei(16, fn(i) {
+      if i < 8 {
+        ((low >> (i * 8)) & 0xFFL).to_byte()
+      } else {
+        ((high >> ((i - 8) * 8)) & 0xFFL).to_byte()
+      }
+    })
+    let label = self.intern_amd64_const(data, 16)
+    self.x86_emit_lea_r64_riprel32(scratch_gpr, label)
+    self.x86_emit_movdqu_xmm_m128(dst_xmm, scratch_gpr, 0)
   }
 
   ///|
@@ -1018,16 +1019,16 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.LoadConstF32(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
-      // Materialize the raw f32 bits into a GPR then move into XMM.
-      self.x86_emit_mov_imm64(scratch, bits.to_int64())
-      self.x86_emit_movd_xmm_r32(rd, scratch)
+      let label = self.intern_amd64_const_f32(bits)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movss_xmm_m32(rd, scratch, 0)
     }
     @instr.LoadConstF64(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
-      // Materialize the raw f64 bits into a GPR then move into XMM.
-      self.x86_emit_mov_imm64(scratch, bits)
-      self.x86_emit_movq_xmm_r64(rd, scratch)
+      let label = self.intern_amd64_const_f64(bits)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movsd_xmm_m64(rd, scratch, 0)
     }
     @instr.LoadGCFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
@@ -2121,25 +2122,12 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
     }
     @instr.LoadConstV128(bytes) => {
-      // Materialize a 128-bit constant.
-      //
-      // Cranelift uses constant pools / mem loads; for now we use a minimal
-      // SSE4.1 sequence with `PINSRQ` to avoid a constant pool.
+      // Materialize a 128-bit constant via constant pool (Cranelift-style).
       let rd = wreg_num(inst.defs[0])
-      let low = bytes_to_int64_le(bytes, 0)
-      let high = bytes_to_int64_le(bytes, 8)
-
-      // rd = 0
-      self.x86_emit_xorpd_xmm_xmm(rd, rd)
       let scratch = isa.scratch_reg_1_index()
-      if low != 0L {
-        self.x86_emit_mov_imm64(scratch, low)
-        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 0)
-      }
-      if high != 0L {
-        self.x86_emit_mov_imm64(scratch, high)
-        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 1)
-      }
+      let label = self.intern_amd64_const(bytes, 16)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movdqu_xmm_m128(rd, scratch, 0)
     }
     @instr.SIMDSplat(lane_size) => {
       // Splat scalar integer to all lanes.

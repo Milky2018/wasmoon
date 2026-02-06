@@ -25,8 +25,19 @@ pub struct MachineCode {
   func_addr_fixups : Array[FuncAddrFixup]
   // Pending fixups for direct function calls (offset -> func_idx)
   call_fixups : Array[CallFixup]
+  // Deduplicated amd64 constant-pool entries (key -> label).
+  amd64_const_labels : Map[String, Int]
+  // Pending amd64 constant-pool bytes to emit at end of function.
+  amd64_const_entries : Array[Amd64ConstEntry]
   // Disassembly annotations (offset -> instruction text)
   disasm : Array[(Int, String)]
+}
+
+///|
+struct Amd64ConstEntry {
+  label : Int
+  align : Int
+  data : Bytes
 }
 
 ///|
@@ -89,6 +100,8 @@ pub fn MachineCode::new() -> MachineCode {
     x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
+    amd64_const_labels: {},
+    amd64_const_entries: [],
     disasm: [],
   }
 }
@@ -308,6 +321,74 @@ pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
       self.bytes[fixup.disp_offset + 1] = (disp32 >> 8) & 255
       self.bytes[fixup.disp_offset + 2] = (disp32 >> 16) & 255
       self.bytes[fixup.disp_offset + 3] = (disp32 >> 24) & 255
+    }
+  }
+}
+
+///|
+fn amd64_const_key(bytes : Bytes, align : Int) -> String {
+  let mut key = "\{align}:"
+  for b in bytes {
+    key = key + @types.to_hex_byte(b.to_int())
+  }
+  key
+}
+
+///|
+pub fn MachineCode::intern_amd64_const(
+  self : MachineCode,
+  data : Bytes,
+  align : Int,
+) -> Int {
+  let key = amd64_const_key(data, align)
+  if self.amd64_const_labels.get(key) is Some(label) {
+    return label
+  }
+  let label = self.new_internal_label()
+  self.amd64_const_labels.set(key, label)
+  self.amd64_const_entries.push({ label, align, data })
+  label
+}
+
+///|
+pub fn MachineCode::intern_amd64_const_f32(
+  self : MachineCode,
+  bits : Int,
+) -> Int {
+  let data = Bytes::from_array([
+    (bits & 0xFF).to_byte(),
+    ((bits >> 8) & 0xFF).to_byte(),
+    ((bits >> 16) & 0xFF).to_byte(),
+    ((bits >> 24) & 0xFF).to_byte(),
+  ])
+  self.intern_amd64_const(data, 4)
+}
+
+///|
+pub fn MachineCode::intern_amd64_const_f64(
+  self : MachineCode,
+  bits : Int64,
+) -> Int {
+  let data = Bytes::makei(8, fn(i) { ((bits >> (i * 8)) & 0xFFL).to_byte() })
+  self.intern_amd64_const(data, 8)
+}
+
+///|
+pub fn MachineCode::emit_amd64_const_pool(self : MachineCode) -> Unit {
+  if self.amd64_const_entries.length() == 0 {
+    return
+  }
+  while self.pos % 16 != 0 {
+    self.emit_byte(0x90)
+  }
+  for entry in self.amd64_const_entries {
+    guard entry.align > 0 else { continue }
+    while self.pos % entry.align != 0 {
+      self.emit_byte(0x90)
+    }
+    self.define_label(entry.label)
+    for b in entry.data {
+      self.emit_byte(b.to_int())
     }
   }
 }
