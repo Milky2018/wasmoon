@@ -204,6 +204,181 @@ fn may_write_memory(opcode : Opcode) -> Bool {
 }
 
 ///|
+priv struct PtrAccess {
+  base_id : Int
+  offset_id : Int
+  memidx : Int
+  size : Int
+}
+
+///|
+priv struct PtrLocationKey {
+  base_id : Int
+  offset_id : Int
+  memidx : Int
+} derive(Eq, Hash)
+
+///|
+priv struct StoreForwardEntry {
+  ty : Type
+  value : Value
+  size : Int
+}
+
+///|
+fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
+  { base_id: self.base_id, offset_id: self.offset_id, memidx: self.memidx }
+}
+
+///|
+fn collect_mem_base_indices(func : Function) -> @hashmap.HashMap[Int, Int] {
+  let result : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is LoadMemBase(memidx) && inst.first_result() is Some(v) {
+        result.set(v.id, memidx)
+      }
+    }
+  }
+  result
+}
+
+///|
+fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
+  let result : @hashmap.HashMap[Int, Int64] = @hashmap.new()
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.first_result() is Some(v) {
+        match inst.opcode {
+          Iconst(value) => result.set(v.id, value)
+          Copy =>
+            if inst.operands.length() > 0 &&
+              result.get(inst.operands[0].id) is Some(copied) {
+              result.set(v.id, copied)
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
+fn type_access_size(ty : Type) -> Int {
+  match ty {
+    I32 | F32 => 4
+    I64 | F64 => 8
+    V128 => 16
+    FuncRef | ExternRef => 8
+  }
+}
+
+///|
+fn ptr_access_from_inst(
+  inst : Inst,
+  mem_base_indices : @hashmap.HashMap[Int, Int],
+) -> PtrAccess? {
+  match inst.opcode {
+    LoadPtr(ty) =>
+      if inst.operands.length() >= 2 {
+        let base = inst.operands[0]
+        let offset = inst.operands[1]
+        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        Some({
+          base_id: base.id,
+          offset_id: offset.id,
+          memidx,
+          size: type_access_size(ty),
+        })
+      } else {
+        None
+      }
+    LoadPtrNarrow(_, bits, _) =>
+      if inst.operands.length() >= 2 {
+        let base = inst.operands[0]
+        let offset = inst.operands[1]
+        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        Some({ base_id: base.id, offset_id: offset.id, memidx, size: bits / 8 })
+      } else {
+        None
+      }
+    StorePtr(ty) =>
+      if inst.operands.length() >= 3 {
+        let base = inst.operands[0]
+        let offset = inst.operands[2]
+        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        Some({
+          base_id: base.id,
+          offset_id: offset.id,
+          memidx,
+          size: type_access_size(ty),
+        })
+      } else {
+        None
+      }
+    StorePtrNarrow(bits) =>
+      if inst.operands.length() >= 3 {
+        let base = inst.operands[0]
+        let offset = inst.operands[2]
+        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        Some({ base_id: base.id, offset_id: offset.id, memidx, size: bits / 8 })
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn store_forward_entry_from_inst(
+  inst : Inst,
+  access : PtrAccess,
+) -> StoreForwardEntry? {
+  match inst.opcode {
+    StorePtr(ty) =>
+      if inst.operands.length() >= 2 {
+        Some({ ty, value: inst.operands[1], size: access.size })
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn ptr_access_from_location_key(key : PtrLocationKey, size : Int) -> PtrAccess {
+  { base_id: key.base_id, offset_id: key.offset_id, memidx: key.memidx, size }
+}
+
+///|
+fn may_alias_ptr_access(
+  a : PtrAccess,
+  b : PtrAccess,
+  iconst_values : @hashmap.HashMap[Int, Int64],
+) -> Bool {
+  // Distinct linear memories are disjoint.
+  if a.memidx >= 0 && b.memidx >= 0 && a.memidx != b.memidx {
+    return false
+  }
+  // Same base + same offset is a must-alias.
+  if a.base_id == b.base_id && a.offset_id == b.offset_id {
+    return true
+  }
+  // For the same base, disjoint constant offset ranges are non-aliasing.
+  if a.base_id == b.base_id &&
+    iconst_values.get(a.offset_id) is Some(a_off) &&
+    iconst_values.get(b.offset_id) is Some(b_off) {
+    let a_end = a_off + a.size.to_int64()
+    let b_end = b_off + b.size.to_int64()
+    if a_end <= b_off || b_end <= a_off {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Check if an instruction is suitable for GVN (can be CSE'd)
 /// This includes pure operations plus loads (which read but don't write)
 fn is_gvn_candidate(inst : Inst) -> Bool {
@@ -285,6 +460,8 @@ pub fn gvn_global(func : Function) -> OptResult {
   if func.blocks.length() == 0 {
     return result
   }
+  let mem_base_indices = collect_mem_base_indices(func)
+  let iconst_values = collect_iconst_values(func)
   // Build CFG and compute dominators
   let cfg = CFG::build(func)
   let idom = cfg.compute_dominators()
@@ -298,6 +475,8 @@ pub fn gvn_global(func : Function) -> OptResult {
   let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
   // Track memory-reading keys separately for O(1) invalidation lookup
   let memory_keys : @hashset.HashSet[Inst] = @hashset.new()
+  // Last store table for selective store-to-load forwarding.
+  let last_store : @hashmap.HashMap[PtrLocationKey, StoreForwardEntry] = @hashmap.new()
   // DFS the dominator tree
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
@@ -305,8 +484,70 @@ pub fn gvn_global(func : Function) -> OptResult {
     // Track expressions added/modified in this block (to restore later)
     // Stores (key, previous_entry) where previous_entry is None if new
     let local_entries : Array[(Inst, (Value, Bool)?)] = []
+    // Track last-store table changes for dominator-tree restoration.
+    let local_store_entries : Array[(PtrLocationKey, StoreForwardEntry?)] = []
     // Process instructions
     for inst in block.instructions {
+      // Store-to-load forwarding (Cranelift-like "last stores" direction):
+      // only forward exact same-address StorePtr(ty) -> LoadPtr(ty).
+      if inst.opcode is LoadPtr(load_ty) &&
+        ptr_access_from_inst(inst, mem_base_indices) is Some(load_access) {
+        let load_key = load_access.location_key()
+        if last_store.get(load_key) is Some(store_entry) &&
+          store_entry.ty == load_ty {
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(store_entry.value)
+          result.mark_changed()
+          continue
+        }
+      }
+      // Store opcodes get selective alias invalidation instead of full flush.
+      if inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_) {
+        if ptr_access_from_inst(inst, mem_base_indices) is Some(store_access) {
+          let reads_to_remove : Array[Inst] = []
+          for key in memory_keys {
+            match ptr_access_from_inst(key, mem_base_indices) {
+              Some(read_access) =>
+                if may_alias_ptr_access(
+                    read_access, store_access, iconst_values,
+                  ) {
+                  reads_to_remove.push(key)
+                }
+              None => reads_to_remove.push(key)
+            }
+          }
+          for key in reads_to_remove {
+            if value_table.get(key) is Some(prev) {
+              local_entries.push((key, Some(prev)))
+            }
+            value_table.remove(key)
+            memory_keys.remove(key)
+          }
+          let stores_to_remove : Array[PtrLocationKey] = []
+          for entry in last_store.iter() {
+            let (key, saved) = entry
+            let previous_access = ptr_access_from_location_key(key, saved.size)
+            if may_alias_ptr_access(
+                previous_access, store_access, iconst_values,
+              ) {
+              stores_to_remove.push(key)
+            }
+          }
+          for key in stores_to_remove {
+            let prev = last_store.get(key)
+            local_store_entries.push((key, prev))
+            last_store.remove(key)
+          }
+          if store_forward_entry_from_inst(inst, store_access) is Some(saved) {
+            let key = store_access.location_key()
+            let prev = last_store.get(key)
+            local_store_entries.push((key, prev))
+            last_store.set(key, saved)
+          }
+          continue
+        }
+      }
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {
         // Invalidate all memory-reading expressions using tracked set
@@ -321,6 +562,16 @@ pub fn gvn_global(func : Function) -> OptResult {
           value_table.remove(key)
         }
         memory_keys.clear()
+        let store_keys : Array[PtrLocationKey] = []
+        for entry in last_store.iter() {
+          let (key, _) = entry
+          store_keys.push(key)
+        }
+        for key in store_keys {
+          let prev = last_store.get(key)
+          local_store_entries.push((key, prev))
+          last_store.remove(key)
+        }
         continue
       }
       // Skip non-candidates
@@ -368,6 +619,13 @@ pub fn gvn_global(func : Function) -> OptResult {
           value_table.remove(key)
           memory_keys.remove(key)
         }
+      }
+    }
+    for entry in local_store_entries.rev_iter() {
+      let (key, prev) = entry
+      match prev {
+        Some(saved) => last_store.set(key, saved)
+        None => last_store.remove(key)
       }
     }
   }

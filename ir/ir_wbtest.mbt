@@ -1930,6 +1930,51 @@ test "GVN: loads are not CSE'd (can trap)" {
 }
 
 ///|
+test "GVN: store-to-load forwarding exact address" {
+  let builder = IRBuilder::new("gvn_store_forward")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let offset = builder.iconst_i64(0L)
+  let stored = builder.iconst_i32(42)
+  builder.store_ptr(Type::I32, mem0_base, stored, offset)
+  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let result = gvn_global(func)
+  assert_true(result.changed)
+  let load_inst = func.blocks[0].instructions[4]
+  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_eq(load_inst.operands[0].id, stored.id)
+}
+
+///|
+test "GVN: disjoint memories keep forwarding state" {
+  let builder = IRBuilder::new("gvn_disjoint_memory_forward")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let mem1_base = builder.load_mem_base(vmctx, 1)
+  let offset = builder.iconst_i64(0L)
+  let mem1_value = builder.iconst_i32(11)
+  builder.store_ptr(Type::I32, mem1_base, mem1_value, offset)
+  let mem0_value = builder.iconst_i32(22)
+  builder.store_ptr(Type::I32, mem0_base, mem0_value, offset)
+  let loaded = builder.load_ptr(Type::I32, mem1_base, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let result = gvn_global(func)
+  assert_true(result.changed)
+  let load_inst = func.blocks[0].instructions[7]
+  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_eq(load_inst.operands[0].id, mem1_value.id)
+}
+
+///|
 test "GVN: pure arithmetic CSE" {
   // Test that GVN also handles pure arithmetic (same as CSE)
   let builder = IRBuilder::new("gvn_pure_cse")
