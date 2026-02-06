@@ -633,6 +633,51 @@ test "constant folding: i32 div_s overflow not folded" {
 }
 
 ///|
+test "egraph purity boundary: trapping div/rem opcodes are excluded" {
+  let builder = IRBuilder::new("egraph_purity_trapping_ops")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(42)
+  let rhs = builder.iconst_i32(3)
+  let sdiv_v = builder.sdiv(lhs, rhs)
+  builder.udiv(lhs, rhs) |> ignore
+  builder.srem(lhs, rhs) |> ignore
+  builder.urem(lhs, rhs) |> ignore
+  builder.return_([sdiv_v])
+  let func = builder.get_function()
+
+  // Admission filter: all trapping div/rem variants must stay out of e-graph.
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[2]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[3]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[4]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[5]) is Some(_))
+  let stats = optimize_function_with_stats(func)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Sdiv)
+  assert_true(func.blocks[0].instructions[3].opcode is Opcode::Udiv)
+  assert_true(func.blocks[0].instructions[4].opcode is Opcode::Srem)
+  assert_true(func.blocks[0].instructions[5].opcode is Opcode::Urem)
+}
+
+///|
+test "egraph purity boundary: pure arithmetic remains admitted" {
+  let builder = IRBuilder::new("egraph_purity_pure_add")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  assert_true(opcode_to_eopcode(func.blocks[0].instructions[2]) is Some(_))
+  let stats = optimize_function_with_stats(func)
+  assert_true(stats.changed)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(30L))
+}
+
+///|
 test "dead code elimination" {
   let builder = IRBuilder::new("dce_test")
   builder.add_result(Type::I32)

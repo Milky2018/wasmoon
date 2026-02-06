@@ -77,18 +77,37 @@ fn type_bits(ty : Type) -> Int {
 }
 
 ///|
-/// Convert an IR Opcode to an EOpcode (if optimizable)
-/// Takes the instruction to extract type information for extend/reduce ops
+/// Cranelift-style purity boundary for e-graph rewrites:
+/// only admit operations that are pure and non-trapping.
+///
+/// Excluded (trap-sensitive) examples:
+/// - `sdiv`, `udiv`, `srem`, `urem` (division by zero / overflow trap semantics)
+fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
+  match opcode {
+    Iconst(_) => true
+    Iadd | Isub | Imul => true
+    Band | Bor | Bxor | Bnot => true
+    Ishl | Sshr | Ushr | Rotl | Rotr => true
+    Clz | Ctz | Popcnt => true
+    Icmp(_) => true
+    Select => true
+    Ireduce | Uextend | Sextend => true
+    _ => false
+  }
+}
+
+///|
+/// Convert an IR Opcode to an EOpcode (if optimizable and purity-safe).
+/// Takes the instruction to extract type information for extend/reduce ops.
 fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
+  if !opcode_is_egraph_pure_nontrapping(inst.opcode) {
+    return None
+  }
   match inst.opcode {
     Iconst(c) => Some(@egraph.EOpcode::Const(c))
     Iadd => Some(@egraph.EOpcode::Add)
     Isub => Some(@egraph.EOpcode::Sub)
     Imul => Some(@egraph.EOpcode::Mul)
-    Sdiv => Some(@egraph.EOpcode::Sdiv)
-    Udiv => Some(@egraph.EOpcode::Udiv)
-    Srem => Some(@egraph.EOpcode::Srem)
-    Urem => Some(@egraph.EOpcode::Urem)
     Band => Some(@egraph.EOpcode::And)
     Bor => Some(@egraph.EOpcode::Or)
     Bxor => Some(@egraph.EOpcode::Xor)
