@@ -1308,6 +1308,32 @@ pub fn build_bundles_with_merging(
 ) -> BundleSet {
   let n = ranges.length()
   let uf = UnionFind::new(n)
+  fn call_profile(range : LiveRange) -> Int {
+    let mut profile = 0
+    if range.crosses_call {
+      profile = profile | 1
+    }
+    if range.crosses_wasm_call {
+      profile = profile | 2
+    }
+    if range.crosses_c_call {
+      profile = profile | 4
+    }
+    profile
+  }
+
+  fn set_call_profile(ranges : LiveRangeSet, members : Array[Int]) -> Int? {
+    if members.is_empty() {
+      return None
+    }
+    let first = call_profile(ranges.get(members[0]))
+    for idx in members {
+      if call_profile(ranges.get(idx)) != first {
+        return None
+      }
+    }
+    Some(first)
+  }
 
   // Helper to try merging two ranges
   fn try_merge(
@@ -1315,6 +1341,7 @@ pub fn build_bundles_with_merging(
     a : Int,
     b : Int,
     ranges : LiveRangeSet,
+    check_call_profile : Bool,
   ) -> Bool {
     if a < 0 || b < 0 || a >= ranges.length() || b >= ranges.length() {
       return false
@@ -1333,6 +1360,21 @@ pub fn build_bundles_with_merging(
     }
     let set_a = uf.get_set(a)
     let set_b = uf.get_set(b)
+
+    // Keep Move-based coalescing from merging dissimilar call-liveness
+    // profiles. This avoids turning short non-cross-call lifetimes into
+    // cross-call bundles that are forced into callee-saved/spill paths.
+    if check_call_profile {
+      let profile_a = set_call_profile(ranges, set_a)
+      let profile_b = set_call_profile(ranges, set_b)
+      match (profile_a, profile_b) {
+        (Some(pa), Some(pb)) => if pa != pb { return false }
+        _ => return false
+      }
+    }
+
+    // TODO: add fixed-register-aware merge filtering after move materialization
+    // handles all additional spill-edge cases from extra non-merged bundles.
 
     // Check for overlap within potential merged bundle.
     // Cap comparison work (Cranelift/regalloc2 has a similar complexity guard).
@@ -1373,7 +1415,7 @@ pub fn build_bundles_with_merging(
           // Find range indices
           if ranges.vreg_to_range.get(src_id) is Some(src_idx) {
             if ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-              try_merge(uf, src_idx, dst_idx, ranges) |> ignore
+              try_merge(uf, src_idx, dst_idx, ranges, true) |> ignore
             }
           }
         }
@@ -1406,7 +1448,7 @@ pub fn build_bundles_with_merging(
           @abi.Virtual(arg_vreg) =>
             if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
               ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
-              try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+              try_merge(uf, param_idx, arg_idx, ranges, false) |> ignore
             }
           _ => ()
         }
