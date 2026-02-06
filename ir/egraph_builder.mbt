@@ -15,6 +15,8 @@ struct EGraphBuilder {
   def_map : Map[Int, Inst]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
+  // Rewrite limits (Cranelift-style hard caps).
+  saturation_limits : @egraph.SaturationLimits
 }
 
 ///|
@@ -28,12 +30,20 @@ struct RepKey {
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
+  EGraphBuilder::new_with_limits(@egraph.SaturationLimits::cranelift_default())
+}
+
+///|
+pub fn EGraphBuilder::new_with_limits(
+  saturation_limits : @egraph.SaturationLimits,
+) -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
     value_map: {},
     class_to_value: {},
     def_map: {},
     ruleset: @egraph.get_global_ruleset(),
+    saturation_limits,
   }
 }
 
@@ -227,7 +237,12 @@ pub fn EGraphBuilder::add_value(
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // One-pass, directed simplification (Cranelift-style aegraph).
   // Additional improvement opportunities are handled by later passes.
-  self.egraph.saturate_indexed(self.ruleset, 1) |> ignore
+  self.egraph.saturate_indexed_with_limits(
+    self.ruleset,
+    1,
+    self.saturation_limits,
+  )
+  |> ignore
 }
 
 ///|
@@ -252,7 +267,18 @@ pub fn EGraphBuilder::extract(
 /// Optimize a single basic block's arithmetic expressions
 /// Returns a map from original Value id to optimized ENode
 pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
-  let builder = EGraphBuilder::new()
+  optimize_block_with_limits(
+    block,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_block_with_limits(
+  block : Block,
+  limits : @egraph.SaturationLimits,
+) -> Map[Int, (Int, @egraph.ENode)] {
+  let builder = EGraphBuilder::new_with_limits(limits)
 
   // First pass: register all definitions
   for inst in block.instructions {
@@ -396,12 +422,23 @@ pub struct EGraphOptimizeStats {
 ///|
 /// Apply e-graph optimization to a function and return aggregate stats.
 pub fn optimize_function_with_stats(func : Function) -> EGraphOptimizeStats {
+  optimize_function_with_stats_with_limits(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_function_with_stats_with_limits(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+) -> EGraphOptimizeStats {
   let mut changed = false
   let mut total_classes = 0
   let mut total_nodes = 0
   let mut total_rule_applications = 0
   for block in func.blocks {
-    let builder = EGraphBuilder::new()
+    let builder = EGraphBuilder::new_with_limits(limits)
 
     // Register all definitions in this block
     for inst in block.instructions {
@@ -471,5 +508,16 @@ pub fn optimize_function_with_stats(func : Function) -> EGraphOptimizeStats {
 /// Apply e-graph optimization to a function.
 /// Returns true if any optimization was applied.
 pub fn optimize_function(func : Function) -> Bool {
-  optimize_function_with_stats(func).changed
+  optimize_function_with_limits(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_function_with_limits(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+) -> Bool {
+  optimize_function_with_stats_with_limits(func, limits).changed
 }

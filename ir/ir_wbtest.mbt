@@ -678,6 +678,40 @@ test "egraph purity boundary: pure arithmetic remains admitted" {
 }
 
 ///|
+test "egraph limits: matches_limit=0 disables rewrites" {
+  let builder = IRBuilder::new("egraph_matches_limit_zero")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let limits = @egraph.SaturationLimits::new(0, 5)
+  let stats = optimize_function_with_stats_with_limits(func, limits)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+}
+
+///|
+test "egraph limits: eclass_enode_limit=1 disables rewrites" {
+  let builder = IRBuilder::new("egraph_eclass_limit_one")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let limits = @egraph.SaturationLimits::new(5, 1)
+  let stats = optimize_function_with_stats_with_limits(func, limits)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+}
+
+///|
 test "dead code elimination" {
   let builder = IRBuilder::new("dce_test")
   builder.add_result(Type::I32)

@@ -395,6 +395,10 @@ struct EGraph {
   remat_set : @hashset.HashSet[Int]
   // Number of successful rule applications in the most recent saturate call.
   mut last_rule_applications : Int
+  // Number of times rewrite candidates were truncated by matches limit.
+  mut last_matches_limit_hits : Int
+  // Number of times rule application was skipped due to eclass size limit.
+  mut last_eclass_size_limit_hits : Int
 }
 
 ///|
@@ -409,6 +413,8 @@ pub fn EGraph::new() -> EGraph {
     type_map: {},
     remat_set: @hashset.new(),
     last_rule_applications: 0,
+    last_matches_limit_hits: 0,
+    last_eclass_size_limit_hits: 0,
   }
 }
 
@@ -1034,6 +1040,20 @@ pub fn EGraph::last_rule_applications(self : EGraph) -> Int {
   self.last_rule_applications
 }
 
+///|
+/// Number of classes/rule streams truncated by the rewrite matches limit in the
+/// most recent `saturate` / `saturate_indexed*` invocation.
+pub fn EGraph::last_matches_limit_hits(self : EGraph) -> Int {
+  self.last_matches_limit_hits
+}
+
+///|
+/// Number of classes skipped/truncated due to eclass size limit in the most
+/// recent `saturate` / `saturate_indexed*` invocation.
+pub fn EGraph::last_eclass_size_limit_hits(self : EGraph) -> Int {
+  self.last_eclass_size_limit_hits
+}
+
 // ============================================================================
 // Helper constructors for common e-nodes
 // ============================================================================
@@ -1651,6 +1671,39 @@ fn EGraph::extract_impl(
 // ============================================================================
 
 ///|
+/// Saturation bounds (Cranelift-style):
+/// - matches_limit: max successful rewrites to keep per class per pass
+/// - eclass_enode_limit: max eclass node budget before skipping further rewrites
+pub struct SaturationLimits {
+  matches_limit : Int
+  eclass_enode_limit : Int
+} derive(Show)
+
+///|
+pub fn SaturationLimits::new(
+  matches_limit : Int,
+  eclass_enode_limit : Int,
+) -> SaturationLimits {
+  { matches_limit, eclass_enode_limit }
+}
+
+///|
+pub fn SaturationLimits::cranelift_default() -> SaturationLimits {
+  // Cranelift uses small hard caps for predictability.
+  { matches_limit: 5, eclass_enode_limit: 5 }
+}
+
+///|
+pub fn SaturationLimits::matches_limit(self : SaturationLimits) -> Int {
+  self.matches_limit
+}
+
+///|
+pub fn SaturationLimits::eclass_enode_limit(self : SaturationLimits) -> Int {
+  self.eclass_enode_limit
+}
+
+///|
 /// A rewrite rule matches a pattern and produces equivalent expressions
 struct RewriteRule {
   apply : (EGraph, EClassId) -> Bool // Returns true if any changes were made
@@ -1669,7 +1722,11 @@ pub fn EGraph::saturate(
   for rule in rules {
     ruleset.add_rule(rule, [])
   }
-  self.saturate_indexed(ruleset, max_iterations)
+  self.saturate_indexed_with_limits(
+    ruleset,
+    max_iterations,
+    SaturationLimits::cranelift_default(),
+  )
 }
 
 ///|
@@ -1719,13 +1776,30 @@ pub fn EGraph::saturate_indexed(
   ruleset : IndexedRuleSet,
   max_iterations : Int,
 ) -> Int {
+  self.saturate_indexed_with_limits(
+    ruleset,
+    max_iterations,
+    SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+/// Apply rules using opcode index for efficiency with explicit rewrite caps.
+pub fn EGraph::saturate_indexed_with_limits(
+  self : EGraph,
+  ruleset : IndexedRuleSet,
+  max_iterations : Int,
+  limits : SaturationLimits,
+) -> Int {
   self.last_rule_applications = 0
+  self.last_matches_limit_hits = 0
+  self.last_eclass_size_limit_hits = 0
   if max_iterations <= 0 {
     return 0
   }
   let mut iters = 0
   while iters < max_iterations {
-    let (changed, applied) = self.apply_indexed_rules_once(ruleset)
+    let (changed, applied) = self.apply_indexed_rules_once(ruleset, limits)
     self.last_rule_applications = self.last_rule_applications + applied
     iters = iters + 1
     if !changed {
@@ -1741,6 +1815,7 @@ pub fn EGraph::saturate_indexed(
 fn EGraph::apply_indexed_rules_once(
   self : EGraph,
   ruleset : IndexedRuleSet,
+  limits : SaturationLimits,
 ) -> (Bool, Int) {
   let mut changed = false
   let mut applied = 0
@@ -1761,6 +1836,17 @@ fn EGraph::apply_indexed_rules_once(
     let class_id = EClassId(canonical)
     let nodes = self.get_nodes(class_id)
     guard !nodes.is_empty() else { continue }
+    if limits.eclass_enode_limit <= 0 ||
+      nodes.length() >= limits.eclass_enode_limit {
+      self.last_eclass_size_limit_hits = self.last_eclass_size_limit_hits + 1
+      continue
+    }
+    if limits.matches_limit <= 0 {
+      self.last_matches_limit_hits = self.last_matches_limit_hits + 1
+      continue
+    }
+    let mut class_matches = 0
+    let mut class_capped = false
 
     // Apply opcode-indexed rules for any opcode present in the class.
     let tags : Array[EOpcodeTag] = []
@@ -1778,19 +1864,49 @@ fn EGraph::apply_indexed_rules_once(
       }
     }
     for tag in tags {
+      if class_capped {
+        break
+      }
       if ruleset.by_opcode.get(tag) is Some(rules) {
         for indexed_rule in rules {
+          if class_matches >= limits.matches_limit {
+            self.last_matches_limit_hits = self.last_matches_limit_hits + 1
+            class_capped = true
+            break
+          }
           if (indexed_rule.rule.apply)(self, class_id) {
             changed = true
             applied = applied + 1
+            class_matches = class_matches + 1
+            let current_nodes = self.get_nodes(class_id).length()
+            if current_nodes >= limits.eclass_enode_limit {
+              self.last_eclass_size_limit_hits = self.last_eclass_size_limit_hits +
+                1
+              class_capped = true
+              break
+            }
           }
         }
       }
     }
+    if class_capped {
+      continue
+    }
     for indexed_rule in ruleset.universal {
+      if class_matches >= limits.matches_limit {
+        self.last_matches_limit_hits = self.last_matches_limit_hits + 1
+        break
+      }
       if (indexed_rule.rule.apply)(self, class_id) {
         changed = true
         applied = applied + 1
+        class_matches = class_matches + 1
+        let current_nodes = self.get_nodes(class_id).length()
+        if current_nodes >= limits.eclass_enode_limit {
+          self.last_eclass_size_limit_hits = self.last_eclass_size_limit_hits +
+            1
+          break
+        }
       }
     }
   }

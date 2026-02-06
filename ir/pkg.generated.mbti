@@ -71,9 +71,15 @@ pub fn optimize(Function) -> OptResult
 
 pub fn optimize_block(Block) -> Map[Int, (Int, @egraph.ENode)]
 
+pub fn optimize_block_with_limits(Block, @egraph.SaturationLimits) -> Map[Int, (Int, @egraph.ENode)]
+
 pub fn optimize_function(Function) -> Bool
 
+pub fn optimize_function_with_limits(Function, @egraph.SaturationLimits) -> Bool
+
 pub fn optimize_function_with_stats(Function) -> EGraphOptimizeStats
+
+pub fn optimize_function_with_stats_with_limits(Function, @egraph.SaturationLimits) -> EGraphOptimizeStats
 
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
@@ -138,6 +144,7 @@ pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
 pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
 pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
 pub fn EGraphBuilder::new() -> Self
+pub fn EGraphBuilder::new_with_limits(@egraph.SaturationLimits) -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
 

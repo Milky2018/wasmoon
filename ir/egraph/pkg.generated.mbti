@@ -102,6 +102,8 @@ pub fn EGraph::get_fconst(Self, EClassId) -> UInt64?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
 pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
+pub fn EGraph::last_eclass_size_limit_hits(Self) -> Int
+pub fn EGraph::last_matches_limit_hits(Self) -> Int
 pub fn EGraph::last_rule_applications(Self) -> Int
 pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
@@ -113,6 +115,7 @@ pub fn EGraph::remat_cost_bonus(Self, EClassId) -> Int
 pub fn EGraph::rewrite_to_fixpoint(Self, IndexedRuleSet) -> Unit
 pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
+pub fn EGraph::saturate_indexed_with_limits(Self, IndexedRuleSet, Int, SaturationLimits) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
 pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 
@@ -202,6 +205,16 @@ pub impl Show for EOpcodeTag
 type IndexedRuleSet
 
 type RewriteRule
+
+pub struct SaturationLimits {
+  matches_limit : Int
+  eclass_enode_limit : Int
+}
+pub fn SaturationLimits::cranelift_default() -> Self
+pub fn SaturationLimits::eclass_enode_limit(Self) -> Int
+pub fn SaturationLimits::matches_limit(Self) -> Int
+pub fn SaturationLimits::new(Int, Int) -> Self
+pub impl Show for SaturationLimits
 
 // Type aliases
 
