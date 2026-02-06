@@ -282,7 +282,7 @@ legalization. The table below is meant as an orientation aid.
 | Per-block egraph rewrite (`optimize_function`) | `ir/egraph_builder.mbt` | `EgraphPass` skeleton simplification + ISLE mid-end rules | Wasmoon is block-scoped; Cranelift is function-scoped and skeleton-driven. |
 | Constant folding | `ir/opt_passes_basic.mbt` | ISLE rules + `EgraphPass` | Similar intent; Cranelift relies more on ISLE rewrite coverage. |
 | Redundant `LoadMemBase` elimination | `ir/opt_passes_cse_gvn.mbt` | No direct analogue; similar concerns around pinned-reg / vmctx reads | Wasmoon has a dedicated conservative pass; Cranelift typically models such reads explicitly. |
-| Copy propagation | `ir/opt_passes_basic.mbt` | `dfg.resolve_all_aliases()` (post-phi-removal canonicalization) | Wasmoon has explicit `Copy`; Cranelift uses value aliases. |
+| Alias/copy canonicalization + copy propagation | `ir/opt_passes_basic.mbt` + `ir/opt_driver.mbt` (`alias_canon`) | `dfg.resolve_all_aliases()` (post-phi-removal canonicalization) | Wasmoon has explicit `Copy`; Cranelift uses value aliases. |
 | Global CSE | `ir/opt_passes_cse_gvn.mbt` | `EgraphPass` GVN map (scoped by domtree) | Wasmoon is a standalone domtree walk; Cranelift integrates GVN into aegraph. |
 | Global GVN + load CSE | `ir/opt_passes_cse_gvn.mbt` | `EgraphPass` GVN + `AliasAnalysis`/`LastStores` | Wasmoon uses conservative invalidation; Cranelift uses alias analysis and forwarding. |
 | DCE | `ir/opt_passes_basic.mbt` | aegraph extraction + cleanup | Wasmoon is explicit/iterative; Cranelift is largely implicit during extraction/elaboration. |
@@ -746,9 +746,9 @@ and alignment value.
 1) **Bound Wasmoon’s egraph**
    - Add hard limits analogous to Cranelift’s `MATCHES_LIMIT` and
      `ECLASS_ENODE_LIMIT`.
-2) **Make alias/copy canonicalization explicit**
-   - Add a dedicated “resolve aliases” step (copy chasing) early in the IR
-     pipeline.
+2) **Make alias/copy canonicalization explicit** (done)
+   - Added dedicated `alias_canon` stage (`canonicalize_aliases`) early in the
+     IR fixed-point pipeline before global CSE/GVN.
 3) **Regalloc validation gate**
    - Add an optional verifier/checker mode similar to Cranelift settings.
 

@@ -154,17 +154,16 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    // Cranelift-style alias/copy canonicalization before global opts.
+    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+    if alias_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     let mb_result = run_opt_pass(
       func, "mem_base_cse", eliminate_redundant_mem_base_loads,
     )
     if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let cp_result = run_opt_pass(
-      func, "copy_prop_global", propagate_copies_global,
-    )
-    if cp_result.changed {
       changed = true
       result.mark_changed()
     }
@@ -226,17 +225,16 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    // Cranelift-style alias/copy canonicalization before global opts.
+    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+    if alias_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     let mb_result = run_opt_pass(
       func, "mem_base_cse", eliminate_redundant_mem_base_loads,
     )
     if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let cp_result = run_opt_pass(
-      func, "copy_prop_global", propagate_copies_global,
-    )
-    if cp_result.changed {
       changed = true
       result.mark_changed()
     }

@@ -857,6 +857,37 @@ test "cross-block copy propagation" {
 }
 
 ///|
+test "alias canonicalization collapses copy chains" {
+  // block0: v1 = copy v0; jump block1
+  // block1: v2 = copy v1; v3 = copy v2; v5 = iadd v3, 1
+  // After canonicalization, v2/v3/iadd should all point to v0.
+  let builder = IRBuilder::new("alias_canon_copy_chain")
+  let p0 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let block0 = builder.create_block()
+  let block1 = builder.create_block()
+  builder.switch_to_block(block0)
+  let copy0 = builder.copy(p0)
+  builder.jump(block1, [])
+  builder.switch_to_block(block1)
+  let copy1 = builder.copy(copy0)
+  let copy2 = builder.copy(copy1)
+  let one = builder.iconst_i32(1)
+  let sum = builder.iadd(copy2, one)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let canon_result = canonicalize_aliases(func)
+  assert_true(canon_result.changed)
+  let block = func.blocks[1]
+  let copy1_after = block.instructions[0]
+  let copy2_after = block.instructions[1]
+  let iadd_after = block.instructions[3]
+  assert_eq(copy1_after.operands[0].id, p0.id)
+  assert_eq(copy2_after.operands[0].id, p0.id)
+  assert_eq(iadd_after.operands[0].id, p0.id)
+}
+
+///|
 test "cross-block copy propagation respects dominance" {
   // Test that copy in sibling branch does NOT propagate to merge block
   // This tests the dominance check is working correctly
