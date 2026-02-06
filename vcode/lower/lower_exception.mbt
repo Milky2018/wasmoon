@@ -318,12 +318,12 @@ fn lower_spill_locals_for_throw(
 
   // If no locals, pass null and 0
   let (locals_ptr_vreg, count_vreg) = if count > 0 {
-    // Allocate stack space for locals (8 bytes each, aligned to 16)
+    // Use pre-allocated outgoing args area for temporary local snapshots.
+    // Do not adjust SP dynamically inside function bodies.
     let stack_space = (count * 8 + 15) / 16 * 16
-    let alloc = @instr.VCodeInst::new(AdjustSP(-stack_space))
-    block.add_inst(alloc)
+    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
 
-    // Store each local value to stack
+    // Store each local value to outgoing args area at SP + offset.
     for i in 0..<count {
       let val_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
@@ -332,7 +332,7 @@ fn lower_spill_locals_for_throw(
       block.add_inst(store)
     }
 
-    // Get current stack pointer as locals_ptr
+    // Outgoing args area starts at current SP.
     let sp_vreg = ctx.vcode_func.new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
@@ -353,10 +353,6 @@ fn lower_spill_locals_for_throw(
       [vmctx_vreg, sp_vreg, count_vreg],
       None,
     )
-
-    // Clean up stack space
-    let dealloc = @instr.VCodeInst::new(AdjustSP(stack_space))
-    block.add_inst(dealloc)
     (sp_vreg, count_vreg)
   } else {
     // No locals - pass null and 0
