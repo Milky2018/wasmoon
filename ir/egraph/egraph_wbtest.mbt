@@ -207,6 +207,40 @@ test "egraph: extraction prefers shifts over muls" {
 }
 
 ///|
+test "egraph: extraction tie-break prefers shallower tree" {
+  let eg = EGraph::new()
+  let a = eg.add_var(0)
+  let b = eg.add_var(1)
+  let c = eg.add_var(2)
+  let d = eg.add_var(3)
+  let deep = eg.add_add(eg.add_add(eg.add_add(a, b), c), d)
+  let balanced = eg.add_add(eg.add_add(a, b), eg.add_add(c, d))
+  eg.merge(deep, balanced) |> ignore
+  let (_, best) = eg.extract(deep)
+  let mut has_var_child = false
+  for child in best.children {
+    let (_, child_node) = eg.extract(child)
+    if child_node.op is Var(_) {
+      has_var_child = true
+    }
+  }
+  inspect(has_var_child, content="false")
+}
+
+///|
+test "egraph: extraction cost is saturating and deterministic" {
+  let eg = EGraph::new()
+  let mut value = eg.add_const(1L)
+  for _ in 0..<100 {
+    value = eg.add_add(value, value)
+  }
+  let (cost1, _) = eg.extract(value)
+  let (cost2, _) = eg.extract(value)
+  inspect(cost1 == cost2, content="true")
+  inspect(cost1 > 0, content="true")
+}
+
+///|
 test "egraph: (x + 1) + 2 = x + 3 reassociation" {
   let eg = EGraph::new()
   let x = eg.add_var(0)

@@ -312,6 +312,29 @@ pub fn Output::summary(self : Output) -> String {
 }
 
 ///|
+/// Return stack-traffic counts inferred from regalloc edits:
+/// (spills, reloads, reg_moves, spill_to_spill).
+pub fn Output::spill_reload_stats(self : Output) -> (Int, Int, Int, Int) {
+  let mut reloads = 0
+  let mut spills = 0
+  let mut reg_moves = 0
+  let mut spill_to_spill = 0
+  for _, entry in self.edits {
+    let (_point, edit) = entry
+    match edit {
+      Move(from, to, _) =>
+        match (from, to) {
+          (Spill(_), Reg(_)) => reloads += 1
+          (Reg(_), Spill(_)) => spills += 1
+          (Reg(_), Reg(_)) => reg_moves += 1
+          (Spill(_), Spill(_)) => spill_to_spill += 1
+        }
+    }
+  }
+  (spills, reloads, reg_moves, spill_to_spill)
+}
+
+///|
 /// Validate that the regalloc output only uses legal physical registers for the
 /// selected ISA.
 ///

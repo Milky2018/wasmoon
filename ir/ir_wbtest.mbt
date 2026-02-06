@@ -633,6 +633,85 @@ test "constant folding: i32 div_s overflow not folded" {
 }
 
 ///|
+test "egraph purity boundary: trapping div/rem opcodes are excluded" {
+  let builder = IRBuilder::new("egraph_purity_trapping_ops")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(42)
+  let rhs = builder.iconst_i32(3)
+  let sdiv_v = builder.sdiv(lhs, rhs)
+  builder.udiv(lhs, rhs) |> ignore
+  builder.srem(lhs, rhs) |> ignore
+  builder.urem(lhs, rhs) |> ignore
+  builder.return_([sdiv_v])
+  let func = builder.get_function()
+
+  // Admission filter: all trapping div/rem variants must stay out of e-graph.
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[2]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[3]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[4]) is Some(_))
+  assert_false(opcode_to_eopcode(func.blocks[0].instructions[5]) is Some(_))
+  let stats = optimize_function_with_stats(func)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Sdiv)
+  assert_true(func.blocks[0].instructions[3].opcode is Opcode::Udiv)
+  assert_true(func.blocks[0].instructions[4].opcode is Opcode::Srem)
+  assert_true(func.blocks[0].instructions[5].opcode is Opcode::Urem)
+}
+
+///|
+test "egraph purity boundary: pure arithmetic remains admitted" {
+  let builder = IRBuilder::new("egraph_purity_pure_add")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  assert_true(opcode_to_eopcode(func.blocks[0].instructions[2]) is Some(_))
+  let stats = optimize_function_with_stats(func)
+  assert_true(stats.changed)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(30L))
+}
+
+///|
+test "egraph limits: matches_limit=0 disables rewrites" {
+  let builder = IRBuilder::new("egraph_matches_limit_zero")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let limits = @egraph.SaturationLimits::new(0, 5)
+  let stats = optimize_function_with_stats_with_limits(func, limits)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+}
+
+///|
+test "egraph limits: eclass_enode_limit=1 disables rewrites" {
+  let builder = IRBuilder::new("egraph_eclass_limit_one")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let limits = @egraph.SaturationLimits::new(5, 1)
+  let stats = optimize_function_with_stats_with_limits(func, limits)
+  ignore(stats)
+  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+}
+
+///|
 test "dead code elimination" {
   let builder = IRBuilder::new("dce_test")
   builder.add_result(Type::I32)
@@ -774,6 +853,37 @@ test "cross-block copy propagation" {
   )
   // After propagation: iadd should use p0 directly (cross-block!)
   let iadd_after = func.blocks[1].instructions[1]
+  assert_eq(iadd_after.operands[0].id, p0.id)
+}
+
+///|
+test "alias canonicalization collapses copy chains" {
+  // block0: v1 = copy v0; jump block1
+  // block1: v2 = copy v1; v3 = copy v2; v5 = iadd v3, 1
+  // After canonicalization, v2/v3/iadd should all point to v0.
+  let builder = IRBuilder::new("alias_canon_copy_chain")
+  let p0 = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let block0 = builder.create_block()
+  let block1 = builder.create_block()
+  builder.switch_to_block(block0)
+  let copy0 = builder.copy(p0)
+  builder.jump(block1, [])
+  builder.switch_to_block(block1)
+  let copy1 = builder.copy(copy0)
+  let copy2 = builder.copy(copy1)
+  let one = builder.iconst_i32(1)
+  let sum = builder.iadd(copy2, one)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let canon_result = canonicalize_aliases(func)
+  assert_true(canon_result.changed)
+  let block = func.blocks[1]
+  let copy1_after = block.instructions[0]
+  let copy2_after = block.instructions[1]
+  let iadd_after = block.instructions[3]
+  assert_eq(copy1_after.operands[0].id, p0.id)
+  assert_eq(copy2_after.operands[0].id, p0.id)
   assert_eq(iadd_after.operands[0].id, p0.id)
 }
 
@@ -1817,6 +1927,51 @@ test "GVN: loads are not CSE'd (can trap)" {
   let second_load = func.blocks[0].instructions[2]
   assert_true(first_load.opcode is Opcode::LoadPtr(_))
   assert_true(second_load.opcode is Opcode::LoadPtr(_))
+}
+
+///|
+test "GVN: store-to-load forwarding exact address" {
+  let builder = IRBuilder::new("gvn_store_forward")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let offset = builder.iconst_i64(0L)
+  let stored = builder.iconst_i32(42)
+  builder.store_ptr(Type::I32, mem0_base, stored, offset)
+  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let result = gvn_global(func)
+  assert_true(result.changed)
+  let load_inst = func.blocks[0].instructions[4]
+  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_eq(load_inst.operands[0].id, stored.id)
+}
+
+///|
+test "GVN: disjoint memories keep forwarding state" {
+  let builder = IRBuilder::new("gvn_disjoint_memory_forward")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let mem1_base = builder.load_mem_base(vmctx, 1)
+  let offset = builder.iconst_i64(0L)
+  let mem1_value = builder.iconst_i32(11)
+  builder.store_ptr(Type::I32, mem1_base, mem1_value, offset)
+  let mem0_value = builder.iconst_i32(22)
+  builder.store_ptr(Type::I32, mem0_base, mem0_value, offset)
+  let loaded = builder.load_ptr(Type::I32, mem1_base, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let result = gvn_global(func)
+  assert_true(result.changed)
+  let load_inst = func.blocks[0].instructions[7]
+  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_eq(load_inst.operands[0].id, mem1_value.id)
 }
 
 ///|

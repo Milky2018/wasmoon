@@ -101,13 +101,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          // NOTE: match_addr_reg_offset is an AArch64-only fusion today.
-          // On amd64 we must not skip the address producer, otherwise we'll
-          // generate undefined vregs (the load/store will not use RegOffset).
-          if !is_amd64 &&
-            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, _, _, _, subsumed, has_extra)) {
+            is Some((_, _, ext, shift, subsumed, has_extra)) &&
+            (
+              !is_amd64 ||
+              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
+            ) {
             if explicit_offset == 0L || has_extra {
               addrmode_skipped.add(base_value.id)
               for vid in subsumed {
@@ -149,10 +149,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               continue
             }
           }
-          if !is_amd64 &&
-            (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, _, _, _, subsumed, has_extra)) {
+            is Some((_, _, ext, shift, subsumed, has_extra)) &&
+            (
+              !is_amd64 ||
+              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
+            ) {
             if explicit_offset == 0L || has_extra {
               addrmode_skipped.add(base_value.id)
               for vid in subsumed {
@@ -2115,15 +2118,18 @@ fn lower_load_ptr(
     result
   }
 
-  // Try Cranelift-style AArch64 register-offset addressing:
-  //   load [base + (uextend/ishl index)]  => load_regoff base, index, (ext/scale)
+  // Try Cranelift-style register-offset addressing:
+  //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
-  // This avoids materializing address temporaries and reduces register pressure.
-  if !(@isa.ISA::current() is @isa.AMD64) &&
-    (mem_ty is I32 || mem_ty is I64) &&
+  // On amd64 Step 1, we currently support IndexExtend::None with scales 0..3.
+  if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&
-    (explicit_offset == 0L || has_extra) {
+    (explicit_offset == 0L || has_extra) &&
+    (
+      !(@isa.ISA::current() is @isa.AMD64) ||
+      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
+    ) {
     let base0 = ctx.get_vreg_for_use(am_base, block)
     let base = adjust_base_with_offset(ctx, block, base0, explicit_offset)
     let index = ctx.get_vreg_for_use(am_index, block)
@@ -2226,12 +2232,15 @@ fn lower_store_ptr(
     result
   }
 
-  // Try Cranelift-style AArch64 register-offset addressing for stores.
-  if !(@isa.ISA::current() is @isa.AMD64) &&
-    (mem_ty is I32 || mem_ty is I64) &&
+  // Try Cranelift-style register-offset addressing for stores.
+  if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, has_extra)) &&
-    (explicit_offset == 0L || has_extra) {
+    (explicit_offset == 0L || has_extra) &&
+    (
+      !(@isa.ISA::current() is @isa.AMD64) ||
+      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
+    ) {
     let base0 = ctx.get_vreg_for_use(am_base, block)
     let base = adjust_base_with_offset(ctx, block, base0, explicit_offset)
     let index = ctx.get_vreg_for_use(am_index, block)

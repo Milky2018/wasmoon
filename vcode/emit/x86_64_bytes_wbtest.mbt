@@ -123,6 +123,24 @@ test "x86_64 mov r12, [r14+disp] encoding" {
 }
 
 ///|
+test "x86_64 lea base+index*scale+disp encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_lea_r64_base_index_scale_disp(10, 11, 9, 2, 0x20)
+  inspect(mc.get_bytes(), content="[79, 141, 148, 139, 32, 0, 0, 0]")
+}
+
+///|
+test "x86_64 indexed mov load/store encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_mov_r32_m32_base_index_scale_disp(8, 10, 9, 3, 0x1234)
+  mc.x86_emit_mov_m64_r64_base_index_scale_disp(10, 9, 1, 16, 8)
+  inspect(
+    mc.get_bytes(),
+    content="[71, 139, 132, 202, 52, 18, 0, 0, 79, 137, 132, 74, 16, 0, 0, 0]",
+  )
+}
+
+///|
 test "x86_64 movaps xmm15, xmm0 encoding" {
   let mc = MachineCode::new()
   mc.x86_emit_movaps_xmm_xmm(15, 0)
@@ -627,4 +645,17 @@ test "x86_64 movd/movq gpr<->xmm encodings" {
     mc.get_bytes(),
     content="[102, 15, 126, 200, 102, 15, 110, 200, 102, 77, 15, 126, 250, 102, 77, 15, 110, 250]",
   )
+}
+
+///|
+test "x86_64 const pool deduplicates identical entries" {
+  let mc = MachineCode::new()
+  let l1 = mc.intern_amd64_const_f64(0x3FF0000000000000L)
+  let l2 = mc.intern_amd64_const_f64(0x3FF0000000000000L)
+  inspect(l1 == l2, content="true")
+  mc.x86_emit_lea_r64_riprel32(0, l1)
+  mc.x86_emit_lea_r64_riprel32(1, l2)
+  mc.emit_amd64_const_pool()
+  mc.resolve_fixups()
+  inspect(mc.size() > 16, content="true")
 }

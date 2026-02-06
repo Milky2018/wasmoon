@@ -26,7 +26,7 @@ jobs:
 
       - name: moon test
         run: |
-          moon test --target native
+          WASMOON_REGALLOC_VALIDATION=1 moon test --target native
 
       - name: lint
         run: |
@@ -81,7 +81,7 @@ jobs:
         id: moon_test
         continue-on-error: true
         run: |
-          moon test --target native --no-parallelize -v
+          WASMOON_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize -v
 
       - name: dump failing rspfile (if any)
         if: steps.moon_test.outcome != 'success'

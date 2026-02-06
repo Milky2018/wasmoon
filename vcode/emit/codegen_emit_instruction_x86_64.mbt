@@ -126,15 +126,16 @@ fn MachineCode::emit_instruction_x86_64(
     high : Int64,
     scratch_gpr : Int,
   ) -> Unit {
-    self.x86_emit_xorpd_xmm_xmm(dst_xmm, dst_xmm)
-    if low != 0L {
-      self.x86_emit_mov_imm64(scratch_gpr, low)
-      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 0)
-    }
-    if high != 0L {
-      self.x86_emit_mov_imm64(scratch_gpr, high)
-      self.x86_emit_pinsrq_xmm_r64_imm8(dst_xmm, scratch_gpr, 1)
-    }
+    let data = Bytes::makei(16, fn(i) {
+      if i < 8 {
+        ((low >> (i * 8)) & 0xFFL).to_byte()
+      } else {
+        ((high >> ((i - 8) * 8)) & 0xFFL).to_byte()
+      }
+    })
+    let label = self.intern_amd64_const(data, 16)
+    self.x86_emit_lea_r64_riprel32(scratch_gpr, label)
+    self.x86_emit_movdqu_xmm_m128(dst_xmm, scratch_gpr, 0)
   }
 
   ///|
@@ -252,6 +253,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if is_64 && (rm & 7) != 4 {
+        // Cranelift-style iadd preference: use LEA for pure address/add trees.
+        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+        return
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd {
         tmp = isa.scratch_reg_2_index()
@@ -610,6 +616,14 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if shift is @instr.ShiftType::Lsl &&
+        amount >= 0 &&
+        amount <= 3 &&
+        (rm & 7) != 4 {
+        // Cranelift x64 iadd-shift style: lea rd, [rn + rm * scale].
+        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
+        return
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
         tmp = isa.scratch_reg_2_index()
@@ -1005,16 +1019,16 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.LoadConstF32(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
-      // Materialize the raw f32 bits into a GPR then move into XMM.
-      self.x86_emit_mov_imm64(scratch, bits.to_int64())
-      self.x86_emit_movd_xmm_r32(rd, scratch)
+      let label = self.intern_amd64_const_f32(bits)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movss_xmm_m32(rd, scratch, 0)
     }
     @instr.LoadConstF64(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
-      // Materialize the raw f64 bits into a GPR then move into XMM.
-      self.x86_emit_mov_imm64(scratch, bits)
-      self.x86_emit_movq_xmm_r64(rd, scratch)
+      let label = self.intern_amd64_const_f64(bits)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movsd_xmm_m64(rd, scratch, 0)
     }
     @instr.LoadGCFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
@@ -1898,6 +1912,52 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
+    @instr.LoadPtrRegOffset(ty, ext, shift) => {
+      // Raw pointer load with scaled index addressing (Cranelift-style sinkable load).
+      let rt = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      if !(ext is @instr.IndexExtend::None) {
+        use_amode = false
+      }
+      if use_amode {
+        match ty {
+          @instr.MemType::I32 =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, 0,
+            )
+          @instr.MemType::I64 =>
+            self.x86_emit_mov_r64_m64_base_index_scale_disp(
+              rt, base, index, shift, 0,
+            )
+          _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+        }
+        return
+      }
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, addr, 0)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, addr, 0)
+        _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+      }
+    }
     @instr.StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking).
       let rn = reg_num(inst.uses[0])
@@ -1908,6 +1968,52 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
         @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
         @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+      }
+    }
+    @instr.StorePtrRegOffset(ty, ext, shift) => {
+      // Raw pointer store with scaled index addressing.
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let value = reg_num(inst.uses[2])
+      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      if !(ext is @instr.IndexExtend::None) {
+        use_amode = false
+      }
+      if use_amode {
+        match ty {
+          @instr.MemType::I32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, index, shift, 0, value,
+            )
+          @instr.MemType::I64 =>
+            self.x86_emit_mov_m64_r64_base_index_scale_disp(
+              base, index, shift, 0, value,
+            )
+          _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+        }
+        return
+      }
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index || addr == value {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(addr, 0, value)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(addr, 0, value)
+        _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
       }
     }
     @instr.LoadPtrNarrow(bits, signed, offset) => {
@@ -2016,25 +2122,12 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
     }
     @instr.LoadConstV128(bytes) => {
-      // Materialize a 128-bit constant.
-      //
-      // Cranelift uses constant pools / mem loads; for now we use a minimal
-      // SSE4.1 sequence with `PINSRQ` to avoid a constant pool.
+      // Materialize a 128-bit constant via constant pool (Cranelift-style).
       let rd = wreg_num(inst.defs[0])
-      let low = bytes_to_int64_le(bytes, 0)
-      let high = bytes_to_int64_le(bytes, 8)
-
-      // rd = 0
-      self.x86_emit_xorpd_xmm_xmm(rd, rd)
       let scratch = isa.scratch_reg_1_index()
-      if low != 0L {
-        self.x86_emit_mov_imm64(scratch, low)
-        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 0)
-      }
-      if high != 0L {
-        self.x86_emit_mov_imm64(scratch, high)
-        self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, 1)
-      }
+      let label = self.intern_amd64_const(bytes, 16)
+      self.x86_emit_lea_r64_riprel32(scratch, label)
+      self.x86_emit_movdqu_xmm_m128(rd, scratch, 0)
     }
     @instr.SIMDSplat(lane_size) => {
       // Splat scalar integer to all lanes.

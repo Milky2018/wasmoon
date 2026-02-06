@@ -22,6 +22,25 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
 }
 
 ///|
+fn is_truthy_env_flag(value : String) -> Bool {
+  value == "1" ||
+  value == "true" ||
+  value == "TRUE" ||
+  value == "yes" ||
+  value == "YES" ||
+  value == "on" ||
+  value == "ON"
+}
+
+///|
+fn regalloc_validation_enabled() -> Bool {
+  match @sys.get_env_var("WASMOON_REGALLOC_VALIDATION") {
+    Some(v) => is_truthy_env_flag(v)
+    None => false
+  }
+}
+
+///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
@@ -288,9 +307,10 @@ pub fn allocate_registers_backtracking_with_isa(
     func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
 
-  // Optional safety net (Cranelift-like checker).
-  // Keeps invariants honest as allocator logic evolves.
-  verify_allocation(func, liveness, alloc_result, isa, settings~)
+  // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
+  if regalloc_validation_enabled() {
+    verify_allocation(func, liveness, alloc_result, isa, settings~)
+  }
 
   // Process constraints and generate RegMove edits
   process_constraints(func, alloc_result)
@@ -345,8 +365,10 @@ pub fn allocate_registers_backtracking_output_with_isa(
     func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
   )
 
-  // Optional safety net (Cranelift-like checker).
-  verify_allocation(func, liveness, alloc_result, isa, settings~)
+  // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
+  if regalloc_validation_enabled() {
+    verify_allocation(func, liveness, alloc_result, isa, settings~)
+  }
 
   // Process constraints and generate RegMove edits.
   process_constraints(func, alloc_result)

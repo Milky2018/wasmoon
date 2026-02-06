@@ -1072,6 +1072,9 @@ pub fn emit_function(
       mc.emit_ret(30)
     }
   }
+  if is_amd64 {
+    mc.emit_amd64_const_pool()
+  }
   mc.resolve_fixups()
   mc
 }
@@ -1932,6 +1935,7 @@ pub fn emit_function_with_regalloc(
   // Keep block layout optimization (targets are block IDs; ids stay stable).
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new()
+  let is_amd64 = current_isa() is @isa.AMD64
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
@@ -2048,7 +2052,14 @@ pub fn emit_function_with_regalloc(
   if shared_exit_block is Some(exit_block) {
     mc.define_label(exit_block)
     mc.emit_epilogue(stack_frame)
-    mc.emit_ret(30)
+    if is_amd64 {
+      mc.x86_emit_ret()
+    } else {
+      mc.emit_ret(30)
+    }
+  }
+  if is_amd64 {
+    mc.emit_amd64_const_pool()
   }
   mc.resolve_fixups()
   mc

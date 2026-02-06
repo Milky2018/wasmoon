@@ -15,6 +15,8 @@ struct EGraphBuilder {
   def_map : Map[Int, Inst]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
+  // Rewrite limits (Cranelift-style hard caps).
+  saturation_limits : @egraph.SaturationLimits
 }
 
 ///|
@@ -28,12 +30,20 @@ struct RepKey {
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
+  EGraphBuilder::new_with_limits(@egraph.SaturationLimits::cranelift_default())
+}
+
+///|
+pub fn EGraphBuilder::new_with_limits(
+  saturation_limits : @egraph.SaturationLimits,
+) -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
     value_map: {},
     class_to_value: {},
     def_map: {},
     ruleset: @egraph.get_global_ruleset(),
+    saturation_limits,
   }
 }
 
@@ -77,18 +87,37 @@ fn type_bits(ty : Type) -> Int {
 }
 
 ///|
-/// Convert an IR Opcode to an EOpcode (if optimizable)
-/// Takes the instruction to extract type information for extend/reduce ops
+/// Cranelift-style purity boundary for e-graph rewrites:
+/// only admit operations that are pure and non-trapping.
+///
+/// Excluded (trap-sensitive) examples:
+/// - `sdiv`, `udiv`, `srem`, `urem` (division by zero / overflow trap semantics)
+fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
+  match opcode {
+    Iconst(_) => true
+    Iadd | Isub | Imul => true
+    Band | Bor | Bxor | Bnot => true
+    Ishl | Sshr | Ushr | Rotl | Rotr => true
+    Clz | Ctz | Popcnt => true
+    Icmp(_) => true
+    Select => true
+    Ireduce | Uextend | Sextend => true
+    _ => false
+  }
+}
+
+///|
+/// Convert an IR Opcode to an EOpcode (if optimizable and purity-safe).
+/// Takes the instruction to extract type information for extend/reduce ops.
 fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
+  if !opcode_is_egraph_pure_nontrapping(inst.opcode) {
+    return None
+  }
   match inst.opcode {
     Iconst(c) => Some(@egraph.EOpcode::Const(c))
     Iadd => Some(@egraph.EOpcode::Add)
     Isub => Some(@egraph.EOpcode::Sub)
     Imul => Some(@egraph.EOpcode::Mul)
-    Sdiv => Some(@egraph.EOpcode::Sdiv)
-    Udiv => Some(@egraph.EOpcode::Udiv)
-    Srem => Some(@egraph.EOpcode::Srem)
-    Urem => Some(@egraph.EOpcode::Urem)
     Band => Some(@egraph.EOpcode::And)
     Bor => Some(@egraph.EOpcode::Or)
     Bxor => Some(@egraph.EOpcode::Xor)
@@ -208,7 +237,12 @@ pub fn EGraphBuilder::add_value(
 pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // One-pass, directed simplification (Cranelift-style aegraph).
   // Additional improvement opportunities are handled by later passes.
-  self.egraph.saturate_indexed(self.ruleset, 1) |> ignore
+  self.egraph.saturate_indexed_with_limits(
+    self.ruleset,
+    1,
+    self.saturation_limits,
+  )
+  |> ignore
 }
 
 ///|
@@ -233,7 +267,18 @@ pub fn EGraphBuilder::extract(
 /// Optimize a single basic block's arithmetic expressions
 /// Returns a map from original Value id to optimized ENode
 pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
-  let builder = EGraphBuilder::new()
+  optimize_block_with_limits(
+    block,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_block_with_limits(
+  block : Block,
+  limits : @egraph.SaturationLimits,
+) -> Map[Int, (Int, @egraph.ENode)] {
+  let builder = EGraphBuilder::new_with_limits(limits)
 
   // First pass: register all definitions
   for inst in block.instructions {
@@ -367,10 +412,33 @@ fn EGraphBuilder::recompute_representatives_for_block(
 ///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
-pub fn optimize_function(func : Function) -> Bool {
+pub struct EGraphOptimizeStats {
+  changed : Bool
+  total_classes : Int
+  total_nodes : Int
+  total_rule_applications : Int
+}
+
+///|
+/// Apply e-graph optimization to a function and return aggregate stats.
+pub fn optimize_function_with_stats(func : Function) -> EGraphOptimizeStats {
+  optimize_function_with_stats_with_limits(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_function_with_stats_with_limits(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+) -> EGraphOptimizeStats {
   let mut changed = false
+  let mut total_classes = 0
+  let mut total_nodes = 0
+  let mut total_rule_applications = 0
   for block in func.blocks {
-    let builder = EGraphBuilder::new()
+    let builder = EGraphBuilder::new_with_limits(limits)
 
     // Register all definitions in this block
     for inst in block.instructions {
@@ -391,6 +459,11 @@ pub fn optimize_function(func : Function) -> Bool {
 
     // Run saturation
     builder.optimize()
+    let egraph = builder.get_egraph()
+    total_classes = total_classes + egraph.num_classes()
+    total_nodes = total_nodes + egraph.num_nodes()
+    total_rule_applications = total_rule_applications +
+      egraph.last_rule_applications()
     builder.recompute_representatives_for_block(block)
 
     // Apply optimizations: constant folding and operand rewriting
@@ -428,5 +501,23 @@ pub fn optimize_function(func : Function) -> Bool {
       }
     }
   }
-  changed
+  { changed, total_classes, total_nodes, total_rule_applications }
+}
+
+///|
+/// Apply e-graph optimization to a function.
+/// Returns true if any optimization was applied.
+pub fn optimize_function(func : Function) -> Bool {
+  optimize_function_with_limits(
+    func,
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+}
+
+///|
+pub fn optimize_function_with_limits(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+) -> Bool {
+  optimize_function_with_stats_with_limits(func, limits).changed
 }
