@@ -89,6 +89,40 @@ The script exits non-zero when:
 - any workload exits non-zero, or
 - metrics file is missing for any workload.
 
+## Repeatable Benchmark Runner (with thresholds)
+
+Use:
+
+```bash
+python3 scripts/run_perf_benchmarks.py
+```
+
+This runner is designed for CI/nightly use:
+
+- Repeats each workload (`--iterations`, default `5`) with warmup runs.
+- Collects medians for:
+  - wall-clock `elapsed_ms`,
+  - `module_compile_us`,
+  - total emitted `code_size`.
+- Optionally compares against a baseline summary (`--baseline`) and fails when
+  regressions exceed configured thresholds:
+  - `--threshold-elapsed-pct` (default `15`)
+  - `--threshold-compile-pct` (default `15`)
+  - `--threshold-code-size-pct` (default `5`)
+
+Example:
+
+```bash
+python3 scripts/run_perf_benchmarks.py \
+  --out-dir target/perf-benchmarks/latest \
+  --iterations 3 \
+  --warmup 1 \
+  --baseline docs/perf/baselines/linux-amd64/perf-summary.json
+```
+
+The workflow `.github/workflows/perf.yml` uses this runner and uploads
+`target/perf-benchmarks/latest` as an artifact.
+
 ## Artifact Layout
 
 For each workload:
@@ -105,8 +139,9 @@ Aggregate files:
 ## CI Integration Guidance
 
 - Keep compile metrics opt-in in normal CI to avoid noise.
-- Add a dedicated perf workflow/job for baseline refresh and regression checks.
-- Parse `summary.json` and selected metrics JSON files for trend checks.
+- Use a dedicated perf workflow/job for baseline refresh and regression checks.
+- Parse benchmark `summary.json` from `run_perf_benchmarks.py` for threshold
+  gating and trend checks.
 
 ## Notes
 

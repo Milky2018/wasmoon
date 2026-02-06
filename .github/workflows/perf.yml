@@ -1,0 +1,61 @@
+name: Perf Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  perf-ubuntu-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: build wasmoon
+        run: |
+          moon build --target native
+          ./install.sh
+
+      - name: run perf benchmark runner
+        run: |
+          set -euxo pipefail
+          BASELINE="docs/perf/baselines/linux-amd64/perf-summary.json"
+          if [ -f "$BASELINE" ]; then
+            python3 scripts/run_perf_benchmarks.py \
+              --out-dir target/perf-benchmarks/latest \
+              --iterations 3 \
+              --warmup 1 \
+              --timeout-sec 240 \
+              --baseline "$BASELINE" \
+              --threshold-elapsed-pct 15 \
+              --threshold-compile-pct 15 \
+              --threshold-code-size-pct 5
+          else
+            python3 scripts/run_perf_benchmarks.py \
+              --out-dir target/perf-benchmarks/latest \
+              --iterations 3 \
+              --warmup 1 \
+              --timeout-sec 240
+          fi
+
+      - name: upload perf artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-benchmarks-ubuntu-amd64
+          path: target/perf-benchmarks/latest
+          if-no-files-found: error
