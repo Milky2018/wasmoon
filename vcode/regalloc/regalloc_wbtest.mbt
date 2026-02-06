@@ -122,6 +122,66 @@ test "liveness: multi-block function" {
 }
 
 ///|
+test "remat: clones LoadJITFuncPtr across blocks" {
+  let func = VCodeFunction::new("test_remat_jit_func_ptr")
+  func.add_result(@abi.Int)
+  let entry = func.new_block()
+  let use_block = func.new_block()
+  let ptr = func.new_vreg(@abi.Int)
+  let load_ptr = @instr.VCodeInst::new(@instr.LoadJITFuncPtr(@instr.HostCall))
+  load_ptr.add_def({ reg: @abi.Virtual(ptr) })
+  entry.add_inst(load_ptr)
+  entry.set_terminator(@instr.Jump(use_block.id, []))
+  let moved = func.new_vreg(@abi.Int)
+  let mv = @instr.VCodeInst::new(@instr.Move)
+  mv.add_def({ reg: @abi.Virtual(moved) })
+  mv.add_use(@abi.Virtual(ptr))
+  use_block.add_inst(mv)
+  use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
+  let rewritten = rematerialize_cross_block_constants(func)
+  inspect(rewritten.blocks[1].insts.length(), content="2")
+  match rewritten.blocks[1].insts[0].opcode {
+    @instr.LoadJITFuncPtr(@instr.HostCall) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
+    inspect(v.id != ptr.id, content="true")
+  } else {
+    inspect(false, content="true")
+  }
+}
+
+///|
+test "remat: clones LoadFuncAddr across blocks" {
+  let func = VCodeFunction::new("test_remat_func_addr")
+  func.add_result(@abi.Int)
+  let entry = func.new_block()
+  let use_block = func.new_block()
+  let fn_addr = func.new_vreg(@abi.Int)
+  let load_addr = @instr.VCodeInst::new(@instr.LoadFuncAddr(7))
+  load_addr.add_def({ reg: @abi.Virtual(fn_addr) })
+  entry.add_inst(load_addr)
+  entry.set_terminator(@instr.Jump(use_block.id, []))
+  let moved = func.new_vreg(@abi.Int)
+  let mv = @instr.VCodeInst::new(@instr.Move)
+  mv.add_def({ reg: @abi.Virtual(moved) })
+  mv.add_use(@abi.Virtual(fn_addr))
+  use_block.add_inst(mv)
+  use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
+  let rewritten = rematerialize_cross_block_constants(func)
+  inspect(rewritten.blocks[1].insts.length(), content="2")
+  match rewritten.blocks[1].insts[0].opcode {
+    @instr.LoadFuncAddr(7) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
+    inspect(v.id != fn_addr.id, content="true")
+  } else {
+    inspect(false, content="true")
+  }
+}
+
+///|
 
 ///|
 test "apply_allocation: BranchCmp reloads both spilled operands without clobber" {
