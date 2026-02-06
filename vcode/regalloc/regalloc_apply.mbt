@@ -50,6 +50,15 @@ pub fn apply_allocation(
     }
   }
 
+  fn invalidate_reload_slot(
+    active_reloads : Map[Int, @abi.PReg],
+    slot : Int,
+  ) -> Unit {
+    if active_reloads.get(slot) is Some(_) {
+      active_reloads.remove(slot) |> ignore
+    }
+  }
+
   // Compute reload intervals for spill coalescing
   let reload_intervals = compute_reload_intervals(func, alloc)
   allocate_reload_registers(func, alloc, reload_intervals)
@@ -527,6 +536,7 @@ pub fn apply_allocation(
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
                 store_inst.add_use(@abi.Physical(source_preg))
                 new_block.add_inst(store_inst)
+                invalidate_reload_slot(active_reloads, to_slot)
               } else {
                 let scratch_class = match mv.class {
                   @abi.Float32 | @abi.Float64 => @abi.Float64
@@ -545,11 +555,13 @@ pub fn apply_allocation(
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
                 store_inst.add_use(@abi.Physical(scratch_preg))
                 new_block.add_inst(store_inst)
+                invalidate_reload_slot(active_reloads, to_slot)
               }
             } else {
               let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
               store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
               new_block.add_inst(store_inst)
+              invalidate_reload_slot(active_reloads, to_slot)
             }
           } else if mv.from.is_spilled() {
             // Reload from spill slot into a register.
@@ -590,6 +602,7 @@ pub fn apply_allocation(
             let store_inst = @instr.VCodeInst::new(StackStore(slot * 8))
             store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
             new_block.add_inst(store_inst)
+            invalidate_reload_slot(active_reloads, slot)
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
@@ -607,6 +620,7 @@ pub fn apply_allocation(
         let scratch_preg = spill_scratch_map.get(vreg.id).unwrap()
         spill_inst.add_use(@abi.Physical(scratch_preg))
         new_block.add_inst(spill_inst)
+        invalidate_reload_slot(active_reloads, slot)
       }
     }
 
@@ -855,10 +869,12 @@ pub fn apply_allocation(
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
                 store_inst.add_use(@abi.Physical(scratch_preg))
                 new_block.add_inst(store_inst)
+                invalidate_reload_slot(active_reloads, to_slot)
               } else {
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
                 store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
                 new_block.add_inst(store_inst)
+                invalidate_reload_slot(active_reloads, to_slot)
               }
             } else if mv.from.is_spilled() {
               let slot = mv.from.get_spill_slot()
