@@ -1123,6 +1123,7 @@ fn compile_module_to_jit(
     let vcode_func = @lower.lower_function(
       ir_func,
       num_imports=mod_.imports.length(),
+      run_ir_opt=false,
     )
     if lower_tick is Some(tick) {
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))
