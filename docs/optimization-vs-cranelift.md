@@ -775,6 +775,31 @@ and alignment value.
 
 ---
 
+## 12) Alignment Ledger (Living)
+
+This ledger tracks concrete optimization alignment work against Cranelift and is
+updated when related tasks close.
+
+| Task | Area | Before | After | Evidence |
+|---|---|---|---|---|
+| `wasmoon-il8.8` | amd64 lowering/addressing | Hot `iadd`/addressing trees typically materialized address temps (`mov/add`), and `LoadPtrRegOffset/StorePtrRegOffset` were disabled on amd64 lowering paths. | amd64 now emits LEA-based add trees and uses scaled indexed raw-pointer memory forms for sinkable patterns (`IndexExtend::None`, scale `0..3`). Hot path instruction count reduces from ~2 to ~1 for `iadd`/LEA and from ~2+ to ~1 for fused indexed load/store. | `vcode/lower/lower.mbt`, `vcode/emit/codegen_emit_instruction_x86_64.mbt`, `vcode/emit/x86_64_bytes.mbt`, `vcode/emit/x86_64_bytes_wbtest.mbt` |
+| `wasmoon-il8.9` | amd64 constant materialization | Scalar/SIMD constants were materialized inline (e.g. `mov imm` + `movd/movq`, or `xorpd` + `pinsrq*` chains for 128-bit constants/masks). | Added amd64 per-function constant-pool path with RIP-relative loads; duplicate constants are interned and emitted once. Typical `v128.const` site becomes `lea + movdqu` (2 instructions) plus shared pool data. | `vcode/emit/machinecode.mbt`, `vcode/emit/codegen_emit_instruction_x86_64.mbt`, `vcode/emit/codegen_prelude.mbt`, `vcode/emit/x86_64_bytes_wbtest.mbt` |
+| `wasmoon-il8.10` | regalloc validation gate | Regalloc verifier/checker executed unconditionally in allocation path. | Verifier is now an explicit optional gate controlled by `WASMOON_REGALLOC_VALIDATION`; CI profile enables it in `moon test` steps. | `vcode/regalloc/regalloc_misc.mbt`, `vcode/regalloc/moon.pkg.json`, `.github/workflows/check.yml` |
+| `wasmoon-il8.11` | benchmark runner + thresholds | Baseline capture existed, but no repeatable median runner with threshold gating. | Added repeatable benchmark runner (`iterations + warmup`, median aggregates, optional baseline comparison with regression thresholds) and nightly perf workflow artifact publishing. | `scripts/run_perf_benchmarks.py`, `.github/workflows/perf.yml`, `docs/perf/compile-metrics.md`, `docs/perf/baselines/README.md` |
+| `wasmoon-il8.12` | docs governance | Report had recommendations but no explicit “close-the-loop” task ledger. | Added this living ledger section with per-task before/after deltas and source-of-truth file references. | `docs/optimization-vs-cranelift.md` |
+
+**Latest local validation snapshot (2026-02-06, darwin/arm64):**
+
+- `moon test vcode/emit/x86_64_bytes_wbtest.mbt --target native`: **56/56** passed.
+- `moon test vcode/lower/lower_wbtest.mbt --target native`: **32/32** passed.
+- `moon test vcode/regalloc/regalloc_wbtest.mbt --target native`: **23/23** passed.
+- `WASMOON_REGALLOC_VALIDATION=1 moon test vcode/regalloc/regalloc_wbtest.mbt --target native`: **23/23** passed.
+
+For amd64 runtime/perf gating, use CI job `build-ubuntu-amd64` in
+`.github/workflows/check.yml` and nightly `Perf Benchmarks` workflow.
+
+---
+
 ## Appendix A: Primary Code References (Wasmoon)
 
 - IR and optimization:
