@@ -160,6 +160,19 @@ fn patch_load_imm64_fixed(
 }
 
 ///|
+fn encode_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
+  let diff = target_ptr - pc
+  if diff % 4L != 0L {
+    return None
+  }
+  let imm26 = diff / 4L
+  if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
+    return None
+  }
+  Some((0x94000000L | (imm26 & 0x3FFFFFFL)).to_int())
+}
+
+///|
 fn apply_func_addr_fixups(
   ctx : JITContext,
   jit_module : JITModule,
@@ -189,22 +202,41 @@ fn apply_func_addr_fixups(
 }
 
 ///|
+fn patch_call_veneer_target(
+  exec_ptr : Int64,
+  fixup : @emit.CallFixup,
+  target_ptr : Int64,
+) -> Unit {
+  let veneer_fixup : @emit.FuncAddrFixup = {
+    offset: fixup.veneer_offset,
+    func_idx: fixup.func_idx,
+    reg: 16, // x16 (ip0)
+  }
+  patch_load_imm64_fixed(exec_ptr, veneer_fixup, target_ptr)
+}
+
+///|
 fn patch_direct_call(
   exec_ptr : Int64,
   fixup : @emit.CallFixup,
   target_ptr : Int64,
 ) -> Unit {
   let pc = exec_ptr + fixup.offset.to_int64()
-  let diff = target_ptr - pc
-  if diff % 4L != 0L {
-    abort("direct call target misaligned")
+  if encode_bl_imm26(pc, target_ptr) is Some(encoded) {
+    c_jit_write_u32(pc, encoded)
+    return
   }
-  let imm26 = diff / 4L
-  if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
-    abort("direct call target out of range")
+  if fixup.veneer_offset >= 0 {
+    let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
+    if encode_bl_imm26(pc, veneer_pc) is Some(encoded) {
+      patch_call_veneer_target(exec_ptr, fixup, target_ptr)
+      c_jit_write_u32(pc, encoded)
+      return
+    }
   }
-  let encoded = (0x94000000L | (imm26 & 0x3FFFFFFL)).to_int()
-  c_jit_write_u32(pc, encoded)
+  abort(
+    "direct call target out of range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
+  )
 }
 
 ///|

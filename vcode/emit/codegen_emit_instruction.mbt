@@ -1316,41 +1316,10 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64_fixed(result_reg, 0L)
       self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
     }
-    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
-      // Load callee from vmctx->func_table[func_idx] and call via BLR.
-      //
-      // Why not BL + runtime fixup?
-      // AArch64 BL immediate is +/-128MB; large modules can place code farther
-      // apart and fail patching with "direct call target out of range".
-      //
-      // This mirrors the x86_64 backend strategy and avoids per-callsite range
-      // constraints while keeping Wasm call ABI semantics unchanged.
-      let vmctx = vmctx_index()
-      let callee = scratch2_index()
-      let table = if stack_frame.cache_func_table {
-        func_table_index()
-      } else {
-        self.emit_ldr_imm(callee, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
-        callee
-      }
-      let byte_offset = func_idx * 8
-      // LDR (unsigned immediate) supports up to 4095 scaled slots for 64-bit.
-      if byte_offset >= 0 && byte_offset <= 4095 * 8 {
-        self.emit_ldr_imm(callee, table, byte_offset)
-      } else {
-        let index = scratch1_index()
-        self.emit_load_imm64(index, byte_offset.to_int64())
-        self.emit_load_reg_offset(
-          I64,
-          callee,
-          table,
-          index,
-          @instr.IndexExtend::None,
-          0,
-        )
-      }
-      self.emit_blr(callee)
-    }
+    CallDirect(func_idx, _num_args, _num_results, _call_conv) =>
+      // Emit BL with runtime fixup. A local veneer fallback is appended later
+      // (during function finalization) for out-of-range targets.
+      self.emit_bl_func(func_idx)
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.
