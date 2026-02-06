@@ -698,6 +698,18 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 }
 
 ///|
+test "emit: call_direct(Wasm) does not emit BL fixup" {
+  let func = @regalloc.VCodeFunction::new("test_call_direct_no_fixup")
+  func.add_result(Int)
+  let block = func.new_block()
+  let call_inst = @instr.VCodeInst::new(CallDirect(6000, 0, 1, Wasm))
+  block.add_inst(call_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  inspect(mc.get_call_fixups().length(), content="0")
+}
+
+///|
 test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
   if @isa.ISA::current() is @isa.AMD64 {
     return
