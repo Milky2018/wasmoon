@@ -1042,6 +1042,11 @@ fn compile_module_to_jit(
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
+  let perf_on = @perf.enabled()
+  let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+  if perf_on {
+    @perf.reset_module(mod_.codes.length())
+  }
   let isa = @isa.ISA::current()
   let target_arch : @cwasm.TargetArch = match isa {
     @isa.AArch64 => @cwasm.AArch64
@@ -1087,11 +1092,24 @@ fn compile_module_to_jit(
     } else {
       opt_level
     }
+    let optimize_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+    if perf_on {
+      @perf.begin_function(
+        func_idx,
+        func_name,
+        normalized_opt_level,
+        @ir.instruction_count(ir_func),
+      )
+    }
     @ir.optimize_with_level(
       ir_func,
       @ir.OptLevel::from_int(normalized_opt_level),
     )
     |> ignore
+    if optimize_tick is Some(tick) {
+      @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
+    }
+    let lower_tick = if perf_on { Some(@perf.tick_now()) } else { None }
     let mut ir_dump : String? = None
     if debug_db is Some(_) {
       ir_dump = Some(ir_func.print())
@@ -1101,6 +1119,10 @@ fn compile_module_to_jit(
       ir_func,
       num_imports=mod_.imports.length(),
     )
+    if lower_tick is Some(tick) {
+      @perf.record_stage_us("lower", @perf.elapsed_us(tick))
+    }
+    let regalloc_tick = if perf_on { Some(@perf.tick_now()) } else { None }
     let mut vcode_before_dump : String? = None
     if debug_db is Some(_) {
       vcode_before_dump = Some(vcode_func.print())
@@ -1109,6 +1131,18 @@ fn compile_module_to_jit(
     let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
       vcode_func,
     )
+    if regalloc_tick is Some(tick) {
+      @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
+      let (spills, reloads, reg_moves, spill_to_spill) = ra_output.spill_reload_stats()
+      @perf.record_regalloc_stats(
+        ra_output.get_num_spillslots(),
+        spills,
+        reloads,
+        reg_moves,
+        spill_to_spill,
+      )
+    }
+    let emit_tick = if perf_on { Some(@perf.tick_now()) } else { None }
     let mut vcode_after_dump : String? = None
     if debug_db is Some(_) {
       // Note: VCode is not rewritten; regalloc results are in `ra_output`.
@@ -1122,17 +1156,24 @@ fn compile_module_to_jit(
       debug_func_idx~,
       force_frame_setup=enable_dwarf,
     )
+    if emit_tick is Some(tick) {
+      @perf.record_stage_us("emit", @perf.elapsed_us(tick))
+    }
     let mut mc_dump : String? = None
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())
     }
     // Stage 6: Add to precompiled module
+    let code_size = mc.get_bytes().length()
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
     )
+    if perf_on {
+      @perf.finish_function(@ir.instruction_count(ir_func), code_size)
+    }
     match debug_db {
       Some(db) =>
         // Store best-effort dumps (empty string if unavailable for a stage).
@@ -1151,6 +1192,20 @@ fn compile_module_to_jit(
       mod_.codes.length() > 10 &&
       ((i + 1) % 10 == 0 || i + 1 == mod_.codes.length()) {
       @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
+    }
+  }
+  if module_tick is Some(tick) {
+    @perf.set_module_compile_us(@perf.elapsed_us(tick))
+    let report = @perf.export_json()
+    let output_path = match @sys.get_env_var("WASMOON_PERF_METRICS_FILE") {
+      Some(path) => path
+      None => "target/wasmoon-perf-metrics.json"
+    }
+    @fs.write_string_to_file(output_path, report) catch {
+      e =>
+        @logger.warn(
+          "Failed to write perf metrics report to '\{output_path}': \{e}",
+        )
     }
   }
   Some((precompiled, debug_db))

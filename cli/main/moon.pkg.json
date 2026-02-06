@@ -13,6 +13,7 @@
     "Milky2018/wasmoon/vcode",
     "Milky2018/wasmoon/vcode/isa",
     "Milky2018/wasmoon/vcode/emit",
+    "Milky2018/wasmoon/perf",
     "Milky2018/wasmoon/wasi",
     "moonbitlang/x/sys",
     "moonbitlang/x/fs",

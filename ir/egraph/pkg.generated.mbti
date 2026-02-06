@@ -102,6 +102,7 @@ pub fn EGraph::get_fconst(Self, EClassId) -> UInt64?
 pub fn EGraph::get_nodes(Self, EClassId) -> Array[ENode]
 pub fn EGraph::is_marked_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::is_rematerializable(Self, EClassId) -> Bool
+pub fn EGraph::last_rule_applications(Self) -> Int
 pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::new() -> Self

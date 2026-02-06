@@ -393,6 +393,8 @@ struct EGraph {
   type_map : Map[Int, Int]
   // Rematerialization set: classes that are cheap to recompute
   remat_set : @hashset.HashSet[Int]
+  // Number of successful rule applications in the most recent saturate call.
+  mut last_rule_applications : Int
 }
 
 ///|
@@ -406,6 +408,7 @@ pub fn EGraph::new() -> EGraph {
     uses: {},
     type_map: {},
     remat_set: @hashset.new(),
+    last_rule_applications: 0,
   }
 }
 
@@ -1022,6 +1025,13 @@ pub fn EGraph::num_nodes(self : EGraph) -> Int {
     count = count + eclass.nodes.length()
   }
   count
+}
+
+///|
+/// Number of successful rewrite rule applications in the most recent
+/// `saturate` / `saturate_indexed` invocation.
+pub fn EGraph::last_rule_applications(self : EGraph) -> Int {
+  self.last_rule_applications
 }
 
 // ============================================================================
@@ -1709,12 +1719,14 @@ pub fn EGraph::saturate_indexed(
   ruleset : IndexedRuleSet,
   max_iterations : Int,
 ) -> Int {
+  self.last_rule_applications = 0
   if max_iterations <= 0 {
     return 0
   }
   let mut iters = 0
   while iters < max_iterations {
-    let changed = self.apply_indexed_rules_once(ruleset)
+    let (changed, applied) = self.apply_indexed_rules_once(ruleset)
+    self.last_rule_applications = self.last_rule_applications + applied
     iters = iters + 1
     if !changed {
       break
@@ -1729,8 +1741,9 @@ pub fn EGraph::saturate_indexed(
 fn EGraph::apply_indexed_rules_once(
   self : EGraph,
   ruleset : IndexedRuleSet,
-) -> Bool {
+) -> (Bool, Int) {
   let mut changed = false
+  let mut applied = 0
 
   // Snapshot the current class ids in deterministic order.
   let uf_len = self.uf.parent.length()
@@ -1769,6 +1782,7 @@ fn EGraph::apply_indexed_rules_once(
         for indexed_rule in rules {
           if (indexed_rule.rule.apply)(self, class_id) {
             changed = true
+            applied = applied + 1
           }
         }
       }
@@ -1776,9 +1790,10 @@ fn EGraph::apply_indexed_rules_once(
     for indexed_rule in ruleset.universal {
       if (indexed_rule.rule.apply)(self, class_id) {
         changed = true
+        applied = applied + 1
       }
     }
   }
   self.rebuild()
-  changed
+  (changed, applied)
 }

@@ -25,6 +25,57 @@ pub fn OptLevel::from_int(n : Int) -> OptLevel {
 }
 
 ///|
+/// Count IR instructions in a function.
+pub fn instruction_count(func : Function) -> Int {
+  let mut count = 0
+  for block in func.blocks {
+    count = count + block.instructions.length()
+  }
+  count
+}
+
+///|
+fn run_opt_pass(
+  func : Function,
+  pass_name : String,
+  pass_fn : (Function) -> OptResult,
+) -> OptResult {
+  if !@perf.enabled() {
+    return pass_fn(func)
+  }
+  let before = instruction_count(func)
+  let tick = @perf.tick_now()
+  let result = pass_fn(func)
+  let duration_us = @perf.elapsed_us(tick)
+  let after = instruction_count(func)
+  @perf.record_ir_pass(pass_name, before, after, result.changed, duration_us)
+  result
+}
+
+///|
+fn run_egraph_pass(func : Function) -> Bool {
+  if !@perf.enabled() {
+    return optimize_function(func)
+  }
+  let before = instruction_count(func)
+  let tick = @perf.tick_now()
+  let stats = optimize_function_with_stats(func)
+  let duration_us = @perf.elapsed_us(tick)
+  let after = instruction_count(func)
+  @perf.record_ir_pass(
+    "egraph",
+    before,
+    after,
+    stats.changed,
+    duration_us,
+    egraph_classes=Some(stats.total_classes),
+    egraph_nodes=Some(stats.total_nodes),
+    egraph_rule_apps=Some(stats.total_rule_applications),
+  )
+  stats.changed
+}
+
+///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   // NOTE: Even at O0 we still need a small set of IR cleanups to keep the
@@ -36,15 +87,19 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
     // Translator produces many SSA temps/block params (e.g. from WASM locals).
     // Removing trivially-dead IR avoids pathological regalloc pressure and
     // prevents backend miscompiles in very large unoptimized functions.
-    let dce_result = eliminate_dead_code(func)
+    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
     if dce_result.changed {
       result.mark_changed()
     }
-    let cbpe_result = eliminate_constant_block_params(func)
+    let cbpe_result = run_opt_pass(
+      func, "const_block_param_elim", eliminate_constant_block_params,
+    )
     if cbpe_result.changed {
       result.mark_changed()
     }
-    let dbpe_result = eliminate_dead_block_params(func)
+    let dbpe_result = run_opt_pass(
+      func, "dead_block_param_elim", eliminate_dead_block_params,
+    )
     if dbpe_result.changed {
       result.mark_changed()
     }
@@ -62,12 +117,14 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   match level {
     O0 => ()
     _ => {
-      let remat_result = rematerialize_across_blocks(func)
+      let remat_result = run_opt_pass(
+        func, "rematerialize_across_blocks", rematerialize_across_blocks,
+      )
       if remat_result.changed {
         result.mark_changed()
       }
       // Cleanup: remat may leave now-unused original defs behind.
-      let dce_result = eliminate_dead_code(func)
+      let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
       if dce_result.changed {
         result.mark_changed()
       }
@@ -87,49 +144,59 @@ fn optimize_o1(func : Function) -> OptResult {
     changed = false
     iterations = iterations + 1
     // E-graph based optimization (constant folding + algebraic simplification)
-    if optimize_function(func) {
+    if run_egraph_pass(func) {
       changed = true
       result.mark_changed()
     }
     // Basic optimizations only
-    let cf_result = fold_constants(func)
+    let cf_result = run_opt_pass(func, "const_fold", fold_constants)
     if cf_result.changed {
       changed = true
       result.mark_changed()
     }
-    let mb_result = eliminate_redundant_mem_base_loads(func)
+    let mb_result = run_opt_pass(
+      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+    )
     if mb_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies_global(func)
+    let cp_result = run_opt_pass(
+      func, "copy_prop_global", propagate_copies_global,
+    )
     if cp_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions_global(func)
+    let cse_result = run_opt_pass(
+      func, "cse_global", eliminate_common_subexpressions_global,
+    )
     if cse_result.changed {
       changed = true
       result.mark_changed()
     }
     // GVN with load CSE (extends CSE to handle memory loads)
-    let gvn_result = gvn_global(func)
+    let gvn_result = run_opt_pass(func, "gvn_global", gvn_global)
     if gvn_result.changed {
       changed = true
       result.mark_changed()
     }
-    let dce_result = eliminate_dead_code(func)
+    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
     if dce_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cbpe_result = eliminate_constant_block_params(func)
+    let cbpe_result = run_opt_pass(
+      func, "const_block_param_elim", eliminate_constant_block_params,
+    )
     if cbpe_result.changed {
       changed = true
       result.mark_changed()
     }
     // Dead block parameter elimination (crucial for unused locals)
-    let dbpe_result = eliminate_dead_block_params(func)
+    let dbpe_result = run_opt_pass(
+      func, "dead_block_param_elim", eliminate_dead_block_params,
+    )
     if dbpe_result.changed {
       changed = true
       result.mark_changed()
@@ -149,70 +216,82 @@ pub fn optimize(func : Function) -> OptResult {
     changed = false
     iterations = iterations + 1
     // E-graph based optimization (constant folding + algebraic simplification)
-    if optimize_function(func) {
+    if run_egraph_pass(func) {
       changed = true
       result.mark_changed()
     }
     // Run each optimization pass
-    let cf_result = fold_constants(func)
+    let cf_result = run_opt_pass(func, "const_fold", fold_constants)
     if cf_result.changed {
       changed = true
       result.mark_changed()
     }
-    let mb_result = eliminate_redundant_mem_base_loads(func)
+    let mb_result = run_opt_pass(
+      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+    )
     if mb_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cp_result = propagate_copies_global(func)
+    let cp_result = run_opt_pass(
+      func, "copy_prop_global", propagate_copies_global,
+    )
     if cp_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cse_result = eliminate_common_subexpressions_global(func)
+    let cse_result = run_opt_pass(
+      func, "cse_global", eliminate_common_subexpressions_global,
+    )
     if cse_result.changed {
       changed = true
       result.mark_changed()
     }
     // GVN with load CSE (extends CSE to handle memory loads)
-    let gvn_result = gvn_global(func)
+    let gvn_result = run_opt_pass(func, "gvn_global", gvn_global)
     if gvn_result.changed {
       changed = true
       result.mark_changed()
     }
-    let dce_result = eliminate_dead_code(func)
+    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
     if dce_result.changed {
       changed = true
       result.mark_changed()
     }
-    let cbpe_result = eliminate_constant_block_params(func)
+    let cbpe_result = run_opt_pass(
+      func, "const_block_param_elim", eliminate_constant_block_params,
+    )
     if cbpe_result.changed {
       changed = true
       result.mark_changed()
     }
     // Dead block parameter elimination (crucial for unused locals)
-    let dbpe_result = eliminate_dead_block_params(func)
+    let dbpe_result = run_opt_pass(
+      func, "dead_block_param_elim", eliminate_dead_block_params,
+    )
     if dbpe_result.changed {
       changed = true
       result.mark_changed()
     }
     // Control flow optimizations
-    let bs_result = simplify_branches(func)
+    let bs_result = run_opt_pass(func, "simplify_branches", simplify_branches)
     if bs_result.changed {
       changed = true
       result.mark_changed()
     }
-    let uce_result = eliminate_unreachable_code(func)
+    let uce_result = run_opt_pass(
+      func, "eliminate_unreachable", eliminate_unreachable_code,
+    )
     if uce_result.changed {
       changed = true
       result.mark_changed()
     }
-    let bm_result = merge_blocks(func)
+    let bm_result = run_opt_pass(func, "merge_blocks", merge_blocks)
     if bm_result.changed {
       changed = true
       result.mark_changed()
     }
-    let jt_result = thread_jumps(func)
+    let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
     if jt_result.changed {
       changed = true
       result.mark_changed()
@@ -231,15 +310,17 @@ fn optimize_o3(func : Function) -> OptResult {
     result.mark_changed()
   }
   // Then apply loop optimizations
-  let licm_result = hoist_loop_invariants(func)
+  let licm_result = run_opt_pass(func, "loop_licm", hoist_loop_invariants)
   if licm_result.changed {
     result.mark_changed()
   }
-  let unroll_result = unroll_loops(func, 2) // Unroll factor of 2
+  let unroll_result = run_opt_pass(func, "loop_unroll", fn(func) {
+    unroll_loops(func, 2)
+  }) // Unroll factor of 2
   if unroll_result.changed {
     result.mark_changed()
   }
-  let sr_result = reduce_strength(func)
+  let sr_result = run_opt_pass(func, "loop_strength_reduce", reduce_strength)
   if sr_result.changed {
     result.mark_changed()
   }

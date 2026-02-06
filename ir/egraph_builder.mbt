@@ -367,8 +367,20 @@ fn EGraphBuilder::recompute_representatives_for_block(
 ///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
-pub fn optimize_function(func : Function) -> Bool {
+pub struct EGraphOptimizeStats {
+  changed : Bool
+  total_classes : Int
+  total_nodes : Int
+  total_rule_applications : Int
+}
+
+///|
+/// Apply e-graph optimization to a function and return aggregate stats.
+pub fn optimize_function_with_stats(func : Function) -> EGraphOptimizeStats {
   let mut changed = false
+  let mut total_classes = 0
+  let mut total_nodes = 0
+  let mut total_rule_applications = 0
   for block in func.blocks {
     let builder = EGraphBuilder::new()
 
@@ -391,6 +403,11 @@ pub fn optimize_function(func : Function) -> Bool {
 
     // Run saturation
     builder.optimize()
+    let egraph = builder.get_egraph()
+    total_classes = total_classes + egraph.num_classes()
+    total_nodes = total_nodes + egraph.num_nodes()
+    total_rule_applications = total_rule_applications +
+      egraph.last_rule_applications()
     builder.recompute_representatives_for_block(block)
 
     // Apply optimizations: constant folding and operand rewriting
@@ -428,5 +445,12 @@ pub fn optimize_function(func : Function) -> Bool {
       }
     }
   }
-  changed
+  { changed, total_classes, total_nodes, total_rule_applications }
+}
+
+///|
+/// Apply e-graph optimization to a function.
+/// Returns true if any optimization was applied.
+pub fn optimize_function(func : Function) -> Bool {
+  optimize_function_with_stats(func).changed
 }

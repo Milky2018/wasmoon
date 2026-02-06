@@ -1,0 +1,12 @@
+{
+  "import": [
+    "moonbitlang/core/json",
+    "moonbitlang/x/sys"
+  ],
+  "targets": {
+    "clock_wasm.mbt": ["wasm", "wasm-gc"],
+    "clock_js.mbt": ["js"],
+    "clock_native.mbt": ["native", "llvm"]
+  },
+  "native-stub": ["clock_native.c"]
+}

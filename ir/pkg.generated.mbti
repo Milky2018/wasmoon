@@ -63,6 +63,8 @@ pub fn gvn_global(Function) -> OptResult
 
 pub fn hoist_loop_invariants(Function) -> OptResult
 
+pub fn instruction_count(Function) -> Int
+
 pub fn merge_blocks(Function) -> OptResult
 
 pub fn optimize(Function) -> OptResult
@@ -70,6 +72,8 @@ pub fn optimize(Function) -> OptResult
 pub fn optimize_block(Block) -> Map[Int, (Int, @egraph.ENode)]
 
 pub fn optimize_function(Function) -> Bool
+
+pub fn optimize_function_with_stats(Function) -> EGraphOptimizeStats
 
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
@@ -136,6 +140,13 @@ pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
 pub fn EGraphBuilder::new() -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
+
+pub struct EGraphOptimizeStats {
+  changed : Bool
+  total_classes : Int
+  total_nodes : Int
+  total_rule_applications : Int
+}
 
 pub(all) enum FloatCC {
   Eq
