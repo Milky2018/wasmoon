@@ -1583,23 +1583,123 @@ fn node_cost(node : ENode) -> Int {
 }
 
 ///|
+/// Extraction cost uses Cranelift-style ordering:
+/// 1) lower op_cost is always better
+/// 2) tie-break with shallower depth
+/// Arithmetic is saturating and reserves an infinity sentinel.
+priv struct ExtractCost {
+  op_cost : Int
+  depth : Int
+  infinite : Bool
+}
+
+///|
+fn extract_cost_max_finite() -> Int {
+  @int.max_value - 1
+}
+
+///|
+fn extract_cost_finite(op_cost : Int, depth : Int) -> ExtractCost {
+  { op_cost, depth, infinite: false }
+}
+
+///|
+fn extract_cost_infinity() -> ExtractCost {
+  { op_cost: extract_cost_max_finite(), depth: 255, infinite: true }
+}
+
+///|
+fn extract_cost_is_better(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
+  if lhs.infinite {
+    false
+  } else if rhs.infinite {
+    true
+  } else if lhs.op_cost < rhs.op_cost {
+    true
+  } else if lhs.op_cost > rhs.op_cost {
+    false
+  } else {
+    lhs.depth < rhs.depth
+  }
+}
+
+///|
+fn extract_cost_cannot_beat(partial : ExtractCost, best : ExtractCost) -> Bool {
+  if best.infinite {
+    false
+  } else if partial.infinite {
+    true
+  } else if partial.op_cost > best.op_cost {
+    true
+  } else if partial.op_cost < best.op_cost {
+    false
+  } else {
+    partial.depth >= best.depth
+  }
+}
+
+///|
+fn extract_cost_add(lhs : ExtractCost, rhs : ExtractCost) -> ExtractCost {
+  if lhs.infinite || rhs.infinite {
+    return extract_cost_infinity()
+  }
+  let max_finite = extract_cost_max_finite()
+  let op_cost = if lhs.op_cost > max_finite - rhs.op_cost {
+    max_finite
+  } else {
+    lhs.op_cost + rhs.op_cost
+  }
+  let depth = if lhs.depth >= rhs.depth { lhs.depth } else { rhs.depth }
+  extract_cost_finite(op_cost, depth)
+}
+
+///|
+fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
+  if cost.infinite || bonus == 0 {
+    return cost
+  }
+  let max_finite = extract_cost_max_finite()
+  if bonus > 0 {
+    let op_cost = if cost.op_cost > max_finite - bonus {
+      max_finite
+    } else {
+      cost.op_cost + bonus
+    }
+    extract_cost_finite(op_cost, cost.depth)
+  } else {
+    let bonus_abs = 0 - bonus
+    let op_cost = if cost.op_cost <= bonus_abs {
+      0
+    } else {
+      cost.op_cost - bonus_abs
+    }
+    extract_cost_finite(op_cost, cost.depth)
+  }
+}
+
+///|
 /// Extract the best (lowest cost) expression from an e-class
 /// Returns the total cost and the best e-node
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
-  let memo : Map[Int, (Int, ENode)] = {}
+  let memo : Map[Int, (ExtractCost, ENode)] = {}
   // Track classes currently being processed to detect cycles
   let in_progress : @hashset.HashSet[Int] = @hashset.new()
-  self.extract_impl(id, memo, in_progress)
+  let (cost, node) = self.extract_impl(id, memo, in_progress)
+  if cost.infinite {
+    (@int.max_value, node)
+  } else {
+    (cost.op_cost, node)
+  }
 }
 
 ///|
 fn EGraph::extract_impl(
   self : EGraph,
   id : EClassId,
-  memo : Map[Int, (Int, ENode)],
+  memo : Map[Int, (ExtractCost, ENode)],
   in_progress : @hashset.HashSet[Int],
-) -> (Int, ENode) {
+) -> (ExtractCost, ENode) {
   let canonical = self.find(id)
 
   // Check memo
@@ -1612,8 +1712,8 @@ fn EGraph::extract_impl(
   // by not choosing nodes that lead to cycles
   if in_progress.contains(canonical.0) {
     // Return a sentinel value that indicates "don't use this path"
-    // The caller will see the high cost and skip this node
-    return (@int.max_value / 2, { op: Var(-1), children: [] })
+    // The caller will see the infinite cost and skip this node
+    return (extract_cost_infinity(), { op: Var(-1), children: [] })
   }
 
   // Mark as in progress
@@ -1625,11 +1725,11 @@ fn EGraph::extract_impl(
     // Should not happen in a well-formed e-graph, but handle gracefully
     in_progress.remove(canonical.0)
     // Return a sentinel value
-    return (@int.max_value, { op: Var(-1), children: [] })
+    return (extract_cost_infinity(), { op: Var(-1), children: [] })
   }
 
   // Find the lowest cost node
-  let mut best_cost = @int.max_value
+  let mut best_cost = extract_cost_infinity()
   let mut best_node = nodes[0]
   for node in nodes {
     // Skip nodes with cyclic children (child points to current class)
@@ -1644,16 +1744,21 @@ fn EGraph::extract_impl(
       continue // Skip this node, try others
     }
 
-    // Compute cost: node cost + sum of children costs
-    let mut total_cost = node_cost(node)
+    // Compute cost with Cranelift-style tie-breaking:
+    // op_cost first, then expression depth.
+    let mut total_cost = extract_cost_finite(node_cost(node), 1)
     for child in node.children {
       let (child_cost, _) = self.extract_impl(child, memo, in_progress)
-      total_cost = total_cost + child_cost
-      if total_cost >= best_cost {
-        break // Pruning: no need to continue if already worse
+      total_cost = extract_cost_add(total_cost, child_cost)
+      if extract_cost_cannot_beat(total_cost, best_cost) {
+        break // Pruning: cannot beat current best
       }
     }
-    if total_cost < best_cost {
+    total_cost = extract_cost_apply_bonus(
+      total_cost,
+      self.remat_cost_bonus(canonical),
+    )
+    if extract_cost_is_better(total_cost, best_cost) {
       best_cost = total_cost
       best_node = node
     }
