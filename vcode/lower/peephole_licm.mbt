@@ -888,6 +888,237 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
 }
 
 ///|
+priv struct JumpForwardInfo {
+  target : Int
+  arg_indices : Array[Int]
+}
+
+///|
+priv struct ResolvedJump {
+  target : Int
+  args : Array[@abi.Reg]
+  changed : Bool
+}
+
+///|
+fn build_jump_forwarding_map(
+  func : @regalloc.VCodeFunction,
+) -> Map[Int, JumpForwardInfo] {
+  let forwarding : Map[Int, JumpForwardInfo] = {}
+  for block in func.blocks {
+    guard block.insts.length() == 0 else { continue }
+    guard block.terminator is Some(@instr.VCodeTerminator::Jump(target, args)) else {
+      continue
+    }
+    guard target != block.id else { continue }
+    guard args.length() == block.params.length() else { continue }
+    let arg_indices : Array[Int] = []
+    let mut ok = true
+    for arg in args {
+      match arg {
+        Virtual(vreg) => {
+          let mut found = -1
+          for i, param in block.params {
+            if param.id == vreg.id {
+              found = i
+              break
+            }
+          }
+          if found < 0 {
+            ok = false
+            break
+          }
+          arg_indices.push(found)
+        }
+        Physical(_) => {
+          ok = false
+          break
+        }
+      }
+    }
+    if ok {
+      forwarding.set(block.id, { target, arg_indices })
+    }
+  }
+  forwarding
+}
+
+///|
+fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
+  let forwarding = build_jump_forwarding_map(func)
+  if forwarding.is_empty() {
+    return 0
+  }
+  fn resolve_jump(
+    target : Int,
+    args : Array[@abi.Reg],
+    forwarding : Map[Int, JumpForwardInfo],
+  ) -> ResolvedJump {
+    let mut cur_target = target
+    let mut cur_args = args
+    let mut changed = false
+    let visited : @hashset.HashSet[Int] = @hashset.new()
+    while true {
+      if visited.contains(cur_target) {
+        break
+      }
+      visited.add(cur_target)
+      match forwarding.get(cur_target) {
+        Some(info) => {
+          if info.arg_indices.length() != cur_args.length() {
+            break
+          }
+          let next_args : Array[@abi.Reg] = []
+          let mut valid = true
+          for idx in info.arg_indices {
+            if idx < 0 || idx >= cur_args.length() {
+              valid = false
+              break
+            }
+            next_args.push(cur_args[idx])
+          }
+          if !valid {
+            break
+          }
+          cur_target = info.target
+          cur_args = next_args
+          changed = true
+        }
+        None => break
+      }
+    }
+    { target: cur_target, args: cur_args, changed }
+  }
+
+  fn resolve_target_no_args(
+    target : Int,
+    forwarding : Map[Int, JumpForwardInfo],
+  ) -> Int {
+    let mut cur_target = target
+    let visited : @hashset.HashSet[Int] = @hashset.new()
+    while true {
+      if visited.contains(cur_target) {
+        break
+      }
+      visited.add(cur_target)
+      match forwarding.get(cur_target) {
+        Some(info) =>
+          if info.arg_indices.length() == 0 {
+            cur_target = info.target
+          } else {
+            break
+          }
+        None => break
+      }
+    }
+    cur_target
+  }
+
+  let mut rewrites = 0
+  for block in func.blocks {
+    match block.terminator {
+      Some(@instr.VCodeTerminator::Jump(target, args)) => {
+        let resolved = resolve_jump(target, args, forwarding)
+        if resolved.changed {
+          block.set_terminator(
+            @instr.VCodeTerminator::Jump(resolved.target, resolved.args),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      Some(@instr.VCodeTerminator::Branch(cond, then_b, else_b)) => {
+        let new_then = resolve_target_no_args(then_b, forwarding)
+        let new_else = resolve_target_no_args(else_b, forwarding)
+        if new_then != then_b || new_else != else_b {
+          block.set_terminator(
+            @instr.VCodeTerminator::Branch(cond, new_then, new_else),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      Some(
+        @instr.VCodeTerminator::BranchCmp(lhs, rhs, cond, is_64, then_b, else_b)
+      ) => {
+        let new_then = resolve_target_no_args(then_b, forwarding)
+        let new_else = resolve_target_no_args(else_b, forwarding)
+        if new_then != then_b || new_else != else_b {
+          block.set_terminator(
+            @instr.VCodeTerminator::BranchCmp(
+              lhs, rhs, cond, is_64, new_then, new_else,
+            ),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      Some(
+        @instr.VCodeTerminator::BranchZero(
+          reg,
+          is_nonzero,
+          is_64,
+          then_b,
+          else_b
+        )
+      ) => {
+        let new_then = resolve_target_no_args(then_b, forwarding)
+        let new_else = resolve_target_no_args(else_b, forwarding)
+        if new_then != then_b || new_else != else_b {
+          block.set_terminator(
+            @instr.VCodeTerminator::BranchZero(
+              reg, is_nonzero, is_64, new_then, new_else,
+            ),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      Some(
+        @instr.VCodeTerminator::BranchCmpImm(
+          lhs,
+          imm,
+          cond,
+          is_64,
+          then_b,
+          else_b
+        )
+      ) => {
+        let new_then = resolve_target_no_args(then_b, forwarding)
+        let new_else = resolve_target_no_args(else_b, forwarding)
+        if new_then != then_b || new_else != else_b {
+          block.set_terminator(
+            @instr.VCodeTerminator::BranchCmpImm(
+              lhs, imm, cond, is_64, new_then, new_else,
+            ),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      Some(@instr.VCodeTerminator::BrTable(index, targets, default_id)) => {
+        let new_targets : Array[Int] = []
+        let mut changed = false
+        for target in targets {
+          let new_target = resolve_target_no_args(target, forwarding)
+          if new_target != target {
+            changed = true
+          }
+          new_targets.push(new_target)
+        }
+        let new_default = resolve_target_no_args(default_id, forwarding)
+        if new_default != default_id {
+          changed = true
+        }
+        if changed {
+          block.set_terminator(
+            @instr.VCodeTerminator::BrTable(index, new_targets, new_default),
+          )
+          rewrites = rewrites + 1
+        }
+      }
+      _ => ()
+    }
+  }
+  rewrites
+}
+
+///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
@@ -912,6 +1143,9 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   propagate_moves_global(func)
   // Pass 1.65: Fuse cmp+branch into compare branches
   fuse_cmp_branch(func)
+  // Pass 1.66: Thread trivial jump blocks, including block-arg forwarding.
+  // This reduces jump chains and improves block fallthrough opportunities.
+  thread_trivial_jump_blocks(func) |> ignore
   // Pass 1.7: Drop trivially-dead value defs
   dce_trivially_dead(func)
 
