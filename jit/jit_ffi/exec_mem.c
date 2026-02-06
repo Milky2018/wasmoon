@@ -12,9 +12,37 @@ typedef struct {
     size_t size;
 } jit_code_block_t;
 
-#define MAX_CODE_BLOCKS 1024
-static jit_code_block_t code_blocks[MAX_CODE_BLOCKS];
+// Start small and grow on demand. This avoids hard limits for large modules.
+#define INITIAL_CODE_BLOCK_CAPACITY 256
+static jit_code_block_t *code_blocks = NULL;
 static int num_code_blocks = 0;
+static int code_blocks_capacity = 0;
+
+static int ensure_code_block_capacity(void) {
+    if (num_code_blocks < code_blocks_capacity) {
+        return 1;
+    }
+
+    int new_capacity = (code_blocks_capacity == 0)
+        ? INITIAL_CODE_BLOCK_CAPACITY
+        : code_blocks_capacity * 2;
+    if (new_capacity <= code_blocks_capacity) {
+        return 0;
+    }
+    if ((size_t)new_capacity > SIZE_MAX / sizeof(jit_code_block_t)) {
+        return 0;
+    }
+
+    jit_code_block_t *new_blocks =
+        (jit_code_block_t *)realloc(code_blocks, (size_t)new_capacity * sizeof(jit_code_block_t));
+    if (!new_blocks) {
+        return 0;
+    }
+
+    code_blocks = new_blocks;
+    code_blocks_capacity = new_capacity;
+    return 1;
+}
 
 // ============ Platform Helpers ============
 
@@ -36,7 +64,10 @@ static size_t round_up_to_page(size_t size) {
 // ============ Executable Memory Allocation ============
 
 int64_t alloc_exec_internal(int size) {
-    if (size <= 0 || num_code_blocks >= MAX_CODE_BLOCKS) {
+    if (size <= 0) {
+        return 0;
+    }
+    if (!ensure_code_block_capacity()) {
         return 0;
     }
 
@@ -62,12 +93,13 @@ int64_t alloc_exec_internal(int size) {
     }
 #endif
 
-    if (ptr) {
-        code_blocks[num_code_blocks].code = ptr;
-        code_blocks[num_code_blocks].size = alloc_size;
-        num_code_blocks++;
+    if (!ptr) {
+        return 0;
     }
 
+    code_blocks[num_code_blocks].code = ptr;
+    code_blocks[num_code_blocks].size = alloc_size;
+    num_code_blocks++;
     return (int64_t)ptr;
 }
 
@@ -148,11 +180,16 @@ int free_exec_internal(int64_t ptr_i64) {
 #else
             munmap(ptr, code_blocks[i].size);
 #endif
-            // Remove from array (shift remaining)
-            for (int j = i; j < num_code_blocks - 1; j++) {
-                code_blocks[j] = code_blocks[j + 1];
-            }
+            // Remove from array in O(1) by swapping with the tail.
             num_code_blocks--;
+            if (i != num_code_blocks) {
+                code_blocks[i] = code_blocks[num_code_blocks];
+            }
+            if (num_code_blocks == 0) {
+                free(code_blocks);
+                code_blocks = NULL;
+                code_blocks_capacity = 0;
+            }
             return 0;
         }
     }

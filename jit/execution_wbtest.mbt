@@ -10,6 +10,25 @@
 //   (assert_return (invoke "test" (i32.const 3)) (f32.const 0.0))
 
 ///|
+test "exec code allocation scales beyond 1024 blocks" {
+  let blocks : Array[ExecCode] = []
+  for _ in 0..<1100 {
+    match ExecCode::new([0x00]) {
+      Some(ec) => blocks.push(ec)
+      None => fail("ExecCode allocation failed before 1100 blocks")
+    }
+  }
+  let mut non_zero_ptrs = 0
+  for block in blocks {
+    if block.ptr() != 0L {
+      non_zero_ptrs = non_zero_ptrs + 1
+    }
+  }
+  inspect(blocks.length(), content="1100")
+  inspect(non_zero_ptrs, content="1100")
+}
+
+///|
 test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   if @isa.ISA::current() is @isa.AMD64 {
     return
