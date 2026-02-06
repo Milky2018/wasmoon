@@ -698,6 +698,28 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 }
 
 ///|
+test "emit: call_direct(Wasm) emits BL fixup with local veneer fallback" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
+  let func = @regalloc.VCodeFunction::new("test_call_direct_no_fixup")
+  func.add_result(Int)
+  let block = func.new_block()
+  let call_inst = @instr.VCodeInst::new(CallDirect(6000, 0, 1, Wasm))
+  block.add_inst(call_inst)
+  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  let mc = @emit.emit_function(func)
+  let fixups = mc.get_call_fixups()
+  inspect(fixups.length(), content="1")
+  let fixup = fixups[0]
+  inspect(fixup.func_idx, content="6000")
+  inspect(fixup.veneer_offset > fixup.offset, content="true")
+  let disasm = mc.dump_disasm()
+  inspect(disasm.contains("bl func_6000"), content="true")
+  inspect(disasm.contains("call_veneer.6000"), content="true")
+}
+
+///|
 test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
   if @isa.ISA::current() is @isa.AMD64 {
     return

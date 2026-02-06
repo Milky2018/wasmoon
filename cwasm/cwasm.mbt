@@ -1081,7 +1081,11 @@ pub fn CompiledEntry::to_compiled_function(
     mc.add_func_addr_fixup(fixup.offset, fixup.func_idx, fixup.reg)
   }
   for fixup in self.call_fixups {
-    mc.add_call_fixup(fixup.offset, fixup.func_idx)
+    mc.add_call_fixup(
+      fixup.offset,
+      fixup.func_idx,
+      veneer_offset=fixup.veneer_offset,
+    )
   }
   @vcode.CompiledFunction::new(self.name, mc, self.frame_size)
 }

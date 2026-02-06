@@ -36,6 +36,7 @@ type Amd64ConstEntry
 pub(all) struct CallFixup {
   offset : Int
   func_idx : Int
+  veneer_offset : Int
 }
 
 pub(all) enum CondCode {
@@ -111,7 +112,7 @@ pub struct MachineCode {
   amd64_const_entries : Array[Amd64ConstEntry]
   disasm : Array[(Int, String)]
 }
-pub fn MachineCode::add_call_fixup(Self, Int, Int) -> Unit
+pub fn MachineCode::add_call_fixup(Self, Int, Int, veneer_offset? : Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
 pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::add_x86_rel32_fixup(Self, Int, Int, Int) -> Unit

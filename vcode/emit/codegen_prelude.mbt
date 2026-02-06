@@ -1072,7 +1072,9 @@ pub fn emit_function(
       mc.emit_ret(30)
     }
   }
-  if is_amd64 {
+  if !is_amd64 {
+    mc.materialize_call_veneers()
+  } else {
     mc.emit_amd64_const_pool()
   }
   mc.resolve_fixups()
@@ -2058,7 +2060,9 @@ pub fn emit_function_with_regalloc(
       mc.emit_ret(30)
     }
   }
-  if is_amd64 {
+  if !is_amd64 {
+    mc.materialize_call_veneers()
+  } else {
     mc.emit_amd64_const_pool()
   }
   mc.resolve_fixups()
