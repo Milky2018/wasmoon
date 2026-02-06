@@ -252,6 +252,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if is_64 && (rm & 7) != 4 {
+        // Cranelift-style iadd preference: use LEA for pure address/add trees.
+        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+        return
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd {
         tmp = isa.scratch_reg_2_index()
@@ -610,6 +615,14 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if shift is @instr.ShiftType::Lsl &&
+        amount >= 0 &&
+        amount <= 3 &&
+        (rm & 7) != 4 {
+        // Cranelift x64 iadd-shift style: lea rd, [rn + rm * scale].
+        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
+        return
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
         tmp = isa.scratch_reg_2_index()
@@ -1898,6 +1911,52 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
+    @instr.LoadPtrRegOffset(ty, ext, shift) => {
+      // Raw pointer load with scaled index addressing (Cranelift-style sinkable load).
+      let rt = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      if !(ext is @instr.IndexExtend::None) {
+        use_amode = false
+      }
+      if use_amode {
+        match ty {
+          @instr.MemType::I32 =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, 0,
+            )
+          @instr.MemType::I64 =>
+            self.x86_emit_mov_r64_m64_base_index_scale_disp(
+              rt, base, index, shift, 0,
+            )
+          _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+        }
+        return
+      }
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, addr, 0)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, addr, 0)
+        _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+      }
+    }
     @instr.StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking).
       let rn = reg_num(inst.uses[0])
@@ -1908,6 +1967,52 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
         @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
         @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+      }
+    }
+    @instr.StorePtrRegOffset(ty, ext, shift) => {
+      // Raw pointer store with scaled index addressing.
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let value = reg_num(inst.uses[2])
+      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      if !(ext is @instr.IndexExtend::None) {
+        use_amode = false
+      }
+      if use_amode {
+        match ty {
+          @instr.MemType::I32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, index, shift, 0, value,
+            )
+          @instr.MemType::I64 =>
+            self.x86_emit_mov_m64_r64_base_index_scale_disp(
+              base, index, shift, 0, value,
+            )
+          _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+        }
+        return
+      }
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index || addr == value {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(addr, 0, value)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(addr, 0, value)
+        _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
       }
     }
     @instr.LoadPtrNarrow(bits, signed, offset) => {

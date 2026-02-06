@@ -31,9 +31,23 @@ fn emit_rex_w(mc : MachineCode, r : Int, b : Int) -> Unit {
 }
 
 ///|
+fn emit_rex_wx(mc : MachineCode, r : Int, x : Int, b : Int) -> Unit {
+  // REX prefix with W=1 and full R/X/B bits.
+  let rex = 0x48 | ((r & 1) << 2) | ((x & 1) << 1) | (b & 1)
+  mc.emit_byte(rex)
+}
+
+///|
 fn emit_rex(mc : MachineCode, r : Int, b : Int) -> Unit {
   // REX prefix without W bit (used by some SSE encodings).
   let rex = 0x40 | ((r & 1) << 2) | (b & 1)
+  mc.emit_byte(rex)
+}
+
+///|
+fn emit_rex_x(mc : MachineCode, r : Int, x : Int, b : Int) -> Unit {
+  // REX prefix without W bit and with full R/X/B bits.
+  let rex = 0x40 | ((r & 1) << 2) | ((x & 1) << 1) | (b & 1)
   mc.emit_byte(rex)
 }
 
@@ -697,6 +711,34 @@ pub fn MachineCode::x86_emit_lea_r64_riprel32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_lea_r64_base_index_scale_disp(
+  self : MachineCode,
+  dst : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // lea r64, [base + index * (1<<scale) + disp32]
+  guard scale >= 0 && scale <= 3 else {
+    abort("x86_emit_lea_r64_base_index_scale_disp: invalid scale \{scale}")
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_lea_r64_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  emit_rex_wx(self, r, x, b)
+  self.emit_byte(0x8D)
+  emit_modrm(self, 2, dst, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_sub_rsp_imm32(
   self : MachineCode,
   imm : Int,
@@ -741,6 +783,34 @@ pub fn MachineCode::x86_emit_mov_r64_m64(
 }
 
 ///|
+pub fn MachineCode::x86_emit_mov_r64_m64_base_index_scale_disp(
+  self : MachineCode,
+  dst : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // mov r64, [base + index * (1<<scale) + disp32]
+  guard scale >= 0 && scale <= 3 else {
+    abort("x86_emit_mov_r64_m64_base_index_scale_disp: invalid scale \{scale}")
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_mov_r64_m64_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  emit_rex_wx(self, r, x, b)
+  self.emit_byte(0x8B)
+  emit_modrm(self, 2, dst, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_mov_r32_m32(
   self : MachineCode,
   dst : Int,
@@ -758,6 +828,36 @@ pub fn MachineCode::x86_emit_mov_r32_m32(
   if (base & 7) == 4 {
     emit_sib(self, 0, 4, base)
   }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_mov_r32_m32_base_index_scale_disp(
+  self : MachineCode,
+  dst : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // mov r32, [base + index * (1<<scale) + disp32]
+  guard scale >= 0 && scale <= 3 else {
+    abort("x86_emit_mov_r32_m32_base_index_scale_disp: invalid scale \{scale}")
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_mov_r32_m32_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x8B)
+  emit_modrm(self, 2, dst, 4)
+  emit_sib(self, scale, index, base)
   emit_disp32(self, disp)
 }
 
@@ -781,6 +881,34 @@ pub fn MachineCode::x86_emit_mov_m64_r64(
 }
 
 ///|
+pub fn MachineCode::x86_emit_mov_m64_r64_base_index_scale_disp(
+  self : MachineCode,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+  src : Int,
+) -> Unit {
+  // mov [base + index * (1<<scale) + disp32], r64
+  guard scale >= 0 && scale <= 3 else {
+    abort("x86_emit_mov_m64_r64_base_index_scale_disp: invalid scale \{scale}")
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_mov_m64_r64_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (src >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  emit_rex_wx(self, r, x, b)
+  self.emit_byte(0x89)
+  emit_modrm(self, 2, src, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_mov_m32_r32(
   self : MachineCode,
   base : Int,
@@ -798,6 +926,36 @@ pub fn MachineCode::x86_emit_mov_m32_r32(
   if (base & 7) == 4 {
     emit_sib(self, 0, 4, base)
   }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_mov_m32_r32_base_index_scale_disp(
+  self : MachineCode,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+  src : Int,
+) -> Unit {
+  // mov [base + index * (1<<scale) + disp32], r32
+  guard scale >= 0 && scale <= 3 else {
+    abort("x86_emit_mov_m32_r32_base_index_scale_disp: invalid scale \{scale}")
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_mov_m32_r32_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (src >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x89)
+  emit_modrm(self, 2, src, 4)
+  emit_sib(self, scale, index, base)
   emit_disp32(self, disp)
 }
 
