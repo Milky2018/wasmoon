@@ -1,6 +1,6 @@
 {
   "name": "Milky2018/wasmoon",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "deps": {
     "moonbitlang/x": "0.4.38",
     "TheWaWaR/clap": "0.2.6"
