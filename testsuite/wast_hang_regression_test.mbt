@@ -176,36 +176,32 @@ fn try_compile_jit(
     None => None
     Some(pc) => {
       let func_signatures = @wast.build_func_signatures(mod_)
-      let jit_module = @jit.JITModule::load(pc, func_signatures)
-      match jit_module {
-        None => abort("Failed to create JIT module")
-        Some(jm) => {
-          let _ = jm.alloc_wasm_stack(1048576L)
-          jm.init_wasi_quiet([], [], [])
-          guard @wast.init_jit_memories_from_store(instance, store, jm)
-            is Some(_) else {
-            return None
-          }
-          let globals_ptr = init_jit_globals(instance, store, jm)
-          if globals_ptr != 0L {
-            jm.set_globals(globals_ptr)
-          }
-          @wast.init_elem_segments(mod_, jm, instance, store)
-          let global_addrs_copy : Array[Int] = []
-          for addr in instance.global_addrs {
-            global_addrs_copy.push(addr)
-          }
-          let func_addrs_copy : Array[Int] = []
-          for addr in instance.func_addrs {
-            func_addrs_copy.push(addr)
-          }
-          Some(
-            @wast.JITModuleContext::new(
-              jm, globals_ptr, global_addrs_copy, func_addrs_copy,
-            ),
-          )
-        }
+      let jm = @jit.JITModule::load(pc, func_signatures) catch {
+        err => abort("Failed to create JIT module: \{err}")
       }
+      let _ = jm.alloc_wasm_stack(1048576L)
+      jm.init_wasi_quiet([], [], [])
+      guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
+        return None
+      }
+      let globals_ptr = init_jit_globals(instance, store, jm)
+      if globals_ptr != 0L {
+        jm.set_globals(globals_ptr)
+      }
+      @wast.init_elem_segments(mod_, jm, instance, store)
+      let global_addrs_copy : Array[Int] = []
+      for addr in instance.global_addrs {
+        global_addrs_copy.push(addr)
+      }
+      let func_addrs_copy : Array[Int] = []
+      for addr in instance.func_addrs {
+        func_addrs_copy.push(addr)
+      }
+      Some(
+        @wast.JITModuleContext::new(
+          jm, globals_ptr, global_addrs_copy, func_addrs_copy,
+        ),
+      )
     }
   }
 }

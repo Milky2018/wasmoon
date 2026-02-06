@@ -407,8 +407,8 @@ pub fn run_jit(
     let func_signatures = @wast.build_func_signatures(mod_)
 
     // Load JIT module with all functions
-    guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-      return Err("Failed to create JIT module")
+    let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
+      err => return Err("Failed to create JIT module: \{err}")
     }
     jm_opt = Some(jm)
 

@@ -243,14 +243,8 @@ pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   debug_db? : JITDebugDB? = None,
-) -> JITModule? {
-  try
-    JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
-  catch {
-    _ => None
-  } noraise {
-    jm => Some(jm)
-  }
+) -> JITModule raise JITModuleLoadError {
+  JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
 }
 
 ///|

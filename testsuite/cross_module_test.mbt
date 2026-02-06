@@ -130,8 +130,8 @@ test "cross-module: shared memory export/import (jit + interp)" {
       func_type.results.length(),
     )
   }
-  guard @jit.JITModule::load(precompiled, func_signatures) is Some(jm) else {
-    abort("jit load failed")
+  let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
+    err => abort("jit load failed: \{err}")
   }
   guard @wast.init_jit_memories_from_store(inst_b, store, jm) is Some(_) else {
     abort("init jit memories failed")
@@ -170,8 +170,8 @@ test "cross-module: shared memory export/import (jit + interp)" {
       func_type.results.length(),
     )
   }
-  guard @jit.JITModule::load(precompiled_a, func_signatures_a) is Some(jm_a) else {
-    abort("jit load (a) failed")
+  let jm_a = @jit.JITModule::load(precompiled_a, func_signatures_a) catch {
+    err => abort("jit load (a) failed: \{err}")
   }
   guard @wast.init_jit_memories_from_store(inst_a, store, jm_a) is Some(_) else {
     abort("init jit memories (a) failed")
@@ -419,8 +419,8 @@ fn run_cross_module_jit(
   }
 
   // Load merged JIT module
-  guard @jit.JITModule::load(precompiled, all_signatures) is Some(jm) else {
-    raise CrossModuleError("Failed to create merged JIT module")
+  let jm = @jit.JITModule::load(precompiled, all_signatures) catch {
+    err => raise CrossModuleError("Failed to create merged JIT module: \{err}")
   }
 
   // Allocate memory (guarded for memory32 memory 0)

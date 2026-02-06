@@ -483,7 +483,7 @@ pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, In
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
