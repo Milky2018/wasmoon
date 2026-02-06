@@ -289,3 +289,43 @@ test "gc: field access after collection" {
   let leaf_value = heap.struct_get(leaf, 0, @types.ValueType::I32)
   inspect(leaf_value, content="I32(42)")
 }
+
+///|
+test "gc_setup: fail fast on inconsistent function table context" {
+  let heap = CHeap::new()
+  let missing_types : Result[Unit, GCSetupError] = try? gc_setup(
+    heap,
+    [],
+    [],
+    func_type_indices=[],
+    func_table_ptr=0L,
+    num_funcs=1,
+  )
+  guard missing_types
+    is Err(FuncTypeIndicesLengthMismatch(func_type_indices_len=0, num_funcs=1)) else {
+    fail("expected func_type_indices length mismatch")
+  }
+  let missing_table_ptr : Result[Unit, GCSetupError] = try? gc_setup(
+    heap,
+    [],
+    [],
+    func_type_indices=[0],
+    func_table_ptr=0L,
+    num_funcs=1,
+  )
+  guard missing_table_ptr is Err(MissingFunctionTableContext(num_funcs=1)) else {
+    fail("expected missing function table context")
+  }
+  let zero_funcs_ok : Result[Unit, GCSetupError] = try? gc_setup(
+    heap,
+    [],
+    [],
+    func_type_indices=[],
+    func_table_ptr=0L,
+    num_funcs=0,
+  )
+  guard zero_funcs_ok is Ok(_) else {
+    fail("expected gc_setup success for zero-func module")
+  }
+  gc_teardown()
+}

@@ -268,27 +268,46 @@ pub fn gc_clear_heap() -> Unit {
 }
 
 ///|
+/// Error for invalid JIT GC setup context
+pub suberror GCSetupError {
+  InvalidFuncCount(num_funcs~ : Int)
+  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
+  MissingFunctionTableContext(num_funcs~ : Int)
+} derive(Show)
+
+///|
 /// Full GC setup for JIT: set heap and type cache
+/// `func_type_indices`, `func_table_ptr`, and `num_funcs` are required to keep
+/// typed funcref/ref.func operations safe and deterministic.
 pub fn gc_setup(
   heap : CHeap,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
-  func_type_indices? : Array[Int] = [],
-  func_table_ptr? : Int64 = 0L,
-  num_funcs? : Int = 0,
-) -> Unit {
+  func_type_indices~ : Array[Int],
+  func_table_ptr~ : Int64,
+  num_funcs~ : Int,
+) -> Unit raise GCSetupError {
+  if num_funcs < 0 {
+    raise InvalidFuncCount(num_funcs~)
+  }
+  if func_type_indices.length() != num_funcs {
+    raise FuncTypeIndicesLengthMismatch(
+      func_type_indices_len=func_type_indices.length(),
+      num_funcs~,
+    )
+  }
+  if num_funcs > 0 && func_table_ptr == 0L {
+    raise MissingFunctionTableContext(num_funcs~)
+  }
   gc_set_heap(heap)
   setup_type_cache_from_types(types, canonical_indices)
-  // Also set function type indices for funcref subtyping
-  if func_type_indices.length() > 0 {
-    let indices = FixedArray::make(func_type_indices.length(), 0)
-    for i, idx in func_type_indices {
-      indices[i] = idx
-    }
-    @jit_ffi.c_jit_gc_set_func_type_indices(indices, func_type_indices.length())
+  // Set function type indices for funcref subtyping
+  let indices = FixedArray::make(func_type_indices.length(), 0)
+  for i, idx in func_type_indices {
+    indices[i] = idx
   }
-  // Set function table pointer for tagged pointer funcref lookups
-  if func_table_ptr != 0L && num_funcs > 0 {
-    @jit_ffi.c_jit_gc_set_func_table(func_table_ptr, num_funcs)
-  }
+  @jit_ffi.c_jit_gc_set_func_type_indices(indices, func_type_indices.length())
+
+  // Set function table pointer for tagged pointer funcref lookups.
+  @jit_ffi.c_jit_gc_set_func_table(func_table_ptr, num_funcs)
 }

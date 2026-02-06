@@ -970,7 +970,12 @@ fn run_with_jit(
                     func_type_indices=instance.func_type_indices,
                     func_table_ptr=jm.get_func_table_ptr(),
                     num_funcs=jm.get_func_count(),
-                  )
+                  ) catch {
+                    err => {
+                      @logger.error("JIT GC setup failed: \{err}")
+                      return exit_failure()
+                    }
+                  }
                   // Set GC heap in VMContext for inline allocation
                   jm.set_gc_heap(heap.get_ptr())
                 }
