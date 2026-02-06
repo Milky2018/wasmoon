@@ -234,6 +234,14 @@ pub(all) suberror CHeapError {
   NullReference
 }
 
+pub suberror JITModuleLoadError {
+  ContextAllocationFailed(total_funcs~ : Int)
+  UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
+  ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
+  FunctionCodeAllocationFailed(func_idx~ : Int, func_name~ : String, code_size~ : Int)
+}
+pub impl Show for JITModuleLoadError
+
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
@@ -476,7 +484,7 @@ pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, S
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self?
-pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self?
+pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit

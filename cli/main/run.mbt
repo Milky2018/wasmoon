@@ -886,18 +886,18 @@ fn run_with_jit(
         mod_, instance, store,
       )
       // Load JIT module
-      let jit_module = @jit.JITModule::load_with_imports(
+      let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
         pc,
         func_signatures,
         external_imports,
         debug_db~,
       )
-      match jit_module {
-        None => {
-          @logger.error("Failed to load JIT module")
+      match jit_module_result {
+        Err(err) => {
+          @logger.error("Failed to load JIT module: \{err}")
           return exit_failure()
         }
-        Some(jm) => {
+        Ok(jm) => {
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page.
