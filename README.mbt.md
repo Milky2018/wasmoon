@@ -107,6 +107,16 @@ WIT support is still evolving. `wasmoon-tools wit` implements directory + `deps/
 
 ## Library Usage
 
+### JIT GC Setup Migration
+
+`@jit.gc_setup(...)` now requires full function-table context for typed funcref/ref.func safety:
+
+- `func_type_indices`
+- `func_table_ptr`
+- `num_funcs`
+
+The API now fails fast with `GCSetupError` when these values are inconsistent, instead of continuing with incomplete context.
+
 ### Basic Example
 
 ```moonbit check

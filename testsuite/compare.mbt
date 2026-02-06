@@ -453,7 +453,15 @@ pub fn run_jit(
       mod_.types,
       type_rec_groups=mod_.type_rec_groups,
     )
-    @jit.gc_setup(c_heap, mod_.types, canonical_indices)
+    let module_func_type_indices = build_module_func_type_indices(mod_)
+    @jit.gc_setup(
+      c_heap,
+      mod_.types,
+      canonical_indices,
+      func_type_indices=module_func_type_indices,
+      func_table_ptr=jm.get_func_table_ptr(),
+      num_funcs=jm.get_func_count(),
+    )
     // Set GC heap in VMContext for inline allocation
     jm.set_gc_heap(c_heap.get_ptr())
 
@@ -511,14 +519,8 @@ pub fn run_jit(
 }
 
 ///|
-/// Extract element segment values for JIT segment setup
-/// Returns an array of Int64 arrays, one per element segment
-/// Each Int64 is a function index or 0 for null
-fn extract_elem_segment_pairs(
-  mod_ : @types.Module,
-  jm : @jit.JITModule,
-) -> Array[Array[Int64]] {
-  // Build func_idx -> type_idx mapping in the module's index space.
+/// Build func_idx -> type_idx mapping in module index space.
+fn build_module_func_type_indices(mod_ : @types.Module) -> Array[Int] {
   let func_type_indices : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -528,6 +530,18 @@ fn extract_elem_segment_pairs(
   for type_idx in mod_.funcs {
     func_type_indices.push(type_idx)
   }
+  func_type_indices
+}
+
+///|
+/// Extract element segment values for JIT segment setup
+/// Returns an array of Int64 arrays, one per element segment
+/// Each Int64 is a function index or 0 for null
+fn extract_elem_segment_pairs(
+  mod_ : @types.Module,
+  jm : @jit.JITModule,
+) -> Array[Array[Int64]] {
+  let func_type_indices = build_module_func_type_indices(mod_)
   let result : Array[Array[Int64]] = []
   for elem in mod_.elems {
     let pairs : Array[Int64] = []

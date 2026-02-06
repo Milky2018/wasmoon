@@ -54,7 +54,7 @@ pub fn gc_clear_heap() -> Unit
 
 pub fn gc_set_heap(CHeap) -> Unit
 
-pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], func_type_indices? : Array[Int], func_table_ptr? : Int64, num_funcs? : Int) -> Unit
+pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
 
 pub fn gc_teardown() -> Unit
 
@@ -233,6 +233,13 @@ pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
 }
+
+pub suberror GCSetupError {
+  InvalidFuncCount(num_funcs~ : Int)
+  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
+  MissingFunctionTableContext(num_funcs~ : Int)
+}
+pub impl Show for GCSetupError
 
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int)
