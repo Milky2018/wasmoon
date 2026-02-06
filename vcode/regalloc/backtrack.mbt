@@ -1331,13 +1331,19 @@ pub fn build_bundles_with_merging(
     if not(reg_class_compatible(range_a.vreg.class, range_b.vreg.class)) {
       return false
     }
-
-    // Check for overlap within potential merged bundle
     let set_a = uf.get_set(a)
     let set_b = uf.get_set(b)
+
+    // Check for overlap within potential merged bundle.
+    // Cap comparison work (Cranelift/regalloc2 has a similar complexity guard).
+    let mut range_checks = 0
     for idx_a in set_a {
       let r_a = ranges.get(idx_a)
       for idx_b in set_b {
+        range_checks += 1
+        if range_checks > 200 {
+          return false
+        }
         let r_b = ranges.get(idx_b)
         if r_a.overlaps(r_b, ranges.block_order) {
           return false
