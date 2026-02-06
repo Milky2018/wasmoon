@@ -29,6 +29,8 @@ struct LoweringContext {
   skipped_values : @hashset.HashSet[Int]
   // Use counts for IR values (used to skip unused call results)
   use_counts : Map[Int, Int]
+  // Value id -> defining IR instruction for O(1) lookup during pattern matching.
+  def_inst_map : Map[Int, @ir.Inst]
 }
 
 ///|
@@ -38,6 +40,14 @@ pub fn LoweringContext::new(
   num_imports : Int,
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
+  let def_inst_map : Map[Int, @ir.Inst] = {}
+  for block in ir_func.blocks {
+    for inst in block.instructions {
+      if inst.first_result() is Some(result) {
+        def_inst_map.set(result.id, inst)
+      }
+    }
+  }
   {
     ir_func,
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
@@ -50,6 +60,7 @@ pub fn LoweringContext::new(
     fused_icmps: @hashset.new(),
     skipped_values: @hashset.new(),
     use_counts,
+    def_inst_map,
   }
 }
 
@@ -766,9 +777,13 @@ pub fn lower_function(
   ir_func : @ir.Function,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   num_imports? : Int = -1,
+  run_ir_opt? : Bool = true,
 ) -> @regalloc.VCodeFunction {
-  // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
-  @ir.optimize_function(ir_func) |> ignore
+  // Keep this optional for call sites that already ran full IR optimization.
+  if run_ir_opt {
+    // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
+    @ir.optimize_function(ir_func) |> ignore
+  }
   let ctx = LoweringContext::new(ir_func, abi_settings, num_imports)
 
   // Phase 0: Pre-compute which Icmps can be fused with Select

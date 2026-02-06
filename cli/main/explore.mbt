@@ -141,6 +141,7 @@ fn run_explore(
     let vcode_func = @lower.lower_function(
       ir_func,
       num_imports=mod_.imports.length(),
+      run_ir_opt=false,
     )
     let vcode_text = vcode_func.to_string()
     if !html_output && show_vcode {

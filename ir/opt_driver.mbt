@@ -35,6 +35,16 @@ pub fn instruction_count(func : Function) -> Int {
 }
 
 ///|
+fn has_material_progress(
+  before_insts : Int,
+  before_blocks : Int,
+  after_insts : Int,
+  after_blocks : Int,
+) -> Bool {
+  before_insts != after_insts || before_blocks != after_blocks
+}
+
+///|
 fn run_opt_pass(
   func : Function,
   pass_name : String,
@@ -139,10 +149,15 @@ fn optimize_o1(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let max_iterations = 100
+  // Keep compile time predictable (Cranelift-style bounded optimization work).
+  let max_iterations = 32
+  let max_stalled_rounds = 3
+  let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    let before_insts = instruction_count(func)
+    let before_blocks = func.blocks.length()
     // E-graph based optimization (constant folding + algebraic simplification)
     if run_egraph_pass(func) {
       changed = true
@@ -192,6 +207,20 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
+    if changed {
+      let after_insts = instruction_count(func)
+      let after_blocks = func.blocks.length()
+      if has_material_progress(
+          before_insts, before_blocks, after_insts, after_blocks,
+        ) {
+        stalled_rounds = 0
+      } else {
+        stalled_rounds = stalled_rounds + 1
+        if stalled_rounds >= max_stalled_rounds {
+          break
+        }
+      }
+    }
   }
   result
 }
@@ -202,10 +231,15 @@ pub fn optimize(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let max_iterations = 100 // Prevent infinite loops
+  // Keep compile time predictable (Cranelift-style bounded optimization work).
+  let max_iterations = 32
+  let max_stalled_rounds = 3
+  let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
+    let before_insts = instruction_count(func)
+    let before_blocks = func.blocks.length()
     // E-graph based optimization (constant folding + algebraic simplification)
     if run_egraph_pass(func) {
       changed = true
@@ -277,6 +311,20 @@ pub fn optimize(func : Function) -> OptResult {
     if jt_result.changed {
       changed = true
       result.mark_changed()
+    }
+    if changed {
+      let after_insts = instruction_count(func)
+      let after_blocks = func.blocks.length()
+      if has_material_progress(
+          before_insts, before_blocks, after_insts, after_blocks,
+        ) {
+        stalled_rounds = 0
+      } else {
+        stalled_rounds = stalled_rounds + 1
+        if stalled_rounds >= max_stalled_rounds {
+          break
+        }
+      }
     }
   }
   result
