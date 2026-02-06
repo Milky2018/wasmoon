@@ -56,10 +56,23 @@ fn lower_get_func_ref(
 
   // Step 2: Load func_ptr from func_table[func_idx * 8]
   let raw_func_ptr = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(Load(I64, func_idx * 8))
-  load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
-  load_ptr.add_use(Virtual(func_table_vreg))
-  block.add_inst(load_ptr)
+  let offset = func_idx * 8
+  if is_valid_load_store_offset(offset.to_int64(), 8) {
+    let load_ptr = @instr.VCodeInst::new(Load(I64, offset))
+    load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
+    load_ptr.add_use(Virtual(func_table_vreg))
+    block.add_inst(load_ptr)
+  } else {
+    // Large func-table indices exceed AArch64 LDR unsigned-imm range.
+    let offset_vreg = materialize_imm(ctx, block, offset.to_int64())
+    let load_ptr = @instr.VCodeInst::new(
+      LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0),
+    )
+    load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
+    load_ptr.add_use(Virtual(func_table_vreg))
+    load_ptr.add_use(Virtual(offset_vreg))
+    block.add_inst(load_ptr)
+  }
 
   // Step 3: OR with FUNCREF_TAG (0x2000000000000000)
   let tag_vreg = ctx.vcode_func.new_vreg(Int)

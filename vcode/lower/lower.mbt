@@ -2029,10 +2029,23 @@ fn lower_call(
     let func_table = emit_load_func_table(ctx, block)
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let offset = func_idx * 8
-    let load_inst = @instr.VCodeInst::new(Load(I64, offset))
-    load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-    load_inst.add_use(Virtual(func_table))
-    block.add_inst(load_inst)
+    if is_valid_load_store_offset(offset.to_int64(), 8) {
+      let load_inst = @instr.VCodeInst::new(Load(I64, offset))
+      load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+      load_inst.add_use(Virtual(func_table))
+      block.add_inst(load_inst)
+    } else {
+      // Large func-table indices exceed AArch64 LDR unsigned-imm range (12-bit scaled).
+      // Materialize byte offset and use register-offset addressing to avoid truncation.
+      let offset_vreg = materialize_imm(ctx, block, offset.to_int64())
+      let load_inst = @instr.VCodeInst::new(
+        LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0),
+      )
+      load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
+      load_inst.add_use(Virtual(func_table))
+      load_inst.add_use(Virtual(offset_vreg))
+      block.add_inst(load_inst)
+    }
     lower_wasm_call(
       ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
     )
