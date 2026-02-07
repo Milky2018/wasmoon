@@ -323,6 +323,37 @@ static void set_memory(jit_context_t *ctx, int32_t memidx, uint8_t *base, size_t
     }
 }
 
+// Small-fill fast path to avoid repeated libc memset call overhead in hot loops.
+static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
+    if (size <= 256) {
+        size_t i = 0;
+        while (i + 16 <= size) {
+            dst[i + 0] = val;
+            dst[i + 1] = val;
+            dst[i + 2] = val;
+            dst[i + 3] = val;
+            dst[i + 4] = val;
+            dst[i + 5] = val;
+            dst[i + 6] = val;
+            dst[i + 7] = val;
+            dst[i + 8] = val;
+            dst[i + 9] = val;
+            dst[i + 10] = val;
+            dst[i + 11] = val;
+            dst[i + 12] = val;
+            dst[i + 13] = val;
+            dst[i + 14] = val;
+            dst[i + 15] = val;
+            i += 16;
+        }
+        while (i < size) {
+            dst[i++] = val;
+        }
+        return;
+    }
+    memset(dst, val, size);
+}
+
 int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t delta, int32_t max_pages) {
     if (!ctx) return -1;
     if (delta < 0) return -1;
@@ -412,7 +443,7 @@ void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t ds
     }
 
     // Fill memory with byte value (val & 0xFF)
-    memset(mem_base + dst, val & 0xFF, size);
+    fill_bytes_fast(mem_base + dst, (uint8_t)(val & 0xFF), (size_t)size);
 }
 
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
@@ -485,7 +516,7 @@ void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int3
     }
 
     // Fill memory with byte value (val & 0xFF)
-    memset(ctx->memory0->base + dst, val & 0xFF, size);
+    fill_bytes_fast(ctx->memory0->base + dst, (uint8_t)(val & 0xFF), (size_t)size);
 }
 
 void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size) {

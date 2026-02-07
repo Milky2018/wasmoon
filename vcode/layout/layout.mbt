@@ -37,12 +37,10 @@ pub fn layout_blocks(func : @regalloc.VCodeFunction) -> Array[Int] {
     }
   }
 
-  // Place any remaining unplaced blocks by CFG traces.
-  // This improves fallthrough opportunities for non-loop regions and reduces
-  // unconditional jump count in emitted machine code.
+  // Place any remaining unplaced blocks (in original order)
   for i in 0..<n {
     if !placed[i] {
-      place_trace(i, cfg, placed, order)
+      place_block(i, placed, order)
     }
   }
   order
@@ -58,34 +56,6 @@ fn place_block(
   if !placed[block_id] {
     placed[block_id] = true
     order.push(block_id)
-  }
-}
-
-///|
-/// Place a straight-line trace by repeatedly following the first unplaced CFG successor.
-fn place_trace(
-  start_block_id : Int,
-  cfg : VCodeCFG,
-  placed : Array[Bool],
-  order : Array[Int],
-) -> Unit {
-  let mut current = start_block_id
-  while true {
-    if current < 0 || current >= placed.length() || placed[current] {
-      break
-    }
-    place_block(current, placed, order)
-    let mut next : Int? = None
-    for succ in cfg.succs[current] {
-      if succ >= 0 && succ < placed.length() && !placed[succ] {
-        next = Some(succ)
-        break
-      }
-    }
-    match next {
-      Some(n) => current = n
-      None => break
-    }
   }
 }
 

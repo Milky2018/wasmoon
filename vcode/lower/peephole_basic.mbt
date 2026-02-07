@@ -263,6 +263,42 @@ fn make_sub_imm(
 }
 
 ///|
+/// Helper to create a ShlImm instruction
+fn make_shl_imm(
+  imm : Int,
+  is_64 : Bool,
+  def : @abi.Writable,
+  use_ : @abi.Reg,
+) -> @instr.VCodeInst {
+  let new_inst = @instr.VCodeInst::new(ShlImm(imm, is_64))
+  new_inst.add_def(def)
+  new_inst.add_use(use_)
+  new_inst
+}
+
+///|
+/// Return shift amount when `value` is a positive power-of-two constant.
+fn power_of_two_shift(value : Int64, is_64 : Bool) -> Int? {
+  if value <= 0 {
+    return None
+  }
+  let max_shift = if is_64 { 63 } else { 31 }
+  let mut shift = 0
+  let mut cur = value
+  while cur > 1 {
+    if (cur & 1L) != 0L {
+      return None
+    }
+    shift = shift + 1
+    if shift > max_shift {
+      return None
+    }
+    cur = cur >> 1
+  }
+  Some(shift)
+}
+
+///|
 /// Optimize a single instruction
 /// Returns None if the instruction should be eliminated
 /// Returns Some(inst) with possibly modified instruction otherwise
@@ -395,6 +431,36 @@ fn optimize_instruction(
                   make_sub_imm(imm, is_64, inst.defs[0], inst.uses[0]),
                 )
               }
+            }
+          }
+        }
+      }
+      Some(inst)
+    }
+    // Mul by power-of-two constant → ShlImm
+    Mul(is_64) => {
+      if inst.uses.length() >= 2 && inst.defs.length() > 0 {
+        if get_vreg_id(inst.uses[1]) is Some(use_id) {
+          if state.constants.get(use_id) is Some(const_val) {
+            if power_of_two_shift(const_val, is_64) is Some(shift) {
+              if shift == 0 {
+                return Some(make_move(inst.defs[0], inst.uses[0]))
+              }
+              return Some(
+                make_shl_imm(shift, is_64, inst.defs[0], inst.uses[0]),
+              )
+            }
+          }
+        }
+        if get_vreg_id(inst.uses[0]) is Some(use_id) {
+          if state.constants.get(use_id) is Some(const_val) {
+            if power_of_two_shift(const_val, is_64) is Some(shift) {
+              if shift == 0 {
+                return Some(make_move(inst.defs[0], inst.uses[1]))
+              }
+              return Some(
+                make_shl_imm(shift, is_64, inst.defs[0], inst.uses[1]),
+              )
             }
           }
         }

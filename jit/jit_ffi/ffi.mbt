@@ -270,9 +270,19 @@ pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory
 pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
+/// Get memory_fill function pointer specialized for memory 0
+/// Signature: memory_fill_mem0(ctx: *jit_context_t, dst: i32, val: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_memory_fill_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_mem0_ptr"
+
+///|
 /// Get memory_copy function pointer for JIT (multi-memory)
 /// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
+
+///|
+/// Get memory_copy function pointer specialized for memory 0
+/// Signature: memory_copy_mem0(ctx: *jit_context_t, dst: i32, src: i32, size: i32) -> void
+pub extern "c" fn c_jit_get_memory_copy_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_mem0_ptr"
 
 // ============ Integer div/rem helpers (x86_64 bootstrap) ============
 

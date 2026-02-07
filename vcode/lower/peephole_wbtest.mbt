@@ -169,3 +169,34 @@ test "thread_trivial_jump_blocks_updates_branch_targets" {
     inspect(false, content="true")
   }
 }
+
+///|
+test "mul_power_of_two_becomes_shl_imm" {
+  let func = @regalloc.VCodeFunction::new("test_mul_pow2")
+  let lhs = func.new_vreg(Int)
+  func.push_param(lhs)
+  let block = func.new_block()
+  let c16 = func.new_vreg(Int)
+  let load_16 = @instr.VCodeInst::new(LoadConst(16L))
+  load_16.add_def({ reg: Virtual(c16) })
+  block.add_inst(load_16)
+  let out = func.new_vreg(Int)
+  let mul = @instr.VCodeInst::new(Mul(true))
+  mul.add_def({ reg: Virtual(out) })
+  mul.add_use(Virtual(lhs))
+  mul.add_use(Virtual(c16))
+  block.add_inst(mul)
+  block.set_terminator(Return([Virtual(out)]))
+  optimize_vcode(func)
+  let mut has_mul = false
+  let mut has_shl = false
+  for inst in block.insts {
+    match inst.opcode {
+      Mul(true) => has_mul = true
+      ShlImm(4, true) => has_shl = true
+      _ => ()
+    }
+  }
+  inspect(has_mul, content="false")
+  inspect(has_shl, content="true")
+}

@@ -335,32 +335,37 @@ pub fn compute_spill_weight(
   for range_id in bundle.range_ids {
     let range = ranges.get(range_id)
     for use_pos in range.uses {
-      // Base weight by use kind
-      let base = match use_pos.kind {
-        Def => 1.0
-        Use => 1.0
+      // Cranelift/regalloc2-like spill weights:
+      // - hot loop bonus: 1000 * 4^depth (capped)
+      // - def bonus: +2000
+      // - operand constraint bonus: Any=+1000, FixedReg=+2000
+      let mut depth = loop_depths[use_pos.point.block]
+      if depth < 0 {
+        depth = 0
       }
-
-      // Loop depth multiplier (10x per nesting level)
-      let loop_depth = loop_depths[use_pos.point.block]
-      let depth_mult = @math.pow(10.0, loop_depth.to_double())
-      weight += base * depth_mult
-    }
-
-    // Fixed register constraint bonus
-    if range.has_fixed_constraint() {
-      weight *= 10.0
-    }
-
-    // Cross-call penalty (harder to allocate)
-    if range.crosses_call {
-      weight *= 2.0
+      if depth > 10 {
+        depth = 10
+      }
+      let mut hot_bonus = 1000.0
+      for _ in 0..<depth {
+        hot_bonus = hot_bonus * 4.0
+      }
+      let def_bonus = match use_pos.kind {
+        Def => 2000.0
+        Use => 0.0
+      }
+      let constraint_bonus = match use_pos.constraint {
+        AnyReg => 1000.0
+        FixedReg(_) => 2000.0
+      }
+      weight = weight + hot_bonus + def_bonus + constraint_bonus
     }
   }
-
-  // Normalize by total length (shorter = higher priority per instruction)
-  let length = bundle.total_length(ranges)
-  weight / length.to_double()
+  if weight <= 0.0 {
+    1.0
+  } else {
+    weight
+  }
 }
 
 ///|

@@ -49,6 +49,12 @@ pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
 }
 
 ///|
+/// WAST-only JIT support check.
+pub fn has_unsupported_instructions_for_wast(mod_ : @types.Module) -> Bool {
+  has_unsupported_instructions(mod_)
+}
+
+///|
 /// Recursively check if instruction list contains unsupported instructions
 fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool {
   for instr in instrs {

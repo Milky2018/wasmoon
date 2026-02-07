@@ -47,7 +47,9 @@ pub(all) enum JITLibcall {
   MemoryGrow
   MemorySize
   MemoryFill
+  MemoryFillMem0
   MemoryCopy
+  MemoryCopyMem0
   MemoryInit
   DataDrop
   TableGrow
@@ -381,12 +383,20 @@ pub(all) enum VCodeOpcode {
   // - extend: None uses X index; Uxtw/Sxtw use W index extended to X
   // - shift: 0 (no scale) or log2(access_size) (scaled register offset)
   LoadPtrRegOffset(MemType, IndexExtend, Int)
+  // LoadPtrNarrowRegOffset(bits, signed, extend, shift): narrow load from
+  // [base + index{, extend}{, scale}] where bits is 8/16/32.
+  // Uses: [base, index], Defs: [result]
+  LoadPtrNarrowRegOffset(Int, Bool, IndexExtend, Int)
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
   // StorePtrRegOffset(type, extend, shift): Store to [base + index{, extend}{, scale}]
   // Uses: [base, index, value], Defs: []
   StorePtrRegOffset(MemType, IndexExtend, Int)
+  // StorePtrNarrowRegOffset(bits, extend, shift): narrow store to
+  // [base + index{, extend}{, scale}] where bits is 8/16/32.
+  // Uses: [base, index, value], Defs: []
+  StorePtrNarrowRegOffset(Int, IndexExtend, Int)
   // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
@@ -1000,9 +1010,15 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     LoadPtrRegOffset(ty, ext, shift) =>
       "load_ptr_regoff.\{ty} (\{ext},\{shift})"
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+      let sign_str = if signed { "s" } else { "u" }
+      "load_ptr\{bits}_\{sign_str}_regoff (\{ext},\{shift})"
+    }
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
     StorePtrRegOffset(ty, ext, shift) =>
       "store_ptr_regoff.\{ty} (\{ext},\{shift})"
+    StorePtrNarrowRegOffset(bits, ext, shift) =>
+      "store_ptr\{bits}_regoff (\{ext},\{shift})"
     LoadPtrNarrow(bits, signed, offset) => {
       let sign_str = if signed { "s" } else { "u" }
       "load_ptr\{bits}_\{sign_str} +\{offset}"

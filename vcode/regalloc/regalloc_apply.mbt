@@ -31,6 +31,10 @@ pub fn apply_allocation(
 ) -> VCodeFunction {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
+  let block_id_to_index : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    block_id_to_index.set(block.id, i)
+  }
   let isa = @isa.ISA::current()
   let wasm_vmctx_arg = isa.wasm_vmctx_arg_preg()
   let wasm_user_gprs = isa.wasm_user_arg_gprs()
@@ -56,6 +60,111 @@ pub fn apply_allocation(
   ) -> Unit {
     if active_reloads.get(slot) is Some(_) {
       active_reloads.remove(slot) |> ignore
+    }
+  }
+
+  fn fold_stack_slot_loads(block : @block.VCodeBlock) -> Unit {
+    fn same_mem_type(a : @instr.MemType, b : @instr.MemType) -> Bool {
+      match (a, b) {
+        (@instr.I32, @instr.I32) => true
+        (@instr.I64, @instr.I64) => true
+        (@instr.F32, @instr.F32) => true
+        (@instr.F64, @instr.F64) => true
+        (@instr.V128, @instr.V128) => true
+        _ => false
+      }
+    }
+
+    fn invalidate_cached_preg(
+      slot_cache : Map[Int, @abi.PReg],
+      preg : @abi.PReg,
+    ) -> Unit {
+      let to_remove : Array[Int] = []
+      for slot, cached in slot_cache {
+        if cached.index == preg.index && cached.class == preg.class {
+          to_remove.push(slot)
+        }
+      }
+      for slot in to_remove {
+        slot_cache.remove(slot) |> ignore
+      }
+    }
+
+    let optimized : Array[@instr.VCodeInst] = []
+    let slot_cache : Map[Int, @abi.PReg] = {}
+    for inst in block.insts {
+      let mut emitted = false
+      match inst.opcode {
+        @instr.StackLoad(offset) =>
+          if inst.defs.length() == 1 && inst.defs[0].reg is @abi.Physical(dst) {
+            if slot_cache.get(offset) is Some(src) && src.class == dst.class {
+              if src.index != dst.index {
+                let mv = @instr.VCodeInst::new(@instr.Move)
+                mv.add_def({ reg: @abi.Physical(dst) })
+                mv.add_use(@abi.Physical(src))
+                optimized.push(mv)
+              }
+              emitted = true
+            }
+          }
+        @instr.LoadPtr(load_ty, load_offset) =>
+          if inst.defs.length() == 1 &&
+            inst.defs[0].reg is @abi.Physical(dst) &&
+            inst.uses.length() == 1 &&
+            inst.uses[0] is @abi.Physical(base_reg) &&
+            optimized.length() > 0 {
+            let prev = optimized[optimized.length() - 1]
+            match prev.opcode {
+              @instr.StorePtr(store_ty, store_offset) =>
+                if same_mem_type(store_ty, load_ty) &&
+                  store_offset == load_offset &&
+                  prev.uses.length() == 2 &&
+                  prev.uses[0] is @abi.Physical(store_base) &&
+                  prev.uses[1] is @abi.Physical(src_reg) &&
+                  store_base.index == base_reg.index &&
+                  store_base.class == base_reg.class &&
+                  src_reg.class == dst.class &&
+                  src_reg.class is @abi.Int {
+                  if src_reg.index != dst.index {
+                    let mv = @instr.VCodeInst::new(@instr.Move)
+                    mv.add_def({ reg: @abi.Physical(dst) })
+                    mv.add_use(@abi.Physical(src_reg))
+                    optimized.push(mv)
+                  }
+                  emitted = true
+                }
+              _ => ()
+            }
+          }
+        _ => ()
+      }
+      if !emitted {
+        optimized.push(inst)
+      }
+      for def in inst.defs {
+        if def.reg is @abi.Physical(preg) {
+          invalidate_cached_preg(slot_cache, preg)
+        }
+      }
+      match inst.opcode {
+        @instr.StackStore(offset) =>
+          if inst.uses.length() == 1 && inst.uses[0] is @abi.Physical(src) {
+            slot_cache.set(offset, src)
+          } else {
+            slot_cache.remove(offset) |> ignore
+          }
+        @instr.StackLoad(offset) =>
+          if inst.defs.length() == 1 && inst.defs[0].reg is @abi.Physical(dst) {
+            slot_cache.set(offset, dst)
+          } else {
+            slot_cache.remove(offset) |> ignore
+          }
+        _ => ()
+      }
+    }
+    block.insts.clear()
+    for inst in optimized {
+      block.add_inst(inst)
     }
   }
 
@@ -237,61 +346,6 @@ pub fn apply_allocation(
     // Track which spill slots have been loaded into coalesced reload registers
     // Key: spill_slot, Value: preg holding the reloaded value
     let active_reloads : Map[Int, @abi.PReg] = {}
-
-    // Precompute per-block defs/uses for swap-aware jump-arg handling.
-    let vreg_def_info : Map[Int, (Int, Int)] = {}
-    let vreg_used_in_insts : Set[Int] = Set::new()
-    let vreg_used_in_term : Set[Int] = Set::new()
-    for inst_idx, inst in block.insts {
-      for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
-          vreg_used_in_insts.add(vreg.id)
-        }
-      }
-      for def_pos, def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
-          vreg_def_info.set(vreg.id, (inst_idx, def_pos))
-        }
-      }
-    }
-    if block.terminator is Some(term) {
-      let term_uses = match term {
-        @instr.VCodeTerminator::Jump(_, args)
-        | @instr.VCodeTerminator::Return(args) => args
-        @instr.VCodeTerminator::Branch(cond, _, _)
-        | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
-        | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
-        @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-        @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-        @instr.VCodeTerminator::Trap(_) => []
-      }
-      for use_reg in term_uses {
-        if use_reg is @abi.Virtual(vreg) {
-          vreg_used_in_term.add(vreg.id)
-        }
-      }
-    }
-    let jump_arg_candidates : Map[Int, (Int, Int)] = {}
-    let jump_arg_counts : Map[Int, Int] = {}
-    if block.terminator is Some(@instr.VCodeTerminator::Jump(_, args)) {
-      for arg in args {
-        if arg is @abi.Virtual(vreg) &&
-          vreg_used_in_term.contains(vreg.id) &&
-          !vreg_used_in_insts.contains(vreg.id) {
-          let count = jump_arg_counts.get(vreg.id).unwrap_or(0)
-          jump_arg_counts.set(vreg.id, count + 1)
-          if vreg_def_info.get(vreg.id) is Some((def_idx, def_pos)) {
-            let def_inst = block.insts[def_idx]
-            let has_fixed = def_pos < def_inst.def_constraints.length() &&
-              def_inst.def_constraints[def_pos] is @abi.FixedReg(_)
-            if !has_fixed {
-              jump_arg_candidates.set(vreg.id, (def_idx, def_pos))
-            }
-          }
-        }
-      }
-    }
-    let orig_inst_to_new_idx : Map[Int, Int] = {}
 
     // Process instructions
     for inst_idx, inst in block.insts {
@@ -589,7 +643,6 @@ pub fn apply_allocation(
         }
       }
       new_block.add_inst(new_inst)
-      orig_inst_to_new_idx.set(inst_idx, new_block.insts.length() - 1)
 
       // Process constraint edits: insert moves after the instruction
       // Use parallel move resolver for consistency (though after moves rarely conflict)
@@ -651,9 +704,8 @@ pub fn apply_allocation(
           }
 
           let moves : Array[RegMove] = []
-          let move_src_vregs : Array[Int?] = []
-          if target >= 0 && target < func.blocks.length() {
-            let target_block = func.blocks[target]
+          if block_id_to_index.get(target) is Some(target_idx) {
+            let target_block = func.blocks[target_idx]
             for i, param in target_block.params {
               if i >= args.length() {
                 break
@@ -683,164 +735,6 @@ pub fn apply_allocation(
                 to: preg_to_loc(to_preg),
                 class: param.class,
               })
-              let src_vreg_id = match args[i] {
-                @abi.Virtual(vreg) => Some(vreg.id)
-                _ => None
-              }
-              move_src_vregs.push(src_vreg_id)
-            }
-          }
-
-          // Swap-aware jump-arg coalescing: avoid 2-cycle swaps by redirecting
-          // a locally-defined jump arg into a scratch register when possible.
-          if !moves.is_empty() && !jump_arg_candidates.is_empty() {
-            fn same_preg(a : @abi.PReg, b : @abi.PReg) -> Bool {
-              a.index == b.index
-            }
-
-            fn inst_uses_preg(
-              inst : @instr.VCodeInst,
-              preg : @abi.PReg,
-            ) -> Bool {
-              for def in inst.defs {
-                if def.reg is @abi.Physical(p) && same_preg(p, preg) {
-                  return true
-                }
-              }
-              for use_reg in inst.uses {
-                if use_reg is @abi.Physical(p) && same_preg(p, preg) {
-                  return true
-                }
-              }
-              false
-            }
-
-            fn scratch_available(
-              new_block : @block.VCodeBlock,
-              def_new_idx : Int,
-              preg : @abi.PReg,
-            ) -> Bool {
-              for i in (def_new_idx + 1)..<new_block.insts.length() {
-                if inst_uses_preg(new_block.insts[i], preg) {
-                  return false
-                }
-              }
-              true
-            }
-
-            fn pick_scratch_reg(
-              new_block : @block.VCodeBlock,
-              def_new_idx : Int,
-            ) -> @abi.PReg? {
-              let isa = @isa.ISA::current()
-              let scratch_regs = [
-                isa.scratch_reg_1_index(),
-                isa.scratch_reg_2_index(),
-              ]
-              for reg_idx in scratch_regs {
-                let preg : @abi.PReg = { index: reg_idx, class: @abi.Int }
-                if scratch_available(new_block, def_new_idx, preg) {
-                  return Some(preg)
-                }
-              }
-              None
-            }
-
-            let rewritten : Set[Int] = Set::new()
-            let mut broke_cycle = false
-            for i in 0..<moves.length() {
-              if broke_cycle {
-                break
-              }
-              let mv_i = moves[i]
-              if mv_i.from.is_spilled() || mv_i.to.is_spilled() {
-                continue
-              }
-              if mv_i.class is @abi.Int {
-                ()
-              } else {
-                continue
-              }
-              for j in (i + 1)..<moves.length() {
-                let mv_j = moves[j]
-                if mv_j.from.is_spilled() || mv_j.to.is_spilled() {
-                  continue
-                }
-                if mv_j.class is @abi.Int {
-                  ()
-                } else {
-                  continue
-                }
-                if !same_preg(loc_as_preg(mv_i.from), loc_as_preg(mv_j.to)) ||
-                  !same_preg(loc_as_preg(mv_i.to), loc_as_preg(mv_j.from)) {
-                  continue
-                }
-                fn try_rewrite_move(
-                  move_idx : Int,
-                  moves : Array[RegMove],
-                  move_src_vregs : Array[Int?],
-                  jump_arg_candidates : Map[Int, (Int, Int)],
-                  jump_arg_counts : Map[Int, Int],
-                  alloc : RegAllocResult,
-                  orig_inst_to_new_idx : Map[Int, Int],
-                  new_block : @block.VCodeBlock,
-                  rewritten : Set[Int],
-                ) -> Bool {
-                  guard move_idx < move_src_vregs.length() else { return false }
-                  guard move_src_vregs[move_idx] is Some(vreg_id) else {
-                    return false
-                  }
-                  if jump_arg_counts.get(vreg_id).unwrap_or(0) != 1 {
-                    return false
-                  }
-                  if rewritten.contains(vreg_id) {
-                    return false
-                  }
-                  guard jump_arg_candidates.get(vreg_id)
-                    is Some((def_idx, def_pos)) else {
-                    return false
-                  }
-                  guard alloc.assignments.get(vreg_id) is Some(assigned_preg) else {
-                    return false
-                  }
-                  if assigned_preg.class is @abi.Int {
-                    ()
-                  } else {
-                    return false
-                  }
-                  guard orig_inst_to_new_idx.get(def_idx) is Some(def_new_idx) else {
-                    return false
-                  }
-                  let new_inst = new_block.insts[def_new_idx]
-                  if new_inst.defs.length() != 1 {
-                    return false
-                  }
-                  guard pick_scratch_reg(new_block, def_new_idx)
-                    is Some(scratch_preg) else {
-                    return false
-                  }
-                  new_inst.defs[def_pos] = { reg: @abi.Physical(scratch_preg) }
-                  moves[move_idx] = {
-                    from: Reg(scratch_preg),
-                    to: moves[move_idx].to,
-                    class: moves[move_idx].class,
-                  }
-                  rewritten.add(vreg_id)
-                  true
-                }
-
-                if try_rewrite_move(
-                    i, moves, move_src_vregs, jump_arg_candidates, jump_arg_counts,
-                    alloc, orig_inst_to_new_idx, new_block, rewritten,
-                  ) ||
-                  try_rewrite_move(
-                    j, moves, move_src_vregs, jump_arg_candidates, jump_arg_counts,
-                    alloc, orig_inst_to_new_idx, new_block, rewritten,
-                  ) {
-                  broke_cycle = true
-                  break
-                }
-              }
             }
           }
 
@@ -984,6 +878,7 @@ pub fn apply_allocation(
         }
         Trap(msg) => Trap(msg)
       }
+      fold_stack_slot_loads(new_block)
       new_block.set_terminator(new_term)
     }
   }
