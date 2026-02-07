@@ -103,6 +103,10 @@ fn lower_load_mem_base(
   if inst.operands.length() != 1 {
     return
   }
+  if ctx.mem_base_cache.get(memidx) is Some(cached_vreg) {
+    ctx.value_map.set(result.id, cached_vreg)
+    return
+  }
   let result_vreg = ctx.get_vreg(result)
   let load_inst = @instr.VCodeInst::new(LoadMemBase(memidx))
   load_inst.add_def({ reg: Virtual(result_vreg) })
@@ -113,6 +117,7 @@ fn lower_load_mem_base(
     load_inst.add_use(Virtual(vmctx_vreg))
   }
   block.add_inst(load_inst)
+  ctx.mem_base_cache.set(memidx, result_vreg)
 }
 
 ///|
@@ -247,23 +252,46 @@ fn lower_memory_fill(
 
   // Lower to a C call:
   //   wasmoon_jit_memory_fill(vmctx, memidx, dst, val, size)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFill))
-  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
-  block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
-  let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
-  lower_c_libcall(
-    ctx,
-    block,
-    func_ptr_vreg,
-    [vmctx_vreg, memidx_vreg, dst, val, size],
-    None,
-  )
+  if memidx == 0 && @isa.ISA::current() is @isa.AArch64 {
+    lower_c_libcall_direct(
+      ctx,
+      block,
+      jit_direct_call_func_idx(@instr.MemoryFillMem0),
+      [vmctx_vreg, dst, val, size],
+      None,
+    )
+  } else if memidx == 0 {
+    // Fast path for memory 0: avoid memidx argument and indexed-memory helper.
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFillMem0))
+    load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_ptr)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, dst, val, size],
+      None,
+    )
+  } else {
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFill))
+    load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_ptr)
+    let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, memidx_vreg, dst, val, size],
+      None,
+    )
+  }
 }
 
 ///|
@@ -286,24 +314,47 @@ fn lower_memory_copy(
 
   // Lower to a C call:
   //   wasmoon_jit_memory_copy(vmctx, dst_memidx, src_memidx, dst, src, size)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopy))
-  load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
-  block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
-  let dst_memidx_vreg = materialize_imm(ctx, block, dst_memidx.to_int64())
-  let src_memidx_vreg = materialize_imm(ctx, block, src_memidx.to_int64())
-  lower_c_libcall(
-    ctx,
-    block,
-    func_ptr_vreg,
-    [vmctx_vreg, dst_memidx_vreg, src_memidx_vreg, dst, src, size],
-    None,
-  )
+  if dst_memidx == 0 && src_memidx == 0 && @isa.ISA::current() is @isa.AArch64 {
+    lower_c_libcall_direct(
+      ctx,
+      block,
+      jit_direct_call_func_idx(@instr.MemoryCopyMem0),
+      [vmctx_vreg, dst, src, size],
+      None,
+    )
+  } else if dst_memidx == 0 && src_memidx == 0 {
+    // Fast path for memory 0 copy.
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopyMem0))
+    load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_ptr)
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, dst, src, size],
+      None,
+    )
+  } else {
+    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopy))
+    load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
+    block.add_inst(load_ptr)
+    let dst_memidx_vreg = materialize_imm(ctx, block, dst_memidx.to_int64())
+    let src_memidx_vreg = materialize_imm(ctx, block, src_memidx.to_int64())
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, dst_memidx_vreg, src_memidx_vreg, dst, src, size],
+      None,
+    )
+  }
 }
 
 ///|

@@ -16,7 +16,10 @@
 priv struct RematDef {
   opcode : @instr.VCodeOpcode
   def_block_id : Int
+  def_inst_idx : Int
   cls : @abi.RegClass
+  uses : Array[@abi.Reg]
+  use_constraints : Array[@abi.OperandConstraint]
 }
 
 ///|
@@ -62,6 +65,266 @@ fn rewrite_use_reg(reg : @abi.Reg, local_map : Map[Int, @abi.VReg]) -> @abi.Reg 
 }
 
 ///|
+fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.VCodeInst {
+  let inst = @instr.VCodeInst::new(def.opcode)
+  inst.add_def({ reg: @abi.Virtual(dst) })
+  for i in 0..<def.uses.length() {
+    let use_reg = def.uses[i]
+    let constraint = def.use_constraints[i]
+    match constraint {
+      @abi.FixedReg(preg) => inst.add_use_fixed(use_reg, preg)
+      @abi.Any => inst.add_use(use_reg)
+    }
+  }
+  inst
+}
+
+///|
+/// Clone long-distance rematerializable defs within the same block.
+///
+/// This mirrors Cranelift's remat intent for cheap constants: shorten very long
+/// live ranges by re-defining constants near far-away uses.
+pub fn rematerialize_long_distance_constants(
+  func : VCodeFunction,
+) -> VCodeFunction {
+  let remat_defs : Map[Int, RematDef] = {}
+  for block in func.blocks {
+    for inst_idx, inst in block.insts {
+      if is_remat_candidate(inst.opcode) &&
+        inst.defs.length() == 1 &&
+        inst.def_constraints.length() == 1 &&
+        inst.def_constraints[0] is @abi.Any &&
+        inst.defs[0].reg is @abi.Virtual(vreg) {
+        if remat_defs.get(vreg.id) is None {
+          remat_defs.set(vreg.id, {
+            opcode: inst.opcode,
+            def_block_id: block.id,
+            def_inst_idx: inst_idx,
+            cls: vreg.class,
+            uses: inst.uses.copy(),
+            use_constraints: inst.use_constraints.copy(),
+          })
+        }
+      }
+    }
+  }
+  if remat_defs.is_empty() {
+    return func
+  }
+  let min_distance = 24
+  let per_vreg_clone_cap = 8
+  for i in 0..<func.blocks.length() {
+    let block = func.blocks[i]
+    let new_block = @block.VCodeBlock::new(block.id)
+    for p in block.params {
+      new_block.params.push(p)
+    }
+    let clone_count : Map[Int, Int] = {}
+    fn maybe_remat_use(
+      func : VCodeFunction,
+      reg : @abi.Reg,
+      block_id : Int,
+      use_inst_idx : Int,
+      remat_defs : Map[Int, RematDef],
+      clone_count : Map[Int, Int],
+      new_block : @block.VCodeBlock,
+      min_distance : Int,
+      per_vreg_clone_cap : Int,
+    ) -> @abi.Reg {
+      match reg {
+        @abi.Virtual(v) =>
+          match remat_defs.get(v.id) {
+            Some(def) => {
+              if def.def_block_id != block_id {
+                return reg
+              }
+              if use_inst_idx - def.def_inst_idx < min_distance {
+                return reg
+              }
+              let cloned = clone_count.get(v.id).unwrap_or(0)
+              if cloned >= per_vreg_clone_cap {
+                return reg
+              }
+              let nv = func.new_vreg(def.cls)
+              let inst = clone_remat_inst(def, nv)
+              new_block.insts.push(inst)
+              clone_count.set(v.id, cloned + 1)
+              @abi.Virtual(nv)
+            }
+            None => reg
+          }
+        _ => reg
+      }
+    }
+
+    for inst_idx, inst in block.insts {
+      for u_idx, u in inst.uses {
+        inst.uses[u_idx] = maybe_remat_use(
+          func,
+          u,
+          block.id,
+          inst_idx,
+          remat_defs,
+          clone_count,
+          new_block,
+          min_distance,
+          per_vreg_clone_cap,
+        )
+      }
+      new_block.insts.push(inst)
+    }
+    match block.terminator {
+      Some(term) => {
+        let term_idx = block.insts.length()
+        let new_term = match term {
+          @instr.Jump(target, args) => {
+            let new_args : Array[@abi.Reg] = []
+            for a in args {
+              new_args.push(
+                maybe_remat_use(
+                  func,
+                  a,
+                  block.id,
+                  term_idx,
+                  remat_defs,
+                  clone_count,
+                  new_block,
+                  min_distance,
+                  per_vreg_clone_cap,
+                ),
+              )
+            }
+            @instr.Jump(target, new_args)
+          }
+          @instr.Branch(cond, t, e) =>
+            @instr.Branch(
+              maybe_remat_use(
+                func,
+                cond,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              t,
+              e,
+            )
+          @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
+            @instr.BranchCmp(
+              maybe_remat_use(
+                func,
+                lhs,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              maybe_remat_use(
+                func,
+                rhs,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              cond,
+              is64,
+              t,
+              e,
+            )
+          @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
+            @instr.BranchCmpImm(
+              maybe_remat_use(
+                func,
+                lhs,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              imm,
+              cond,
+              is64,
+              t,
+              e,
+            )
+          @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
+            @instr.BranchZero(
+              maybe_remat_use(
+                func,
+                reg,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              is_nonzero,
+              is64,
+              t,
+              e,
+            )
+          @instr.BrTable(index, targets, default) =>
+            @instr.BrTable(
+              maybe_remat_use(
+                func,
+                index,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+              targets,
+              default,
+            )
+          @instr.Return(vals) => {
+            let new_vals : Array[@abi.Reg] = []
+            for v in vals {
+              new_vals.push(
+                maybe_remat_use(
+                  func,
+                  v,
+                  block.id,
+                  term_idx,
+                  remat_defs,
+                  clone_count,
+                  new_block,
+                  min_distance,
+                  per_vreg_clone_cap,
+                ),
+              )
+            }
+            @instr.Return(new_vals)
+          }
+          @instr.Trap(msg) => @instr.Trap(msg)
+        }
+        new_block.set_terminator(new_term)
+      }
+      None => ()
+    }
+    func.blocks[i] = new_block
+  }
+  func
+}
+
+///|
 /// Rematerialize cross-block cheap defs:
 /// - Detect vregs defined by rematerializable opcodes.
 /// - If such a vreg is used in a different block than its def, clone the
@@ -81,7 +344,7 @@ pub fn rematerialize_cross_block_constants(
 
   // 1) Collect rematerializable defs.
   for block in func.blocks {
-    for inst in block.insts {
+    for inst_idx, inst in block.insts {
       if is_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
@@ -91,7 +354,10 @@ pub fn rematerialize_cross_block_constants(
           remat_defs.set(vreg.id, {
             opcode: inst.opcode,
             def_block_id: block.id,
+            def_inst_idx: inst_idx,
             cls: vreg.class,
+            uses: inst.uses.copy(),
+            use_constraints: inst.use_constraints.copy(),
           })
         }
       }
@@ -182,9 +448,8 @@ pub fn rematerialize_cross_block_constants(
     // Insert remat defs at block start.
     for vreg_id in need_ids {
       let def = remat_defs.get(vreg_id).unwrap()
-      let inst = @instr.VCodeInst::new(def.opcode)
       let nv = local_map.get(vreg_id).unwrap()
-      inst.add_def({ reg: @abi.Virtual(nv) })
+      let inst = clone_remat_inst(def, nv)
       new_block.insts.push(inst)
     }
 

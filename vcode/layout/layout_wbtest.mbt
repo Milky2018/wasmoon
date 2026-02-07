@@ -96,6 +96,27 @@ test "cfg: find back edges" {
 }
 
 ///|
+test "cfg: sparse block ids keep edges" {
+  let func = @regalloc.VCodeFunction::new("test_sparse_block_ids")
+  let block0 = func.new_block() // id 0
+  let _block1 = func.new_block() // id 1 (removed)
+  let _block2 = func.new_block() // id 2 (removed)
+  let block3 = func.new_block() // id 3
+
+  // Keep only id=0 and id=3 blocks so block IDs are sparse versus indices.
+  func.get_blocks().remove(1) |> ignore
+  func.get_blocks().remove(1) |> ignore
+
+  // 0 -> 3 -> 0 creates one back edge in index space: 1 -> 0.
+  block0.set_terminator(@instr.Jump(block3.id, []))
+  block3.set_terminator(@instr.Jump(block0.id, []))
+  let cfg = VCodeCFG::build(func)
+  let back_edges = cfg.find_back_edges()
+  inspect(back_edges.length(), content="1")
+  inspect(back_edges[0], content="(1, 0)")
+}
+
+///|
 test "cfg: find loops" {
   // Create a function with a simple loop
   let func = @regalloc.VCodeFunction::new("test_find_loop")

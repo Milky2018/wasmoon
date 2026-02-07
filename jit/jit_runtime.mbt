@@ -109,6 +109,8 @@ struct JITModule {
   mut debug_db : JITDebugDB?
   // Keep generated import trampolines alive (GC-managed executable memory).
   import_exec_codes : Array[ExecCode]
+  // Pseudo direct-call function indices -> near stub entry points.
+  direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
 }
@@ -122,6 +124,7 @@ pub fn JITModule::new() -> JITModule {
     context: None,
     debug_db: None,
     import_exec_codes: [],
+    direct_call_targets: {},
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
   }
@@ -142,6 +145,59 @@ fn emit_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
   let mc = @emit.MachineCode::new()
   mc.emit_load_imm64_fixed(reg, imm)
   mc.get_bytes()
+}
+
+///|
+fn direct_call_idx_memory_fill_mem0() -> Int {
+  -1001
+}
+
+///|
+fn direct_call_idx_memory_copy_mem0() -> Int {
+  -1002
+}
+
+///|
+fn build_direct_call_stub(target_ptr : Int64) -> Array[Int] {
+  let mc = @emit.MachineCode::new()
+  // load absolute helper target into X16, then tail-branch.
+  mc.emit_load_imm64_fixed(16, target_ptr)
+  mc.emit_br(16)
+  mc.get_bytes()
+}
+
+///|
+fn install_direct_call_stubs(
+  jit_module : JITModule,
+) -> Unit raise JITModuleLoadError {
+  fn install_one(
+    pseudo_idx : Int,
+    target_ptr : Int64,
+  ) -> Unit raise JITModuleLoadError {
+    let stub_code = build_direct_call_stub(target_ptr)
+    match ExecCode::new(stub_code) {
+      Some(ec) => {
+        jit_module.import_exec_codes.push(ec)
+        jit_module.direct_call_targets.set(pseudo_idx, ec.ptr())
+      }
+      None =>
+        raise ImportTrampolineAllocationFailed(
+          import_idx=-1,
+          module_name="__jit_direct_call",
+          func_name="idx_\{pseudo_idx}",
+          code_size=stub_code.length(),
+        )
+    }
+  }
+
+  install_one(
+    direct_call_idx_memory_fill_mem0(),
+    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
+  )
+  install_one(
+    direct_call_idx_memory_copy_mem0(),
+    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
+  )
 }
 
 ///|
@@ -246,7 +302,7 @@ fn apply_call_fixups(
   precompiled : @cwasm.PrecompiledModule,
 ) -> Unit {
   let func_table_ptr = ctx.get_func_table_ptr()
-  if func_table_ptr == 0L {
+  if func_table_ptr == 0L && jit_module.direct_call_targets.is_empty() {
     return
   }
   for entry in precompiled.functions {
@@ -257,9 +313,17 @@ fn apply_call_fixups(
       Some(func) => {
         let exec_ptr = func.exec_code.ptr()
         for fixup in entry.call_fixups {
-          let target_ptr = c_jit_read_i64(
-            func_table_ptr + fixup.func_idx.to_int64() * 8L,
-          )
+          let target_ptr = if fixup.func_idx >= 0 {
+            c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
+          } else {
+            match jit_module.direct_call_targets.get(fixup.func_idx) {
+              Some(ptr) => ptr
+              None =>
+                abort(
+                  "missing direct-call target for pseudo idx \{fixup.func_idx}",
+                )
+            }
+          }
           patch_direct_call(exec_ptr, fixup, target_ptr)
         }
       }
@@ -300,6 +364,9 @@ pub fn JITModule::load_with_imports(
   match context {
     None => raise ContextAllocationFailed(total_funcs~)
     Some(ctx) => {
+      // Install near stubs used by pseudo direct-call fixups.
+      install_direct_call_stubs(jit_module)
+
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
         // First check external imports, then fall back to built-in trampolines

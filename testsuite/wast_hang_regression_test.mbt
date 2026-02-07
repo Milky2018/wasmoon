@@ -147,7 +147,7 @@ fn try_compile_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> @wast.JITModuleContext? {
-  if @wast.has_unsupported_instructions(mod_) {
+  if @wast.has_unsupported_instructions_for_wast(mod_) {
     return None
   }
   if @wast.has_cross_module_imports(mod_) {

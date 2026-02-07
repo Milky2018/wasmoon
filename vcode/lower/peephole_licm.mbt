@@ -242,19 +242,66 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
 ///
 /// Today this is intentionally conservative:
 /// - vmctx base must be `x19`
-/// - only track the `vmctx.func_table` pointer (`VMCTX_FUNC_TABLE_OFFSET`)
+/// - only track immutable vmctx-derived base pointers (`func_table`, `globals`)
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
 fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
   let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
+  // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
+  // vmctx-derived base loads can be CSE'd even before prelude rewrites.
+  let vmctx_aliases : @hashset.HashSet[Int] = @hashset.new()
+  let params = func.get_params()
+  if params.length() > 0 {
+    vmctx_aliases.add(params[0].id)
+  }
   // Collect all vregs that are func_table pointers.
   let func_table_ptrs : @hashset.HashSet[Int] = @hashset.new()
+  fn is_vmctx_alias(
+    reg : @abi.Reg,
+    copies : Map[Int, Int],
+    aliases : @hashset.HashSet[Int],
+  ) -> Bool {
+    match reg {
+      Physical(p) => p.index == vmctx_idx
+      Virtual(v) => {
+        let mut cur = v.id
+        while copies.get(cur) is Some(next) {
+          if next == cur {
+            break
+          }
+          cur = next
+        }
+        aliases.contains(cur)
+      }
+    }
+  }
+
   for blk in func.blocks {
+    let copies : Map[Int, Int] = {}
     for inst in blk.insts {
+      if inst.opcode is Move &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 {
+        if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+          if get_vreg_id(inst.uses[0]) is Some(src) {
+            let mut src_root = src
+            while copies.get(src_root) is Some(next) {
+              if next == src_root {
+                break
+              }
+              src_root = next
+            }
+            copies.set(dst, src_root)
+            if vmctx_aliases.contains(src_root) {
+              vmctx_aliases.add(dst)
+            }
+          }
+        }
+      }
       match inst.opcode {
         Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
         | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
           if inst.defs.length() == 1 && inst.uses.length() == 1 {
-            if inst.uses[0] is Physical(p) && p.index == vmctx_idx {
+            if is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) {
               if get_def_vreg_id(inst.defs[0]) is Some(did) {
                 func_table_ptrs.add(did)
               }
@@ -265,7 +312,10 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   fn is_vmctx(r : @abi.Reg) -> Bool {
-    r is Physical(p) && p.index == vmctx_idx
+    match r {
+      Physical(p) => p.index == vmctx_idx
+      Virtual(v) => vmctx_aliases.contains(v.id)
+    }
   }
 
   fn canonical_id(id : Int, copies : Map[Int, Int]) -> Int {
@@ -345,15 +395,23 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
         _ => ()
       }
 
-      // Also CSE duplicate func_table base loads from vmctx: `load.i64 +8 x19`.
+      // Also CSE duplicate vmctx-derived immutable base loads:
+      // - func_table: `load.i64 +8 x19`
+      // - globals ptr: `load.i64 +32 x19`
       if !replaced {
         match inst.opcode {
           Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
-          | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
+          | Load(I64, @abi.VMCTX_GLOBALS_OFFSET)
+          | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
+          | LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET) =>
             if inst.defs.length() == 1 &&
               inst.uses.length() == 1 &&
               is_vmctx(inst.uses[0]) {
-              let key = "ftbase"
+              let key = match inst.opcode {
+                Load(_, off) | LoadPtr(_, off) =>
+                  "vmctx_base|" + off.to_string()
+                _ => "vmctx_base"
+              }
               if seen.get(key) is Some(prev_id) {
                 let mv = @instr.VCodeInst::new(Move)
                 mv.add_def(inst.defs[0])
@@ -628,15 +686,34 @@ fn propagate_single_use_moves(
 ///|
 /// Propagate virtual moves across the whole function and remove redundant copies.
 fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
+  let dom = compute_dominators(func)
+  let def_pos : Map[Int, (Int, Int)] = {}
+  for block in func.blocks {
+    for param in block.params {
+      if !def_pos.contains(param.id) {
+        def_pos.set(param.id, (block.id, -1))
+      }
+    }
+    for inst_idx, inst in block.insts {
+      for def in inst.defs {
+        if def.reg is Virtual(vreg) && !def_pos.contains(vreg.id) {
+          def_pos.set(vreg.id, (block.id, inst_idx))
+        }
+      }
+    }
+  }
   let copies : Map[Int, @abi.VReg] = {}
   for block in func.blocks {
-    for inst in block.insts {
+    for inst_idx, inst in block.insts {
       if inst.opcode is Move &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 {
         if inst.defs[0].reg is Virtual(dst_vreg) &&
           inst.uses[0] is Virtual(src_vreg) {
-          if same_reg_class(dst_vreg.class, src_vreg.class) {
+          if same_reg_class(dst_vreg.class, src_vreg.class) &&
+            def_pos.get(src_vreg.id) is Some((src_block, src_inst)) &&
+            dom[block.id].contains(src_block) &&
+            (src_block != block.id || src_inst < inst_idx) {
             copies.set(dst_vreg.id, src_vreg)
           }
         }
@@ -646,22 +723,45 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
   if copies.is_empty() {
     return
   }
-  fn resolve_copy(reg : @abi.VReg, copies : Map[Int, @abi.VReg]) -> @abi.VReg {
+  fn resolve_copy(
+    reg : @abi.VReg,
+    copies : Map[Int, @abi.VReg],
+    def_pos : Map[Int, (Int, Int)],
+    dom : Array[@hashset.HashSet[Int]],
+    use_block_id : Int,
+    use_inst_idx : Int,
+  ) -> @abi.VReg {
     let mut cur = reg
+    let visited : @hashset.HashSet[Int] = @hashset.new()
     while copies.get(cur.id) is Some(next) {
-      if next.id == cur.id {
+      if next.id == cur.id || visited.contains(cur.id) {
         break
       }
-      cur = next
+      visited.add(cur.id)
+      if def_pos.get(next.id) is Some((src_block, src_inst)) &&
+        dom[use_block_id].contains(src_block) &&
+        (src_block != use_block_id || src_inst < use_inst_idx) {
+        cur = next
+      } else {
+        break
+      }
     }
     cur
   }
 
-  let rewrite_reg = fn(reg : @abi.Reg) -> @abi.Reg {
+  let rewrite_reg = fn(
+    reg : @abi.Reg,
+    use_block_id : Int,
+    use_inst_idx : Int,
+  ) -> @abi.Reg {
     match reg {
       Virtual(v) =>
         if copies.get(v.id) is Some(target) {
-          Virtual(resolve_copy(target, copies))
+          Virtual(
+            resolve_copy(
+              target, copies, def_pos, dom, use_block_id, use_inst_idx,
+            ),
+          )
         } else {
           reg
         }
@@ -669,34 +769,27 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   for block in func.blocks {
-    let new_insts : Array[@instr.VCodeInst] = []
-    for inst in block.insts {
+    for inst_idx, inst in block.insts {
       for u in 0..<inst.uses.length() {
-        inst.uses[u] = rewrite_reg(inst.uses[u])
+        inst.uses[u] = rewrite_reg(inst.uses[u], block.id, inst_idx)
       }
-      if inst.opcode is Move &&
-        inst.defs.length() == 1 &&
-        inst.defs[0].reg is Virtual(dst_vreg) &&
-        copies.contains(dst_vreg.id) {
-        continue
-      }
-      new_insts.push(inst)
-    }
-    block.insts.clear()
-    for inst in new_insts {
-      block.insts.push(inst)
     }
     if block.terminator is Some(term) {
+      let use_idx = block.insts.length()
       let new_term = match term {
         @instr.VCodeTerminator::Jump(target, args) => {
           let new_args : Array[@abi.Reg] = []
           for arg in args {
-            new_args.push(rewrite_reg(arg))
+            new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
           @instr.VCodeTerminator::Jump(target, new_args)
         }
         @instr.VCodeTerminator::Branch(cond, then_id, else_id) =>
-          @instr.VCodeTerminator::Branch(rewrite_reg(cond), then_id, else_id)
+          @instr.VCodeTerminator::Branch(
+            rewrite_reg(cond, block.id, use_idx),
+            then_id,
+            else_id,
+          )
         @instr.VCodeTerminator::BranchCmp(
           lhs,
           rhs,
@@ -706,8 +799,8 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
           else_id
         ) =>
           @instr.VCodeTerminator::BranchCmp(
-            rewrite_reg(lhs),
-            rewrite_reg(rhs),
+            rewrite_reg(lhs, block.id, use_idx),
+            rewrite_reg(rhs, block.id, use_idx),
             cond,
             is_64,
             then_id,
@@ -721,7 +814,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
           else_id
         ) =>
           @instr.VCodeTerminator::BranchZero(
-            rewrite_reg(cond),
+            rewrite_reg(cond, block.id, use_idx),
             is_nonzero,
             is_64,
             then_id,
@@ -736,7 +829,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
           else_id
         ) =>
           @instr.VCodeTerminator::BranchCmpImm(
-            rewrite_reg(lhs),
+            rewrite_reg(lhs, block.id, use_idx),
             imm,
             cond,
             is_64,
@@ -746,13 +839,13 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
         @instr.VCodeTerminator::Return(args) => {
           let new_args : Array[@abi.Reg] = []
           for arg in args {
-            new_args.push(rewrite_reg(arg))
+            new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
           @instr.VCodeTerminator::Return(new_args)
         }
         @instr.VCodeTerminator::BrTable(index, targets, default_id) =>
           @instr.VCodeTerminator::BrTable(
-            rewrite_reg(index),
+            rewrite_reg(index, block.id, use_idx),
             targets,
             default_id,
           )
@@ -764,34 +857,173 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
 }
 
 ///|
-/// Block-local CSE for LoadMemBase (mem=0..), reset on calls.
+/// Treat call-like instructions as barriers for mem-base value availability.
+fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
+  match opcode {
+    // Keep `LoadMemBase` available across Wasm calls; clear only on C-side
+    // calls that may update memory descriptors in the runtime.
+    CallPtr(_, _, @instr.C)
+    | CallDirect(_, _, _, @instr.C)
+    | ReturnCallIndirect(_, _)
+    | TypeCheckSubtypeIndirect(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Clone mem-base environment map.
+fn clone_mem_base_env(src : Map[Int, Int]) -> Map[Int, Int] {
+  let dst : Map[Int, Int] = {}
+  for mem_idx, vreg_id in src {
+    dst.set(mem_idx, vreg_id)
+  }
+  dst
+}
+
+///|
+/// Compare two mem-base environments for exact equality.
+fn same_mem_base_env(lhs : Map[Int, Int], rhs : Map[Int, Int]) -> Bool {
+  for mem_idx, vreg_id in lhs {
+    if rhs.get(mem_idx) is Some(other) {
+      if other != vreg_id {
+        return false
+      }
+    } else {
+      return false
+    }
+  }
+  for mem_idx, _ in rhs {
+    if lhs.get(mem_idx) is None {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Intersect predecessor out-envs, keeping only `(mem_idx -> vreg)` pairs
+/// available with the exact same vreg in all predecessors.
+fn merge_mem_base_preds(
+  preds : Array[Int],
+  out_env : Array[Map[Int, Int]],
+) -> Map[Int, Int] {
+  if preds.length() == 0 {
+    return {}
+  }
+  let merged = clone_mem_base_env(out_env[preds[0]])
+  for i in 1..<preds.length() {
+    let pred_env = out_env[preds[i]]
+    let to_remove : Array[Int] = []
+    for mem_idx, vreg_id in merged {
+      match pred_env.get(mem_idx) {
+        Some(other) if other == vreg_id => ()
+        _ => to_remove.push(mem_idx)
+      }
+    }
+    for mem_idx in to_remove {
+      merged.remove(mem_idx) |> ignore
+    }
+    if merged.length() == 0 {
+      break
+    }
+  }
+  merged
+}
+
+///|
+/// Dominance-safe CSE for `LoadMemBase(mem=...)`.
+///
+/// Unlike the previous block-local pass, this computes a forward dataflow
+/// environment and allows reuse across block boundaries when all predecessors
+/// agree on the exact same available vreg.
 fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
-  for blk in func.blocks {
-    let last_base : Map[Int, Int] = {}
+  let n = func.blocks.length()
+  if n == 0 {
+    return
+  }
+  let block_id_to_index : Map[Int, Int] = {}
+  for i, blk in func.blocks {
+    block_id_to_index.set(blk.id, i)
+  }
+  let preds : Array[Array[Int]] = []
+  for _ in 0..<n {
+    preds.push([])
+  }
+  for pred_idx, blk in func.blocks {
+    let succ_ids = get_successors(blk.terminator)
+    for succ_id in succ_ids {
+      if block_id_to_index.get(succ_id) is Some(succ_idx) {
+        preds[succ_idx].push(pred_idx)
+      }
+    }
+  }
+  let in_env : Array[Map[Int, Int]] = []
+  let out_env : Array[Map[Int, Int]] = []
+  for _ in 0..<n {
+    in_env.push({})
+    out_env.push({})
+  }
+
+  // Fixed-point solve for available mem-base values.
+  let mut changed = true
+  while changed {
+    changed = false
+    for block_idx, blk in func.blocks {
+      let incoming = if block_idx == 0 {
+        {}
+      } else {
+        merge_mem_base_preds(preds[block_idx], out_env)
+      }
+      if !same_mem_base_env(in_env[block_idx], incoming) {
+        in_env[block_idx] = incoming
+        changed = true
+      }
+      let state = clone_mem_base_env(in_env[block_idx])
+      for inst in blk.insts {
+        if is_mem_base_cse_barrier(inst.opcode) {
+          state.clear()
+          continue
+        }
+        if inst.opcode is LoadMemBase(mem_idx) && inst.defs.length() == 1 {
+          if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+            // Forward the available value through this block with the latest
+            // local name to avoid creating very long vreg live ranges.
+            state.set(mem_idx, dst)
+          }
+        }
+      }
+      if !same_mem_base_env(out_env[block_idx], state) {
+        out_env[block_idx] = state
+        changed = true
+      }
+    }
+  }
+
+  // Rewrite loads using stable in-env snapshots.
+  for block_idx, blk in func.blocks {
+    let state = clone_mem_base_env(in_env[block_idx])
     let new_insts : Array[@instr.VCodeInst] = []
     for inst in blk.insts {
+      if is_mem_base_cse_barrier(inst.opcode) {
+        state.clear()
+        new_insts.push(inst)
+        continue
+      }
       match inst.opcode {
-        CallPtr(_, _, _)
-        | CallDirect(_, _, _, _)
-        | ReturnCallIndirect(_, _)
-        | TypeCheckSubtypeIndirect(_) => {
-          last_base.clear()
-          new_insts.push(inst)
-        }
         LoadMemBase(mem_idx) =>
           if inst.defs.length() == 1 {
-            if last_base.get(mem_idx) is Some(prev_id) {
+            if state.get(mem_idx) is Some(prev_id) {
               let mv = @instr.VCodeInst::new(Move)
               mv.add_def(inst.defs[0])
               mv.add_use(Virtual({ id: prev_id, class: Int }))
               new_insts.push(mv)
               if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-                last_base.set(mem_idx, dst)
+                state.set(mem_idx, dst)
               }
             } else {
               new_insts.push(inst)
               if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-                last_base.set(mem_idx, dst)
+                state.set(mem_idx, dst)
               }
             }
           } else {
@@ -1139,8 +1371,13 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     propagate_single_use_moves(block, global_use_counts)
   }
-  // Pass 1.6: Global copy propagation for virtual moves
-  propagate_moves_global(func)
+  // Pass 1.6: Global copy propagation for virtual moves.
+  // Keep this disabled for now: even bounded versions still regress
+  // branch-heavy WAST suites. Local propagation remains enabled.
+  let enable_global_copy_prop = false
+  if enable_global_copy_prop {
+    propagate_moves_global(func)
+  }
   // Pass 1.65: Fuse cmp+branch into compare branches
   fuse_cmp_branch(func)
   // Pass 1.66: Thread trivial jump blocks, including block-arg forwarding.

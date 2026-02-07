@@ -615,26 +615,43 @@ fn Translator::translate_br_table(
   // Save the original block
   let original_block = self.builder.current_block()
 
-  // Phase 1: Create all intermediate blocks (without filling them)
+  // Phase 1: Create intermediate blocks for unique target depths.
+  //
+  // br_table payloads can be very large with many repeated labels. Emitting one
+  // unique intermediate block per target depth keeps IR size bounded and avoids
+  // O(table_size) extra blocks in translator hot paths.
   let intermediate_blocks : Array[Block] = []
-  let target_blocks : Array[Block] = []
-  for depth in labels {
-    let (target_block, _, _) = get_target(self, depth)
-    target_blocks.push(target_block)
-    intermediate_blocks.push(self.builder.create_block())
-  }
-  // Create intermediate block for default
+  let unique_depths : Array[Int] = []
+  let depth_to_intermediate : Map[Int, Block] = {}
   let default_intermediate = self.builder.create_block()
+  for depth in labels {
+    if depth == default_ {
+      intermediate_blocks.push(default_intermediate)
+      continue
+    }
+    if depth_to_intermediate.get(depth) is Some(existing) {
+      intermediate_blocks.push(existing)
+      continue
+    }
+    let intermediate = self.builder.create_block()
+    depth_to_intermediate.set(depth, intermediate)
+    unique_depths.push(depth)
+    intermediate_blocks.push(intermediate)
+  }
 
   // Phase 2: Emit br_table in original block
   if original_block is Some(_) {
     self.builder.br_table(index, intermediate_blocks, default_intermediate)
   }
 
-  // Phase 3: Fill in intermediate blocks with jumps to real targets
-  for i, intermediate in intermediate_blocks {
+  // Phase 3: Fill in unique intermediate blocks with jumps to real targets.
+  for depth in unique_depths {
+    guard depth_to_intermediate.get(depth) is Some(intermediate) else {
+      continue
+    }
+    let (target_block, _, _) = get_target(self, depth)
     self.builder.switch_to_block(intermediate)
-    self.builder.jump(target_blocks[i], args)
+    self.builder.jump(target_block, args)
   }
 
   // Fill in default intermediate

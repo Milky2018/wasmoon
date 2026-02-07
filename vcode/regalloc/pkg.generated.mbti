@@ -47,6 +47,8 @@ pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
 
 pub fn rematerialize_cross_block_constants(VCodeFunction) -> VCodeFunction
 
+pub fn rematerialize_long_distance_constants(VCodeFunction) -> VCodeFunction
+
 pub fn verify_allocation(VCodeFunction, LivenessResult, RegAllocResult, @isa.ISA, settings? : @abi.ABISettings) -> Unit
 
 pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit

@@ -121,25 +121,6 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
     O3 => optimize_o3(func)
     O0 => OptResult::new()
   }
-
-  // Cranelift-style rematerialization is a post-optimization, IR-level pass.
-  // Run it once, after reaching a fixed point, to avoid repeated cloning.
-  match level {
-    O0 => ()
-    _ => {
-      let remat_result = run_opt_pass(
-        func, "rematerialize_across_blocks", rematerialize_across_blocks,
-      )
-      if remat_result.changed {
-        result.mark_changed()
-      }
-      // Cleanup: remat may leave now-unused original defs behind.
-      let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
-      if dce_result.changed {
-        result.mark_changed()
-      }
-    }
-  }
   result
 }
 
@@ -221,6 +202,11 @@ fn optimize_o1(func : Function) -> OptResult {
         }
       }
     }
+  }
+  // Run jump-threading once after fixed-point to avoid repeated CFG churn.
+  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+  if jt_result.changed {
+    result.mark_changed()
   }
   result
 }
@@ -307,11 +293,8 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-    if jt_result.changed {
-      changed = true
-      result.mark_changed()
-    }
+    // Keep branch threading out of the O2 fixed-point loop for now.
+    // In large Wasm CFGs this can inflate live ranges and hurt backend quality.
     if changed {
       let after_insts = instruction_count(func)
       let after_blocks = func.blocks.length()

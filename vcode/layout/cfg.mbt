@@ -12,34 +12,41 @@ pub struct VCodeCFG {
 ///|
 /// Build a CFG from a VCodeFunction
 pub fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
-  let n = func.get_blocks().length()
+  let blocks = func.get_blocks()
+  let n = blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
+  let block_id_to_index : Map[Int, Int] = {}
 
   // Initialize arrays
   for _ in 0..<n {
     preds.push([])
     succs.push([])
   }
+  for i, block in blocks {
+    block_id_to_index.set(block.id, i)
+  }
 
   // Build edges from terminators
-  for block_idx, block in func.get_blocks() {
+  for block_idx, block in blocks {
     if block.terminator is Some(term) {
-      let block_succs = get_terminator_succs(term)
-      succs[block_idx] = block_succs
-      for succ in block_succs {
-        if succ < n {
-          preds[succ].push(block_idx)
+      let block_succ_ids = get_terminator_succ_ids(term)
+      let block_succs : Array[Int] = []
+      for succ_id in block_succ_ids {
+        if block_id_to_index.get(succ_id) is Some(succ_idx) {
+          block_succs.push(succ_idx)
+          preds[succ_idx].push(block_idx)
         }
       }
+      succs[block_idx] = block_succs
     }
   }
   { size: n, preds, succs }
 }
 
 ///|
-/// Extract successor block IDs from terminator
-fn get_terminator_succs(term : @instr.VCodeTerminator) -> Array[Int] {
+/// Extract successor block IDs from terminator.
+fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
   match term {
     Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]
