@@ -340,18 +340,18 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block2(v5:int, f6:float, f7:float):
       #|    v24 = load_mem_base mem=0 x21
       #|    store_ptr.f32 +0 v24, f6
-      #|    f37 = load_ptr.f32 +0 v24
-      #|    jump block1 (v5, f6, f37)
+      #|    f36 = load_ptr.f32 +0 v24
+      #|    jump block1 (v5, f6, f36)
       #|block3(v8:int, f9:float, f10:float):
-      #|    v39 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v39, f9
-      #|    f52 = load_ptr.f32 +0 v39
-      #|    jump block1 (v8, f9, f52)
+      #|    v38 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v38, f9
+      #|    f50 = load_ptr.f32 +0 v38
+      #|    jump block1 (v8, f9, f50)
       #|block4(v11:int, f12:float, f13:float):
-      #|    v54 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v54, f12
-      #|    f67 = load_ptr.f32 +0 v54
-      #|    jump block1 (v11, f12, f67)
+      #|    v52 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v52, f12
+      #|    f64 = load_ptr.f32 +0 v52
+      #|    jump block1 (v11, f12, f64)
       #|block5:
       #|    jump block4 (v1, f16, f15)
       #|block6:

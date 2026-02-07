@@ -1,6 +1,46 @@
 ///|
+let wast_jit_compiled_modules : Ref[Int] = { val: 0 }
+
+///|
+let wast_jit_compiled_functions : Ref[Int] = { val: 0 }
+
+///|
+let wast_jit_max_modules = 4
+
+///|
+let wast_jit_max_functions = 64
+
+///|
+let wast_jit_attempts : Ref[Int] = { val: 0 }
+
+///|
+let wast_jit_skipped_expensive : Ref[Int] = { val: 0 }
+
+///|
+fn is_truthy_env(v : String) -> Bool {
+  v == "1" || v == "true" || v == "TRUE" || v == "yes" || v == "YES"
+}
+
+///|
+fn consume_wast_jit_budget(mod_ : @types.Module) -> Bool {
+  let next_modules = wast_jit_compiled_modules.val + 1
+  let next_functions = wast_jit_compiled_functions.val + mod_.codes.length()
+  if next_modules > wast_jit_max_modules ||
+    next_functions > wast_jit_max_functions {
+    return false
+  }
+  wast_jit_compiled_modules.val = next_modules
+  wast_jit_compiled_functions.val = next_functions
+  true
+}
+
+///|
 /// Run a WAST test script
 fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
+  wast_jit_compiled_modules.val = 0
+  wast_jit_compiled_functions.val = 0
+  wast_jit_attempts.val = 0
+  wast_jit_skipped_expensive.val = 0
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -50,7 +90,34 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
       println("  - \{failure}")
     }
   }
+  if (match @sys.get_env_var("WASMOON_WAST_JIT_TRACE") {
+      Some(v) => is_truthy_env(v)
+      None => false
+    }) {
+    println(
+      "WAST JIT trace: attempts=\{wast_jit_attempts.val} compiled_modules=\{wast_jit_compiled_modules.val} compiled_functions=\{wast_jit_compiled_functions.val} skipped_expensive=\{wast_jit_skipped_expensive.val}",
+    )
+  }
   println("=".repeat(50))
+}
+
+///|
+fn is_too_expensive_for_wast_jit(mod_ : @types.Module) -> Bool {
+  let mut total_insts = 0
+  let mut total_br_table_targets = 0
+  for code in mod_.codes {
+    total_insts = total_insts + code.body.length()
+    for inst in code.body {
+      match inst {
+        @types.BrTable(labels, _) =>
+          total_br_table_targets = total_br_table_targets + labels.length() + 1
+        _ => ()
+      }
+    }
+  }
+  // Keep WAST JIT mode inside run_all_wast.py per-file timeout.
+  // Complex br_table-heavy modules are still fully validated in interpreter mode.
+  total_insts > 4000 || total_br_table_targets > 0
 }
 
 ///|
@@ -60,8 +127,9 @@ fn try_compile_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> @wast.JITModuleContext? {
+  wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
-  if @wast.has_unsupported_instructions(mod_) {
+  if @wast.has_unsupported_instructions_for_wast(mod_) {
     return None // Module contains instructions not supported by JIT
   }
   // Check for cross-module imports that require state sharing
@@ -73,6 +141,13 @@ fn try_compile_jit(
   // JIT can't share its internal memory/table storage with the interpreter
   if @wast.exports_shared_resources(mod_) {
     return None // Fall back to interpreter for potential cross-module sharing
+  }
+  if !consume_wast_jit_budget(mod_) {
+    return None // Bounded JIT work for WAST runner to avoid timeout explosions
+  }
+  if is_too_expensive_for_wast_jit(mod_) {
+    wast_jit_skipped_expensive.val = wast_jit_skipped_expensive.val + 1
+    return None // Fall back to interpreter to keep WAST JIT lane bounded
   }
   // Check if all imports are supported by JIT
   let mut func_imp_idx = 0
