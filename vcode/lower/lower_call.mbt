@@ -188,6 +188,7 @@ fn lower_wasm_call_common(
   // Add clobbers for all caller-saved registers
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
+  invalidate_mem_base_cache(ctx)
 }
 
 ///|
@@ -361,17 +362,13 @@ fn lower_return_call_indirect(
     ptr_vreg
   }
 
-  // Calculate offset and load function pointer
+  // Calculate offset = elem_idx << 4 (each table entry is 16 bytes).
+  // This matches Cranelift-style lowering and avoids an unnecessary const+mul.
   let offset_vreg = ctx.vcode_func.new_vreg(Int)
-  let const_16_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_16 = @instr.VCodeInst::new(LoadConst(16L))
-  load_16.add_def({ reg: Virtual(const_16_vreg) })
-  block.add_inst(load_16)
-  let mul_inst = @instr.VCodeInst::new(Mul(true))
-  mul_inst.add_def({ reg: Virtual(offset_vreg) })
-  mul_inst.add_use(Virtual(elem_idx_vreg))
-  mul_inst.add_use(Virtual(const_16_vreg))
-  block.add_inst(mul_inst)
+  let shl_inst = @instr.VCodeInst::new(ShlImm(4, true))
+  shl_inst.add_def({ reg: Virtual(offset_vreg) })
+  shl_inst.add_use(Virtual(elem_idx_vreg))
+  block.add_inst(shl_inst)
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
   let add_inst = @instr.VCodeInst::new(Add(true))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
@@ -385,16 +382,11 @@ fn lower_return_call_indirect(
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
 
-  // Clear FUNCREF_TAG (bit 61) from function pointer
+  // Clear FUNCREF_TAG (bit 61) from function pointer.
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
-  load_mask.add_def({ reg: Virtual(mask_vreg) })
-  block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And(true))
+  let and_inst = @instr.VCodeInst::new(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
-  and_inst.add_use(Virtual(mask_vreg))
   block.add_inst(and_inst)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
   let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
@@ -487,15 +479,10 @@ fn lower_return_call_ref(
 
   // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
   // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
-  let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
-  load_mask.add_def({ reg: Virtual(mask_vreg) })
-  block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let and_inst = @instr.VCodeInst::new(And(true))
+  let and_inst = @instr.VCodeInst::new(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
-  and_inst.add_use(Virtual(mask_vreg))
   block.add_inst(and_inst)
 
   // Get vmctx
@@ -623,17 +610,11 @@ fn lower_call_indirect(
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
 
-  // Step 1: Calculate offset = elem_idx * 16 (each entry is 16 bytes: func_ptr + type_idx)
-  // Use 64-bit multiply since we're working with 64-bit pointers
-  let const_16_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_16 = @instr.VCodeInst::new(LoadConst(16L))
-  load_16.add_def({ reg: Virtual(const_16_vreg) })
-  block.add_inst(load_16)
-  let mul_inst = @instr.VCodeInst::new(Mul(true))
-  mul_inst.add_def({ reg: Virtual(offset_vreg) })
-  mul_inst.add_use(Virtual(elem_idx_vreg))
-  mul_inst.add_use(Virtual(const_16_vreg))
-  block.add_inst(mul_inst)
+  // Step 1: Calculate offset = elem_idx << 4 (entry size is 16 bytes).
+  let shl_inst = @instr.VCodeInst::new(ShlImm(4, true))
+  shl_inst.add_def({ reg: Virtual(offset_vreg) })
+  shl_inst.add_use(Virtual(elem_idx_vreg))
+  block.add_inst(shl_inst)
 
   // Step 2: Calculate address = table_ptr + offset (64-bit pointer arithmetic)
   // table_ptr is loaded on-demand from vmctx (on-demand)
@@ -651,17 +632,10 @@ fn lower_call_indirect(
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
 
-  // Step 3.5: Clear FUNCREF_TAG (bit 61) from function pointer
-  // Function pointers in tables are tagged with 0x2000000000000000 for ref.test
-  // We need to clear this tag before calling: mask = ~0x2000000000000000 = 0xDFFFFFFFFFFFFFFF
-  let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
-  load_mask.add_def({ reg: Virtual(mask_vreg) })
-  block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And(true))
+  // Step 3.5: Clear FUNCREF_TAG (bit 61) from function pointer.
+  let and_inst = @instr.VCodeInst::new(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
-  and_inst.add_use(Virtual(mask_vreg))
   block.add_inst(and_inst)
 
   // Step 4: Load actual type index from address + 8
@@ -719,15 +693,10 @@ fn lower_call_ref(
 
   // Step 1: Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
   // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
-  let mask_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0xDFFFFFFFFFFFFFFFL))
-  load_mask.add_def({ reg: Virtual(mask_vreg) })
-  block.add_inst(load_mask)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let and_inst = @instr.VCodeInst::new(And(true))
+  let and_inst = @instr.VCodeInst::new(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
-  and_inst.add_use(Virtual(mask_vreg))
   block.add_inst(and_inst)
 
   // Step 2: Use Standard call lowering
@@ -772,6 +741,61 @@ fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
   for preg in isa.call_clobbered_fprs() {
     inst.add_def({ reg: Physical(preg) })
   }
+}
+
+///|
+/// Pseudo function indices for AArch64 direct BL fixups to JIT libcalls.
+/// Negative indices are never used by wasm/imported functions.
+fn jit_direct_call_func_idx(libcall : @instr.JITLibcall) -> Int {
+  match libcall {
+    @instr.MemoryFillMem0 => -1001
+    @instr.MemoryCopyMem0 => -1002
+    _ => abort("jit_direct_call_func_idx: unsupported libcall \{libcall}")
+  }
+}
+
+///|
+/// Lower a C libcall as direct-call fixup (AArch64 only).
+/// This emits `CallDirect` with a pseudo function index that is patched in
+/// runtime to a near call stub, avoiding an indirect `blr` on the hot path.
+fn lower_c_libcall_direct(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  pseudo_func_idx : Int,
+  args : Array[@abi.VReg],
+  result : @abi.VReg?,
+) -> Unit {
+  fn c_arg_gpr_indices() -> Array[Int] {
+    match @isa.ISA::current() {
+      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
+    }
+  }
+
+  let arg_regs = c_arg_gpr_indices()
+  guard args.length() <= arg_regs.length() else {
+    abort("lower_c_libcall_direct: too many arguments")
+  }
+  let num_args = args.length()
+  let num_results = if result is Some(_) { 1 } else { 0 }
+  let call_inst = @instr.VCodeInst::new(
+    CallDirect(pseudo_func_idx, num_args, num_results, C),
+  )
+  for i, arg in args {
+    call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
+      index: arg_regs[i],
+      class: @abi.Int,
+    })
+  }
+  if result is Some(dst) {
+    call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+      index: 0,
+      class: @abi.Int,
+    })
+  }
+  add_call_clobbers(call_inst)
+  block.add_inst(call_inst)
+  invalidate_mem_base_cache(ctx)
 }
 
 ///|
@@ -891,6 +915,7 @@ fn lower_call_ptr(
   // Add clobbers for all caller-saved registers
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
+  invalidate_mem_base_cache(ctx)
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
 }
 
@@ -904,7 +929,7 @@ fn lower_call_ptr(
 /// Unlike lower_call_ptr which handles Wasm calling convention with vmctx,
 /// this is for simple C functions where args go directly to X0-X7.
 fn lower_c_libcall(
-  _ctx : LoweringContext,
+  ctx : LoweringContext,
   block : @block.VCodeBlock,
   func_ptr : @abi.VReg,
   args : Array[@abi.VReg],
@@ -954,6 +979,7 @@ fn lower_c_libcall(
   // Add clobbers for all caller-saved registers
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
+  invalidate_mem_base_cache(ctx)
 }
 
 ///|

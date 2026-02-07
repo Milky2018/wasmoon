@@ -1,6 +1,23 @@
 ///|
+let wast_jit_compiled_modules : Ref[Int] = { val: 0 }
+
+///|
+let wast_jit_compiled_functions : Ref[Int] = { val: 0 }
+
+///|
+let wast_jit_attempts : Ref[Int] = { val: 0 }
+
+///|
+fn is_truthy_env(v : String) -> Bool {
+  v == "1" || v == "true" || v == "TRUE" || v == "yes" || v == "YES"
+}
+
+///|
 /// Run a WAST test script
 fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
+  wast_jit_compiled_modules.val = 0
+  wast_jit_compiled_functions.val = 0
+  wast_jit_attempts.val = 0
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -50,6 +67,14 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
       println("  - \{failure}")
     }
   }
+  if (match @sys.get_env_var("WASMOON_WAST_JIT_TRACE") {
+      Some(v) => is_truthy_env(v)
+      None => false
+    }) {
+    println(
+      "WAST JIT trace: attempts=\{wast_jit_attempts.val} compiled_modules=\{wast_jit_compiled_modules.val} compiled_functions=\{wast_jit_compiled_functions.val}",
+    )
+  }
   println("=".repeat(50))
 }
 
@@ -60,8 +85,9 @@ fn try_compile_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> @wast.JITModuleContext? {
+  wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
-  if @wast.has_unsupported_instructions(mod_) {
+  if @wast.has_unsupported_instructions_for_wast(mod_) {
     return None // Module contains instructions not supported by JIT
   }
   // Check for cross-module imports that require state sharing
@@ -116,7 +142,7 @@ fn try_compile_jit(
     false, // debug mode off for wast tests
     false, // dump-on-trap off for wast tests
     actual_memory_max~,
-    2,
+    0, // Keep WAST JIT compile latency aligned with timeout-limited harness runs.
     false, // DWARF off for wast tests
   )
   match compiled {
@@ -134,6 +160,9 @@ fn try_compile_jit(
       match jit_module_result {
         Err(err) => abort("Failed to create JIT module: \{err}")
         Ok(jm) => {
+          wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
+          wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
+            mod_.codes.length()
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page (1MB)

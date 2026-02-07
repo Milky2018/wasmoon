@@ -362,43 +362,45 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
     "unknown"
   }
 
-  fn validate_preg(p : @abi.PReg, ctx_desc : String) -> Unit {
+  fn validate_preg(p : @abi.PReg, ctx_desc_fn : () -> String) -> Unit {
     match p.class {
       @abi.Int => {
         guard p.index >= 0 && p.index < 16 else {
           abort(
-            "amd64 regalloc output contains invalid Int preg \{p} at \{ctx_desc}",
+            "amd64 regalloc output contains invalid Int preg \{p} at \{ctx_desc_fn()}",
           )
         }
         // rsp/rbp are never allocatable as value registers.
         guard p.index != 4 && p.index != 5 else {
           abort(
-            "amd64 regalloc output contains reserved Int preg \{p} at \{ctx_desc}",
+            "amd64 regalloc output contains reserved Int preg \{p} at \{ctx_desc_fn()}",
           )
         }
       }
       @abi.Float32 | @abi.Float64 | @abi.Vector => {
         guard p.index >= 0 && p.index < 16 else {
           abort(
-            "amd64 regalloc output contains invalid FP/Vec preg \{p} at \{ctx_desc}",
+            "amd64 regalloc output contains invalid FP/Vec preg \{p} at \{ctx_desc_fn()}",
           )
         }
       }
     }
   }
 
-  fn validate_loc(loc : Loc, ctx_desc : String) -> Unit {
+  fn validate_loc(loc : Loc, ctx_desc_fn : () -> String) -> Unit {
     match loc {
-      Reg(p) => validate_preg(p, ctx_desc)
+      Reg(p) => validate_preg(p, ctx_desc_fn)
       Spill(_) => ()
     }
   }
 
   for i in 0..<self.param_locs.length() {
-    validate_loc(self.param_locs[i], "param_locs[\{i}]")
+    validate_loc(self.param_locs[i], fn() { "param_locs[\{i}]" })
   }
   for i in 0..<self.allocs.length() {
-    validate_loc(self.allocs[i], "allocs[\{i}] (\{alloc_context(self, i)})")
+    validate_loc(self.allocs[i], fn() {
+      "allocs[\{i}] (\{alloc_context(self, i)})"
+    })
   }
   for entry in self.edits {
     let ((block_id, inst_idx, pos), edit) = entry
@@ -412,8 +414,8 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
     let ctx_desc = "edit[\{block_id}:\{inst_idx}:\{pos_str(pos)}]"
     match edit {
       Move(from, to, _class) => {
-        validate_loc(from, ctx_desc + ".from")
-        validate_loc(to, ctx_desc + ".to")
+        validate_loc(from, fn() { ctx_desc + ".from" })
+        validate_loc(to, fn() { ctx_desc + ".to" })
       }
     }
   }

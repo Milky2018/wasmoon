@@ -19,7 +19,7 @@ fn main {
         "optmize": @clap.Arg::named(
           short='O',
           nargs=@clap.Nargs::AtMost(1),
-          help="Optimization level (0-3, default: 2)",
+          help="Optimization level (0-3, default: 1)",
         ),
         "arg": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
@@ -103,7 +103,7 @@ fn main {
           "optmize": @clap.Arg::named(
             short='O',
             nargs=@clap.Nargs::AtMost(1),
-            help="Optimization level (0-3, default: 2)",
+            help="Optimization level (0-3, default: 1)",
           ),
           "stage": @clap.Arg::named(
             short='s',
@@ -178,12 +178,12 @@ fn main {
                   Some(arr) =>
                     if arr.length() > 0 {
                       @strconv.parse_int(arr[0]) catch {
-                        _ => 2
+                        _ => 1
                       }
                     } else {
-                      2
+                      1
                     }
-                  None => 2
+                  None => 1
                 }
                 // Get function arguments from --arg option (for invoked function)
                 let func_args : Array[String] = match sub.args.get("arg") {
@@ -296,12 +296,12 @@ fn main {
                   Some(arr) =>
                     if arr.length() > 0 {
                       @strconv.parse_int(arr[0]) catch {
-                        _ => 2
+                        _ => 1
                       }
                     } else {
-                      2
+                      1
                     }
-                  None => 2
+                  None => 1
                 }
                 let stages : Array[String] = match sub.args.get("stage") {
                   Some(arr) => arr

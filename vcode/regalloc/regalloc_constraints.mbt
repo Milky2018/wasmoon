@@ -44,6 +44,42 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   if moves.is_empty() {
     return moves
   }
+  fn class_bank(cls : @abi.RegClass) -> Int {
+    match cls {
+      @abi.Int => 0
+      @abi.Float32 | @abi.Float64 | @abi.Vector => 1
+    }
+  }
+
+  let mut has_int = false
+  let mut has_fp = false
+  for mv in moves {
+    if class_bank(mv.class) == 0 {
+      has_int = true
+    } else {
+      has_fp = true
+    }
+  }
+  // Resolve integer and FP/vector move graphs independently.
+  // Mixing classes in one graph can incorrectly couple cycle-breaking through
+  // shared spill slots and pick a temp register in the wrong bank.
+  if has_int && has_fp {
+    let int_moves : Array[RegMove] = []
+    let fp_moves : Array[RegMove] = []
+    for mv in moves {
+      if class_bank(mv.class) == 0 {
+        int_moves.push(mv)
+      } else {
+        fp_moves.push(mv)
+      }
+    }
+    let resolved = resolve_parallel_moves(int_moves)
+    let resolved_fp = resolve_parallel_moves(fp_moves)
+    for mv in resolved_fp {
+      resolved.push(mv)
+    }
+    return resolved
+  }
   let result : Array[RegMove] = []
   let pending : Array[RegMove] = []
   let seen : Set[Int] = Set::new()
@@ -130,22 +166,27 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     }
   }
 
-  fn loc_key(loc : Loc) -> Int {
+  fn loc_key(loc : Loc, cls : @abi.RegClass) -> Int {
     match loc {
       Reg(preg) => preg.index * 2 + reg_kind(preg)
-      Spill(slot) => 1_000_000 + slot
+      Spill(slot) => 1_000_000 + slot * 4 + class_key(cls)
     }
   }
 
-  fn aliases(a : Loc, b : Loc) -> Bool {
-    loc_key(a) == loc_key(b)
+  fn aliases(
+    a : Loc,
+    a_cls : @abi.RegClass,
+    b : Loc,
+    b_cls : @abi.RegClass,
+  ) -> Bool {
+    loc_key(a, a_cls) == loc_key(b, b_cls)
   }
 
   // Build a set of source registers for quick lookup
   fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
     let srcs : Set[Int] = Set::new()
     for mv in pending {
-      srcs.add(loc_key(mv.from))
+      srcs.add(loc_key(mv.from, mv.class))
     }
     srcs
   }
@@ -157,7 +198,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     // Find a move whose destination is not a source of any other pending move
     let mut found_idx : Int? = None
     for i, mv in pending {
-      let dest_key = loc_key(mv.to)
+      let dest_key = loc_key(mv.to, mv.class)
       if !src_set.contains(dest_key) {
         found_idx = Some(i)
         break
@@ -185,7 +226,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
         // Redirect all uses of the saved destination as a source to read from temp.
         for i in 0..<pending.length() {
-          if aliases(pending[i].from, mv.to) {
+          if aliases(pending[i].from, pending[i].class, mv.to, mv.class) {
             pending[i] = {
               from: temp_loc,
               to: pending[i].to,

@@ -239,7 +239,7 @@ pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // Additional improvement opportunities are handled by later passes.
   self.egraph.saturate_indexed_with_limits(
     self.ruleset,
-    1,
+    2,
     self.saturation_limits,
   )
   |> ignore
@@ -485,16 +485,32 @@ pub fn optimize_function_with_stats_with_limits(
         Some(v) =>
           match builder.get_simplified_opcode(v) {
             Some(Iconst(c)) => {
-              // Replace with constant
-              inst.opcode = Iconst(c)
-              inst.operands.clear()
-              changed = true
+              // Replace with constant only when it materially changes the IR.
+              // Otherwise we can report spurious "changed" forever.
+              let mut inst_changed = false
+              match inst.opcode {
+                Iconst(old_c) =>
+                  if old_c != c || inst.operands.length() > 0 {
+                    inst.opcode = Iconst(c)
+                    inst.operands.clear()
+                    inst_changed = true
+                  }
+                _ => {
+                  inst.opcode = Iconst(c)
+                  inst.operands.clear()
+                  inst_changed = true
+                }
+              }
+              if inst_changed {
+                changed = true
+              }
             }
-            Some(new_op) => {
-              // Opcode changed - update it
-              inst.opcode = new_op
-              changed = true
-            }
+            Some(new_op) =>
+              // Opcode changed - update it only when different.
+              if inst.opcode != new_op {
+                inst.opcode = new_op
+                changed = true
+              }
             None => ()
           }
         None => ()
