@@ -1317,7 +1317,8 @@ fn MachineCode::emit_instruction(
       self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
     }
     CallDirect(func_idx, _num_args, _num_results, _call_conv) =>
-      // Direct call via BL (patched at JIT load time)
+      // Emit BL with runtime fixup. A local veneer fallback is appended later
+      // (during function finalization) for out-of-range targets.
       self.emit_bl_func(func_idx)
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.

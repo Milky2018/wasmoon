@@ -80,6 +80,8 @@ pub(all) struct CallFixup {
   offset : Int
   // Target function index
   func_idx : Int
+  // Offset of a local call veneer (load-absolute + br), -1 when absent
+  veneer_offset : Int
 }
 
 ///|
@@ -272,8 +274,54 @@ pub fn MachineCode::add_call_fixup(
   self : MachineCode,
   offset : Int,
   func_idx : Int,
+  veneer_offset? : Int = -1,
 ) -> Unit {
-  self.call_fixups.push({ offset, func_idx })
+  self.call_fixups.push({ offset, func_idx, veneer_offset })
+}
+
+///|
+/// Emit a local veneer for out-of-range direct calls.
+///
+/// Veneer sequence:
+///   movz/movk x16, #imm64   (16 bytes, patched at JIT load time)
+///   br x16
+///
+/// Callers branch to this veneer with BL; BR preserves LR so the callee returns
+/// to the original callsite.
+fn MachineCode::emit_call_veneer(self : MachineCode, func_idx : Int) -> Int {
+  let veneer_offset = self.current_pos()
+  self.annotate("call_veneer.\{func_idx}")
+  self.emit_load_imm64_fixed(16, 0L)
+  self.emit_br(16)
+  veneer_offset
+}
+
+///|
+/// Materialize local veneers for all direct-call fixups.
+///
+/// Veneers are emitted once per callee function index at function end; each
+/// callsite fixup records the corresponding veneer offset as fallback.
+fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
+  if self.call_fixups.length() == 0 {
+    return
+  }
+  let veneers_by_func : Map[Int, Int] = {}
+  for i in 0..<self.call_fixups.length() {
+    let fixup = self.call_fixups[i]
+    let veneer_offset = match veneers_by_func.get(fixup.func_idx) {
+      Some(offset) => offset
+      None => {
+        let offset = self.emit_call_veneer(fixup.func_idx)
+        veneers_by_func.set(fixup.func_idx, offset)
+        offset
+      }
+    }
+    self.call_fixups[i] = {
+      offset: fixup.offset,
+      func_idx: fixup.func_idx,
+      veneer_offset,
+    }
+  }
 }
 
 ///|
