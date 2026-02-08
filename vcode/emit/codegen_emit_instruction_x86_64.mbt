@@ -1071,7 +1071,11 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.JITLibcall::MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
         @instr.JITLibcall::MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
         @instr.JITLibcall::MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
+        @instr.JITLibcall::MemoryFillMem0 =>
+          @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
         @instr.JITLibcall::MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
+        @instr.JITLibcall::MemoryCopyMem0 =>
+          @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
         @instr.JITLibcall::MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
         @instr.JITLibcall::DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
         @instr.JITLibcall::TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
@@ -1958,6 +1962,38 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
       }
     }
+    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+      // Raw pointer narrow load with register-offset addressing.
+      let rt = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index || addr == rt {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match (bits, signed) {
+        (8, true) => self.x86_emit_movsx_r64_m8(rt, addr, 0)
+        (8, false) => self.x86_emit_movzx_r32_m8(rt, addr, 0)
+        (16, true) => self.x86_emit_movsx_r64_m16(rt, addr, 0)
+        (16, false) => self.x86_emit_movzx_r32_m16(rt, addr, 0)
+        (32, true) => self.x86_emit_movsxd_r64_m32(rt, addr, 0)
+        (32, false) => self.x86_emit_mov_r32_m32(rt, addr, 0)
+        _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
+      }
+    }
     @instr.StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking).
       let rn = reg_num(inst.uses[0])
@@ -2014,6 +2050,35 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::I32 => self.x86_emit_mov_m32_r32(addr, 0, value)
         @instr.MemType::I64 => self.x86_emit_mov_m64_r64(addr, 0, value)
         _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+      }
+    }
+    @instr.StorePtrNarrowRegOffset(bits, ext, shift) => {
+      // Raw pointer narrow store with register-offset addressing.
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let value = reg_num(inst.uses[2])
+      let mut addr = isa.scratch_reg_1_index()
+      let mut idx = isa.scratch_reg_2_index()
+      if addr == base || addr == index || addr == value {
+        addr = isa.scratch_reg_2_index()
+        idx = isa.scratch_reg_1_index()
+      }
+      self.x86_emit_mov_rr(addr, base)
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      self.x86_emit_add_rr(addr, idx)
+      match bits {
+        8 => self.x86_emit_mov_m8_r8(addr, 0, value)
+        16 => self.x86_emit_mov_m16_r16(addr, 0, value)
+        32 => self.x86_emit_mov_m32_r32(addr, 0, value)
+        _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
     @instr.LoadPtrNarrow(bits, signed, offset) => {

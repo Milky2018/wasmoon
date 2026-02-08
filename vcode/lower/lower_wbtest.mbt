@@ -1158,16 +1158,16 @@ test "br_table with block arguments from WAT" {
       #|vcode test(v0:int, v1:int) -> int {
       #|block0:
       #|    v6 = ldi 0
-      #|    br_cmp_imm.eq v1, #0, block3, block4
+      #|    br_cmp_imm.eq v1, #0, block4, block3
       #|block1(v2:int, v3:int):
       #|    ret v3
       #|block2(v4:int, v5:int):
       #|    v9 = ldi 100
       #|    jump block1 (v4, v9)
       #|block3:
-      #|    jump block2 (v1, v6)
-      #|block4:
       #|    jump block1 (v1, v6)
+      #|block4:
+      #|    jump block2 (v1, v6)
       #|}
       #|
     ),

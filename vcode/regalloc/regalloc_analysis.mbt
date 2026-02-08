@@ -154,31 +154,40 @@ fn UseDefInfo::new(vreg : @abi.VReg) -> UseDefInfo {
 ///|
 /// CFG edges for liveness analysis
 priv struct CFGEdges {
-  preds : Array[Array[Int]] // preds[block_id] = predecessor block IDs
-  succs : Array[Array[Int]] // succs[block_id] = successor block IDs
+  preds : Array[Array[Int]] // preds[block_idx] = predecessor block indices
+  succs : Array[Array[Int]] // succs[block_idx] = successor block indices
 }
 
 ///|
 /// Build CFG edges once (O(B + E))
 fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
+  let blocks = func.blocks
   let n = func.blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
+  let block_id_to_index : Map[Int, Int] = {}
 
   // Initialize arrays
   for _ in 0..<n {
     preds.push([])
     succs.push([])
   }
+  for i, block in blocks {
+    block_id_to_index.set(block.id, i)
+  }
 
   // Build edges from terminators
-  for block_idx, block in func.blocks {
+  for block_idx, block in blocks {
     if block.terminator is Some(term) {
-      let block_succs = get_terminator_succs(term)
-      succs[block_idx] = block_succs
-      for succ in block_succs {
-        preds[succ].push(block_idx)
+      let block_succ_ids = get_terminator_succ_ids(term)
+      let block_succs : Array[Int] = []
+      for succ_id in block_succ_ids {
+        if block_id_to_index.get(succ_id) is Some(succ_idx) {
+          block_succs.push(succ_idx)
+          preds[succ_idx].push(block_idx)
+        }
       }
+      succs[block_idx] = block_succs
     }
   }
   { preds, succs }
@@ -186,7 +195,7 @@ fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
 
 ///|
 /// Extract successor block IDs from terminator
-fn get_terminator_succs(term : @instr.VCodeTerminator) -> Array[Int] {
+fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
   match term {
     Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]
@@ -299,79 +308,62 @@ pub struct LivenessResult {
 
 ///|
 /// Compute reverse postorder of blocks (for linearizing the CFG)
-/// Returns a FixedArray where order[block_id] = position in reverse postorder
+/// Returns a FixedArray where order[block_idx] = position in reverse postorder
 fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
+  let blocks = func.blocks
   let n = func.blocks.length()
-  let visited : Set[Int] = Set::new()
+  let visited : Array[Bool] = Array::make(n, false)
   let postorder : Array[Int] = []
+  let block_id_to_index : Map[Int, Int] = {}
+  for i, block in blocks {
+    block_id_to_index.set(block.id, i)
+  }
 
   // DFS to compute postorder
   fn dfs(
     func : VCodeFunction,
-    block_id : Int,
-    visited : Set[Int],
+    block_id_to_index : Map[Int, Int],
+    block_idx : Int,
+    visited : Array[Bool],
     postorder : Array[Int],
   ) {
-    if visited.contains(block_id) {
+    if block_idx < 0 || block_idx >= func.blocks.length() || visited[block_idx] {
       return
     }
-    visited.add(block_id)
+    visited[block_idx] = true
 
     // Visit successors first
-    // Since block ID equals array index, we can use direct indexing
-    if block_id >= 0 && block_id < func.blocks.length() {
-      let block = func.blocks[block_id]
-      if block.terminator is Some(term) {
-        match term {
-          Jump(target, _) => dfs(func, target, visited, postorder)
-          Branch(_, then_b, else_b) => {
-            dfs(func, then_b, visited, postorder)
-            dfs(func, else_b, visited, postorder)
-          }
-          BranchCmp(_, _, _, _, then_b, else_b) => {
-            dfs(func, then_b, visited, postorder)
-            dfs(func, else_b, visited, postorder)
-          }
-          BranchCmpImm(_, _, _, _, then_b, else_b) => {
-            dfs(func, then_b, visited, postorder)
-            dfs(func, else_b, visited, postorder)
-          }
-          BranchZero(_, _, _, then_b, else_b) => {
-            dfs(func, then_b, visited, postorder)
-            dfs(func, else_b, visited, postorder)
-          }
-          BrTable(_, targets, default) => {
-            for t in targets {
-              dfs(func, t, visited, postorder)
-            }
-            dfs(func, default, visited, postorder)
-          }
-          Return(_) | Trap(_) => ()
+    let block = func.blocks[block_idx]
+    if block.terminator is Some(term) {
+      let succ_ids = get_terminator_succ_ids(term)
+      for succ_id in succ_ids {
+        if block_id_to_index.get(succ_id) is Some(succ_idx) {
+          dfs(func, block_id_to_index, succ_idx, visited, postorder)
         }
       }
     }
 
     // Add to postorder after visiting all successors
-    postorder.push(block_id)
+    postorder.push(block_idx)
   }
 
-  // Start DFS from block 0 (entry)
+  // Start DFS from entry block index 0.
   if n > 0 {
-    dfs(func, func.blocks[0].id, visited, postorder)
+    dfs(func, block_id_to_index, 0, visited, postorder)
   }
 
-  // Also visit any unreachable blocks (shouldn't happen in valid code)
-  for block in func.blocks {
-    if !visited.contains(block.id) {
-      dfs(func, block.id, visited, postorder)
+  // Also visit any unreachable blocks.
+  for block_idx in 0..<n {
+    if !visited[block_idx] {
+      dfs(func, block_id_to_index, block_idx, visited, postorder)
     }
   }
 
-  // Reverse postorder: order[block_id] = position in reverse postorder
+  // Reverse postorder: order[block_idx] = position in reverse postorder.
   let order : FixedArray[Int] = FixedArray::make(n, 0)
   let len = postorder.length()
-  for i, block_id in postorder {
-    order[block_id] = len - 1 - i
+  for i, block_idx in postorder {
+    order[block_idx] = len - 1 - i
   }
   order
 }

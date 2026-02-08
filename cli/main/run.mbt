@@ -428,7 +428,7 @@ fn run_wasm(
     // Call the function
     if use_jit {
       // Check if JIT can handle this module.
-      let import_ok = check_jit_import_support(mod_, debug)
+      let import_ok = check_jit_import_support(mod_, instance, store, debug)
       let has_cross_imports = @wast.has_cross_module_imports(mod_)
       let exports_shared = @wast.exports_shared_resources(mod_)
       let has_unsupported = @wast.has_unsupported_instructions(mod_)
@@ -1123,6 +1123,7 @@ fn compile_module_to_jit(
     let vcode_func = @lower.lower_function(
       ir_func,
       num_imports=mod_.imports.length(),
+      run_ir_opt=false,
     )
     if lower_tick is Some(tick) {
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))
@@ -1304,12 +1305,39 @@ fn parse_func_args(
 
 ///|
 /// Check if all imports are supported by JIT trampolines
-fn check_jit_import_support(mod_ : @types.Module, _debug : Bool) -> Bool {
+fn check_jit_import_support(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  _debug : Bool,
+) -> Bool {
   let unsupported : Array[String] = []
+  let mut func_imp_idx = 0
   for imp in mod_.imports {
-    if imp.desc is Func(_) &&
-      @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
-      unsupported.push("\{imp.mod_name}.\{imp.name}")
+    if imp.desc is Func(_) {
+      let has_builtin = @jit.get_import_trampoline(imp.mod_name, imp.name)
+        is Some(_)
+      if !has_builtin {
+        let func_addr = if func_imp_idx < instance.func_addrs.length() {
+          instance.func_addrs[func_imp_idx]
+        } else {
+          -1
+        }
+        if func_addr < 0 {
+          unsupported.push("\{imp.mod_name}.\{imp.name}")
+        } else {
+          let inst = store.get_func_inst(func_addr) catch {
+            _ => {
+              unsupported.push("\{imp.mod_name}.\{imp.name}")
+              continue
+            }
+          }
+          if !(inst is @runtime.FuncInst::HostFunc(_)) {
+            unsupported.push("\{imp.mod_name}.\{imp.name}")
+          }
+        }
+      }
+      func_imp_idx = func_imp_idx + 1
     }
   }
   if unsupported.length() > 0 {

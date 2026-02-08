@@ -5,10 +5,16 @@
 fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
-    LoadPtr(_, _) | LoadPtrRegOffset(_, _, _) | LoadPtrNarrow(_, _, _) => true
+    LoadPtr(_, _)
+    | LoadPtrRegOffset(_, _, _)
+    | LoadPtrNarrowRegOffset(_, _, _, _)
+    | LoadPtrNarrow(_, _, _) => true
     // Memory stores have side effects
-    Store(_, _) | StackStore(_) | StorePtr(_, _) | StorePtrRegOffset(_, _, _) =>
-      true
+    Store(_, _)
+    | StackStore(_)
+    | StorePtr(_, _)
+    | StorePtrRegOffset(_, _, _)
+    | StorePtrNarrowRegOffset(_, _, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
     TypeCheckSubtypeIndirect(_) => true
@@ -285,6 +291,9 @@ pub fn allocate_registers_backtracking_with_isa(
 ) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
+  // Clone long-distance cheap constants within blocks to shorten live ranges.
+  let func = rematerialize_long_distance_constants(func)
+  let func = eliminate_dead_code(func)
   // Cranelift-style remat for cross-block constants to reduce reg pressure.
   let func = rematerialize_cross_block_constants(func)
   // Remat may make original const-defs dead in their original blocks.
@@ -344,6 +353,8 @@ pub fn allocate_registers_backtracking_output_with_isa(
   settings : @abi.ABISettings,
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
+  let func = eliminate_dead_code(func)
+  let func = rematerialize_long_distance_constants(func)
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)

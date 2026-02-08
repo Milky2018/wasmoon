@@ -8,12 +8,8 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
     (@abi.Int, @abi.Int) => true
     (@abi.Float32, @abi.Float32) => true
     (@abi.Float32, @abi.Float64) => true
-    (@abi.Float32, @abi.Vector) => true
     (@abi.Float64, @abi.Float32) => true
     (@abi.Float64, @abi.Float64) => true
-    (@abi.Float64, @abi.Vector) => true
-    (@abi.Vector, @abi.Float32) => true
-    (@abi.Vector, @abi.Float64) => true
     (@abi.Vector, @abi.Vector) => true
     _ => false
   }
@@ -42,6 +38,23 @@ fn queue_entry_higher(a : QueueEntry, b : QueueEntry) -> Bool {
   } else {
     a.bundle_id < b.bundle_id
   }
+}
+
+///|
+/// Check whether two pregs refer to the same hardware register bank + index.
+fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
+  a.index == b.index && reg_class_compatible(a.class, b.class)
+}
+
+///|
+/// Check whether a preg is contained in a register list (bank/index match).
+fn preg_in_list(preg : @abi.PReg, regs : Array[@abi.PReg]) -> Bool {
+  for reg in regs {
+    if preg_same_bank_and_index(preg, reg) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -346,6 +359,25 @@ fn BacktrackingAllocator::get_available_regs(
 }
 
 ///|
+/// In Cranelift/regalloc2 terms, "non-preferred" generally corresponds to
+/// callee-saved registers. For bundles that do not cross calls, we should
+/// allocate preferred regs first and only then fall back to non-preferred.
+fn BacktrackingAllocator::is_nonpreferred_for_bundle(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  preg : @abi.PReg,
+) -> Bool {
+  if bundle.crosses_call(self.ranges) {
+    return false
+  }
+  match bundle.reg_class {
+    @abi.Int => preg_in_list(preg, self.callee_saved_int)
+    @abi.Float32 | @abi.Float64 => preg_in_list(preg, self.callee_saved_float)
+    @abi.Vector => false
+  }
+}
+
+///|
 /// Check if a register is free for all ranges in a bundle
 fn BacktrackingAllocator::is_reg_free(
   self : BacktrackingAllocator,
@@ -492,15 +524,27 @@ fn BacktrackingAllocator::try_allocate(
   // `ProgPoint.inst` may be -1 (block params). Ensure non-negative offset.
   let raw = bundle.id + start_inst
   let offset = (raw % n + n) % n
-  for i in 0..<n {
-    let preg = avail_regs[(offset + i) % n]
-    if hint_preg is Some(hint) &&
-      preg.class == hint.class &&
-      preg.index == hint.index {
-      continue
-    }
-    if self.is_reg_free(preg, bundle) {
-      return Some(preg)
+  let do_preferred_pass = !bundle.crosses_call(self.ranges) &&
+    (
+      bundle.reg_class is @abi.Int ||
+      bundle.reg_class is @abi.Float32 ||
+      bundle.reg_class is @abi.Float64
+    )
+  let phase_count = if do_preferred_pass { 2 } else { 1 }
+  for phase in 0..<phase_count {
+    let want_nonpreferred = phase == 1
+    for i in 0..<n {
+      let preg = avail_regs[(offset + i) % n]
+      if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
+        continue
+      }
+      if do_preferred_pass &&
+        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
+        continue
+      }
+      if self.is_reg_free(preg, bundle) {
+        return Some(preg)
+      }
     }
   }
   None
@@ -555,49 +599,61 @@ fn BacktrackingAllocator::try_evict(
     return None
   }
   let offset = bundle.id % n
-  for i in 0..<n {
-    let preg = avail_regs[(offset + i) % n]
-    if hint_preg is Some(hint) &&
-      preg.class == hint.class &&
-      preg.index == hint.index {
-      // Keep hint preg as a preferred candidate but don't special-case it here;
-      // the scan order already includes it.
-      ()
-    }
-    let conflicts = self.find_conflicts(bundle, preg)
-    if conflicts.is_empty() {
-      continue // Should have been caught by try_allocate
-    }
-
-    // Check if all conflicts have lower weight and are not pinned
-    let mut can_evict = true
-    let mut total_conflict_weight = 0.0
-    for conflict_id in conflicts {
-      let conflict = self.bundles.get(conflict_id)
-      // Never evict pinned bundles (e.g., function parameters)
-      if conflict.is_pinned {
-        can_evict = false
-        break
+  let do_preferred_pass = !bundle.crosses_call(self.ranges) &&
+    (
+      bundle.reg_class is @abi.Int ||
+      bundle.reg_class is @abi.Float32 ||
+      bundle.reg_class is @abi.Float64
+    )
+  let phase_count = if do_preferred_pass { 2 } else { 1 }
+  for phase in 0..<phase_count {
+    let want_nonpreferred = phase == 1
+    for i in 0..<n {
+      let preg = avail_regs[(offset + i) % n]
+      if do_preferred_pass &&
+        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
+        continue
       }
-      if conflict.spill_weight >= bundle.spill_weight {
-        can_evict = false
-        break
+      if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
+        // Keep hint preg as a preferred candidate but don't special-case it here;
+        // the scan order already includes it.
+        ()
       }
-      total_conflict_weight += conflict.spill_weight
-    }
+      let conflicts = self.find_conflicts(bundle, preg)
+      if conflicts.is_empty() {
+        continue // Should have been caught by try_allocate
+      }
 
-    // Only evict if our weight is significantly higher
-    if can_evict && bundle.spill_weight > total_conflict_weight {
-      // Evict all conflicts
+      // Check if all conflicts have lower weight and are not pinned
+      let mut can_evict = true
+      let mut total_conflict_weight = 0.0
       for conflict_id in conflicts {
         let conflict = self.bundles.get(conflict_id)
-        self.remove_allocation(conflict)
-        // Re-add to queue with slightly lower weight
-        let new_weight = conflict.spill_weight * 0.9
-        conflict.spill_weight = new_weight
-        self.queue_push(conflict_id, new_weight, None)
+        // Never evict pinned bundles (e.g., function parameters)
+        if conflict.is_pinned {
+          can_evict = false
+          break
+        }
+        if conflict.spill_weight >= bundle.spill_weight {
+          can_evict = false
+          break
+        }
+        total_conflict_weight += conflict.spill_weight
       }
-      return Some(preg)
+
+      // Only evict if our weight is significantly higher
+      if can_evict && bundle.spill_weight > total_conflict_weight {
+        // Evict all conflicts
+        for conflict_id in conflicts {
+          let conflict = self.bundles.get(conflict_id)
+          self.remove_allocation(conflict)
+          // Re-add to queue with slightly lower weight
+          let new_weight = conflict.spill_weight * 0.9
+          conflict.spill_weight = new_weight
+          self.queue_push(conflict_id, new_weight, None)
+        }
+        return Some(preg)
+      }
     }
   }
   None
@@ -1116,6 +1172,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   struct AssignedSlot {
     start : Int
     spans : Array[ProgPointRange]
+    old_slots : Array[Int]
   }
   fn slots_used(cls : @abi.RegClass) -> Int {
     match cls {
@@ -1151,6 +1208,20 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
     }
     s
+  }
+
+  fn add_no_share_edge(
+    no_share : Map[Int, Set[Int]],
+    a : Int,
+    b : Int,
+  ) -> Unit {
+    if a == b {
+      return
+    }
+    if no_share.get(a) is None {
+      no_share.set(a, Set::new())
+    }
+    no_share.get(a).unwrap().add(b) |> ignore
   }
 
   // 1) Build spillsets keyed by the old spill-slot id.
@@ -1208,6 +1279,50 @@ fn BacktrackingAllocator::compact_spill_slots(
     a.start.compare_with_order(b.start, self.ranges.block_order)
   })
 
+  // 2.5) Build anti-coalesce constraints for block-arg edge copies.
+  //
+  // Any spilled values participating in the same edge-parallel-copy must keep
+  // distinct spill slots after compaction. Otherwise, compaction can collapse
+  // logically distinct values onto one stack location at the jump boundary and
+  // break SSA block-arg semantics.
+  let no_share : Map[Int, Set[Int]] = {}
+  let block_id_to_index : Map[Int, Int] = {}
+  for i, block in self.func.blocks {
+    block_id_to_index.set(block.id, i)
+  }
+  for pred_block in self.func.blocks {
+    if pred_block.terminator is Some(Jump(target, args)) {
+      guard block_id_to_index.get(target) is Some(target_idx) else { continue }
+      let target_block = self.func.blocks[target_idx]
+      let edge_slots : Set[Int] = Set::new()
+      for i, param in target_block.params {
+        if i >= args.length() {
+          break
+        }
+        guard args[i] is @abi.Virtual(arg_vreg) else { continue }
+        if result.spill_slots.get(arg_vreg.id) is Some(src_slot) {
+          edge_slots.add(src_slot) |> ignore
+        }
+        if result.spill_slots.get(param.id) is Some(dst_slot) {
+          edge_slots.add(dst_slot) |> ignore
+        }
+      }
+      if edge_slots.length() <= 1 {
+        continue
+      }
+      let slots : Array[Int] = []
+      for slot in edge_slots {
+        slots.push(slot)
+      }
+      for i in 0..<slots.length() {
+        for j in (i + 1)..<slots.length() {
+          add_no_share_edge(no_share, slots[i], slots[j])
+          add_no_share_edge(no_share, slots[j], slots[i])
+        }
+      }
+    }
+  }
+
   // 3) Assign spillsets to a compact set of physical spill slots.
   let scalar_slots : Array[AssignedSlot] = []
   let vector_slots : Array[AssignedSlot] = []
@@ -1218,12 +1333,23 @@ fn BacktrackingAllocator::compact_spill_slots(
     let pool = if used == 2 { vector_slots } else { scalar_slots }
     let mut placed = false
     for slot in pool {
-      if !spans_overlap(ss.spans, slot.spans, self.ranges.block_order) {
+      let mut edge_conflict = false
+      if no_share.get(ss.old_slot) is Some(disallowed) {
+        for existing_old_slot in slot.old_slots {
+          if disallowed.contains(existing_old_slot) {
+            edge_conflict = true
+            break
+          }
+        }
+      }
+      if !edge_conflict &&
+        !spans_overlap(ss.spans, slot.spans, self.ranges.block_order) {
         slot_remap.set(ss.old_slot, slot.start)
         // Extend occupancy for future overlap checks.
         for span in ss.spans {
           slot.spans.push(span)
         }
+        slot.old_slots.push(ss.old_slot)
         placed = true
         break
       }
@@ -1242,7 +1368,7 @@ fn BacktrackingAllocator::compact_spill_slots(
     for span in ss.spans {
       new_spans.push(span)
     }
-    pool.push({ start: new_slot, spans: new_spans })
+    pool.push({ start: new_slot, spans: new_spans, old_slots: [ss.old_slot] })
     slot_remap.set(ss.old_slot, new_slot)
   }
 
@@ -1308,6 +1434,111 @@ pub fn build_bundles_with_merging(
 ) -> BundleSet {
   let n = ranges.length()
   let uf = UnionFind::new(n)
+  fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
+    match (a.class, b.class) {
+      (@abi.Int, @abi.Int) => true
+      (
+        @abi.Float32
+        | @abi.Float64
+        | @abi.Vector,
+        @abi.Float32
+        | @abi.Float64
+        | @abi.Vector,
+      ) => true
+      _ => false
+    }
+  }
+
+  fn range_fixed_reg_conflict(range : LiveRange) -> (@abi.PReg?, Bool) {
+    let mut fixed : @abi.PReg? = None
+    for use_pos in range.uses {
+      match use_pos.constraint {
+        FixedReg(preg) =>
+          match fixed {
+            None => fixed = Some(preg)
+            Some(existing) =>
+              if existing.index != preg.index ||
+                !same_fixed_bank(existing, preg) {
+                return (None, true)
+              }
+          }
+        AnyReg => ()
+      }
+    }
+    (fixed, false)
+  }
+
+  fn set_fixed_reg(
+    ranges : LiveRangeSet,
+    members : Array[Int],
+  ) -> (@abi.PReg?, Bool) {
+    let mut fixed : @abi.PReg? = None
+    for idx in members {
+      let range = ranges.get(idx)
+      let (range_fixed, has_conflict) = range_fixed_reg_conflict(range)
+      if has_conflict {
+        return (None, true)
+      }
+      if range_fixed is Some(preg) {
+        match fixed {
+          None => fixed = Some(preg)
+          Some(existing) =>
+            if existing.index != preg.index || !same_fixed_bank(existing, preg) {
+              return (None, true)
+            }
+        }
+      }
+    }
+    (fixed, false)
+  }
+
+  fn range_has_fixed_def(range : LiveRange) -> Bool {
+    for use_pos in range.uses {
+      if use_pos.kind is Def && use_pos.constraint is FixedReg(_) {
+        return true
+      }
+    }
+    false
+  }
+
+  fn set_has_fixed_def(ranges : LiveRangeSet, members : Array[Int]) -> Bool {
+    for idx in members {
+      if range_has_fixed_def(ranges.get(idx)) {
+        return true
+      }
+    }
+    false
+  }
+
+  fn adjusted_start_for_overlap(
+    span : ProgPointRange,
+    adjust_to_inst_start : Bool,
+  ) -> ProgPoint {
+    if adjust_to_inst_start {
+      { block: span.start.block, inst: span.start.inst, pos: Before }
+    } else {
+      span.start
+    }
+  }
+
+  fn collect_sorted_merge_spans(
+    ranges : LiveRangeSet,
+    members : Array[Int],
+    adjust_to_inst_start : Bool,
+  ) -> Array[ProgPointRange] {
+    let spans : Array[ProgPointRange] = []
+    for idx in members {
+      let range = ranges.get(idx)
+      for span in range.ranges {
+        let start = adjusted_start_for_overlap(span, adjust_to_inst_start)
+        spans.push({ start, end: span.end })
+      }
+    }
+    spans.sort_by(fn(a, b) {
+      a.start.compare_with_order(b.start, ranges.block_order)
+    })
+    spans
+  }
 
   // Helper to try merging two ranges
   fn try_merge(
@@ -1331,17 +1562,49 @@ pub fn build_bundles_with_merging(
     if not(reg_class_compatible(range_a.vreg.class, range_b.vreg.class)) {
       return false
     }
-
-    // Check for overlap within potential merged bundle
     let set_a = uf.get_set(a)
     let set_b = uf.get_set(b)
-    for idx_a in set_a {
-      let r_a = ranges.get(idx_a)
-      for idx_b in set_b {
-        let r_b = ranges.get(idx_b)
-        if r_a.overlaps(r_b, ranges.block_order) {
+    let set_a_has_fixed_def = set_has_fixed_def(ranges, set_a)
+    let set_b_has_fixed_def = set_has_fixed_def(ranges, set_b)
+
+    // Keep merged bundles compatible with fixed-register constraints.
+    // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
+    // incompatible fixed uses.
+    let (fixed_a, conflict_a) = set_fixed_reg(ranges, set_a)
+    let (fixed_b, conflict_b) = set_fixed_reg(ranges, set_b)
+    if conflict_a || conflict_b {
+      return false
+    }
+    match (fixed_a, fixed_b) {
+      (Some(a_fixed), Some(b_fixed)) =>
+        if a_fixed.index != b_fixed.index || !same_fixed_bank(a_fixed, b_fixed) {
           return false
         }
+      _ => ()
+    }
+
+    // Check for overlap within potential merged bundle.
+    // Follow regalloc2's merge scan style: compare sorted range starts with
+    // two cursors and stop early when one side advances past the other.
+    let spans_a = collect_sorted_merge_spans(ranges, set_a, set_a_has_fixed_def)
+    let spans_b = collect_sorted_merge_spans(ranges, set_b, set_b_has_fixed_def)
+    let mut ia = 0
+    let mut ib = 0
+    let mut range_checks = 0
+    while ia < spans_a.length() && ib < spans_b.length() {
+      range_checks += 1
+      if range_checks > 200 {
+        return false
+      }
+      let span_a = spans_a[ia]
+      let span_b = spans_b[ib]
+      if span_a.start.compare_with_order(span_b.end, ranges.block_order) >= 0 {
+        ib = ib + 1
+      } else if span_b.start.compare_with_order(span_a.end, ranges.block_order) >=
+        0 {
+        ia = ia + 1
+      } else {
+        return false
       }
     }
     uf.union(a, b) |> ignore
@@ -1455,9 +1718,8 @@ fn BacktrackingAllocator::preassign_params(
   let arg_fprs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
-  let mut callee_saved_int_idx = 0
-  let mut callee_saved_float_idx = 0
   for param in self.func.params {
+    let is_vmctx_param = param.class is @abi.Int && int_idx == 0
     // Determine which ABI register this param comes in
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
       @abi.Int =>
@@ -1485,61 +1747,34 @@ fn BacktrackingAllocator::preassign_params(
       float_idx = float_idx + 1
     }
 
-    // Skip stack params
+    // Skip stack params (handled by normal allocation).
     guard preg_opt is Some(preg) else { continue }
 
     // Find the LiveRange for this param and get its bundle
     let range = self.ranges.get_by_vreg(param.id)
     if range is Some(lr) && lr.bundle_id >= 0 {
       let bundle = self.bundles.bundles[lr.bundle_id]
+      // The same bundle may be reached through multiple params after coalescing.
+      // Keep the first pre-assignment decision.
+      if bundle.allocation is Reg(_) || bundle.allocation is Spill(_) {
+        continue
+      }
       // If the param's bundle crosses a call (even if the param itself doesn't),
-      // the bundle must not be pinned to a caller-saved arg register.
-      //
-      // This can happen when block params / copies coalesce with function params
-      // and the later ranges in the same bundle are live across a call.
+      // avoid pre-assigning caller-saved ABI arg registers. Let the allocator
+      // choose a safe location from full liveness/call-clobber information.
       if bundle.crosses_call(self.ranges) {
-        // For 128-bit SIMD vectors, AAPCS64 only guarantees preserving the low
-        // 64 bits of V8-V15 across calls. To keep semantics correct, force spill.
-        if !is_int && param.class is @abi.Vector {
-          self.force_spill_bundle(bundle)
+        if is_vmctx_param {
+          self.record_allocation(bundle, isa.vmctx_preg())
           bundle.is_pinned = true
-          continue
-        }
-
-        // Cranelift-style conservative clobbers for C calls: treat all V0-V31 as clobbered.
-        // Any float value that crosses a C call must spill.
-        if !is_int && bundle.crosses_c_call(self.ranges) {
-          self.force_spill_bundle(bundle)
-          bundle.is_pinned = true
-          continue
-        }
-
-        // Otherwise, allocate to callee-saved registers so the bundle can
-        // survive Wasm-to-Wasm calls safely.
-        let callee_saved_preg = if is_int {
-          if callee_saved_int_idx < self.callee_saved_int.length() {
-            let p = self.callee_saved_int[callee_saved_int_idx]
-            callee_saved_int_idx = callee_saved_int_idx + 1
-            Some(p)
-          } else {
-            None
-          }
-        } else if callee_saved_float_idx < self.callee_saved_float.length() {
-          let p = self.callee_saved_float[callee_saved_float_idx]
-          callee_saved_float_idx = callee_saved_float_idx + 1
-          Some(p)
-        } else {
-          None
-        }
-        if callee_saved_preg is Some(cs_preg) {
-          self.record_allocation(bundle, cs_preg)
-          bundle.is_pinned = true // Prevent eviction of param bundles
         }
         continue
       }
 
       // Normal case: pin param bundle to its incoming ABI register.
       self.record_allocation(bundle, preg)
+      if is_vmctx_param {
+        bundle.is_pinned = true
+      }
     }
   }
 }

@@ -169,7 +169,9 @@ pub(all) enum JITLibcall {
   MemoryGrow
   MemorySize
   MemoryFill
+  MemoryFillMem0
   MemoryCopy
+  MemoryCopyMem0
   MemoryInit
   DataDrop
   TableGrow
@@ -331,8 +333,10 @@ pub(all) enum VCodeOpcode {
   LoadMemBase(Int)
   LoadPtr(MemType, Int)
   LoadPtrRegOffset(MemType, IndexExtend, Int)
+  LoadPtrNarrowRegOffset(Int, Bool, IndexExtend, Int)
   StorePtr(MemType, Int)
   StorePtrRegOffset(MemType, IndexExtend, Int)
+  StorePtrNarrowRegOffset(Int, IndexExtend, Int)
   LoadPtrNarrow(Int, Bool, Int)
   StorePtrNarrow(Int, Int)
   LoadGCFuncPtr(GCLibcall)

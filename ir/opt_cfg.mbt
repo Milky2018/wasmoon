@@ -633,64 +633,150 @@ pub fn merge_blocks(func : Function) -> OptResult {
 // ============ Jump Threading ============
 
 ///|
+fn block_arg_arrays_equal(lhs : Array[Value], rhs : Array[Value]) -> Bool {
+  if lhs.length() != rhs.length() {
+    return false
+  }
+  for i in 0..<lhs.length() {
+    if lhs[i].id != rhs[i].id {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn rewrite_jump_args_through_block(
+  block_params : Array[(Value, Type)],
+  incoming_args : Array[Value],
+  outgoing_args : Array[Value],
+) -> Array[Value]? {
+  if block_params.length() != incoming_args.length() {
+    return None
+  }
+  let param_to_arg : @hashmap.HashMap[Int, Value] = @hashmap.new()
+  for i in 0..<block_params.length() {
+    let (param, _) = block_params[i]
+    param_to_arg.set(param.id, incoming_args[i])
+  }
+  let rewritten : Array[Value] = []
+  for arg in outgoing_args {
+    rewritten.push(param_to_arg.get(arg.id).unwrap_or(arg))
+  }
+  Some(rewritten)
+}
+
+///|
+fn resolve_jump_target_with_args(
+  target : Int,
+  args : Array[Value],
+  func : Function,
+  block_idx : @hashmap.HashMap[Int, Int],
+) -> (Int, Array[Value]) {
+  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let mut current_target = target
+  let mut current_args = args
+  let mut done = false
+  while !done {
+    if visited.get(current_target).unwrap_or(false) {
+      break
+    }
+    visited.set(current_target, true)
+    let block = match block_idx.get(current_target) {
+      Some(idx) => func.blocks[idx]
+      None => break
+    }
+    if block.instructions.length() != 0 {
+      break
+    }
+    match block.terminator {
+      Some(Jump(next_target, next_args)) =>
+        match
+          rewrite_jump_args_through_block(block.params, current_args, next_args) {
+          Some(rewritten_args) => {
+            current_target = next_target
+            current_args = rewritten_args
+          }
+          None => done = true
+        }
+      _ => done = true
+    }
+  }
+  (current_target, current_args)
+}
+
+///|
 /// Jump Threading
 /// Bypasses blocks that only contain an unconditional jump
 pub fn thread_jumps(func : Function) -> OptResult {
   let result = OptResult::new()
-  // Find blocks that are just jumps (no instructions, just a jump terminator)
-  let jump_targets : @hashmap.HashMap[Int, Int] = @hashmap.new() // block -> final target
-  for block in func.blocks {
-    if block.instructions.length() == 0 &&
-      block.params.length() == 0 &&
-      block.terminator is Some(Jump(target, args)) &&
-      args.length() == 0 {
-      jump_targets.set(block.id, target)
-    }
-  }
-  // Follow jump chains to find final target
-  fn resolve_target(
-    block_id : Int,
-    jump_targets : @hashmap.HashMap[Int, Int],
-    visited : @hashmap.HashMap[Int, Bool],
-  ) -> Int {
-    if visited.get(block_id).unwrap_or(false) {
-      return block_id // Cycle detected
-    }
-    match jump_targets.get(block_id) {
-      Some(target) => {
-        visited.set(block_id, true)
-        resolve_target(target, jump_targets, visited)
-      }
-      None => block_id
-    }
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
   }
   // Update terminators to skip intermediate jump blocks
   for block in func.blocks {
     match block.terminator {
-      Some(Jump(target, args)) =>
-        if args.length() == 0 {
-          let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-          let final_target = resolve_target(target, jump_targets, visited)
-          if final_target != target {
-            block.terminator = Some(Terminator::Jump(final_target, []))
-            result.mark_changed()
-          }
+      Some(Jump(target, args)) => {
+        let (final_target, final_args) = resolve_jump_target_with_args(
+          target, args, func, block_idx,
+        )
+        if final_target != target || !block_arg_arrays_equal(final_args, args) {
+          block.terminator = Some(Terminator::Jump(final_target, final_args))
+          result.mark_changed()
         }
+      }
       Some(Brz(cond, then_target, else_target)) => {
-        let visited1 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-        let visited2 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-        let new_then = resolve_target(then_target, jump_targets, visited1)
-        let new_else = resolve_target(else_target, jump_targets, visited2)
+        let (resolved_then, then_args) = resolve_jump_target_with_args(
+          then_target,
+          [],
+          func,
+          block_idx,
+        )
+        let (resolved_else, else_args) = resolve_jump_target_with_args(
+          else_target,
+          [],
+          func,
+          block_idx,
+        )
+        let new_then = if then_args.length() == 0 {
+          resolved_then
+        } else {
+          then_target
+        }
+        let new_else = if else_args.length() == 0 {
+          resolved_else
+        } else {
+          else_target
+        }
         if new_then != then_target || new_else != else_target {
           block.terminator = Some(Terminator::Brz(cond, new_then, new_else))
           result.mark_changed()
         }
       }
       Some(Brnz(cond, then_target, else_target)) => {
-        let visited1 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-        let visited2 : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-        let new_then = resolve_target(then_target, jump_targets, visited1)
-        let new_else = resolve_target(else_target, jump_targets, visited2)
+        let (resolved_then, then_args) = resolve_jump_target_with_args(
+          then_target,
+          [],
+          func,
+          block_idx,
+        )
+        let (resolved_else, else_args) = resolve_jump_target_with_args(
+          else_target,
+          [],
+          func,
+          block_idx,
+        )
+        let new_then = if then_args.length() == 0 {
+          resolved_then
+        } else {
+          then_target
+        }
+        let new_else = if else_args.length() == 0 {
+          resolved_else
+        } else {
+          else_target
+        }
         if new_then != then_target || new_else != else_target {
           block.terminator = Some(Terminator::Brnz(cond, new_then, new_else))
           result.mark_changed()
@@ -700,17 +786,29 @@ pub fn thread_jumps(func : Function) -> OptResult {
         let new_targets : Array[Int] = []
         let mut any_changed = false
         for t in targets {
-          let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-          let new_t = resolve_target(t, jump_targets, visited)
+          let (resolved_t, resolved_args) = resolve_jump_target_with_args(
+            t,
+            [],
+            func,
+            block_idx,
+          )
+          let new_t = if resolved_args.length() == 0 { resolved_t } else { t }
           new_targets.push(new_t)
           if new_t != t {
             any_changed = true
           }
         }
-        let visited_default : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-        let new_default = resolve_target(
-          default_target, jump_targets, visited_default,
+        let (resolved_default, default_args) = resolve_jump_target_with_args(
+          default_target,
+          [],
+          func,
+          block_idx,
         )
+        let new_default = if default_args.length() == 0 {
+          resolved_default
+        } else {
+          default_target
+        }
         if new_default != default_target {
           any_changed = true
         }

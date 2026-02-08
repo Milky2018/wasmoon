@@ -1198,6 +1198,46 @@ fn MachineCode::emit_instruction(
       let index_reg = reg_num(inst.uses[1])
       self.emit_load_reg_offset(ty, result_reg, base_reg, index_reg, ext, shift)
     }
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+      // Raw pointer narrow load with register offset (no bounds checking).
+      let result_reg = wreg_num(inst.defs[0])
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      let option = index_extend_to_option(ext)
+      match (bits, signed) {
+        (8, false) =>
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 0, shift,
+          )
+        (16, false) =>
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 1, shift,
+          )
+        (32, false) =>
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 2, shift,
+          )
+        (8, true) => {
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 0, shift,
+          )
+          self.emit_sxtb_x(result_reg, result_reg)
+        }
+        (16, true) => {
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 1, shift,
+          )
+          self.emit_sxth_x(result_reg, result_reg)
+        }
+        (32, true) => {
+          self.emit_ldr_reg_offset(
+            result_reg, base_reg, index_reg, option, 2, shift,
+          )
+          self.emit_sxtw(result_reg, result_reg)
+        }
+        _ => abort("LoadPtrNarrowRegOffset: unsupported bits=\{bits}")
+      }
+    }
     StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking)
       // Uses: [base, value], Defs: []
@@ -1212,6 +1252,28 @@ fn MachineCode::emit_instruction(
       let index_reg = reg_num(inst.uses[1])
       let value_reg = reg_num(inst.uses[2])
       self.emit_store_reg_offset(ty, value_reg, base_reg, index_reg, ext, shift)
+    }
+    StorePtrNarrowRegOffset(bits, ext, shift) => {
+      // Raw pointer narrow store with register offset (no bounds checking).
+      let base_reg = reg_num(inst.uses[0])
+      let index_reg = reg_num(inst.uses[1])
+      let value_reg = reg_num(inst.uses[2])
+      let option = index_extend_to_option(ext)
+      match bits {
+        8 =>
+          self.emit_str_reg_offset(
+            value_reg, base_reg, index_reg, option, 0, shift,
+          )
+        16 =>
+          self.emit_str_reg_offset(
+            value_reg, base_reg, index_reg, option, 1, shift,
+          )
+        32 =>
+          self.emit_str_reg_offset(
+            value_reg, base_reg, index_reg, option, 2, shift,
+          )
+        _ => abort("StorePtrNarrowRegOffset: unsupported bits=\{bits}")
+      }
     }
     LoadPtrNarrow(bits, signed, offset) => {
       // Raw pointer narrow load (no bounds checking)
@@ -1278,7 +1340,9 @@ fn MachineCode::emit_instruction(
         MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
         MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
         MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
+        MemoryFillMem0 => @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
         MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
+        MemoryCopyMem0 => @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
         MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
         DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
         TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()

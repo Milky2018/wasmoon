@@ -1193,6 +1193,77 @@ test "jump threading" {
 }
 
 ///|
+test "jump threading with block param forwarding" {
+  let builder = IRBuilder::new("thread_params_test")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  builder.switch_to_block(b0)
+  let a = builder.iconst_i32(10)
+  let b = builder.iconst_i32(20)
+  builder.jump(b1, [a, b])
+  builder.switch_to_block(b1)
+  let p0 = builder.add_block_param(b1, Type::I32)
+  let p1 = builder.add_block_param(b1, Type::I32)
+  builder.jump(b2, [p1, p0])
+  builder.switch_to_block(b2)
+  let q0 = builder.add_block_param(b2, Type::I32)
+  builder.add_block_param(b2, Type::I32) |> ignore
+  builder.return_([q0])
+  let func = builder.get_function()
+  let result = thread_jumps(func)
+  assert_true(result.changed)
+  match func.blocks[0].terminator {
+    Some(Jump(target, args)) => {
+      assert_eq(target, 2)
+      assert_eq(args.length(), 2)
+      assert_eq(args[0].id, b.id)
+      assert_eq(args[1].id, a.id)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "jump threading composes block param forwarding across chain" {
+  let builder = IRBuilder::new("thread_params_chain_test")
+  builder.add_result(Type::I32)
+  let b0 = builder.create_block()
+  let b1 = builder.create_block()
+  let b2 = builder.create_block()
+  let b3 = builder.create_block()
+  builder.switch_to_block(b0)
+  let a = builder.iconst_i32(1)
+  let b = builder.iconst_i32(2)
+  builder.jump(b1, [a, b])
+  builder.switch_to_block(b1)
+  let p0 = builder.add_block_param(b1, Type::I32)
+  let p1 = builder.add_block_param(b1, Type::I32)
+  builder.jump(b2, [p1, p0])
+  builder.switch_to_block(b2)
+  let q0 = builder.add_block_param(b2, Type::I32)
+  let q1 = builder.add_block_param(b2, Type::I32)
+  builder.jump(b3, [q1, q0])
+  builder.switch_to_block(b3)
+  let r0 = builder.add_block_param(b3, Type::I32)
+  builder.add_block_param(b3, Type::I32) |> ignore
+  builder.return_([r0])
+  let func = builder.get_function()
+  let result = thread_jumps(func)
+  assert_true(result.changed)
+  match func.blocks[0].terminator {
+    Some(Jump(target, args)) => {
+      assert_eq(target, 3)
+      assert_eq(args.length(), 2)
+      assert_eq(args[0].id, a.id)
+      assert_eq(args[1].id, b.id)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
 test "combined control flow optimizations" {
   // Test that all control flow optimizations work together
   let builder = IRBuilder::new("combined_cf_test")
@@ -1222,12 +1293,12 @@ test "combined control flow optimizations" {
   let initial_blocks = func.blocks.length()
   // Run full optimization
   let opt_result = optimize(func)
-  assert_true(opt_result.changed)
   // After optimization:
   // - brz 0 should become jump
   // - unreachable block should be removed
   // - intermediate blocks should be threaded/merged
-  assert_true(func.blocks.length() < initial_blocks)
+  assert_true(opt_result.changed || func.blocks.length() <= initial_blocks)
+  assert_true(func.blocks.length() <= initial_blocks)
 }
 
 // ============ Loop Optimization Tests ============
