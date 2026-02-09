@@ -581,19 +581,6 @@ fn BacktrackingAllocator::try_evict(
   hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
   let avail_regs = self.get_available_regs(bundle)
-
-  // Prefer hint preg when attempting eviction; it helps keep split pieces sticky.
-  if hint_preg is Some(hint) {
-    for preg in avail_regs {
-      if preg.class == hint.class && preg.index == hint.index {
-        let conflicts = self.find_conflicts(bundle, preg)
-        if !conflicts.is_empty() {
-          // (Continue with normal logic below by starting at this preg.)
-          break
-        }
-      }
-    }
-  }
   let n = avail_regs.length()
   if n == 0 {
     return None
@@ -606,6 +593,9 @@ fn BacktrackingAllocator::try_evict(
       bundle.reg_class is @abi.Float64
     )
   let phase_count = if do_preferred_pass { 2 } else { 1 }
+  let mut best_preg : @abi.PReg? = None
+  let mut best_conflict_cost : Double? = None
+  let best_conflicts : Array[Int] = []
   for phase in 0..<phase_count {
     let want_nonpreferred = phase == 1
     for i in 0..<n {
@@ -614,22 +604,19 @@ fn BacktrackingAllocator::try_evict(
         self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
         continue
       }
-      if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
-        // Keep hint preg as a preferred candidate but don't special-case it here;
-        // the scan order already includes it.
-        ()
-      }
       let conflicts = self.find_conflicts(bundle, preg)
       if conflicts.is_empty() {
         continue // Should have been caught by try_allocate
       }
 
-      // Check if all conflicts have lower weight and are not pinned
+      // Keep only legal eviction candidates.
+      // Mirrors regalloc2's "lowest conflict cost" selection strategy:
+      // - reject pinned / heavier-or-equal conflicts
+      // - choose the candidate with minimum maximum conflict spill weight.
       let mut can_evict = true
-      let mut total_conflict_weight = 0.0
+      let mut max_conflict_weight = 0.0
       for conflict_id in conflicts {
         let conflict = self.bundles.get(conflict_id)
-        // Never evict pinned bundles (e.g., function parameters)
         if conflict.is_pinned {
           can_evict = false
           break
@@ -638,22 +625,50 @@ fn BacktrackingAllocator::try_evict(
           can_evict = false
           break
         }
-        total_conflict_weight += conflict.spill_weight
-      }
-
-      // Only evict if our weight is significantly higher
-      if can_evict && bundle.spill_weight > total_conflict_weight {
-        // Evict all conflicts
-        for conflict_id in conflicts {
-          let conflict = self.bundles.get(conflict_id)
-          self.remove_allocation(conflict)
-          // Re-add to queue with slightly lower weight
-          let new_weight = conflict.spill_weight * 0.9
-          conflict.spill_weight = new_weight
-          self.queue_push(conflict_id, new_weight, None)
+        if conflict.spill_weight > max_conflict_weight {
+          max_conflict_weight = conflict.spill_weight
         }
-        return Some(preg)
       }
+      if !can_evict {
+        continue
+      }
+      let mut take_candidate = false
+      match best_conflict_cost {
+        None => take_candidate = true
+        Some(existing_cost) =>
+          if max_conflict_weight < existing_cost {
+            take_candidate = true
+          } else if max_conflict_weight == existing_cost {
+            // Tie-break: prefer the hint register if one is provided.
+            if hint_preg is Some(hint) &&
+              preg_same_bank_and_index(preg, hint) &&
+              best_preg is Some(current_best) &&
+              !preg_same_bank_and_index(current_best, hint) {
+              take_candidate = true
+            }
+          }
+      }
+      if take_candidate {
+        best_preg = Some(preg)
+        best_conflict_cost = Some(max_conflict_weight)
+        best_conflicts.clear()
+        for conflict_id in conflicts {
+          best_conflicts.push(conflict_id)
+        }
+      }
+    }
+  }
+  if best_preg is Some(preg) {
+    // Only evict when our spill weight strictly dominates the chosen conflict cost.
+    if best_conflict_cost is Some(cost) && bundle.spill_weight > cost {
+      for conflict_id in best_conflicts {
+        let conflict = self.bundles.get(conflict_id)
+        self.remove_allocation(conflict)
+        let new_weight = conflict.spill_weight * 0.9
+        conflict.spill_weight = new_weight
+        self.queue_push(conflict_id, new_weight, None)
+      }
+      return Some(preg)
     }
   }
   None
