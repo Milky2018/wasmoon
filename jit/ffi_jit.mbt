@@ -628,11 +628,7 @@ pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
   if size == 0 {
     return true
   }
-  let bytes = FixedArray::make(size, b'\x00')
-  for i in 0..<size {
-    bytes[i] = data[i]
-  }
-  @jit_ffi.c_jit_memory_init(mem_ptr, offset, bytes, size) == 0
+  @jit_ffi.c_jit_memory_init_bytes(mem_ptr, offset, data, size) == 0
 }
 
 ///|

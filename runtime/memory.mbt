@@ -464,12 +464,8 @@ pub fn Memory::init_data(
   if len == 0 {
     return
   }
-  let fixed = FixedArray::make(len, b'\x00')
-  for i in 0..<len {
-    fixed[i] = data[i]
-  }
   let offset = self.addr_to_offset(dest)
-  let _ = @jit_ffi.c_mem_desc_write(self.mem_desc_ptr, offset, fixed, len)
+  let _ = @jit_ffi.c_mem_desc_write_bytes(self.mem_desc_ptr, offset, data, len)
 
 }
 

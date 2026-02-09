@@ -116,6 +116,16 @@ pub extern "c" fn c_jit_memory_init(
 ) -> Int = "wasmoon_jit_memory_init"
 
 ///|
+/// Copy bytes to linear memory at offset (zero-copy friendly Bytes path).
+#borrow(data)
+pub extern "c" fn c_jit_memory_init_bytes(
+  mem_ptr : Int64,
+  offset : Int64,
+  data : Bytes,
+  size : Int,
+) -> Int = "wasmoon_jit_memory_init_bytes"
+
+///|
 /// Copy data from linear memory at offset into `out`
 #borrow(out)
 pub extern "c" fn c_jit_memory_read(
@@ -201,6 +211,16 @@ pub extern "c" fn c_mem_desc_write(
   data : FixedArray[Byte],
   size : Int,
 ) -> Int = "wasmoon_mem_desc_write"
+
+///|
+/// Copy bytes from `data` into memory descriptor at offset (Bytes fast path).
+#borrow(data)
+pub extern "c" fn c_mem_desc_write_bytes(
+  mem_desc_ptr : Int64,
+  offset : Int64,
+  data : Bytes,
+  size : Int,
+) -> Int = "wasmoon_mem_desc_write_bytes"
 
 ///|
 /// memmove within the same memory descriptor.
