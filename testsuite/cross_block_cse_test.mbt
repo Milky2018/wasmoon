@@ -150,7 +150,7 @@ test "cross_block_cse" {
     content=(
       #|block0:
       #|  0000: 2300020b  add w3, w1, w2
-      #|  0004: 61000034  cbz w1, block2
+      #|  0004: 61000034  cbz w1, block3
       #|block1:
       #|  0008: 63040011  add w3, w3, #1
       #|  000c: 01000014  b block3

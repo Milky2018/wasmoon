@@ -245,10 +245,83 @@ test "optimize_layout: full pipeline" {
   let blocks = optimized.get_blocks()
   inspect(blocks.length(), content="4")
 
-  // Check that block order is: entry, body, header, exit
-  // Which means: 0, 2, 1, 3
-  inspect(blocks[0].id, content="0") // entry
-  inspect(blocks[1].id, content="2") // body
-  inspect(blocks[2].id, content="1") // header
-  inspect(blocks[3].id, content="3") // exit
+  // Jump threading may change exact order for empty loop-body blocks.
+  // Keep a stable invariant: entry block stays first and all block IDs remain.
+  inspect(blocks[0].id, content="0")
+  let mut seen0 = false
+  let mut seen1 = false
+  let mut seen2 = false
+  let mut seen3 = false
+  for block in blocks {
+    if block.id == 0 {
+      seen0 = true
+    } else if block.id == 1 {
+      seen1 = true
+    } else if block.id == 2 {
+      seen2 = true
+    } else if block.id == 3 {
+      seen3 = true
+    }
+  }
+  inspect(seen0 && seen1 && seen2 && seen3, content="true")
+}
+
+///|
+test "optimize_layout: threads trivial conditional targets" {
+  // Mirrors Cranelift's trivial-jump-block elimination:
+  // block0 branches to block1/block2, both are empty jumps to block3.
+  // After threading, block0 should become an unconditional jump to block3.
+  let func = @regalloc.VCodeFunction::new("test_thread_conditional")
+  let cond = func.add_param(@abi.Int)
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  let block3 = func.new_block()
+  block0.set_terminator(
+    @instr.BranchZero(@abi.Virtual(cond), false, false, block1.id, block2.id),
+  )
+  block1.set_terminator(@instr.Jump(block3.id, []))
+  block2.set_terminator(@instr.Jump(block3.id, []))
+  block3.set_terminator(@instr.Return([]))
+  let optimized = optimize_layout(func)
+  let mut threaded_to_jump = false
+  for block in optimized.get_blocks() {
+    if block.id == 0 {
+      if block.terminator is Some(@instr.Jump(target, args)) &&
+        target == 3 &&
+        args.length() == 0 {
+        threaded_to_jump = true
+      }
+      break
+    }
+  }
+  inspect(threaded_to_jump, content="true")
+}
+
+///|
+test "optimize_layout: threads jump chains transitively" {
+  // block0 -> block1 -> block2 -> block3, with all middle blocks trivial jumps.
+  // block0 should be retargeted directly to block3 after threading.
+  let func = @regalloc.VCodeFunction::new("test_thread_chain")
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  let block3 = func.new_block()
+  block0.set_terminator(@instr.Jump(block1.id, []))
+  block1.set_terminator(@instr.Jump(block2.id, []))
+  block2.set_terminator(@instr.Jump(block3.id, []))
+  block3.set_terminator(@instr.Return([]))
+  let optimized = optimize_layout(func)
+  let mut retargeted = false
+  for block in optimized.get_blocks() {
+    if block.id == 0 {
+      if block.terminator is Some(@instr.Jump(target, args)) &&
+        target == 3 &&
+        args.length() == 0 {
+        retargeted = true
+      }
+      break
+    }
+  }
+  inspect(retargeted, content="true")
 }
