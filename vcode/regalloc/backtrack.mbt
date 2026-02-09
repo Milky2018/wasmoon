@@ -1521,23 +1521,138 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  fn collect_sorted_merge_spans(
+  fn collect_root_spans(
     ranges : LiveRangeSet,
     members : Array[Int],
-    adjust_to_inst_start : Bool,
   ) -> Array[ProgPointRange] {
     let spans : Array[ProgPointRange] = []
     for idx in members {
       let range = ranges.get(idx)
       for span in range.ranges {
-        let start = adjusted_start_for_overlap(span, adjust_to_inst_start)
-        spans.push({ start, end: span.end })
+        spans.push(span)
       }
     }
     spans.sort_by(fn(a, b) {
       a.start.compare_with_order(b.start, ranges.block_order)
     })
     spans
+  }
+
+  fn merge_sorted_spans(
+    a : Array[ProgPointRange],
+    b : Array[ProgPointRange],
+    ranges : LiveRangeSet,
+  ) -> Array[ProgPointRange] {
+    let merged : Array[ProgPointRange] = []
+    let mut ia = 0
+    let mut ib = 0
+    while ia < a.length() && ib < b.length() {
+      if a[ia].start.compare_with_order(b[ib].start, ranges.block_order) <= 0 {
+        merged.push(a[ia])
+        ia = ia + 1
+      } else {
+        merged.push(b[ib])
+        ib = ib + 1
+      }
+    }
+    while ia < a.length() {
+      merged.push(a[ia])
+      ia = ia + 1
+    }
+    while ib < b.length() {
+      merged.push(b[ib])
+      ib = ib + 1
+    }
+    merged
+  }
+
+  let root_members_cache : Map[Int, Array[Int]] = {}
+  let root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)] = {}
+  let root_has_fixed_def_cache : Map[Int, Bool] = {}
+  let root_spans_cache : Map[Int, Array[ProgPointRange]] = {}
+
+  // Initialize per-root metadata so merges stay incremental.
+  for i in 0..<n {
+    root_members_cache.set(i, [i])
+    let range = ranges.get(i)
+    root_fixed_info_cache.set(i, range_fixed_reg_conflict(range))
+    root_has_fixed_def_cache.set(i, range_has_fixed_def(range))
+    let spans : Array[ProgPointRange] = []
+    for span in range.ranges {
+      spans.push(span)
+    }
+    spans.sort_by(fn(a, b) {
+      a.start.compare_with_order(b.start, ranges.block_order)
+    })
+    root_spans_cache.set(i, spans)
+  }
+  fn root_members(
+    uf : UnionFind,
+    root_members_cache : Map[Int, Array[Int]],
+    root : Int,
+  ) -> Array[Int] {
+    match root_members_cache.get(root) {
+      Some(members) => members
+      None => {
+        let members = uf.get_set(root)
+        root_members_cache.set(root, members)
+        members
+      }
+    }
+  }
+
+  fn root_fixed_info(
+    uf : UnionFind,
+    ranges : LiveRangeSet,
+    root_members_cache : Map[Int, Array[Int]],
+    root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
+    root : Int,
+  ) -> (@abi.PReg?, Bool) {
+    match root_fixed_info_cache.get(root) {
+      Some(info) => info
+      None => {
+        let members = root_members(uf, root_members_cache, root)
+        let info = set_fixed_reg(ranges, members)
+        root_fixed_info_cache.set(root, info)
+        info
+      }
+    }
+  }
+
+  fn root_has_fixed_def(
+    uf : UnionFind,
+    ranges : LiveRangeSet,
+    root_members_cache : Map[Int, Array[Int]],
+    root_has_fixed_def_cache : Map[Int, Bool],
+    root : Int,
+  ) -> Bool {
+    match root_has_fixed_def_cache.get(root) {
+      Some(has_fixed_def) => has_fixed_def
+      None => {
+        let members = root_members(uf, root_members_cache, root)
+        let has_fixed_def = set_has_fixed_def(ranges, members)
+        root_has_fixed_def_cache.set(root, has_fixed_def)
+        has_fixed_def
+      }
+    }
+  }
+
+  fn root_spans(
+    uf : UnionFind,
+    ranges : LiveRangeSet,
+    root_members_cache : Map[Int, Array[Int]],
+    root_spans_cache : Map[Int, Array[ProgPointRange]],
+    root : Int,
+  ) -> Array[ProgPointRange] {
+    match root_spans_cache.get(root) {
+      Some(spans) => spans
+      None => {
+        let members = root_members(uf, root_members_cache, root)
+        let spans = collect_root_spans(ranges, members)
+        root_spans_cache.set(root, spans)
+        spans
+      }
+    }
   }
 
   // Helper to try merging two ranges
@@ -1550,9 +1665,9 @@ pub fn build_bundles_with_merging(
     if a < 0 || b < 0 || a >= ranges.length() || b >= ranges.length() {
       return false
     }
-
-    // Already in same set
-    if uf.same_set(a, b) {
+    let root_a = uf.find(a)
+    let root_b = uf.find(b)
+    if root_a == root_b {
       return true
     }
     let range_a = ranges.get(a)
@@ -1562,16 +1677,22 @@ pub fn build_bundles_with_merging(
     if not(reg_class_compatible(range_a.vreg.class, range_b.vreg.class)) {
       return false
     }
-    let set_a = uf.get_set(a)
-    let set_b = uf.get_set(b)
-    let set_a_has_fixed_def = set_has_fixed_def(ranges, set_a)
-    let set_b_has_fixed_def = set_has_fixed_def(ranges, set_b)
+    let set_a_has_fixed_def = root_has_fixed_def(
+      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_a,
+    )
+    let set_b_has_fixed_def = root_has_fixed_def(
+      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_b,
+    )
 
     // Keep merged bundles compatible with fixed-register constraints.
     // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
     // incompatible fixed uses.
-    let (fixed_a, conflict_a) = set_fixed_reg(ranges, set_a)
-    let (fixed_b, conflict_b) = set_fixed_reg(ranges, set_b)
+    let (fixed_a, conflict_a) = root_fixed_info(
+      uf, ranges, root_members_cache, root_fixed_info_cache, root_a,
+    )
+    let (fixed_b, conflict_b) = root_fixed_info(
+      uf, ranges, root_members_cache, root_fixed_info_cache, root_b,
+    )
     if conflict_a || conflict_b {
       return false
     }
@@ -1586,8 +1707,12 @@ pub fn build_bundles_with_merging(
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
-    let spans_a = collect_sorted_merge_spans(ranges, set_a, set_a_has_fixed_def)
-    let spans_b = collect_sorted_merge_spans(ranges, set_b, set_b_has_fixed_def)
+    let spans_a = root_spans(
+      uf, ranges, root_members_cache, root_spans_cache, root_a,
+    )
+    let spans_b = root_spans(
+      uf, ranges, root_members_cache, root_spans_cache, root_b,
+    )
     let mut ia = 0
     let mut ib = 0
     let mut range_checks = 0
@@ -1598,16 +1723,47 @@ pub fn build_bundles_with_merging(
       }
       let span_a = spans_a[ia]
       let span_b = spans_b[ib]
-      if span_a.start.compare_with_order(span_b.end, ranges.block_order) >= 0 {
+      let start_a = adjusted_start_for_overlap(span_a, set_a_has_fixed_def)
+      let start_b = adjusted_start_for_overlap(span_b, set_b_has_fixed_def)
+      if start_a.compare_with_order(span_b.end, ranges.block_order) >= 0 {
         ib = ib + 1
-      } else if span_b.start.compare_with_order(span_a.end, ranges.block_order) >=
-        0 {
+      } else if start_b.compare_with_order(span_a.end, ranges.block_order) >= 0 {
         ia = ia + 1
       } else {
         return false
       }
     }
-    uf.union(a, b) |> ignore
+    if !uf.union(root_a, root_b) {
+      return true
+    }
+    let new_root = uf.find(root_a)
+    let old_root = if new_root == root_a { root_b } else { root_a }
+
+    // Keep root metadata incremental (mirrors regalloc2's merge behavior).
+    let members_new = root_members(uf, root_members_cache, new_root)
+    let members_old = root_members(uf, root_members_cache, old_root)
+    let merged_members : Array[Int] = []
+    for idx in members_new {
+      merged_members.push(idx)
+    }
+    for idx in members_old {
+      merged_members.push(idx)
+    }
+    root_members_cache.set(new_root, merged_members)
+    root_members_cache.remove(old_root) |> ignore
+    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
+    root_has_fixed_def_cache.set(new_root, merged_fixed_def)
+    root_has_fixed_def_cache.remove(old_root) |> ignore
+    let merged_fixed = match (fixed_a, fixed_b) {
+      (Some(preg), _) => Some(preg)
+      (_, Some(preg)) => Some(preg)
+      _ => None
+    }
+    root_fixed_info_cache.set(new_root, (merged_fixed, false))
+    root_fixed_info_cache.remove(old_root) |> ignore
+    let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
+    root_spans_cache.set(new_root, merged_spans)
+    root_spans_cache.remove(old_root) |> ignore
     true
   }
 
