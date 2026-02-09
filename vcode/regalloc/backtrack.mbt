@@ -972,15 +972,6 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       continue
     }
 
-    // Cranelift-style conservative call clobbers for C calls: treat all V0-V31 as clobbered.
-    // To be safe, spill any float values that cross a C call.
-    if (bundle.reg_class is @abi.Float32 || bundle.reg_class is @abi.Float64) &&
-      bundle.crosses_c_call(self.ranges) {
-      self.force_spill_bundle(bundle)
-      processed.add(entry.bundle_id)
-      continue
-    }
-
     // Try to allocate a register
     if self.try_allocate(bundle, hint_preg) is Some(preg) {
       self.record_allocation(bundle, preg)
