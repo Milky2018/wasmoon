@@ -75,6 +75,9 @@ struct BacktrackingAllocator {
   // Used for fast conflict lookup in find_conflicts
   int_reg_bundles : Map[Int, Set[Int]]
   float_reg_bundles : Map[Int, Set[Int]]
+  // Cache static overlap checks between bundle pairs to avoid repeated
+  // O(ranges_a * ranges_b) scans in hot conflict paths.
+  bundle_overlap_cache : Map[Int, Map[Int, Bool]]
 
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.weight
@@ -191,6 +194,7 @@ pub fn BacktrackingAllocator::new(
     float_reg_allocs: {},
     int_reg_bundles: {},
     float_reg_bundles: {},
+    bundle_overlap_cache: {},
     queue: [],
     queue_next_seq: 0,
     spillset_hints: Array::make(bundles.length(), None),
@@ -384,25 +388,15 @@ fn BacktrackingAllocator::is_reg_free(
   preg : @abi.PReg,
   bundle : Bundle,
 ) -> Bool {
-  let allocs = self.get_reg_allocs(preg.class)
-  let occupied = allocs.get(preg.index)
-  match occupied {
-    None => true // No allocations yet
-    Some(ranges) => {
-      // Check if any bundle range overlaps with occupied ranges
-      for range_id in bundle.range_ids {
-        let range = self.ranges.get(range_id)
-        for span in range.ranges {
-          for occ in ranges {
-            if span.overlaps(occ.1, self.block_order) {
-              return false
-            }
-          }
-        }
+  let bundle_index = self.get_reg_bundles(preg.class)
+  if bundle_index.get(preg.index) is Some(bundle_set) {
+    for other_id in bundle_set {
+      if self.bundle_overlaps_cached(bundle.id, other_id) {
+        return false
       }
-      true
     }
   }
+  true
 }
 
 ///|
@@ -551,6 +545,34 @@ fn BacktrackingAllocator::try_allocate(
 }
 
 ///|
+fn BacktrackingAllocator::bundle_overlaps_cached(
+  self : BacktrackingAllocator,
+  a_id : Int,
+  b_id : Int,
+) -> Bool {
+  if a_id == b_id {
+    return true
+  }
+  let lo = if a_id < b_id { a_id } else { b_id }
+  let hi = if a_id < b_id { b_id } else { a_id }
+  if self.bundle_overlap_cache.get(lo) is Some(cache_row) {
+    if cache_row.get(hi) is Some(overlaps) {
+      return overlaps
+    }
+  } else {
+    self.bundle_overlap_cache.set(lo, {})
+  }
+  let overlaps = self.bundles
+    .get(lo)
+    .overlaps(self.bundles.get(hi), self.ranges)
+  match self.bundle_overlap_cache.get(lo) {
+    Some(cache_row) => cache_row.set(hi, overlaps)
+    None => ()
+  }
+  overlaps
+}
+
+///|
 /// Find conflicting bundles for a given bundle and register
 fn BacktrackingAllocator::find_conflicts(
   self : BacktrackingAllocator,
@@ -563,8 +585,7 @@ fn BacktrackingAllocator::find_conflicts(
   let bundle_index = self.get_reg_bundles(preg.class)
   if bundle_index.get(preg.index) is Some(bundle_set) {
     for other_id in bundle_set {
-      let other = self.bundles.get(other_id)
-      if bundle.overlaps(other, self.ranges) {
+      if self.bundle_overlaps_cached(bundle.id, other_id) {
         conflicts.push(other_id)
       }
     }
