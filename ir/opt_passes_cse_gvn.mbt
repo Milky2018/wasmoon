@@ -143,15 +143,27 @@ fn may_write_memory(opcode : Opcode) -> Bool {
 priv struct PtrAccess {
   base_id : Int
   offset_id : Int
-  memidx : Int
+  region : PtrAliasRegion
   size : Int
+}
+
+///|
+priv enum PtrAliasRegion {
+  Heap(Int)
+  Vmctx
+  Other
+} derive(Eq, Hash)
+
+///|
+priv struct PtrBaseInfo {
+  region : PtrAliasRegion
 }
 
 ///|
 priv struct PtrLocationKey {
   base_id : Int
   offset_id : Int
-  memidx : Int
+  region : PtrAliasRegion
 } derive(Eq, Hash)
 
 ///|
@@ -163,20 +175,7 @@ priv struct StoreForwardEntry {
 
 ///|
 fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
-  { base_id: self.base_id, offset_id: self.offset_id, memidx: self.memidx }
-}
-
-///|
-fn collect_mem_base_indices(func : Function) -> @hashmap.HashMap[Int, Int] {
-  let result : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  for block in func.blocks {
-    for inst in block.instructions {
-      if inst.opcode is LoadMemBase(memidx) && inst.first_result() is Some(v) {
-        result.set(v.id, memidx)
-      }
-    }
-  }
-  result
+  { base_id: self.base_id, offset_id: self.offset_id, region: self.region }
 }
 
 ///|
@@ -201,6 +200,90 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
 }
 
 ///|
+fn is_known_iconst(
+  value_id : Int,
+  iconst_values : @hashmap.HashMap[Int, Int64],
+) -> Bool {
+  iconst_values.get(value_id) is Some(_)
+}
+
+///|
+fn collect_ptr_base_infos(
+  func : Function,
+  iconst_values : @hashmap.HashMap[Int, Int64],
+) -> @hashmap.HashMap[Int, PtrBaseInfo] {
+  let result : @hashmap.HashMap[Int, PtrBaseInfo] = @hashmap.new()
+  if func.blocks.length() > 0 && func.blocks[0].params.length() > 0 {
+    // Wasm ABI: entry param 0 is vmctx; treat copy-derived pointers as vmctx-region.
+    let vmctx = func.blocks[0].params[0].0
+    result.set(vmctx.id, { region: Vmctx })
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    for block in func.blocks {
+      for inst in block.instructions {
+        if inst.first_result() is Some(v) && result.get(v.id) is None {
+          let inferred : PtrBaseInfo? = match inst.opcode {
+            LoadMemBase(memidx) => Some({ region: Heap(memidx) })
+            Copy | Bitcast | Uextend | Sextend | Ireduce =>
+              if inst.operands.length() > 0 {
+                result.get(inst.operands[0].id)
+              } else {
+                None
+              }
+            Iadd =>
+              if inst.operands.length() >= 2 {
+                let lhs = inst.operands[0]
+                let rhs = inst.operands[1]
+                if result.get(lhs.id) is Some(base) &&
+                  is_known_iconst(rhs.id, iconst_values) {
+                  Some(base)
+                } else if result.get(rhs.id) is Some(base) &&
+                  is_known_iconst(lhs.id, iconst_values) {
+                  Some(base)
+                } else {
+                  None
+                }
+              } else {
+                None
+              }
+            Isub =>
+              if inst.operands.length() >= 2 {
+                let lhs = inst.operands[0]
+                let rhs = inst.operands[1]
+                if result.get(lhs.id) is Some(base) &&
+                  is_known_iconst(rhs.id, iconst_values) {
+                  Some(base)
+                } else {
+                  None
+                }
+              } else {
+                None
+              }
+            Select =>
+              if inst.operands.length() >= 3 &&
+                result.get(inst.operands[1].id) is Some(lhs_base) &&
+                result.get(inst.operands[2].id) is Some(rhs_base) &&
+                lhs_base.region == rhs_base.region {
+                Some(lhs_base)
+              } else {
+                None
+              }
+            _ => None
+          }
+          if inferred is Some(base) {
+            result.set(v.id, base)
+            changed = true
+          }
+        }
+      }
+    }
+  }
+  result
+}
+
+///|
 fn type_access_size(ty : Type) -> Int {
   match ty {
     I32 | F32 => 4
@@ -213,18 +296,21 @@ fn type_access_size(ty : Type) -> Int {
 ///|
 fn ptr_access_from_inst(
   inst : Inst,
-  mem_base_indices : @hashmap.HashMap[Int, Int],
+  ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
   match inst.opcode {
     LoadPtr(ty) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        let region = match ptr_base_infos.get(base.id) {
+          Some(base_info) => base_info.region
+          None => Other
+        }
         Some({
           base_id: base.id,
           offset_id: offset.id,
-          memidx,
+          region,
           size: type_access_size(ty),
         })
       } else {
@@ -234,8 +320,11 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
-        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
-        Some({ base_id: base.id, offset_id: offset.id, memidx, size: bits / 8 })
+        let region = match ptr_base_infos.get(base.id) {
+          Some(base_info) => base_info.region
+          None => Other
+        }
+        Some({ base_id: base.id, offset_id: offset.id, region, size: bits / 8 })
       } else {
         None
       }
@@ -243,11 +332,14 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
+        let region = match ptr_base_infos.get(base.id) {
+          Some(base_info) => base_info.region
+          None => Other
+        }
         Some({
           base_id: base.id,
           offset_id: offset.id,
-          memidx,
+          region,
           size: type_access_size(ty),
         })
       } else {
@@ -257,8 +349,11 @@ fn ptr_access_from_inst(
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
-        let memidx = mem_base_indices.get(base.id).unwrap_or(-1)
-        Some({ base_id: base.id, offset_id: offset.id, memidx, size: bits / 8 })
+        let region = match ptr_base_infos.get(base.id) {
+          Some(base_info) => base_info.region
+          None => Other
+        }
+        Some({ base_id: base.id, offset_id: offset.id, region, size: bits / 8 })
       } else {
         None
       }
@@ -284,7 +379,7 @@ fn store_forward_entry_from_inst(
 
 ///|
 fn ptr_access_from_location_key(key : PtrLocationKey, size : Int) -> PtrAccess {
-  { base_id: key.base_id, offset_id: key.offset_id, memidx: key.memidx, size }
+  { base_id: key.base_id, offset_id: key.offset_id, region: key.region, size }
 }
 
 ///|
@@ -293,8 +388,8 @@ fn may_alias_ptr_access(
   b : PtrAccess,
   iconst_values : @hashmap.HashMap[Int, Int64],
 ) -> Bool {
-  // Distinct linear memories are disjoint.
-  if a.memidx >= 0 && b.memidx >= 0 && a.memidx != b.memidx {
+  // Cranelift-like disjoint abstract regions: never alias across regions.
+  if a.region != b.region {
     return false
   }
   // Same base + same offset is a must-alias.
@@ -356,13 +451,13 @@ fn run_global_value_numbering(
     return result
   }
   let enable_memory = mode is AliasAwareGVN
-  let mem_base_indices : @hashmap.HashMap[Int, Int] = if enable_memory {
-    collect_mem_base_indices(func)
+  let iconst_values : @hashmap.HashMap[Int, Int64] = if enable_memory {
+    collect_iconst_values(func)
   } else {
     @hashmap.new()
   }
-  let iconst_values : @hashmap.HashMap[Int, Int64] = if enable_memory {
-    collect_iconst_values(func)
+  let ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo] = if enable_memory {
+    collect_ptr_base_infos(func, iconst_values)
   } else {
     @hashmap.new()
   }
@@ -396,7 +491,7 @@ fn run_global_value_numbering(
         // Store-to-load forwarding (Cranelift-like "last stores" direction):
         // only forward exact same-address StorePtr(ty) -> LoadPtr(ty).
         if inst.opcode is LoadPtr(load_ty) &&
-          ptr_access_from_inst(inst, mem_base_indices) is Some(load_access) {
+          ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
           let load_key = load_access.location_key()
           if last_store.get(load_key) is Some(store_entry) &&
             store_entry.ty == load_ty {
@@ -409,10 +504,10 @@ fn run_global_value_numbering(
         }
         // Store opcodes get selective alias invalidation instead of full flush.
         if inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_) {
-          if ptr_access_from_inst(inst, mem_base_indices) is Some(store_access) {
+          if ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) {
             let reads_to_remove : Array[Inst] = []
             for key in memory_keys {
-              match ptr_access_from_inst(key, mem_base_indices) {
+              match ptr_access_from_inst(key, ptr_base_infos) {
                 Some(read_access) =>
                   if may_alias_ptr_access(
                       read_access, store_access, iconst_values,
