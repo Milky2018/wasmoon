@@ -71,13 +71,9 @@ struct BacktrackingAllocator {
   int_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
   float_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
 
-  // Index: preg.index -> set of bundle IDs allocated to this register
-  // Used for fast conflict lookup in find_conflicts
-  int_reg_bundles : Map[Int, Set[Int]]
-  float_reg_bundles : Map[Int, Set[Int]]
-  // Cache static overlap checks between bundle pairs to avoid repeated
-  // O(ranges_a * ranges_b) scans in hot conflict paths.
-  bundle_overlap_cache : Map[Int, Map[Int, Bool]]
+  // Per-bundle flattened/sorted span cache. This mirrors regalloc2's use of
+  // ordered per-bundle ranges for conflict scans.
+  bundle_span_cache : Map[Int, Array[ProgPointRange]]
 
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.weight
@@ -192,9 +188,7 @@ pub fn BacktrackingAllocator::new(
     bundles,
     int_reg_allocs: {},
     float_reg_allocs: {},
-    int_reg_bundles: {},
-    float_reg_bundles: {},
-    bundle_overlap_cache: {},
+    bundle_span_cache: {},
     queue: [],
     queue_next_seq: 0,
     spillset_hints: Array::make(bundles.length(), None),
@@ -328,15 +322,81 @@ fn BacktrackingAllocator::get_reg_allocs(
 }
 
 ///|
-/// Get the bundle index map for a register class
-fn BacktrackingAllocator::get_reg_bundles(
+/// Flatten a bundle to sorted spans (cached by bundle id).
+fn BacktrackingAllocator::bundle_sorted_spans(
   self : BacktrackingAllocator,
-  class : @abi.RegClass,
-) -> Map[Int, Set[Int]] {
-  match class {
-    @abi.Int => self.int_reg_bundles
-    @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_bundles
+  bundle : Bundle,
+) -> Array[ProgPointRange] {
+  if self.bundle_span_cache.get(bundle.id) is Some(spans) {
+    return spans
   }
+  let spans : Array[ProgPointRange] = []
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    for span in range.ranges {
+      spans.push(span)
+    }
+  }
+  spans.sort_by(fn(a, b) {
+    a.start.compare_with_order(b.start, self.block_order)
+  })
+  self.bundle_span_cache.set(bundle.id, spans)
+  spans
+}
+
+///|
+/// Insert a (bundle_id, span) entry while keeping the occupancy list sorted by
+/// `span.start`, matching regalloc2's ordered traversal strategy.
+fn BacktrackingAllocator::insert_occupied_span_sorted(
+  self : BacktrackingAllocator,
+  occupied : Array[(Int, ProgPointRange)],
+  bundle_id : Int,
+  span : ProgPointRange,
+) -> Unit {
+  occupied.push((bundle_id, span))
+  let mut i = occupied.length() - 1
+  while i > 0 {
+    let prev = occupied[i - 1].1.start
+    let cur = occupied[i].1.start
+    if prev.compare_with_order(cur, self.block_order) <= 0 {
+      break
+    }
+    let tmp = occupied[i - 1]
+    occupied[i - 1] = occupied[i]
+    occupied[i] = tmp
+    i = i - 1
+  }
+}
+
+///|
+/// Fast conflict probe: return true as soon as one overlap is found.
+fn BacktrackingAllocator::has_conflict_on_preg(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  preg : @abi.PReg,
+) -> Bool {
+  let allocs = self.get_reg_allocs(preg.class)
+  guard allocs.get(preg.index) is Some(occupied) else { return false }
+  if occupied.is_empty() {
+    return false
+  }
+  let spans = self.bundle_sorted_spans(bundle)
+  let mut i = 0
+  let mut j = 0
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+      i = i + 1
+      continue
+    }
+    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+      j = j + 1
+      continue
+    }
+    return true
+  }
+  false
 }
 
 ///|
@@ -388,15 +448,7 @@ fn BacktrackingAllocator::is_reg_free(
   preg : @abi.PReg,
   bundle : Bundle,
 ) -> Bool {
-  let bundle_index = self.get_reg_bundles(preg.class)
-  if bundle_index.get(preg.index) is Some(bundle_set) {
-    for other_id in bundle_set {
-      if self.bundle_overlaps_cached(bundle.id, other_id) {
-        return false
-      }
-    }
-  }
-  true
+  !self.has_conflict_on_preg(bundle, preg)
 }
 
 ///|
@@ -414,7 +466,7 @@ fn BacktrackingAllocator::record_allocation(
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for span in range.ranges {
-      occupied.push((bundle.id, span))
+      self.insert_occupied_span_sorted(occupied, bundle.id, span)
     }
     // Also update the LiveRange's allocation
     range.allocation = Reg(preg)
@@ -427,13 +479,6 @@ fn BacktrackingAllocator::record_allocation(
   if spillset_id >= 0 && spillset_id < self.spillset_hints.length() {
     self.spillset_hints[spillset_id] = Some(preg)
   }
-
-  // Update bundle index for fast conflict lookup
-  let bundle_index = self.get_reg_bundles(preg.class)
-  if bundle_index.get(preg.index) is None {
-    bundle_index.set(preg.index, Set::new())
-  }
-  bundle_index.get(preg.index).unwrap().add(bundle.id)
 }
 
 ///|
@@ -453,12 +498,6 @@ fn BacktrackingAllocator::remove_allocation(
         }
       }
       allocs.set(preg.index, new_occupied)
-    }
-
-    // Remove from bundle index
-    let bundle_index = self.get_reg_bundles(preg.class)
-    if bundle_index.get(preg.index) is Some(bundle_set) {
-      bundle_set.remove(bundle.id)
     }
 
     // Clear allocation
@@ -545,49 +584,45 @@ fn BacktrackingAllocator::try_allocate(
 }
 
 ///|
-fn BacktrackingAllocator::bundle_overlaps_cached(
-  self : BacktrackingAllocator,
-  a_id : Int,
-  b_id : Int,
-) -> Bool {
-  if a_id == b_id {
-    return true
-  }
-  let lo = if a_id < b_id { a_id } else { b_id }
-  let hi = if a_id < b_id { b_id } else { a_id }
-  if self.bundle_overlap_cache.get(lo) is Some(cache_row) {
-    if cache_row.get(hi) is Some(overlaps) {
-      return overlaps
-    }
-  } else {
-    self.bundle_overlap_cache.set(lo, {})
-  }
-  let overlaps = self.bundles
-    .get(lo)
-    .overlaps(self.bundles.get(hi), self.ranges)
-  match self.bundle_overlap_cache.get(lo) {
-    Some(cache_row) => cache_row.set(hi, overlaps)
-    None => ()
-  }
-  overlaps
-}
-
-///|
-/// Find conflicting bundles for a given bundle and register
+/// Collect conflicting bundles for `bundle` on `preg` using ordered
+/// span traversal (regalloc2-style).
 fn BacktrackingAllocator::find_conflicts(
   self : BacktrackingAllocator,
   bundle : Bundle,
   preg : @abi.PReg,
 ) -> Array[Int] {
   let conflicts : Array[Int] = []
-
-  // Use bundle index for O(bundles_on_register) instead of O(all_bundles)
-  let bundle_index = self.get_reg_bundles(preg.class)
-  if bundle_index.get(preg.index) is Some(bundle_set) {
-    for other_id in bundle_set {
-      if self.bundle_overlaps_cached(bundle.id, other_id) {
-        conflicts.push(other_id)
-      }
+  let seen : Set[Int] = Set::new()
+  let allocs = self.get_reg_allocs(preg.class)
+  guard allocs.get(preg.index) is Some(occupied) else { return conflicts }
+  if occupied.is_empty() {
+    return conflicts
+  }
+  let spans = self.bundle_sorted_spans(bundle)
+  let mut i = 0
+  let mut j = 0
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+      i = i + 1
+      continue
+    }
+    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+      j = j + 1
+      continue
+    }
+    let other_id = occupied[j].0
+    if !seen.contains(other_id) {
+      seen.add(other_id) |> ignore
+      conflicts.push(other_id)
+    }
+    // Both lists are sorted and preg allocations are non-overlapping; advance
+    // whichever interval ends first.
+    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+      i = i + 1
+    } else {
+      j = j + 1
     }
   }
   conflicts
@@ -702,38 +737,31 @@ fn BacktrackingAllocator::find_first_conflict_point_for_preg(
   bundle : Bundle,
   preg : @abi.PReg,
 ) -> ProgPoint? {
-  let mut earliest_conflict : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
-  if allocs.get(preg.index) is Some(occupied) {
-    for range_id in bundle.range_ids {
-      let range = self.ranges.get(range_id)
-      for span in range.ranges {
-        for occ in occupied {
-          if span.overlaps(occ.1, self.block_order) {
-            // Find the overlap start point
-            let conflict_start = if span.start.compare_with_order(
-                occ.1.start,
-                self.block_order,
-              ) >
-              0 {
-              span.start
-            } else {
-              occ.1.start
-            }
-            match earliest_conflict {
-              None => earliest_conflict = Some(conflict_start)
-              Some(existing) =>
-                if conflict_start.compare_with_order(existing, self.block_order) <
-                  0 {
-                  earliest_conflict = Some(conflict_start)
-                }
-            }
-          }
-        }
-      }
-    }
+  guard allocs.get(preg.index) is Some(occupied) else { return None }
+  if occupied.is_empty() {
+    return None
   }
-  earliest_conflict
+  let spans = self.bundle_sorted_spans(bundle)
+  let mut i = 0
+  let mut j = 0
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+      i = i + 1
+      continue
+    }
+    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+      j = j + 1
+      continue
+    }
+    if span.start.compare_with_order(occ.start, self.block_order) >= 0 {
+      return Some(span.start)
+    }
+    return Some(occ.start)
+  }
+  None
 }
 
 ///|
