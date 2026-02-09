@@ -241,6 +241,12 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
     let step = 4096
     let scratch = scratch1_index()
     if is_sub {
+      // Probe only when crossing at least one full page, matching Cranelift's
+      // inline-probestack rule (probe_count = frame_size / guard_size).
+      if abs_amount < step {
+        self.x86_emit_sub_rsp_imm32(abs_amount)
+        return
+      }
       // Probe in 4KB steps to avoid skipping over a stack guard page.
       let mut remaining = abs_amount
       while remaining >= step {
@@ -275,14 +281,11 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
     // Stack allocation: touch stack pages so a guard page can't be skipped by a
     // single large SP adjustment (e.g. large frames on the independent WASM stack).
     //
-    // We probe in 4KB steps (<= minimum common page size), then do the remainder.
-    // This guarantees that if we cross into a PROT_NONE guard page, we fault while
-    // the faulting address is within the guard region (so the signal handler can
-    // classify it as "call stack exhausted").
-    if abs_amount <= 4095 {
+    // We probe in 4KB steps only when crossing at least one full page.
+    // This follows Cranelift's `probe_count = frame_size / guard_size` behavior
+    // and avoids an extra store for small stack frames.
+    if abs_amount < step {
       self.emit_sub_imm(31, 31, abs_amount)
-      // Touch at the new SP to fault immediately on overflow.
-      self.emit_str_imm(31, 31, 0)
       return
     }
     // abs_amount >= 4096
