@@ -206,11 +206,6 @@ fn optimize_o1(func : Function) -> OptResult {
       }
     }
   }
-  // Run jump-threading once after fixed-point to avoid repeated CFG churn.
-  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-  if jt_result.changed {
-    result.mark_changed()
-  }
   result
 }
 
