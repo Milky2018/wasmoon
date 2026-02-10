@@ -210,6 +210,20 @@ pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
 }
 
 ///|
+/// Returns true if this function contains any call-like instruction.
+pub fn VCodeFunction::has_calls(self : VCodeFunction) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      match inst.opcode.call_type() {
+        @instr.Regular | @instr.TailCall => return true
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Returns true if the function uses `LoadMemBase(memidx=0)`.
 /// Used to enable caching of the memory0 descriptor pointer in a reserved register.
 pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
@@ -220,6 +234,12 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
       }
     }
   }
+  false
+}
+
+///|
+/// Returns true if memory0 descriptor caching should be enabled for this function.
+pub fn VCodeFunction::should_cache_mem0_desc(_self : VCodeFunction) -> Bool {
   false
 }
 
@@ -241,6 +261,12 @@ pub fn VCodeFunction::uses_func_table(self : VCodeFunction) -> Bool {
     }
   }
   false
+}
+
+///|
+/// Returns true if func_table pointer caching should be enabled for this function.
+pub fn VCodeFunction::should_cache_func_table(self : VCodeFunction) -> Bool {
+  self.uses_func_table()
 }
 
 ///|

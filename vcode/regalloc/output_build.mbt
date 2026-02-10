@@ -245,8 +245,8 @@ fn build_output(
   }
   let reserve_extra_results_ptr = func.needs_extra_results_ptr() ||
     func.calls_multi_value_function()
-  let reserve_mem0_desc = func.uses_mem0()
-  let reserve_func_table = func.uses_func_table()
+  let reserve_mem0_desc = func.should_cache_mem0_desc()
+  let reserve_func_table = func.should_cache_func_table()
   let env = isa.machine_env(
     settings~,
     reserve_mem0_desc~,

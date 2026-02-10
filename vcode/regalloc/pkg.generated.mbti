@@ -277,6 +277,7 @@ pub fn VCodeFunction::get_num_spill_slots(Self) -> Int
 pub fn VCodeFunction::get_param_pregs(Self) -> Array[@abi.PReg?]
 pub fn VCodeFunction::get_params(Self) -> Array[@abi.VReg]
 pub fn VCodeFunction::get_result_types(Self) -> Array[@ir.Type]
+pub fn VCodeFunction::has_calls(Self) -> Bool
 pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> @block.VCodeBlock
@@ -285,6 +286,8 @@ pub fn VCodeFunction::print(Self) -> String
 pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
 pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
 pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
+pub fn VCodeFunction::should_cache_func_table(Self) -> Bool
+pub fn VCodeFunction::should_cache_mem0_desc(Self) -> Bool
 pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
 pub fn VCodeFunction::uses_func_table(Self) -> Bool
 pub fn VCodeFunction::uses_mem0(Self) -> Bool

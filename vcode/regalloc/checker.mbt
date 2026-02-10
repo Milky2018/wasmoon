@@ -67,8 +67,8 @@ pub fn verify_allocation(
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
-  let needs_x20_reserved = func.uses_mem0()
-  let needs_x21_reserved = func.uses_func_table()
+  let needs_x20_reserved = func.should_cache_mem0_desc()
+  let needs_x21_reserved = func.should_cache_func_table()
   let env = isa.machine_env(
     settings~,
     reserve_mem0_desc=needs_x20_reserved,

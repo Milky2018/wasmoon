@@ -196,10 +196,9 @@ fn build_reg_pools(
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
-  // Cache memory0 descriptor pointer in X20 when needed.
-  let needs_x20_reserved = func.uses_mem0()
-  // Cache func_table pointer in X21 when needed.
-  let needs_x21_reserved = func.uses_func_table()
+  // Cache role registers only for the selected cache policy.
+  let needs_x20_reserved = func.should_cache_mem0_desc()
+  let needs_x21_reserved = func.should_cache_func_table()
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
   let env = isa.machine_env(

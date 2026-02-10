@@ -200,8 +200,9 @@ pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
   fn is_allocatable_fixed(preg : @abi.PReg) -> Bool {
     match preg.class {
       @abi.Int =>
-        // Exclude ABI argument regs (x0-x7) and reserved/scratch regs.
-        preg.index >= 8 &&
+        // Keep architectural reserved/scratch regs out of fixed allocation.
+        // Argument regs (x0-x7) are allowed so fixed-arg constraints can be
+        // satisfied by allocation when profitable, matching regalloc2 style.
         preg.index != 16 &&
         preg.index != 17 &&
         preg.index != 18 &&

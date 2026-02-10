@@ -422,64 +422,61 @@ test "end-to-end: f32_br_2locals.wast from source" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
-      #|  0004: fd030091  add x29, sp, #0
-      #|  0008: f40f1ff8  str x20, [sp, #-16]!
-      #|  000c: f50300aa  mov x21, x0
-      #|  0010: b40240f9  ldr x20, [x21, #0]
+      #|  0000: f50300aa  mov x21, x0
       #|block0:
-      #|  0014: 3f000071  cmp w1, #0
-      #|  0018: a0030054  b.eq block6
+      #|  0004: 3f000071  cmp w1, #0
+      #|  0008: e0030054  b.eq block6
       #|block9:
-      #|  001c: 3f040071  cmp w1, #1
-      #|  0020: 40020054  b.eq block7
+      #|  000c: 3f040071  cmp w1, #1
+      #|  0010: 60020054  b.eq block7
       #|block10:
-      #|  0024: 3f080071  cmp w1, #2
-      #|  0028: e0000054  b.eq block8
+      #|  0014: 3f080071  cmp w1, #2
+      #|  0018: e0000054  b.eq block8
       #|block5:
-      #|  002c: 100080d2  movz x16, #0, lsl #0
-      #|  0030: 0402271e  fmov s4, w16
-      #|  0034: 100080d2  movz x16, #0, lsl #0
-      #|  0038: 1024a8f2  movk x16, #16672, lsl #16
-      #|  003c: 0302271e  fmov s3, w16
-      #|  0040: 1b000014  b block1
+      #|  001c: 100080d2  movz x16, #0, lsl #0
+      #|  0020: 0402271e  fmov s4, w16
+      #|  0024: 100080d2  movz x16, #0, lsl #0
+      #|  0028: 1024a8f2  movk x16, #16672, lsl #16
+      #|  002c: 0302271e  fmov s3, w16
+      #|  0030: 1e000014  b block1
       #|block8:
-      #|  0044: 100080d2  movz x16, #0, lsl #0
-      #|  0048: 0402271e  fmov s4, w16
-      #|  004c: 100080d2  movz x16, #0, lsl #0
-      #|  0050: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0054: 0302271e  fmov s3, w16
+      #|  0034: 100080d2  movz x16, #0, lsl #0
+      #|  0038: 0402271e  fmov s4, w16
+      #|  003c: 100080d2  movz x16, #0, lsl #0
+      #|  0040: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0044: 0302271e  fmov s3, w16
       #|block2:
-      #|  0058: 850240f9  ldr x5, [x20, #0]
-      #|  005c: a30000bd  str s3, [x5, #0]
-      #|  0060: a40040bd  ldr s4, [x5, #0]
-      #|  0064: 12000014  b block1
+      #|  0048: a50240f9  ldr x5, [x21, #0]
+      #|  004c: a50040f9  ldr x5, [x5, #0]
+      #|  0050: a30000bd  str s3, [x5, #0]
+      #|  0054: a40040bd  ldr s4, [x5, #0]
+      #|  0058: 14000014  b block1
       #|block7:
-      #|  0068: 100080d2  movz x16, #0, lsl #0
-      #|  006c: 0602271e  fmov s6, w16
-      #|  0070: 100080d2  movz x16, #0, lsl #0
-      #|  0074: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0078: 0302271e  fmov s3, w16
+      #|  005c: 100080d2  movz x16, #0, lsl #0
+      #|  0060: 0602271e  fmov s6, w16
+      #|  0064: 100080d2  movz x16, #0, lsl #0
+      #|  0068: 1024a8f2  movk x16, #16672, lsl #16
+      #|  006c: 0302271e  fmov s3, w16
       #|block3:
-      #|  007c: 870240f9  ldr x7, [x20, #0]
-      #|  0080: e30000bd  str s3, [x7, #0]
-      #|  0084: e40040bd  ldr s4, [x7, #0]
-      #|  0088: 09000014  b block1
+      #|  0070: a70240f9  ldr x7, [x21, #0]
+      #|  0074: e70040f9  ldr x7, [x7, #0]
+      #|  0078: e30000bd  str s3, [x7, #0]
+      #|  007c: e40040bd  ldr s4, [x7, #0]
+      #|  0080: 0a000014  b block1
       #|block6:
+      #|  0084: 100080d2  movz x16, #0, lsl #0
+      #|  0088: 1202271e  fmov s18, w16
       #|  008c: 100080d2  movz x16, #0, lsl #0
-      #|  0090: 1202271e  fmov s18, w16
-      #|  0094: 100080d2  movz x16, #0, lsl #0
-      #|  0098: 1024a8f2  movk x16, #16672, lsl #16
-      #|  009c: 0302271e  fmov s3, w16
+      #|  0090: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0094: 0302271e  fmov s3, w16
       #|block4:
-      #|  00a0: 890240f9  ldr x9, [x20, #0]
-      #|  00a4: 230100bd  str s3, [x9, #0]
-      #|  00a8: 240140bd  ldr s4, [x9, #0]
+      #|  0098: a90240f9  ldr x9, [x21, #0]
+      #|  009c: 290140f9  ldr x9, [x9, #0]
+      #|  00a0: 230100bd  str s3, [x9, #0]
+      #|  00a4: 240140bd  ldr s4, [x9, #0]
       #|block1:
-      #|  00ac: 801ca44e  orr v0.16b, v4.16b, v4.16b
-      #|  00b0: f40741f8  ldr x20, [sp], #16
-      #|  00b4: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  00b8: c0035fd6  ret
+      #|  00a8: 801ca44e  orr v0.16b, v4.16b, v4.16b
+      #|  00ac: c0035fd6  ret
       #|
     ),
   )

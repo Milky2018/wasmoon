@@ -123,16 +123,7 @@ fn collect_used_callee_saved_fprs(
 ///|
 /// Check if a function makes any calls
 fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
-  for block in func.get_blocks() {
-    for inst in block.insts {
-      // Check if this instruction is a function call
-      match inst.opcode.call_type() {
-        @instr.Regular | @instr.TailCall => return true
-        _ => ()
-      }
-    }
-  }
-  false
+  func.has_calls()
 }
 
 ///|
@@ -631,7 +622,8 @@ pub fn emit_function(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
-  let uses_func_table = func.uses_func_table()
+  let cache_mem0_desc = func.should_cache_mem0_desc()
+  let cache_func_table = func.should_cache_func_table()
 
   // Check if function uses vmctx (x19)
   // A function needs vmctx if:
@@ -641,11 +633,11 @@ pub fn emit_function(
   let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
   let clobbered_gprs = clobbered
   let mem0_desc = mem0_desc_index()
-  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
   let func_table = func_table_index()
-  if uses_func_table && !clobbered_gprs.contains(func_table) {
+  if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
@@ -655,8 +647,8 @@ pub fn emit_function(
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
-    cache_mem0_desc=uses_mem0,
-    cache_func_table=uses_func_table,
+    cache_mem0_desc~,
+    cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
     abi_settings~,
@@ -1952,18 +1944,19 @@ pub fn emit_function_with_regalloc(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
-  let uses_func_table = func.uses_func_table()
+  let cache_mem0_desc = func.should_cache_mem0_desc()
+  let cache_func_table = func.should_cache_func_table()
   let vmctx = vmctx_index()
   let needs_vmctx = has_calls ||
     output_uses_preg(func, output, vmctx) ||
     uses_mem0
   let clobbered_gprs = clobbered
   let mem0_desc = mem0_desc_index()
-  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
   let func_table = func_table_index()
-  if uses_func_table && !clobbered_gprs.contains(func_table) {
+  if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
@@ -1973,8 +1966,8 @@ pub fn emit_function_with_regalloc(
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
-    cache_mem0_desc=uses_mem0,
-    cache_func_table=uses_func_table,
+    cache_mem0_desc~,
+    cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
     abi_settings~,
