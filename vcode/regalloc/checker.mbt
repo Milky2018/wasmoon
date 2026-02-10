@@ -108,9 +108,12 @@ pub fn verify_allocation(
   for r in isa.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
-  // For C calls, be conservative like Cranelift: clobber all V0-V31.
+  // For scalar FPR values crossing C calls, model low-64-bit preservation of
+  // V8-V15 (AAPCS64) the same way as same-ABI calls.
+  //
+  // Vector values are handled separately below and must never cross calls.
   let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  for r in isa.call_clobbered_fprs() {
+  for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_c.add(r.index) |> ignore
   }
   // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
@@ -217,7 +220,8 @@ pub fn verify_allocation(
             )
           }
           if preg.class is @abi.Float32 || preg.class is @abi.Float64 {
-            // If this value crosses any C call, treat all V regs as clobbered.
+            // If this value crosses any C call, use the scalar same-ABI
+            // caller-saved subset (V8-V15 low 64-bit remain preserved).
             if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
               abort(
                 "regalloc verifier: value live across C call assigned to caller-saved v\{preg.index}",
