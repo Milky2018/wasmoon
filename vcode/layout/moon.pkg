@@ -1,0 +1,10 @@
+import {
+  "Milky2018/wasmoon/vcode/regalloc",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/abi",
+  "moonbitlang/core/hashmap",
+}
+
+import {
+  "Milky2018/wasmoon/vcode/abi",
+} for "wbtest"
