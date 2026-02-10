@@ -11,21 +11,28 @@ moon build --target native --release cli/tools
 
 resolve_binary() {
   local binary_name="$1"
-  local explicit_path="$2"
+  shift
+  local explicit_paths=("$@")
 
-  if [ -n "$explicit_path" ] && [ -f "$explicit_path" ]; then
-    echo "$explicit_path"
-    return 0
-  fi
+  for explicit_path in "${explicit_paths[@]}"; do
+    if [ -n "$explicit_path" ] && [ -f "$explicit_path" ]; then
+      echo "$explicit_path"
+      return 0
+    fi
+  done
 
   local found
-  found="$(find target/native/release/build -type f \
-    \( -name "${binary_name}.exe" -o -name "${binary_name}" \) \
-    | head -n 1)"
-  if [ -n "$found" ] && [ -f "$found" ]; then
-    echo "$found"
-    return 0
-  fi
+  for build_root in "_build/native/release/build" "target/native/release/build"; do
+    if [ -d "$build_root" ]; then
+      found="$(find "$build_root" -type f \
+        \( -name "${binary_name}.exe" -o -name "${binary_name}" \) \
+        | head -n 1)"
+      if [ -n "$found" ] && [ -f "$found" ]; then
+        echo "$found"
+        return 0
+      fi
+    fi
+  done
 
   echo "Error: cannot find built binary for ${binary_name}" >&2
   return 1
@@ -42,8 +49,12 @@ canonical_path() {
   echo "${dir}/$(basename "$target")"
 }
 
-main_bin="$(resolve_binary "main" "target/native/release/build/cli/main/main.exe")"
-tools_bin="$(resolve_binary "tools" "target/native/release/build/cli/tools/tools.exe")"
+main_bin="$(resolve_binary "main" \
+  "_build/native/release/build/cli/main/main.exe" \
+  "target/native/release/build/cli/main/main.exe")"
+tools_bin="$(resolve_binary "tools" \
+  "_build/native/release/build/cli/tools/tools.exe" \
+  "target/native/release/build/cli/tools/tools.exe")"
 main_bin_abs="$(canonical_path "$main_bin")"
 tools_bin_abs="$(canonical_path "$tools_bin")"
 
