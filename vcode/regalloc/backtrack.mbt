@@ -629,6 +629,72 @@ fn BacktrackingAllocator::find_conflicts(
 }
 
 ///|
+/// Collect conflicting bundles for `bundle` on `preg` using ordered span
+/// traversal, but stop early when we already know this candidate cannot win.
+///
+/// This matches regalloc2's `ion/process.rs` behavior:
+/// - Reject immediately on pinned / non-evictable conflicts.
+/// - Track the maximum conflict spill weight as we discover conflicts.
+/// - If `max_allowable_cost` is provided and the max conflict weight grows
+///   beyond it, stop early (high-cost cutoff).
+fn BacktrackingAllocator::find_conflicts_with_cutoff(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  preg : @abi.PReg,
+  max_allowable_cost : Double?,
+) -> (Array[Int], Double, Bool) {
+  let conflicts : Array[Int] = []
+  let seen : Set[Int] = Set::new()
+  let mut max_conflict_weight = 0.0
+  let allocs = self.get_reg_allocs(preg.class)
+  guard allocs.get(preg.index) is Some(occupied) else {
+    return (conflicts, max_conflict_weight, false)
+  }
+  if occupied.is_empty() {
+    return (conflicts, max_conflict_weight, false)
+  }
+  let spans = self.bundle_sorted_spans(bundle)
+  let mut i = 0
+  let mut j = 0
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+      i = i + 1
+      continue
+    }
+    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+      j = j + 1
+      continue
+    }
+    let other_id = occupied[j].0
+    if !seen.contains(other_id) {
+      seen.add(other_id) |> ignore
+      let other = self.bundles.get(other_id)
+      // Non-evictable conflicts: reject this candidate immediately.
+      if other.is_pinned || other.spill_weight >= bundle.spill_weight {
+        return ([], 0.0, true)
+      }
+      conflicts.push(other_id)
+      if other.spill_weight > max_conflict_weight {
+        max_conflict_weight = other.spill_weight
+        if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
+          return ([], 0.0, true)
+        }
+      }
+    }
+    // Both lists are sorted and preg allocations are non-overlapping; advance
+    // whichever interval ends first.
+    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+      i = i + 1
+    } else {
+      j = j + 1
+    }
+  }
+  (conflicts, max_conflict_weight, false)
+}
+
+///|
 /// Try to evict lower-weight bundles to make room
 /// Returns the register if eviction was successful
 fn BacktrackingAllocator::try_evict(
@@ -660,7 +726,15 @@ fn BacktrackingAllocator::try_evict(
         self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
         continue
       }
-      let conflicts = self.find_conflicts(bundle, preg)
+      // regalloc2-style high-cost cutoff: when we already have a best candidate,
+      // stop scanning early once this candidate's max-conflict cost exceeds it.
+      let cutoff = best_conflict_cost
+      let (conflicts, max_conflict_weight, rejected) = self.find_conflicts_with_cutoff(
+        bundle, preg, cutoff,
+      )
+      if rejected {
+        continue
+      }
       if conflicts.is_empty() {
         continue // Should have been caught by try_allocate
       }
@@ -669,25 +743,6 @@ fn BacktrackingAllocator::try_evict(
       // Mirrors regalloc2's "lowest conflict cost" selection strategy:
       // - reject pinned / heavier-or-equal conflicts
       // - choose the candidate with minimum maximum conflict spill weight.
-      let mut can_evict = true
-      let mut max_conflict_weight = 0.0
-      for conflict_id in conflicts {
-        let conflict = self.bundles.get(conflict_id)
-        if conflict.is_pinned {
-          can_evict = false
-          break
-        }
-        if conflict.spill_weight >= bundle.spill_weight {
-          can_evict = false
-          break
-        }
-        if conflict.spill_weight > max_conflict_weight {
-          max_conflict_weight = conflict.spill_weight
-        }
-      }
-      if !can_evict {
-        continue
-      }
       let mut take_candidate = false
       match best_conflict_cost {
         None => take_candidate = true
