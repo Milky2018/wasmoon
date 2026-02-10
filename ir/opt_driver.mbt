@@ -294,8 +294,8 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Keep branch threading out of the O2 fixed-point loop for now.
-    // In large Wasm CFGs this can inflate live ranges and hurt backend quality.
+    // Keep branch threading out of the O2 fixed-point loop.
+    // We run it once after convergence to avoid repeated CFG churn.
     if changed {
       let after_insts = instruction_count(func)
       let after_blocks = func.blocks.length()
@@ -310,6 +310,11 @@ pub fn optimize(func : Function) -> OptResult {
         }
       }
     }
+  }
+  // Run jump-threading once after fixed-point (Cranelift-like late CFG cleanup).
+  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+  if jt_result.changed {
+    result.mark_changed()
   }
   result
 }

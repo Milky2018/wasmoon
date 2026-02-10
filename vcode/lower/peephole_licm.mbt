@@ -1358,16 +1358,25 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
   }
+  let enable_licm = true
+  let enable_immutable_load_cse = true
+  let enable_mem_base_cse = false
   // Bound expensive ad-hoc memory peepholes on very large functions.
   // Keep the correctness-preserving core passes enabled for all functions.
   let enable_mem_peepholes = inst_count <= 1200
 
   // Pass 0: loop-invariant code motion
-  licm_hoist_invariants(func)
+  if enable_licm {
+    licm_hoist_invariants(func)
+  }
   // Pass 0.5: block-local CSE for immutable loads
-  cse_immutable_loads(func)
+  if enable_immutable_load_cse {
+    cse_immutable_loads(func)
+  }
   // Pass 0.6: block-local CSE for LoadMemBase
-  cse_mem_base_loads(func)
+  if enable_mem_base_cse {
+    cse_mem_base_loads(func)
+  }
 
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
