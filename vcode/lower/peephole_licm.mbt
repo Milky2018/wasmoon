@@ -1358,13 +1358,8 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
   }
-  // Keep compile time bounded on very large functions.
-  // These ad-hoc VCode peepholes are outside Cranelift's core pipeline.
-  if inst_count > 2000 {
-    return
-  }
   // Bound expensive ad-hoc memory peepholes on very large functions.
-  // Cranelift's default pipeline does not rely on these global merges.
+  // Keep the correctness-preserving core passes enabled for all functions.
   let enable_mem_peepholes = inst_count <= 1200
 
   // Pass 0: loop-invariant code motion
