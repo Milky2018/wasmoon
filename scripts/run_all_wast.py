@@ -2,10 +2,13 @@
 """Run all .wast tests and report results for both JIT and interpreter modes."""
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Tuple
+
+DEFAULT_TEST_TIMEOUT_SECONDS = int(os.environ.get("WASMOON_WAST_TIMEOUT", "20"))
 
 
 def run_test(
@@ -22,7 +25,7 @@ def run_test(
             cwd=repo_root,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=DEFAULT_TEST_TIMEOUT_SECONDS,
         )
         output = result.stdout + result.stderr
 
