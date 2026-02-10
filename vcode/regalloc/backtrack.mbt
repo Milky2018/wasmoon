@@ -362,6 +362,44 @@ fn BacktrackingAllocator::insert_occupied_span_sorted(
 }
 
 ///|
+/// Find a near-optimal starting index for overlap scans in `occupied`.
+///
+/// This mirrors regalloc2's ordered BTree range scan from the bundle's first
+/// range start: we jump close to `point` via binary search, then advance to
+/// the first interval whose `end` can still overlap.
+fn BacktrackingAllocator::occupied_scan_start_idx(
+  self : BacktrackingAllocator,
+  occupied : Array[(Int, ProgPointRange)],
+  point : ProgPoint,
+) -> Int {
+  if occupied.is_empty() {
+    return 0
+  }
+  // Upper-bound by start <= point.
+  let mut lo = 0
+  let mut hi = occupied.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    let mid_start = occupied[mid].1.start
+    if mid_start.compare_with_order(point, self.block_order) <= 0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  // Candidate is predecessor (may still overlap) or the first greater start.
+  let mut idx = if lo == 0 { 0 } else { lo - 1 }
+  while idx < occupied.length() {
+    let occ_end = occupied[idx].1.end
+    if occ_end.compare_with_order(point, self.block_order) > 0 {
+      break
+    }
+    idx = idx + 1
+  }
+  idx
+}
+
+///|
 /// Fast conflict probe: return true as soon as one overlap is found.
 fn BacktrackingAllocator::has_conflict_on_preg(
   self : BacktrackingAllocator,
@@ -374,8 +412,11 @@ fn BacktrackingAllocator::has_conflict_on_preg(
     return false
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return false
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_scan_start_idx(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
@@ -602,8 +643,11 @@ fn BacktrackingAllocator::find_conflicts_with_cutoff(
     return (conflicts, max_conflict_weight, false)
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return (conflicts, max_conflict_weight, false)
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_scan_start_idx(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
@@ -665,8 +709,11 @@ fn BacktrackingAllocator::split_conflict_cost_with_cutoff(
     return (max_conflict_weight, first_conflict, false)
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return (max_conflict_weight, first_conflict, false)
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_scan_start_idx(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
