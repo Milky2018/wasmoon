@@ -1354,6 +1354,19 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
+  let mut inst_count = 0
+  for block in func.blocks {
+    inst_count = inst_count + block.insts.length()
+  }
+  // Keep compile time bounded on very large functions.
+  // These ad-hoc VCode peepholes are outside Cranelift's core pipeline.
+  if inst_count > 2000 {
+    return
+  }
+  // Bound expensive ad-hoc memory peepholes on very large functions.
+  // Cranelift's default pipeline does not rely on these global merges.
+  let enable_mem_peepholes = inst_count <= 1200
+
   // Pass 0: loop-invariant code motion
   licm_hoist_invariants(func)
   // Pass 0.5: block-local CSE for immutable loads
@@ -1391,18 +1404,20 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     optimize_inplace_updates(block) |> ignore
   }
 
-  // Pass 3: Memory operation merging (store8+store8 -> store16, etc.)
-  for block in func.blocks {
-    optimize_store_merging(block, func) |> ignore
-  }
+  if enable_mem_peepholes {
+    // Pass 3: Memory operation merging (store8+store8 -> store16, etc.)
+    for block in func.blocks {
+      optimize_store_merging(block, func) |> ignore
+    }
 
-  // Pass 4: Load-store pair merging (for memcpy-like patterns)
-  for block in func.blocks {
-    optimize_load_merging(block, func) |> ignore
-  }
+    // Pass 4: Load-store pair merging (for memcpy-like patterns)
+    for block in func.blocks {
+      optimize_load_merging(block, func) |> ignore
+    }
 
-  // Pass 5: Load-store forwarding (store then load -> store then mov)
-  for block in func.blocks {
-    optimize_load_store_forwarding(block) |> ignore
+    // Pass 5: Load-store forwarding (store then load -> store then mov)
+    for block in func.blocks {
+      optimize_load_store_forwarding(block) |> ignore
+    }
   }
 }
