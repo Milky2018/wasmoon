@@ -117,7 +117,7 @@ fn Parser::read_instruction(
     0x0C => Br(self.read_u32())
     0x0D => BrIf(self.read_u32())
     0x0E => {
-      let labels = self.read_vec(fn() { self.read_u32() })
+      let labels = self.read_vec(() => self.read_u32())
       let default = self.read_u32()
       BrTable(labels, default)
     }

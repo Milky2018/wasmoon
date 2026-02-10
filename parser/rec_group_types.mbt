@@ -26,7 +26,7 @@ fn Parser::read_field_type(self : Parser) -> @types.FieldType raise ParserError 
 fn Parser::read_struct_type(
   self : Parser,
 ) -> @types.StructType raise ParserError {
-  let fields = self.read_vec(fn() { self.read_field_type() })
+  let fields = self.read_vec(() => self.read_field_type())
   { fields, }
 }
 
@@ -43,8 +43,8 @@ fn Parser::read_composite_type(
   let tag = self.read_byte()
   match tag {
     0x60 => {
-      let params = self.read_vec(fn() { self.read_value_type() })
-      let results = self.read_vec(fn() { self.read_value_type() })
+      let params = self.read_vec(() => self.read_value_type())
+      let results = self.read_vec(() => self.read_value_type())
       @types.CompositeType::Func({ params, results })
     }
     0x5f => @types.CompositeType::Struct(self.read_struct_type())

@@ -203,12 +203,10 @@ pub fn Store::alloc_host_func(
 ) -> Int {
   let idx = self.funcs.length()
   // Back-compat: old-style host funcs don't take a Caller.
-  let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = fn(
+  let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
     _caller,
     args,
-  ) {
-    func(args)
-  }
+  ) => func(args)
   self.funcs.push(FuncInst::HostFunc(wrapped))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
