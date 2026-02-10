@@ -2,7 +2,11 @@
 
 ///|
 /// Maximum call stack depth to prevent stack overflow
-const MAX_CALL_STACK_DEPTH : Int = 1000
+// The interpreter executes WASM calls via host recursion (not an explicit
+// instruction-pointer loop). Keep this limit conservative so runaway recursion
+// traps with `CallStackExhausted` instead of crashing the process with a native
+// stack overflow on typical 8MiB thread stacks (e.g. macOS).
+const MAX_CALL_STACK_DEPTH : Int = 256
 
 ///|
 /// Label info for tracking block arity during branching

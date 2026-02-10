@@ -158,7 +158,7 @@ test "wasi: random_get produces different results" {
     if mem.read_byte(i) != first[i] {
       break true
     }
-  } else {
+  } nobreak {
     false
   }
   inspect(any_different, content="true")

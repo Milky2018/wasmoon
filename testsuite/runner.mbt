@@ -507,10 +507,10 @@ fn run_test_command_internal(
           return
         }
       }
-      if (try? {
+      if (try? ({
           let mod = @parser.parse_module(bytes)
           @validator.validate_module(mod)
-        })
+        }))
         is Err(_) {
         result.passed += 1
       } else {

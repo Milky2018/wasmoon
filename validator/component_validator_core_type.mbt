@@ -1032,7 +1032,7 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
     (TypeSig::Resource(a), TypeSig::Resource(b)) => a != b
     (TypeSig::Tuple(xs), TypeSig::Tuple(ys)) =>
       xs.length() == ys.length() &&
-      {
+      ({
         let mut mismatch = false
         for i in 0..<xs.length() {
           if xs[i] != ys[i] && type_sig_has_resource_mismatch(xs[i], ys[i]) {
@@ -1041,10 +1041,10 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
           }
         }
         mismatch
-      }
+      })
     (TypeSig::Record(xs), TypeSig::Record(ys)) =>
       xs.length() == ys.length() &&
-      {
+      ({
         let mut mismatch = false
         for i in 0..<xs.length() {
           if xs[i].ty != ys[i].ty &&
@@ -1054,10 +1054,10 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
           }
         }
         mismatch
-      }
+      })
     (TypeSig::Variant(xs), TypeSig::Variant(ys)) =>
       xs.length() == ys.length() &&
-      {
+      ({
         let mut mismatch = false
         for i in 0..<xs.length() {
           let a = xs[i].ty
@@ -1074,7 +1074,7 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
           }
         }
         mismatch
-      }
+      })
     (TypeSig::Option(a), TypeSig::Option(b)) =>
       a != b && type_sig_has_resource_mismatch(a, b)
     (TypeSig::List(a), TypeSig::List(b)) =>

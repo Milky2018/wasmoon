@@ -88,7 +88,6 @@ fn Memory::write_fixed(
   }
   let offset = self.addr_to_offset(addr)
   let _ = @jit_ffi.c_mem_desc_write(self.mem_desc_ptr, offset, data, len)
-
 }
 
 ///|
@@ -466,7 +465,6 @@ pub fn Memory::init_data(
   }
   let offset = self.addr_to_offset(dest)
   let _ = @jit_ffi.c_mem_desc_write_bytes(self.mem_desc_ptr, offset, data, len)
-
 }
 
 ///|
@@ -487,7 +485,6 @@ pub fn Memory::copy(
   let dest_off = self.addr_to_offset(dest)
   let src_off = self.addr_to_offset(src)
   let _ = @jit_ffi.c_mem_desc_memmove(self.mem_desc_ptr, dest_off, src_off, len)
-
 }
 
 ///|
@@ -510,7 +507,6 @@ pub fn Memory::fill(
     value.to_int(),
     len,
   )
-
 }
 
 ///|
