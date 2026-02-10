@@ -1,124 +1,68 @@
-// Block layout optimization with loop rotation
-// Reorders blocks to make back edges fall through, improving branch prediction
+// Block layout optimization.
+// Keeps branch threading, and uses Cranelift-style CFG reverse-postorder
+// ordering to prefer straight-line fallthrough on dominator-tree order.
 
 ///|
 /// Compute an optimized block ordering for the function
 /// Returns an array of block indices in the new order
 pub fn layout_blocks(func : @regalloc.VCodeFunction) -> Array[Int] {
-  let n = func.get_blocks().length()
+  let blocks = func.get_blocks()
+  let n = blocks.length()
   if n <= 1 {
-    // Nothing to optimize for 0 or 1 blocks
     let order : Array[Int] = []
     for i in 0..<n {
       order.push(i)
     }
     return order
   }
-  let cfg = VCodeCFG::build(func)
-  let loops = cfg.find_loops()
 
-  // Track which blocks have been placed
+  let cfg = VCodeCFG::build(func)
+  let rpo = cfg.reverse_postorder()
+  let block_idx_by_id : Map[Int, Int] = {}
+  for i, block in blocks {
+    block_idx_by_id.set(block.id, i)
+  }
+
+  // Place reachable blocks in CFG RPO order, then append unreachable blocks
+  // in stable original order.
   let placed : Array[Bool] = Array::make(n, false)
   let order : Array[Int] = []
+  for block_id in rpo {
+    if block_id < 0 || block_id >= n || placed[block_id] {
+      continue
+    }
 
-  // Sort loops by header block ID (process outer loops first, then inner)
-  // This ensures proper nesting in the layout
-  loops.sort_by(fn(a, b) { a.header - b.header })
-
-  // Process entry block first
-  if n > 0 {
-    place_block(0, placed, order)
-  }
-
-  // Process each loop with rotation
-  for lp in loops {
-    if !placed[lp.header] {
-      place_rotated_loop(lp, cfg, placed, order)
+    // Follow jump-only, single-predecessor chains to maximize fallthrough,
+    // similar in effect to Cranelift's late branch-threading in MachBuffer.
+    let mut current = block_id
+    while !placed[current] {
+      placed[current] = true
+      order.push(current)
+      match blocks[current].terminator {
+        Some(Jump(target, _args)) =>
+          match block_idx_by_id.get(target) {
+            Some(next_idx) =>
+              if next_idx == current ||
+                placed[next_idx] ||
+                cfg.preds[next_idx].length() != 1 {
+                break
+              } else {
+                current = next_idx
+                continue
+              }
+            None => break
+          }
+        _ => break
+      }
     }
   }
-
-  // Place any remaining unplaced blocks (in original order)
   for i in 0..<n {
     if !placed[i] {
-      place_block(i, placed, order)
+      placed[i] = true
+      order.push(i)
     }
   }
   order
-}
-
-///|
-/// Place a single block if not already placed
-fn place_block(
-  block_id : Int,
-  placed : Array[Bool],
-  order : Array[Int],
-) -> Unit {
-  if !placed[block_id] {
-    placed[block_id] = true
-    order.push(block_id)
-  }
-}
-
-///|
-/// Place a loop with rotation to make back edge fall through
-///
-/// Before rotation:
-///   header -> body -> ... -> latch -> header (back edge is a jump)
-///
-/// After rotation:
-///   body -> ... -> latch -> header -> exit (back edge & exit fall through!)
-///
-/// The key insight: if we place latch immediately before header,
-/// the back edge (latch -> header) becomes a fall through.
-/// Additionally, placing exit blocks after header makes exit branch fall through.
-fn place_rotated_loop(
-  lp : VCodeLoop,
-  cfg : VCodeCFG,
-  placed : Array[Bool],
-  order : Array[Int],
-) -> Unit {
-  // For simple loops: place body blocks, then latch, then header, then exits
-  // This makes both the back edge and exit branch fall through
-
-  // First, find blocks that are in the loop but not header or latch
-  let body_blocks : Array[Int] = []
-  for block_id in lp.body {
-    if block_id != lp.header && block_id != lp.latch {
-      body_blocks.push(block_id)
-    }
-  }
-
-  // Sort body blocks to maintain some locality
-  body_blocks.sort_by(fn(a, b) { a - b })
-
-  // Place order: body blocks -> latch -> header
-  // This way latch falls through to header
-  for block_id in body_blocks {
-    place_block(block_id, placed, order)
-  }
-
-  // Place latch (if different from header)
-  if lp.latch != lp.header {
-    place_block(lp.latch, placed, order)
-  }
-
-  // Place header last in the loop
-  place_block(lp.header, placed, order)
-
-  // Place exit blocks right after header so exit branch can fall through
-  // Exit blocks are successors of header that are not in the loop body
-  for succ in cfg.succs[lp.header] {
-    let mut is_in_loop = false
-    for block_id in lp.body {
-      if block_id == succ {
-        is_in_loop = true
-        break
-      }
-    }
-    if !is_in_loop {
-      place_block(succ, placed, order)
-    }
-  }
 }
 
 ///|
@@ -132,46 +76,103 @@ fn build_block_index_map(func : @regalloc.VCodeFunction) -> Map[Int, Int] {
 }
 
 ///|
+/// Substitute forwarded jump arguments through a block-parameter mapping.
+///
+/// Returns `None` when a forwarded virtual value is not a block parameter of
+/// the forwarded block.
+fn substitute_forwarded_args(
+  forwarded_args : Array[@abi.Reg],
+  params : Array[@abi.VReg],
+  incoming_args : Array[@abi.Reg],
+) -> Array[@abi.Reg]? {
+  let rewritten : Array[@abi.Reg] = []
+  for arg in forwarded_args {
+    match arg {
+      Physical(_) => rewritten.push(arg)
+      Virtual(vreg) => {
+        let mut mapped : @abi.Reg? = None
+        for i, param in params {
+          if param.id == vreg.id {
+            mapped = Some(incoming_args[i])
+            break
+          }
+        }
+        match mapped {
+          Some(value) => rewritten.push(value)
+          None => return None
+        }
+      }
+    }
+  }
+  Some(rewritten)
+}
+
+///|
 /// Resolve a jump target through chains of trivial jump-only blocks.
 ///
 /// A block is considered a trivial jump block iff:
 /// - it has no instructions;
-/// - it has no block parameters;
-/// - its terminator is `Jump(next, [])`.
+/// - its terminator is `Jump(next, next_args)`;
+/// - `next_args` can be expressed as a forwarding of this block's parameters.
 ///
 /// This mirrors Cranelift MachBuffer branch-threading for empty jump blocks.
-fn resolve_threaded_target(
+fn resolve_threaded_jump(
   start_target : Int,
+  start_args : Array[@abi.Reg],
   func : @regalloc.VCodeFunction,
   block_idx_by_id : Map[Int, Int],
-) -> Int {
+) -> (Int, Array[@abi.Reg], Bool) {
   let mut current = start_target
+  let mut current_args = start_args.copy()
   let visited : Map[Int, Bool] = {}
   let blocks = func.get_blocks()
+  let mut changed = false
   while true {
     if visited.get(current).unwrap_or(false) {
       // Cycle in trivial-jump chain; keep original target stable.
-      return start_target
+      return (start_target, start_args, false)
     }
     visited.set(current, true)
     match block_idx_by_id.get(current) {
       Some(block_idx) => {
         let block = blocks[block_idx]
-        if block.insts.length() == 0 && block.params.length() == 0 {
-          if block.terminator is Some(@instr.Jump(next, args)) &&
-            args.length() == 0 &&
-            next != current {
-            current = next
-            continue
+        if block.insts.length() == 0 {
+          if block.terminator is Some(@instr.Jump(next, next_args)) &&
+            next != current &&
+            block.params.length() == current_args.length() {
+            if substitute_forwarded_args(next_args, block.params, current_args)
+              is Some(mapped) {
+              current = next
+              current_args = mapped
+              changed = true
+              continue
+            }
           }
         }
-        return current
+        return (current, current_args, changed)
       }
-      None => return current
+      None => return (current, current_args, changed)
     }
   }
   // Unreachable, retained for exhaustiveness.
-  start_target
+  (start_target, start_args, false)
+}
+
+///|
+/// Resolve a branch target through trivial jump chains when no block arguments
+/// are available.
+fn resolve_threaded_target(
+  start_target : Int,
+  func : @regalloc.VCodeFunction,
+  block_idx_by_id : Map[Int, Int],
+) -> Int {
+  let (target, _, _) = resolve_threaded_jump(
+    start_target,
+    [],
+    func,
+    block_idx_by_id,
+  )
+  target
 }
 
 ///|
@@ -182,13 +183,12 @@ fn rewrite_terminator_targets(
   block_idx_by_id : Map[Int, Int],
 ) -> (@instr.VCodeTerminator, Bool) {
   match term {
-    @instr.Jump(target, args) =>
-      if args.length() == 0 {
-        let resolved = resolve_threaded_target(target, func, block_idx_by_id)
-        (@instr.Jump(resolved, args), resolved != target)
-      } else {
-        (term, false)
-      }
+    @instr.Jump(target, args) => {
+      let (resolved_target, resolved_args, changed) = resolve_threaded_jump(
+        target, args, func, block_idx_by_id,
+      )
+      (@instr.Jump(resolved_target, resolved_args), changed)
+    }
     @instr.Branch(cond, then_b, else_b) => {
       let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
       let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)

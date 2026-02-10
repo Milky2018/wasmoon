@@ -19,7 +19,7 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 /// Priority queue entry for allocation
 priv struct QueueEntry {
   bundle_id : Int
-  weight : Double
+  prio : Int
   hint_preg : @abi.PReg?
   // Insertion order for stable tie-breaking (monotonic).
   seq : Int
@@ -27,11 +27,11 @@ priv struct QueueEntry {
 
 ///|
 /// Ordering for the allocator queue (max-heap).
-/// Higher weight gets popped first; ties keep the historical stable behavior.
+/// Higher priority gets popped first; ties keep the historical stable behavior.
 fn queue_entry_higher(a : QueueEntry, b : QueueEntry) -> Bool {
-  if a.weight > b.weight {
+  if a.prio > b.prio {
     true
-  } else if a.weight < b.weight {
+  } else if a.prio < b.prio {
     false
   } else if a.seq != b.seq {
     a.seq < b.seq
@@ -76,7 +76,7 @@ struct BacktrackingAllocator {
   bundle_span_cache : Map[Int, Array[ProgPointRange]]
 
   // Priority queue of bundles to process
-  mut queue : Array[QueueEntry] // max-heap by QueueEntry.weight
+  mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
   mut queue_next_seq : Int
 
   // Cranelift-style spillset hint: remember last successful preg for an
@@ -92,6 +92,8 @@ struct BacktrackingAllocator {
 
   // Block order for comparison (O(1) lookup)
   block_order : FixedArray[Int]
+  // Approximate loop-depth per block (pre-computed once).
+  loop_depths : Array[Int]
 
   // Reference to function for constraint lookups
   func : VCodeFunction
@@ -102,12 +104,12 @@ struct BacktrackingAllocator {
 fn BacktrackingAllocator::queue_push(
   self : BacktrackingAllocator,
   bundle_id : Int,
-  weight : Double,
+  prio : Int,
   hint_preg : @abi.PReg?,
 ) -> Unit {
   let entry : QueueEntry = {
     bundle_id,
-    weight,
+    prio,
     hint_preg,
     seq: self.queue_next_seq,
   }
@@ -183,6 +185,7 @@ pub fn BacktrackingAllocator::new(
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
 ) -> BacktrackingAllocator {
+  let loop_depths = compute_loop_depths(func)
   {
     ranges,
     bundles,
@@ -198,7 +201,33 @@ pub fn BacktrackingAllocator::new(
     callee_saved_int,
     callee_saved_float,
     block_order: ranges.block_order,
+    loop_depths,
     func,
+  }
+}
+
+///|
+/// Queue priority follows regalloc2 Ion's bundle priority:
+/// total covered instruction length of all ranges in this bundle.
+fn BacktrackingAllocator::bundle_queue_prio(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> Int {
+  bundle.total_length(self.ranges)
+}
+
+///|
+/// Spill weight follows regalloc2 Ion: sum(use weights) divided by bundle prio.
+fn BacktrackingAllocator::recompute_bundle_spill_weight(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> Double {
+  let total = compute_spill_weight(bundle, self.ranges, self.loop_depths)
+  let prio = self.bundle_queue_prio(bundle).to_double()
+  if prio <= 0.0 {
+    total
+  } else {
+    total / prio
   }
 }
 
@@ -261,51 +290,15 @@ fn BacktrackingAllocator::constraint_hint_preg(
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
   self.queue_next_seq = 0
-  // Pre-compute loop depths once (O(blocks + edges))
-  let loop_depths = compute_loop_depths(self.func)
+  // Recompute spill weights, enqueue by bundle priority.
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
-    bundle.spill_weight = compute_spill_weight(bundle, self.ranges, loop_depths)
-    self.queue.push({
-      bundle_id: i,
-      weight: bundle.spill_weight,
-      hint_preg: self.constraint_hint_preg(bundle),
-      seq: self.queue_next_seq,
-    })
-    self.queue_next_seq = self.queue_next_seq + 1
-  }
-  // Heapify (max-heap).
-  let n = self.queue.length()
-  if n <= 1 {
-    return
-  }
-  let mut i = n / 2 - 1
-  while i >= 0 {
-    // Sift down from i.
-    let mut p = i
-    while true {
-      let left = p * 2 + 1
-      if left >= n {
-        break
-      }
-      let right = left + 1
-      let mut best = left
-      if right < n && queue_entry_higher(self.queue[right], self.queue[left]) {
-        best = right
-      }
-      if queue_entry_higher(self.queue[best], self.queue[p]) {
-        let tmp = self.queue[p]
-        self.queue[p] = self.queue[best]
-        self.queue[best] = tmp
-        p = best
-      } else {
-        break
-      }
-    }
-    if i == 0 {
-      break
-    }
-    i = i - 1
+    bundle.spill_weight = self.recompute_bundle_spill_weight(bundle)
+    self.queue_push(
+      i,
+      self.bundle_queue_prio(bundle),
+      self.constraint_hint_preg(bundle),
+    )
   }
 }
 
@@ -775,9 +768,7 @@ fn BacktrackingAllocator::try_evict(
       for conflict_id in best_conflicts {
         let conflict = self.bundles.get(conflict_id)
         self.remove_allocation(conflict)
-        let new_weight = conflict.spill_weight * 0.9
-        conflict.spill_weight = new_weight
-        self.queue_push(conflict_id, new_weight, None)
+        self.queue_push(conflict_id, self.bundle_queue_prio(conflict), None)
       }
       return Some(preg)
     }
@@ -958,40 +949,49 @@ fn BacktrackingAllocator::split_bundle(
         return
       }
 
-      // Create new bundles with reduced weight
-      let new_weight = bundle.spill_weight * 0.9
-
       // Before bundle
       let before_bundle = Bundle::new(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
-      before_bundle.spill_weight = new_weight
       before_bundle.spill_bundle_id = spill_bundle.id
       before_bundle.spillset_id = bundle.spillset_id
       for range_id in before_ranges {
         before_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = before_bundle.id
       }
+      before_bundle.spill_weight = self.recompute_bundle_spill_weight(
+        before_bundle,
+      )
       self.bundles.add_bundle(before_bundle)
       spill_bundle.add_bundle(before_bundle.id)
-      self.queue_push(before_bundle.id, new_weight, Some(split_hint_reg))
+      self.queue_push(
+        before_bundle.id,
+        self.bundle_queue_prio(before_bundle),
+        Some(split_hint_reg),
+      )
 
       // After bundle
       let after_bundle = Bundle::new(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
-      after_bundle.spill_weight = new_weight
       after_bundle.spill_bundle_id = spill_bundle.id
       after_bundle.spillset_id = bundle.spillset_id
       for range_id in after_ranges {
         after_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = after_bundle.id
       }
+      after_bundle.spill_weight = self.recompute_bundle_spill_weight(
+        after_bundle,
+      )
       self.bundles.add_bundle(after_bundle)
       spill_bundle.add_bundle(after_bundle.id)
-      self.queue_push(after_bundle.id, new_weight, Some(split_hint_reg))
+      self.queue_push(
+        after_bundle.id,
+        self.bundle_queue_prio(after_bundle),
+        Some(split_hint_reg),
+      )
 
       // Mark original bundle as processed (it's been split)
       bundle.allocation = Spill(spill_bundle.slot)

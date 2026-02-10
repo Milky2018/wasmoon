@@ -27,7 +27,7 @@ test "layout: no loops - preserves order" {
 }
 
 ///|
-test "layout: simple loop - rotates" {
+test "layout: simple loop - cfg rpo order" {
   // Create a simple while loop:
   // block0 (entry): init, jump to block1
   // block1 (header): condition check, branch to block2 or block3
@@ -60,18 +60,9 @@ test "layout: simple loop - rotates" {
   // Compute layout
   let order = layout_blocks(func)
 
-  // After rotation, we want: entry -> body -> header -> exit
-  // block0 (entry) placed first
-  // block2 (body) placed before header
-  // block1 (header) placed after body (so back edge falls through)
-  // block3 (exit) placed last
-
-  // Expected order: [0, 2, 1, 3]
-  // block0 = entry (placed first)
-  // block2 = body (loop body)
-  // block1 = header (after latch/body for fall-through)
-  // block3 = exit (after loop)
-  inspect(order, content="[0, 2, 1, 3]")
+  // Cranelift-style blockorder starts from CFG RPO.
+  // With successor order [exit, body], we get [entry, header, body, exit].
+  inspect(order, content="[0, 1, 2, 3]")
 }
 
 ///|
@@ -214,13 +205,8 @@ test "layout: loop with exit chain" {
   // Compute layout
   let order = layout_blocks(func)
 
-  // Expected order: [0, 3, 2, 4, 1]
-  // block0 = entry (placed first)
-  // block3 = body (loop body, latch)
-  // block2 = header (after latch for back edge fall-through)
-  // block4 = exit (after header for exit fall-through)
-  // block1 = return (remaining)
-  inspect(order, content="[0, 3, 2, 4, 1]")
+  // CFG RPO order for this graph is [0, 2, 3, 4, 1].
+  inspect(order, content="[0, 2, 3, 4, 1]")
 }
 
 ///|
@@ -241,7 +227,7 @@ test "optimize_layout: full pipeline" {
   block3.set_terminator(@instr.Return([@abi.Virtual(counter)]))
   let optimized = optimize_layout(func)
 
-  // After optimization, blocks should be reordered for loop rotation
+  // After optimization, blocks should be in CFG-RPO-based order plus threading.
   let blocks = optimized.get_blocks()
   inspect(blocks.length(), content="4")
 
@@ -318,6 +304,42 @@ test "optimize_layout: threads jump chains transitively" {
       if block.terminator is Some(@instr.Jump(target, args)) &&
         target == 3 &&
         args.length() == 0 {
+        retargeted = true
+      }
+      break
+    }
+  }
+  inspect(retargeted, content="true")
+}
+
+///|
+test "optimize_layout: threads jump chains with block args" {
+  // block0 -> block1(param p) -> block2(param q)
+  // block1 is empty and forwards p directly to q, so block0 should jump to
+  // block2 with the original argument.
+  let func = @regalloc.VCodeFunction::new("test_thread_chain_with_args")
+  let incoming = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let forwarded = func.new_vreg(@abi.Int)
+  let result = func.new_vreg(@abi.Int)
+  let block0 = func.new_block()
+  let block1 = func.new_block()
+  let block2 = func.new_block()
+  block1.params.push(forwarded)
+  block2.params.push(result)
+  block0.set_terminator(@instr.Jump(block1.id, [@abi.Virtual(incoming)]))
+  block1.set_terminator(@instr.Jump(block2.id, [@abi.Virtual(forwarded)]))
+  block2.set_terminator(@instr.Return([@abi.Virtual(result)]))
+
+  let optimized = optimize_layout(func)
+  let mut retargeted = false
+  for block in optimized.get_blocks() {
+    if block.id == block0.id {
+      if block.terminator is Some(@instr.Jump(target, args)) &&
+        target == block2.id &&
+        args.length() == 1 &&
+        args[0] is @abi.Virtual(v) &&
+        v.id == incoming.id {
         retargeted = true
       }
       break
