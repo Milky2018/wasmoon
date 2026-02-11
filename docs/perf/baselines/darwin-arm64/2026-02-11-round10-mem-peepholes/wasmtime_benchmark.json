@@ -1,0 +1,46 @@
+{
+  "median_wall_sec": 0.28341487498255447,
+  "median_stdout_value": 1.0,
+  "runs": [
+    {
+      "iter": 1,
+      "exit_code": 0,
+      "wall_sec": 0.2868315419764258,
+      "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+      "stderr": "",
+      "stdout_value": 1.0
+    },
+    {
+      "iter": 2,
+      "exit_code": 0,
+      "wall_sec": 0.2815465409657918,
+      "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+      "stderr": "",
+      "stdout_value": 1.0
+    },
+    {
+      "iter": 3,
+      "exit_code": 0,
+      "wall_sec": 0.2797409999766387,
+      "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+      "stderr": "",
+      "stdout_value": 1.0
+    },
+    {
+      "iter": 4,
+      "exit_code": 0,
+      "wall_sec": 0.3089317500125617,
+      "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+      "stderr": "",
+      "stdout_value": 1.0
+    },
+    {
+      "iter": 5,
+      "exit_code": 0,
+      "wall_sec": 0.28341487498255447,
+      "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+      "stderr": "",
+      "stdout_value": 1.0
+    }
+  ]
+}
