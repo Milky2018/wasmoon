@@ -1877,34 +1877,7 @@ pub fn build_bundles_with_merging(
     true
   }
 
-  // 1. Merge across Move instructions
-  for block in func.blocks {
-    for inst in block.insts {
-      if inst.opcode is @instr.Move &&
-        inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        // Get source and destination vregs
-        let src_vreg_id = match inst.uses[0] {
-          @abi.Virtual(vreg) => Some(vreg.id)
-          _ => None
-        }
-        let dst_vreg_id = match inst.defs[0].reg {
-          @abi.Virtual(vreg) => Some(vreg.id)
-          _ => None
-        }
-        if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) {
-          // Find range indices
-          if ranges.vreg_to_range.get(src_id) is Some(src_idx) {
-            if ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-              try_merge(uf, src_idx, dst_idx, ranges) |> ignore
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 2. Merge across block arguments (SSA phi-like connections)
+  // Merge across block arguments (SSA phi-like connections).
   // For each Jump(target, args), the i-th arg corresponds to the i-th block param.
   // Coalescing these bundles avoids edge moves and preserves SSA semantics.
   let block_idx : Map[Int, Int] = {}
