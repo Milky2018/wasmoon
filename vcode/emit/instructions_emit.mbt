@@ -173,6 +173,28 @@ pub fn MachineCode::emit_add_sxtw(
 }
 
 ///|
+pub fn MachineCode::emit_sub_uxtw(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  SubExtUxtw(rd, rn, rm, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_sub_sxtw(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  SubExtSxtw(rd, rn, rm, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_sub_shifted(
   self : MachineCode,
   rd : Int,

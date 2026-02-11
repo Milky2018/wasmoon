@@ -251,6 +251,10 @@ test "emit add.extend disasm" {
   mc.emit_add_uxtw(8, 10, 8, 2)
   mc.emit_add_sxtw(8, 10, 8, 0)
   mc.emit_add_sxtw(8, 10, 8, 2)
+  mc.emit_sub_uxtw(8, 10, 8, 0)
+  mc.emit_sub_uxtw(8, 10, 8, 2)
+  mc.emit_sub_sxtw(8, 10, 8, 0)
+  mc.emit_sub_sxtw(8, 10, 8, 2)
   inspect(
     mc.dump_disasm(),
     content=(
@@ -258,6 +262,10 @@ test "emit add.extend disasm" {
       #|  0004: 4849288b  add x8, x10, w8, uxtw #2
       #|  0008: 48c1288b  add x8, x10, w8, sxtw
       #|  000c: 48c9288b  add x8, x10, w8, sxtw #2
+      #|  0010: 484128cb  sub x8, x10, w8, uxtw
+      #|  0014: 484928cb  sub x8, x10, w8, uxtw #2
+      #|  0018: 48c128cb  sub x8, x10, w8, sxtw
+      #|  001c: 48c928cb  sub x8, x10, w8, sxtw #2
       #|
     ),
   )

@@ -272,6 +272,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
           }
+          if is_i64 &&
+            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(rhs.id)
+          }
         }
         @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
           if !is_shift_fusable_int {

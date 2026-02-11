@@ -324,6 +324,7 @@ pub(all) enum VCodeOpcode {
   // These combine an arithmetic/logical op with a shift in one instruction
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
   AddExtend(IndexExtend, Int) // ADD Xd, Xn, Wm, {uxtw|sxtw} #amount
+  SubExtend(IndexExtend, Int) // SUB Xd, Xn, Wm, {uxtw|sxtw} #amount
   SubShifted(ShiftType, Int) // SUB Xd, Xn, Xm, shift #amount
   AndShifted(ShiftType, Int) // AND Xd, Xn, Xm, shift #amount
   OrShifted(ShiftType, Int) // ORR Xd, Xn, Xm, shift #amount
@@ -1000,6 +1001,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
     AddExtend(ext, amount) => "add.\{ext} #\{amount}"
+    SubExtend(ext, amount) => "sub.\{ext} #\{amount}"
     SubShifted(shift, amount) => "sub.\{shift} #\{amount}"
     AndShifted(shift, amount) => "and.\{shift} #\{amount}"
     OrShifted(shift, amount) => "or.\{shift} #\{amount}"

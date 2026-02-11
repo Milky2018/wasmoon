@@ -317,6 +317,7 @@ pub(all) enum VCodeOpcode {
   FpuMinnm(Bool)
   AddShifted(ShiftType, Int)
   AddExtend(IndexExtend, Int)
+  SubExtend(IndexExtend, Int)
   SubShifted(ShiftType, Int)
   AndShifted(ShiftType, Int)
   OrShifted(ShiftType, Int)

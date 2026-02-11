@@ -70,6 +70,40 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    SubExtUxtw(rd, rn, rm, shift) => {
+      // SUB (extended register): sf=1 (64-bit), op=1 (sub), S=0, option=UXTW (010)
+      let imm3 = shift & 7
+      let option_uxtw = 2 // 010 = UXTW
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_uxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    SubExtSxtw(rd, rn, rm, shift) => {
+      // SUB (extended register): sf=1 (64-bit), op=1 (sub), S=0, option=SXTW (110)
+      let imm3 = shift & 7
+      let option_sxtw = 6 // 110 = SXTW
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_sxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     AddImm(rd, rn, imm12) => {
       let imm = imm12 & 0xFFF
       let inst = (0b1 << 31) |

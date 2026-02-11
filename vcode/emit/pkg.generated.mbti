@@ -315,6 +315,8 @@ pub fn MachineCode::emit_sub_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_sub_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_sub_sxtw(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_sub_uxtw(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sxtb_w(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_sxtb_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_sxth_w(Self, Int, Int) -> Unit

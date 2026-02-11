@@ -838,6 +838,7 @@ fn lower_smulh(
 /// - sub(x, mul(y, z)) -> MSUB: x - y * z
 /// - sub(0, mul(x, y)) -> MNEG: -(x * y)
 /// - sub(x, shl(y, n)) -> SubShifted: x - (y << n)
+/// - sub(x, uextend/sextend(i32)) -> SubExtend (i64 only)
 fn lower_isub(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -888,6 +889,20 @@ fn lower_isub(
         SubShifted32(Lsl, amount)
       },
     )
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: sub(x, uextend/sextend(i32)) -> SubExtend (i64 only).
+  if is_64 &&
+    match_extend_i32_to_i64(ctx, rhs_val) is Some((inner, ext)) &&
+    !(ext is @instr.IndexExtend::None) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(inner, block)
+    let vcode_inst = @instr.VCodeInst::new(SubExtend(ext, 0))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
