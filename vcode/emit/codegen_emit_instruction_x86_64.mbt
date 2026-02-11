@@ -694,6 +694,35 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr32(rd, tmp)
       }
     }
+    @instr.AddExtend(ext, amount) => {
+      // AArch64-specific ADD with extended W operand:
+      //   rd = rn + extend_32_to_64(rm) << amount
+      // amd64 fallback materializes the extension explicitly.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      if tmp == rd || tmp == rn {
+        abort("x86_64 add_extend: no scratch register available")
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
+      }
+      match ext {
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
+        @instr.IndexExtend::None =>
+          abort("x86_64 add_extend expects Uxtw or Sxtw, got None")
+      }
+      let sh = amount & 63
+      if sh != 0 {
+        self.x86_emit_shl_r_imm8(tmp, sh)
+      }
+      self.x86_emit_add_rr(rd, tmp)
+    }
     @instr.AddShifted(shift, amount) => {
       // AArch64 fused "op + shifted operand" form.
       //

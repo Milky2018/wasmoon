@@ -678,6 +678,56 @@ test "lower i32 add(x, shl(y, n)) to add_shifted32" {
 }
 
 ///|
+test "lower i64 add(x, uextend(y)) to add.uxtw" {
+  let builder = @ir.IRBuilder::new("add_uxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.uextend(@ir.Type::I64, y)
+  let result = builder.iadd(x, y64)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_uxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add.uxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i64 add(sextend(y), x) to add.sxtw" {
+  let builder = @ir.IRBuilder::new("add_sxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.sextend(@ir.Type::I64, y)
+  let result = builder.iadd(y64, x)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_sxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add.sxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")

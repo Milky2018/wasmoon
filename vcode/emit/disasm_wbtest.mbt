@@ -245,15 +245,19 @@ test "all emit functions disasm" {
 }
 
 ///|
-test "emit add.uxtw disasm" {
+test "emit add.extend disasm" {
   let mc = MachineCode::new()
   mc.emit_add_uxtw(8, 10, 8, 0)
   mc.emit_add_uxtw(8, 10, 8, 2)
+  mc.emit_add_sxtw(8, 10, 8, 0)
+  mc.emit_add_sxtw(8, 10, 8, 2)
   inspect(
     mc.dump_disasm(),
     content=(
       #|  0000: 4841288b  add x8, x10, w8, uxtw
       #|  0004: 4849288b  add x8, x10, w8, uxtw #2
+      #|  0008: 48c1288b  add x8, x10, w8, sxtw
+      #|  000c: 48c9288b  add x8, x10, w8, sxtw #2
       #|
     ),
   )

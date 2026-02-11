@@ -625,6 +625,7 @@ fn lower_bitcount(
 /// - add(mul(x, y), z) -> MADD: z + x * y (commutative)
 /// - add(x, shl(y, n)) -> AddShifted: x + (y << n)
 /// - add(shl(x, n), y) -> AddShifted: y + (x << n) (commutative)
+/// - add(x, uextend/sextend(i32)) -> AddExtend (i64 only)
 fn lower_iadd(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -693,6 +694,34 @@ fn lower_iadd(
         AddShifted32(Lsl, amount)
       },
     )
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: add(x, uextend/sextend(i32)) -> AddExtend (i64 only).
+  if is_64 &&
+    match_extend_i32_to_i64(ctx, rhs_val) is Some((inner, ext)) &&
+    !(ext is @instr.IndexExtend::None) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(inner, block)
+    let vcode_inst = @instr.VCodeInst::new(AddExtend(ext, 0))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: add(uextend/sextend(i32), x) -> AddExtend (commutative, i64 only).
+  if is_64 &&
+    match_extend_i32_to_i64(ctx, lhs_val) is Some((inner, ext)) &&
+    !(ext is @instr.IndexExtend::None) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(inner, block)
+    let vcode_inst = @instr.VCodeInst::new(AddExtend(ext, 0))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))

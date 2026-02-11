@@ -980,6 +980,17 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_add_shifted(rd, rn, rm, shift, amount)
     }
+    AddExtend(ext, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match ext {
+        @instr.IndexExtend::Uxtw => self.emit_add_uxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::Sxtw => self.emit_add_sxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::None =>
+          abort("AddExtend expects Uxtw or Sxtw, got None")
+      }
+    }
     AddShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

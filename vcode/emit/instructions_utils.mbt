@@ -25,6 +25,7 @@ enum Instruction {
   AddShifted32(Int, Int, Int, @instr.ShiftType, Int)
   // Add with extended register operand: ADD Xd, Xn, Wm, UXTW #shift
   AddExtUxtw(Int, Int, Int, Int) // rd, rn, rm, shift (0-4)
+  AddExtSxtw(Int, Int, Int, Int) // rd, rn, rm, shift (0-4)
   AddImm(Int, Int, Int)
   AddImmShifted12(Int, Int, Int) // ADD with immediate shifted left by 12
   SubReg(Int, Int, Int)
@@ -558,6 +559,10 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     AddExtUxtw(rd, rn, rm, shift) => {
       let suffix = if shift == 0 { "uxtw" } else { "uxtw #\{shift}" }
+      "add x\{rd}, x\{rn}, w\{rm}, \{suffix}"
+    }
+    AddExtSxtw(rd, rn, rm, shift) => {
+      let suffix = if shift == 0 { "sxtw" } else { "sxtw #\{shift}" }
       "add x\{rd}, x\{rn}, w\{rm}, \{suffix}"
     }
     AddImm(rd, rn, imm12) => {

@@ -239,6 +239,20 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             skipped.add(lhs.id)
             continue
           }
+          if is_i64 &&
+            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if is_i64 &&
+            ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(lhs.id)
+            continue
+          }
         }
         @ir.Opcode::Isub => {
           if !is_shift_fusable_int {

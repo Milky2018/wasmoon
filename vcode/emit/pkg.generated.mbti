@@ -131,6 +131,7 @@ pub fn MachineCode::emit_add_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_add_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_add_sxtw(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_uxtw(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_addv_b(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_adr(Self, Int, Int) -> Unit

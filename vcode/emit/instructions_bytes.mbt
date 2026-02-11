@@ -53,6 +53,23 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    AddExtSxtw(rd, rn, rm, shift) => {
+      // ADD (extended register): sf=1 (64-bit), op=0 (add), S=0, option=SXTW (110)
+      let imm3 = shift & 7
+      let option_sxtw = 6 // 110 = SXTW
+      let inst = (0b1 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_sxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     AddImm(rd, rn, imm12) => {
       let imm = imm12 & 0xFFF
       let inst = (0b1 << 31) |

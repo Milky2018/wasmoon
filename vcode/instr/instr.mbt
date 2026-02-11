@@ -323,6 +323,7 @@ pub(all) enum VCodeOpcode {
   // AArch64-specific: shifted operand instructions
   // These combine an arithmetic/logical op with a shift in one instruction
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
+  AddExtend(IndexExtend, Int) // ADD Xd, Xn, Wm, {uxtw|sxtw} #amount
   SubShifted(ShiftType, Int) // SUB Xd, Xn, Xm, shift #amount
   AndShifted(ShiftType, Int) // AND Xd, Xn, Xm, shift #amount
   OrShifted(ShiftType, Int) // ORR Xd, Xn, Xm, shift #amount
@@ -998,6 +999,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FpuMinnm(is_f32) => if is_f32 { "fminnm.s" } else { "fminnm.d" }
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
+    AddExtend(ext, amount) => "add.\{ext} #\{amount}"
     SubShifted(shift, amount) => "sub.\{shift} #\{amount}"
     AndShifted(shift, amount) => "and.\{shift} #\{amount}"
     OrShifted(shift, amount) => "or.\{shift} #\{amount}"
