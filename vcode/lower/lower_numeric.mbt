@@ -637,12 +637,13 @@ fn lower_iadd(
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
 
-  // Pattern: add(x, mul(y, z)) -> MADD (i64 only; 32-bit would pollute upper bits)
-  if is_64 && match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: add(x, mul(y, z)) -> MADD / MADD32.
+  // Match Cranelift's iadd_imul_{right,left} for fits_in_64 (i64 + i32).
+  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(Madd)
+    let vcode_inst = @instr.VCodeInst::new(if is_64 { Madd } else { Madd32 })
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(acc)) // accumulator
     vcode_inst.add_use(Virtual(src1)) // multiplicand
@@ -651,12 +652,12 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(mul(x, y), z) -> MADD (commutative, i64 only)
-  if is_64 && match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: add(mul(x, y), z) -> MADD / MADD32 (commutative).
+  if match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(rhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(Madd)
+    let vcode_inst = @instr.VCodeInst::new(if is_64 { Madd } else { Madd32 })
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(acc))
     vcode_inst.add_use(Virtual(src1))
@@ -870,13 +871,13 @@ fn lower_isub(
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
 
-  // Pattern: sub(0, mul(x, y)) -> MNEG (i64 only; 32-bit would pollute upper bits)
-  if is_64 &&
-    is_const_zero_value(ctx, lhs_val) &&
+  // Pattern: sub(0, mul(x, y)) -> MNEG / MNEG32.
+  // Match Cranelift's ineg(imul()) lowering for fits_in_64.
+  if is_const_zero_value(ctx, lhs_val) &&
     match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(Mneg)
+    let vcode_inst = @instr.VCodeInst::new(if is_64 { Mneg } else { Mneg32 })
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(src1))
     vcode_inst.add_use(Virtual(src2))
@@ -884,12 +885,12 @@ fn lower_isub(
     return
   }
 
-  // Pattern: sub(x, mul(y, z)) -> MSUB (i64 only; 32-bit would pollute upper bits)
-  if is_64 && match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  // Pattern: sub(x, mul(y, z)) -> MSUB / MSUB32.
+  if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(Msub)
+    let vcode_inst = @instr.VCodeInst::new(if is_64 { Msub } else { Msub32 })
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(acc))
     vcode_inst.add_use(Virtual(src1))

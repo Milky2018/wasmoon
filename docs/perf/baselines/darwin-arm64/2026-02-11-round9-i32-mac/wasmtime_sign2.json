@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.1473934579989873,
+    "stdout": "690270000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.14533616602420807,
+    "stdout": "685680000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.1462885410292074,
+    "stdout": "689470000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.14942366699688137,
+    "stdout": "703605000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.14495266700396314,
+    "stdout": "683375000",
+    "stderr": ""
+  }
+]

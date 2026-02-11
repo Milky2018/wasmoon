@@ -258,12 +258,15 @@ pub fn MachineCode::emit_lsr_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsr_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_lsr_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_madd(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_madd32(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mneg(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_mneg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mov_reg(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_mov_reg32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_movk(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_movz(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_msub(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_msub32(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mul(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mul32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_mvn(Self, Int, Int) -> Unit

@@ -323,6 +323,38 @@ pub fn MachineCode::emit_mneg(
 }
 
 ///|
+pub fn MachineCode::emit_madd32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  ra : Int,
+) -> Unit {
+  Madd32(rd, rn, rm, ra).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_msub32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  ra : Int,
+) -> Unit {
+  Msub32(rd, rn, rm, ra).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_mneg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  Mneg32(rd, rn, rm).emit(self)
+}
+
+///|
 /// UMULH Xd, Xn, Xm - Unsigned multiply high (64-bit)
 pub fn MachineCode::emit_umulh(
   self : MachineCode,

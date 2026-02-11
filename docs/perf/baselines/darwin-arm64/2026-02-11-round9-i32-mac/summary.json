@@ -1,0 +1,494 @@
+{
+  "wasmoon_aead": {
+    "median_wall_sec": 5.370026084012352,
+    "median_stdout_value": 3410520000.0,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.272655415988993,
+        "stdout": "3414640000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.370026084012352,
+        "stdout": "3375585000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.4977857079938985,
+        "stdout": "3410520000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.327147625037469,
+        "stdout": "3375720000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.5043466669740155,
+        "stdout": "3456290000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_aead": {
+    "median_wall_sec": 0.744306750013493,
+    "median_stdout_value": 3674065000.0,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7877811669604853,
+        "stdout": "3688900000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7683709590346552,
+        "stdout": "3792735000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7384445419884287,
+        "stdout": "3645515000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7348075830377638,
+        "stdout": "3627850000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.744306750013493,
+        "stdout": "3674065000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmoon_benchmark": {
+    "median_wall_sec": 0.24952404195209965,
+    "median_stdout_value": null,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.24903774994891137,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.24970729200867936,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2493245419464074,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.24952404195209965,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.27176737500121817,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_benchmark": {
+    "median_wall_sec": 0.2805221669841558,
+    "median_stdout_value": null,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2805221669841558,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.27710408298298717,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2811665000044741,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2839797920314595,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2783059169887565,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmoon_keygen": {
+    "median_wall_sec": 3.926096500013955,
+    "median_stdout_value": 7415000.0,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 3.914353249943815,
+        "stdout": "7375000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 3.9978611249825917,
+        "stdout": "8495000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 3.926096500013955,
+        "stdout": "7270000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 3.9191594590083696,
+        "stdout": "7425000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 3.9503782910178415,
+        "stdout": "7415000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_keygen": {
+    "median_wall_sec": 0.010441915947012603,
+    "median_stdout_value": 8425000.0,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.01180100004421547,
+        "stdout": "9055000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.010441915947012603,
+        "stdout": "7850000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.01102212502155453,
+        "stdout": "8720000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.009911875007674098,
+        "stdout": "8235000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/keygen.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.010256458015646785,
+        "stdout": "8425000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmoon_sign2": {
+    "median_wall_sec": 7.462476874992717,
+    "median_stdout_value": 686760000.0,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 7.48588600003859,
+        "stdout": "675275000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 7.59274120797636,
+        "stdout": "685410000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 7.462476874992717,
+        "stdout": "692440000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 7.301447541976813,
+        "stdout": "690455000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 7.299969624960795,
+        "stdout": "686760000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_sign2": {
+    "median_wall_sec": 0.1462885410292074,
+    "median_stdout_value": 689470000.0,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.1473934579989873,
+        "stdout": "690270000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.14533616602420807,
+        "stdout": "685680000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.1462885410292074,
+        "stdout": "689470000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.14942366699688137,
+        "stdout": "703605000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/sign2.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.14495266700396314,
+        "stdout": "683375000",
+        "stderr": ""
+      }
+    ]
+  },
+  "aead_output_delta_pct": -7.173117514251926,
+  "benchmark_wall_delta_pct": -11.050151710045407,
+  "keygen_output_delta_pct": -11.98813056379822,
+  "sign2_output_delta_pct": -0.39305553541125793
+}

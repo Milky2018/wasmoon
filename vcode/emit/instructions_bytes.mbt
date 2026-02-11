@@ -209,6 +209,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       (b0, b1, b2, b3)
     }
     Mneg(rd, rn, rm) => Msub(rd, rn, rm, 31).instr_bytes()
+    Madd32(rd, rn, rm, ra) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2)
+      let b2 = rm & 31
+      let b3 = 0x1B
+      (b0, b1, b2, b3)
+    }
+    Msub32(rd, rn, rm, ra) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2) | 128
+      let b2 = rm & 31
+      let b3 = 0x1B
+      (b0, b1, b2, b3)
+    }
+    Mneg32(rd, rn, rm) => Msub32(rd, rn, rm, 31).instr_bytes()
     Umulh(rd, rn, rm) => {
       // UMULH: sf=1, op31=110, Ra=11111
       let b0 = (rd & 31) | ((rn & 7) << 5)

@@ -1080,6 +1080,29 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_mneg(rd, rn, rm)
     }
+    Madd32 => {
+      // Wd = Wa + Wn * Wm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      self.emit_madd32(rd, rn, rm, ra)
+    }
+    Msub32 => {
+      // Wd = Wa - Wn * Wm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      self.emit_msub32(rd, rn, rm, ra)
+    }
+    Mneg32 => {
+      // Wd = -(Wn * Wm), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_mneg32(rd, rn, rm)
+    }
     Umulh => {
       // Xd = (Xn * Xm) >> 64 (unsigned), uses: [src1, src2]
       let rd = wreg_num(inst.defs[0])

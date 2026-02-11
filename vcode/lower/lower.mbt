@@ -217,17 +217,15 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // multiply can be fused into a single MADD; the other must be materialized.
           let lhs = inst.operands[0]
           let rhs = inst.operands[1]
-          if is_i64 {
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
-              match_mul_value(ctx, rhs) is Some(_) {
-              skipped.add(rhs.id)
-              continue
-            }
-            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
-              match_mul_value(ctx, lhs) is Some(_) {
-              skipped.add(lhs.id)
-              continue
-            }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
+            continue
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
@@ -262,11 +260,9 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             continue
           }
           let rhs = inst.operands[1]
-          if is_i64 {
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
-              match_mul_value(ctx, rhs) is Some(_) {
-              skipped.add(rhs.id)
-            }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_mul_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {

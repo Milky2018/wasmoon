@@ -621,6 +621,85 @@ test "lower sub(0, mul(x, y)) to mneg" {
 }
 
 ///|
+test "lower i32 add(x, mul(y, z)) to madd32" {
+  // Cranelift lower.isle iadd_imul_* applies to fits_in_64, including i32.
+  let builder = @ir.IRBuilder::new("madd32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  let z = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.iadd(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode madd32_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = madd32 v0, v1, v2
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(x, mul(y, z)) to msub32" {
+  let builder = @ir.IRBuilder::new("msub32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  let z = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.isub(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode msub32_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = msub32 v0, v1, v2
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(0, mul(x, y)) to mneg32" {
+  let builder = @ir.IRBuilder::new("mneg32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i32(0)
+  let mul_xy = builder.imul(x, y)
+  let result = builder.isub(zero, mul_xy)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode mneg32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = mneg32 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower add(x, shl(y, n)) to add_shifted" {
   // Pattern: add(x, shl(y, n)) -> AddShifted: x + (y << n)
   let builder = @ir.IRBuilder::new("add_shifted_test")

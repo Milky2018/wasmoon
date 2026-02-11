@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.01180100004421547,
+    "stdout": "9055000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.010441915947012603,
+    "stdout": "7850000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.01102212502155453,
+    "stdout": "8720000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.009911875007674098,
+    "stdout": "8235000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.010256458015646785,
+    "stdout": "8425000",
+    "stderr": ""
+  }
+]

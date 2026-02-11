@@ -496,6 +496,54 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, tmp)
       }
     }
+    @instr.Madd32 => {
+      // rd = acc + (src1 * src2)  (i32 form)
+      let rd = wreg_num(inst.defs[0])
+      let acc = reg_num(inst.uses[0])
+      let src1 = reg_num(inst.uses[1])
+      let src2 = reg_num(inst.uses[2])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, src1)
+      self.x86_emit_imul_rr32(tmp, src2)
+      if rd != acc {
+        self.x86_emit_mov_rr32(rd, acc)
+      }
+      self.x86_emit_add_rr32(rd, tmp)
+    }
+    @instr.Msub32 => {
+      // rd = acc - (src1 * src2)  (i32 form)
+      let rd = wreg_num(inst.defs[0])
+      let acc = reg_num(inst.uses[0])
+      let src1 = reg_num(inst.uses[1])
+      let src2 = reg_num(inst.uses[2])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, src1)
+      self.x86_emit_imul_rr32(tmp, src2)
+      if rd != acc {
+        self.x86_emit_mov_rr32(rd, acc)
+      }
+      self.x86_emit_sub_rr32(rd, tmp)
+    }
+    @instr.Mneg32 => {
+      // rd = -(src1 * src2)  (i32 form)
+      let rd = wreg_num(inst.defs[0])
+      let src1 = reg_num(inst.uses[0])
+      let src2 = reg_num(inst.uses[1])
+      let mut prod = isa.scratch_reg_1_index()
+      if prod == rd {
+        prod = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(prod, src1)
+      self.x86_emit_imul_rr32(prod, src2)
+      self.x86_emit_xor_rr32(rd, rd)
+      self.x86_emit_sub_rr32(rd, prod)
+    }
     @instr.And(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

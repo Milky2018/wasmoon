@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 3.914353249943815,
+    "stdout": "7375000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 3.9978611249825917,
+    "stdout": "8495000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 3.926096500013955,
+    "stdout": "7270000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 3.9191594590083696,
+    "stdout": "7425000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/keygen.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 3.9503782910178415,
+    "stdout": "7415000",
+    "stderr": ""
+  }
+]

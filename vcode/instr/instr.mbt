@@ -339,6 +339,10 @@ pub(all) enum VCodeOpcode {
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
+  // 32-bit multiply-accumulate forms (Cranelift fits_in_64 i32 coverage)
+  Madd32 // Wd = Wa + Wn * Wm (3 uses: acc, src1, src2)
+  Msub32 // Wd = Wa - Wn * Wm (3 uses: acc, src1, src2)
+  Mneg32 // Wd = -(Wn * Wm) (2 uses: src1, src2)
   // AArch64-specific: multiply high instructions
   Umulh // Xd = (Xn * Xm) >> 64 (unsigned multiply high, 64-bit only)
   Smulh // Xd = (Xn * Xm) >> 64 (signed multiply high, 64-bit only)
@@ -1014,6 +1018,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
+    Madd32 => "madd32"
+    Msub32 => "msub32"
+    Mneg32 => "mneg32"
     Umulh => "umulh"
     Smulh => "smulh"
     Umull => "umull"

@@ -330,6 +330,9 @@ pub(all) enum VCodeOpcode {
   Madd
   Msub
   Mneg
+  Madd32
+  Msub32
+  Mneg32
   Umulh
   Smulh
   Umull

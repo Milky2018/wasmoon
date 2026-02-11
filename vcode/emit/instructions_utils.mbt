@@ -39,6 +39,9 @@ enum Instruction {
   Madd(Int, Int, Int, Int)
   Msub(Int, Int, Int, Int)
   Mneg(Int, Int, Int)
+  Madd32(Int, Int, Int, Int)
+  Msub32(Int, Int, Int, Int)
+  Mneg32(Int, Int, Int)
   Umulh(Int, Int, Int) // Unsigned multiply high (64-bit)
   Smulh(Int, Int, Int) // Signed multiply high (64-bit)
   Umull(Int, Int, Int) // Unsigned 32x32->64 multiply
@@ -616,6 +619,9 @@ fn Instruction::annotate(self : Instruction) -> String {
     Madd(rd, rn, rm, ra) => "madd x\{rd}, x\{rn}, x\{rm}, x\{ra}"
     Msub(rd, rn, rm, ra) => "msub x\{rd}, x\{rn}, x\{rm}, x\{ra}"
     Mneg(rd, rn, rm) => "mneg x\{rd}, x\{rn}, x\{rm}"
+    Madd32(rd, rn, rm, ra) => "madd w\{rd}, w\{rn}, w\{rm}, w\{ra}"
+    Msub32(rd, rn, rm, ra) => "msub w\{rd}, w\{rn}, w\{rm}, w\{ra}"
+    Mneg32(rd, rn, rm) => "mneg w\{rd}, w\{rn}, w\{rm}"
     Umulh(rd, rn, rm) => "umulh x\{rd}, x\{rn}, x\{rm}"
     Smulh(rd, rn, rm) => "smulh x\{rd}, x\{rn}, x\{rm}"
     Umull(rd, rn, rm) => "umull x\{rd}, w\{rn}, w\{rm}"
