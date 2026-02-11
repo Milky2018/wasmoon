@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Benchmark examples/algorithms with cached Wasmtime baselines."""
+"""Benchmark examples/algorithms with cached Wasmtime baselines.
+
+Perf-gap policy is one-sided by default: only regressions where Wasmoon is
+slower than Wasmtime by more than threshold are flagged.
+"""
 
 from __future__ import annotations
 
@@ -150,7 +154,10 @@ def main() -> int:
         "--value-threshold-pct",
         type=float,
         default=5.0,
-        help="Allowed absolute delta percentage vs wasmtime parsed output value.",
+        help=(
+            "Allowed positive delta percentage vs wasmtime parsed output value "
+            "(one-sided: only slower-than-baseline is flagged)."
+        ),
     )
     parser.add_argument(
         "--refresh-wasmtime-baseline",
@@ -252,7 +259,7 @@ def main() -> int:
         elif value_delta_pct is None:
             status = "parse_error"
             failures.append(f"{workload_str}: unable to parse numeric output")
-        elif abs(value_delta_pct) > args.value_threshold_pct:
+        elif value_delta_pct > args.value_threshold_pct:
             status = "perf_gap"
             perf_gaps.append(
                 f"{workload_str}: value delta {value_delta_pct:.2f}% "

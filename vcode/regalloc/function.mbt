@@ -239,8 +239,22 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
 
 ///|
 /// Returns true if memory0 descriptor caching should be enabled for this function.
-pub fn VCodeFunction::should_cache_mem0_desc(_self : VCodeFunction) -> Bool {
-  false
+pub fn VCodeFunction::should_cache_mem0_desc(self : VCodeFunction) -> Bool {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return false
+  }
+  if !self.uses_mem0() {
+    return false
+  }
+  let mut mem0_loads = 0
+  for block in self.blocks {
+    for inst in block.insts {
+      if inst.opcode is LoadMemBase(0) {
+        mem0_loads += 1
+      }
+    }
+  }
+  mem0_loads >= 4
 }
 
 ///|

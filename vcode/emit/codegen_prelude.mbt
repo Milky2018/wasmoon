@@ -522,10 +522,11 @@ fn MachineCode::emit_prologue(
     }
     let vmctx = vmctx_index()
     self.emit_mov_reg(vmctx, 0)
-    // Optionally cache memory0 descriptor pointer in X20.
-    // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
+    // Optionally cache memory0 base pointer in X20.
+    // This allows `LoadMemBase(mem=0)` to become a register move.
     if stack_frame.cache_mem0_desc {
       self.emit_ldr_imm(mem0_desc_index(), vmctx, @abi.VMCTX_MEMORY0_OFFSET)
+      self.emit_ldr_imm(mem0_desc_index(), mem0_desc_index(), 0)
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
