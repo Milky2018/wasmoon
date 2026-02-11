@@ -11,6 +11,7 @@
 // Current remat candidates:
 // - integer/float constants (LoadConst*)
 // - runtime function pointers and direct function addresses (Load*FuncPtr/LoadFuncAddr)
+// - cheap ALU defs that are profitable to re-create near uses (AddImm/SubImm/Extend)
 
 ///|
 priv struct RematDef {
@@ -28,6 +29,9 @@ fn is_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     @instr.LoadConst(_)
     | @instr.LoadConstF32(_)
     | @instr.LoadConstF64(_)
+    | @instr.AddImm(_, _)
+    | @instr.SubImm(_, _)
+    | @instr.Extend(_)
     | @instr.LoadGCFuncPtr(_)
     | @instr.LoadJITFuncPtr(_)
     | @instr.LoadExceptionFuncPtr(_)
@@ -111,8 +115,8 @@ pub fn rematerialize_long_distance_constants(
   if remat_defs.is_empty() {
     return func
   }
-  let min_distance = 24
-  let per_vreg_clone_cap = 8
+  let min_distance = 16
+  let per_vreg_clone_cap = 16
   for i in 0..<func.blocks.length() {
     let block = func.blocks[i]
     let new_block = @block.VCodeBlock::new(block.id)

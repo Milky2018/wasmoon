@@ -43,16 +43,17 @@ test "lower integer arithmetic" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // After e-graph optimization: sub(add(v0, v1), v0) = v1, so mul(v3, v1) = mul(v1, v1)
-  let expected =
-    #|vcode arith(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = add v0, v1
-    #|    v3 = sub v2, v0
-    #|    v4 = mul v1, v1
-    #|    ret v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode arith(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v4 = mul v1, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|

@@ -470,7 +470,14 @@ fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
 /// Check whether an opcode is trivially dead when its defs are unused.
 fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
   match op {
-    Move
+    // Pure integer/extend ops: safe to drop when defs are unused.
+    Add(_)
+    | AddImm(_, _)
+    | Sub(_)
+    | SubImm(_, _)
+    | Extend(_)
+    // Existing trivially-dead constant/move forms.
+    | Move
     | LoadConst(_)
     | LoadConstF32(_)
     | LoadConstF64(_)
