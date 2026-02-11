@@ -859,13 +859,11 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
 ///|
 /// Treat call-like instructions as barriers for mem-base value availability.
 fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
-  match opcode {
-    // Keep `LoadMemBase` available across Wasm calls; clear only on C-side
-    // calls that may update memory descriptors in the runtime.
-    CallPtr(_, _, @instr.C)
-    | CallDirect(_, _, _, @instr.C)
-    | ReturnCallIndirect(_, _)
-    | TypeCheckSubtypeIndirect(_) => true
+  // Cranelift treats calls as memory-fence points for alias/load forwarding.
+  // Align with that model to avoid carrying stale memory descriptors across
+  // Wasm calls that may trigger memory growth.
+  match opcode.call_type() {
+    @instr.Regular | @instr.TailCall => true
     _ => false
   }
 }
@@ -1360,7 +1358,7 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   }
   let enable_licm = true
   let enable_immutable_load_cse = true
-  let enable_mem_base_cse = false
+  let enable_mem_base_cse = true
   // Bound expensive ad-hoc memory peepholes on very large functions.
   // Keep the correctness-preserving core passes enabled for all functions.
   let enable_mem_peepholes = inst_count <= 1200
