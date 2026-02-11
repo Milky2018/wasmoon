@@ -16,11 +16,6 @@ fn main {
       "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
         "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
-        "optmize": @clap.Arg::named(
-          short='O',
-          nargs=@clap.Nargs::AtMost(1),
-          help="Optimization level (0-3, default: 2)",
-        ),
         "arg": @clap.Arg::named(
           nargs=@clap.Nargs::Any,
           help="Arguments to pass to the function (can be repeated)",
@@ -100,11 +95,6 @@ fn main {
             nargs=@clap.Nargs::AtMost(1),
             help="Function index to explore (default: 0)",
           ),
-          "optmize": @clap.Arg::named(
-            short='O',
-            nargs=@clap.Nargs::AtMost(1),
-            help="Optimization level (0-3, default: 2)",
-          ),
           "stage": @clap.Arg::named(
             short='s',
             nargs=@clap.Nargs::Any,
@@ -174,17 +164,7 @@ fn main {
                     }
                   None => None
                 }
-                let opt_level : Int = match sub.args.get("optmize") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      @strconv.parse_int(arr[0]) catch {
-                        _ => 2
-                      }
-                    } else {
-                      2
-                    }
-                  None => 2
-                }
+                let opt_level = 2
                 // Get function arguments from --arg option (for invoked function)
                 let func_args : Array[String] = match sub.args.get("arg") {
                   Some(arr) => arr
@@ -292,17 +272,7 @@ fn main {
                     }
                   None => None
                 }
-                let opt_level : Int = match sub.args.get("optmize") {
-                  Some(arr) =>
-                    if arr.length() > 0 {
-                      @strconv.parse_int(arr[0]) catch {
-                        _ => 2
-                      }
-                    } else {
-                      2
-                    }
-                  None => 2
-                }
+                let opt_level = 2
                 let stages : Array[String] = match sub.args.get("stage") {
                   Some(arr) => arr
                   None => []
