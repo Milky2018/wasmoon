@@ -244,8 +244,55 @@ test "mem_base_cse_reuses_load_without_call_barrier" {
 }
 
 ///|
-test "mem_base_cse_does_not_cross_wasm_call_barrier" {
-  let func = @regalloc.VCodeFunction::new("test_mem_base_cse_call_barrier")
+test "mem_base_cse_reuses_across_wasm_direct_call" {
+  let func = @regalloc.VCodeFunction::new("test_mem_base_cse_direct_wasm_call")
+  let vmctx = func.new_vreg(Int)
+  func.push_param(vmctx)
+  let block = func.new_block()
+
+  let mem0_a = func.new_vreg(Int)
+  let load0 = @instr.VCodeInst::new(LoadMemBase(0))
+  load0.add_def({ reg: Virtual(mem0_a) })
+  load0.add_use(Virtual(vmctx))
+  block.add_inst(load0)
+
+  let call_inst = @instr.VCodeInst::new(CallDirect(42, 0, 0, Wasm))
+  block.add_inst(call_inst)
+
+  let mem0_b = func.new_vreg(Int)
+  let load1 = @instr.VCodeInst::new(LoadMemBase(0))
+  load1.add_def({ reg: Virtual(mem0_b) })
+  load1.add_use(Virtual(vmctx))
+  block.add_inst(load1)
+
+  let sum = func.new_vreg(Int)
+  let add = @instr.VCodeInst::new(Add(true))
+  add.add_def({ reg: Virtual(sum) })
+  add.add_use(Virtual(mem0_a))
+  add.add_use(Virtual(mem0_b))
+  block.add_inst(add)
+  block.set_terminator(Return([Virtual(sum)]))
+
+  optimize_vcode(func)
+
+  let mut load_mem_base_count = 0
+  let mut move_count = 0
+  for inst in block.insts {
+    match inst.opcode {
+      LoadMemBase(0) => load_mem_base_count = load_mem_base_count + 1
+      Move => move_count = move_count + 1
+      _ => ()
+    }
+  }
+  inspect(load_mem_base_count, content="1")
+  inspect(move_count, content="0")
+}
+
+///|
+test "mem_base_cse_keeps_barrier_for_wasm_indirect_call" {
+  let func = @regalloc.VCodeFunction::new(
+    "test_mem_base_cse_wasm_indirect_barrier",
+  )
   let vmctx = func.new_vreg(Int)
   func.push_param(vmctx)
   let callee = func.new_vreg(Int)

@@ -859,11 +859,16 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
 ///|
 /// Treat call-like instructions as barriers for mem-base value availability.
 fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
-  // Cranelift treats calls as memory-fence points for alias/load forwarding.
-  // Align with that model to avoid carrying stale memory descriptors across
-  // Wasm calls that may trigger memory growth.
-  match opcode.call_type() {
-    @instr.Regular | @instr.TailCall => true
+  // Cranelift keeps heap-base values live across direct Wasm calls in hot
+  // paths. Keep barriers for C/indirect calls (and subtype checks) where the
+  // callee/slow path may mutate runtime-managed memory state.
+  match opcode {
+    @instr.CallDirect(_, _, _, @instr.Wasm) => false
+    @instr.CallDirect(_, _, _, @instr.C) => true
+    @instr.CallPtr(_, _, @instr.C) => true
+    @instr.CallPtr(_, _, @instr.Wasm) => true
+    @instr.ReturnCallIndirect(_, _) => true
+    @instr.TypeCheckSubtypeIndirect(_) => true
     _ => false
   }
 }
