@@ -778,6 +778,56 @@ test "lower i64 sub(x, sextend(y)) to sub.sxtw" {
 }
 
 ///|
+test "lower i32 add(x, -imm) to sub32 #imm" {
+  // Cranelift lower.isle iadd_imm12_neg_{right,left}.
+  let builder = @ir.IRBuilder::new("add_neg_imm_test")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let neg_imm = builder.iconst_i32(-12)
+  let result = builder.iadd(x, neg_imm)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_neg_imm_test(v0:int) -> int {
+      #|block0:
+      #|    v2 = sub32 #12 v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(x, -imm) to add32 #imm" {
+  // Cranelift lower.isle isub_imm12_neg.
+  let builder = @ir.IRBuilder::new("sub_neg_imm_test")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let neg_imm = builder.iconst_i32(-12)
+  let result = builder.isub(x, neg_imm)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode sub_neg_imm_test(v0:int) -> int {
+      #|block0:
+      #|    v2 = add32 #12 v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")

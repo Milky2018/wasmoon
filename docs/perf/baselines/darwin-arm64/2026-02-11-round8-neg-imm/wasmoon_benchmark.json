@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2512617079773918,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.25104399997508153,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2494106669910252,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.25141366699244827,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.25090750004164875,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  }
+]

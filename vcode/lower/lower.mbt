@@ -667,6 +667,23 @@ fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
 }
 
 ///|
+/// Check if a value is a constant whose negation is a valid ADD/SUB immediate.
+/// Returns Some(-val) when val is a constant and -val fits AArch64 add/sub imm12.
+fn match_negated_add_imm_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> Int64? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iconst(val) {
+    let neg = -val
+    if val < 0L && is_valid_add_imm(neg) {
+      return Some(neg)
+    }
+  }
+  None
+}
+
+///|
 /// Check if a value is iadd(base, iconst(offset)) and return (base, offset) if matched
 /// Used for folding address calculations into load/store instructions
 fn match_iadd_const(

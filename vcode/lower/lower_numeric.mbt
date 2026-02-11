@@ -729,6 +729,26 @@ fn lower_iadd(
     return
   }
 
+  // Match Cranelift iadd_imm12_neg_{right,left}:
+  // add(x, -C) -> sub #C, x when C fits add/sub imm12 encoding.
+  if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  if match_negated_add_imm_value(ctx, lhs_val) is Some(imm_val) {
+    let rhs = ctx.get_vreg_for_use(rhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
   // Pattern: add(x, const) -> AddImm where const is valid 12-bit immediate
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
@@ -906,6 +926,17 @@ fn lower_isub(
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Match Cranelift isub_imm12_neg:
+  // sub(x, -C) -> add #C, x when C fits add/sub imm12 encoding.
+  if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
+    let lhs = ctx.get_vreg_for_use(lhs_val, block)
+    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(lhs))
     block.add_inst(vcode_inst)
     return
   }

@@ -1,0 +1,248 @@
+{
+  "wasmoon_aead": {
+    "median_wall_sec": 5.2799854159820825,
+    "median_stdout_value": 3318935000.0,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.27272854198236,
+        "stdout": "3318935000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.251392374979332,
+        "stdout": "3272880000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.2799854159820825,
+        "stdout": "3341495000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.304043374955654,
+        "stdout": "3399020000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 5.288591500022449,
+        "stdout": "3316725000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_aead": {
+    "median_wall_sec": 0.7503030419466086,
+    "median_stdout_value": 3698740000.0,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7926095000002533,
+        "stdout": "3698650000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7478869590559043,
+        "stdout": "3698740000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7686618749867193,
+        "stdout": "3801345000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7479380419827066,
+        "stdout": "3691740000",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/algorithms/aead_aegis128l.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.7503030419466086,
+        "stdout": "3706525000",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmoon_benchmark": {
+    "median_wall_sec": 0.25104399997508153,
+    "median_stdout_value": null,
+    "runs": [
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2512617079773918,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.25104399997508153,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2494106669910252,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.25141366699244827,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "./wasmoon",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.25090750004164875,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      }
+    ]
+  },
+  "wasmtime_benchmark": {
+    "median_wall_sec": 0.282578292011749,
+    "median_stdout_value": null,
+    "runs": [
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2922098750132136,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.30254358396632597,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.282578292011749,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2825016250135377,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      },
+      {
+        "cmd": [
+          "wasmtime",
+          "run",
+          "examples/benchmark.wasm"
+        ],
+        "code": 0,
+        "wall_sec": 0.2825606670230627,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": ""
+      }
+    ]
+  },
+  "aead_output_delta_pct": -10.26849683946425,
+  "benchmark_wall_delta_pct": -11.15948851278227
+}
