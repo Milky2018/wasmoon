@@ -634,10 +634,10 @@ fn lower_iadd(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
+  let is_64 = result.ty is @ir.Type::I64
 
   // Pattern: add(x, mul(y, z)) -> MADD (i64 only; 32-bit would pollute upper bits)
-  if result.ty is @ir.Type::I64 &&
-    match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  if is_64 && match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -651,8 +651,7 @@ fn lower_iadd(
   }
 
   // Pattern: add(mul(x, y), z) -> MADD (commutative, i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
+  if is_64 && match_mul_value(ctx, lhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(rhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -665,12 +664,17 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(x, shl(y, n)) -> AddShifted (i64 only to avoid upper 32-bit pollution)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  // Pattern: add(x, shl(y, n)) -> AddShifted/AddShifted32
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        AddShifted(Lsl, amount)
+      } else {
+        AddShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -678,12 +682,17 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(shl(x, n), y) -> AddShifted (commutative, i64 only)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  // Pattern: add(shl(x, n), y) -> AddShifted/AddShifted32 (commutative)
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(AddShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        AddShifted(Lsl, amount)
+      } else {
+        AddShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -694,7 +703,6 @@ fn lower_iadd(
   // Pattern: add(x, const) -> AddImm where const is valid 12-bit immediate
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let is_64 = result.ty is @ir.Type::I64
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
@@ -705,7 +713,6 @@ fn lower_iadd(
   // Pattern: add(const, x) -> AddImm (commutative)
   if match_add_imm_value(ctx, lhs_val) is Some(imm_val) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let is_64 = result.ty is @ir.Type::I64
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rhs))
@@ -716,7 +723,6 @@ fn lower_iadd(
   // Default: regular add
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let is_64 = result.ty is @ir.Type::I64
   let vcode_inst = @instr.VCodeInst::new(Add(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -812,9 +818,10 @@ fn lower_isub(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
+  let is_64 = result.ty is @ir.Type::I64
 
   // Pattern: sub(0, mul(x, y)) -> MNEG (i64 only; 32-bit would pollute upper bits)
-  if result.ty is @ir.Type::I64 &&
+  if is_64 &&
     is_const_zero_value(ctx, lhs_val) &&
     match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
@@ -828,8 +835,7 @@ fn lower_isub(
   }
 
   // Pattern: sub(x, mul(y, z)) -> MSUB (i64 only; 32-bit would pollute upper bits)
-  if result.ty is @ir.Type::I64 &&
-    match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
+  if is_64 && match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
@@ -842,12 +848,17 @@ fn lower_isub(
     return
   }
 
-  // Pattern: sub(x, shl(y, n)) -> SubShifted (i64 only to avoid upper 32-bit pollution)
-  if result.ty is @ir.Type::I64 &&
-    match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  // Pattern: sub(x, shl(y, n)) -> SubShifted/SubShifted32
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(SubShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        SubShifted(Lsl, amount)
+      } else {
+        SubShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -858,7 +869,6 @@ fn lower_isub(
   // Pattern: sub(x, const) -> SubImm where const is valid 12-bit immediate
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let is_64 = result.ty is @ir.Type::I64
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
@@ -869,7 +879,6 @@ fn lower_isub(
   // Default: regular sub
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let is_64 = result.ty is @ir.Type::I64
   let vcode_inst = @instr.VCodeInst::new(Sub(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
   vcode_inst.add_use(Virtual(lhs))
@@ -912,11 +921,17 @@ fn lower_band(
     return
   }
 
-  // Pattern: and(x, shl(y, n)) -> AndShifted (i64 only)
-  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  // Pattern: and(x, shl(y, n)) -> AndShifted/AndShifted32
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        AndShifted(Lsl, amount)
+      } else {
+        AndShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -924,11 +939,17 @@ fn lower_band(
     return
   }
 
-  // Pattern: and(shl(x, n), y) -> AndShifted (commutative, i64 only)
-  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  // Pattern: and(shl(x, n), y) -> AndShifted/AndShifted32 (commutative)
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(AndShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        AndShifted(Lsl, amount)
+      } else {
+        AndShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -981,11 +1002,17 @@ fn lower_bor(
     return
   }
 
-  // Pattern: or(x, shl(y, n)) -> OrShifted (i64 only)
-  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  // Pattern: or(x, shl(y, n)) -> OrShifted/OrShifted32
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        OrShifted(Lsl, amount)
+      } else {
+        OrShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -993,11 +1020,17 @@ fn lower_bor(
     return
   }
 
-  // Pattern: or(shl(x, n), y) -> OrShifted (commutative, i64 only)
-  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  // Pattern: or(shl(x, n), y) -> OrShifted/OrShifted32 (commutative)
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(OrShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        OrShifted(Lsl, amount)
+      } else {
+        OrShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -1050,11 +1083,17 @@ fn lower_bxor(
     return
   }
 
-  // Pattern: xor(x, shl(y, n)) -> XorShifted (i64 only)
-  if is_64 && match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
+  // Pattern: xor(x, shl(y, n)) -> XorShifted/XorShifted32
+  if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        XorShifted(Lsl, amount)
+      } else {
+        XorShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -1062,11 +1101,17 @@ fn lower_bxor(
     return
   }
 
-  // Pattern: xor(shl(x, n), y) -> XorShifted (commutative, i64 only)
-  if is_64 && match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
+  // Pattern: xor(shl(x, n), y) -> XorShifted/XorShifted32 (commutative)
+  if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(XorShifted(Lsl, amount))
+    let vcode_inst = @instr.VCodeInst::new(
+      if is_64 {
+        XorShifted(Lsl, amount)
+      } else {
+        XorShifted32(Lsl, amount)
+      },
+    )
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))

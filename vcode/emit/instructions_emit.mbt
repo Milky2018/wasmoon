@@ -139,6 +139,18 @@ pub fn MachineCode::emit_add_shifted(
 }
 
 ///|
+pub fn MachineCode::emit_add_shifted32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : @instr.ShiftType,
+  amount : Int,
+) -> Unit {
+  AddShifted32(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_add_uxtw(
   self : MachineCode,
   rd : Int,
@@ -162,6 +174,18 @@ pub fn MachineCode::emit_sub_shifted(
 }
 
 ///|
+pub fn MachineCode::emit_sub_shifted32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : @instr.ShiftType,
+  amount : Int,
+) -> Unit {
+  SubShifted32(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_and_shifted(
   self : MachineCode,
   rd : Int,
@@ -171,6 +195,18 @@ pub fn MachineCode::emit_and_shifted(
   amount : Int,
 ) -> Unit {
   AndShifted(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_and_shifted32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : @instr.ShiftType,
+  amount : Int,
+) -> Unit {
+  AndShifted32(rd, rn, rm, shift, amount).emit(self)
 }
 
 ///|
@@ -186,6 +222,18 @@ pub fn MachineCode::emit_orr_shifted(
 }
 
 ///|
+pub fn MachineCode::emit_orr_shifted32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : @instr.ShiftType,
+  amount : Int,
+) -> Unit {
+  OrrShifted32(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_eor_shifted(
   self : MachineCode,
   rd : Int,
@@ -195,6 +243,18 @@ pub fn MachineCode::emit_eor_shifted(
   amount : Int,
 ) -> Unit {
   EorShifted(rd, rn, rm, shift, amount).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eor_shifted32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : @instr.ShiftType,
+  amount : Int,
+) -> Unit {
+  EorShifted32(rd, rn, rm, shift, amount).emit(self)
 }
 
 ///|

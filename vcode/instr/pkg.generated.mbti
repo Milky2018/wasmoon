@@ -317,6 +317,11 @@ pub(all) enum VCodeOpcode {
   AndShifted(ShiftType, Int)
   OrShifted(ShiftType, Int)
   XorShifted(ShiftType, Int)
+  AddShifted32(ShiftType, Int)
+  SubShifted32(ShiftType, Int)
+  AndShifted32(ShiftType, Int)
+  OrShifted32(ShiftType, Int)
+  XorShifted32(ShiftType, Int)
   Madd
   Msub
   Mneg

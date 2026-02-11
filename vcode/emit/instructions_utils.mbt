@@ -22,12 +22,14 @@ enum Instruction {
   // Arithmetic - Register
   AddReg(Int, Int, Int)
   AddShifted(Int, Int, Int, @instr.ShiftType, Int)
+  AddShifted32(Int, Int, Int, @instr.ShiftType, Int)
   // Add with extended register operand: ADD Xd, Xn, Wm, UXTW #shift
   AddExtUxtw(Int, Int, Int, Int) // rd, rn, rm, shift (0-4)
   AddImm(Int, Int, Int)
   AddImmShifted12(Int, Int, Int) // ADD with immediate shifted left by 12
   SubReg(Int, Int, Int)
   SubShifted(Int, Int, Int, @instr.ShiftType, Int)
+  SubShifted32(Int, Int, Int, @instr.ShiftType, Int)
   SubImm(Int, Int, Int)
   SubImmShifted12(Int, Int, Int) // SUB with immediate shifted left by 12
   Mul(Int, Int, Int)
@@ -56,16 +58,19 @@ enum Instruction {
   AndImm(Int, Int, Int)
   AndImm32(Int, Int, Int)
   AndShifted(Int, Int, Int, @instr.ShiftType, Int)
+  AndShifted32(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
   OrrReg32(Int, Int, Int)
   OrrImm(Int, Int, Int)
   OrrImm32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
+  OrrShifted32(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
   EorReg32(Int, Int, Int)
   EorImm(Int, Int, Int)
   EorImm32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
+  EorShifted32(Int, Int, Int, @instr.ShiftType, Int)
   Mvn(Int, Int)
   Mvn32(Int, Int) // 32-bit bitwise NOT
   // Shift/Rotate - Register (64-bit)
@@ -537,6 +542,14 @@ fn Instruction::annotate(self : Instruction) -> String {
       }
       "add x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
+    AddShifted32(rd, rn, rm, shift, amount) => {
+      let shift_name = match shift {
+        Lsl => "lsl"
+        Lsr => "lsr"
+        Asr => "asr"
+      }
+      "add w\{rd}, w\{rn}, w\{rm}, \{shift_name} #\{amount}"
+    }
     AddExtUxtw(rd, rn, rm, shift) => {
       let suffix = if shift == 0 { "uxtw" } else { "uxtw #\{shift}" }
       "add x\{rd}, x\{rn}, w\{rm}, \{suffix}"
@@ -559,6 +572,14 @@ fn Instruction::annotate(self : Instruction) -> String {
         Asr => "asr"
       }
       "sub x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
+    }
+    SubShifted32(rd, rn, rm, shift, amount) => {
+      let shift_name = match shift {
+        Lsl => "lsl"
+        Lsr => "lsr"
+        Asr => "asr"
+      }
+      "sub w\{rd}, w\{rn}, w\{rm}, \{shift_name} #\{amount}"
     }
     SubImm(rd, rn, imm12) => {
       let rn_name = if rn == 31 { "sp" } else { "x\{rn}" }
@@ -601,6 +622,14 @@ fn Instruction::annotate(self : Instruction) -> String {
       }
       "and x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
+    AndShifted32(rd, rn, rm, shift, amount) => {
+      let shift_name = match shift {
+        Lsl => "lsl"
+        Lsr => "lsr"
+        Asr => "asr"
+      }
+      "and w\{rd}, w\{rn}, w\{rm}, \{shift_name} #\{amount}"
+    }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
     OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
     OrrImm(rd, rn, imm_bits) => "orr x\{rd}, x\{rn}, #imml(\{imm_bits})"
@@ -613,6 +642,14 @@ fn Instruction::annotate(self : Instruction) -> String {
       }
       "orr x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
     }
+    OrrShifted32(rd, rn, rm, shift, amount) => {
+      let shift_name = match shift {
+        Lsl => "lsl"
+        Lsr => "lsr"
+        Asr => "asr"
+      }
+      "orr w\{rd}, w\{rn}, w\{rm}, \{shift_name} #\{amount}"
+    }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
     EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
     EorImm(rd, rn, imm_bits) => "eor x\{rd}, x\{rn}, #imml(\{imm_bits})"
@@ -624,6 +661,14 @@ fn Instruction::annotate(self : Instruction) -> String {
         Asr => "asr"
       }
       "eor x\{rd}, x\{rn}, x\{rm}, \{shift_name} #\{amount}"
+    }
+    EorShifted32(rd, rn, rm, shift, amount) => {
+      let shift_name = match shift {
+        Lsl => "lsl"
+        Lsr => "lsr"
+        Asr => "asr"
+      }
+      "eor w\{rd}, w\{rn}, w\{rm}, \{shift_name} #\{amount}"
     }
     Mvn(rd, rm) => "mvn x\{rd}, x\{rm}"
     Mvn32(rd, rm) => "mvn w\{rd}, w\{rm}"

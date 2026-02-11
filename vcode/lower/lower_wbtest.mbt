@@ -650,6 +650,34 @@ test "lower add(x, shl(y, n)) to add_shifted" {
 }
 
 ///|
+test "lower i32 add(x, shl(y, n)) to add_shifted32" {
+  // Cranelift-aligned: i32 shifted-add should use 32-bit shifted-register form.
+  let builder = @ir.IRBuilder::new("add_shifted32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i32(35) // masked to 3 by Wasm semantics
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.iadd(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode add_shifted32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = add32.lsl #3 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")
@@ -671,6 +699,33 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
       #|vcode sub_shifted_test(v0:int, v1:int) -> int {
       #|block0:
       #|    v3 = sub.lsl #2 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 xor(x, shl(y, n)) to xor_shifted32" {
+  let builder = @ir.IRBuilder::new("xor_shifted32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i32(33) // masked to 1
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.bxor(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode xor_shifted32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = xor32.lsl #1 v0, v1
       #|    ret v3
       #|}
       #|

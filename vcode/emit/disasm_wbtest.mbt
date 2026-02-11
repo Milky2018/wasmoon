@@ -452,6 +452,32 @@ test "cmp_imm_shifted12" {
 }
 
 ///|
+/// Test 32-bit shifted-register arithmetic/logical encodings.
+test "emit_shifted32_variants" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
+  let mc = MachineCode::new()
+  mc.emit_add_shifted32(0, 1, 2, Lsl, 3)
+  mc.emit_sub_shifted32(3, 4, 5, Lsr, 4)
+  mc.emit_and_shifted32(6, 7, 8, Asr, 5)
+  mc.emit_orr_shifted32(9, 10, 11, Lsl, 6)
+  mc.emit_eor_shifted32(12, 13, 14, Lsr, 7)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 200c020b  add w0, w1, w2, lsl #3
+      #|  0004: 8310454b  sub w3, w4, w5, lsr #4
+      #|  0008: e614880a  and w6, w7, w8, asr #5
+      #|  000c: 49190b2a  orr w9, w10, w11, lsl #6
+      #|  0010: ac1d4e4a  eor w12, w13, w14, lsr #7
+      #|
+    ),
+  )
+}
+
+///|
 /// Test Standard pre-indexed stores for prologue
 test "emit_str_pre - GPR pre-indexed store" {
   let mc = MachineCode::new()

@@ -130,6 +130,7 @@ pub fn MachineCode::emit_add_imm_shifted12(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_add_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_add_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_add_uxtw(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_addv_b(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_adr(Self, Int, Int) -> Unit
@@ -139,6 +140,7 @@ pub fn MachineCode::emit_and_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_and_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_and_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_asr_imm(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_asr_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_asr_reg(Self, Int, Int, Int) -> Unit
@@ -169,6 +171,7 @@ pub fn MachineCode::emit_eor_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_eor_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_eor_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_eor_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_eor_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_ext_16b(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_d(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_s(Self, Int, Int) -> Unit
@@ -266,6 +269,7 @@ pub fn MachineCode::emit_orr_imm32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_orr_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_orr_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_orr_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_orr_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_rbit(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_rbit32(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_ret(Self, Int) -> Unit
@@ -303,6 +307,7 @@ pub fn MachineCode::emit_sub_imm_shifted12(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_sub_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
+pub fn MachineCode::emit_sub_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_sxtb_w(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_sxtb_x(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_sxth_w(Self, Int, Int) -> Unit

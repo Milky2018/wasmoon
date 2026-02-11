@@ -202,9 +202,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
     for inst in block.instructions {
       let is_i64 = inst.first_result() is Some(result) &&
         result.ty is @ir.Type::I64
+      let is_shift_fusable_int = inst.first_result() is Some(result) &&
+        (result.ty is @ir.Type::I64 || result.ty is @ir.Type::I32)
       match inst.opcode {
         @ir.Opcode::Iadd => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
@@ -215,15 +217,17 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // multiply can be fused into a single MADD; the other must be materialized.
           let lhs = inst.operands[0]
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
-            match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
-            continue
-          }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
-            match_mul_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
-            continue
+          if is_i64 {
+            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+              match_mul_value(ctx, rhs) is Some(_) {
+              skipped.add(rhs.id)
+              continue
+            }
+            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+              match_mul_value(ctx, lhs) is Some(_) {
+              skipped.add(lhs.id)
+              continue
+            }
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
@@ -237,16 +241,18 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
         }
         @ir.Opcode::Isub => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
             continue
           }
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
-            match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+          if is_i64 {
+            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+              match_mul_value(ctx, rhs) is Some(_) {
+              skipped.add(rhs.id)
+            }
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
@@ -254,7 +260,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
         }
         @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
@@ -266,11 +272,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // If this op will lower to a logical-immediate form (and/orr/eor immediate),
           // then no shift producer is subsumed. Skipping it would create an undefined vreg.
           let lhs_is_imm = match get_const_value(ctx, lhs) {
-            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            Some(imm) =>
+              @instr.aarch64_logic_imm_enc_bits(imm, is_i64) is Some(_)
             None => false
           }
           let rhs_is_imm = match get_const_value(ctx, rhs) {
-            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            Some(imm) =>
+              @instr.aarch64_logic_imm_enc_bits(imm, is_i64) is Some(_)
             None => false
           }
           if lhs_is_imm || rhs_is_imm {

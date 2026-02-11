@@ -642,6 +642,28 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(rd, tmp)
     }
+    @instr.AddShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, rm)
+      let sh = amount & 31
+      if sh != 0 {
+        match shift {
+          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+        }
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+      self.x86_emit_add_rr32(rd, tmp)
+    }
     @instr.SubShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -663,6 +685,28 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, rn)
       }
       self.x86_emit_sub_rr(rd, tmp)
+    }
+    @instr.SubShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, rm)
+      let sh = amount & 31
+      if sh != 0 {
+        match shift {
+          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+        }
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+      self.x86_emit_sub_rr32(rd, tmp)
     }
     @instr.AndShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
@@ -686,6 +730,28 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_and_rr(rd, tmp)
     }
+    @instr.AndShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, rm)
+      let sh = amount & 31
+      if sh != 0 {
+        match shift {
+          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+        }
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+      self.x86_emit_and_rr32(rd, tmp)
+    }
     @instr.OrShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -708,6 +774,28 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_or_rr(rd, tmp)
     }
+    @instr.OrShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, rm)
+      let sh = amount & 31
+      if sh != 0 {
+        match shift {
+          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+        }
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+      self.x86_emit_or_rr32(rd, tmp)
+    }
     @instr.XorShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -729,6 +817,28 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, rn)
       }
       self.x86_emit_xor_rr(rd, tmp)
+    }
+    @instr.XorShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn {
+        tmp = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr32(tmp, rm)
+      let sh = amount & 31
+      if sh != 0 {
+        match shift {
+          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+        }
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr32(rd, rn)
+      }
+      self.x86_emit_xor_rr32(rd, tmp)
     }
     @instr.Not(is_64) => {
       let rd = wreg_num(inst.defs[0])

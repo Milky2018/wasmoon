@@ -950,11 +950,23 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_add_shifted(rd, rn, rm, shift, amount)
     }
+    AddShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_add_shifted32(rd, rn, rm, shift, amount)
+    }
     SubShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_sub_shifted(rd, rn, rm, shift, amount)
+    }
+    SubShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_sub_shifted32(rd, rn, rm, shift, amount)
     }
     AndShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
@@ -962,17 +974,35 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_and_shifted(rd, rn, rm, shift, amount)
     }
+    AndShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_and_shifted32(rd, rn, rm, shift, amount)
+    }
     OrShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_orr_shifted(rd, rn, rm, shift, amount)
     }
+    OrShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_orr_shifted32(rd, rn, rm, shift, amount)
+    }
     XorShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_eor_shifted(rd, rn, rm, shift, amount)
+    }
+    XorShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_eor_shifted32(rd, rn, rm, shift, amount)
     }
     // AArch64-specific: multiply-accumulate instructions
     Madd => {

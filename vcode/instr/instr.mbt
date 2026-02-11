@@ -324,6 +324,12 @@ pub(all) enum VCodeOpcode {
   AndShifted(ShiftType, Int) // AND Xd, Xn, Xm, shift #amount
   OrShifted(ShiftType, Int) // ORR Xd, Xn, Xm, shift #amount
   XorShifted(ShiftType, Int) // EOR Xd, Xn, Xm, shift #amount
+  // 32-bit shifted operand forms (Cranelift-aligned for i32 lowering)
+  AddShifted32(ShiftType, Int) // ADD Wd, Wn, Wm, shift #amount
+  SubShifted32(ShiftType, Int) // SUB Wd, Wn, Wm, shift #amount
+  AndShifted32(ShiftType, Int) // AND Wd, Wn, Wm, shift #amount
+  OrShifted32(ShiftType, Int) // ORR Wd, Wn, Wm, shift #amount
+  XorShifted32(ShiftType, Int) // EOR Wd, Wn, Wm, shift #amount
   // AArch64-specific: multiply-accumulate instructions
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
@@ -990,6 +996,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     AndShifted(shift, amount) => "and.\{shift} #\{amount}"
     OrShifted(shift, amount) => "or.\{shift} #\{amount}"
     XorShifted(shift, amount) => "xor.\{shift} #\{amount}"
+    AddShifted32(shift, amount) => "add32.\{shift} #\{amount}"
+    SubShifted32(shift, amount) => "sub32.\{shift} #\{amount}"
+    AndShifted32(shift, amount) => "and32.\{shift} #\{amount}"
+    OrShifted32(shift, amount) => "or32.\{shift} #\{amount}"
+    XorShifted32(shift, amount) => "xor32.\{shift} #\{amount}"
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
