@@ -533,6 +533,35 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_and_rr32(rd, scratch)
       }
     }
+    @instr.AndNot(is_64) => {
+      // rd = rn & ~rm
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn || tmp == rm {
+        tmp = isa.scratch_reg_2_index()
+      }
+      if tmp == rd || tmp == rn || tmp == rm {
+        abort("x86_64 andnot: no scratch register available")
+      }
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      if is_64 {
+        self.x86_emit_mov_rr(tmp, rm)
+        self.x86_emit_not_r64(tmp)
+        self.x86_emit_and_rr(rd, tmp)
+      } else {
+        self.x86_emit_mov_rr32(tmp, rm)
+        self.x86_emit_not_r32(tmp)
+        self.x86_emit_and_rr32(rd, tmp)
+      }
+    }
     @instr.Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -570,6 +599,35 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, scratch)
       }
     }
+    @instr.OrNot(is_64) => {
+      // rd = rn | ~rm
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn || tmp == rm {
+        tmp = isa.scratch_reg_2_index()
+      }
+      if tmp == rd || tmp == rn || tmp == rm {
+        abort("x86_64 ornot: no scratch register available")
+      }
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      if is_64 {
+        self.x86_emit_mov_rr(tmp, rm)
+        self.x86_emit_not_r64(tmp)
+        self.x86_emit_or_rr(rd, tmp)
+      } else {
+        self.x86_emit_mov_rr32(tmp, rm)
+        self.x86_emit_not_r32(tmp)
+        self.x86_emit_or_rr32(rd, tmp)
+      }
+    }
     @instr.Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -605,6 +663,35 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr(rd, scratch)
       } else {
         self.x86_emit_xor_rr32(rd, scratch)
+      }
+    }
+    @instr.XorNot(is_64) => {
+      // rd = rn ^ ~rm
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn || tmp == rm {
+        tmp = isa.scratch_reg_2_index()
+      }
+      if tmp == rd || tmp == rn || tmp == rm {
+        abort("x86_64 xornot: no scratch register available")
+      }
+      if rd != rn {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+      }
+      if is_64 {
+        self.x86_emit_mov_rr(tmp, rm)
+        self.x86_emit_not_r64(tmp)
+        self.x86_emit_xor_rr(rd, tmp)
+      } else {
+        self.x86_emit_mov_rr32(tmp, rm)
+        self.x86_emit_not_r32(tmp)
+        self.x86_emit_xor_rr32(rd, tmp)
       }
     }
     @instr.AddShifted(shift, amount) => {

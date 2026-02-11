@@ -921,6 +921,30 @@ fn lower_band(
     return
   }
 
+  // Pattern: and(x, bnot(y)) -> AndNot
+  if match_bnot_value(ctx, rhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(AndNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: and(bnot(y), x) -> AndNot
+  if match_bnot_value(ctx, lhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(AndNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
   // Pattern: and(x, shl(y, n)) -> AndShifted/AndShifted32
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
@@ -1002,6 +1026,30 @@ fn lower_bor(
     return
   }
 
+  // Pattern: or(x, bnot(y)) -> OrNot
+  if match_bnot_value(ctx, rhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(OrNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: or(bnot(y), x) -> OrNot
+  if match_bnot_value(ctx, lhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(OrNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
   // Pattern: or(x, shl(y, n)) -> OrShifted/OrShifted32
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
@@ -1079,6 +1127,30 @@ fn lower_bxor(
     let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rhs))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: xor(x, bnot(y)) -> XorNot
+  if match_bnot_value(ctx, rhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(lhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(XorNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Pattern: xor(bnot(y), x) -> XorNot
+  if match_bnot_value(ctx, lhs_val) is Some(not_src) {
+    let rn = ctx.get_vreg_for_use(rhs_val, block)
+    let rm = ctx.get_vreg_for_use(not_src, block)
+    let vcode_inst = @instr.VCodeInst::new(XorNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
     block.add_inst(vcode_inst)
     return
   }

@@ -129,6 +129,16 @@ fn MachineCode::emit_instruction(
         self.emit_and_reg32(rd, rn, rm)
       }
     }
+    AndNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_bic_reg(rd, rn, rm)
+      } else {
+        self.emit_bic_reg32(rd, rn, rm)
+      }
+    }
     AndImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -161,6 +171,16 @@ fn MachineCode::emit_instruction(
         self.emit_orr_reg32(rd, rn, rm)
       }
     }
+    OrNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_orn_reg(rd, rn, rm)
+      } else {
+        self.emit_orn_reg32(rd, rn, rm)
+      }
+    }
     OrImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -190,6 +210,16 @@ fn MachineCode::emit_instruction(
         self.emit_eor_reg(rd, rn, rm)
       } else {
         self.emit_eor_reg32(rd, rn, rm)
+      }
+    }
+    XorNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_eon_reg(rd, rn, rm)
+      } else {
+        self.emit_eon_reg32(rd, rn, rm)
       }
     }
     XorImm(imm, is_64) => {

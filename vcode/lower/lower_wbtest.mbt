@@ -821,6 +821,81 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
 }
 
 ///|
+test "lower and(x, bnot(y)) to andnot" {
+  let builder = @ir.IRBuilder::new("andnot_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_y = builder.bnot(y)
+  let result = builder.band(x, not_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode andnot_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = andnot v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower or(bnot(x), y) to ornot" {
+  let builder = @ir.IRBuilder::new("ornot_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_x = builder.bnot(x)
+  let result = builder.bor(not_x, y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode ornot_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ornot v1, v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 xor(x, bnot(y)) to xornot32" {
+  let builder = @ir.IRBuilder::new("xornot32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_y = builder.bnot(y)
+  let result = builder.bxor(x, not_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode xornot32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = xornot32 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "madd commutative: add(mul(x, y), z) to madd" {
   // Pattern: add(mul(x, y), z) -> MADD: z + x * y (commutative)
   let builder = @ir.IRBuilder::new("madd_commutative")

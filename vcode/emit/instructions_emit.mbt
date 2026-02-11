@@ -435,6 +435,26 @@ pub fn MachineCode::emit_and_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_bic_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  BicReg(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_bic_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  BicReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_and_imm(
   self : MachineCode,
   rd : Int,
@@ -475,6 +495,26 @@ pub fn MachineCode::emit_orr_reg32(
 }
 
 ///|
+pub fn MachineCode::emit_orn_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  OrnReg(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_orn_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  OrnReg32(rd, rn, rm).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_orr_imm(
   self : MachineCode,
   rd : Int,
@@ -512,6 +552,26 @@ pub fn MachineCode::emit_eor_reg32(
   rm : Int,
 ) -> Unit {
   EorReg32(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eon_reg(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  EonReg(rd, rn, rm).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_eon_reg32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+) -> Unit {
+  EonReg32(rd, rn, rm).emit(self)
 }
 
 ///|

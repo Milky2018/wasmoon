@@ -296,6 +296,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x0A // AND 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    BicReg(rd, rn, rm) => {
+      // BIC Xd, Xn, Xm (AND with NOT Rm) = AND shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 138
+      (b0, b1, b2, b3)
+    }
+    BicReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x0A
+      (b0, b1, b2, b3)
+    }
     AndImm(rd, rn, imm_bits) => {
       // AND (immediate): bits_31_23 = 000_100100 with sf=1.
       let top9 = 0b000_100100 | (1 << 8)
@@ -354,6 +369,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x2A // ORR 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    OrnReg(rd, rn, rm) => {
+      // ORN Xd, Xn, Xm (OR with NOT Rm) = ORR shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 170
+      (b0, b1, b2, b3)
+    }
+    OrnReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x2A
+      (b0, b1, b2, b3)
+    }
     OrrImm(rd, rn, imm_bits) => {
       // ORR (immediate): bits_31_23 = 001_100100 with sf=1.
       let top9 = 0b001_100100 | (1 << 8)
@@ -410,6 +440,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 0x4A // EOR 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    EonReg(rd, rn, rm) => {
+      // EON Xd, Xn, Xm (XOR with NOT Rm) = EOR shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 202
+      (b0, b1, b2, b3)
+    }
+    EonReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x4A
       (b0, b1, b2, b3)
     }
     EorImm(rd, rn, imm_bits) => {

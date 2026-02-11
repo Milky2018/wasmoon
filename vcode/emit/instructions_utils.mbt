@@ -54,6 +54,8 @@ enum Instruction {
   // Bitwise - Register
   AndReg(Int, Int, Int)
   AndReg32(Int, Int, Int)
+  BicReg(Int, Int, Int)
+  BicReg32(Int, Int, Int)
   // Bitwise - Immediate (logical/bitmask immediate). imm_bits is N:immr:imms (13 bits).
   AndImm(Int, Int, Int)
   AndImm32(Int, Int, Int)
@@ -61,12 +63,16 @@ enum Instruction {
   AndShifted32(Int, Int, Int, @instr.ShiftType, Int)
   OrrReg(Int, Int, Int)
   OrrReg32(Int, Int, Int)
+  OrnReg(Int, Int, Int)
+  OrnReg32(Int, Int, Int)
   OrrImm(Int, Int, Int)
   OrrImm32(Int, Int, Int)
   OrrShifted(Int, Int, Int, @instr.ShiftType, Int)
   OrrShifted32(Int, Int, Int, @instr.ShiftType, Int)
   EorReg(Int, Int, Int)
   EorReg32(Int, Int, Int)
+  EonReg(Int, Int, Int)
+  EonReg32(Int, Int, Int)
   EorImm(Int, Int, Int)
   EorImm32(Int, Int, Int)
   EorShifted(Int, Int, Int, @instr.ShiftType, Int)
@@ -612,6 +618,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     Mul32(rd, rn, rm) => "mul w\{rd}, w\{rn}, w\{rm}"
     AndReg(rd, rn, rm) => "and x\{rd}, x\{rn}, x\{rm}"
     AndReg32(rd, rn, rm) => "and w\{rd}, w\{rn}, w\{rm}"
+    BicReg(rd, rn, rm) => "bic x\{rd}, x\{rn}, x\{rm}"
+    BicReg32(rd, rn, rm) => "bic w\{rd}, w\{rn}, w\{rm}"
     AndImm(rd, rn, imm_bits) => "and x\{rd}, x\{rn}, #imml(\{imm_bits})"
     AndImm32(rd, rn, imm_bits) => "and w\{rd}, w\{rn}, #imml(\{imm_bits})"
     AndShifted(rd, rn, rm, shift, amount) => {
@@ -632,6 +640,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     OrrReg(rd, rn, rm) => "orr x\{rd}, x\{rn}, x\{rm}"
     OrrReg32(rd, rn, rm) => "orr w\{rd}, w\{rn}, w\{rm}"
+    OrnReg(rd, rn, rm) => "orn x\{rd}, x\{rn}, x\{rm}"
+    OrnReg32(rd, rn, rm) => "orn w\{rd}, w\{rn}, w\{rm}"
     OrrImm(rd, rn, imm_bits) => "orr x\{rd}, x\{rn}, #imml(\{imm_bits})"
     OrrImm32(rd, rn, imm_bits) => "orr w\{rd}, w\{rn}, #imml(\{imm_bits})"
     OrrShifted(rd, rn, rm, shift, amount) => {
@@ -652,6 +662,8 @@ fn Instruction::annotate(self : Instruction) -> String {
     }
     EorReg(rd, rn, rm) => "eor x\{rd}, x\{rn}, x\{rm}"
     EorReg32(rd, rn, rm) => "eor w\{rd}, w\{rn}, w\{rm}"
+    EonReg(rd, rn, rm) => "eon x\{rd}, x\{rn}, x\{rm}"
+    EonReg32(rd, rn, rm) => "eon w\{rd}, w\{rn}, w\{rm}"
     EorImm(rd, rn, imm_bits) => "eor x\{rd}, x\{rn}, #imml(\{imm_bits})"
     EorImm32(rd, rn, imm_bits) => "eor w\{rd}, w\{rn}, #imml(\{imm_bits})"
     EorShifted(rd, rn, rm, shift, amount) => {

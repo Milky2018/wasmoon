@@ -205,6 +205,9 @@ pub(all) enum VCodeOpcode {
   Rotr(Bool) // Rotate right with size
   RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
   Not(Bool) // Bitwise NOT with size: true = 64-bit, false = 32-bit
+  AndNot(Bool) // x & ~y
+  OrNot(Bool) // x | ~y
+  XorNot(Bool) // x ^ ~y
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
   FSub(Bool)
@@ -907,6 +910,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
     RotrImm(imm, is_64) => if is_64 { "rotr #\{imm}" } else { "rotr32 #\{imm}" }
     Not(is_64) => if is_64 { "not" } else { "not32" }
+    AndNot(is_64) => if is_64 { "andnot" } else { "andnot32" }
+    OrNot(is_64) => if is_64 { "ornot" } else { "ornot32" }
+    XorNot(is_64) => if is_64 { "xornot" } else { "xornot32" }
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
     FMul(is_f32) => if is_f32 { "fmul.s" } else { "fmul.d" }

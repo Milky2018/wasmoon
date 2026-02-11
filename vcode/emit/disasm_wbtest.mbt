@@ -843,3 +843,27 @@ test "div_overflow_trap_sequence" {
     ),
   )
 }
+
+///|
+test "logical not-right register forms" {
+  let mc = MachineCode::new()
+  mc.emit_bic_reg(0, 1, 2)
+  mc.emit_bic_reg32(3, 4, 5)
+  mc.emit_orn_reg(6, 7, 8)
+  mc.emit_orn_reg32(9, 10, 11)
+  mc.emit_eon_reg(12, 13, 14)
+  mc.emit_eon_reg32(15, 16, 17)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 2000228a  bic x0, x1, x2
+      #|  0004: 8300250a  bic w3, w4, w5
+      #|  0008: e60028aa  orn x6, x7, x8
+      #|  000c: 49012b2a  orn w9, w10, w11
+      #|  0010: ac012eca  eon x12, x13, x14
+      #|  0014: 0f02314a  eon w15, w16, w17
+      #|
+    ),
+  )
+}

@@ -285,6 +285,16 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             continue
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_bnot_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_bnot_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
+            continue
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
             continue
@@ -598,6 +608,17 @@ fn match_mul_value(
   if find_defining_inst(ctx, value) is Some(inst) &&
     inst.opcode is @ir.Opcode::Imul {
     return Some((inst.operands[0], inst.operands[1]))
+  }
+  None
+}
+
+///|
+/// Check if a value is defined by bitwise NOT.
+/// Returns the inner operand if matched.
+fn match_bnot_value(ctx : LoweringContext, value : @ir.Value) -> @ir.Value? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Bnot {
+    return Some(inst.operands[0])
   }
   None
 }
