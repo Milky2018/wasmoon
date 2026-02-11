@@ -1199,6 +1199,33 @@ test "regalloc: direct move does not force bundle merge" {
 }
 
 ///|
+test "regalloc: direct move merges with matching call profile" {
+  let func = VCodeFunction::new("merge_move_profile_match")
+  let a = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+  let mov = @instr.VCodeInst::new(@instr.Move)
+  let v1 = func.new_vreg(@abi.Int)
+  mov.add_def({ reg: @abi.Virtual(v1) })
+  mov.add_use(@abi.Virtual(a))
+  block.add_inst(mov)
+  block.set_terminator(@instr.Return([@abi.Virtual(v1)]))
+  let live = compute_liveness(func)
+  let ranges = build_live_ranges(func, live)
+  let src = ranges.get_by_vreg(a.id).unwrap()
+  let dst = ranges.get_by_vreg(v1.id).unwrap()
+  src.crosses_call = true
+  src.crosses_wasm_call = true
+  src.crosses_c_call = false
+  dst.crosses_call = true
+  dst.crosses_wasm_call = true
+  dst.crosses_c_call = false
+  let bundles = build_bundles_with_merging(func, ranges)
+  inspect(src.bundle_id == dst.bundle_id, content="true")
+  inspect(bundles.length(), content="1")
+}
+
+///|
 test "regalloc: move-merge rejects fixed-def boundary overlap" {
   let func = VCodeFunction::new("merge_fixed_def_boundary")
   let p = func.add_param(@abi.Int)
