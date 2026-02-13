@@ -169,7 +169,10 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     wasmoon_bin = repo_root / "wasmoon"
     if not wasmoon_bin.exists():
-        print("Error: wasmoon binary not found. Run moon build && ./install.sh first.")
+        print(
+            "Error: wasmoon binary not found. "
+            "Run moon build --target native --release && ./install.sh first."
+        )
         sys.exit(1)
 
     test_dir = repo_root / args.dir

@@ -28,7 +28,7 @@ jobs:
 
       - name: build wasmoon
         run: |
-          moon build --target native
+          moon build --target native --release
           ./install.sh
 
       - name: install wasmtime
