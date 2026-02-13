@@ -59,7 +59,7 @@ jobs:
       - name: Build wasmoon
         shell: bash
         run: |
-          moon build --target native
+          moon build --target native --release
           ./install.sh
 
       - name: Package tarball

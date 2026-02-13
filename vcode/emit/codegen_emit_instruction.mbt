@@ -129,6 +129,16 @@ fn MachineCode::emit_instruction(
         self.emit_and_reg32(rd, rn, rm)
       }
     }
+    AndNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_bic_reg(rd, rn, rm)
+      } else {
+        self.emit_bic_reg32(rd, rn, rm)
+      }
+    }
     AndImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -161,6 +171,16 @@ fn MachineCode::emit_instruction(
         self.emit_orr_reg32(rd, rn, rm)
       }
     }
+    OrNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_orn_reg(rd, rn, rm)
+      } else {
+        self.emit_orn_reg32(rd, rn, rm)
+      }
+    }
     OrImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -190,6 +210,16 @@ fn MachineCode::emit_instruction(
         self.emit_eor_reg(rd, rn, rm)
       } else {
         self.emit_eor_reg32(rd, rn, rm)
+      }
+    }
+    XorNot(is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_eon_reg(rd, rn, rm)
+      } else {
+        self.emit_eon_reg32(rd, rn, rm)
       }
     }
     XorImm(imm, is_64) => {
@@ -950,11 +980,45 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_add_shifted(rd, rn, rm, shift, amount)
     }
+    AddExtend(ext, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match ext {
+        @instr.IndexExtend::Uxtw => self.emit_add_uxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::Sxtw => self.emit_add_sxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::None =>
+          abort("AddExtend expects Uxtw or Sxtw, got None")
+      }
+    }
+    SubExtend(ext, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      match ext {
+        @instr.IndexExtend::Uxtw => self.emit_sub_uxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::Sxtw => self.emit_sub_sxtw(rd, rn, rm, amount)
+        @instr.IndexExtend::None =>
+          abort("SubExtend expects Uxtw or Sxtw, got None")
+      }
+    }
+    AddShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_add_shifted32(rd, rn, rm, shift, amount)
+    }
     SubShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_sub_shifted(rd, rn, rm, shift, amount)
+    }
+    SubShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_sub_shifted32(rd, rn, rm, shift, amount)
     }
     AndShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
@@ -962,17 +1026,35 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_and_shifted(rd, rn, rm, shift, amount)
     }
+    AndShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_and_shifted32(rd, rn, rm, shift, amount)
+    }
     OrShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_orr_shifted(rd, rn, rm, shift, amount)
     }
+    OrShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_orr_shifted32(rd, rn, rm, shift, amount)
+    }
     XorShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_eor_shifted(rd, rn, rm, shift, amount)
+    }
+    XorShifted32(shift, amount) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_eor_shifted32(rd, rn, rm, shift, amount)
     }
     // AArch64-specific: multiply-accumulate instructions
     Madd => {
@@ -997,6 +1079,29 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       self.emit_mneg(rd, rn, rm)
+    }
+    Madd32 => {
+      // Wd = Wa + Wn * Wm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      self.emit_madd32(rd, rn, rm, ra)
+    }
+    Msub32 => {
+      // Wd = Wa - Wn * Wm, uses: [acc, src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let ra = reg_num(inst.uses[0]) // accumulator
+      let rn = reg_num(inst.uses[1]) // multiplicand
+      let rm = reg_num(inst.uses[2]) // multiplier
+      self.emit_msub32(rd, rn, rm, ra)
+    }
+    Mneg32 => {
+      // Wd = -(Wn * Wm), uses: [src1, src2]
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      self.emit_mneg32(rd, rn, rm)
     }
     Umulh => {
       // Xd = (Xn * Xm) >> 64 (unsigned), uses: [src1, src2]
@@ -1172,8 +1277,10 @@ fn MachineCode::emit_instruction(
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 descriptor pointer is cached in X20.
-        self.emit_ldr_imm(dst, mem0_desc_index(), 0)
+        // Fast path: memory0 base pointer is cached in X20.
+        if dst != mem0_desc_index() {
+          self.emit_mov_reg(dst, mem0_desc_index())
+        }
       } else if memidx == 0 {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
         self.emit_ldr_imm(dst, dst, 0)

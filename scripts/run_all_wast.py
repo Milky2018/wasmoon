@@ -2,24 +2,30 @@
 """Run all .wast tests and report results for both JIT and interpreter modes."""
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
+DEFAULT_TEST_TIMEOUT_SECONDS = int(os.environ.get("WASMOON_WAST_TIMEOUT", "20"))
 
-def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+
+def run_test(
+    repo_root: Path, wasmoon_bin: Path, wast_file: Path, use_jit: bool
+) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     """Run a single wast test and return (passed, failed, error)."""
-    cmd = ["./wasmoon", "test", str(wast_file)]
+    cmd = [str(wasmoon_bin), "test", str(wast_file)]
     if not use_jit:
         cmd.append("--no-jit")
 
     try:
         result = subprocess.run(
             cmd,
+            cwd=repo_root,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=DEFAULT_TEST_TIMEOUT_SECONDS,
         )
         output = result.stdout + result.stderr
 
@@ -55,7 +61,7 @@ def run_test(wast_file: Path, use_jit: bool) -> Tuple[Optional[int], Optional[in
         return None, None, str(e)
 
 
-def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) -> dict:
+def run_tests_for_mode(repo_root: Path, wasmoon_bin: Path, wast_files: list[Path], test_dir: Path, use_jit: bool) -> dict:
     """Run all tests for a specific mode and return results."""
     mode_name = "JIT" if use_jit else "Interpreter"
     print(f"\n{'='*60}")
@@ -70,7 +76,7 @@ def run_tests_for_mode(wast_files: list[Path], test_dir: Path, use_jit: bool) ->
 
     for wast_file in wast_files:
         name = str(wast_file.relative_to(test_dir))
-        passed, failed, error = run_test(wast_file, use_jit)
+        passed, failed, error = run_test(repo_root, wasmoon_bin, wast_file, use_jit)
 
         if error or passed is None or failed is None:
             status = f"ERROR: {error[:50] if error else 'Unknown error'}"
@@ -160,7 +166,16 @@ def main() -> None:
     if args.only_jit and args.only_interp:
         parser.error("--only-jit and --only-interp are mutually exclusive")
 
-    test_dir = Path(args.dir)
+    repo_root = Path(__file__).resolve().parent.parent
+    wasmoon_bin = repo_root / "wasmoon"
+    if not wasmoon_bin.exists():
+        print(
+            "Error: wasmoon binary not found. "
+            "Run moon build --target native --release && ./install.sh first."
+        )
+        sys.exit(1)
+
+    test_dir = repo_root / args.dir
     if not test_dir.exists():
         print(f"Error: Directory '{test_dir}' does not exist")
         return
@@ -184,11 +199,11 @@ def main() -> None:
     # Run tests based on mode selection
     if not args.only_jit:
         # Run tests with interpreter (--no-jit)
-        interp_results = run_tests_for_mode(wast_files, test_dir, use_jit=False)
+        interp_results = run_tests_for_mode(repo_root, wasmoon_bin, wast_files, test_dir, use_jit=False)
 
     if not args.only_interp:
         # Run tests with JIT
-        jit_results = run_tests_for_mode(wast_files, test_dir, use_jit=True)
+        jit_results = run_tests_for_mode(repo_root, wasmoon_bin, wast_files, test_dir, use_jit=True)
 
     # Print combined summary
     print("\n" + "=" * 60)

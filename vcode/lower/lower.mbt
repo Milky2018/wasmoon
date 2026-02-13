@@ -91,7 +91,14 @@ fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
 fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
   let skipped : @hashset.HashSet[Int] = @hashset.new()
   let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
+  let addrmode_subsumed_uses : Map[Int, Int] = {}
   let is_amd64 = @isa.ISA::current() is @isa.AMD64
+  let is_aarch64 = @isa.ISA::current() is @isa.AArch64
+
+  fn mark_addrmode_subsumed_use(value_id : Int) -> Unit {
+    let old = addrmode_subsumed_uses.get(value_id).unwrap_or(0)
+    addrmode_subsumed_uses.set(value_id, old + 1)
+  }
 
   // Pass 1: find address values that will be subsumed by load/store lowering.
   for block in ctx.ir_func.blocks {
@@ -100,9 +107,6 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
         @ir.Opcode::LoadPtr(ty) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
-          if ctx.use_counts.get(base_value.id).unwrap_or(0) != 1 {
-            continue
-          }
           let access_size = match ty {
             @ir.Type::I32 | @ir.Type::F32 => 4
             @ir.Type::I64
@@ -121,16 +125,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           } else {
             0L
           }
-          if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
-            let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
-              addrmode_skipped.add(base_value.id)
-              continue
-            }
-          }
+          let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, ext, shift, _, extra_offset, has_extra)) &&
+            is Some(
+              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
+            ) &&
             (
               !is_amd64 ||
               (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
@@ -140,16 +140,24 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
-              addrmode_skipped.add(base_value.id)
+              mark_addrmode_subsumed_use(base_value.id)
+              for value_id in subsumed {
+                mark_addrmode_subsumed_use(value_id)
+              }
+              matched = true
+            }
+          }
+          if !matched &&
+            match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              mark_addrmode_subsumed_use(base_value.id)
             }
           }
         }
         @ir.Opcode::StorePtr(ty) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
-          if ctx.use_counts.get(base_value.id).unwrap_or(0) != 1 {
-            continue
-          }
           let access_size = match ty {
             @ir.Type::I32 | @ir.Type::F32 => 4
             @ir.Type::I64
@@ -168,16 +176,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           } else {
             0L
           }
-          if match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
-            let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
-              addrmode_skipped.add(base_value.id)
-              continue
-            }
-          }
+          let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, ext, shift, _, extra_offset, has_extra)) &&
+            is Some(
+              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
+            ) &&
             (
               !is_amd64 ||
               (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
@@ -187,12 +191,104 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
-              addrmode_skipped.add(base_value.id)
+              mark_addrmode_subsumed_use(base_value.id)
+              for value_id in subsumed {
+                mark_addrmode_subsumed_use(value_id)
+              }
+              matched = true
+            }
+          }
+          if !matched &&
+            match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              mark_addrmode_subsumed_use(base_value.id)
+            }
+          }
+        }
+        @ir.Opcode::LoadPtrNarrow(_, bits, _) => {
+          guard inst.operands.length() >= 1 else { continue }
+          let base_value = inst.operands[0]
+          let access_size = bits / 8
+          let explicit_offset = if inst.operands.length() > 1 {
+            if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
+              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              off
+            } else {
+              0L
+            }
+          } else {
+            0L
+          }
+          let mut matched = false
+          if is_aarch64 &&
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            let effective_offset = explicit_offset + extra_offset
+            if (effective_offset == 0L || has_extra) &&
+              prefer_reg_offset_for_index(
+                ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
+              ) {
+              mark_addrmode_subsumed_use(base_value.id)
+              for value_id in subsumed {
+                mark_addrmode_subsumed_use(value_id)
+              }
+              matched = true
+            }
+          }
+          if !matched &&
+            match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              mark_addrmode_subsumed_use(base_value.id)
+            }
+          }
+        }
+        @ir.Opcode::StorePtrNarrow(bits) => {
+          guard inst.operands.length() >= 2 else { continue }
+          let base_value = inst.operands[0]
+          let access_size = bits / 8
+          let explicit_offset = if inst.operands.length() > 2 {
+            if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
+              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              off
+            } else {
+              0L
+            }
+          } else {
+            0L
+          }
+          let mut matched = false
+          if is_aarch64 &&
+            match_addr_reg_offset(ctx, base_value, access_size)
+            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            let effective_offset = explicit_offset + extra_offset
+            if (effective_offset == 0L || has_extra) &&
+              prefer_reg_offset_for_index(
+                ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
+              ) {
+              mark_addrmode_subsumed_use(base_value.id)
+              for value_id in subsumed {
+                mark_addrmode_subsumed_use(value_id)
+              }
+              matched = true
+            }
+          }
+          if !matched &&
+            match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
+            let combined = explicit_offset + addr_offset
+            if is_valid_load_store_offset(combined, access_size) {
+              mark_addrmode_subsumed_use(base_value.id)
             }
           }
         }
         _ => ()
       }
+    }
+  }
+  for value_id, subsumed_count in addrmode_subsumed_uses {
+    if ctx.use_counts.get(value_id).unwrap_or(0) == subsumed_count {
+      addrmode_skipped.add(value_id)
     }
   }
 
@@ -202,9 +298,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
     for inst in block.instructions {
       let is_i64 = inst.first_result() is Some(result) &&
         result.ty is @ir.Type::I64
+      let is_shift_fusable_int = inst.first_result() is Some(result) &&
+        (result.ty is @ir.Type::I64 || result.ty is @ir.Type::I32)
       match inst.opcode {
         @ir.Opcode::Iadd => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
@@ -235,9 +333,23 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             skipped.add(lhs.id)
             continue
           }
+          if is_i64 &&
+            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if is_i64 &&
+            ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(lhs.id)
+            continue
+          }
         }
         @ir.Opcode::Isub => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
@@ -252,9 +364,15 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
           }
+          if is_i64 &&
+            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
+            !(ext is @instr.IndexExtend::None) {
+            skipped.add(rhs.id)
+          }
         }
         @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
-          if !is_i64 {
+          if !is_shift_fusable_int {
             continue
           }
           if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
@@ -266,14 +384,26 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // If this op will lower to a logical-immediate form (and/orr/eor immediate),
           // then no shift producer is subsumed. Skipping it would create an undefined vreg.
           let lhs_is_imm = match get_const_value(ctx, lhs) {
-            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            Some(imm) =>
+              @instr.aarch64_logic_imm_enc_bits(imm, is_i64) is Some(_)
             None => false
           }
           let rhs_is_imm = match get_const_value(ctx, rhs) {
-            Some(imm) => @instr.aarch64_logic_imm_enc_bits(imm, true) is Some(_)
+            Some(imm) =>
+              @instr.aarch64_logic_imm_enc_bits(imm, is_i64) is Some(_)
             None => false
           }
           if lhs_is_imm || rhs_is_imm {
+            continue
+          }
+          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            match_bnot_value(ctx, rhs) is Some(_) {
+            skipped.add(rhs.id)
+            continue
+          }
+          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            match_bnot_value(ctx, lhs) is Some(_) {
+            skipped.add(lhs.id)
             continue
           }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
@@ -595,6 +725,17 @@ fn match_mul_value(
 }
 
 ///|
+/// Check if a value is defined by bitwise NOT.
+/// Returns the inner operand if matched.
+fn match_bnot_value(ctx : LoweringContext, value : @ir.Value) -> @ir.Value? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Bnot {
+    return Some(inst.operands[0])
+  }
+  None
+}
+
+///|
 /// Check if a value is the constant 0
 fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
   if find_defining_inst(ctx, value) is Some(inst) &&
@@ -612,6 +753,23 @@ fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
     inst.opcode is @ir.Opcode::Iconst(val) {
     if is_valid_add_imm(val) {
       return Some(val)
+    }
+  }
+  None
+}
+
+///|
+/// Check if a value is a constant whose negation is a valid ADD/SUB immediate.
+/// Returns Some(-val) when val is a constant and -val fits AArch64 add/sub imm12.
+fn match_negated_add_imm_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> Int64? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Iconst(val) {
+    let neg = -val
+    if val < 0L && is_valid_add_imm(neg) {
+      return Some(neg)
     }
   }
   None

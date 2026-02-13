@@ -434,6 +434,8 @@ pub fn c_jit_memory_fill(Int, Int, Int) -> Unit
 
 pub fn c_jit_memory_init(Int64, Int64, FixedArray[Byte], Int) -> Int
 
+pub fn c_jit_memory_init_bytes(Int64, Int64, Bytes, Int) -> Int
+
 pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
@@ -479,6 +481,8 @@ pub fn c_mem_desc_memset(Int64, Int64, Int, Int) -> Int
 pub fn c_mem_desc_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_mem_desc_write(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn c_mem_desc_write_bytes(Int64, Int64, Bytes, Int) -> Int
 
 // Errors
 

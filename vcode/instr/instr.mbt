@@ -205,6 +205,9 @@ pub(all) enum VCodeOpcode {
   Rotr(Bool) // Rotate right with size
   RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
   Not(Bool) // Bitwise NOT with size: true = 64-bit, false = 32-bit
+  AndNot(Bool) // x & ~y
+  OrNot(Bool) // x | ~y
+  XorNot(Bool) // x ^ ~y
   // Floating-point operations (Bool = true for f32, false for f64)
   FAdd(Bool)
   FSub(Bool)
@@ -320,14 +323,26 @@ pub(all) enum VCodeOpcode {
   // AArch64-specific: shifted operand instructions
   // These combine an arithmetic/logical op with a shift in one instruction
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
+  AddExtend(IndexExtend, Int) // ADD Xd, Xn, Wm, {uxtw|sxtw} #amount
+  SubExtend(IndexExtend, Int) // SUB Xd, Xn, Wm, {uxtw|sxtw} #amount
   SubShifted(ShiftType, Int) // SUB Xd, Xn, Xm, shift #amount
   AndShifted(ShiftType, Int) // AND Xd, Xn, Xm, shift #amount
   OrShifted(ShiftType, Int) // ORR Xd, Xn, Xm, shift #amount
   XorShifted(ShiftType, Int) // EOR Xd, Xn, Xm, shift #amount
+  // 32-bit shifted operand forms (Cranelift-aligned for i32 lowering)
+  AddShifted32(ShiftType, Int) // ADD Wd, Wn, Wm, shift #amount
+  SubShifted32(ShiftType, Int) // SUB Wd, Wn, Wm, shift #amount
+  AndShifted32(ShiftType, Int) // AND Wd, Wn, Wm, shift #amount
+  OrShifted32(ShiftType, Int) // ORR Wd, Wn, Wm, shift #amount
+  XorShifted32(ShiftType, Int) // EOR Wd, Wn, Wm, shift #amount
   // AArch64-specific: multiply-accumulate instructions
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
+  // 32-bit multiply-accumulate forms (Cranelift fits_in_64 i32 coverage)
+  Madd32 // Wd = Wa + Wn * Wm (3 uses: acc, src1, src2)
+  Msub32 // Wd = Wa - Wn * Wm (3 uses: acc, src1, src2)
+  Mneg32 // Wd = -(Wn * Wm) (2 uses: src1, src2)
   // AArch64-specific: multiply high instructions
   Umulh // Xd = (Xn * Xm) >> 64 (unsigned multiply high, 64-bit only)
   Smulh // Xd = (Xn * Xm) >> 64 (signed multiply high, 64-bit only)
@@ -901,6 +916,9 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
     RotrImm(imm, is_64) => if is_64 { "rotr #\{imm}" } else { "rotr32 #\{imm}" }
     Not(is_64) => if is_64 { "not" } else { "not32" }
+    AndNot(is_64) => if is_64 { "andnot" } else { "andnot32" }
+    OrNot(is_64) => if is_64 { "ornot" } else { "ornot32" }
+    XorNot(is_64) => if is_64 { "xornot" } else { "xornot32" }
     FAdd(is_f32) => if is_f32 { "fadd.s" } else { "fadd.d" }
     FSub(is_f32) => if is_f32 { "fsub.s" } else { "fsub.d" }
     FMul(is_f32) => if is_f32 { "fmul.s" } else { "fmul.d" }
@@ -986,13 +1004,23 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     FpuMinnm(is_f32) => if is_f32 { "fminnm.s" } else { "fminnm.d" }
     // AArch64-specific
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
+    AddExtend(ext, amount) => "add.\{ext} #\{amount}"
+    SubExtend(ext, amount) => "sub.\{ext} #\{amount}"
     SubShifted(shift, amount) => "sub.\{shift} #\{amount}"
     AndShifted(shift, amount) => "and.\{shift} #\{amount}"
     OrShifted(shift, amount) => "or.\{shift} #\{amount}"
     XorShifted(shift, amount) => "xor.\{shift} #\{amount}"
+    AddShifted32(shift, amount) => "add32.\{shift} #\{amount}"
+    SubShifted32(shift, amount) => "sub32.\{shift} #\{amount}"
+    AndShifted32(shift, amount) => "and32.\{shift} #\{amount}"
+    OrShifted32(shift, amount) => "or32.\{shift} #\{amount}"
+    XorShifted32(shift, amount) => "xor32.\{shift} #\{amount}"
     Madd => "madd"
     Msub => "msub"
     Mneg => "mneg"
+    Madd32 => "madd32"
+    Msub32 => "msub32"
+    Mneg32 => "mneg32"
     Umulh => "umulh"
     Smulh => "smulh"
     Umull => "umull"

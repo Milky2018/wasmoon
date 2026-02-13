@@ -1,0 +1,374 @@
+{
+  "wasmoon_aead": {
+    "median_wall_sec": 5.516592125000898,
+    "median_stdout_value": 3414550000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 5.476711249968503,
+        "stdout": "3312515000",
+        "stderr": "",
+        "stdout_value": 3312515000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 5.532360790995881,
+        "stdout": "3267920000",
+        "stderr": "",
+        "stdout_value": 3267920000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 5.516592125000898,
+        "stdout": "3414550000",
+        "stderr": "",
+        "stdout_value": 3414550000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 5.489044000045396,
+        "stdout": "3505925000",
+        "stderr": "",
+        "stdout_value": 3505925000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 5.51781737501733,
+        "stdout": "3501170000",
+        "stderr": "",
+        "stdout_value": 3501170000.0
+      }
+    ]
+  },
+  "wasmtime_aead": {
+    "median_wall_sec": 0.7517072089831345,
+    "median_stdout_value": 3707425000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 0.7933998749940656,
+        "stdout": "3699650000",
+        "stderr": "",
+        "stdout_value": 3699650000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 0.7470589590375312,
+        "stdout": "3686385000",
+        "stderr": "",
+        "stdout_value": 3686385000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 0.7512461669975892,
+        "stdout": "3707425000",
+        "stderr": "",
+        "stdout_value": 3707425000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 0.7517072089831345,
+        "stdout": "3711555000",
+        "stderr": "",
+        "stdout_value": 3711555000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 0.776063458994031,
+        "stdout": "3835150000",
+        "stderr": "",
+        "stdout_value": 3835150000.0
+      }
+    ]
+  },
+  "wasmoon_benchmark": {
+    "median_wall_sec": 0.2513184159761295,
+    "median_stdout_value": 1.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 0.2545990420039743,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 0.2606261660112068,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 0.251089499972295,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 0.2513184159761295,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 0.25060158397536725,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      }
+    ]
+  },
+  "wasmtime_benchmark": {
+    "median_wall_sec": 0.28341487498255447,
+    "median_stdout_value": 1.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 0.2868315419764258,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 0.2815465409657918,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 0.2797409999766387,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 0.3089317500125617,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 0.28341487498255447,
+        "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+        "stderr": "",
+        "stdout_value": 1.0
+      }
+    ]
+  },
+  "wasmoon_keygen": {
+    "median_wall_sec": 3.983232875005342,
+    "median_stdout_value": 7430000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 3.946519042016007,
+        "stdout": "7430000",
+        "stderr": "",
+        "stdout_value": 7430000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 3.983232875005342,
+        "stdout": "7525000",
+        "stderr": "",
+        "stdout_value": 7525000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 4.048336833016947,
+        "stdout": "7345000",
+        "stderr": "",
+        "stdout_value": 7345000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 3.9464303749846295,
+        "stdout": "8065000",
+        "stderr": "",
+        "stdout_value": 8065000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 3.9939123339718208,
+        "stdout": "7290000",
+        "stderr": "",
+        "stdout_value": 7290000.0
+      }
+    ]
+  },
+  "wasmtime_keygen": {
+    "median_wall_sec": 0.010482000012416393,
+    "median_stdout_value": 8585000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 0.012538375041913241,
+        "stdout": "8625000",
+        "stderr": "",
+        "stdout_value": 8625000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 0.010482000012416393,
+        "stdout": "8585000",
+        "stderr": "",
+        "stdout_value": 8585000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 0.010192957997787744,
+        "stdout": "8290000",
+        "stderr": "",
+        "stdout_value": 8290000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 0.010731707967352122,
+        "stdout": "8505000",
+        "stderr": "",
+        "stdout_value": 8505000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 0.010252167005091906,
+        "stdout": "8790000",
+        "stderr": "",
+        "stdout_value": 8790000.0
+      }
+    ]
+  },
+  "wasmoon_sign2": {
+    "median_wall_sec": 7.605368582997471,
+    "median_stdout_value": 693405000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 7.593555125000421,
+        "stdout": "697275000",
+        "stderr": "",
+        "stdout_value": 697275000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 7.639615375024732,
+        "stdout": "693405000",
+        "stderr": "",
+        "stdout_value": 693405000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 7.605368582997471,
+        "stdout": "688245000",
+        "stderr": "",
+        "stdout_value": 688245000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 7.637800707947463,
+        "stdout": "679565000",
+        "stderr": "",
+        "stdout_value": 679565000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 7.531600165995769,
+        "stdout": "695315000",
+        "stderr": "",
+        "stdout_value": 695315000.0
+      }
+    ]
+  },
+  "wasmtime_sign2": {
+    "median_wall_sec": 0.14826066698879004,
+    "median_stdout_value": 692330000.0,
+    "runs": [
+      {
+        "iter": 1,
+        "exit_code": 0,
+        "wall_sec": 0.18615641701035202,
+        "stdout": "876595000",
+        "stderr": "",
+        "stdout_value": 876595000.0
+      },
+      {
+        "iter": 2,
+        "exit_code": 0,
+        "wall_sec": 0.14826066698879004,
+        "stdout": "692330000",
+        "stderr": "",
+        "stdout_value": 692330000.0
+      },
+      {
+        "iter": 3,
+        "exit_code": 0,
+        "wall_sec": 0.1498312499606982,
+        "stdout": "698875000",
+        "stderr": "",
+        "stdout_value": 698875000.0
+      },
+      {
+        "iter": 4,
+        "exit_code": 0,
+        "wall_sec": 0.1468913329881616,
+        "stdout": "685145000",
+        "stderr": "",
+        "stdout_value": 685145000.0
+      },
+      {
+        "iter": 5,
+        "exit_code": 0,
+        "wall_sec": 0.14785462501458824,
+        "stdout": "688865000",
+        "stderr": "",
+        "stdout_value": 688865000.0
+      }
+    ]
+  },
+  "aead_output_delta_pct": -7.89968778869431,
+  "benchmark_wall_delta_pct": -11.324902762566955,
+  "keygen_output_delta_pct": -13.453698311007573,
+  "sign2_output_delta_pct": 0.15527277454393137
+}

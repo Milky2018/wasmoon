@@ -1053,6 +1053,10 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init(int64_t mem_ptr, int64_t offset, 
     return 0;
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_jit_memory_init_bytes(int64_t mem_ptr, int64_t offset, moonbit_bytes_t data, int size) {
+    return wasmoon_jit_memory_init(mem_ptr, offset, data, size);
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_jit_memory_read(int64_t mem_ptr, int64_t offset, moonbit_bytes_t out, int size) {
     if (!mem_ptr || !out || size <= 0) return -1;
     uint8_t *mem = (uint8_t *)mem_ptr;
@@ -1089,6 +1093,10 @@ MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write(int64_t mem_desc_ptr, int64_t offs
     if (!mem || !mem->base || !data || size <= 0) return -1;
     memcpy(mem->base + offset, data, (size_t)size);
     return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_mem_desc_write_bytes(int64_t mem_desc_ptr, int64_t offset, moonbit_bytes_t data, int size) {
+    return wasmoon_mem_desc_write(mem_desc_ptr, offset, data, size);
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_mem_desc_memmove(int64_t mem_desc_ptr, int64_t dst, int64_t src, int size) {

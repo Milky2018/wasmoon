@@ -195,7 +195,6 @@ test "gc: deep reference chain" {
   // Add some garbage
   for _ in 0..<5 {
     let _ = heap.alloc_struct(0, [@types.Value::I32(999)])
-
   }
   inspect(heap.get_object_count(), content="15")
 
@@ -273,7 +272,6 @@ test "gc: field access after collection" {
   // Add garbage
   for _ in 0..<10 {
     let _ = heap.alloc_struct(0, [@types.Value::I32(999)])
-
   }
 
   // Collect

@@ -1081,20 +1081,20 @@ fn v128_pattern_match(
 fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
   match source {
     Binary(bytes) =>
-      (try? {
+      (try? ({
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
-      })
+      }))
       is Ok(_)
     Quote(parts) => {
       // Join quoted parts and parse as WAT
       let wat_source = "(module " +
         parts.iter().fold(init="", fn(acc, s) { acc + s }) +
         ")"
-      (try? {
+      (try? ({
         let mod_ = @wat.parse(wat_source)
         @validator.validate_module(mod_)
-      })
+      }))
       is Ok(_)
     }
     Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
@@ -1120,7 +1120,7 @@ fn try_instantiate_source(
   let imports = ctx.build_imports()
   match source {
     Binary(bytes) =>
-      (try? {
+      (try? ({
         let mod_ = @parser.parse_module(bytes)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
@@ -1128,17 +1128,17 @@ fn try_instantiate_source(
           imports,
         )
         ctx.current_module = Some(instance)
-      })
+      }))
       is Ok(_)
     Inline(mod_) =>
-      (try? {
+      (try? ({
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
           mod_,
           imports,
         )
         ctx.current_module = Some(instance)
-      })
+      }))
       is Ok(_)
     Quote(_) => false
     FailedToParse(_) => false // Module failed to parse, can't instantiate
@@ -1155,11 +1155,11 @@ fn try_instantiate_source_traps(
   let imports = ctx.build_imports()
   match source {
     Binary(bytes) =>
-      (try? {
+      (try? ({
         let mod_ = @parser.parse_module(bytes)
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
-      })
+      }))
       is Err(_)
     Inline(mod_) =>
       (try? (@executor.instantiate_module_with_imports(ctx.store, mod_, imports)

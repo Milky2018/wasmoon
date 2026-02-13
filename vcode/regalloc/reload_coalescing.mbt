@@ -100,13 +100,14 @@ fn allocate_reload_registers(
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen.
   let isa = @isa.ISA::current()
-  // - The func_table cache register (AArch64: x19).
-  used_int_regs.add(isa.func_table_reg_index()) |> ignore
   // - The pinned VMContext register (AArch64: x21).
   used_int_regs.add(isa.vmctx_reg_index()) |> ignore
   // - The cached memory0 descriptor pointer register when needed.
-  if func.uses_mem0() {
+  if func.should_cache_mem0_desc() {
     used_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
+  }
+  if func.should_cache_func_table() {
+    used_int_regs.add(isa.func_table_reg_index()) |> ignore
   }
   // - Extra results pointer register when needed.
   let calls_multi = func.calls_multi_value_function()
@@ -138,8 +139,8 @@ fn allocate_reload_registers(
     }
     @isa.AMD64 => {
       let env = isa.machine_env(
-        reserve_mem0_desc=func.uses_mem0(),
-        reserve_func_table=func.uses_func_table(),
+        reserve_mem0_desc=func.should_cache_mem0_desc(),
+        reserve_func_table=func.should_cache_func_table(),
         reserve_extra_results_ptr=needs_x23_reserved,
       )
       for r in env.callee_saved_int {

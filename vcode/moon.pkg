@@ -1,0 +1,14 @@
+import {
+  "Milky2018/wasmoon/types",
+  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/wasmoon/vcode/emit",
+  "Milky2018/wasmoon/vcode/regalloc",
+  "Milky2018/wasmoon/vcode/instr",
+  "Milky2018/wasmoon/vcode/block",
+  "moonbitlang/core/cmp",
+}
+
+import {
+  "Milky2018/wasmoon/vcode/isa",
+  "Milky2018/wasmoon/vcode/isa/aarch64",
+} for "wbtest"

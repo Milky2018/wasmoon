@@ -44,10 +44,8 @@ test "store_merging_peephole" {
       #|vcode test(v0:int, v1:int, v2:int) {
       #|block0:
       #|    v4 = load_mem_base mem=0 x21
-      #|    v6 = add #200 v4
-      #|    store_ptr8 +200 v4, v1
-      #|    v8 = add #201 v4
-      #|    store_ptr8 +201 v4, v2
+      #|    v9 = or.lsl #8 v1, v2
+      #|    store_ptr16 +200 v4, v9
       #|    ret
       #|}
       #|

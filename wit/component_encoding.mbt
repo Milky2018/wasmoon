@@ -732,7 +732,7 @@ fn lower_valtype_in_value(
         // Plain resource type in WIT value position is owned.
         let ridx = env.named_typeidx
           .get(n)
-          .unwrap_or_else(fn() {
+          .unwrap_or_else(() => {
             raise WitError::Error("unknown resource `" + n + "`")
           })
         let key = "own:" + ridx.to_string()
@@ -896,7 +896,7 @@ fn encode_interface_instancetype_full(
                 } else {
                   let target = env.named_typeidx
                     .get(rhs)
-                    .unwrap_or_else(fn() {
+                    .unwrap_or_else(() => {
                       raise WitError::Error("unknown type `" + rhs + "`")
                     })
                   env.export_type_eq(t.name, target) |> ignore
@@ -1166,7 +1166,7 @@ fn encode_componenttype_wrapper_for_interface(
     let (iface_key, names) = kv
     let dep_iface = iface_map
       .get(iface_key)
-      .unwrap_or_else(fn() {
+      .unwrap_or_else(() => {
         raise WitError::Error("unknown interface `" + iface_key + "`")
       })
     let hash = find_last_code_unit(iface_key, 35) // '#'
@@ -1244,7 +1244,7 @@ fn encode_componenttype_inner_for_world(
         let rkey = iface_ref_key(cur_pkg_key, p)
         let iface = iface_map
           .get(rkey)
-          .unwrap_or_else(fn() {
+          .unwrap_or_else(() => {
             raise WitError::Error(
               "unknown interface `" + p.raw + "` in world `" + world.name + "`",
             )

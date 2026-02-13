@@ -1,0 +1,46 @@
+{
+  "median_wall_sec": 3.983232875005342,
+  "median_stdout_value": 7430000.0,
+  "runs": [
+    {
+      "iter": 1,
+      "exit_code": 0,
+      "wall_sec": 3.946519042016007,
+      "stdout": "7430000",
+      "stderr": "",
+      "stdout_value": 7430000.0
+    },
+    {
+      "iter": 2,
+      "exit_code": 0,
+      "wall_sec": 3.983232875005342,
+      "stdout": "7525000",
+      "stderr": "",
+      "stdout_value": 7525000.0
+    },
+    {
+      "iter": 3,
+      "exit_code": 0,
+      "wall_sec": 4.048336833016947,
+      "stdout": "7345000",
+      "stderr": "",
+      "stdout_value": 7345000.0
+    },
+    {
+      "iter": 4,
+      "exit_code": 0,
+      "wall_sec": 3.9464303749846295,
+      "stdout": "8065000",
+      "stderr": "",
+      "stdout_value": 8065000.0
+    },
+    {
+      "iter": 5,
+      "exit_code": 0,
+      "wall_sec": 3.9939123339718208,
+      "stdout": "7290000",
+      "stderr": "",
+      "stdout_value": 7290000.0
+    }
+  ]
+}

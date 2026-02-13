@@ -239,7 +239,7 @@ pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // Additional improvement opportunities are handled by later passes.
   self.egraph.saturate_indexed_with_limits(
     self.ruleset,
-    2,
+    1,
     self.saturation_limits,
   )
   |> ignore

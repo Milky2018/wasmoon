@@ -202,7 +202,10 @@ def run_all_tests():
 
 if __name__ == "__main__":
     if not os.path.exists("./wasmoon"):
-        print("Error: ./wasmoon not found. Run 'moon build && ./install.sh' first.")
+        print(
+            "Error: ./wasmoon not found. "
+            "Run 'moon build --target native --release && ./install.sh' first."
+        )
         sys.exit(1)
 
     success = run_all_tests()

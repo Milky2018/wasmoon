@@ -14,6 +14,10 @@ struct Bundle {
   mut allocation : Allocation // Current allocation
   reg_class : @abi.RegClass // Register class for this bundle
   mut is_pinned : Bool // If true, cannot be evicted (e.g., function parameters)
+  mut call_flags_ready : Bool // Lazy cache for call-crossing queries
+  mut crosses_call_cached : Bool
+  mut crosses_wasm_call_cached : Bool
+  mut crosses_c_call_cached : Bool
 }
 
 ///|
@@ -27,6 +31,10 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     allocation: Unallocated,
     reg_class,
     is_pinned: false,
+    call_flags_ready: false,
+    crosses_call_cached: false,
+    crosses_wasm_call_cached: false,
+    crosses_c_call_cached: false,
   }
 }
 
@@ -34,6 +42,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
 /// Add a LiveRange to this bundle
 fn Bundle::add_range(self : Bundle, range_id : Int) -> Unit {
   self.range_ids.push(range_id)
+  self.call_flags_ready = false
 }
 
 ///|
@@ -116,36 +125,49 @@ pub fn Bundle::get_fixed_reg(
 }
 
 ///|
-/// Check if any range in this bundle crosses a function call
-pub fn Bundle::crosses_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+
+///|
+fn Bundle::ensure_call_flags(self : Bundle, ranges : LiveRangeSet) -> Unit {
+  if self.call_flags_ready {
+    return
+  }
+  let mut crosses_call = false
+  let mut crosses_wasm = false
+  let mut crosses_c = false
   for range_id in self.range_ids {
-    if ranges.get(range_id).crosses_call {
-      return true
+    let range = ranges.get(range_id)
+    crosses_call = crosses_call || range.crosses_call
+    crosses_wasm = crosses_wasm || range.crosses_wasm_call
+    crosses_c = crosses_c || range.crosses_c_call
+    if crosses_call && crosses_wasm && crosses_c {
+      break
     }
   }
-  false
+  self.crosses_call_cached = crosses_call
+  self.crosses_wasm_call_cached = crosses_wasm
+  self.crosses_c_call_cached = crosses_c
+  self.call_flags_ready = true
+}
+
+///|
+/// Check if any range in this bundle crosses a function call
+pub fn Bundle::crosses_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+  self.ensure_call_flags(ranges)
+  self.crosses_call_cached
 }
 
 ///|
 /// Check if any range in this bundle crosses a Wasm call
 pub fn Bundle::crosses_wasm_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
-  for range_id in self.range_ids {
-    if ranges.get(range_id).crosses_wasm_call {
-      return true
-    }
-  }
-  false
+  self.ensure_call_flags(ranges)
+  self.crosses_wasm_call_cached
 }
 
 ///|
 /// Check if any range in this bundle crosses a C call
 pub fn Bundle::crosses_c_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
-  for range_id in self.range_ids {
-    if ranges.get(range_id).crosses_c_call {
-      return true
-    }
-  }
-  false
+  self.ensure_call_flags(ranges)
+  self.crosses_c_call_cached
 }
 
 ///|

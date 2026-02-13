@@ -56,7 +56,7 @@ cd "$ROOT_DIR"
 MOON_HOME="$ROSETTA_MOON_HOME" \
   MOON_CC="$ROSETTA_MOON_HOME/bin/clang-x86_64" \
   MOON_AR=/usr/bin/ar \
-  moon build --target native --target-dir "$TARGET_DIR"
+  moon build --target native --release --target-dir "$TARGET_DIR"
 
 echo "Built x86_64 executables:"
 echo "  $TARGET_DIR/native/release/build/cli/main/main.exe"

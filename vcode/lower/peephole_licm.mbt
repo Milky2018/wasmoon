@@ -470,7 +470,14 @@ fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
 /// Check whether an opcode is trivially dead when its defs are unused.
 fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
   match op {
-    Move
+    // Pure integer/extend ops: safe to drop when defs are unused.
+    Add(_)
+    | AddImm(_, _)
+    | Sub(_)
+    | SubImm(_, _)
+    | Extend(_)
+    // Existing trivially-dead constant/move forms.
+    | Move
     | LoadConst(_)
     | LoadConstF32(_)
     | LoadConstF64(_)
@@ -859,13 +866,16 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
 ///|
 /// Treat call-like instructions as barriers for mem-base value availability.
 fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
+  // Cranelift keeps heap-base values live across direct Wasm calls in hot
+  // paths. Keep barriers for C/indirect calls (and subtype checks) where the
+  // callee/slow path may mutate runtime-managed memory state.
   match opcode {
-    // Keep `LoadMemBase` available across Wasm calls; clear only on C-side
-    // calls that may update memory descriptors in the runtime.
-    CallPtr(_, _, @instr.C)
-    | CallDirect(_, _, _, @instr.C)
-    | ReturnCallIndirect(_, _)
-    | TypeCheckSubtypeIndirect(_) => true
+    @instr.CallDirect(_, _, _, @instr.Wasm) => false
+    @instr.CallDirect(_, _, _, @instr.C) => true
+    @instr.CallPtr(_, _, @instr.C) => true
+    @instr.CallPtr(_, _, @instr.Wasm) => true
+    @instr.ReturnCallIndirect(_, _) => true
+    @instr.TypeCheckSubtypeIndirect(_) => true
     _ => false
   }
 }
@@ -1354,12 +1364,29 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
+  let mut inst_count = 0
+  for block in func.blocks {
+    inst_count = inst_count + block.insts.length()
+  }
+  let enable_licm = true
+  let enable_immutable_load_cse = true
+  let enable_mem_base_cse = true
+  // Keep memory peepholes enabled for all functions.
+  // Runtime code quality is prioritized over compile-time savings here.
+  let enable_mem_peepholes = true
+
   // Pass 0: loop-invariant code motion
-  licm_hoist_invariants(func)
+  if enable_licm {
+    licm_hoist_invariants(func)
+  }
   // Pass 0.5: block-local CSE for immutable loads
-  cse_immutable_loads(func)
+  if enable_immutable_load_cse {
+    cse_immutable_loads(func)
+  }
   // Pass 0.6: block-local CSE for LoadMemBase
-  cse_mem_base_loads(func)
+  if enable_mem_base_cse {
+    cse_mem_base_loads(func)
+  }
 
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
@@ -1391,18 +1418,20 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     optimize_inplace_updates(block) |> ignore
   }
 
-  // Pass 3: Memory operation merging (store8+store8 -> store16, etc.)
-  for block in func.blocks {
-    optimize_store_merging(block, func) |> ignore
-  }
+  if enable_mem_peepholes {
+    // Pass 3: Memory operation merging (store8+store8 -> store16, etc.)
+    for block in func.blocks {
+      optimize_store_merging(block, func) |> ignore
+    }
 
-  // Pass 4: Load-store pair merging (for memcpy-like patterns)
-  for block in func.blocks {
-    optimize_load_merging(block, func) |> ignore
-  }
+    // Pass 4: Load-store pair merging (for memcpy-like patterns)
+    for block in func.blocks {
+      optimize_load_merging(block, func) |> ignore
+    }
 
-  // Pass 5: Load-store forwarding (store then load -> store then mov)
-  for block in func.blocks {
-    optimize_load_store_forwarding(block) |> ignore
+    // Pass 5: Load-store forwarding (store then load -> store then mov)
+    for block in func.blocks {
+      optimize_load_store_forwarding(block) |> ignore
+    }
   }
 }

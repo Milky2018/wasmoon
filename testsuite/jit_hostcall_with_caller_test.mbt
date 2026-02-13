@@ -19,7 +19,7 @@ test "jit hostcall: imported host func receives Caller and can access exported m
   linker.add_host_func_with_caller(
     "host",
     "write_and_add1",
-    fn(caller, args) {
+    (caller, args) => {
       let mem = caller.get_exported_memory("mem") catch { _ => None }
       match mem {
         Some(m) => m.store_i32(0, 123) catch { e => raise e }

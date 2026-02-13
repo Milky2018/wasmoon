@@ -69,7 +69,7 @@ pub fn resolve_package(
   for key in order {
     let pkg = pkgs
       .get(key)
-      .unwrap_or_else(fn() {
+      .unwrap_or_else(() => {
         raise WitError::Error("internal: missing package `" + key + "`")
       })
     let (pkg_out, worlds_out) = resolve_one_package(
@@ -84,7 +84,7 @@ pub fn resolve_package(
   let root_key = package_key(root_doc)
   let root_pkg = resolved_pkgs
     .get(root_key)
-    .unwrap_or_else(fn() {
+    .unwrap_or_else(() => {
       raise WitError::Error("internal: missing resolved root package")
     })
   let out_deps : Array[Package] = []
@@ -93,7 +93,7 @@ pub fn resolve_package(
       out_deps.push(
         resolved_pkgs
         .get(k)
-        .unwrap_or_else(fn() {
+        .unwrap_or_else(() => {
           raise WitError::Error(
             "internal: missing resolved package `" + k + "`",
           )
@@ -149,7 +149,7 @@ pub fn importize_resolved_package(
       _ => non_world_items.push(it)
     }
   }
-  let w = target.unwrap_or_else(fn() {
+  let w = target.unwrap_or_else(() => {
     raise WitError::Error("unknown world `" + world_name + "`")
   })
   let out_name = out_world_name.unwrap_or(world_name + "-importized")
@@ -178,7 +178,7 @@ pub fn importize_first_world_in_package(
       _ => non_world_items.push(it)
     }
   }
-  let w = target.unwrap_or_else(fn() {
+  let w = target.unwrap_or_else(() => {
     raise WitError::Error("no world found in input")
   })
   let out_name = out_world_name.unwrap_or(w.name + "-importized")
@@ -248,7 +248,7 @@ fn topo_sort_packages(
   for k in keys {
     let pkg = pkgs
       .get(k)
-      .unwrap_or_else(fn() {
+      .unwrap_or_else(() => {
         raise WitError::Error("internal: missing package `" + k + "`")
       })
     deps_map.set(k, collect_package_deps(k, pkg))
@@ -414,9 +414,7 @@ fn resolve_one_package(
   for n in iface_names {
     let iface = ifaces
       .get(n)
-      .unwrap_or_else(fn() {
-        raise WitError::Error("internal: missing interface")
-      })
+      .unwrap_or_else(() => raise WitError::Error("internal: missing interface"))
     let local_edges : Array[String] = []
     let deps_arr : Array[IfaceRef] = []
     for item in iface.items {
@@ -444,9 +442,7 @@ fn resolve_one_package(
   for name in iface_order {
     let iface = ifaces
       .get(name)
-      .unwrap_or_else(fn() {
-        raise WitError::Error("internal: missing interface")
-      })
+      .unwrap_or_else(() => raise WitError::Error("internal: missing interface"))
     let (type_exports, deps_arr) = resolve_interface_in_package(
       pkg_key, iface, pkgs, iface_type_exports,
     )
@@ -466,7 +462,7 @@ fn resolve_one_package(
   for n in world_names {
     let w = worlds
       .get(n)
-      .unwrap_or_else(fn() { raise WitError::Error("internal: missing world") })
+      .unwrap_or_else(() => raise WitError::Error("internal: missing world"))
     let edges : Array[String] = []
     for wi in w.items {
       match wi {
@@ -491,7 +487,7 @@ fn resolve_one_package(
   for wn in world_order {
     let w = worlds
       .get(wn)
-      .unwrap_or_else(fn() { raise WitError::Error("internal: missing world") })
+      .unwrap_or_else(() => raise WitError::Error("internal: missing world"))
     let rw = resolve_world_in_package(
       pkg_key, w, pkgs, worlds, iface_type_exports, iface_deps, resolved_worlds,
       local_resolved_worlds,
@@ -505,7 +501,7 @@ fn resolve_one_package(
       Interface(
         resolved_ifaces
         .get(n)
-        .unwrap_or_else(fn() {
+        .unwrap_or_else(() => {
           raise WitError::Error("internal: missing resolved interface")
         }),
       ),
@@ -516,7 +512,7 @@ fn resolve_one_package(
       World(
         local_resolved_worlds
         .get(n)
-        .unwrap_or_else(fn() {
+        .unwrap_or_else(() => {
           raise WitError::Error("internal: missing resolved world")
         }),
       ),
@@ -651,7 +647,7 @@ fn get_iface_type_exports(
   // Validate that the target interface exists and is resolved.
   let pkg = pkgs
     .get(target.pkg_key)
-    .unwrap_or_else(fn() {
+    .unwrap_or_else(() => {
       raise WitError::Error("unknown package `" + target.pkg_key + "`")
     })
   let mut found = false
@@ -1015,14 +1011,14 @@ fn resolve_world_ref(
     (Some(pkg_key), name, _) => {
       pkgs
       .get(pkg_key)
-      .unwrap_or_else(fn() {
+      .unwrap_or_else(() => {
         raise WitError::Error("unknown package `" + pkg_key + "`")
       })
       |> ignore
       let k = pkg_key + "/" + name
       resolved_worlds
       .get(k)
-      .unwrap_or_else(fn() {
+      .unwrap_or_else(() => {
         raise WitError::Error(
           "unknown world `" + name + "` in package `" + pkg_key + "`",
         )
@@ -1156,7 +1152,7 @@ fn validate_iface_exists(
 ) -> Unit raise WitError {
   let pkg = pkgs
     .get(r.pkg_key)
-    .unwrap_or_else(fn() {
+    .unwrap_or_else(() => {
       raise WitError::Error("unknown package `" + r.pkg_key + "`")
     })
   // Ensure the interface name exists in the parsed package even if it has no exports.
@@ -1244,9 +1240,7 @@ fn topo_sort_ifaces(
     out.push(
       ifaces
       .get(k)
-      .unwrap_or_else(fn() {
-        raise WitError::Error("internal: missing iface ref")
-      }),
+      .unwrap_or_else(() => raise WitError::Error("internal: missing iface ref")),
     )
   }
   out

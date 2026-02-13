@@ -777,9 +777,7 @@ test "function call: call_indirect" {
 test "host function: simple call" {
   // Create a store and add host function to it
   let store = @runtime.Store::new()
-  let host_fn : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = fn(
-    args,
-  ) {
+  let host_fn : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = args => {
     match args[0] {
       I32(n) => [I32(n * 2)]
       _ => raise @runtime.TypeMismatch
@@ -833,10 +831,10 @@ test "host function: caller can access exported memory" {
   let store = @runtime.Store::new()
 
   // Host function writes 7 into caller-exported memory "mem" at address 0.
-  let host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = fn(
+  let host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = (
     caller,
     args,
-  ) {
+  ) => {
     if args.length() != 0 {
       raise @runtime.TypeMismatch
     }

@@ -43,16 +43,17 @@ test "lower integer arithmetic" {
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
   // After e-graph optimization: sub(add(v0, v1), v0) = v1, so mul(v3, v1) = mul(v1, v1)
-  let expected =
-    #|vcode arith(v0:int, v1:int) -> int {
-    #|block0:
-    #|    v2 = add v0, v1
-    #|    v3 = sub v2, v0
-    #|    v4 = mul v1, v1
-    #|    ret v4
-    #|}
-    #|
-  inspect(output, content=expected)
+  inspect(
+    output,
+    content=(
+      #|vcode arith(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v4 = mul v1, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -621,6 +622,85 @@ test "lower sub(0, mul(x, y)) to mneg" {
 }
 
 ///|
+test "lower i32 add(x, mul(y, z)) to madd32" {
+  // Cranelift lower.isle iadd_imul_* applies to fits_in_64, including i32.
+  let builder = @ir.IRBuilder::new("madd32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  let z = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.iadd(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode madd32_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = madd32 v0, v1, v2
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(x, mul(y, z)) to msub32" {
+  let builder = @ir.IRBuilder::new("msub32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  let z = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mul_yz = builder.imul(y, z)
+  let result = builder.isub(x, mul_yz)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode msub32_test(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = msub32 v0, v1, v2
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(0, mul(x, y)) to mneg32" {
+  let builder = @ir.IRBuilder::new("mneg32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i32(0)
+  let mul_xy = builder.imul(x, y)
+  let result = builder.isub(zero, mul_xy)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode mneg32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = mneg32 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower add(x, shl(y, n)) to add_shifted" {
   // Pattern: add(x, shl(y, n)) -> AddShifted: x + (y << n)
   let builder = @ir.IRBuilder::new("add_shifted_test")
@@ -650,6 +730,184 @@ test "lower add(x, shl(y, n)) to add_shifted" {
 }
 
 ///|
+test "lower i32 add(x, shl(y, n)) to add_shifted32" {
+  // Cranelift-aligned: i32 shifted-add should use 32-bit shifted-register form.
+  let builder = @ir.IRBuilder::new("add_shifted32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i32(35) // masked to 3 by Wasm semantics
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.iadd(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode add_shifted32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = add32.lsl #3 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i64 add(x, uextend(y)) to add.uxtw" {
+  let builder = @ir.IRBuilder::new("add_uxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.uextend(@ir.Type::I64, y)
+  let result = builder.iadd(x, y64)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_uxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add.uxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i64 add(sextend(y), x) to add.sxtw" {
+  let builder = @ir.IRBuilder::new("add_sxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.sextend(@ir.Type::I64, y)
+  let result = builder.iadd(y64, x)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_sxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = add.sxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i64 sub(x, uextend(y)) to sub.uxtw" {
+  let builder = @ir.IRBuilder::new("sub_uxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.uextend(@ir.Type::I64, y)
+  let result = builder.isub(x, y64)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode sub_uxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = sub.uxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i64 sub(x, sextend(y)) to sub.sxtw" {
+  let builder = @ir.IRBuilder::new("sub_sxtw_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let y64 = builder.sextend(@ir.Type::I64, y)
+  let result = builder.isub(x, y64)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode sub_sxtw_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = sub.sxtw #0 v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 add(x, -imm) to sub32 #imm" {
+  // Cranelift lower.isle iadd_imm12_neg_{right,left}.
+  let builder = @ir.IRBuilder::new("add_neg_imm_test")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let neg_imm = builder.iconst_i32(-12)
+  let result = builder.iadd(x, neg_imm)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode add_neg_imm_test(v0:int) -> int {
+      #|block0:
+      #|    v2 = sub32 #12 v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 sub(x, -imm) to add32 #imm" {
+  // Cranelift lower.isle isub_imm12_neg.
+  let builder = @ir.IRBuilder::new("sub_neg_imm_test")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let neg_imm = builder.iconst_i32(-12)
+  let result = builder.isub(x, neg_imm)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode sub_neg_imm_test(v0:int) -> int {
+      #|block0:
+      #|    v2 = add32 #12 v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")
@@ -671,6 +929,33 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
       #|vcode sub_shifted_test(v0:int, v1:int) -> int {
       #|block0:
       #|    v3 = sub.lsl #2 v0, v1
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 xor(x, shl(y, n)) to xor_shifted32" {
+  let builder = @ir.IRBuilder::new("xor_shifted32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shift_amt = builder.iconst_i32(33) // masked to 1
+  let shl_y = builder.ishl(y, shift_amt)
+  let result = builder.bxor(x, shl_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode xor_shifted32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v3 = xor32.lsl #1 v0, v1
       #|    ret v3
       #|}
       #|
@@ -759,6 +1044,81 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
       #|block0:
       #|    v3 = xor.lsl #1 v0, v1
       #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower and(x, bnot(y)) to andnot" {
+  let builder = @ir.IRBuilder::new("andnot_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_y = builder.bnot(y)
+  let result = builder.band(x, not_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode andnot_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = andnot v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower or(bnot(x), y) to ornot" {
+  let builder = @ir.IRBuilder::new("ornot_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_x = builder.bnot(x)
+  let result = builder.bor(not_x, y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode ornot_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = ornot v1, v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower i32 xor(x, bnot(y)) to xornot32" {
+  let builder = @ir.IRBuilder::new("xornot32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let not_y = builder.bnot(y)
+  let result = builder.bxor(x, not_y)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode xornot32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = xornot32 v0, v1
+      #|    ret v2
       #|}
       #|
     ),
@@ -978,22 +1338,22 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block0:
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    d1 = ldf 10
-      #|    x3 = ldi 0
-      #|    store_ptr.f32 +0 x3, d1
-      #|    d6 = load_ptr.f32 +0 x3
+      #|    x1 = ldi 0
+      #|    d3 = ldf 10
+      #|    store_ptr.f32 +0 x1, d3
+      #|    d6 = load_ptr.f32 +0 x1
       #|    jump block4
       #|block2:
-      #|    d4 = ldf 10
-      #|    x6 = ldi 0
-      #|    store_ptr.f32 +0 x6, d4
-      #|    d6 = load_ptr.f32 +0 x6
+      #|    x4 = ldi 0
+      #|    d6 = ldf 10
+      #|    store_ptr.f32 +0 x4, d6
+      #|    d6 = load_ptr.f32 +0 x4
       #|    jump block4
       #|block3:
-      #|    d6 = ldf 10
-      #|    x8 = ldi 0
-      #|    store_ptr.f32 +0 x8, d6
-      #|    d6 = load_ptr.f32 +0 x8
+      #|    x6 = ldi 0
+      #|    d18 = ldf 10
+      #|    store_ptr.f32 +0 x6, d18
+      #|    d6 = load_ptr.f32 +0 x6
       #|    jump block4
       #|block4(f1:float):
       #|    ret d6

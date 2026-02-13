@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2805221669841558,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.27710408298298717,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2811665000044741,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2839797920314595,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/benchmark.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.2783059169887565,
+    "stdout": "Running benchmark...\nIteration  1/10\nIteration  2/10\nIteration  3/10\nIteration  4/10\nIteration  5/10\nIteration  6/10\nIteration  7/10\nIteration  8/10\nIteration  9/10\nIteration 10/10\nBenchmark complete!",
+    "stderr": ""
+  }
+]

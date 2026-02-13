@@ -139,10 +139,13 @@ fn optimize_o1(func : Function) -> OptResult {
     iterations = iterations + 1
     let before_insts = instruction_count(func)
     let before_blocks = func.blocks.length()
-    // E-graph based optimization (constant folding + algebraic simplification)
-    if run_egraph_pass(func) {
-      changed = true
-      result.mark_changed()
+    // Cranelift-style aegraph scheduling: run once up-front, then let
+    // canonical passes drive the fixed point.
+    if iterations == 1 {
+      if run_egraph_pass(func) {
+        changed = true
+        result.mark_changed()
+      }
     }
     // Basic optimizations only
     let cf_result = run_opt_pass(func, "const_fold", fold_constants)
@@ -203,11 +206,6 @@ fn optimize_o1(func : Function) -> OptResult {
       }
     }
   }
-  // Run jump-threading once after fixed-point to avoid repeated CFG churn.
-  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-  if jt_result.changed {
-    result.mark_changed()
-  }
   result
 }
 
@@ -226,10 +224,13 @@ pub fn optimize(func : Function) -> OptResult {
     iterations = iterations + 1
     let before_insts = instruction_count(func)
     let before_blocks = func.blocks.length()
-    // E-graph based optimization (constant folding + algebraic simplification)
-    if run_egraph_pass(func) {
-      changed = true
-      result.mark_changed()
+    // Cranelift-style aegraph scheduling: run once up-front, then let
+    // canonical passes drive the fixed point.
+    if iterations == 1 {
+      if run_egraph_pass(func) {
+        changed = true
+        result.mark_changed()
+      }
     }
     // Run each optimization pass
     let cf_result = run_opt_pass(func, "const_fold", fold_constants)
@@ -293,8 +294,8 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Keep branch threading out of the O2 fixed-point loop for now.
-    // In large Wasm CFGs this can inflate live ranges and hurt backend quality.
+    // Keep branch threading out of the O2 fixed-point loop.
+    // We run it once after convergence to avoid repeated CFG churn.
     if changed {
       let after_insts = instruction_count(func)
       let after_blocks = func.blocks.length()
@@ -309,6 +310,11 @@ pub fn optimize(func : Function) -> OptResult {
         }
       }
     }
+  }
+  // Run jump-threading once after fixed-point (Cranelift-like late CFG cleanup).
+  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+  if jt_result.changed {
+    result.mark_changed()
   }
   result
 }

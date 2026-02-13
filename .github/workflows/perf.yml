@@ -28,8 +28,14 @@ jobs:
 
       - name: build wasmoon
         run: |
-          moon build --target native
+          moon build --target native --release
           ./install.sh
+
+      - name: install wasmtime
+        run: |
+          curl -fsSL https://wasmtime.dev/install.sh | bash
+          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+          wasmtime --version
 
       - name: run perf benchmark runner
         run: |
@@ -53,9 +59,24 @@ jobs:
               --timeout-sec 240
           fi
 
+      - name: check wasmtime parity guardrail
+        run: |
+          set -euxo pipefail
+          python3 scripts/check_wasmtime_parity.py \
+            --wasmoon ./wasmoon \
+            --wasmtime wasmtime \
+            --iterations 3 \
+            --warmup 1 \
+            --timeout-sec 240 \
+            --out-dir target/perf-benchmarks/parity \
+            --threshold examples/aead_aegis128l.wasm=6.0 \
+            --threshold examples/benchmark.wasm=1.5
+
       - name: upload perf artifacts
         uses: actions/upload-artifact@v4
         with:
           name: perf-benchmarks-ubuntu-amd64
-          path: target/perf-benchmarks/latest
+          path: |
+            target/perf-benchmarks/latest
+            target/perf-benchmarks/parity
           if-no-files-found: error

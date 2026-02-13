@@ -284,7 +284,7 @@ fn decode_interface_from_componenttype(
       _ => ()
     }
   }
-  let full = full_name.unwrap_or_else(fn() {
+  let full = full_name.unwrap_or_else(() => {
     raise WitError::Error(
       "not an interface wrapper: `" + export_short_name + "`",
     )
@@ -356,7 +356,7 @@ fn decode_interface_from_componenttype(
         let (inst_idx, export_name) = pair
         let sig_ti = inst_sig_typeidx_by_inst
           .get(inst_idx)
-          .unwrap_or_else(fn() { raise WitError::Error("missing import sig") })
+          .unwrap_or_else(() => raise WitError::Error("missing import sig"))
         let sig_td = match type_space[sig_ti] {
           Some(td) => td
           None => raise WitError::Error("missing instancetype signature")
@@ -662,7 +662,7 @@ fn decode_world_from_componenttype(
       _ => ()
     }
   }
-  let full = full_name.unwrap_or_else(fn() {
+  let full = full_name.unwrap_or_else(() => {
     raise WitError::Error("not a world wrapper: `" + export_short_name + "`")
   })
   let (pkg, name, ver) = decode_full_name(full)

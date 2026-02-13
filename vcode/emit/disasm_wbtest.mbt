@@ -245,15 +245,27 @@ test "all emit functions disasm" {
 }
 
 ///|
-test "emit add.uxtw disasm" {
+test "emit add.extend disasm" {
   let mc = MachineCode::new()
   mc.emit_add_uxtw(8, 10, 8, 0)
   mc.emit_add_uxtw(8, 10, 8, 2)
+  mc.emit_add_sxtw(8, 10, 8, 0)
+  mc.emit_add_sxtw(8, 10, 8, 2)
+  mc.emit_sub_uxtw(8, 10, 8, 0)
+  mc.emit_sub_uxtw(8, 10, 8, 2)
+  mc.emit_sub_sxtw(8, 10, 8, 0)
+  mc.emit_sub_sxtw(8, 10, 8, 2)
   inspect(
     mc.dump_disasm(),
     content=(
       #|  0000: 4841288b  add x8, x10, w8, uxtw
       #|  0004: 4849288b  add x8, x10, w8, uxtw #2
+      #|  0008: 48c1288b  add x8, x10, w8, sxtw
+      #|  000c: 48c9288b  add x8, x10, w8, sxtw #2
+      #|  0010: 484128cb  sub x8, x10, w8, uxtw
+      #|  0014: 484928cb  sub x8, x10, w8, uxtw #2
+      #|  0018: 48c128cb  sub x8, x10, w8, sxtw
+      #|  001c: 48c928cb  sub x8, x10, w8, sxtw #2
       #|
     ),
   )
@@ -446,6 +458,32 @@ test "cmp_imm_shifted12" {
     mc.dump_disasm(),
     content=(
       #|  0000: 3f0150f1  cmp x9, #1024, lsl #12
+      #|
+    ),
+  )
+}
+
+///|
+/// Test 32-bit shifted-register arithmetic/logical encodings.
+test "emit_shifted32_variants" {
+  if @isa.ISA::current() is @isa.AMD64 {
+    return
+  }
+  let mc = MachineCode::new()
+  mc.emit_add_shifted32(0, 1, 2, Lsl, 3)
+  mc.emit_sub_shifted32(3, 4, 5, Lsr, 4)
+  mc.emit_and_shifted32(6, 7, 8, Asr, 5)
+  mc.emit_orr_shifted32(9, 10, 11, Lsl, 6)
+  mc.emit_eor_shifted32(12, 13, 14, Lsr, 7)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 200c020b  add w0, w1, w2, lsl #3
+      #|  0004: 8310454b  sub w3, w4, w5, lsr #4
+      #|  0008: e614880a  and w6, w7, w8, asr #5
+      #|  000c: 49190b2a  orr w9, w10, w11, lsl #6
+      #|  0010: ac1d4e4a  eor w12, w13, w14, lsr #7
       #|
     ),
   )
@@ -691,6 +729,9 @@ test "32-bit instruction variants" {
   mc.emit_add_reg32(0, 1, 2) // ADD W0, W1, W2
   mc.emit_add_imm32(3, 4, 100) // ADD W3, W4, #100
   mc.emit_mul32(5, 6, 7) // MUL W5, W6, W7
+  mc.emit_madd32(8, 9, 10, 11) // MADD W8, W9, W10, W11
+  mc.emit_msub32(12, 13, 14, 15) // MSUB W12, W13, W14, W15
+  mc.emit_mneg32(16, 17, 18) // MNEG W16, W17, W18
 
   // 32-bit shifts
   mc.emit_lsl_reg32(9, 10, 11) // LSL W9, W10, W11
@@ -718,15 +759,18 @@ test "32-bit instruction variants" {
       #|  000c: 2000020b  add w0, w1, w2
       #|  0010: 83900111  add w3, w4, #100
       #|  0014: c57c071b  mul w5, w6, w7
-      #|  0018: 4921cb1a  lsl w9, w10, w11
-      #|  001c: ac25ce1a  lsr w12, w13, w14
-      #|  0020: 0f2ad11a  asr w15, w16, w17
-      #|  0024: 722ed41a  ror w18, w19, w20
-      #|  0028: d512c05a  clz w21, w22
-      #|  002c: 1703c05a  rbit w23, w24
-      #|  0030: 3f031a6b  cmp w25, w26
-      #|  0034: 7fab0071  cmp w27, #42
-      #|  0038: fc031d2a  mov w28, w29
+      #|  0018: 282d0a1b  madd w8, w9, w10, w11
+      #|  001c: acbd0e1b  msub w12, w13, w14, w15
+      #|  0020: 30fe121b  mneg w16, w17, w18
+      #|  0024: 4921cb1a  lsl w9, w10, w11
+      #|  0028: ac25ce1a  lsr w12, w13, w14
+      #|  002c: 0f2ad11a  asr w15, w16, w17
+      #|  0030: 722ed41a  ror w18, w19, w20
+      #|  0034: d512c05a  clz w21, w22
+      #|  0038: 1703c05a  rbit w23, w24
+      #|  003c: 3f031a6b  cmp w25, w26
+      #|  0040: 7fab0071  cmp w27, #42
+      #|  0044: fc031d2a  mov w28, w29
       #|
     ),
   )
@@ -813,6 +857,30 @@ test "div_overflow_trap_sequence" {
       #|  0004: 000841fa  ccmp x0, #1, #0, eq
       #|  0008: 47000054  b.vc .+8
       #|  000c: 800020d4  brk #4
+      #|
+    ),
+  )
+}
+
+///|
+test "logical not-right register forms" {
+  let mc = MachineCode::new()
+  mc.emit_bic_reg(0, 1, 2)
+  mc.emit_bic_reg32(3, 4, 5)
+  mc.emit_orn_reg(6, 7, 8)
+  mc.emit_orn_reg32(9, 10, 11)
+  mc.emit_eon_reg(12, 13, 14)
+  mc.emit_eon_reg32(15, 16, 17)
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 2000228a  bic x0, x1, x2
+      #|  0004: 8300250a  bic w3, w4, w5
+      #|  0008: e60028aa  orn x6, x7, x8
+      #|  000c: 49012b2a  orn w9, w10, w11
+      #|  0010: ac012eca  eon x12, x13, x14
+      #|  0014: 0f02314a  eon w15, w16, w17
       #|
     ),
   )

@@ -2046,6 +2046,31 @@ test "GVN: disjoint memories keep forwarding state" {
 }
 
 ///|
+test "GVN: copied mem base keeps memory region" {
+  let builder = IRBuilder::new("gvn_copied_mem_base_region")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let mem1_base = builder.load_mem_base(vmctx, 1)
+  let mem1_copy = builder.copy(mem1_base)
+  let offset = builder.iconst_i64(0L)
+  let mem1_value = builder.iconst_i32(11)
+  builder.store_ptr(Type::I32, mem1_copy, mem1_value, offset)
+  let mem0_value = builder.iconst_i32(22)
+  builder.store_ptr(Type::I32, mem0_base, mem0_value, offset)
+  let loaded = builder.load_ptr(Type::I32, mem1_copy, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  let result = gvn_global(func)
+  assert_true(result.changed)
+  let load_inst = func.blocks[0].instructions[8]
+  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_eq(load_inst.operands[0].id, mem1_value.id)
+}
+
+///|
 test "GVN: pure arithmetic CSE" {
   // Test that GVN also handles pure arithmetic (same as CSE)
   let builder = IRBuilder::new("gvn_pure_cse")

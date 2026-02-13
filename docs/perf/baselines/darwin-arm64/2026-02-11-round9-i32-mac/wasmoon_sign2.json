@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 7.48588600003859,
+    "stdout": "675275000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 7.59274120797636,
+    "stdout": "685410000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 7.462476874992717,
+    "stdout": "692440000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 7.301447541976813,
+    "stdout": "690455000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "./wasmoon",
+      "run",
+      "examples/algorithms/sign2.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 7.299969624960795,
+    "stdout": "686760000",
+    "stderr": ""
+  }
+]

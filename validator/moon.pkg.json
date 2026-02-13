@@ -1,8 +1,0 @@
-{
-  "import": [
-    "Milky2018/wasmoon/component",
-    "Milky2018/wasmoon/parser",
-    "Milky2018/wasmoon/types",
-    "moonbitlang/core/hashset"
-  ]
-}

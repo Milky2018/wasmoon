@@ -21,6 +21,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 139
       (b0, b1, b2, b3)
     }
+    AddShifted32(rd, rn, rm, shift, amount) => {
+      let shift_bits = match shift {
+        Lsl => 0
+        Lsr => 1
+        Asr => 2
+      }
+      let imm6 = amount & 31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+      let b2 = (rm & 31) | ((shift_bits & 3) << 6)
+      let b3 = 0x0B // ADD (shifted register), 32-bit
+      (b0, b1, b2, b3)
+    }
     AddExtUxtw(rd, rn, rm, shift) => {
       // ADD (extended register): sf=1 (64-bit), op=0 (add), S=0, option=UXTW (010)
       // Encoding:  sf op S 01011 00 1 Rm option imm3 Rn Rd
@@ -35,6 +48,57 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (0b1 << 21) |
         ((rm & 31) << 16) |
         ((option_uxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    AddExtSxtw(rd, rn, rm, shift) => {
+      // ADD (extended register): sf=1 (64-bit), op=0 (add), S=0, option=SXTW (110)
+      let imm3 = shift & 7
+      let option_sxtw = 6 // 110 = SXTW
+      let inst = (0b1 << 31) |
+        (0 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_sxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    SubExtUxtw(rd, rn, rm, shift) => {
+      // SUB (extended register): sf=1 (64-bit), op=1 (sub), S=0, option=UXTW (010)
+      let imm3 = shift & 7
+      let option_uxtw = 2 // 010 = UXTW
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_uxtw & 7) << 13) |
+        ((imm3 & 7) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    SubExtSxtw(rd, rn, rm, shift) => {
+      // SUB (extended register): sf=1 (64-bit), op=1 (sub), S=0, option=SXTW (110)
+      let imm3 = shift & 7
+      let option_sxtw = 6 // 110 = SXTW
+      let inst = (0b1 << 31) |
+        (1 << 30) |
+        (0 << 29) |
+        (0b01011 << 24) |
+        (0 << 22) |
+        (0b1 << 21) |
+        ((rm & 31) << 16) |
+        ((option_sxtw & 7) << 13) |
         ((imm3 & 7) << 10) |
         ((rn & 31) << 5) |
         (rd & 31)
@@ -85,6 +149,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 203
       (b0, b1, b2, b3)
     }
+    SubShifted32(rd, rn, rm, shift, amount) => {
+      let shift_bits = match shift {
+        Lsl => 0
+        Lsr => 1
+        Asr => 2
+      }
+      let imm6 = amount & 31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+      let b2 = (rm & 31) | ((shift_bits & 3) << 6)
+      let b3 = 0x4B // SUB (shifted register), 32-bit
+      (b0, b1, b2, b3)
+    }
     SubImm(rd, rn, imm12) => {
       let imm = imm12 & 0xFFF
       let inst = (0b1 << 31) |
@@ -132,6 +209,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       (b0, b1, b2, b3)
     }
     Mneg(rd, rn, rm) => Msub(rd, rn, rm, 31).instr_bytes()
+    Madd32(rd, rn, rm, ra) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2)
+      let b2 = rm & 31
+      let b3 = 0x1B
+      (b0, b1, b2, b3)
+    }
+    Msub32(rd, rn, rm, ra) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((ra & 31) << 2) | 128
+      let b2 = rm & 31
+      let b3 = 0x1B
+      (b0, b1, b2, b3)
+    }
+    Mneg32(rd, rn, rm) => Msub32(rd, rn, rm, 31).instr_bytes()
     Umulh(rd, rn, rm) => {
       // UMULH: sf=1, op31=110, Ra=11111
       let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -270,6 +362,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 0x0A // AND 32-bit: sf=0
       (b0, b1, b2, b3)
     }
+    BicReg(rd, rn, rm) => {
+      // BIC Xd, Xn, Xm (AND with NOT Rm) = AND shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 138
+      (b0, b1, b2, b3)
+    }
+    BicReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x0A
+      (b0, b1, b2, b3)
+    }
     AndImm(rd, rn, imm_bits) => {
       // AND (immediate): bits_31_23 = 000_100100 with sf=1.
       let top9 = 0b000_100100 | (1 << 8)
@@ -301,6 +408,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 138
       (b0, b1, b2, b3)
     }
+    AndShifted32(rd, rn, rm, shift, amount) => {
+      let shift_bits = match shift {
+        Lsl => 0
+        Lsr => 1
+        Asr => 2
+      }
+      let imm6 = amount & 31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+      let b2 = (rm & 31) | ((shift_bits & 3) << 6)
+      let b3 = 0x0A // AND (shifted register), 32-bit
+      (b0, b1, b2, b3)
+    }
     OrrReg(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = (rn >> 3) & 3
@@ -313,6 +433,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 0x2A // ORR 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    OrnReg(rd, rn, rm) => {
+      // ORN Xd, Xn, Xm (OR with NOT Rm) = ORR shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 170
+      (b0, b1, b2, b3)
+    }
+    OrnReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x2A
       (b0, b1, b2, b3)
     }
     OrrImm(rd, rn, imm_bits) => {
@@ -346,6 +481,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b3 = 170
       (b0, b1, b2, b3)
     }
+    OrrShifted32(rd, rn, rm, shift, amount) => {
+      let shift_bits = match shift {
+        Lsl => 0
+        Lsr => 1
+        Asr => 2
+      }
+      let imm6 = amount & 31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+      let b2 = (rm & 31) | ((shift_bits & 3) << 6)
+      let b3 = 0x2A // ORR (shifted register), 32-bit
+      (b0, b1, b2, b3)
+    }
     EorReg(rd, rn, rm) => {
       let b0 = (rd & 31) | ((rn & 7) << 5)
       let b1 = (rn >> 3) & 3
@@ -358,6 +506,21 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = (rn >> 3) & 3
       let b2 = rm & 31
       let b3 = 0x4A // EOR 32-bit: sf=0
+      (b0, b1, b2, b3)
+    }
+    EonReg(rd, rn, rm) => {
+      // EON Xd, Xn, Xm (XOR with NOT Rm) = EOR shifted-register with N=1.
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 202
+      (b0, b1, b2, b3)
+    }
+    EonReg32(rd, rn, rm) => {
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = (rn >> 3) & 3
+      let b2 = (rm & 31) | 0x20
+      let b3 = 0x4A
       (b0, b1, b2, b3)
     }
     EorImm(rd, rn, imm_bits) => {
@@ -389,6 +552,19 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
       let b2 = (rm & 31) | ((shift_bits & 3) << 6)
       let b3 = 202
+      (b0, b1, b2, b3)
+    }
+    EorShifted32(rd, rn, rm, shift, amount) => {
+      let shift_bits = match shift {
+        Lsl => 0
+        Lsr => 1
+        Asr => 2
+      }
+      let imm6 = amount & 31
+      let b0 = (rd & 31) | ((rn & 7) << 5)
+      let b1 = ((rn >> 3) & 3) | ((imm6 & 63) << 2)
+      let b2 = (rm & 31) | ((shift_bits & 3) << 6)
+      let b3 = 0x4A // EOR (shifted register), 32-bit
       (b0, b1, b2, b3)
     }
     Mvn(rd, rm) => {

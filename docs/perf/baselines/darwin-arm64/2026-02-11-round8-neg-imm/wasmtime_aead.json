@@ -1,0 +1,57 @@
+[
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/aead_aegis128l.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.7926095000002533,
+    "stdout": "3698650000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/aead_aegis128l.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.7478869590559043,
+    "stdout": "3698740000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/aead_aegis128l.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.7686618749867193,
+    "stdout": "3801345000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/aead_aegis128l.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.7479380419827066,
+    "stdout": "3691740000",
+    "stderr": ""
+  },
+  {
+    "cmd": [
+      "wasmtime",
+      "run",
+      "examples/algorithms/aead_aegis128l.wasm"
+    ],
+    "code": 0,
+    "wall_sec": 0.7503030419466086,
+    "stdout": "3706525000",
+    "stderr": ""
+  }
+]

@@ -196,10 +196,9 @@ fn build_reg_pools(
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
   let needs_x23_reserved = needs_extra || calls_multi
-  // Cache memory0 descriptor pointer in X20 when needed.
-  let needs_x20_reserved = func.uses_mem0()
-  // Cache func_table pointer in X21 when needed.
-  let needs_x21_reserved = func.uses_func_table()
+  // Cache role registers only for the selected cache policy.
+  let needs_x20_reserved = func.should_cache_mem0_desc()
+  let needs_x21_reserved = func.should_cache_func_table()
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
   let env = isa.machine_env(
@@ -291,9 +290,6 @@ pub fn allocate_registers_backtracking_with_isa(
 ) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
-  // Clone long-distance cheap constants within blocks to shorten live ranges.
-  let func = rematerialize_long_distance_constants(func)
-  let func = eliminate_dead_code(func)
   // Cranelift-style remat for cross-block constants to reduce reg pressure.
   let func = rematerialize_cross_block_constants(func)
   // Remat may make original const-defs dead in their original blocks.
@@ -353,8 +349,6 @@ pub fn allocate_registers_backtracking_output_with_isa(
   settings : @abi.ABISettings,
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
-  let func = eliminate_dead_code(func)
-  let func = rematerialize_long_distance_constants(func)
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)

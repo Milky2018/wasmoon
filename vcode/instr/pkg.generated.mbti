@@ -263,6 +263,9 @@ pub(all) enum VCodeOpcode {
   Rotr(Bool)
   RotrImm(Int, Bool)
   Not(Bool)
+  AndNot(Bool)
+  OrNot(Bool)
+  XorNot(Bool)
   FAdd(Bool)
   FSub(Bool)
   FMul(Bool)
@@ -313,13 +316,23 @@ pub(all) enum VCodeOpcode {
   FpuMaxnm(Bool)
   FpuMinnm(Bool)
   AddShifted(ShiftType, Int)
+  AddExtend(IndexExtend, Int)
+  SubExtend(IndexExtend, Int)
   SubShifted(ShiftType, Int)
   AndShifted(ShiftType, Int)
   OrShifted(ShiftType, Int)
   XorShifted(ShiftType, Int)
+  AddShifted32(ShiftType, Int)
+  SubShifted32(ShiftType, Int)
+  AndShifted32(ShiftType, Int)
+  OrShifted32(ShiftType, Int)
+  XorShifted32(ShiftType, Int)
   Madd
   Msub
   Mneg
+  Madd32
+  Msub32
+  Mneg32
   Umulh
   Smulh
   Umull

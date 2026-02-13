@@ -206,6 +206,103 @@ test "remat: clones LoadFuncAddr across blocks" {
 }
 
 ///|
+test "remat: clones AndImm across blocks" {
+  let func = VCodeFunction::new("test_remat_andimm")
+  func.add_result(@abi.Int)
+  let src = func.add_param(@abi.Int)
+  let entry = func.new_block()
+  let use_block = func.new_block()
+  let masked = func.new_vreg(@abi.Int)
+  let and_imm = @instr.VCodeInst::new(@instr.AndImm(255L, true))
+  and_imm.add_def({ reg: @abi.Virtual(masked) })
+  and_imm.add_use(@abi.Virtual(src))
+  entry.add_inst(and_imm)
+  entry.set_terminator(@instr.Jump(use_block.id, []))
+  let moved = func.new_vreg(@abi.Int)
+  let mv = @instr.VCodeInst::new(@instr.Move)
+  mv.add_def({ reg: @abi.Virtual(moved) })
+  mv.add_use(@abi.Virtual(masked))
+  use_block.add_inst(mv)
+  use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
+  let rewritten = rematerialize_cross_block_constants(func)
+  inspect(rewritten.blocks[1].insts.length(), content="2")
+  match rewritten.blocks[1].insts[0].opcode {
+    @instr.AndImm(255L, true) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
+    inspect(v.id != masked.id, content="true")
+  } else {
+    inspect(false, content="true")
+  }
+}
+
+///|
+test "remat: clones Not across blocks" {
+  let func = VCodeFunction::new("test_remat_not")
+  func.add_result(@abi.Int)
+  let src = func.add_param(@abi.Int)
+  let entry = func.new_block()
+  let use_block = func.new_block()
+  let inverted = func.new_vreg(@abi.Int)
+  let not_inst = @instr.VCodeInst::new(@instr.Not(true))
+  not_inst.add_def({ reg: @abi.Virtual(inverted) })
+  not_inst.add_use(@abi.Virtual(src))
+  entry.add_inst(not_inst)
+  entry.set_terminator(@instr.Jump(use_block.id, []))
+  let moved = func.new_vreg(@abi.Int)
+  let mv = @instr.VCodeInst::new(@instr.Move)
+  mv.add_def({ reg: @abi.Virtual(moved) })
+  mv.add_use(@abi.Virtual(inverted))
+  use_block.add_inst(mv)
+  use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
+  let rewritten = rematerialize_cross_block_constants(func)
+  inspect(rewritten.blocks[1].insts.length(), content="2")
+  match rewritten.blocks[1].insts[0].opcode {
+    @instr.Not(true) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
+    inspect(v.id != inverted.id, content="true")
+  } else {
+    inspect(false, content="true")
+  }
+}
+
+///|
+test "remat: inserts clone at first use" {
+  let func = VCodeFunction::new("test_remat_insert_at_use")
+  func.add_result(@abi.Int)
+  let entry = func.new_block()
+  let use_block = func.new_block()
+  let value = func.new_vreg(@abi.Int)
+  let load_value = @instr.VCodeInst::new(@instr.LoadConst(123L))
+  load_value.add_def({ reg: @abi.Virtual(value) })
+  entry.add_inst(load_value)
+  entry.set_terminator(@instr.Jump(use_block.id, []))
+  let warmup = func.new_vreg(@abi.Int)
+  let load_warmup = @instr.VCodeInst::new(@instr.LoadConst(9L))
+  load_warmup.add_def({ reg: @abi.Virtual(warmup) })
+  use_block.add_inst(load_warmup)
+  let moved = func.new_vreg(@abi.Int)
+  let mv = @instr.VCodeInst::new(@instr.Move)
+  mv.add_def({ reg: @abi.Virtual(moved) })
+  mv.add_use(@abi.Virtual(value))
+  use_block.add_inst(mv)
+  use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
+  let rewritten = rematerialize_cross_block_constants(func)
+  inspect(rewritten.blocks[1].insts.length(), content="3")
+  match rewritten.blocks[1].insts[0].opcode {
+    @instr.LoadConst(9L) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+  match rewritten.blocks[1].insts[1].opcode {
+    @instr.LoadConst(123L) => inspect(true, content="true")
+    _ => inspect(false, content="true")
+  }
+}
+
+///|
 
 ///|
 test "apply_allocation: BranchCmp reloads both spilled operands without clobber" {
@@ -1171,7 +1268,7 @@ test "regalloc: backtracking allocator with register pressure" {
 }
 
 ///|
-test "regalloc: move-merge allows call-profile mismatch" {
+test "regalloc: direct move does not force bundle merge" {
   let func = VCodeFunction::new("merge_call_profile")
   let a = func.add_param(@abi.Int)
   func.add_result(@abi.Int)
@@ -1193,6 +1290,35 @@ test "regalloc: move-merge allows call-profile mismatch" {
   dst.crosses_wasm_call = false
   dst.crosses_c_call = false
   let bundles = build_bundles_with_merging(func, ranges)
+  // Cranelift/regalloc2-style merge policy does not blindly merge all
+  // move-related ranges; keep these as separate bundles.
+  inspect(bundles.length(), content="2")
+}
+
+///|
+test "regalloc: direct move merges with matching call profile" {
+  let func = VCodeFunction::new("merge_move_profile_match")
+  let a = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+  let mov = @instr.VCodeInst::new(@instr.Move)
+  let v1 = func.new_vreg(@abi.Int)
+  mov.add_def({ reg: @abi.Virtual(v1) })
+  mov.add_use(@abi.Virtual(a))
+  block.add_inst(mov)
+  block.set_terminator(@instr.Return([@abi.Virtual(v1)]))
+  let live = compute_liveness(func)
+  let ranges = build_live_ranges(func, live)
+  let src = ranges.get_by_vreg(a.id).unwrap()
+  let dst = ranges.get_by_vreg(v1.id).unwrap()
+  src.crosses_call = true
+  src.crosses_wasm_call = true
+  src.crosses_c_call = false
+  dst.crosses_call = true
+  dst.crosses_wasm_call = true
+  dst.crosses_c_call = false
+  let bundles = build_bundles_with_merging(func, ranges)
+  inspect(src.bundle_id == dst.bundle_id, content="true")
   inspect(bundles.length(), content="1")
 }
 

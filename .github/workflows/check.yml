@@ -35,7 +35,7 @@ jobs:
 
       - name: build wasmoon
         run: |
-          moon build --target native
+          moon build --target native --release
           ./install.sh
 
       - name: install wasm-tools
@@ -148,7 +148,7 @@ jobs:
 
       - name: build wasmoon
         run: |
-          moon build --target native
+          moon build --target native --release
           ./install.sh
 
       - name: run wast spec tests (amd64)

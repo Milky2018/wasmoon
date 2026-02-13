@@ -280,7 +280,6 @@ test "GC: threshold check" {
   // Allocate until threshold
   for i in 0..<5 {
     let _ = heap.alloc_struct(0, [@types.Value::I32(i)])
-
   }
   inspect(heap.should_collect(), content="true")
 }

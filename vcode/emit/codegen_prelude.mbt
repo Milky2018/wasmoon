@@ -123,16 +123,7 @@ fn collect_used_callee_saved_fprs(
 ///|
 /// Check if a function makes any calls
 fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
-  for block in func.get_blocks() {
-    for inst in block.insts {
-      // Check if this instruction is a function call
-      match inst.opcode.call_type() {
-        @instr.Regular | @instr.TailCall => return true
-        _ => ()
-      }
-    }
-  }
-  false
+  func.has_calls()
 }
 
 ///|
@@ -241,6 +232,12 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
     let step = 4096
     let scratch = scratch1_index()
     if is_sub {
+      // Probe only when crossing at least one full page, matching Cranelift's
+      // inline-probestack rule (probe_count = frame_size / guard_size).
+      if abs_amount < step {
+        self.x86_emit_sub_rsp_imm32(abs_amount)
+        return
+      }
       // Probe in 4KB steps to avoid skipping over a stack guard page.
       let mut remaining = abs_amount
       while remaining >= step {
@@ -275,14 +272,11 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
     // Stack allocation: touch stack pages so a guard page can't be skipped by a
     // single large SP adjustment (e.g. large frames on the independent WASM stack).
     //
-    // We probe in 4KB steps (<= minimum common page size), then do the remainder.
-    // This guarantees that if we cross into a PROT_NONE guard page, we fault while
-    // the faulting address is within the guard region (so the signal handler can
-    // classify it as "call stack exhausted").
-    if abs_amount <= 4095 {
+    // We probe in 4KB steps only when crossing at least one full page.
+    // This follows Cranelift's `probe_count = frame_size / guard_size` behavior
+    // and avoids an extra store for small stack frames.
+    if abs_amount < step {
       self.emit_sub_imm(31, 31, abs_amount)
-      // Touch at the new SP to fault immediately on overflow.
-      self.emit_str_imm(31, 31, 0)
       return
     }
     // abs_amount >= 4096
@@ -528,10 +522,11 @@ fn MachineCode::emit_prologue(
     }
     let vmctx = vmctx_index()
     self.emit_mov_reg(vmctx, 0)
-    // Optionally cache memory0 descriptor pointer in X20.
-    // This allows `LoadMemBase(mem=0)` to be a single load from [X20 + 0].
+    // Optionally cache memory0 base pointer in X20.
+    // This allows `LoadMemBase(mem=0)` to become a register move.
     if stack_frame.cache_mem0_desc {
       self.emit_ldr_imm(mem0_desc_index(), vmctx, @abi.VMCTX_MEMORY0_OFFSET)
+      self.emit_ldr_imm(mem0_desc_index(), mem0_desc_index(), 0)
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
@@ -628,7 +623,8 @@ pub fn emit_function(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
-  let uses_func_table = func.uses_func_table()
+  let cache_mem0_desc = func.should_cache_mem0_desc()
+  let cache_func_table = func.should_cache_func_table()
 
   // Check if function uses vmctx (x19)
   // A function needs vmctx if:
@@ -638,11 +634,11 @@ pub fn emit_function(
   let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
   let clobbered_gprs = clobbered
   let mem0_desc = mem0_desc_index()
-  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
   let func_table = func_table_index()
-  if uses_func_table && !clobbered_gprs.contains(func_table) {
+  if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
@@ -652,8 +648,8 @@ pub fn emit_function(
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
-    cache_mem0_desc=uses_mem0,
-    cache_func_table=uses_func_table,
+    cache_mem0_desc~,
+    cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
     abi_settings~,
@@ -1949,18 +1945,19 @@ pub fn emit_function_with_regalloc(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_mem0 = func.uses_mem0()
-  let uses_func_table = func.uses_func_table()
+  let cache_mem0_desc = func.should_cache_mem0_desc()
+  let cache_func_table = func.should_cache_func_table()
   let vmctx = vmctx_index()
   let needs_vmctx = has_calls ||
     output_uses_preg(func, output, vmctx) ||
     uses_mem0
   let clobbered_gprs = clobbered
   let mem0_desc = mem0_desc_index()
-  if uses_mem0 && !clobbered_gprs.contains(mem0_desc) {
+  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
   let func_table = func_table_index()
-  if uses_func_table && !clobbered_gprs.contains(func_table) {
+  if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
   let stack_frame = JITStackFrame::build(
@@ -1970,8 +1967,8 @@ pub fn emit_function_with_regalloc(
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
-    cache_mem0_desc=uses_mem0,
-    cache_func_table=uses_func_table,
+    cache_mem0_desc~,
+    cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
     abi_settings~,
