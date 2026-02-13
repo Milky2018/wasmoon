@@ -19,11 +19,15 @@ pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @
 
 pub fn instantiate_module(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance)
 
+pub fn instantiate_module_with_import_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> InstantiateWithImportDiagnosticsResult
+
 pub fn instantiate_module_with_imports(@runtime.Store, @types.Module, @runtime.Imports) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.ModuleInstance) raise @runtime.RuntimeError
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
+
+pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult
 
 // Errors
 
@@ -62,6 +66,34 @@ pub fn ExecContext::exec_tail_call(Self, Int) -> Unit raise
 pub fn ExecContext::exec_tail_call_indirect(Self, Int, Int) -> Unit raise
 pub fn ExecContext::exec_tail_call_ref(Self, Int) -> Unit raise
 pub impl Show for ExecContext
+
+pub struct ImportDiagnostic {
+  import_index : Int
+  module_name : String
+  name : String
+  kind : ImportDiagnosticKind
+  expected : String
+  actual : String?
+  message : String
+}
+
+pub(all) enum ImportDiagnosticKind {
+  MissingImport
+  ImportKindMismatch
+  ImportTypeMismatch
+}
+
+pub struct ImportDiagnosticsResult {
+  mut ok : Bool
+  diagnostics : Array[ImportDiagnostic]
+}
+pub fn ImportDiagnosticsResult::new() -> Self
+
+pub(all) enum InstantiateWithImportDiagnosticsResult {
+  Ok(@runtime.ModuleInstance)
+  ImportError(ImportDiagnosticsResult)
+  RuntimeFailure(@runtime.RuntimeError)
+}
 
 // Type aliases
 
