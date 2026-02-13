@@ -29,7 +29,28 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.NullReference => @runtime.NullReference
     @runtime.UnalignedAtomic => @runtime.UnalignedAtomic
     @runtime.InvalidConstantExpression(_) as err => err
+    InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
     _ => @runtime.Unreachable
+  }
+}
+
+///|
+fn find_export_by_name(
+  exports : Array[@types.Export],
+  target : String,
+) -> @types.Export? {
+  loop 0 {
+    idx =>
+      if idx >= exports.length() {
+        None
+      } else {
+        let exp = exports[idx]
+        if exp.name == target {
+          Some(exp)
+        } else {
+          continue idx + 1
+        }
+      }
   }
 }
 
@@ -1180,6 +1201,162 @@ pub fn instantiate_module_with_imports(
 }
 
 ///|
+/// Failure category for controlled export invocation.
+pub(all) enum CallExportFailureKind {
+  ExportNotFound
+  NotFunctionExport
+  Trap
+  HostInvocation
+  Cancelled
+  UnsupportedOption
+}
+
+///|
+/// Structured failure for controlled export invocation.
+pub struct CallExportFailure {
+  kind : CallExportFailureKind
+  message : String
+  runtime_error : @runtime.RuntimeError?
+}
+
+///|
+/// Result type for controlled export invocation.
+pub(all) enum CallExportResult {
+  Ok(Array[@types.Value])
+  Err(CallExportFailure)
+}
+
+///|
+/// Options for controlled export invocation.
+///
+/// Current engine support:
+/// - `cancel` is checked before invocation.
+/// - `timeout_ms`, `fuel`, and `budget` are parsed and surfaced as structured
+///   `UnsupportedOption` errors for integration-time capability probing.
+pub struct CallExportOptions {
+  timeout_ms : Int?
+  fuel : Int?
+  budget : Int?
+  cancel : (() -> Bool)?
+}
+
+///|
+pub fn CallExportOptions::new(
+  timeout_ms? : Int? = None,
+  fuel? : Int? = None,
+  budget? : Int? = None,
+  cancel? : (() -> Bool)? = None,
+) -> CallExportOptions {
+  { timeout_ms, fuel, budget, cancel }
+}
+
+///|
+fn call_export_failure(
+  kind : CallExportFailureKind,
+  message : String,
+  runtime_error? : @runtime.RuntimeError? = None,
+) -> CallExportFailure {
+  { kind, message, runtime_error }
+}
+
+///|
+fn check_call_export_options(options : CallExportOptions) -> CallExportFailure? {
+  if options.timeout_ms is Some(timeout_ms) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "timeout_ms is not supported yet (requested: \{timeout_ms})",
+      ),
+    )
+  }
+  if options.fuel is Some(fuel) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "fuel is not supported yet (requested: \{fuel})",
+      ),
+    )
+  }
+  if options.budget is Some(budget) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "budget is not supported yet (requested: \{budget})",
+      ),
+    )
+  }
+  if options.cancel is Some(cancel_fn) && cancel_fn() {
+    return Some(
+      call_export_failure(Cancelled, "invocation cancelled before execution"),
+    )
+  }
+  None
+}
+
+///|
+/// Controlled export invocation with structured result.
+pub fn call_exported_func_with_options(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  name : String,
+  args : Array[@types.Value],
+  options? : CallExportOptions = CallExportOptions::new(),
+) -> CallExportResult {
+  if check_call_export_options(options) is Some(failure) {
+    return Err(failure)
+  }
+
+  match find_export_by_name(instance.exports, name) {
+    Some(exp) =>
+      match exp.desc {
+        Func(func_idx) => {
+          let ctx = ExecContext::new(store, instance)
+          let results = ctx.call_func(func_idx, args) catch {
+            BranchWith(_, _) | Return =>
+              return Err(
+                call_export_failure(
+                  Trap,
+                  "internal control signal escaped during function invocation",
+                  runtime_error=Some(@runtime.Unreachable),
+                ),
+              )
+            InvocationSignal::HostInvocation(err) => {
+              let runtime_err = normalize_runtime_error(err)
+              return Err(
+                call_export_failure(
+                  HostInvocation,
+                  runtime_err.to_string(),
+                  runtime_error=Some(runtime_err),
+                ),
+              )
+            }
+            e => {
+              let runtime_err = normalize_runtime_error(e)
+              return Err(
+                call_export_failure(
+                  Trap,
+                  runtime_err.to_string(),
+                  runtime_error=Some(runtime_err),
+                ),
+              )
+            }
+          }
+          Ok(results)
+        }
+        _ =>
+          Err(
+            call_export_failure(
+              NotFunctionExport,
+              "export '\{name}' is not a function",
+            ),
+          )
+      }
+    None =>
+      Err(call_export_failure(ExportNotFound, "export '\{name}' not found"))
+  }
+}
+
+///|
 /// Find and call an exported function
 pub fn call_exported_func(
   store : @runtime.Store,
@@ -1187,27 +1364,7 @@ pub fn call_exported_func(
   name : String,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
-  // Find the export
-  fn find_export(
-    exports : Array[@types.Export],
-    target : String,
-  ) -> @types.Export? {
-    loop 0 {
-      idx =>
-        if idx >= exports.length() {
-          None
-        } else {
-          let exp = exports[idx]
-          if exp.name == target {
-            Some(exp)
-          } else {
-            continue idx + 1
-          }
-        }
-    }
-  }
-
-  match find_export(instance.exports, name) {
+  match find_export_by_name(instance.exports, name) {
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
@@ -1247,27 +1404,7 @@ pub fn get_exported_global(
   instance : @runtime.ModuleInstance,
   name : String,
 ) -> @types.Value raise @runtime.RuntimeError {
-  // Find the export
-  fn find_export(
-    exports : Array[@types.Export],
-    target : String,
-  ) -> @types.Export? {
-    loop 0 {
-      idx =>
-        if idx >= exports.length() {
-          None
-        } else {
-          let exp = exports[idx]
-          if exp.name == target {
-            Some(exp)
-          } else {
-            continue idx + 1
-          }
-        }
-    }
-  }
-
-  match find_export(instance.exports, name) {
+  match find_export_by_name(instance.exports, name) {
     Some(exp) =>
       match exp.desc {
         Global(global_idx) => {

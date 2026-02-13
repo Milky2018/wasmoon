@@ -9,6 +9,8 @@ import {
 // Values
 pub fn call_exported_func(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, String, Array[@types.Value], options? : CallExportOptions) -> CallExportResult
+
 pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
 pub fn eval_const_expr(Array[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
@@ -26,6 +28,34 @@ pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runti
 // Errors
 
 // Types and methods
+pub struct CallExportFailure {
+  kind : CallExportFailureKind
+  message : String
+  runtime_error : @runtime.RuntimeError?
+}
+
+pub(all) enum CallExportFailureKind {
+  ExportNotFound
+  NotFunctionExport
+  Trap
+  HostInvocation
+  Cancelled
+  UnsupportedOption
+}
+
+pub struct CallExportOptions {
+  timeout_ms : Int?
+  fuel : Int?
+  budget : Int?
+  cancel : (() -> Bool)?
+}
+pub fn CallExportOptions::new(timeout_ms? : Int?, fuel? : Int?, budget? : Int?, cancel? : (() -> Bool)?) -> Self
+
+pub(all) enum CallExportResult {
+  Ok(Array[@types.Value])
+  Err(CallExportFailure)
+}
+
 type ExecContext
 pub fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise
 pub fn ExecContext::exec_tail_call(Self, Int) -> Unit raise
