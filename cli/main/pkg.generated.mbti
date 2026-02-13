@@ -2,10 +2,13 @@
 package "Milky2018/wasmoon/cli/main"
 
 import {
+  "Milky2018/wasmoon/cwasm",
   "Milky2018/wasmoon/types",
 }
 
 // Values
+pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?) -> @cwasm.PrecompiledModule?
+
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
 pub fn run_component_script(String) -> Unit
@@ -18,6 +21,31 @@ pub suberror ComponentTestError {
 pub impl Show for ComponentTestError
 
 // Types and methods
+pub struct CompileProgress {
+  stage : CompileStage
+  func_idx : Int?
+  func_name : String?
+  total_funcs : Int
+  compiled_funcs : Int
+  elapsed_us : Int64
+  message : String?
+}
+pub fn CompileProgress::new(CompileStage, Int, Int, Int64, func_idx? : Int?, func_name? : String?, message? : String?) -> Self
+
+pub(all) enum CompileStage {
+  Parse
+  Verify
+  Translate
+  Optimize
+  Lower
+  Regalloc
+  Codegen
+  Link
+  Done
+  Failed
+}
+pub impl Show for CompileStage
+
 type CompiledFunc
 
 // Type aliases

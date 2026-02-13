@@ -226,6 +226,100 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 }
 
 ///|
+/// Stage markers for `compile_module` progress callbacks.
+pub(all) enum CompileStage {
+  Parse
+  Verify
+  Translate
+  Optimize
+  Lower
+  Regalloc
+  Codegen
+  Link
+  Done
+  Failed
+}
+
+///|
+fn CompileStage::to_string(self : CompileStage) -> String {
+  match self {
+    Parse => "parse"
+    Verify => "verify"
+    Translate => "translate"
+    Optimize => "optimize"
+    Lower => "lower"
+    Regalloc => "regalloc"
+    Codegen => "codegen"
+    Link => "link"
+    Done => "done"
+    Failed => "failed"
+  }
+}
+
+///|
+pub impl Show for CompileStage with output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Structured compile progress event.
+pub struct CompileProgress {
+  stage : CompileStage
+  func_idx : Int?
+  func_name : String?
+  total_funcs : Int
+  compiled_funcs : Int
+  elapsed_us : Int64
+  message : String?
+}
+
+///|
+pub fn CompileProgress::new(
+  stage : CompileStage,
+  total_funcs : Int,
+  compiled_funcs : Int,
+  elapsed_us : Int64,
+  func_idx? : Int? = None,
+  func_name? : String? = None,
+  message? : String? = None,
+) -> CompileProgress {
+  {
+    stage,
+    func_idx,
+    func_name,
+    total_funcs,
+    compiled_funcs,
+    elapsed_us,
+    message,
+  }
+}
+
+///|
+fn emit_compile_progress(
+  on_progress : (CompileProgress) -> Unit?,
+  stage : CompileStage,
+  compile_start : @perf.PerfTick,
+  total_funcs : Int,
+  compiled_funcs : Int,
+  func_idx? : Int? = None,
+  func_name? : String? = None,
+  message? : String? = None,
+) -> Unit {
+  on_progress(
+    CompileProgress::new(
+      stage,
+      total_funcs,
+      compiled_funcs,
+      @perf.elapsed_us(compile_start),
+      func_idx~,
+      func_name~,
+      message~,
+    ),
+  )
+  |> ignore
+}
+
+///|
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
@@ -1037,6 +1131,80 @@ fn run_with_jit(
 }
 
 ///|
+/// Compile module bytes into a precompiled artifact and emit structured progress.
+pub fn compile_module(
+  module_bytes : Bytes,
+  opt_level? : Int = 2,
+  enable_dwarf? : Bool = false,
+  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
+) -> @cwasm.PrecompiledModule? {
+  let compile_start = @perf.tick_now()
+  emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
+  let wasm_module = @parser.parse_module(module_bytes) catch {
+    e => {
+      let message = e.to_string()
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        compile_start,
+        0,
+        0,
+        message=Some(message),
+      )
+      return None
+    }
+  }
+  emit_compile_progress(
+    on_progress,
+    Verify,
+    compile_start,
+    wasm_module.codes.length(),
+    0,
+  )
+  @validator.validate_module(wasm_module) catch {
+    e => {
+      let message = match e {
+        @validator.WithContext(ctx) => ctx.format()
+        _ => @validator.format_validation_error(e)
+      }
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        compile_start,
+        wasm_module.codes.length(),
+        0,
+        message=Some(message),
+      )
+      return None
+    }
+  }
+  let compiled = compile_module_to_jit(
+    wasm_module,
+    false,
+    false,
+    actual_memory_max=None,
+    opt_level,
+    enable_dwarf,
+    on_progress~,
+    compile_start=Some(compile_start),
+  )
+  match compiled {
+    Some((precompiled, _debug_db)) => Some(precompiled)
+    None => {
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        compile_start,
+        wasm_module.codes.length(),
+        0,
+        message=Some("compile failed"),
+      )
+      None
+    }
+  }
+}
+
+///|
 /// Compile a WASM module to precompiled format in memory
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
@@ -1046,7 +1214,10 @@ fn compile_module_to_jit(
   actual_memory_max? : Int? = None,
   opt_level : Int,
   enable_dwarf : Bool,
+  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
+  compile_start? : @perf.PerfTick? = None,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
+  let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   if perf_on {
@@ -1082,6 +1253,15 @@ fn compile_module_to_jit(
     let type_idx = mod_.funcs[i]
     let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
+    emit_compile_progress(
+      on_progress,
+      Translate,
+      progress_start,
+      mod_.codes.length(),
+      i,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
+    )
     // Stage 1: Translate WASM to IR - use simplified from_module API
     let ir_func = @ir.translate_function(
       mod_,
@@ -1097,6 +1277,15 @@ fn compile_module_to_jit(
     } else {
       opt_level
     }
+    emit_compile_progress(
+      on_progress,
+      Optimize,
+      progress_start,
+      mod_.codes.length(),
+      i,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
+    )
     let optimize_tick = if perf_on { Some(@perf.tick_now()) } else { None }
     if perf_on {
       @perf.begin_function(
@@ -1119,6 +1308,15 @@ fn compile_module_to_jit(
     if debug_db is Some(_) {
       ir_dump = Some(ir_func.print())
     }
+    emit_compile_progress(
+      on_progress,
+      Lower,
+      progress_start,
+      mod_.codes.length(),
+      i,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
+    )
     // Stage 3: Lower to VCode
     let vcode_func = @lower.lower_function(
       ir_func,
@@ -1133,6 +1331,15 @@ fn compile_module_to_jit(
     if debug_db is Some(_) {
       vcode_before_dump = Some(vcode_func.print())
     }
+    emit_compile_progress(
+      on_progress,
+      Regalloc,
+      progress_start,
+      mod_.codes.length(),
+      i,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
+    )
     // Stage 4: Register allocation (Cranelift-style output)
     let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
       vcode_func,
@@ -1154,6 +1361,15 @@ fn compile_module_to_jit(
       // Note: VCode is not rewritten; regalloc results are in `ra_output`.
       vcode_after_dump = Some(vcode_ra.print())
     }
+    emit_compile_progress(
+      on_progress,
+      Codegen,
+      progress_start,
+      mod_.codes.length(),
+      i,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
+    )
     // Stage 5: Emit machine code
     let debug_func_idx = if debug { Some(func_idx) } else { None }
     let mc = @emit.emit_function_with_regalloc(
@@ -1176,6 +1392,15 @@ fn compile_module_to_jit(
     let num_results = func_type.results.length()
     precompiled.add_function(
       func_idx, func_name, compiled, num_params, num_results,
+    )
+    emit_compile_progress(
+      on_progress,
+      Link,
+      progress_start,
+      mod_.codes.length(),
+      i + 1,
+      func_idx=Some(func_idx),
+      func_name=Some(func_name),
     )
     if perf_on {
       @perf.finish_function(@ir.instruction_count(ir_func), code_size)
@@ -1214,6 +1439,13 @@ fn compile_module_to_jit(
         )
     }
   }
+  emit_compile_progress(
+    on_progress,
+    Done,
+    progress_start,
+    mod_.codes.length(),
+    mod_.codes.length(),
+  )
   Some((precompiled, debug_db))
 }
 
