@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/preflight"
+
+// Values
+pub fn validate_jit(Bytes, opt_level? : Int) -> PreflightResult
+
+pub fn validate_module(Bytes) -> PreflightResult
+
+// Errors
+
+// Types and methods
+pub struct PreflightDiagnostic {
+  severity : PreflightSeverity
+  stage : PreflightStage
+  message : String
+  func_idx : Int?
+  func_name : String?
+}
+pub fn PreflightDiagnostic::new(PreflightSeverity, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Self
+
+pub struct PreflightResult {
+  mut ok : Bool
+  diagnostics : Array[PreflightDiagnostic]
+  mut total_funcs : Int
+  mut checked_funcs : Int
+}
+pub fn PreflightResult::add_error(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
+pub fn PreflightResult::add_warning(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
+pub fn PreflightResult::new() -> Self
+
+pub(all) enum PreflightSeverity {
+  Error
+  Warning
+}
+pub impl Show for PreflightSeverity
+
+pub(all) enum PreflightStage {
+  Parse
+  Validate
+  Translate
+  Lower
+  Regalloc
+}
+pub impl Show for PreflightStage
+
+// Type aliases
+
+// Traits
+
