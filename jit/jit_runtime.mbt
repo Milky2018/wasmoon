@@ -14,6 +14,36 @@ pub struct JITFunction {
 }
 
 ///|
+/// A resolved wasm frame in a native trap report.
+pub struct WasmTrapFrame {
+  pc : Int64
+  func_idx : Int
+  func_name : String
+  wasm_offset : Int64
+}
+
+///|
+/// Structured trap report for native integrations.
+pub struct TrapReport {
+  trap_kind : String
+  message : String
+  signal : Int
+  signal_name : String
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  wasm_func_idx : Int?
+  wasm_func_name : String?
+  wasm_offset : Int64?
+  wasm_frames : Array[WasmTrapFrame]
+  host_frames : Array[String]
+  dump_path : String?
+}
+
+///|
 /// Per-function compilation dumps captured for dump-on-trap.
 pub struct JITFunctionDebug {
   ir : String
@@ -107,6 +137,7 @@ struct JITModule {
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut debug_db : JITDebugDB?
+  mut last_trap_report : TrapReport?
   // Keep generated import trampolines alive (GC-managed executable memory).
   import_exec_codes : Array[ExecCode]
   // Pseudo direct-call function indices -> near stub entry points.
@@ -123,6 +154,7 @@ pub fn JITModule::new() -> JITModule {
     address_ranges: [],
     context: None,
     debug_db: None,
+    last_trap_report: None,
     import_exec_codes: [],
     direct_call_targets: {},
     wasi_stdout_callback: None,
@@ -746,6 +778,13 @@ pub fn JITModule::export_functions(self : JITModule) -> Map[String, Int64] {
 }
 
 ///|
+/// Returns the last structured trap report from `call_with_context`.
+/// Returns `None` if no trap has been observed on this module.
+pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
+  self.last_trap_report
+}
+
+///|
 /// Call a function using the JIT context (for functions that need to call other functions)
 /// Returns Array[Int64] where each element corresponds to a return value:
 /// - For I32/I64: the value is directly in Int64
@@ -758,6 +797,7 @@ pub fn JITModule::call_with_context(
 ) -> Array[Int64] raise JITTrap {
   match self.context {
     Some(ctx) => {
+      self.last_trap_report = None
       // Calculate number of result slots (V128 needs 2 slots, others need 1)
       let mut num_result_slots = 0
       for result_type in func.result_types {
@@ -780,7 +820,11 @@ pub fn JITModule::call_with_context(
       }
       self.flush_wasi_output(ctx)
       match call_error {
-        Some(JITTrap(msg)) => raise JITTrap(self.enrich_trap_message(msg))
+        Some(JITTrap(msg)) => {
+          let report = self.build_trap_report(msg)
+          self.last_trap_report = Some(report)
+          raise JITTrap(self.format_trap_report_message(report))
+        }
         Some(JITExit(code)) => raise JITExit(code)
         None => ()
       }
@@ -808,79 +852,99 @@ fn JITModule::flush_wasi_output(self : JITModule, ctx : JITContext) -> Unit {
 }
 
 ///|
-fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
+fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
   let details = get_last_trap_details()
-  let fields : Array[String] = []
-  if details.signal != 0 {
-    fields.push("sig=\{format_signal(details.signal)}")
-  }
-  if details.pc != 0L {
-    fields.push("pc=\{to_hex_u64(details.pc)}")
-  }
-  if details.lr != 0L {
-    fields.push("lr=\{to_hex_u64(details.lr)}")
-  }
-  if details.frame_lr != 0L {
-    fields.push("frame_lr=\{to_hex_u64(details.frame_lr)}")
-  }
-  if details.fault_addr != 0L {
-    fields.push("addr=\{to_hex_u64(details.fault_addr)}")
-  }
-  if details.brk_imm >= 0 {
-    fields.push("brk_imm=\{details.brk_imm}")
+  let mut wasm_func_idx : Int? = None
+  let mut wasm_func_name : String? = None
+  let mut wasm_offset : Int64? = None
+  let wasm_frames : Array[WasmTrapFrame] = []
+  let signal_name = if details.signal != 0 {
+    format_signal(details.signal)
+  } else {
+    ""
   }
 
-  // Prefer PC-range mapping; fall back to current-func tracking.
-  let mut resolved_func_idx : Int? = None
-  let mut func_desc : String? = None
+  fn add_unique_frame(
+    frames : Array[WasmTrapFrame],
+    frame : WasmTrapFrame,
+  ) -> Unit {
+    for existing in frames {
+      if existing.func_idx == frame.func_idx &&
+        existing.pc == frame.pc &&
+        existing.wasm_offset == frame.wasm_offset {
+        return
+      }
+    }
+    frames.push(frame)
+  }
+
   match self.find_func_by_pc(details.pc) {
     Some((func_idx, f, offset)) => {
-      resolved_func_idx = Some(func_idx)
-      func_desc = Some(
-        "wasm=\{func_idx} '\{f.name}'+0x\{@types.int_to_hex(offset)}",
-      )
+      wasm_func_idx = Some(func_idx)
+      wasm_func_name = Some(f.name)
+      wasm_offset = Some(offset.to_int64())
+      add_unique_frame(wasm_frames, {
+        pc: details.pc,
+        func_idx,
+        func_name: f.name,
+        wasm_offset: offset.to_int64(),
+      })
     }
     None =>
       if details.func_idx >= 0 {
-        resolved_func_idx = Some(details.func_idx)
-        match self.functions.get(details.func_idx) {
-          Some(f) => func_desc = Some("wasm=\{details.func_idx} '\{f.name}'")
-          None => func_desc = Some("wasm=\{details.func_idx}")
+        wasm_func_idx = Some(details.func_idx)
+        let name = match self.functions.get(details.func_idx) {
+          Some(f) => f.name
+          None => "func_\{details.func_idx}"
+        }
+        wasm_func_name = Some(name)
+        wasm_offset = Some(0L)
+        if details.pc != 0L {
+          add_unique_frame(wasm_frames, {
+            pc: details.pc,
+            func_idx: details.func_idx,
+            func_name: name,
+            wasm_offset: 0L,
+          })
         }
       }
   }
-  match func_desc {
-    Some(s) => fields.push(s)
-    None => ()
-  }
 
-  // Best-effort caller mapping via the saved LR in the frame record.
-  let mut caller : (Int, JITFunction, Int, Int64)? = None
+  let mut caller_func_idx : Int? = None
   if details.frame_lr != 0L {
+    let mut caller_pc = details.frame_lr
     match self.find_func_by_pc(details.frame_lr) {
-      Some((func_idx, f, offset)) =>
-        caller = Some((func_idx, f, offset, details.frame_lr))
+      Some((func_idx, f, offset)) => {
+        caller_func_idx = Some(func_idx)
+        add_unique_frame(wasm_frames, {
+          pc: details.frame_lr,
+          func_idx,
+          func_name: f.name,
+          wasm_offset: offset.to_int64(),
+        })
+      }
       None =>
         if details.frame_lr >= 4L {
           let lr_prev = details.frame_lr - 4L
           match self.find_func_by_pc(lr_prev) {
-            Some((func_idx, f, offset)) =>
-              caller = Some((func_idx, f, offset, lr_prev))
+            Some((func_idx, f, offset)) => {
+              caller_pc = lr_prev
+              caller_func_idx = Some(func_idx)
+              add_unique_frame(wasm_frames, {
+                pc: caller_pc,
+                func_idx,
+                func_name: f.name,
+                wasm_offset: offset.to_int64(),
+              })
+            }
             None => ()
           }
         }
     }
   }
-  match caller {
-    Some((func_idx, f, offset, _)) =>
-      fields.push(
-        "caller=\{func_idx} '\{f.name}'+0x\{@types.int_to_hex(offset)}",
-      )
-    None => ()
-  }
 
-  // Dump-on-trap (optional): write a single per-trap file for the resolved function.
-  match (resolved_func_idx, self.debug_db) {
+  let mut dump_path : String? = None
+  match (wasm_func_idx, self.debug_db) {
     (Some(func_idx), Some(db)) =>
       match db.get(func_idx) {
         Some(dbg) => {
@@ -909,14 +973,23 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
             "== Machine Code ==\n" +
             dbg.machine_code +
             "\n"
-          let content = match caller {
-            Some((caller_idx, caller_func, _caller_off, caller_pc)) =>
+          let content = match caller_func_idx {
+            Some(caller_idx) =>
               match db.get(caller_idx) {
-                Some(cdbg) =>
+                Some(cdbg) => {
+                  let caller_name = match self.functions.get(caller_idx) {
+                    Some(f) => f.name
+                    None => "func_\{caller_idx}"
+                  }
+                  let caller_pc = if wasm_frames.length() > 1 {
+                    wasm_frames[1].pc
+                  } else {
+                    0L
+                  }
                   content +
                   "\n== Caller ==\n" +
                   "caller_func_idx: \{caller_idx}\n" +
-                  "caller_name: \{caller_func.name}\n" +
+                  "caller_name: \{caller_name}\n" +
                   "caller_pc: \{to_hex_u64(caller_pc)}\n\n" +
                   "== Caller IR ==\n" +
                   cdbg.ir +
@@ -930,6 +1003,7 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
                   "== Caller Machine Code ==\n" +
                   cdbg.machine_code +
                   "\n"
+                }
                 None => content
               }
             None => content
@@ -937,16 +1011,87 @@ fn JITModule::enrich_trap_message(self : JITModule, msg : String) -> String {
           @fs.write_string_to_file(path, content) catch {
             _ => ()
           }
-          fields.push("dump=\{path}")
+          dump_path = Some(path)
         }
         None => ()
       }
     _ => ()
   }
+
+  {
+    trap_kind: msg,
+    message: msg,
+    signal: details.signal,
+    signal_name,
+    pc: details.pc,
+    lr: details.lr,
+    fp: details.fp,
+    frame_lr: details.frame_lr,
+    fault_addr: details.fault_addr,
+    brk_imm: details.brk_imm,
+    wasm_func_idx,
+    wasm_func_name,
+    wasm_offset,
+    wasm_frames,
+    host_frames: [],
+    dump_path,
+  }
+}
+
+///|
+fn JITModule::format_trap_report_message(
+  _self : JITModule,
+  report : TrapReport,
+) -> String {
+  let fields : Array[String] = []
+  if report.signal != 0 {
+    fields.push("sig=\{report.signal_name}")
+  }
+  if report.pc != 0L {
+    fields.push("pc=\{to_hex_u64(report.pc)}")
+  }
+  if report.lr != 0L {
+    fields.push("lr=\{to_hex_u64(report.lr)}")
+  }
+  if report.frame_lr != 0L {
+    fields.push("frame_lr=\{to_hex_u64(report.frame_lr)}")
+  }
+  if report.fault_addr != 0L {
+    fields.push("addr=\{to_hex_u64(report.fault_addr)}")
+  }
+  if report.brk_imm >= 0 {
+    fields.push("brk_imm=\{report.brk_imm}")
+  }
+  match report.wasm_func_idx {
+    Some(func_idx) =>
+      match (report.wasm_func_name, report.wasm_offset) {
+        (Some(name), Some(offset)) =>
+          fields.push(
+            "wasm=\{func_idx} '\{name}'+0x\{@types.int_to_hex(offset.to_int())}",
+          )
+        (Some(name), None) => fields.push("wasm=\{func_idx} '\{name}'")
+        (None, Some(offset)) =>
+          fields.push(
+            "wasm=\{func_idx} +0x\{@types.int_to_hex(offset.to_int())}",
+          )
+        (None, None) => fields.push("wasm=\{func_idx}")
+      }
+    None => ()
+  }
+  if report.wasm_frames.length() > 1 {
+    let caller = report.wasm_frames[1]
+    fields.push(
+      "caller=\{caller.func_idx} '\{caller.func_name}'+0x\{@types.int_to_hex(caller.wasm_offset.to_int())}",
+    )
+  }
+  match report.dump_path {
+    Some(path) => fields.push("dump=\{path}")
+    None => ()
+  }
   if fields.is_empty() {
-    msg
+    report.message
   } else {
-    msg + " (" + fields.join(", ") + ")"
+    report.message + " (" + fields.join(", ") + ")"
   }
 }
 

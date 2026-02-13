@@ -9,6 +9,40 @@ import {
 // Values
 pub fn format_runtime_error(RuntimeError) -> String
 
+pub fn runtime_capabilities() -> RuntimeCapabilities
+
+pub fn runtime_version() -> String
+
+pub fn supports_component_model() -> Bool
+
+pub fn supports_exception_handling() -> Bool
+
+pub fn supports_feature(RuntimeFeature) -> Bool
+
+pub fn supports_function_references() -> Bool
+
+pub fn supports_gc() -> Bool
+
+pub fn supports_interpreter() -> Bool
+
+pub fn supports_jit() -> Bool
+
+pub fn supports_memory64() -> Bool
+
+pub fn supports_multi_memory() -> Bool
+
+pub fn supports_reference_types() -> Bool
+
+pub fn supports_relaxed_simd() -> Bool
+
+pub fn supports_simd() -> Bool
+
+pub fn supports_tail_call() -> Bool
+
+pub fn supports_threads() -> Bool
+
+pub fn supports_wasi_preview1() -> Bool
+
 // Errors
 pub(all) suberror RuntimeError {
   StackUnderflow
@@ -254,6 +288,24 @@ pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub fn ModuleInstance::new() -> Self
 pub impl Show for ModuleInstance
 
+pub struct RuntimeCapabilities {
+  version : String
+  interpreter : Bool
+  jit : Bool
+  simd : Bool
+  relaxed_simd : Bool
+  reference_types : Bool
+  function_references : Bool
+  tail_call : Bool
+  exception_handling : Bool
+  gc : Bool
+  memory64 : Bool
+  multi_memory : Bool
+  component_model : Bool
+  wasi_preview1 : Bool
+  threads : Bool
+}
+
 pub struct RuntimeErrorContext {
   error : RuntimeError
   call_stack : Array[CallStackEntry]
@@ -266,6 +318,23 @@ pub fn RuntimeErrorContext::with_call_stack(Self, Array[CallStackEntry]) -> Self
 pub fn RuntimeErrorContext::with_func_idx(Self, Int) -> Self
 pub fn RuntimeErrorContext::with_instruction(Self, String) -> Self
 pub impl Show for RuntimeErrorContext
+
+pub(all) enum RuntimeFeature {
+  Interpreter
+  JIT
+  SIMD
+  RelaxedSIMD
+  ReferenceTypes
+  FunctionReferences
+  TailCall
+  ExceptionHandling
+  GC
+  Memory64
+  MultiMemory
+  ComponentModel
+  WasiPreview1
+  Threads
+}
 
 type Stack
 pub fn Stack::clear(Self) -> Unit

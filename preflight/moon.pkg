@@ -1,0 +1,8 @@
+import {
+  "Milky2018/wasmoon/ir",
+  "Milky2018/wasmoon/parser",
+  "Milky2018/wasmoon/types",
+  "Milky2018/wasmoon/validator",
+  "Milky2018/wasmoon/vcode/lower",
+  "Milky2018/wasmoon/vcode/regalloc",
+}

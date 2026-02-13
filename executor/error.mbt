@@ -7,3 +7,9 @@ priv suberror ControlSignal {
   TailCall(Int, @runtime.FuncInst, Array[@types.Value], Int) // Tail call: (store_addr, func_inst, args, num_results)
   ThrowException(Int, Array[@types.Value]) // Exception: (tag_idx, exception values)
 } derive(Show)
+
+///|
+/// Internal signal used to preserve host-call error provenance.
+priv suberror InvocationSignal {
+  HostInvocation(Error)
+} derive(Show)
