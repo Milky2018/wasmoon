@@ -756,9 +756,6 @@ fn MachineCode::emit_instruction_x86_64(
       if tmp == rd || tmp == rn {
         abort("x86_64 add_extend: no scratch register available")
       }
-      if rd != rn {
-        self.x86_emit_mov_rr(rd, rn)
-      }
       match ext {
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
@@ -768,6 +765,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         self.x86_emit_shl_r_imm8(tmp, sh)
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
       }
       self.x86_emit_add_rr(rd, tmp)
     }
@@ -784,9 +784,6 @@ fn MachineCode::emit_instruction_x86_64(
       if tmp == rd || tmp == rn {
         abort("x86_64 sub_extend: no scratch register available")
       }
-      if rd != rn {
-        self.x86_emit_mov_rr(rd, rn)
-      }
       match ext {
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
@@ -796,6 +793,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         self.x86_emit_shl_r_imm8(tmp, sh)
+      }
+      if rd != rn {
+        self.x86_emit_mov_rr(rd, rn)
       }
       self.x86_emit_sub_rr(rd, tmp)
     }
