@@ -12,6 +12,7 @@
 // - integer/float constants (LoadConst*)
 // - runtime function pointers and direct function addresses (Load*FuncPtr/LoadFuncAddr)
 // - cheap ALU defs that are profitable to re-create near uses (AddImm/SubImm/Extend)
+// - Cranelift remat.isle-aligned bitwise-imm and bnot for cross-block remat
 
 ///|
 priv struct RematDef {
@@ -24,7 +25,7 @@ priv struct RematDef {
 }
 
 ///|
-fn is_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
+fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     @instr.LoadConst(_)
     | @instr.LoadConstF32(_)
@@ -41,30 +42,23 @@ fn is_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
 }
 
 ///|
-fn record_block_need(
-  needs : Map[Int, Set[Int]],
-  block_id : Int,
-  vreg_id : Int,
-) -> Unit {
-  match needs.get(block_id) {
-    Some(s) => s.add(vreg_id) |> ignore
-    None => {
-      let s : Set[Int] = Set::new()
-      s.add(vreg_id) |> ignore
-      needs.set(block_id, s)
-    }
-  }
-}
-
-///|
-fn rewrite_use_reg(reg : @abi.Reg, local_map : Map[Int, @abi.VReg]) -> @abi.Reg {
-  match reg {
-    @abi.Virtual(v) =>
-      match local_map.get(v.id) {
-        Some(nv) => @abi.Virtual(nv)
-        None => reg
-      }
-    _ => reg
+fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
+  match opcode {
+    @instr.LoadConst(_)
+    | @instr.LoadConstF32(_)
+    | @instr.LoadConstF64(_)
+    | @instr.AddImm(_, _)
+    | @instr.SubImm(_, _)
+    | @instr.AndImm(_, _)
+    | @instr.OrImm(_, _)
+    | @instr.XorImm(_, _)
+    | @instr.Not(_)
+    | @instr.Extend(_)
+    | @instr.LoadGCFuncPtr(_)
+    | @instr.LoadJITFuncPtr(_)
+    | @instr.LoadExceptionFuncPtr(_)
+    | @instr.LoadFuncAddr(_) => true
+    _ => false
   }
 }
 
@@ -94,7 +88,7 @@ pub fn rematerialize_long_distance_constants(
   let remat_defs : Map[Int, RematDef] = {}
   for block in func.blocks {
     for inst_idx, inst in block.insts {
-      if is_remat_candidate(inst.opcode) &&
+      if is_long_distance_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
         inst.def_constraints[0] is @abi.Any &&
@@ -343,13 +337,10 @@ pub fn rematerialize_cross_block_constants(
   // vreg_id -> rematerializable def
   let remat_defs : Map[Int, RematDef] = {}
 
-  // block_id -> set of remat-vreg IDs that are used in this block but defined elsewhere.
-  let block_needs : Map[Int, Set[Int]] = {}
-
   // 1) Collect rematerializable defs.
   for block in func.blocks {
     for inst_idx, inst in block.insts {
-      if is_remat_candidate(inst.opcode) &&
+      if is_cross_block_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
         inst.def_constraints[0] is @abi.Any &&
@@ -367,121 +358,112 @@ pub fn rematerialize_cross_block_constants(
       }
     }
   }
-
-  // 2) Compute per-block remat needs by scanning uses.
-  fn scan_use_reg(
-    remat_defs : Map[Int, RematDef],
-    block_needs : Map[Int, Set[Int]],
-    block_id : Int,
-    reg : @abi.Reg,
-  ) -> Unit {
-    if reg is @abi.Virtual(v) {
-      match remat_defs.get(v.id) {
-        Some(def) =>
-          if def.def_block_id != block_id {
-            record_block_need(block_needs, block_id, v.id)
-          }
-        None => ()
-      }
-    }
-  }
-
-  for block in func.blocks {
-    for inst in block.insts {
-      for u in inst.uses {
-        scan_use_reg(remat_defs, block_needs, block.id, u)
-      }
-    }
-    match block.terminator {
-      Some(term) =>
-        match term {
-          @instr.Jump(_target, args) =>
-            for a in args {
-              scan_use_reg(remat_defs, block_needs, block.id, a)
-            }
-          @instr.Branch(cond, _t, _e) =>
-            scan_use_reg(remat_defs, block_needs, block.id, cond)
-          @instr.BranchCmp(lhs, rhs, _cond, _is64, _t, _e) => {
-            scan_use_reg(remat_defs, block_needs, block.id, lhs)
-            scan_use_reg(remat_defs, block_needs, block.id, rhs)
-          }
-          @instr.BranchZero(reg, _is_nonzero, _is64, _t, _e) =>
-            scan_use_reg(remat_defs, block_needs, block.id, reg)
-          @instr.BranchCmpImm(lhs, _imm, _cond, _is64, _t, _e) =>
-            scan_use_reg(remat_defs, block_needs, block.id, lhs)
-          @instr.Return(vals) =>
-            for r in vals {
-              scan_use_reg(remat_defs, block_needs, block.id, r)
-            }
-          @instr.BrTable(index, _targets, _default) =>
-            scan_use_reg(remat_defs, block_needs, block.id, index)
-          @instr.Trap(_) => ()
-        }
-      None => ()
-    }
-  }
-  if block_needs.is_empty() {
+  if remat_defs.is_empty() {
     return func
   }
 
-  // 3) Rebuild blocks with inserted const-loads and rewritten uses.
+  // 2) Rebuild blocks and materialize remat defs at first use position.
   for i in 0..<func.blocks.length() {
     let block = func.blocks[i]
-    let needs = match block_needs.get(block.id) {
-      Some(s) => s
-      None => continue
-    }
-
-    // Per-block mapping: original vreg id -> new local vreg.
-    let local_map : Map[Int, @abi.VReg] = {}
-    let need_ids : Array[Int] = []
-    for vreg_id in needs {
-      need_ids.push(vreg_id)
-    }
-    need_ids.sort_by(fn(a, b) { if a < b { -1 } else if a > b { 1 } else { 0 } })
-    for vreg_id in need_ids {
-      let def = remat_defs.get(vreg_id).unwrap()
-      let nv = func.new_vreg(def.cls)
-      local_map.set(vreg_id, nv)
-    }
     let new_block = @block.VCodeBlock::new(block.id)
     for p in block.params {
       new_block.params.push(p)
     }
-
-    // Insert remat defs at block start.
-    for vreg_id in need_ids {
-      let def = remat_defs.get(vreg_id).unwrap()
-      let nv = local_map.get(vreg_id).unwrap()
-      let inst = clone_remat_inst(def, nv)
-      new_block.insts.push(inst)
+    // Per-block remat cache, mirrors Cranelift remat_copies[(block, value)].
+    let local_map : Map[Int, @abi.VReg] = {}
+    fn rewrite_use_with_local_remat(
+      func : VCodeFunction,
+      reg : @abi.Reg,
+      remat_defs : Map[Int, RematDef],
+      local_map : Map[Int, @abi.VReg],
+      block_id : Int,
+      new_block : @block.VCodeBlock,
+    ) -> @abi.Reg {
+      match reg {
+        @abi.Virtual(v) =>
+          match local_map.get(v.id) {
+            Some(nv) => @abi.Virtual(nv)
+            None =>
+              match remat_defs.get(v.id) {
+                Some(def) =>
+                  if def.def_block_id != block_id {
+                    let nv = func.new_vreg(def.cls)
+                    local_map.set(v.id, nv)
+                    new_block.insts.push(clone_remat_inst(def, nv))
+                    @abi.Virtual(nv)
+                  } else {
+                    reg
+                  }
+                None => reg
+              }
+          }
+        _ => reg
+      }
     }
 
-    // Rewrite instruction uses and append.
     for inst in block.insts {
       for j, u in inst.uses {
-        inst.uses[j] = rewrite_use_reg(u, local_map)
+        inst.uses[j] = rewrite_use_with_local_remat(
+          func,
+          u,
+          remat_defs,
+          local_map,
+          block.id,
+          new_block,
+        )
       }
       new_block.insts.push(inst)
     }
-
-    // Rewrite terminator.
     match block.terminator {
       Some(term) => {
         let new_term = match term {
           @instr.Jump(target, args) => {
             let new_args : Array[@abi.Reg] = []
             for a in args {
-              new_args.push(rewrite_use_reg(a, local_map))
+              new_args.push(
+                rewrite_use_with_local_remat(
+                  func,
+                  a,
+                  remat_defs,
+                  local_map,
+                  block.id,
+                  new_block,
+                ),
+              )
             }
             @instr.Jump(target, new_args)
           }
           @instr.Branch(cond, t, e) =>
-            @instr.Branch(rewrite_use_reg(cond, local_map), t, e)
+            @instr.Branch(
+              rewrite_use_with_local_remat(
+                func,
+                cond,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
+              t,
+              e,
+            )
           @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
             @instr.BranchCmp(
-              rewrite_use_reg(lhs, local_map),
-              rewrite_use_reg(rhs, local_map),
+              rewrite_use_with_local_remat(
+                func,
+                lhs,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
+              rewrite_use_with_local_remat(
+                func,
+                rhs,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
               cond,
               is64,
               t,
@@ -489,7 +471,14 @@ pub fn rematerialize_cross_block_constants(
             )
           @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
             @instr.BranchZero(
-              rewrite_use_reg(reg, local_map),
+              rewrite_use_with_local_remat(
+                func,
+                reg,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
               is_nonzero,
               is64,
               t,
@@ -497,7 +486,14 @@ pub fn rematerialize_cross_block_constants(
             )
           @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
             @instr.BranchCmpImm(
-              rewrite_use_reg(lhs, local_map),
+              rewrite_use_with_local_remat(
+                func,
+                lhs,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
               imm,
               cond,
               is64,
@@ -507,12 +503,32 @@ pub fn rematerialize_cross_block_constants(
           @instr.Return(vals) => {
             let new_vals : Array[@abi.Reg] = []
             for r in vals {
-              new_vals.push(rewrite_use_reg(r, local_map))
+              new_vals.push(
+                rewrite_use_with_local_remat(
+                  func,
+                  r,
+                  remat_defs,
+                  local_map,
+                  block.id,
+                  new_block,
+                ),
+              )
             }
             @instr.Return(new_vals)
           }
           @instr.BrTable(index, targets, default) =>
-            @instr.BrTable(rewrite_use_reg(index, local_map), targets, default)
+            @instr.BrTable(
+              rewrite_use_with_local_remat(
+                func,
+                index,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
+              targets,
+              default,
+            )
           @instr.Trap(msg) => @instr.Trap(msg)
         }
         new_block.set_terminator(new_term)

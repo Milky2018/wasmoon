@@ -1338,22 +1338,22 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|block0:
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    d1 = ldf 10
-      #|    x3 = ldi 0
-      #|    store_ptr.f32 +0 x3, d1
-      #|    d6 = load_ptr.f32 +0 x3
+      #|    x1 = ldi 0
+      #|    d3 = ldf 10
+      #|    store_ptr.f32 +0 x1, d3
+      #|    d6 = load_ptr.f32 +0 x1
       #|    jump block4
       #|block2:
-      #|    d4 = ldf 10
-      #|    x6 = ldi 0
-      #|    store_ptr.f32 +0 x6, d4
-      #|    d6 = load_ptr.f32 +0 x6
+      #|    x4 = ldi 0
+      #|    d6 = ldf 10
+      #|    store_ptr.f32 +0 x4, d6
+      #|    d6 = load_ptr.f32 +0 x4
       #|    jump block4
       #|block3:
-      #|    d6 = ldf 10
-      #|    x8 = ldi 0
-      #|    store_ptr.f32 +0 x8, d6
-      #|    d6 = load_ptr.f32 +0 x8
+      #|    x6 = ldi 0
+      #|    d18 = ldf 10
+      #|    store_ptr.f32 +0 x6, d18
+      #|    d6 = load_ptr.f32 +0 x6
       #|    jump block4
       #|block4(f1:float):
       #|    ret d6

@@ -2039,6 +2039,59 @@ fn BacktrackingAllocator::preassign_params(
         if is_vmctx_param {
           self.record_allocation(bundle, isa.vmctx_preg())
           bundle.is_pinned = true
+          continue
+        }
+
+        // Cranelift-like bias for call-crossing values: if a call-crossing
+        // parameter can be kept in a callee-saved register up front, prefer
+        // that over letting it fall back to caller-saved arg regs and frequent
+        // spill/reload traffic around calls.
+        //
+        // This remains opportunistic: only pre-assign when the register is
+        // currently conflict-free; otherwise keep the bundle unassigned and let
+        // normal allocation decide.
+        let mut assigned = false
+        match param.class {
+          @abi.Int =>
+            for callee_preg in self.callee_saved_int {
+              if self.is_reg_free(callee_preg, bundle) {
+                self.record_allocation(bundle, callee_preg)
+                assigned = true
+                break
+              }
+            }
+          @abi.Float32 | @abi.Float64 =>
+            for callee_preg in self.callee_saved_float {
+              if self.is_reg_free(callee_preg, bundle) {
+                self.record_allocation(bundle, callee_preg)
+                assigned = true
+                break
+              }
+            }
+          @abi.Vector => ()
+        }
+        if !assigned &&
+          bundle.spillset_id >= 0 &&
+          bundle.spillset_id < self.spillset_hints.length() {
+          // Give split pieces a callee-saved preference when possible.
+          let hint = match param.class {
+            @abi.Int =>
+              if self.callee_saved_int.length() > 0 {
+                Some(self.callee_saved_int[0])
+              } else {
+                None
+              }
+            @abi.Float32 | @abi.Float64 =>
+              if self.callee_saved_float.length() > 0 {
+                Some(self.callee_saved_float[0])
+              } else {
+                None
+              }
+            @abi.Vector => None
+          }
+          if hint is Some(hint_preg) {
+            self.spillset_hints[bundle.spillset_id] = Some(hint_preg)
+          }
         }
         continue
       }
