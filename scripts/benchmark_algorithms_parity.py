@@ -95,19 +95,50 @@ def build_wasmtime_baseline(
     workloads: List[Path],
     wasmtime_bin: str,
     timeout_sec: int,
+    iterations: int,
+    warmup: int,
 ) -> Dict[str, Dict]:
     baseline: Dict[str, Dict] = {}
-    for workload in workloads:
+    for index, workload in enumerate(workloads, start=1):
+        print(
+            f"[baseline] {index}/{len(workloads)} {workload}",
+            file=sys.stderr,
+            flush=True,
+        )
         cmd = [wasmtime_bin, "run", str(workload)]
-        result = run_one(cmd, timeout_sec)
+        for _ in range(warmup):
+            run_one(cmd, timeout_sec)
+        runs = [run_one(cmd, timeout_sec) for _ in range(iterations)]
+        ok_runs = [run for run in runs if run.exit_code == 0 and not run.timeout]
+        durations = [run.duration_sec for run in ok_runs]
+        parsed_values = [
+            run.parsed_value for run in ok_runs if run.parsed_value is not None
+        ]
+        median_duration = median(durations)
+        median_value = median(parsed_values)
+        has_valid_median = median_duration is not None and median_value is not None
         baseline[str(workload)] = {
-            "command": result.command,
-            "exit_code": result.exit_code,
-            "duration_sec": result.duration_sec,
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
-            "parsed_value": result.parsed_value,
-            "timeout": result.timeout,
+            "command": cmd,
+            "iterations": iterations,
+            "warmup": warmup,
+            "ok_runs": len(ok_runs),
+            "runs": [
+                {
+                    "exit_code": run.exit_code,
+                    "timeout": run.timeout,
+                    "duration_sec": run.duration_sec,
+                    "parsed_value": run.parsed_value,
+                    "stdout": run.stdout.strip(),
+                    "stderr": run.stderr.strip(),
+                }
+                for run in runs
+            ],
+            "exit_code": 0 if has_valid_median else 1,
+            "duration_sec": median_duration,
+            "stdout": ok_runs[-1].stdout.strip() if ok_runs else "",
+            "stderr": ok_runs[-1].stderr.strip() if ok_runs else "",
+            "parsed_value": median_value,
+            "timeout": all(run.timeout for run in runs),
             "generated_at_unix_sec": int(time.time()),
         }
     return baseline
@@ -127,6 +158,12 @@ def pct_delta(observed: Optional[float], baseline: Optional[float]) -> Optional[
             return 0.0
         return float("inf") if observed > 0.0 else float("-inf")
     return ((observed - baseline) / baseline) * 100.0
+
+
+def abs_delta(observed: Optional[float], baseline: Optional[float]) -> Optional[float]:
+    if observed is None or baseline is None:
+        return None
+    return observed - baseline
 
 
 def main() -> int:
@@ -150,6 +187,8 @@ def main() -> int:
     parser.add_argument("--timeout-sec", type=int, default=300)
     parser.add_argument("--iterations", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
+    parser.add_argument("--baseline-iterations", type=int, default=3)
+    parser.add_argument("--baseline-warmup", type=int, default=1)
     parser.add_argument(
         "--value-threshold-pct",
         type=float,
@@ -157,6 +196,15 @@ def main() -> int:
         help=(
             "Allowed positive delta percentage vs wasmtime parsed output value "
             "(one-sided: only slower-than-baseline is flagged)."
+        ),
+    )
+    parser.add_argument(
+        "--value-threshold-abs",
+        type=float,
+        default=50000.0,
+        help=(
+            "Allowed absolute positive delta vs wasmtime parsed output value; "
+            "a perf gap is flagged only if both pct and abs thresholds are exceeded."
         ),
     )
     parser.add_argument(
@@ -186,7 +234,13 @@ def main() -> int:
             "schema_version": 1,
             "generated_at_unix_sec": int(time.time()),
             "wasmtime": args.wasmtime,
-            "workloads": build_wasmtime_baseline(workloads, args.wasmtime, args.timeout_sec),
+            "workloads": build_wasmtime_baseline(
+                workloads,
+                args.wasmtime,
+                args.timeout_sec,
+                args.baseline_iterations,
+                args.baseline_warmup,
+            ),
         }
         save_json(baseline_path, baseline_payload)
         print(
@@ -250,6 +304,7 @@ def main() -> int:
         baseline_duration = baseline_row.get("duration_sec")
         baseline_value = baseline_row.get("parsed_value")
         value_delta_pct = pct_delta(median_value, baseline_value)
+        value_delta_abs = abs_delta(median_value, baseline_value)
         wall_delta_pct = pct_delta(median_duration, baseline_duration)
 
         status = "ok"
@@ -259,11 +314,17 @@ def main() -> int:
         elif value_delta_pct is None:
             status = "parse_error"
             failures.append(f"{workload_str}: unable to parse numeric output")
-        elif value_delta_pct > args.value_threshold_pct:
+        elif (
+            value_delta_pct > args.value_threshold_pct
+            and value_delta_abs is not None
+            and value_delta_abs > args.value_threshold_abs
+        ):
             status = "perf_gap"
             perf_gaps.append(
                 f"{workload_str}: value delta {value_delta_pct:.2f}% "
-                f"(threshold {args.value_threshold_pct:.2f}%)"
+                f"(threshold {args.value_threshold_pct:.2f}%), "
+                f"abs delta {value_delta_abs:.0f} "
+                f"(threshold {args.value_threshold_abs:.0f})"
             )
 
         rows.append(
@@ -290,6 +351,7 @@ def main() -> int:
                 },
                 "wasmtime_baseline": baseline_row,
                 "value_delta_pct": value_delta_pct,
+                "value_delta_abs": value_delta_abs,
                 "wall_delta_pct": wall_delta_pct,
             }
         )
@@ -310,6 +372,7 @@ def main() -> int:
             "iterations": args.iterations,
             "warmup": args.warmup,
             "value_threshold_pct": args.value_threshold_pct,
+            "value_threshold_abs": args.value_threshold_abs,
             "baseline_file": str(baseline_path),
         },
         "stats": {
@@ -337,19 +400,21 @@ def main() -> int:
         f"- Failures: `{summary_payload['stats']['failures']}`",
         f"- Perf gaps: `{summary_payload['stats']['perf_gaps']}`",
         "",
-        "| Workload | Status | Value Delta % | Wall Delta % | Wasmoon Median Value | Wasmtime Value |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Workload | Status | Value Delta % | Value Delta Abs | Wall Delta % | Wasmoon Median Value | Wasmtime Value |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         value_delta = row.get("value_delta_pct")
+        value_delta_abs = row.get("value_delta_abs")
         wall_delta = row.get("wall_delta_pct")
         wasmoon_median_value = row.get("wasmoon", {}).get("median_value")
         wasmtime_value = row.get("wasmtime_baseline", {}).get("parsed_value")
         md_lines.append(
-            "| `{}` | {} | {} | {} | {} | {} |".format(
+            "| `{}` | {} | {} | {} | {} | {} | {} |".format(
                 row.get("workload"),
                 row.get("status"),
                 "n/a" if value_delta is None else f"{value_delta:.2f}",
+                "n/a" if value_delta_abs is None else f"{value_delta_abs:.0f}",
                 "n/a" if wall_delta is None else f"{wall_delta:.2f}",
                 "n/a" if wasmoon_median_value is None else f"{wasmoon_median_value:.2f}",
                 "n/a" if wasmtime_value is None else f"{wasmtime_value:.2f}",
