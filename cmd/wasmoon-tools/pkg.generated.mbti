@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/cli/tools"
+package "Milky2018/wasmoon/cmd/wasmoon-tools"
 
 // Values
 

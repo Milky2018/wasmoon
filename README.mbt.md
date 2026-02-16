@@ -15,7 +15,19 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 
 ## Installation
 
-### As CLI Tool
+### Install Binary with `moon install` (recommended)
+
+```bash
+moon install Milky2018/wasmoon/cmd/wasmoon
+moon install Milky2018/wasmoon/cmd/wasmoon-tools
+```
+
+By default these commands install binaries to `~/.moon/bin/` as:
+
+- `wasmoon` (runtime CLI)
+- `wasmoon-tools` (utility CLI)
+
+### Build from Source (repo-local binaries)
 
 ```bash
 git clone https://github.com/Milky2018/wasmoon.git
@@ -23,18 +35,13 @@ cd wasmoon
 ./install.sh
 ```
 
-`./install.sh` creates/updates two symlinks in the repository root:
+`./install.sh` uses `moon install --path ...` to install local binaries into
+`target/moon-install-bin/`, then creates/updates two symlinks in repo root:
 
 - `./wasmoon`: the runtime CLI
 - `./wasmoon-tools`: utility tooling (validate/convert/WIT inspection)
 
-After the symlinks exist, you can usually just run:
-
-```bash
-moon build --target native --release
-```
-
-and `./wasmoon` / `./wasmoon-tools` will point at the latest build outputs.
+After code changes, re-run `./install.sh` to refresh both symlinks.
 
 ### As Library
 
