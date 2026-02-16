@@ -29,6 +29,59 @@ test "exec code allocation scales beyond 1024 blocks" {
 }
 
 ///|
+test "trap report: structured data available after jit trap" {
+  let builder = @ir.IRBuilder::new("trap_div")
+  let _vmctx = builder.add_param(@ir.Type::I64)
+  let rhs = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(42)
+  let result = builder.sdiv(lhs, rhs)
+  builder.return_([result])
+
+  let vcode_func = @lower.lower_function(builder.get_function())
+  let allocated_func = @regalloc.allocate_registers_backtracking(vcode_func)
+  let mc = @emit.emit_function(allocated_func)
+
+  let jit_module = JITModule::from_single_function(
+    mc.get_bytes(),
+    "trap_div",
+    [@types.ValueType::I32],
+    [@types.ValueType::I32],
+    4096L,
+  )
+  guard jit_module is Some(jm) else {
+    fail("failed to create jit module")
+    return
+  }
+  guard jm.get_func_by_name("trap_div") is Some(func) else {
+    fail("function not found")
+    return
+  }
+
+  let mut trapped = false
+  (jm.call_with_context(func, [0L]) |> ignore) catch {
+    JITTrap(msg) => {
+      trapped = true
+      inspect(msg.length() > 0, content="true")
+    }
+    JITExit(code) => fail("unexpected JITExit(\{code})")
+  }
+  inspect(trapped, content="true")
+
+  let report = jm.get_last_trap_report()
+  inspect(report is Some(_), content="true")
+  if report is Some(r) {
+    inspect(r.trap_kind == "integer divide by zero", content="true")
+    inspect(r.wasm_frames.length() > 0, content="true")
+    inspect(r.wasm_frames[0].func_name == "trap_div", content="true")
+    inspect(r.wasm_func_idx is Some(0), content="true")
+  }
+}
+
+///|
 test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   if @isa.ISA::current() is @isa.AMD64 {
     return

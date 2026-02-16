@@ -29,7 +29,28 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.NullReference => @runtime.NullReference
     @runtime.UnalignedAtomic => @runtime.UnalignedAtomic
     @runtime.InvalidConstantExpression(_) as err => err
+    InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
     _ => @runtime.Unreachable
+  }
+}
+
+///|
+fn find_export_by_name(
+  exports : Array[@types.Export],
+  target : String,
+) -> @types.Export? {
+  loop 0 {
+    idx =>
+      if idx >= exports.length() {
+        None
+      } else {
+        let exp = exports[idx]
+        if exp.name == target {
+          Some(exp)
+        } else {
+          continue idx + 1
+        }
+      }
   }
 }
 
@@ -743,6 +764,595 @@ pub fn instantiate_module_with_init(
 }
 
 ///|
+/// Import diagnostic category for strict import validation.
+pub(all) enum ImportDiagnosticKind {
+  MissingImport
+  ImportKindMismatch
+  ImportTypeMismatch
+}
+
+///|
+/// Structured diagnostic for one import check failure.
+pub struct ImportDiagnostic {
+  import_index : Int
+  module_name : String
+  name : String
+  kind : ImportDiagnosticKind
+  expected : String
+  actual : String?
+  message : String
+}
+
+///|
+/// Structured diagnostics result for module imports.
+pub struct ImportDiagnosticsResult {
+  mut ok : Bool
+  diagnostics : Array[ImportDiagnostic]
+}
+
+///|
+pub fn ImportDiagnosticsResult::new() -> ImportDiagnosticsResult {
+  { ok: true, diagnostics: [] }
+}
+
+///|
+fn push_import_diagnostic(
+  result : ImportDiagnosticsResult,
+  import_index : Int,
+  module_name : String,
+  name : String,
+  kind : ImportDiagnosticKind,
+  expected : String,
+  actual : String?,
+  message : String,
+) -> Unit {
+  result.ok = false
+  result.diagnostics.push({
+    import_index,
+    module_name,
+    name,
+    kind,
+    expected,
+    actual,
+    message,
+  })
+}
+
+///|
+fn import_desc_kind(desc : @types.ImportDesc) -> String {
+  match desc {
+    Func(_) => "func"
+    Memory(_) => "memory"
+    Table(_) => "table"
+    Global(_) => "global"
+    Tag(_) => "tag"
+  }
+}
+
+///|
+fn extern_val_kind(v : @runtime.ExternVal) -> String {
+  match v {
+    @runtime.ExternVal::Func(_) => "func"
+    @runtime.ExternVal::Memory(_) => "memory"
+    @runtime.ExternVal::Table(_) => "table"
+    @runtime.ExternVal::Global(_) => "global"
+    @runtime.ExternVal::Tag(_) => "tag"
+  }
+}
+
+///|
+fn format_limits_pair(limits : (Int, Int?)) -> String {
+  let max_text = match limits.1 {
+    Some(max) => max.to_string()
+    None => "none"
+  }
+  "(min=\{limits.0}, max=\{max_text})"
+}
+
+///|
+/// Validate module imports against provided imports with structured diagnostics.
+pub fn validate_imports_with_diagnostics(
+  store : @runtime.Store,
+  mod : @types.Module,
+  imports : @runtime.Imports,
+) -> ImportDiagnosticsResult {
+  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
+  let result = ImportDiagnosticsResult::new()
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
+  for import_index, imp in mod.imports {
+    let expected_kind = import_desc_kind(imp.desc)
+    let resolved = imports.resolve(imp.mod_name, imp.name)
+    guard resolved is Some(extern_val) else {
+      push_import_diagnostic(
+        result,
+        import_index,
+        imp.mod_name,
+        imp.name,
+        MissingImport,
+        expected_kind,
+        None,
+        "import \{imp.mod_name}.\{imp.name} is missing",
+      )
+      continue
+    }
+
+    if extern_val_kind(extern_val) != expected_kind {
+      push_import_diagnostic(
+        result,
+        import_index,
+        imp.mod_name,
+        imp.name,
+        ImportKindMismatch,
+        expected_kind,
+        Some(extern_val_kind(extern_val)),
+        "import \{imp.mod_name}.\{imp.name} kind mismatch",
+      )
+      continue
+    }
+
+    match imp.desc {
+      Func(type_idx) =>
+        match extern_val {
+          @runtime.ExternVal::Func(addr) => {
+            let expected_type = mod.get_func_type(type_idx)
+            let actual_type = match store.get_func_type_opt(addr) {
+              Some(type_) => type_
+              None => {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_type.to_string(),
+                  None,
+                  "import \{imp.mod_name}.\{imp.name} refers to invalid function address \{addr}",
+                )
+                continue
+              }
+            }
+            match store.get_func_owner(addr) {
+              Some(owner) => {
+                let actual_type_idx = store.get_func_type_idx(addr)
+                let canonical_export = @types.compute_canonical_type_indices(
+                  owner.types,
+                  type_rec_groups=owner.type_rec_groups,
+                )
+                let ctx = @types.SubtypingContext::cross_module(
+                  owner.types,
+                  mod.types,
+                  rec_groups1=owner.type_rec_groups,
+                  rec_groups2=mod.type_rec_groups,
+                  canonical1=canonical_export,
+                  canonical2=canonical_type_indices,
+                )
+                if !ctx.is_subtype(actual_type_idx, type_idx) {
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_type.to_string(),
+                    Some(actual_type.to_string()),
+                    "import \{imp.mod_name}.\{imp.name} function type mismatch (cross-module subtype check failed)",
+                  )
+                }
+              }
+              None => {
+                let expected_rec_info = @types.get_rec_group_info(
+                  mod.type_rec_groups,
+                  type_idx,
+                )
+                if expected_rec_info != (0, 1) {
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_type.to_string(),
+                    Some(actual_type.to_string()),
+                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{expected_rec_info}",
+                  )
+                  continue
+                }
+                if !@types.func_types_equal(expected_type, actual_type) {
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_type.to_string(),
+                    Some(actual_type.to_string()),
+                    "import \{imp.mod_name}.\{imp.name} function type mismatch",
+                  )
+                }
+              }
+            }
+          }
+          _ => continue
+        }
+      Memory(expected_mem_type) =>
+        match extern_val {
+          @runtime.ExternVal::Memory(addr) => {
+            let actual_mem = try store.get_mem(addr) catch {
+              _ => {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_mem_type.to_string(),
+                  None,
+                  "import \{imp.mod_name}.\{imp.name} refers to invalid memory address \{addr}",
+                )
+                continue
+              }
+            } noraise {
+              mem => mem
+            }
+            let actual_limits = actual_mem.get_limits()
+            if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
+              push_import_diagnostic(
+                result,
+                import_index,
+                imp.mod_name,
+                imp.name,
+                ImportTypeMismatch,
+                expected_mem_type.to_string(),
+                Some(
+                  "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
+                ),
+                "import \{imp.mod_name}.\{imp.name} memory64 mismatch",
+              )
+              continue
+            }
+            if actual_limits.0 < expected_mem_type.limits.min.to_int() {
+              push_import_diagnostic(
+                result,
+                import_index,
+                imp.mod_name,
+                imp.name,
+                ImportTypeMismatch,
+                expected_mem_type.to_string(),
+                Some(
+                  "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
+                ),
+                "import \{imp.mod_name}.\{imp.name} memory minimum is smaller than required",
+              )
+              continue
+            }
+            if expected_mem_type.limits.max is Some(expected_max) {
+              match actual_limits.1 {
+                Some(actual_max) =>
+                  if actual_max > expected_max.to_int() {
+                    push_import_diagnostic(
+                      result,
+                      import_index,
+                      imp.mod_name,
+                      imp.name,
+                      ImportTypeMismatch,
+                      expected_mem_type.to_string(),
+                      Some(
+                        "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
+                      ),
+                      "import \{imp.mod_name}.\{imp.name} memory maximum exceeds requirement",
+                    )
+                  }
+                None =>
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_mem_type.to_string(),
+                    Some(
+                      "memory64=\{actual_mem.is_memory64()}, limits=\{format_limits_pair(actual_limits)}",
+                    ),
+                    "import \{imp.mod_name}.\{imp.name} memory maximum is required but missing",
+                  )
+              }
+            }
+          }
+          _ => continue
+        }
+      Table(expected_table_type) =>
+        match extern_val {
+          @runtime.ExternVal::Table(addr) => {
+            let actual_table = try store.get_table(addr) catch {
+              _ => {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_table_type.to_string(),
+                  None,
+                  "import \{imp.mod_name}.\{imp.name} refers to invalid table address \{addr}",
+                )
+                continue
+              }
+            } noraise {
+              table => table
+            }
+            let actual_limits = actual_table.get_limits()
+            if actual_table.get_elem_type() != expected_table_type.elem_type {
+              push_import_diagnostic(
+                result,
+                import_index,
+                imp.mod_name,
+                imp.name,
+                ImportTypeMismatch,
+                expected_table_type.to_string(),
+                Some(
+                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
+                ),
+                "import \{imp.mod_name}.\{imp.name} table element type mismatch",
+              )
+              continue
+            }
+            if actual_table.is_table64() != expected_table_type.is_table64 {
+              push_import_diagnostic(
+                result,
+                import_index,
+                imp.mod_name,
+                imp.name,
+                ImportTypeMismatch,
+                expected_table_type.to_string(),
+                Some(
+                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
+                ),
+                "import \{imp.mod_name}.\{imp.name} table64 mismatch",
+              )
+              continue
+            }
+            if actual_limits.0 < expected_table_type.limits.min.to_int() {
+              push_import_diagnostic(
+                result,
+                import_index,
+                imp.mod_name,
+                imp.name,
+                ImportTypeMismatch,
+                expected_table_type.to_string(),
+                Some(
+                  "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
+                ),
+                "import \{imp.mod_name}.\{imp.name} table minimum is smaller than required",
+              )
+              continue
+            }
+            if expected_table_type.limits.max is Some(expected_max) {
+              match actual_limits.1 {
+                Some(actual_max) =>
+                  if actual_max > expected_max.to_int() {
+                    push_import_diagnostic(
+                      result,
+                      import_index,
+                      imp.mod_name,
+                      imp.name,
+                      ImportTypeMismatch,
+                      expected_table_type.to_string(),
+                      Some(
+                        "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
+                      ),
+                      "import \{imp.mod_name}.\{imp.name} table maximum exceeds requirement",
+                    )
+                  }
+                None =>
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_table_type.to_string(),
+                    Some(
+                      "elem=\{actual_table.get_elem_type()}, table64=\{actual_table.is_table64()}, limits=\{format_limits_pair(actual_limits)}",
+                    ),
+                    "import \{imp.mod_name}.\{imp.name} table maximum is required but missing",
+                  )
+              }
+            }
+          }
+          _ => continue
+        }
+      Global(expected_global_type) =>
+        match extern_val {
+          @runtime.ExternVal::Global(addr) => {
+            let actual_global = try store.get_global(addr) catch {
+              _ => {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_global_type.to_string(),
+                  None,
+                  "import \{imp.mod_name}.\{imp.name} refers to invalid global address \{addr}",
+                )
+                continue
+              }
+            } noraise {
+              global => global
+            }
+            let actual_type = actual_global.get_type()
+            if actual_type.mutable {
+              if actual_type.value_type != expected_global_type.value_type ||
+                actual_type.mutable != expected_global_type.mutable {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_global_type.to_string(),
+                  Some(actual_type.to_string()),
+                  "import \{imp.mod_name}.\{imp.name} mutable global type mismatch",
+                )
+              }
+            } else {
+              if !is_value_type_subtype(
+                  actual_type.value_type,
+                  expected_global_type.value_type,
+                ) {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_global_type.to_string(),
+                  Some(actual_type.to_string()),
+                  "import \{imp.mod_name}.\{imp.name} immutable global type mismatch",
+                )
+                continue
+              }
+              if expected_global_type.mutable {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  expected_global_type.to_string(),
+                  Some(actual_type.to_string()),
+                  "import \{imp.mod_name}.\{imp.name} expected mutable global but actual is immutable",
+                )
+              }
+            }
+          }
+          _ => continue
+        }
+      Tag(expected_type_idx) =>
+        match extern_val {
+          @runtime.ExternVal::Tag(addr) => {
+            let actual_type = try store.get_tag_type(addr) catch {
+              _ => {
+                push_import_diagnostic(
+                  result,
+                  import_index,
+                  imp.mod_name,
+                  imp.name,
+                  ImportTypeMismatch,
+                  mod.get_func_type(expected_type_idx).to_string(),
+                  None,
+                  "import \{imp.mod_name}.\{imp.name} refers to invalid tag address \{addr}",
+                )
+                continue
+              }
+            } noraise {
+              type_ => type_
+            }
+            let expected_type = mod.get_func_type(expected_type_idx)
+            let owner = store.get_tag_owner(addr)
+            let actual_type_idx = store.get_tag_type_idx(addr)
+            match owner {
+              Some(owner_instance) => {
+                let expected_rec_info = @types.get_rec_group_info(
+                  mod.type_rec_groups,
+                  expected_type_idx,
+                )
+                let actual_rec_info = @types.get_rec_group_info(
+                  owner_instance.type_rec_groups,
+                  actual_type_idx,
+                )
+                if expected_rec_info.1 == 1 && actual_rec_info.1 == 1 {
+                  if expected_type.params != actual_type.params {
+                    push_import_diagnostic(
+                      result,
+                      import_index,
+                      imp.mod_name,
+                      imp.name,
+                      ImportTypeMismatch,
+                      expected_type.to_string(),
+                      Some(actual_type.to_string()),
+                      "import \{imp.mod_name}.\{imp.name} tag parameter mismatch",
+                    )
+                  }
+                } else {
+                  let canonical_export = @types.compute_canonical_type_indices(
+                    owner_instance.types,
+                    type_rec_groups=owner_instance.type_rec_groups,
+                  )
+                  let ctx = @types.SubtypingContext::cross_module(
+                    owner_instance.types,
+                    mod.types,
+                    rec_groups1=owner_instance.type_rec_groups,
+                    rec_groups2=mod.type_rec_groups,
+                    canonical1=canonical_export,
+                    canonical2=canonical_type_indices,
+                  )
+                  if !(ctx.is_subtype(actual_type_idx, expected_type_idx) &&
+                    ctx.is_subtype(expected_type_idx, actual_type_idx)) {
+                    push_import_diagnostic(
+                      result,
+                      import_index,
+                      imp.mod_name,
+                      imp.name,
+                      ImportTypeMismatch,
+                      expected_type.to_string(),
+                      Some(actual_type.to_string()),
+                      "import \{imp.mod_name}.\{imp.name} tag type mismatch",
+                    )
+                  }
+                }
+              }
+              None =>
+                if expected_type.params != actual_type.params {
+                  push_import_diagnostic(
+                    result,
+                    import_index,
+                    imp.mod_name,
+                    imp.name,
+                    ImportTypeMismatch,
+                    expected_type.to_string(),
+                    Some(actual_type.to_string()),
+                    "import \{imp.mod_name}.\{imp.name} tag parameter mismatch",
+                  )
+                }
+            }
+          }
+          _ => continue
+        }
+    }
+  }
+  result
+}
+
+///|
+pub(all) enum InstantiateWithImportDiagnosticsResult {
+  Ok(@runtime.ModuleInstance)
+  ImportError(ImportDiagnosticsResult)
+  RuntimeFailure(@runtime.RuntimeError)
+}
+
+///|
+/// Instantiate module with strict import diagnostics.
+pub fn instantiate_module_with_import_diagnostics(
+  store : @runtime.Store,
+  mod : @types.Module,
+  imports : @runtime.Imports,
+) -> InstantiateWithImportDiagnosticsResult {
+  let diagnostics = validate_imports_with_diagnostics(store, mod, imports)
+  if !diagnostics.ok {
+    return ImportError(diagnostics)
+  }
+  let instance = instantiate_module_with_imports(store, mod, imports) catch {
+    e => return RuntimeFailure(normalize_runtime_error(e))
+  }
+  Ok(instance)
+}
+
+///|
 /// Create a module instance with imports using an existing store
 /// Raises UnknownImport if any required import is not provided
 pub fn instantiate_module_with_imports(
@@ -1180,6 +1790,162 @@ pub fn instantiate_module_with_imports(
 }
 
 ///|
+/// Failure category for controlled export invocation.
+pub(all) enum CallExportFailureKind {
+  ExportNotFound
+  NotFunctionExport
+  Trap
+  HostInvocation
+  Cancelled
+  UnsupportedOption
+}
+
+///|
+/// Structured failure for controlled export invocation.
+pub struct CallExportFailure {
+  kind : CallExportFailureKind
+  message : String
+  runtime_error : @runtime.RuntimeError?
+}
+
+///|
+/// Result type for controlled export invocation.
+pub(all) enum CallExportResult {
+  Ok(Array[@types.Value])
+  Err(CallExportFailure)
+}
+
+///|
+/// Options for controlled export invocation.
+///
+/// Current engine support:
+/// - `cancel` is checked before invocation.
+/// - `timeout_ms`, `fuel`, and `budget` are parsed and surfaced as structured
+///   `UnsupportedOption` errors for integration-time capability probing.
+pub struct CallExportOptions {
+  timeout_ms : Int?
+  fuel : Int?
+  budget : Int?
+  cancel : (() -> Bool)?
+}
+
+///|
+pub fn CallExportOptions::new(
+  timeout_ms? : Int? = None,
+  fuel? : Int? = None,
+  budget? : Int? = None,
+  cancel? : (() -> Bool)? = None,
+) -> CallExportOptions {
+  { timeout_ms, fuel, budget, cancel }
+}
+
+///|
+fn call_export_failure(
+  kind : CallExportFailureKind,
+  message : String,
+  runtime_error? : @runtime.RuntimeError? = None,
+) -> CallExportFailure {
+  { kind, message, runtime_error }
+}
+
+///|
+fn check_call_export_options(options : CallExportOptions) -> CallExportFailure? {
+  if options.timeout_ms is Some(timeout_ms) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "timeout_ms is not supported yet (requested: \{timeout_ms})",
+      ),
+    )
+  }
+  if options.fuel is Some(fuel) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "fuel is not supported yet (requested: \{fuel})",
+      ),
+    )
+  }
+  if options.budget is Some(budget) {
+    return Some(
+      call_export_failure(
+        UnsupportedOption,
+        "budget is not supported yet (requested: \{budget})",
+      ),
+    )
+  }
+  if options.cancel is Some(cancel_fn) && cancel_fn() {
+    return Some(
+      call_export_failure(Cancelled, "invocation cancelled before execution"),
+    )
+  }
+  None
+}
+
+///|
+/// Controlled export invocation with structured result.
+pub fn call_exported_func_with_options(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  name : String,
+  args : Array[@types.Value],
+  options? : CallExportOptions = CallExportOptions::new(),
+) -> CallExportResult {
+  if check_call_export_options(options) is Some(failure) {
+    return Err(failure)
+  }
+
+  match find_export_by_name(instance.exports, name) {
+    Some(exp) =>
+      match exp.desc {
+        Func(func_idx) => {
+          let ctx = ExecContext::new(store, instance)
+          let results = ctx.call_func(func_idx, args) catch {
+            BranchWith(_, _) | Return =>
+              return Err(
+                call_export_failure(
+                  Trap,
+                  "internal control signal escaped during function invocation",
+                  runtime_error=Some(@runtime.Unreachable),
+                ),
+              )
+            InvocationSignal::HostInvocation(err) => {
+              let runtime_err = normalize_runtime_error(err)
+              return Err(
+                call_export_failure(
+                  HostInvocation,
+                  runtime_err.to_string(),
+                  runtime_error=Some(runtime_err),
+                ),
+              )
+            }
+            e => {
+              let runtime_err = normalize_runtime_error(e)
+              return Err(
+                call_export_failure(
+                  Trap,
+                  runtime_err.to_string(),
+                  runtime_error=Some(runtime_err),
+                ),
+              )
+            }
+          }
+          Ok(results)
+        }
+        _ =>
+          Err(
+            call_export_failure(
+              NotFunctionExport,
+              "export '\{name}' is not a function",
+            ),
+          )
+      }
+    None =>
+      Err(call_export_failure(ExportNotFound, "export '\{name}' not found"))
+  }
+}
+
+///|
 /// Find and call an exported function
 pub fn call_exported_func(
   store : @runtime.Store,
@@ -1187,27 +1953,7 @@ pub fn call_exported_func(
   name : String,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
-  // Find the export
-  fn find_export(
-    exports : Array[@types.Export],
-    target : String,
-  ) -> @types.Export? {
-    loop 0 {
-      idx =>
-        if idx >= exports.length() {
-          None
-        } else {
-          let exp = exports[idx]
-          if exp.name == target {
-            Some(exp)
-          } else {
-            continue idx + 1
-          }
-        }
-    }
-  }
-
-  match find_export(instance.exports, name) {
+  match find_export_by_name(instance.exports, name) {
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
@@ -1247,27 +1993,7 @@ pub fn get_exported_global(
   instance : @runtime.ModuleInstance,
   name : String,
 ) -> @types.Value raise @runtime.RuntimeError {
-  // Find the export
-  fn find_export(
-    exports : Array[@types.Export],
-    target : String,
-  ) -> @types.Export? {
-    loop 0 {
-      idx =>
-        if idx >= exports.length() {
-          None
-        } else {
-          let exp = exports[idx]
-          if exp.name == target {
-            Some(exp)
-          } else {
-            continue idx + 1
-          }
-        }
-    }
-  }
-
-  match find_export(instance.exports, name) {
+  match find_export_by_name(instance.exports, name) {
     Some(exp) =>
       match exp.desc {
         Global(global_idx) => {
