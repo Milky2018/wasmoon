@@ -284,7 +284,11 @@ static void table_fill_impl(
         void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
         for (int i = 0; i < g_func_table_size; i++) {
             if (g_func_table[i] == raw_ptr) {
-                type_idx = (int64_t)g_func_type_indices[i];
+                int32_t t = g_func_type_indices[i];
+                if (g_gc_canonical_indices && t >= 0 && t < g_gc_num_canonical) {
+                    t = g_gc_canonical_indices[t];
+                }
+                type_idx = (int64_t)t;
                 break;
             }
         }
@@ -292,7 +296,11 @@ static void table_fill_impl(
         // IR-encoded funcref index: -(func_idx + 1)
         int32_t func_idx = (int32_t)(-(val + 1));
         if (func_idx >= 0 && func_idx < g_num_funcs) {
-            type_idx = (int64_t)g_func_type_indices[func_idx];
+            int32_t t = g_func_type_indices[func_idx];
+            if (g_gc_canonical_indices && t >= 0 && t < g_gc_num_canonical) {
+                t = g_gc_canonical_indices[t];
+            }
+            type_idx = (int64_t)t;
         }
     }
 

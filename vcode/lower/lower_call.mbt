@@ -189,6 +189,7 @@ fn lower_wasm_call_common(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
+  invalidate_table0_base_cache(ctx)
 }
 
 ///|
@@ -362,18 +363,13 @@ fn lower_return_call_indirect(
     ptr_vreg
   }
 
-  // Calculate offset = elem_idx << 4 (each table entry is 16 bytes).
-  // This matches Cranelift-style lowering and avoids an unnecessary const+mul.
-  let offset_vreg = ctx.vcode_func.new_vreg(Int)
-  let shl_inst = @instr.VCodeInst::new(ShlImm(4, true))
-  shl_inst.add_def({ reg: Virtual(offset_vreg) })
-  shl_inst.add_use(Virtual(elem_idx_vreg))
-  block.add_inst(shl_inst)
+  // Calculate address = table_ptr + (zext(elem_idx) << 4) (entry size = 16B).
+  // Match Cranelift-style folded add+shift shape.
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add(true))
+  let add_inst = @instr.VCodeInst::new(AddExtend(@instr.IndexExtend::Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
-  add_inst.add_use(Virtual(offset_vreg))
+  add_inst.add_use(Virtual(elem_idx_vreg))
   block.add_inst(add_inst)
   // Load raw function pointer
   let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -388,16 +384,25 @@ fn lower_return_call_indirect(
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   block.add_inst(and_inst)
+
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
+  let load_type_inst = @instr.VCodeInst::new(Load(I32, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
 
-  // Type check (fast path); see lower_call_indirect.
-  let type_check = @instr.VCodeInst::new(TypeCheckSubtypeIndirect(type_idx))
+  // Type check (fast path); align with Cranelift behavior:
+  // use exact check when subtype checks are unnecessary.
+  let expected_type_idx = ctx.canonicalize_indirect_type_idx(type_idx)
+  let type_check = if ctx.use_subtype_indirect_check {
+    @instr.VCodeInst::new(TypeCheckSubtypeIndirect(expected_type_idx))
+  } else {
+    @instr.VCodeInst::new(TypeCheckIndirect(expected_type_idx))
+  }
   type_check.add_use(Virtual(actual_type_vreg))
-  add_c_call_clobbers(type_check)
+  if ctx.use_subtype_indirect_check {
+    add_c_call_clobbers(type_check)
+  }
   block.add_inst(type_check)
 
   // Get pinned vmctx.
@@ -605,41 +610,34 @@ fn lower_call_indirect(
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
-  // Create temporaries for calculation
-  let offset_vreg = ctx.vcode_func.new_vreg(Int)
+  // Create temporaries for call_indirect entry loads.
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let actual_type_vreg = ctx.vcode_func.new_vreg(Int)
 
-  // Step 1: Calculate offset = elem_idx << 4 (entry size is 16 bytes).
-  let shl_inst = @instr.VCodeInst::new(ShlImm(4, true))
-  shl_inst.add_def({ reg: Virtual(offset_vreg) })
-  shl_inst.add_use(Virtual(elem_idx_vreg))
-  block.add_inst(shl_inst)
-
-  // Step 2: Calculate address = table_ptr + offset (64-bit pointer arithmetic)
-  // table_ptr is loaded on-demand from vmctx (on-demand)
+  // Step 1: Calculate address = table_ptr + (zext(elem_idx) << 4)
+  // (entry size is 16 bytes).
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(Add(true))
+  let add_inst = @instr.VCodeInst::new(AddExtend(@instr.IndexExtend::Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
-  add_inst.add_use(Virtual(offset_vreg))
+  add_inst.add_use(Virtual(elem_idx_vreg))
   block.add_inst(add_inst)
 
-  // Step 3: Load function pointer from address (offset 0)
+  // Step 2: Load function pointer from address (offset 0)
   let raw_func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_func_inst = @instr.VCodeInst::new(Load(I64, 0))
   load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
 
-  // Step 3.5: Clear FUNCREF_TAG (bit 61) from function pointer.
+  // Step 2.5: Clear FUNCREF_TAG (bit 61) from function pointer.
   let and_inst = @instr.VCodeInst::new(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   block.add_inst(and_inst)
 
-  // Step 4: Load actual type index from address + 8
-  let load_type_inst = @instr.VCodeInst::new(Load(I64, 8))
+  // Step 3: Load actual type index from address + 8
+  let load_type_inst = @instr.VCodeInst::new(Load(I32, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
@@ -649,11 +647,18 @@ fn lower_call_indirect(
   // Exact-match is by far the common case for call_indirect; avoid an
   // unconditional C call. On mismatch, fall back to the existing runtime helper
   // that implements full GC subtyping and traps on failure.
-  let type_check = @instr.VCodeInst::new(
-    TypeCheckSubtypeIndirect(expected_type_idx),
+  let expected_canonical_type_idx = ctx.canonicalize_indirect_type_idx(
+    expected_type_idx,
   )
+  let type_check = if ctx.use_subtype_indirect_check {
+    @instr.VCodeInst::new(TypeCheckSubtypeIndirect(expected_canonical_type_idx))
+  } else {
+    @instr.VCodeInst::new(TypeCheckIndirect(expected_canonical_type_idx))
+  }
   type_check.add_use(Virtual(actual_type_vreg))
-  add_c_call_clobbers(type_check)
+  if ctx.use_subtype_indirect_check {
+    add_c_call_clobbers(type_check)
+  }
   block.add_inst(type_check)
 
   // Step 6: Use Standard call lowering
@@ -796,6 +801,7 @@ fn lower_c_libcall_direct(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
+  invalidate_table0_base_cache(ctx)
 }
 
 ///|
@@ -916,6 +922,7 @@ fn lower_call_ptr(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
+  invalidate_table0_base_cache(ctx)
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
 }
 
@@ -980,6 +987,7 @@ fn lower_c_libcall(
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
+  invalidate_table0_base_cache(ctx)
 }
 
 ///|

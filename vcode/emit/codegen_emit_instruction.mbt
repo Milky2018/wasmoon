@@ -319,6 +319,16 @@ fn MachineCode::emit_instruction(
         self.emit_ror_imm32(rd, rn, shift)
       }
     }
+    ExtrImm(shift, is_64) => {
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_extr_imm(rd, rn, rm, shift)
+      } else {
+        self.emit_extr_imm32(rd, rn, rm, shift)
+      }
+    }
     Not(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -1160,14 +1170,15 @@ fn MachineCode::emit_instruction(
       // Uses: [actual_type_vreg]
       // Emits: CMP actual, expected; B.EQ +8; BRK #2
       let actual_type_reg = reg_num(inst.uses[0])
-      // CMP immediate can only handle 12-bit values (0-4095)
-      // For larger values, load into scratch register and use CMP register
+      // Compare as i32 (type indices are 32-bit).
+      // CMP immediate can only handle 12-bit values (0-4095).
+      // For larger values, load into scratch register and use CMP register.
       if expected_type <= 4095 {
-        self.emit_cmp_imm(actual_type_reg, expected_type)
+        self.emit_cmp_imm32(actual_type_reg, expected_type)
       } else {
         // Load expected_type into x17 and compare
         self.emit_load_imm64(17, expected_type.to_int64())
-        self.emit_cmp_reg(actual_type_reg, 17)
+        self.emit_cmp_reg32(actual_type_reg, 17)
       }
       // B.EQ +8: skip BRK (4 bytes) if types match
       self.emit_b_cond_offset(0, 8) // cond=0 is EQ

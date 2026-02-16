@@ -337,7 +337,6 @@ fn lower_select(
     if match_icmp_value(ctx, cond_ir) is Some((lhs, rhs, cc)) {
       // Use SelectCmp to fuse the comparison with the select
       let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
-      let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
       let kind = ir_intcc_to_cmp_kind(cc)
       // Determine is_64 from comparison operand type
       let is_64 = match lhs.ty {
@@ -347,7 +346,13 @@ fn lower_select(
       let vcode_inst = @instr.VCodeInst::new(SelectCmp(kind, is_64))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(lhs_vreg))
-      vcode_inst.add_use(Virtual(rhs_vreg))
+      if @isa.ISA::current() is @isa.AArch64 && is_const_zero_value(ctx, rhs) {
+        // Cranelift-style zero-compare fast path for fused cmp+select.
+        vcode_inst.add_use(Physical({ index: 31, class: Int }))
+      } else {
+        let rhs_vreg = ctx.get_vreg_for_use(rhs, block)
+        vcode_inst.add_use(Virtual(rhs_vreg))
+      }
       vcode_inst.add_use(Virtual(true_val))
       vcode_inst.add_use(Virtual(false_val))
       block.add_inst(vcode_inst)

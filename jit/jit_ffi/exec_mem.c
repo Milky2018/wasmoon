@@ -17,6 +17,7 @@ typedef struct {
 static jit_code_block_t *code_blocks = NULL;
 static int num_code_blocks = 0;
 static int code_blocks_capacity = 0;
+static void *next_exec_hint = NULL;
 
 static int ensure_code_block_capacity(void) {
     if (num_code_blocks < code_blocks_capacity) {
@@ -82,11 +83,18 @@ int64_t alloc_exec_internal(int size) {
     flags |= MAP_JIT;
 #endif
     // Allocate as RWX; use pthread_jit_write_protect_np to toggle W^X on Apple.
-    void *ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
+    void *ptr = mmap(next_exec_hint, alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
+    if (ptr == MAP_FAILED && next_exec_hint != NULL) {
+        ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
+    }
 #else
     // Allocate with WRITE permission first, will change to EXEC after copying.
-    void *ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
+    void *ptr = mmap(next_exec_hint, alloc_size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (ptr == MAP_FAILED && next_exec_hint != NULL) {
+        ptr = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    }
 #endif
     if (ptr == MAP_FAILED) {
         return 0;
@@ -100,6 +108,9 @@ int64_t alloc_exec_internal(int size) {
     code_blocks[num_code_blocks].code = ptr;
     code_blocks[num_code_blocks].size = alloc_size;
     num_code_blocks++;
+#ifndef _WIN32
+    next_exec_hint = (void *)((uint8_t *)ptr + alloc_size);
+#endif
     return (int64_t)ptr;
 }
 

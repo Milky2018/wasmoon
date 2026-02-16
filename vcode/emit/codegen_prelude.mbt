@@ -1338,29 +1338,99 @@ fn collect_used_callee_saved_fprs_from_output(
 }
 
 ///|
-fn emit_edit_move(
+fn invalidate_edit_slot_cache_reg(
+  slot_cache : Map[Int, @abi.PReg],
+  preg : @abi.PReg,
+) -> Unit {
+  let to_remove : Array[Int] = []
+  for slot, cached in slot_cache {
+    if cached.index == preg.index && cached.class == preg.class {
+      to_remove.push(slot)
+    }
+  }
+  for slot in to_remove {
+    slot_cache.remove(slot) |> ignore
+  }
+}
+
+///|
+fn invalidate_edit_slot_cache_defs(
+  slot_cache : Map[Int, @abi.PReg],
+  inst : @instr.VCodeInst,
+) -> Unit {
+  for def in inst.defs {
+    if def.reg is @abi.Physical(preg) {
+      invalidate_edit_slot_cache_reg(slot_cache, preg)
+    }
+  }
+}
+
+///|
+fn spill_slots_for_class(class : @abi.RegClass) -> Int {
+  match class {
+    @abi.Vector => 2
+    _ => 1
+  }
+}
+
+///|
+fn invalidate_edit_slot_cache_range(
+  slot_cache : Map[Int, @abi.PReg],
+  base_slot : Int,
+  class : @abi.RegClass,
+) -> Unit {
+  let width = spill_slots_for_class(class)
+  for i in 0..<width {
+    slot_cache.remove(base_slot + i) |> ignore
+  }
+}
+
+///|
+fn emit_edit_move_with_cache(
   mc : MachineCode,
   edit : @regalloc.Edit,
   stack_frame : JITStackFrame,
+  slot_cache : Map[Int, @abi.PReg],
 ) -> Unit {
   match edit {
     @regalloc.Move(from, to, class) =>
       match (from, to) {
         (@regalloc.Reg(src), @regalloc.Reg(dst)) => {
+          let dst_preg : @abi.PReg = { index: dst.index, class }
+          invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           let inst = @instr.VCodeInst::new(@instr.Move)
-          inst.add_def({ reg: @abi.Physical({ index: dst.index, class }) })
+          inst.add_def({ reg: @abi.Physical(dst_preg) })
           inst.add_use(@abi.Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
         }
         (@regalloc.Spill(slot), @regalloc.Reg(dst)) => {
-          let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
-          inst.add_def({ reg: @abi.Physical({ index: dst.index, class }) })
-          mc.emit_instruction(inst, stack_frame)
+          let dst_preg : @abi.PReg = { index: dst.index, class }
+          invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
+          let cached = slot_cache.get(slot)
+          invalidate_edit_slot_cache_range(slot_cache, slot, class)
+          match cached {
+            Some(src_preg) if src_preg.class == class =>
+              if src_preg.index != dst.index {
+                let inst = @instr.VCodeInst::new(@instr.Move)
+                inst.add_def({ reg: @abi.Physical(dst_preg) })
+                inst.add_use(@abi.Physical(src_preg))
+                mc.emit_instruction(inst, stack_frame)
+              }
+            _ => {
+              let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
+              inst.add_def({ reg: @abi.Physical(dst_preg) })
+              mc.emit_instruction(inst, stack_frame)
+            }
+          }
+          slot_cache.set(slot, dst_preg)
         }
         (@regalloc.Reg(src), @regalloc.Spill(slot)) => {
+          let src_preg : @abi.PReg = { index: src.index, class }
+          invalidate_edit_slot_cache_range(slot_cache, slot, class)
           let inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
-          inst.add_use(@abi.Physical({ index: src.index, class }))
+          inst.add_use(@abi.Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
+          slot_cache.set(slot, src_preg)
         }
         (@regalloc.Spill(from_slot), @regalloc.Spill(to_slot)) =>
           abort(
@@ -1679,7 +1749,13 @@ fn MachineCode::emit_prologue_with_output(
             match loc {
               @regalloc.Reg(dst) =>
                 if dst.index != src {
-                  int_moves.push((src, dst.index))
+                  let vmctx_dst = isa.vmctx_preg().index
+                  let is_redundant_vmctx_move = int_idx == 0 &&
+                    stack_frame.needs_vmctx &&
+                    dst.index == vmctx_dst
+                  if !is_redundant_vmctx_move {
+                    int_moves.push((src, dst.index))
+                  }
                 }
               _ => ()
             }
@@ -1897,7 +1973,13 @@ fn MachineCode::emit_prologue_with_output(
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != x_src {
-                int_moves.push((x_src, dst.index))
+                let vmctx_dst = vmctx_index()
+                let is_redundant_vmctx_move = int_idx == 0 &&
+                  stack_frame.needs_vmctx &&
+                  dst.index == vmctx_dst
+                if !is_redundant_vmctx_move {
+                  int_moves.push((x_src, dst.index))
+                }
               }
             _ => ()
           }
@@ -2000,25 +2082,28 @@ pub fn emit_function_with_regalloc(
   } else {
     None
   }
+  let edit_slot_cache : Map[Int, @abi.PReg] = {}
   for i, block in blocks {
+    edit_slot_cache.clear()
     mc.define_label(block.id)
     for inst_idx, inst in block.insts {
       // Edits before instruction.
       match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before) {
         Some(edits) =>
           for e in edits {
-            emit_edit_move(mc, e, stack_frame)
+            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
           }
         None => ()
       }
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
       mc.emit_instruction(mapped, stack_frame)
+      invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
       match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After) {
         Some(edits) =>
           for e in edits {
-            emit_edit_move(mc, e, stack_frame)
+            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
           }
         None => ()
       }
@@ -2029,7 +2114,7 @@ pub fn emit_function_with_regalloc(
       match output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before) {
         Some(edits) =>
           for e in edits {
-            emit_edit_move(mc, e, stack_frame)
+            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
           }
         None => ()
       }

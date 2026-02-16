@@ -777,6 +777,22 @@ test "32-bit instruction variants" {
 }
 
 ///|
+test "extr immediate instruction variants" {
+  let mc = MachineCode::new()
+  mc.emit_extr_imm(0, 1, 2, 13) // EXTR X0, X1, X2, #13
+  mc.emit_extr_imm32(3, 4, 5, 7) // EXTR W3, W4, W5, #7
+  mc.resolve_fixups()
+  inspect(
+    mc.dump_disasm(),
+    content=(
+      #|  0000: 2034c293  extr x0, x1, x2, #13
+      #|  0004: 831c8513  extr w3, w4, w5, #7
+      #|
+    ),
+  )
+}
+
+///|
 /// Test CBNZ with immediate offset (for TrapIfZero)
 test "cbnz_offset instruction" {
   let mc = MachineCode::new()

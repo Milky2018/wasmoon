@@ -295,12 +295,11 @@ fn patch_call_veneer_target(
   fixup : @emit.CallFixup,
   target_ptr : Int64,
 ) -> Unit {
-  let veneer_fixup : @emit.FuncAddrFixup = {
-    offset: fixup.veneer_offset,
-    func_idx: fixup.func_idx,
-    reg: 16, // x16 (ip0)
-  }
-  patch_load_imm64_fixed(exec_ptr, veneer_fixup, target_ptr)
+  // Veneer layout (16 bytes):
+  //   +0:  ldr x16, #8
+  //   +4:  br x16
+  //   +8:  target_ptr literal (u64)
+  c_jit_write_i64(exec_ptr + fixup.veneer_offset.to_int64() + 8L, target_ptr)
 }
 
 ///|

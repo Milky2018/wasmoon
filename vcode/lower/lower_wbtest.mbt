@@ -57,6 +57,33 @@ test "lower integer arithmetic" {
 }
 
 ///|
+test "lower add(sub(x, c), c) cancelation keeps source value" {
+  let builder = @ir.IRBuilder::new("add_sub_cancel")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c16 = builder.iconst_i32(16)
+  let sub = builder.isub(x, c16)
+  let sum = builder.iadd(sub, c16)
+  builder.return_([sum, sub])
+  let vcode_func = lower_function(builder.get_function())
+  let output = vcode_func.print()
+  inspect(
+    output,
+    content=(
+      #|vcode add_sub_cancel(v0:int) -> (int, int) {
+      #|block0:
+      #|    v2 = sub32 #16 v0
+      #|    ret v0, v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower madd does not skip mul accumulator" {
   // Regression test for compute_skipped_values(): for add(mul(a,b), mul(c,d))
   // only one side can be fused into a single MADD. The other multiply must be
@@ -1015,6 +1042,116 @@ test "lower or(x, shl(y, n)) to or_shifted" {
       #|block0:
       #|    v3 = or.lsl #5 v0, v1
       #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower rotate idiom (i32) to rotr32_imm" {
+  let builder = @ir.IRBuilder::new("or_rotate_i32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shl_amt = builder.iconst_i32(7)
+  let shr_amt = builder.iconst_i32(25)
+  let left = builder.ishl(x, shl_amt)
+  let right = builder.ushr(x, shr_amt)
+  let result = builder.bor(left, right)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode or_rotate_i32_test(v0:int) -> int {
+      #|block0:
+      #|    v3 = rotr32 #25 v0
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower rotate idiom (i64) to rotr_imm" {
+  let builder = @ir.IRBuilder::new("or_rotate_i64_test")
+  let x = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shl_amt = builder.iconst_i64(13L)
+  let shr_amt = builder.iconst_i64(51L)
+  let left = builder.ishl(x, shl_amt)
+  let right = builder.ushr(x, shr_amt)
+  let result = builder.bor(right, left) // commuted form
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode or_rotate_i64_test(v0:int) -> int {
+      #|block0:
+      #|    v3 = rotr #51 v0
+      #|    ret v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower extr idiom (i64) to extr_imm" {
+  let builder = @ir.IRBuilder::new("or_extr_i64_test")
+  let x = builder.add_param(@ir.Type::I64)
+  let y = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shl_amt = builder.iconst_i64(13L)
+  let shr_amt = builder.iconst_i64(51L)
+  let left = builder.ishl(x, shl_amt)
+  let right = builder.ushr(y, shr_amt)
+  let result = builder.bor(left, right)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode or_extr_i64_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v4 = extr #51 v0, v1
+      #|    ret v4
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "lower extr idiom (i32) to extr32_imm" {
+  let builder = @ir.IRBuilder::new("or_extr_i32_test")
+  let x = builder.add_param(@ir.Type::I32)
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let shl_amt = builder.iconst_i32(25)
+  let shr_amt = builder.iconst_i32(7)
+  let left = builder.ushr(y, shr_amt)
+  let right = builder.ishl(x, shl_amt)
+  let result = builder.bor(left, right)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode or_extr_i32_test(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v4 = extr32 #7 v0, v1
+      #|    ret v4
       #|}
       #|
     ),

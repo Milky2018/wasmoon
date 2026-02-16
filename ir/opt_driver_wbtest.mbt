@@ -27,3 +27,31 @@ test "optimize o1 converges on second run" {
   inspect(first.changed, content="true")
   inspect(second.changed, content="false")
 }
+
+///|
+test "optimize cse vmctx load_ptr in block" {
+  let builder = IRBuilder::new("vmctx_load_ptr_cse")
+  let vmctx = builder.add_param(Type::I64)
+  builder.add_result(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let off32 = builder.iconst_i32(32)
+  let off0 = builder.iconst_i32(0)
+  let p0 = builder.load_ptr(Type::I64, vmctx, off32)
+  // Keep an intervening memory read to ensure load-ptr CSE still works when
+  // no memory-writing side effect occurs.
+  builder.load_ptr(Type::I32, p0, off0) |> ignore
+  let p1 = builder.load_ptr(Type::I64, vmctx, off32)
+  let sum = builder.iadd(p0, p1)
+  builder.return_([sum])
+  let func = builder.get_function()
+  optimize(func) |> ignore
+
+  let mut load_i64_count = 0
+  for inst in func.blocks[0].instructions {
+    if inst.opcode is LoadPtr(Type::I64) {
+      load_i64_count = load_i64_count + 1
+    }
+  }
+  inspect(load_i64_count, content="1")
+}

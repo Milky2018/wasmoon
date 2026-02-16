@@ -56,9 +56,13 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
 /// `MemoryGrow`.
 pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
   let result = OptResult::new()
+  let iconst_values = collect_iconst_values(func)
+  let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
   for block in func.blocks {
     // Key: (memidx, vmctx_value_id) packed into an Int64.
     let seen : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    // Key: opcode/base/offset for vmctx field loads.
+    let seen_vmctx_loads : @hashmap.HashMap[String, Value] = @hashmap.new()
     for inst in block.instructions {
       match inst.opcode {
         LoadMemBase(memidx) =>
@@ -76,6 +80,42 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
               None => seen.set(key, r)
             }
           }
+        LoadPtr(ty) =>
+          if inst.first_result() is Some(r) && inst.operands.length() >= 2 {
+            let base = inst.operands[0]
+            let offset = inst.operands[1]
+            if ptr_base_infos.get(base.id) is Some(base_info) &&
+              base_info.region is Vmctx {
+              let key = "load_ptr:\{ty}:\{base.id}:\{offset.id}"
+              match seen_vmctx_loads.get(key) {
+                Some(existing) => {
+                  inst.opcode = Opcode::Copy
+                  inst.operands.clear()
+                  inst.operands.push(existing)
+                  result.mark_changed()
+                }
+                None => seen_vmctx_loads.set(key, r)
+              }
+            }
+          }
+        LoadPtrNarrow(ty, bits, signed) =>
+          if inst.first_result() is Some(r) && inst.operands.length() >= 2 {
+            let base = inst.operands[0]
+            let offset = inst.operands[1]
+            if ptr_base_infos.get(base.id) is Some(base_info) &&
+              base_info.region is Vmctx {
+              let key = "load_ptr_narrow:\{ty}:\{bits}:\{signed}:\{base.id}:\{offset.id}"
+              match seen_vmctx_loads.get(key) {
+                Some(existing) => {
+                  inst.opcode = Opcode::Copy
+                  inst.operands.clear()
+                  inst.operands.push(existing)
+                  result.mark_changed()
+                }
+                None => seen_vmctx_loads.set(key, r)
+              }
+            }
+          }
         // Conservatively invalidate on operations that can mutate memory base.
         MemoryGrow(_, _)
         | Call(_)
@@ -84,7 +124,16 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
         | ReturnCall(_)
         | ReturnCallIndirect(_, _)
         | ReturnCallRef(_)
-        | CallPtr(_, _) => seen.clear()
+        | CallPtr(_, _)
+        | TableGrow(_) => {
+          seen.clear()
+          seen_vmctx_loads.clear()
+        }
+        StorePtr(_) | StorePtrNarrow(_) =>
+          if ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
+            store_access.region is Vmctx {
+            seen_vmctx_loads.clear()
+          }
         _ => ()
       }
     }
@@ -213,8 +262,14 @@ fn collect_ptr_base_infos(
   iconst_values : @hashmap.HashMap[Int, Int64],
 ) -> @hashmap.HashMap[Int, PtrBaseInfo] {
   let result : @hashmap.HashMap[Int, PtrBaseInfo] = @hashmap.new()
+  if func.params.length() > 0 {
+    // Wasm ABI: function param 0 is vmctx.
+    let vmctx = func.params[0].0
+    result.set(vmctx.id, { region: Vmctx })
+  }
   if func.blocks.length() > 0 && func.blocks[0].params.length() > 0 {
-    // Wasm ABI: entry param 0 is vmctx; treat copy-derived pointers as vmctx-region.
+    // Some IR forms thread vmctx through entry block params; keep this as a
+    // secondary source of vmctx-region seeds.
     let vmctx = func.blocks[0].params[0].0
     result.set(vmctx.id, { region: Vmctx })
   }

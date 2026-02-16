@@ -185,9 +185,18 @@ fn try_compile_jit(
           @wast.init_elem_segments(mod_, jm, instance, store)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(mod_, jm, instance, store)
+          let use_subtype_indirect_check = module_indirect_subtype_check_reason(
+              mod_,
+            )
+            is Some(_)
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
-          @wast.sync_tables_to_jit(instance, store, jm)
+          @wast.sync_tables_to_jit(
+            instance,
+            store,
+            jm,
+            use_subtype_indirect_check~,
+          )
           // NOTE: Memory and globals are owned by JITContext, GC handles cleanup
           // Store global_addrs and func_addrs for syncing after JIT calls
           let global_addrs_copy : Array[Int] = []

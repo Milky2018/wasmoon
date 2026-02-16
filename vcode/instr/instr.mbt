@@ -204,6 +204,13 @@ pub(all) enum VCodeOpcode {
   LShrImm(Int, Bool) // LSR with immediate shift amount (masked per Wasm semantics)
   Rotr(Bool) // Rotate right with size
   RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
+  // AArch64 EXTR immediate forms:
+  //   extr rd, rn, rm, #shift  (64-bit)
+  //   extr wD, wN, wM, #shift  (32-bit)
+  // Encodes: (rn << (bits - shift)) | (rm >> shift)
+  // Used by Cranelift-style lowering for:
+  //   (x << a) | (y >> b)  where a + b == bitwidth.
+  ExtrImm(Int, Bool) // EXTR immediate shift amount, Bool=true(64)/false(32)
   Not(Bool) // Bitwise NOT with size: true = 64-bit, false = 32-bit
   AndNot(Bool) // x & ~y
   OrNot(Bool) // x | ~y
@@ -915,6 +922,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     LShrImm(imm, is_64) => if is_64 { "lshr #\{imm}" } else { "lshr32 #\{imm}" }
     Rotr(is_64) => if is_64 { "rotr" } else { "rotr32" }
     RotrImm(imm, is_64) => if is_64 { "rotr #\{imm}" } else { "rotr32 #\{imm}" }
+    ExtrImm(imm, is_64) => if is_64 { "extr #\{imm}" } else { "extr32 #\{imm}" }
     Not(is_64) => if is_64 { "not" } else { "not32" }
     AndNot(is_64) => if is_64 { "andnot" } else { "andnot32" }
     OrNot(is_64) => if is_64 { "ornot" } else { "ornot32" }

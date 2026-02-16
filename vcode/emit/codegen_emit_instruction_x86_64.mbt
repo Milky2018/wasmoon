@@ -1932,6 +1932,50 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_ror_r32_imm8(rd, amt)
       }
     }
+    @instr.ExtrImm(amt, is_64) => {
+      // AArch64 EXTR fallback on amd64:
+      //   (rn << (bits - amt)) | (rm >> amt)
+      // with shift domain masked per lane width.
+      let rd = wreg_num(inst.defs[0])
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      let bits = if is_64 { 64 } else { 32 }
+      let amt_masked = if is_64 { amt & 63 } else { amt & 31 }
+      if amt_masked == 0 {
+        if is_64 {
+          if rd != rm {
+            self.x86_emit_mov_rr(rd, rm)
+          }
+        } else if rd != rm {
+          self.x86_emit_mov_rr32(rd, rm)
+        }
+        return
+      }
+      let mut tmp = isa.scratch_reg_1_index()
+      if tmp == rd || tmp == rn || tmp == rm {
+        tmp = isa.scratch_reg_2_index()
+      }
+      if tmp == rd || tmp == rn || tmp == rm {
+        abort("x86_64 extr_imm: no scratch register available")
+      }
+      if is_64 {
+        self.x86_emit_mov_rr(tmp, rm)
+        self.x86_emit_shr_r_imm8(tmp, amt_masked)
+        if rd != rn {
+          self.x86_emit_mov_rr(rd, rn)
+        }
+        self.x86_emit_shl_r_imm8(rd, bits - amt_masked)
+        self.x86_emit_or_rr(rd, tmp)
+      } else {
+        self.x86_emit_mov_rr32(tmp, rm)
+        self.x86_emit_shr_r32_imm8(tmp, amt_masked)
+        if rd != rn {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+        self.x86_emit_shl_r32_imm8(rd, bits - amt_masked)
+        self.x86_emit_or_rr32(rd, tmp)
+      }
+    }
     @instr.Select => {
       let rd = wreg_num(inst.defs[0])
       let cond_reg = reg_num(inst.uses[0])
