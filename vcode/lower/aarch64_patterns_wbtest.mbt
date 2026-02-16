@@ -17,7 +17,13 @@ test "aarch64: add with shifted operand" {
   // Get the AArch64 rules and try matching
   let rules = get_aarch64_rules()
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
 
   // Find the add instruction
   let block = ir_func.blocks[0]
@@ -53,7 +59,13 @@ test "aarch64: madd pattern" {
   // Get the AArch64 rules
   let rules = get_aarch64_rules()
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
 
   // Find the add instruction
   let block = ir_func.blocks[0]
@@ -88,7 +100,13 @@ test "aarch64: msub pattern" {
   // Get the AArch64 rules
   let rules = get_aarch64_rules()
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
 
   // Find the sub instruction
   let block = ir_func.blocks[0]
@@ -122,7 +140,13 @@ test "aarch64: mneg pattern" {
   // Get the AArch64 rules
   let rules = get_aarch64_rules()
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
 
   // Find the sub instruction
   let block = ir_func.blocks[0]
@@ -217,7 +241,13 @@ test "apply_aarch64_rule: add_shifted" {
   let c = builder.iconst_i32(0)
   builder.return_([c])
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
   let test_inst = ir_func.blocks[0].instructions[0]
   let apply_result = apply_aarch64_rule(
     "aarch64_add_shifted", result, test_inst, ctx,
@@ -242,7 +272,13 @@ test "apply_aarch64_rule: madd" {
   let c = builder.iconst_i32(0)
   builder.return_([c])
   let ir_func = builder.get_function()
-  let ctx = LoweringContext::new(ir_func, @abi.ABISettings::default(), -1)
+  let ctx = LoweringContext::new(
+    ir_func,
+    @abi.ABISettings::default(),
+    -1,
+    true,
+    [],
+  )
   let test_inst = ir_func.blocks[0].instructions[0]
   let apply_result = apply_aarch64_rule("aarch64_madd", result, test_inst, ctx)
   match apply_result {

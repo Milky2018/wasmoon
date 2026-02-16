@@ -25,6 +25,19 @@ pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
       }
       let movz_count = if non_zero == 0 { 1 } else { non_zero }
       let movn_count = if non_ffff == 0 { 1 } else { non_ffff }
+      // Cranelift-aligned fast path: if neither MOVZ nor MOVN is single-instruction,
+      // try logical-immediate materialization via:
+      //   orr xD, xzr, #imm
+      // This can materialize many mask/pattern constants in one instruction.
+      if movz_count > 1 && movn_count > 1 {
+        match @instr.aarch64_logic_imm_enc_bits(imm, true) {
+          Some(imm_bits) => {
+            OrrImm(rd, 31, imm_bits).emit(mc)
+            return
+          }
+          None => ()
+        }
+      }
       if movn_count < movz_count {
         // MOVN strategy: start from all-ones, patch non-0xFFFF halfwords.
         if non_ffff == 0 {
@@ -920,6 +933,17 @@ pub fn MachineCode::emit_ror_imm(
 }
 
 ///|
+pub fn MachineCode::emit_extr_imm(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  ExtrImm(rd, rn, rm, shift).emit(self)
+}
+
+///|
 pub fn MachineCode::emit_ror_imm32(
   self : MachineCode,
   rd : Int,
@@ -927,6 +951,17 @@ pub fn MachineCode::emit_ror_imm32(
   shift : Int,
 ) -> Unit {
   RorImm32(rd, rn, shift).emit(self)
+}
+
+///|
+pub fn MachineCode::emit_extr_imm32(
+  self : MachineCode,
+  rd : Int,
+  rn : Int,
+  rm : Int,
+  shift : Int,
+) -> Unit {
+  ExtrImm32(rd, rn, rm, shift).emit(self)
 }
 
 ///|

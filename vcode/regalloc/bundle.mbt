@@ -277,71 +277,83 @@ fn BundleSet::get_or_create_spill_bundle(
 }
 
 ///|
-/// Pre-compute loop depths for all blocks (O(blocks + edges))
-/// Returns an array where loop_depths[block_id] = depth
+/// Pre-compute per-block approximate loop depth, aligned with regalloc2's
+/// CFG heuristic (`cfg.rs::approx_loop_depth`): count backedge entries/exits
+/// over linear block order and maintain a small nesting stack.
 pub fn compute_loop_depths(func : VCodeFunction) -> Array[Int] {
   let n = func.blocks.length()
-  let depths : Array[Int] = Array::make(n, 0)
+  if n == 0 {
+    return []
+  }
 
-  // Count incoming backedges for each block
-  for i, block in func.blocks {
+  let backedge_in = Array::make(n, 0)
+  let backedge_out = Array::make(n, 0)
+
+  for block_idx, block in func.blocks {
     if block.terminator is Some(term) {
-      // Get successors without allocating
+      fn add_backedge(
+        backedge_in : Array[Int],
+        backedge_out : Array[Int],
+        block_idx : Int,
+        succ : Int,
+        n : Int,
+      ) -> Unit {
+        if succ < 0 || succ >= n {
+          return
+        }
+        if succ <= block_idx {
+          backedge_in[succ] = backedge_in[succ] + 1
+          backedge_out[block_idx] = backedge_out[block_idx] + 1
+        }
+      }
       match term {
-        Jump(target, _) => if i > target { depths[target] = depths[target] + 1 }
+        Jump(target, _) =>
+          add_backedge(backedge_in, backedge_out, block_idx, target, n)
         Branch(_, then_b, else_b) => {
-          if i > then_b {
-            depths[then_b] = depths[then_b] + 1
-          }
-          if i > else_b {
-            depths[else_b] = depths[else_b] + 1
-          }
+          add_backedge(backedge_in, backedge_out, block_idx, then_b, n)
+          add_backedge(backedge_in, backedge_out, block_idx, else_b, n)
         }
-        BranchCmp(_, _, _, _, then_b, else_b) => {
-          if i > then_b {
-            depths[then_b] = depths[then_b] + 1
-          }
-          if i > else_b {
-            depths[else_b] = depths[else_b] + 1
-          }
-        }
-        BranchZero(_, _, _, then_b, else_b) => {
-          if i > then_b {
-            depths[then_b] = depths[then_b] + 1
-          }
-          if i > else_b {
-            depths[else_b] = depths[else_b] + 1
-          }
-        }
-        BranchCmpImm(_, _, _, _, then_b, else_b) => {
-          if i > then_b {
-            depths[then_b] = depths[then_b] + 1
-          }
-          if i > else_b {
-            depths[else_b] = depths[else_b] + 1
-          }
+        BranchCmp(_, _, _, _, then_b, else_b)
+        | BranchZero(_, _, _, then_b, else_b)
+        | BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          add_backedge(backedge_in, backedge_out, block_idx, then_b, n)
+          add_backedge(backedge_in, backedge_out, block_idx, else_b, n)
         }
         BrTable(_, targets, default) => {
-          for t in targets {
-            if i > t {
-              depths[t] = depths[t] + 1
-            }
+          for target in targets {
+            add_backedge(backedge_in, backedge_out, block_idx, target, n)
           }
-          if i > default {
-            depths[default] = depths[default] + 1
-          }
+          add_backedge(backedge_in, backedge_out, block_idx, default, n)
         }
         Return(_) | Trap(_) => ()
       }
     }
   }
 
-  // Cap depths at 3
-  for i in 0..<n {
-    if depths[i] > 3 {
-      depths[i] = 3
+  let depths : Array[Int] = []
+  let backedge_stack : Array[Int] = []
+  let mut cur_depth = 0
+
+  for block_idx in 0..<n {
+    if backedge_in[block_idx] > 0 {
+      cur_depth = cur_depth + 1
+      backedge_stack.push(backedge_in[block_idx])
+    }
+
+    depths.push(cur_depth)
+
+    let mut out_count = backedge_out[block_idx]
+    while backedge_stack.length() > 0 && out_count > 0 {
+      out_count = out_count - 1
+      let last = backedge_stack.length() - 1
+      backedge_stack[last] = backedge_stack[last] - 1
+      if backedge_stack[last] == 0 {
+        cur_depth = cur_depth - 1
+        backedge_stack.pop() |> ignore
+      }
     }
   }
+
   depths
 }
 

@@ -59,9 +59,9 @@ pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
-pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
-pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
+pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit
 
 pub fn values_match(@types.Value, @wat.WastValue) -> Bool
 

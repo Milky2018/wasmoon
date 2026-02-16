@@ -52,6 +52,12 @@ fn run_explore(
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
   let num_imports = count_func_imports(mod_.imports)
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let use_subtype_indirect_check = module_indirect_subtype_check_reason(mod_)
+    is Some(_)
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -142,6 +148,8 @@ fn run_explore(
       ir_func,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
+      use_subtype_indirect_check~,
+      canonical_type_indices~,
     )
     let vcode_text = vcode_func.to_string()
     if !html_output && show_vcode {

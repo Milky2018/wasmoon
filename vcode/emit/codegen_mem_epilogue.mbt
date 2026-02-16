@@ -357,8 +357,45 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
-      // CMP lhs, #imm + B.cond then_b + B else_b
       let rn = reg_num(lhs)
+      // Cranelift-style zero-compare fast path:
+      //   cmp xN, #0 ; b.eq/b.ne
+      // becomes
+      //   cbz/cbnz xN
+      // to save one instruction and preserve branch inversion behavior.
+      if imm == 0 && (cond is Eq || cond is Ne) {
+        let is_nonzero = cond is Ne
+        if next_block == Some(then_b) {
+          if is_nonzero {
+            if is_64 {
+              self.emit_cbz(rn, else_b)
+            } else {
+              self.emit_cbz32(rn, else_b)
+            }
+          } else if is_64 {
+            self.emit_cbnz(rn, else_b)
+          } else {
+            self.emit_cbnz32(rn, else_b)
+          }
+        } else {
+          if is_nonzero {
+            if is_64 {
+              self.emit_cbnz(rn, then_b)
+            } else {
+              self.emit_cbnz32(rn, then_b)
+            }
+          } else if is_64 {
+            self.emit_cbz(rn, then_b)
+          } else {
+            self.emit_cbz32(rn, then_b)
+          }
+          if next_block != Some(else_b) {
+            self.emit_b(else_b)
+          }
+        }
+        return
+      }
+      // General case: CMP lhs, #imm + B.cond then_b + B else_b
       if is_64 {
         self.emit_cmp_imm(rn, imm)
       } else {

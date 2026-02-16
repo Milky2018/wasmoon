@@ -262,6 +262,7 @@ pub(all) enum VCodeOpcode {
   LShrImm(Int, Bool)
   Rotr(Bool)
   RotrImm(Int, Bool)
+  ExtrImm(Int, Bool)
   Not(Bool)
   AndNot(Bool)
   OrNot(Bool)

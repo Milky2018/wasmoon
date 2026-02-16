@@ -67,9 +67,71 @@ fn lower_binary_int(
 ///|
 /// Get the constant value of an IR value if it's defined by Iconst
 fn get_const_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iconst(c) {
-    return Some(c)
+  iconst_value(ctx, value)
+}
+
+///|
+/// Resolve trivial `Copy` chains to a stable IR value.
+fn resolve_copy_value(ctx : LoweringContext, value0 : @ir.Value) -> @ir.Value {
+  let mut value = value0
+  let mut depth = 0
+  while depth < 8 {
+    depth += 1
+    if find_defining_inst(ctx, value) is Some(inst) &&
+      inst.opcode is Copy &&
+      !inst.operands.is_empty() {
+      value = inst.operands[0]
+      continue
+    }
+    break
+  }
+  value
+}
+
+///|
+/// Check whether two IR values are equivalent after resolving trivial copies.
+fn values_equivalent(
+  ctx : LoweringContext,
+  lhs : @ir.Value,
+  rhs : @ir.Value,
+) -> Bool {
+  let lhs = resolve_copy_value(ctx, lhs)
+  let rhs = resolve_copy_value(ctx, rhs)
+  lhs.id == rhs.id && lhs.ty == rhs.ty
+}
+
+///|
+/// Match `(x - y) + y -> x` (and copy-equivalent variants).
+fn match_sub_add_cancel_value(
+  ctx : LoweringContext,
+  maybe_sub : @ir.Value,
+  addend : @ir.Value,
+) -> @ir.Value? {
+  if find_defining_inst(ctx, maybe_sub) is Some(sub_inst) &&
+    sub_inst.opcode is Isub &&
+    sub_inst.operands.length() == 2 &&
+    values_equivalent(ctx, sub_inst.operands[1], addend) {
+    return Some(sub_inst.operands[0])
+  }
+  None
+}
+
+///|
+/// Match `(x + y) - y -> x` and `(x + y) - x -> y` (copy-equivalent variants).
+fn match_add_sub_cancel_value(
+  ctx : LoweringContext,
+  maybe_add : @ir.Value,
+  subtrahend : @ir.Value,
+) -> @ir.Value? {
+  if find_defining_inst(ctx, maybe_add) is Some(add_inst) &&
+    add_inst.opcode is Iadd &&
+    add_inst.operands.length() == 2 {
+    if values_equivalent(ctx, add_inst.operands[0], subtrahend) {
+      return Some(add_inst.operands[1])
+    }
+    if values_equivalent(ctx, add_inst.operands[1], subtrahend) {
+      return Some(add_inst.operands[0])
+    }
   }
   None
 }
@@ -637,6 +699,24 @@ fn lower_iadd(
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
 
+  // Cranelift algebraic cancelation: (x - y) + y -> x.
+  if match_sub_add_cancel_value(ctx, lhs_val, rhs_val) is Some(base) {
+    let src = ctx.get_vreg_for_use(base, block)
+    let move_inst = @instr.VCodeInst::new(Move)
+    move_inst.add_def({ reg: Virtual(dst) })
+    move_inst.add_use(Virtual(src))
+    block.add_inst(move_inst)
+    return
+  }
+  if match_sub_add_cancel_value(ctx, rhs_val, lhs_val) is Some(base) {
+    let src = ctx.get_vreg_for_use(base, block)
+    let move_inst = @instr.VCodeInst::new(Move)
+    move_inst.add_def({ reg: Virtual(dst) })
+    move_inst.add_use(Virtual(src))
+    block.add_inst(move_inst)
+    return
+  }
+
   // Pattern: add(x, mul(y, z)) -> MADD / MADD32.
   // Match Cranelift's iadd_imul_{right,left} for fits_in_64 (i64 + i32).
   if match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
@@ -871,6 +951,23 @@ fn lower_isub(
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
 
+  // Cranelift algebraic cancelation: (x + y) - y -> x.
+  if match_add_sub_cancel_value(ctx, lhs_val, rhs_val) is Some(base) {
+    let src = ctx.get_vreg_for_use(base, block)
+    let move_inst = @instr.VCodeInst::new(Move)
+    move_inst.add_def({ reg: Virtual(dst) })
+    move_inst.add_use(Virtual(src))
+    block.add_inst(move_inst)
+    return
+  }
+  let lhs_reg : @abi.Reg = if @isa.ISA::current() is @isa.AArch64 &&
+    is_const_zero_value(ctx, lhs_val) {
+    // Cranelift-style negation path: use xzr/wzr directly for `0 - x`.
+    Physical({ index: 31, class: Int })
+  } else {
+    Virtual(ctx.get_vreg_for_use(lhs_val, block))
+  }
+
   // Pattern: sub(0, mul(x, y)) -> MNEG / MNEG32.
   // Match Cranelift's ineg(imul()) lowering for fits_in_64.
   if is_const_zero_value(ctx, lhs_val) &&
@@ -901,7 +998,6 @@ fn lower_isub(
 
   // Pattern: sub(x, shl(y, n)) -> SubShifted/SubShifted32
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
-    let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
     let vcode_inst = @instr.VCodeInst::new(
       if is_64 {
@@ -911,7 +1007,7 @@ fn lower_isub(
       },
     )
     vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(lhs_reg)
     vcode_inst.add_use(Virtual(rm))
     block.add_inst(vcode_inst)
     return
@@ -921,11 +1017,10 @@ fn lower_isub(
   if is_64 &&
     match_extend_i32_to_i64(ctx, rhs_val) is Some((inner, ext)) &&
     !(ext is @instr.IndexExtend::None) {
-    let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(inner, block)
     let vcode_inst = @instr.VCodeInst::new(SubExtend(ext, 0))
     vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(lhs_reg)
     vcode_inst.add_use(Virtual(rm))
     block.add_inst(vcode_inst)
     return
@@ -934,30 +1029,27 @@ fn lower_isub(
   // Match Cranelift isub_imm12_neg:
   // sub(x, -C) -> add #C, x when C fits add/sub imm12 encoding.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
-    let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(lhs_reg)
     block.add_inst(vcode_inst)
     return
   }
 
   // Pattern: sub(x, const) -> SubImm where const is valid 12-bit immediate
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
-    let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(lhs_reg)
     block.add_inst(vcode_inst)
     return
   }
 
   // Default: regular sub
-  let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
   let vcode_inst = @instr.VCodeInst::new(Sub(is_64))
   vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
+  vcode_inst.add_use(lhs_reg)
   vcode_inst.add_use(Virtual(rhs))
   block.add_inst(vcode_inst)
 }
@@ -1119,6 +1211,34 @@ fn lower_bor(
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
     let vcode_inst = @instr.VCodeInst::new(OrNot(is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    vcode_inst.add_use(Virtual(rm))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Cranelift-style rotate idiom:
+  // (x << a) | (x >> b), with a + b == bitwidth  ==>  rotr x, #b
+  if match_rotate_or_value(ctx, lhs_val, rhs_val, is_64)
+    is Some((src, rotr_amt)) {
+    let rn = ctx.get_vreg_for_use(src, block)
+    let vcode_inst = @instr.VCodeInst::new(RotrImm(rotr_amt, is_64))
+    vcode_inst.add_def({ reg: Virtual(dst) })
+    vcode_inst.add_use(Virtual(rn))
+    block.add_inst(vcode_inst)
+    return
+  }
+
+  // Cranelift-style EXTR idiom:
+  // (x << a) | (y >> b), with a + b == bitwidth  ==>  extr x, y, #b
+  // Reference: cranelift/codegen/src/isa/aarch64/lower.isle
+  //   rule: (bor (ishl x xs) (ushr y ys)) -> a64_extr x y ys
+  if match_extr_or_value(ctx, lhs_val, rhs_val, is_64)
+    is Some((x_src, y_src, extr_amt)) {
+    let rn = ctx.get_vreg_for_use(x_src, block)
+    let rm = ctx.get_vreg_for_use(y_src, block)
+    let vcode_inst = @instr.VCodeInst::new(ExtrImm(extr_amt, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(rn))
     vcode_inst.add_use(Virtual(rm))
@@ -1321,21 +1441,25 @@ fn lower_rotl(
   }
   let amount = ctx.get_vreg_for_use(inst.operands[1], block)
 
-  // Step 1: Load constant 0 into temp
-  let zero = ctx.vcode_func.new_vreg(Int)
-  let load_zero = @instr.VCodeInst::new(LoadConst(0L))
-  load_zero.add_def({ reg: Virtual(zero) })
-  block.add_inst(load_zero)
-
-  // Step 2: Compute (0 - n) = -n
+  // Step 1: Compute (0 - n) = -n.
+  // AArch64 can use the zero register directly (`xzr/wzr`) as the lhs.
+  // Keep the previous generic path for other ISAs.
   let neg_n = ctx.vcode_func.new_vreg(Int)
   let sub_inst = @instr.VCodeInst::new(Sub(is_64))
   sub_inst.add_def({ reg: Virtual(neg_n) })
-  sub_inst.add_use(Virtual(zero))
+  if @isa.ISA::current() is @isa.AArch64 {
+    sub_inst.add_use(Physical({ index: 31, class: Int }))
+  } else {
+    let zero = ctx.vcode_func.new_vreg(Int)
+    let load_zero = @instr.VCodeInst::new(LoadConst(0L))
+    load_zero.add_def({ reg: Virtual(zero) })
+    block.add_inst(load_zero)
+    sub_inst.add_use(Virtual(zero))
+  }
   sub_inst.add_use(Virtual(amount))
   block.add_inst(sub_inst)
 
-  // Step 3: Rotate right by -n (effectively rotl by n)
+  // Step 2: Rotate right by -n (effectively rotl by n)
   let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
   rotr_inst.add_def({ reg: Virtual(dst) })
   rotr_inst.add_use(Virtual(src))

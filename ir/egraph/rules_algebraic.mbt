@@ -223,7 +223,7 @@ fn rule_sub_add_cancel() -> RewriteRule {
             if left_node.op is Sub && left_node.children.length() == 2 {
               if eg.equiv(left_node.children[1], node.children[1]) {
                 // (x - y) + y = x
-                let new_id = eg.merge(class_id, left_node.children[0])
+                let new_id = eg.subsume(class_id, left_node.children[0])
                 changed = new_id != class_id || changed
               }
             }
@@ -233,7 +233,7 @@ fn rule_sub_add_cancel() -> RewriteRule {
             if right_node.op is Sub && right_node.children.length() == 2 {
               if eg.equiv(right_node.children[1], node.children[0]) {
                 // y + (x - y) = x
-                let new_id = eg.merge(class_id, right_node.children[0])
+                let new_id = eg.subsume(class_id, right_node.children[0])
                 changed = new_id != class_id || changed
               }
             }
@@ -257,12 +257,12 @@ fn rule_add_sub_cancel() -> RewriteRule {
             if left_node.op is Add && left_node.children.length() == 2 {
               // (x + y) - y = x
               if eg.equiv(left_node.children[1], node.children[1]) {
-                let new_id = eg.merge(class_id, left_node.children[0])
+                let new_id = eg.subsume(class_id, left_node.children[0])
                 changed = new_id != class_id || changed
               }
               // (x + y) - x = y
               if eg.equiv(left_node.children[0], node.children[1]) {
-                let new_id = eg.merge(class_id, left_node.children[1])
+                let new_id = eg.subsume(class_id, left_node.children[1])
                 changed = new_id != class_id || changed
               }
             }
@@ -287,7 +287,7 @@ fn rule_sub_sub_cancel() -> RewriteRule {
               // (x - y) - x = -y
               if eg.equiv(left_node.children[0], node.children[1]) {
                 let neg_y = eg.add_neg(left_node.children[1])
-                let new_id = eg.merge(class_id, neg_y)
+                let new_id = eg.subsume(class_id, neg_y)
                 changed = new_id != class_id || changed
               }
             }

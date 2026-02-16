@@ -103,6 +103,8 @@ enum Instruction {
   AsrImm(Int, Int, Int)
   // Rotate - Immediate (64-bit): ROR Xd, Xn, #shift (alias of EXTR with rm=rn)
   RorImm(Int, Int, Int)
+  // Extract - Immediate (64-bit): EXTR Xd, Xn, Xm, #shift
+  ExtrImm(Int, Int, Int, Int)
   // Shift - Immediate (32-bit): LSR Wd, Wn, #shift
   LsrImm32(Int, Int, Int)
   // Shift - Immediate (32-bit): LSL Wd, Wn, #shift
@@ -111,6 +113,8 @@ enum Instruction {
   AsrImm32(Int, Int, Int)
   // Rotate - Immediate (32-bit): ROR Wd, Wn, #shift (alias of EXTR with rm=rn)
   RorImm32(Int, Int, Int)
+  // Extract - Immediate (32-bit): EXTR Wd, Wn, Wm, #shift
+  ExtrImm32(Int, Int, Int, Int)
   // Unsigned Bitfield Extract: UBFX Xd, Xn, #0, #width
   // Extracts bits [0, width-1] from Xn to Xd (zero-extended)
   UbfxWidth(Int, Int, Int)
@@ -717,10 +721,12 @@ fn Instruction::annotate(self : Instruction) -> String {
     LslImm(rd, rn, shift) => "lsl x\{rd}, x\{rn}, #\{shift}"
     AsrImm(rd, rn, shift) => "asr x\{rd}, x\{rn}, #\{shift}"
     RorImm(rd, rn, shift) => "ror x\{rd}, x\{rn}, #\{shift}"
+    ExtrImm(rd, rn, rm, shift) => "extr x\{rd}, x\{rn}, x\{rm}, #\{shift}"
     LsrImm32(rd, rn, shift) => "lsr w\{rd}, w\{rn}, #\{shift}"
     LslImm32(rd, rn, shift) => "lsl w\{rd}, w\{rn}, #\{shift}"
     AsrImm32(rd, rn, shift) => "asr w\{rd}, w\{rn}, #\{shift}"
     RorImm32(rd, rn, shift) => "ror w\{rd}, w\{rn}, #\{shift}"
+    ExtrImm32(rd, rn, rm, shift) => "extr w\{rd}, w\{rn}, w\{rm}, #\{shift}"
     UbfxWidth(rd, rn, width) => "ubfx x\{rd}, x\{rn}, #0, #\{width}"
     Clz(rd, rn) => "clz x\{rd}, x\{rn}"
     Rbit(rd, rn) => "rbit x\{rd}, x\{rn}"

@@ -283,16 +283,28 @@ pub fn MachineCode::add_call_fixup(
 /// Emit a local veneer for out-of-range direct calls.
 ///
 /// Veneer sequence:
-///   movz/movk x16, #imm64   (16 bytes, patched at JIT load time)
+///   ldr x16, #8             (load 64-bit literal placed right after BR)
 ///   br x16
+///   .quad target_ptr        (patched at JIT load time)
 ///
 /// Callers branch to this veneer with BL; BR preserves LR so the callee returns
 /// to the original callsite.
 fn MachineCode::emit_call_veneer(self : MachineCode, func_idx : Int) -> Int {
   let veneer_offset = self.current_pos()
   self.annotate("call_veneer.\{func_idx}")
-  self.emit_load_imm64_fixed(16, 0L)
+  // LDR (literal, 64-bit), Rt=x16, imm19=2 => literal at PC+8.
+  self.annotate("ldr x16, #8")
+  self.emit_inst(0x50, 0x00, 0x00, 0x58)
   self.emit_br(16)
+  // 64-bit target pointer literal (patched during call fixup application).
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
   veneer_offset
 }
 

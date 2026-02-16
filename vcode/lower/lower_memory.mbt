@@ -29,6 +29,9 @@ fn emit_load_table0_base(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
+  if ctx.table0_base_cache.get(block.id) is Some(vreg) {
+    return vreg
+  }
   let table0_base_vreg = ctx.vcode_func.new_vreg(Int)
   let load_inst = @instr.VCodeInst::new(
     Load(I64, @abi.VMCTX_TABLE0_BASE_OFFSET),
@@ -36,6 +39,7 @@ fn emit_load_table0_base(
   load_inst.add_def({ reg: Virtual(table0_base_vreg) })
   load_inst.add_use(Physical({ index: vmctx_index(), class: Int })) // vmctx
   block.add_inst(load_inst)
+  ctx.table0_base_cache.set(block.id, table0_base_vreg)
   table0_base_vreg
 }
 

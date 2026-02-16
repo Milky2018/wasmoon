@@ -996,9 +996,12 @@ fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
         }
         if inst.opcode is LoadMemBase(mem_idx) && inst.defs.length() == 1 {
           if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-            // Forward the available value through this block with the latest
-            // local name to avoid creating very long vreg live ranges.
-            state.set(mem_idx, dst)
+            // Keep the first dominating value-id for each mem-base key.
+            // This allows predecessor intersections to succeed more often
+            // across blocks, reducing duplicated base materialization.
+            if state.get(mem_idx) is None {
+              state.set(mem_idx, dst)
+            }
           }
         }
       }
@@ -1399,8 +1402,8 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     propagate_single_use_moves(block, global_use_counts)
   }
   // Pass 1.6: Global copy propagation for virtual moves.
-  // Keep this disabled for now: even bounded versions still regress
-  // branch-heavy WAST suites. Local propagation remains enabled.
+  // Keep this disabled for now: global propagation tends to increase
+  // live-range pressure in large branch-heavy kernels.
   let enable_global_copy_prop = false
   if enable_global_copy_prop {
     propagate_moves_global(func)

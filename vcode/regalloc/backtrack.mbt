@@ -1984,6 +1984,7 @@ fn BacktrackingAllocator::force_spill_bundle(
 ///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
+  strict_precolor : Bool,
 ) -> Unit {
   let isa = @isa.ISA::current()
   let vmctx_preg = isa.wasm_vmctx_arg_preg()
@@ -2096,10 +2097,17 @@ fn BacktrackingAllocator::preassign_params(
         continue
       }
 
-      // Normal case: pin param bundle to its incoming ABI register.
-      self.record_allocation(bundle, preg)
-      if is_vmctx_param {
-        bundle.is_pinned = true
+      // Normal case:
+      // - strict mode: pin param bundle to incoming ABI register.
+      // - relaxed mode: keep vmctx pinned, but treat other params as hints only.
+      if strict_precolor || is_vmctx_param {
+        self.record_allocation(bundle, preg)
+        if is_vmctx_param {
+          bundle.is_pinned = true
+        }
+      } else if bundle.spillset_id >= 0 &&
+        bundle.spillset_id < self.spillset_hints.length() {
+        self.spillset_hints[bundle.spillset_id] = Some(preg)
       }
     }
   }
@@ -2115,6 +2123,7 @@ pub fn allocate_backtracking(
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
+  param_precolor_strict? : Bool = true,
 ) -> RegAllocResult {
   // Phase 2: Build LiveRanges
   let ranges = build_live_ranges(func, liveness)
@@ -2128,7 +2137,7 @@ pub fn allocate_backtracking(
   )
 
   // Pre-assign function parameters to ABI registers (before main allocation)
-  allocator.preassign_params()
+  allocator.preassign_params(param_precolor_strict)
   allocator.allocate()
 
   // Generate result
