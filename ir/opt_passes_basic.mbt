@@ -429,7 +429,7 @@ fn fold_sdiv(
     (Some(I32(a)), Some(I32(b))) =>
       if b == 0 {
         None
-      } else if a == -2147483648 && b == -1 {
+      } else if a == @types.I32_MIN && b == -1 {
         None
       } else {
         Some(ConstValue::I32(a / b))

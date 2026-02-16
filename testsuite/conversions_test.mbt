@@ -19,7 +19,7 @@ test "i32.trunc_sat_f32_s nan" {
     #|    (i32.trunc_sat_f32_s (local.get 0))
     #|  )
     #|)
-  let nan = Float::reinterpret_from_int(0x7FC00000) // canonical NaN
+  let nan = Float::reinterpret_from_int(@types.F32_CANONICAL_NAN_BITS)
   let result = compare_jit_interp(source, "trunc_sat", [@types.Value::F32(nan)])
   inspect(result, content="matched")
 }

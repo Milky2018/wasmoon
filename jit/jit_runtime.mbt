@@ -525,9 +525,10 @@ pub fn JITModule::from_single_function(
       let pages = if mem_size <= 0L {
         0
       } else {
-        ((mem_size + 65535L) / 65536L).to_int()
+        ((mem_size + @types.WASM_PAGE_SIZE_BYTES - 1L) /
+        @types.WASM_PAGE_SIZE_BYTES).to_int()
       }
-      let actual_size = pages.to_int64() * 65536L
+      let actual_size = pages.to_int64() * @types.WASM_PAGE_SIZE_BYTES
       let mem_ptr = if pages > 0 {
         ctx.alloc_guarded_memory(pages, None)
       } else {

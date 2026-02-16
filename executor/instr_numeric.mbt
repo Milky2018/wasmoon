@@ -30,7 +30,7 @@ fn ExecContext::exec_i32_numeric(
         raise @runtime.DivisionByZero
       }
       // Check for integer overflow: INT32_MIN / -1 would overflow
-      if a == -2147483648 && b == -1 {
+      if a == @types.I32_MIN && b == -1 {
         raise @runtime.IntegerOverflow
       }
       self.stack.push(I32(a / b))
@@ -53,7 +53,7 @@ fn ExecContext::exec_i32_numeric(
       }
       // Wasm semantics: INT_MIN % -1 == 0 (must not trap).
       // On amd64, native IDIV can raise SIGFPE for this case.
-      if a == -2147483648 && b == -1 {
+      if a == @types.I32_MIN && b == -1 {
         self.stack.push(I32(0))
       } else {
         self.stack.push(I32(a % b))
