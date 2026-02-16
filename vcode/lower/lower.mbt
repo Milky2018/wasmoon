@@ -22,9 +22,17 @@ struct LoweringContext {
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
   // Cache of func_table base per VCode block (block-local CSE)
   func_table_cache : Map[Int, @abi.VReg]
+  // Cache of table0_base per VCode block (block-local CSE)
+  table0_base_cache : Map[Int, @abi.VReg]
   // Cache of memory base pointers per memidx (cleared at block boundaries and
   // invalidated at call sites that may mutate memory base).
   mem_base_cache : Map[Int, @abi.VReg]
+  // Whether indirect-call type checks must support full subtype semantics.
+  // Cranelift uses exact type equality when GC subtyping is not enabled.
+  use_subtype_indirect_check : Bool
+  // Module-level canonical type-index mapping (raw -> canonical). Used to align
+  // call_indirect exact checks with Cranelift's shared-signature-id semantics.
+  canonical_type_indices : Array[Int]
   // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
   fused_icmps : @hashset.HashSet[Int]
   // Values that should not be lowered because they are subsumed by a fused instruction
@@ -41,6 +49,8 @@ pub fn LoweringContext::new(
   ir_func : @ir.Function,
   abi_settings : @abi.ABISettings,
   num_imports : Int,
+  use_subtype_indirect_check : Bool,
+  canonical_type_indices : Array[Int],
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
   let def_inst_map : Map[Int, @ir.Inst] = {}
@@ -60,11 +70,30 @@ pub fn LoweringContext::new(
     block_map: {},
     stack_param_map: {},
     func_table_cache: {},
+    table0_base_cache: {},
     mem_base_cache: {},
+    use_subtype_indirect_check,
+    canonical_type_indices,
     fused_icmps: @hashset.new(),
     skipped_values: @hashset.new(),
     use_counts,
     def_inst_map,
+  }
+}
+
+///|
+fn LoweringContext::canonicalize_indirect_type_idx(
+  self : LoweringContext,
+  raw_type_idx : Int,
+) -> Int {
+  // Keep raw indices when full subtype checks are enabled.
+  if self.use_subtype_indirect_check {
+    return raw_type_idx
+  }
+  if raw_type_idx >= 0 && raw_type_idx < self.canonical_type_indices.length() {
+    self.canonical_type_indices[raw_type_idx]
+  } else {
+    raw_type_idx
   }
 }
 
@@ -77,6 +106,18 @@ fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
   }
   for k in keys {
     ctx.mem_base_cache.remove(k)
+  }
+}
+
+///|
+/// Invalidate cached table0 base pointers in lowering context.
+fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
+  let keys : Array[Int] = []
+  for k, _ in ctx.table0_base_cache {
+    keys.push(k)
+  }
+  for k in keys {
+    ctx.table0_base_cache.remove(k)
   }
 }
 
@@ -396,6 +437,42 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           if lhs_is_imm || rhs_is_imm {
             continue
           }
+          if inst.opcode is @ir.Opcode::Bor &&
+            match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
+            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+              (
+                match_shl_const_value(ctx, lhs) is Some(_) ||
+                match_ushr_const_value(ctx, lhs) is Some(_)
+              ) {
+              skipped.add(lhs.id)
+            }
+            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+              (
+                match_shl_const_value(ctx, rhs) is Some(_) ||
+                match_ushr_const_value(ctx, rhs) is Some(_)
+              ) {
+              skipped.add(rhs.id)
+            }
+            continue
+          }
+          if inst.opcode is @ir.Opcode::Bor &&
+            match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
+            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+              (
+                match_shl_const_value(ctx, lhs) is Some(_) ||
+                match_ushr_const_value(ctx, lhs) is Some(_)
+              ) {
+              skipped.add(lhs.id)
+            }
+            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+              (
+                match_shl_const_value(ctx, rhs) is Some(_) ||
+                match_ushr_const_value(ctx, rhs) is Some(_)
+              ) {
+              skipped.add(rhs.id)
+            }
+            continue
+          }
           if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_bnot_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
@@ -711,6 +788,107 @@ fn match_shl_const_value(
 }
 
 ///|
+/// Check if a value is defined by an unsigned shift-right with a constant.
+/// Returns (shifted_value, shift_amount) if matched.
+/// The shift amount is masked according to WebAssembly semantics:
+/// - i32: amount & 31
+/// - i64: amount & 63
+fn match_ushr_const_value(
+  ctx : LoweringContext,
+  value : @ir.Value,
+) -> (@ir.Value, Int)? {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is @ir.Opcode::Ushr {
+    let shift_operand = inst.operands[1]
+    if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
+      shift_inst.opcode is @ir.Opcode::Iconst(amount) {
+      let is_64 = value.ty is @ir.Type::I64
+      let mask = if is_64 { 63 } else { 31 }
+      let shift_val = amount.to_int() & mask
+      return Some((inst.operands[0], shift_val))
+    }
+  }
+  None
+}
+
+///|
+/// Match rotate idiom encoded as OR of opposite-direction shifts:
+/// - (x << a) | (x >> b)
+/// - (x >> b) | (x << a)
+/// where a + b == bitwidth.
+///
+/// Returns (x, rotr_amount=b) when matched.
+fn match_rotate_or_value(
+  ctx : LoweringContext,
+  lhs : @ir.Value,
+  rhs : @ir.Value,
+  is_64 : Bool,
+) -> (@ir.Value, Int)? {
+  let bits = if is_64 { 64 } else { 32 }
+
+  fn match_one_side(
+    ctx : LoweringContext,
+    left : @ir.Value,
+    right : @ir.Value,
+    bits : Int,
+  ) -> (@ir.Value, Int)? {
+    if match_shl_const_value(ctx, left) is Some((x, shl_amt)) &&
+      match_ushr_const_value(ctx, right) is Some((y, shr_amt)) &&
+      x.id == y.id &&
+      shl_amt + shr_amt == bits {
+      return Some((x, shr_amt))
+    }
+    None
+  }
+
+  if match_one_side(ctx, lhs, rhs, bits) is Some(m) {
+    return Some(m)
+  }
+  if match_one_side(ctx, rhs, lhs, bits) is Some(m) {
+    return Some(m)
+  }
+  None
+}
+
+///|
+/// Match Cranelift AArch64 EXTR idiom encoded as OR of opposite-direction shifts:
+/// - (x << a) | (y >> b)
+/// - (y >> b) | (x << a)
+/// where a + b == bitwidth.
+///
+/// Returns (x, y, b) for `extr x, y, #b`.
+fn match_extr_or_value(
+  ctx : LoweringContext,
+  lhs : @ir.Value,
+  rhs : @ir.Value,
+  is_64 : Bool,
+) -> (@ir.Value, @ir.Value, Int)? {
+  let bits = if is_64 { 64 } else { 32 }
+
+  fn match_one_side(
+    ctx : LoweringContext,
+    left : @ir.Value,
+    right : @ir.Value,
+    bits : Int,
+  ) -> (@ir.Value, @ir.Value, Int)? {
+    if match_shl_const_value(ctx, left) is Some((x, shl_amt)) &&
+      match_ushr_const_value(ctx, right) is Some((y, shr_amt)) &&
+      shl_amt + shr_amt == bits {
+      return Some((x, y, shr_amt))
+    }
+    None
+  }
+
+  if match_one_side(ctx, lhs, rhs, bits) is Some(m) {
+    return Some(m)
+  }
+  if match_one_side(ctx, rhs, lhs, bits) is Some(m) {
+    return Some(m)
+  }
+  None
+}
+
+///|
 /// Check if a value is defined by a multiply instruction
 /// Returns (lhs, rhs) if matched
 fn match_mul_value(
@@ -738,19 +916,44 @@ fn match_bnot_value(ctx : LoweringContext, value : @ir.Value) -> @ir.Value? {
 ///|
 /// Check if a value is the constant 0
 fn is_const_zero_value(ctx : LoweringContext, value : @ir.Value) -> Bool {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iconst(val) {
-    return val == 0L
+  if resolve_iconst_value(ctx, value) is Some(v) {
+    return v == 0L
   }
   false
+}
+
+///|
+/// Resolve integer constants through trivial copy chains.
+///
+/// This mirrors Cranelift's preference for folding constants at use sites:
+/// we avoid materializing extra `movz #0` when IR kept an intermediate `Copy`.
+fn resolve_iconst_value(ctx : LoweringContext, value0 : @ir.Value) -> Int64? {
+  let mut value = value0
+  for _ in 0..<8 {
+    if find_defining_inst(ctx, value) is Some(inst) {
+      match inst.opcode {
+        @ir.Opcode::Iconst(c) => return Some(c)
+        @ir.Opcode::Copy =>
+          if inst.operands.length() > 0 {
+            value = inst.operands[0]
+            continue
+          } else {
+            return None
+          }
+        _ => return None
+      }
+    } else {
+      return None
+    }
+  }
+  None
 }
 
 ///|
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
 /// Returns Some(val) if the value is a constant in valid 12-bit immediate range
 fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iconst(val) {
+  if resolve_iconst_value(ctx, value) is Some(val) {
     if is_valid_add_imm(val) {
       return Some(val)
     }
@@ -765,8 +968,7 @@ fn match_negated_add_imm_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> Int64? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iconst(val) {
+  if resolve_iconst_value(ctx, value) is Some(val) {
     let neg = -val
     if val < 0L && is_valid_add_imm(neg) {
       return Some(neg)
@@ -801,11 +1003,7 @@ fn match_iadd_const(
 ///|
 /// Return the constant payload when `value` is defined by `Iconst`.
 fn iconst_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iconst(off) {
-    return Some(off)
-  }
-  None
+  resolve_iconst_value(ctx, value)
 }
 
 ///|
@@ -1009,13 +1207,17 @@ pub fn lower_function(
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
 ) -> @regalloc.VCodeFunction {
   // Keep this optional for call sites that already ran full IR optimization.
   if run_ir_opt {
     // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
     @ir.optimize_function(ir_func) |> ignore
   }
-  let ctx = LoweringContext::new(ir_func, abi_settings, num_imports)
+  let ctx = LoweringContext::new(
+    ir_func, abi_settings, num_imports, use_subtype_indirect_check, canonical_type_indices,
+  )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
   let fused = compute_fused_icmps(ir_func, ctx.use_counts)
@@ -1126,6 +1328,12 @@ pub fn lower_function(
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //
+  // AArch64 target-specific role fixups (currently disabled under the
+  // Cranelift-aligned policy where no dedicated mem0 cache register is used).
+  fixup_aarch64_mem0_desc_constraints(ctx.vcode_func, abi_settings)
+
+  // Phase 7: Target-specific fixups (Cranelift-style).
+  //
   // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
   // register. Enforce this constraint universally to avoid relying on each
   // lowering site to set it correctly.
@@ -1133,6 +1341,28 @@ pub fn lower_function(
     fixup_amd64_shift_count_constraints(ctx.vcode_func)
   }
   ctx.vcode_func
+}
+
+///|
+fn fixup_aarch64_mem0_desc_constraints(
+  func : @regalloc.VCodeFunction,
+  abi_settings : @abi.ABISettings,
+) -> Unit {
+  if @isa.ISA::current() is @isa.AMD64 || !abi_settings.enable_pinned_reg {
+    return
+  }
+  if !func.should_cache_mem0_desc() {
+    return
+  }
+  let mem0_desc = @abi.PReg::{ index: mem0_desc_index(), class: Int }
+  for block in func.blocks {
+    for inst in block.insts {
+      if inst.opcode is @instr.LoadMemBase(0) &&
+        inst.def_constraints.length() > 0 {
+        inst.def_constraints[0] = @abi.FixedReg(mem0_desc)
+      }
+    }
+  }
 }
 
 ///|
@@ -1989,7 +2219,6 @@ fn lower_icmp(
     }
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-    let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let kind = ir_intcc_to_cmp_kind(cc)
     // Determine is_64 from operand type, not result type (result is always i32)
     // Reference types (FuncRef, ExternRef) are also 64-bit values
@@ -2000,7 +2229,15 @@ fn lower_icmp(
     let vcode_inst = @instr.VCodeInst::new(Cmp(kind, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
+    if @isa.ISA::current() is @isa.AArch64 &&
+      is_const_zero_value(ctx, inst.operands[1]) {
+      // Cranelift-style zero-compare fast path: use xzr/wzr directly and
+      // avoid materializing an explicit zero register.
+      vcode_inst.add_use(Physical({ index: 31, class: Int }))
+    } else {
+      let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
+      vcode_inst.add_use(Virtual(rhs))
+    }
     block.add_inst(vcode_inst)
   }
 }
@@ -2248,10 +2485,9 @@ fn lower_terminator(
 
 ///|
 /// Lower a direct function call
-/// Generates code to:
-/// 1. Load func_table from vmctx on-demand
-/// 2. Load the function pointer from the function table
-/// 3. Call through the function pointer with arguments
+/// Cranelift-aligned strategy: use direct call fixups (`CallDirect`) for both
+/// defined and imported functions. Imported targets are resolved from
+/// `vmctx->func_table` when call fixups are applied at module load time.
 fn lower_call(
   ctx : LoweringContext,
   inst : @ir.Inst,
@@ -2273,37 +2509,9 @@ fn lower_call(
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
-  if ctx.num_imports < 0 || func_idx < ctx.num_imports {
-    // Imports: load function pointer from vmctx func_table and call indirectly.
-    let func_table = emit_load_func_table(ctx, block)
-    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-    let offset = func_idx * 8
-    if is_valid_load_store_offset(offset.to_int64(), 8) {
-      let load_inst = @instr.VCodeInst::new(Load(I64, offset))
-      load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-      load_inst.add_use(Virtual(func_table))
-      block.add_inst(load_inst)
-    } else {
-      // Large func-table indices exceed AArch64 LDR unsigned-imm range (12-bit scaled).
-      // Materialize byte offset and use register-offset addressing to avoid truncation.
-      let offset_vreg = materialize_imm(ctx, block, offset.to_int64())
-      let load_inst = @instr.VCodeInst::new(
-        LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0),
-      )
-      load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
-      load_inst.add_use(Virtual(func_table))
-      load_inst.add_use(Virtual(offset_vreg))
-      block.add_inst(load_inst)
-    }
-    lower_wasm_call(
-      ctx, block, func_ptr_vreg, arg_vregs, result_vregs, const_args,
-    )
-  } else {
-    // Internal functions: direct call.
-    lower_wasm_call_direct(
-      ctx, block, func_idx, arg_vregs, result_vregs, const_args,
-    )
-  }
+  lower_wasm_call_direct(
+    ctx, block, func_idx, arg_vregs, result_vregs, const_args,
+  )
 }
 
 // NOTE: lower_global_get, lower_global_set are removed

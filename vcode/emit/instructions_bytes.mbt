@@ -688,6 +688,18 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
     }
+    ExtrImm(rd, rn, rm, shift) => {
+      // EXTR Xd, Xn, Xm, #shift.
+      // Encodes: (Xn << (64-shift)) | (Xm >> shift).
+      let amt = shift & 63
+      let top10 = 0b0001001110 | (1 << 9) | 1
+      let inst = (top10 << 22) |
+        ((rm & 31) << 16) |
+        ((amt & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
     LsrImm32(rd, rn, shift) => {
       // LSR Wd, Wn, #shift = UBFM Wd, Wn, #shift, #31
       let b0 = (rd & 31) | ((rn & 7) << 5)
@@ -732,6 +744,18 @@ fn Instruction::instr_bytes(self : Instruction) -> (Int, Int, Int, Int) {
       let inst = (top10 << 22) |
         ((immr & 31) << 16) |
         ((imms & 63) << 10) |
+        ((rn & 31) << 5) |
+        (rd & 31)
+      (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)
+    }
+    ExtrImm32(rd, rn, rm, shift) => {
+      // EXTR Wd, Wn, Wm, #shift.
+      // Encodes: (Wn << (32-shift)) | (Wm >> shift).
+      let amt = shift & 31
+      let top10 = 0b0001001110
+      let inst = (top10 << 22) |
+        ((rm & 31) << 16) |
+        ((amt & 63) << 10) |
         ((rn & 31) << 5) |
         (rd & 31)
       (inst & 255, (inst >> 8) & 255, (inst >> 16) & 255, (inst >> 24) & 255)

@@ -21,6 +21,11 @@ fn vmctx_preg() -> @abi.PReg {
 }
 
 ///|
+fn mem0_desc_index() -> Int {
+  current_isa().mem0_desc_reg_index()
+}
+
+///|
 fn scratch2_index() -> Int {
   current_isa().scratch_reg_2_index()
 }

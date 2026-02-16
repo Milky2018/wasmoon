@@ -788,6 +788,7 @@ fn init_jit_tables(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jm : @jit.JITModule,
+  use_subtype_indirect_check : Bool,
 ) -> Unit {
   if instance.table_addrs.is_empty() {
     return
@@ -817,7 +818,7 @@ fn init_jit_tables(
       match value {
         FuncRef(store_addr) => {
           let func_idx = func_addr_to_idx.get(store_addr)
-          let type_idx = match func_idx {
+          let raw_type_idx = match func_idx {
             Some(idx) =>
               if idx >= 0 && idx < instance.func_type_indices.length() {
                 instance.func_type_indices[idx]
@@ -825,6 +826,14 @@ fn init_jit_tables(
                 -1
               }
             None => -1
+          }
+          let type_idx = if use_subtype_indirect_check {
+            raw_type_idx
+          } else if raw_type_idx >= 0 &&
+            raw_type_idx < instance.canonical_type_indices.length() {
+            instance.canonical_type_indices[raw_type_idx]
+          } else {
+            raw_type_idx
           }
           elem_init.push((table_idx, elem_idx, func_idx, type_idx))
         }
@@ -937,7 +946,11 @@ fn run_with_jit(
             jm.set_globals(globals_ptr)
           }
           // Initialize tables for call_indirect and table operations
-          init_jit_tables(instance, store, jm)
+          let use_subtype_indirect_check = module_indirect_subtype_check_reason(
+              mod_,
+            )
+            is Some(_)
+          init_jit_tables(instance, store, jm, use_subtype_indirect_check)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(mod_, jm, instance, store)
           let jit_ctx = @wast.JITModuleContext::new(
@@ -1037,6 +1050,38 @@ fn run_with_jit(
 }
 
 ///|
+fn table_elem_type_may_need_subtype_check(elem_type : @types.ValueType) -> Bool {
+  match elem_type {
+    // Typed funcref tables still use exact signature-id equality unless GC
+    // function-subtyping is actually enabled in the module type graph.
+    FuncRef | NullFuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
+      false
+    _ => true
+  }
+}
+
+///|
+fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
+  for subtype in mod_.types {
+    if subtype.supertypes.length() > 0 {
+      return Some("type has declared supertypes")
+    }
+    match subtype.composite {
+      Func(_) => ()
+      _ => return Some("module defines non-func GC composite types")
+    }
+  }
+  for table in mod_.tables {
+    if table_elem_type_may_need_subtype_check(table.type_.elem_type) {
+      return Some(
+        "table element type requires subtype checks: \{table.type_.elem_type.to_string()}",
+      )
+    }
+  }
+  None
+}
+
+///|
 /// Compile a WASM module to precompiled format in memory
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
@@ -1064,6 +1109,28 @@ fn compile_module_to_jit(
     None
   }
   let num_imports = count_func_imports(mod_.imports)
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let subtype_check_reason = module_indirect_subtype_check_reason(mod_)
+  // Cranelift-style behavior:
+  // - no-GC tables: exact equality on canonicalized type IDs
+  // - GC/subtyping tables: keep subtype helper slow path
+  let use_subtype_indirect_check = subtype_check_reason is Some(_)
+  if debug {
+    if use_subtype_indirect_check {
+      let reason = match subtype_check_reason {
+        Some(r) => r
+        None => "unknown"
+      }
+      @logger.debug("JIT: indirect-call subtype check mode enabled (\{reason})")
+    } else {
+      @logger.debug(
+        "JIT: indirect-call exact mode enabled (canonical type ids)",
+      )
+    }
+  }
   // Record imports in precompiled module
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1124,6 +1191,8 @@ fn compile_module_to_jit(
       ir_func,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
+      use_subtype_indirect_check~,
+      canonical_type_indices~,
     )
     if lower_tick is Some(tick) {
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))

@@ -230,6 +230,7 @@ pub fn sync_tables_to_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jit_module : @jit.JITModule,
+  use_subtype_indirect_check? : Bool = false,
 ) -> Unit {
   // Iterate over all tables in the instance
   for table_addr in instance.table_addrs {
@@ -241,7 +242,14 @@ pub fn sync_tables_to_jit(
       None => continue
     }
     // Sync the table
-    sync_table_to_jit(table, jit_table, jit_module, instance, store)
+    sync_table_to_jit(
+      table,
+      jit_table,
+      jit_module,
+      instance,
+      store,
+      use_subtype_indirect_check~,
+    )
   }
 }
 
@@ -586,6 +594,7 @@ pub fn sync_table_to_jit(
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  use_subtype_indirect_check? : Bool = false,
 ) -> Unit {
   let size = table.size()
   for i in 0..<size {
@@ -605,7 +614,12 @@ pub fn sync_table_to_jit(
       FuncRef(store_addr) => {
         encoded = encode_store_funcref_for_jit(value, jit_module, instance)
         if store_addr >= 0 && store_addr < store.func_type_indices.length() {
-          type_idx = store.func_type_indices[store_addr]
+          let raw_type_idx = store.func_type_indices[store_addr]
+          type_idx = if use_subtype_indirect_check {
+            raw_type_idx
+          } else {
+            store.get_func_canonical_type_idx(store_addr)
+          }
         }
       }
       // Numeric types shouldn't be present in reference tables.

@@ -178,6 +178,8 @@ pub fn MachineCode::emit_eor_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_eor_shifted(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_eor_shifted32(Self, Int, Int, Int, @instr.ShiftType, Int) -> Unit
 pub fn MachineCode::emit_ext_16b(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_extr_imm(Self, Int, Int, Int, Int) -> Unit
+pub fn MachineCode::emit_extr_imm32(Self, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_d(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fabs_s(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_fadd_d(Self, Int, Int, Int) -> Unit

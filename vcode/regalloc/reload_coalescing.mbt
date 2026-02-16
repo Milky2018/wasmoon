@@ -84,6 +84,11 @@ fn allocate_reload_registers(
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
 ) -> Unit {
+  match @sys.get_env_var("WASMOON_DISABLE_RELOAD_COALESCING") {
+    Some(v) => if v == "1" || v == "true" || v == "TRUE" { return }
+    None => ()
+  }
+
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen. These must never be chosen for reload
   // coalescing.
@@ -276,6 +281,10 @@ fn allocate_reload_registers(
       Some(v) => v
       None => false
     }
+    // Cranelift/regalloc2 does not have a dedicated spill-slot reload cache pass.
+    // Keep this custom optimization conservative at callsites by only using the
+    // callee-saved candidate set in call-containing blocks (no caller-saved
+    // fallback pool), but still allow interval coalescing within those blocks.
     // Track which reload registers are in use within this block.
     let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
     let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
