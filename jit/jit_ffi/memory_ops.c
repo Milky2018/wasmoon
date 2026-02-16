@@ -4,6 +4,10 @@
 
 #include "jit_internal.h"
 
+#define WASM_MEMORY64_MAX_PAGES ((int64_t)INT32_MAX)
+#define WASM_MEMORY32_MAX_BYTES (((int64_t)UINT32_MAX) + 1LL)
+#define WASM_MEMORY32_DEFAULT_MAX_PAGES ((size_t)(WASM_MEMORY32_MAX_BYTES / WASM_PAGE_SIZE))
+
 // ============ Guard Page Memory Allocation ============
 // Uses mmap to allocate memory with guard pages for bounds check elimination.
 // Strategy: allocate max_pages worth of virtual address space, but only make
@@ -157,9 +161,9 @@ int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_
     // Spec max: memory32 has a 32-bit address space (4GiB bytes).
     int64_t arch_max_pages;
     if (mem->is_memory64) {
-        arch_max_pages = 2147483647LL;
+        arch_max_pages = WASM_MEMORY64_MAX_PAGES;
     } else {
-        const int64_t max_bytes = 4294967296LL;
+        const int64_t max_bytes = WASM_MEMORY32_MAX_BYTES;
         arch_max_pages = (page_size == 0) ? 0 : (max_bytes / (int64_t)page_size);
     }
     if (new_pages > arch_max_pages) return -1;
@@ -233,9 +237,9 @@ int32_t memory_grow_desc_internal(wasmoon_memory_t *mem, int32_t delta, int32_t 
 
     int64_t arch_max_pages;
     if (mem->is_memory64) {
-        arch_max_pages = 2147483647LL;
+        arch_max_pages = WASM_MEMORY64_MAX_PAGES;
     } else {
-        const int64_t max_bytes = 4294967296LL;
+        const int64_t max_bytes = WASM_MEMORY32_MAX_BYTES;
         arch_max_pages = max_bytes / (int64_t)page_size;
     }
     if (new_pages > arch_max_pages) return -1;
@@ -294,19 +298,19 @@ static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
 static size_t get_memory_max_pages(jit_context_t *ctx, int32_t memidx) {
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     if (!mem) {
-        return 65536;
+        return WASM_MEMORY32_DEFAULT_MAX_PAGES;
     }
 
     // SIZE_MAX means "unlimited".
     if (mem->max_pages == SIZE_MAX) {
         if (mem->is_memory64) {
-            return (size_t)2147483647;
+            return (size_t)WASM_MEMORY64_MAX_PAGES;
         }
         size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
         if (page_size == 0) {
-            return 65536;
+            return WASM_MEMORY32_DEFAULT_MAX_PAGES;
         }
-        return (size_t)(4294967296ULL / (uint64_t)page_size);
+        return (size_t)(WASM_MEMORY32_MAX_BYTES / (int64_t)page_size);
     }
 
     // Otherwise, the declared maximum can legally be 0.

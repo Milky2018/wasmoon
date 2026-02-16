@@ -149,7 +149,7 @@ pub fn Memory::new_guarded_memory0(min : Int, max : Int?) -> Memory {
     max,
     is_memory64: false,
     page_size_log2: 16,
-    page_size_bytes: 65536L,
+    page_size_bytes: @types.WASM_PAGE_SIZE_BYTES,
   }
 }
 

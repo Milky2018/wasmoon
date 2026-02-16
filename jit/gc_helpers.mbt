@@ -20,7 +20,7 @@
 /// Encode an i31 value for JIT (tagged pointer with lowest bit = 1)
 pub fn encode_i31(value : Int) -> Int64 {
   // i31 stores 31 bits, mask and tag
-  let masked = value & 0x7FFFFFFF
+  let masked = value & @types.I32_MAX
   (masked.to_int64() << 1) | 1L
 }
 
@@ -31,7 +31,7 @@ pub fn decode_i31(encoded : Int64) -> Int {
   let value = (encoded >> 1).to_int()
   // Sign extend from 31 bits
   if (value & 0x40000000) != 0 {
-    value | -2147483648
+    value | @types.I32_MIN
   } else { // 0x80000000
     value
   }

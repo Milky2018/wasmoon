@@ -695,10 +695,10 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   // The IEEE exponent (unbiased) is: bit_len - 1 + binary_exp
 
   let ieee_exp_unbiased = binary_exp + bit_len - 1
-  let ieee_exp = ieee_exp_unbiased + 127
+  let ieee_exp = ieee_exp_unbiased + @types.F32_EXP_BIAS
 
   // Check for overflow
-  if ieee_exp >= 255 {
+  if ieee_exp >= @types.F32_EXP_INF_NAN {
     // Infinity
     if neg {
       return Float::reinterpret_from_uint(0xFF800000U)
@@ -846,7 +846,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Check for overflow after rounding
-  if final_exp >= 255 {
+  if final_exp >= @types.F32_EXP_INF_NAN {
     if neg {
       return Float::reinterpret_from_uint(0xFF800000U)
     }
@@ -1045,11 +1045,11 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
   // norm_exp is the actual binary exponent when norm_sig is in [1, 2) form
   let norm_exp = total_exp + bit_count - 1
 
-  // IEEE 754 float: value = 2^(ieee_exp - 127) * (1 + mantissa/2^23)
-  let ieee_exp = norm_exp + 127
+  // IEEE 754 float: value = 2^(ieee_exp - bias) * (1 + mantissa/2^23)
+  let ieee_exp = norm_exp + @types.F32_EXP_BIAS
 
   // Check for overflow (infinity)
-  if ieee_exp >= 255 {
+  if ieee_exp >= @types.F32_EXP_INF_NAN {
     return if neg {
       Float::reinterpret_from_uint(0xff800000U) // -infinity
     } else {
@@ -1124,7 +1124,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
   }
 
   // Check for overflow after rounding
-  if final_exp >= 255 {
+  if final_exp >= @types.F32_EXP_INF_NAN {
     return if neg {
       Float::reinterpret_from_uint(0xff800000U) // -infinity
     } else {

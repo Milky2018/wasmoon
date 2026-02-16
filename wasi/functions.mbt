@@ -941,7 +941,7 @@ fn read_string_from_memory(
   let buf = StringBuilder::new()
   for i in 0..<len {
     let c = mem.read_byte(ptr + i).to_int()
-    if c >= 32 && c < 127 {
+    if c >= 32 && c < @types.ASCII_DEL {
       buf.write_char(c.unsafe_to_char())
     } else if c == 0 {
       break

@@ -39,7 +39,7 @@ pub struct CHeap {
 
 ///|
 /// Create a new C heap with the given initial capacity
-pub fn CHeap::new(capacity? : Int = 1048576) -> CHeap {
+pub fn CHeap::new(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
   let ptr = @jit_ffi.c_gc_heap_new(capacity.to_int64())
   { ptr, }
 }

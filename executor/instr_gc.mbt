@@ -788,7 +788,7 @@ fn ExecContext::exec_ref_i31(self : ExecContext) -> Unit raise {
   match val {
     I32(n) => {
       // i31 stores only the lower 31 bits
-      let i31_val = n & 0x7FFFFFFF
+      let i31_val = n & @types.I32_MAX
       self.stack.push(@types.Value::I31(i31_val))
     }
     _ => raise @runtime.RuntimeError::TypeMismatch
@@ -804,7 +804,7 @@ fn ExecContext::exec_i31_get_s(self : ExecContext) -> Unit raise {
       // Sign extend from 31 bits to 32 bits
       // If bit 30 is set, we need to set bit 31 (sign bit)
       // -2147483648 = 0x80000000 as signed int
-      let extended = if (n & 0x40000000) != 0 { n | -2147483648 } else { n }
+      let extended = if (n & 0x40000000) != 0 { n | @types.I32_MIN } else { n }
       self.stack.push(@types.Value::I32(extended))
     }
     Null => raise @runtime.RuntimeError::NullReference

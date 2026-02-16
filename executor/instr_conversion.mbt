@@ -3,10 +3,10 @@
 // Constants for conversion bounds (using powers of 2 for precision)
 
 ///|
-let pow2_32 : Double = 4294967296.0 // 2^32, exactly representable
+let pow2_32 : Double = @types.U32_MODULUS_F64 // 2^32, exactly representable
 
 ///|
-let pow2_31 : Double = 2147483648.0 // 2^31, exactly representable
+let pow2_31 : Double = @types.I32_MAX_F64 + 1.0 // 2^31, exactly representable
 
 ///|
 let pow2_63 : Double = @math.pow(2.0, 63.0) // 2^63, exactly representable
@@ -231,10 +231,10 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f32()
       let result = if a.is_nan() {
         0
-      } else if a >= 2147483647.0 {
-        2147483647
-      } else if a <= -2147483648.0 {
-        -2147483648
+      } else if a >= @types.I32_MAX_F32 {
+        @types.I32_MAX
+      } else if a <= @types.I32_MIN_F32 {
+        @types.I32_MIN
       } else {
         a.to_int()
       }
@@ -245,8 +245,8 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f32()
       let result = if a.is_nan() || a <= 0.0 {
         0
-      } else if a >= 4294967295.0 {
-        -1 // 0xFFFFFFFF as signed
+      } else if a >= @types.U32_MAX_F32 {
+        @types.U32_MAX.reinterpret_as_int()
       } else {
         a.to_double().to_uint().reinterpret_as_int()
       }
@@ -257,10 +257,10 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f64()
       let result = if a.is_nan() {
         0
-      } else if a >= 2147483647.0 {
-        2147483647
-      } else if a <= -2147483648.0 {
-        -2147483648
+      } else if a >= @types.I32_MAX_F64 {
+        @types.I32_MAX
+      } else if a <= @types.I32_MIN_F64 {
+        @types.I32_MIN
       } else {
         a.to_int()
       }
@@ -271,8 +271,8 @@ fn ExecContext::exec_trunc_sat(
       let a = self.stack.pop_f64()
       let result = if a.is_nan() || a <= 0.0 {
         0
-      } else if a >= 4294967295.0 {
-        -1 // 0xFFFFFFFF as signed
+      } else if a >= @types.U32_MAX_F64 {
+        @types.U32_MAX.reinterpret_as_int()
       } else {
         a.to_uint().reinterpret_as_int()
       }

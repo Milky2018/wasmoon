@@ -572,12 +572,18 @@ pub fn ty_umax(bits : Int) -> Int64 {
 }
 
 ///|
+const I32_SMIN_I64 : Int64 = -2147483648L
+
+///|
+const I32_SMAX_I64 : Int64 = 2147483647L
+
+///|
 /// Get the minimum signed value for a given bit width
 pub fn ty_smin(bits : Int) -> Int64 {
   match bits {
     8 => -128L
     16 => -32768L
-    32 => -2147483648L
+    32 => I32_SMIN_I64
     64 => -9223372036854775808L
     _ => -9223372036854775808L
   }
@@ -589,7 +595,7 @@ pub fn ty_smax(bits : Int) -> Int64 {
   match bits {
     8 => 127L
     16 => 32767L
-    32 => 2147483647L
+    32 => I32_SMAX_I64
     64 => 9223372036854775807L
     _ => 9223372036854775807L
   }
@@ -1599,13 +1605,20 @@ fn extract_cost_max_finite() -> Int {
 }
 
 ///|
+const EXTRACT_INFINITY_DEPTH : Int = 255
+
+///|
 fn extract_cost_finite(op_cost : Int, depth : Int) -> ExtractCost {
   { op_cost, depth, infinite: false }
 }
 
 ///|
 fn extract_cost_infinity() -> ExtractCost {
-  { op_cost: extract_cost_max_finite(), depth: 255, infinite: true }
+  {
+    op_cost: extract_cost_max_finite(),
+    depth: EXTRACT_INFINITY_DEPTH,
+    infinite: true,
+  }
 }
 
 ///|

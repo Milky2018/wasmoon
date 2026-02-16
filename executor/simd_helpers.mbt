@@ -235,8 +235,8 @@ fn trunc_sat_f32_to_i32_u(f : Float) -> Int {
   if f <= 0.0 {
     return 0
   }
-  if f >= 4294967296.0 {
-    return -1 // 0xFFFFFFFF as signed int
+  if f >= @types.U32_MODULUS_F32 {
+    return @types.U32_MAX.reinterpret_as_int()
   }
   f.to_double().to_uint().reinterpret_as_int()
 }
@@ -249,8 +249,8 @@ fn trunc_sat_f64_to_i32_u(f : Double) -> Int {
   if f <= 0.0 {
     return 0
   }
-  if f >= 4294967296.0 {
-    return -1 // 0xFFFFFFFF as signed int
+  if f >= @types.U32_MODULUS_F64 {
+    return @types.U32_MAX.reinterpret_as_int()
   }
   f.to_uint().reinterpret_as_int()
 }
@@ -495,19 +495,19 @@ fn sat_add_i8_s(a : Int, b : Int) -> Byte {
   let sa = sign_i8(a)
   let sb = sign_i8(b)
   let result = sa + sb
-  if result > 127 {
+  if result > @types.I8_MAX {
     b'\x7F'
   } else if result < -128 {
     b'\x80'
   } else {
-    (result & 0xFF).to_byte()
+    (result & @types.U8_MAX).to_byte()
   }
 }
 
 ///|
 fn sat_add_i8_u(a : Int, b : Int) -> Byte {
   let result = a + b
-  if result > 255 {
+  if result > @types.U8_MAX {
     b'\xFF'
   } else {
     result.to_byte()
@@ -519,12 +519,12 @@ fn sat_sub_i8_s(a : Int, b : Int) -> Byte {
   let sa = sign_i8(a)
   let sb = sign_i8(b)
   let result = sa - sb
-  if result > 127 {
+  if result > @types.I8_MAX {
     b'\x7F'
   } else if result < -128 {
     b'\x80'
   } else {
-    (result & 0xFF).to_byte()
+    (result & @types.U8_MAX).to_byte()
   }
 }
 
@@ -600,19 +600,19 @@ fn popcount8(v : Int) -> Int {
 ///|
 fn sat_i16_to_i8_s(v : Int) -> Byte {
   let sv = sign_i16(v)
-  if sv > 127 {
+  if sv > @types.I8_MAX {
     b'\x7F'
   } else if sv < -128 {
     b'\x80'
   } else {
-    (sv & 0xFF).to_byte()
+    (sv & @types.U8_MAX).to_byte()
   }
 }
 
 ///|
 fn sat_i16_to_u8(v : Int) -> Byte {
   let sv = sign_i16(v)
-  if sv > 255 {
+  if sv > @types.U8_MAX {
     b'\xFF'
   } else if sv < 0 {
     b'\x00'
@@ -735,11 +735,11 @@ fn trunc_sat_f32_to_i32_s(f : Float) -> Int {
   if f.is_nan() {
     return 0
   }
-  if f >= 2147483648.0 {
-    return 2147483647
+  if f >= @types.I32_MAX_F32 + 1.0 {
+    return @types.I32_MAX
   }
-  if f <= -2147483649.0 {
-    return -2147483648
+  if f <= @types.I32_MIN_F32 - 1.0 {
+    return @types.I32_MIN
   }
   f.to_int()
 }
@@ -752,8 +752,8 @@ fn trunc_sat_f32_to_u32(f : Float) -> UInt {
   if f <= 0.0 {
     return 0U
   }
-  if f >= 4294967296.0 {
-    return 4294967295U
+  if f >= @types.U32_MODULUS_F32 {
+    return @types.U32_MAX
   }
   f.to_double().to_uint()
 }
@@ -763,11 +763,11 @@ fn trunc_sat_f64_to_i32_s(f : Double) -> Int {
   if f.is_nan() {
     return 0
   }
-  if f >= 2147483648.0 {
-    return 2147483647
+  if f >= @types.I32_MAX_F64 + 1.0 {
+    return @types.I32_MAX
   }
-  if f <= -2147483649.0 {
-    return -2147483648
+  if f <= @types.I32_MIN_F64 - 1.0 {
+    return @types.I32_MIN
   }
   f.to_int()
 }
@@ -780,8 +780,8 @@ fn trunc_sat_f64_to_u32(f : Double) -> UInt {
   if f <= 0.0 {
     return 0U
   }
-  if f >= 4294967296.0 {
-    return 4294967295U
+  if f >= @types.U32_MODULUS_F64 {
+    return @types.U32_MAX
   }
   f.to_uint()
 }
