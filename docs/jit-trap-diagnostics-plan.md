@@ -100,13 +100,13 @@ Optionally also enable “always include trap detail fields” (1 & 2) by defaul
 
 7. **MoonBit: dump-on-trap**
    - Introduce a `JITDebugDB` (Map[func_idx] → debug strings).
-   - `cli/main/run.mbt`: when `--dump-on-trap` is set, capture per-function IR/VCode/regalloc/MC dumps during compilation into `JITDebugDB`.
+   - `cmd/wasmoon/run.mbt`: when `--dump-on-trap` is set, capture per-function IR/VCode/regalloc/MC dumps during compilation into `JITDebugDB`.
    - Attach DB to `JITModule` (new setter or constructor variant).
    - On trap, write a single log file for the identified function.
 
 8. **CLI flags**
-   - `cli/main/main.mbt`: add `--dump-on-trap` to `run`.
-   - `cli/main/run.mbt`: plumb to compilation/JIT setup.
+   - `cmd/wasmoon/main.mbt`: add `--dump-on-trap` to `run`.
+   - `cmd/wasmoon/run.mbt`: plumb to compilation/JIT setup.
 
 9. **Validation**
    - Build + run the existing failing reproducer (`examples/aead_aegis128l.wasm`) and verify:
@@ -124,4 +124,3 @@ Optionally also enable “always include trap detail fields” (1 & 2) by defaul
   - includes wasm `func_idx`/name when determinable (via PC range or `debug_current_func_idx`)
 - `wasmoon run --dump-on-trap ...` produces exactly one per-trap dump file for the relevant function.
 - No change to `.cwasm` file format or serializer.
-

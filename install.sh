@@ -10,11 +10,11 @@ install_dir="${repo_root}/target/moon-install-bin"
 mkdir -p "$install_dir"
 
 # Build + install binaries via `moon install`.
-moon install --path "${repo_root}/cli/main" --bin "$install_dir"
-moon install --path "${repo_root}/cli/tools" --bin "$install_dir"
+moon install --path "${repo_root}/cmd/wasmoon" --bin "$install_dir"
+moon install --path "${repo_root}/cmd/wasmoon-tools" --bin "$install_dir"
 
-main_bin="${install_dir}/main"
-tools_bin="${install_dir}/tools"
+main_bin="${install_dir}/wasmoon"
+tools_bin="${install_dir}/wasmoon-tools"
 
 if [ ! -f "$main_bin" ]; then
   echo "Error: missing installed binary: $main_bin" >&2

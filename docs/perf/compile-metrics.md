@@ -27,7 +27,7 @@ WASMOON_PERF_METRICS=1 ./wasmoon test spec/f32.wast
 
 ## Collected Data
 
-Collection starts in `cli/main/run.mbt` during `compile_module_to_jit(...)`.
+Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 
 ### Module-level fields
 

@@ -18,21 +18,14 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 ### Install Binary with `moon install` (recommended)
 
 ```bash
-moon install Milky2018/wasmoon/cli/main
-moon install Milky2018/wasmoon/cli/tools
+moon install Milky2018/wasmoon/cmd/wasmoon
+moon install Milky2018/wasmoon/cmd/wasmoon-tools
 ```
 
 By default these commands install binaries to `~/.moon/bin/` as:
 
-- `main` (runtime CLI)
-- `tools` (utility CLI)
-
-If you prefer the `wasmoon` / `wasmoon-tools` command names:
-
-```bash
-ln -sf ~/.moon/bin/main ~/.moon/bin/wasmoon
-ln -sf ~/.moon/bin/tools ~/.moon/bin/wasmoon-tools
-```
+- `wasmoon` (runtime CLI)
+- `wasmoon-tools` (utility CLI)
 
 ### Build from Source (repo-local binaries)
 
@@ -57,8 +50,6 @@ moon add Milky2018/wasmoon
 ```
 
 ## CLI Usage
-
-> If you installed binaries without aliases, replace `wasmoon` with `main`.
 
 Quick differential testing vs Wasmtime (wasm-smith):
 ```bash

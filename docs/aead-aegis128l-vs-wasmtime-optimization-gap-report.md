@@ -146,7 +146,7 @@ Interpretation: Wasmoon generated code for this hot function has materially high
 
 In `compile_module_to_jit`, Wasmoon loops through all module code bodies:
 
-- `/Users/zhengyu/Documents/projects/wasmoon/cli/main/run.mbt:1075`
+- `/Users/zhengyu/Documents/projects/wasmoon/cmd/wasmoon/run.mbt:1075`
 
 ```moonbit
 for i, _ in mod_.codes {
@@ -202,7 +202,7 @@ This behavior matches observed data (61/63 functions at 100 rounds).
 In module compile flow:
 
 - Phase 2 already runs `@ir.optimize_with_level(...)`:
-  - `/Users/zhengyu/Documents/projects/wasmoon/cli/main/run.mbt:1104`
+  - `/Users/zhengyu/Documents/projects/wasmoon/cmd/wasmoon/run.mbt:1104`
 
 Then lowering calls `@ir.optimize_function(ir_func)` again:
 

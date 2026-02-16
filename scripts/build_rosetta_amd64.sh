@@ -11,8 +11,8 @@ set -eu
 #   includes an x86_64 slice, we can cross-link x86_64 executables using clang.
 #
 # Output (x86_64):
-# - target-rosetta/native/release/build/cli/main/main.exe
-# - target-rosetta/native/release/build/cli/tools/tools.exe
+# - target-rosetta/native/release/build/cmd/wasmoon/wasmoon.exe
+# - target-rosetta/native/release/build/cmd/wasmoon-tools/wasmoon-tools.exe
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
@@ -59,5 +59,5 @@ MOON_HOME="$ROSETTA_MOON_HOME" \
   moon build --target native --release --target-dir "$TARGET_DIR"
 
 echo "Built x86_64 executables:"
-echo "  $TARGET_DIR/native/release/build/cli/main/main.exe"
-echo "  $TARGET_DIR/native/release/build/cli/tools/tools.exe"
+echo "  $TARGET_DIR/native/release/build/cmd/wasmoon/wasmoon.exe"
+echo "  $TARGET_DIR/native/release/build/cmd/wasmoon-tools/wasmoon-tools.exe"
