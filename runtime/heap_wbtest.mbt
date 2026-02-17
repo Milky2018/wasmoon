@@ -162,6 +162,8 @@ test "GC: stats initial" {
   inspect(stats.live_objects, content="0")
   inspect(stats.free_slots, content="0")
   inspect(stats.collections, content="0")
+  inspect(stats.bytes_allocated, content="0")
+  inspect(stats.bytes_collected, content="0")
 }
 
 ///|
@@ -173,6 +175,8 @@ test "GC: stats after allocation" {
   inspect(stats.total_objects, content="2")
   inspect(stats.live_objects, content="2")
   inspect(stats.free_slots, content="0")
+  inspect(stats.bytes_allocated, content="48")
+  inspect(stats.bytes_collected, content="0")
 }
 
 ///|
@@ -190,6 +194,7 @@ test "GC: collect unreachable objects" {
   inspect(heap.stats().live_objects, content="0")
   inspect(heap.stats().free_slots, content="3")
   inspect(heap.stats().collections, content="1")
+  inspect(heap.stats().bytes_collected, content="72")
 }
 
 ///|

@@ -4,11 +4,11 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 
 > **Warning**: This project is primarily developed with AI assistance and has not been thoroughly audited. **Do not use in production or security-sensitive environments.**
 
-> **Note**: The JIT compiler performs minimal optimization. Expect slower execution compared to production runtimes like Wasmtime or Wasmer.
+> **Note**: JIT optimization is actively improving. Performance depends on workload and platform; benchmark your target programs for an accurate comparison.
 
 ## Features
 
-- **JIT Compiler**: AArch64 native code generation with SSA-based IR
+- **JIT Compiler**: AArch64 and amd64 native code generation with SSA-based IR
 - **Interpreter**: Full WebAssembly 1.0 support as fallback
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
@@ -82,32 +82,32 @@ wasmoon explore examples/add.wat --stage ir vcode mc
 
 ```bash
 # Validate a core Wasm module (WASM/WAT)
-./wasmoon-tools validate examples/add.wat
+wasmoon-tools validate examples/add.wat
 
 # Convert between WASM and WAT
-./wasmoon-tools wasm2wat examples/add.wasm -o examples/add.wat
-./wasmoon-tools wat2wasm examples/add.wat -o examples/add.wasm
+wasmoon-tools wasm2wat examples/add.wasm -o examples/add.wat
+wasmoon-tools wat2wasm examples/add.wat -o examples/add.wasm
 
 # Parse WIT (text) and print a normalized representation
-./wasmoon-tools wit path/to/foo.wit
+wasmoon-tools wit path/to/foo.wit
 
 # Parse a directory as a WIT package (all *.wit files, sorted by filename),
 # resolve it with `deps/`, and print a canonicalized output (toplevel-use removed,
 # include flattened, and transitive interface imports injected).
-./wasmoon-tools wit path/to/pkgdir
+wasmoon-tools wit path/to/pkgdir
 
 # Emit the resolved WIT graph to a directory (root + deps/*.wit)
-./wasmoon-tools wit path/to/pkgdir --out-dir out
+wasmoon-tools wit path/to/pkgdir --out-dir out
 
 # Emit a JSON AST (stable, for scripting/debugging)
-./wasmoon-tools wit path/to/foo.wit --json
+wasmoon-tools wit path/to/foo.wit --json
 
 # Encode a WIT package as a component (type-only) binary / text
-./wasmoon-tools wit path/to/foo.wit --wasm -o foo.wasm
-./wasmoon-tools wit path/to/foo.wit --wat > foo.wat
+wasmoon-tools wit path/to/foo.wit --wasm -o foo.wasm
+wasmoon-tools wit path/to/foo.wit --wat > foo.wat
 
 # Alias for compatibility with wasm-tools' subcommand shape
-./wasmoon-tools component wit path/to/foo.wit --json
+wasmoon-tools component wit path/to/foo.wit --json
 ```
 
 WIT support is still evolving. `wasmoon-tools wit` implements directory + `deps/` resolution, and can emit a minimal component representation for simple WIT packages (currently functions with built-in scalar types).
@@ -239,14 +239,13 @@ test "host function" {
 ## Project Status
 
 - [x] WebAssembly 1.0 core specification
-- [x] JIT compiler (AArch64)
+- [x] JIT compiler (AArch64, amd64)
 - [x] Multi-value returns
 - [x] Reference types (funcref, externref)
 - [x] Tail calls
 - [x] Cross-module function calls
 - [ ] WASI Preview 1 (partial)
 - [ ] GC proposal (in progress)
-- [ ] JIT compiler (x86-64)
 - [ ] Component Model
 - [ ] JIT optimizations (constant folding, dead code elimination, etc.)
 

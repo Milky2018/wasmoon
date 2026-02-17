@@ -137,6 +137,8 @@ pub struct GCStats {
   live_objects : Int
   free_slots : Int
   collections : Int
+  bytes_allocated : Int64
+  bytes_collected : Int64
 }
 pub impl Show for GCStats
 
@@ -186,6 +188,8 @@ pub struct MarkSweepHeap {
   mut total_live : Int
   mut gc_threshold : Int
   mut collections : Int
+  mut bytes_allocated : Int64
+  mut bytes_collected : Int64
 }
 pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int

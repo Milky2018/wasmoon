@@ -7,6 +7,12 @@ pub(all) enum GCObject {
 } derive(Show)
 
 ///|
+const GC_OBJECT_HEADER_BYTES : Int64 = 16L
+
+///|
+const GC_VALUE_SLOT_BYTES : Int64 = 8L
+
+///|
 /// Struct instance - stores field values
 pub(all) struct StructInstance {
   type_idx : Int // Index of the struct type in the module
@@ -29,6 +35,8 @@ pub struct MarkSweepHeap {
   mut total_live : Int // Count of live objects
   mut gc_threshold : Int // Trigger GC when total_live exceeds this
   mut collections : Int // Number of GC cycles performed
+  mut bytes_allocated : Int64 // Cumulative allocated bytes
+  mut bytes_collected : Int64 // Cumulative collected bytes
 } derive(Show)
 
 ///|
@@ -38,6 +46,8 @@ pub struct GCStats {
   live_objects : Int // Number of live objects
   free_slots : Int // Number of free slots
   collections : Int // Number of GC cycles performed
+  bytes_allocated : Int64 // Cumulative allocated bytes
+  bytes_collected : Int64 // Cumulative collected bytes
 } derive(Show)
 
 ///|
@@ -50,6 +60,8 @@ pub fn MarkSweepHeap::new() -> MarkSweepHeap {
     total_live: 0,
     gc_threshold: 1000, // Default: trigger GC after 1000 allocations
     collections: 0,
+    bytes_allocated: 0L,
+    bytes_collected: 0L,
   }
 }
 
@@ -63,6 +75,8 @@ pub fn MarkSweepHeap::with_threshold(threshold : Int) -> MarkSweepHeap {
     total_live: 0,
     gc_threshold: threshold,
     collections: 0,
+    bytes_allocated: 0L,
+    bytes_collected: 0L,
   }
 }
 
@@ -74,6 +88,8 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
     live_objects: self.total_live,
     free_slots: self.free_list.length(),
     collections: self.collections,
+    bytes_allocated: self.bytes_allocated,
+    bytes_collected: self.bytes_collected,
   }
 }
 
@@ -100,9 +116,22 @@ pub fn MarkSweepHeap::alloc_array(
 }
 
 ///|
+fn gc_object_size_bytes(obj : GCObject) -> Int64 {
+  match obj {
+    Struct(instance) =>
+      GC_OBJECT_HEADER_BYTES +
+      instance.fields.length().to_int64() * GC_VALUE_SLOT_BYTES
+    Array(instance) =>
+      GC_OBJECT_HEADER_BYTES +
+      instance.elements.length().to_int64() * GC_VALUE_SLOT_BYTES
+  }
+}
+
+///|
 /// Internal: allocate an object, reusing free slots if available
 fn MarkSweepHeap::alloc_object(self : MarkSweepHeap, obj : GCObject) -> Int {
   self.total_live += 1
+  self.bytes_allocated += gc_object_size_bytes(obj)
   // Try to reuse a free slot
   if self.free_list.length() > 0 {
     let idx = self.free_list.pop().unwrap()
@@ -362,9 +391,10 @@ pub fn MarkSweepHeap::mark_roots(
 pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int {
   let mut collected = 0
   for i in 0..<self.objects.length() {
-    if self.objects[i] is Some(_) {
+    if self.objects[i] is Some(object) {
       if not(self.marks[i]) {
         // Object is not reachable, collect it
+        self.bytes_collected += gc_object_size_bytes(object)
         self.objects[i] = None
         self.free_list.push(i)
         self.total_live -= 1
@@ -555,8 +585,8 @@ pub impl GcRuntime for MarkSweepHeap with stats(self) -> GcStats {
     live_objects: old_stats.live_objects,
     free_slots: old_stats.free_slots,
     collections: old_stats.collections,
-    bytes_allocated: 0L, // Not tracked in this implementation
-    bytes_collected: 0L, // Not tracked in this implementation
+    bytes_allocated: old_stats.bytes_allocated,
+    bytes_collected: old_stats.bytes_collected,
   }
 }
 
@@ -681,8 +711,8 @@ pub impl GcManager for MarkSweepHeap with stats(self) -> GcStats {
     live_objects: old_stats.live_objects,
     free_slots: old_stats.free_slots,
     collections: old_stats.collections,
-    bytes_allocated: 0L,
-    bytes_collected: 0L,
+    bytes_allocated: old_stats.bytes_allocated,
+    bytes_collected: old_stats.bytes_collected,
   }
 }
 
