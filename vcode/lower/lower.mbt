@@ -135,6 +135,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
   let addrmode_subsumed_uses : Map[Int, Int] = {}
   let is_amd64 = @isa.ISA::current() is @isa.AMD64
   let is_aarch64 = @isa.ISA::current() is @isa.AArch64
+  let enable_subextend_fusion = true
 
   fn mark_addrmode_subsumed_use(value_id : Int) -> Unit {
     let old = addrmode_subsumed_uses.get(value_id).unwrap_or(0)
@@ -405,7 +406,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
           }
-          if is_i64 &&
+          if enable_subextend_fusion &&
+            is_i64 &&
             ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {

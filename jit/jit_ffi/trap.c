@@ -309,6 +309,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
             case 5: trap_code = 7; break;   // integer overflow
+            case 6: trap_code = 8; break;   // backend/unknown JIT trap
             default: trap_code = 99; break; // unknown
         }
 #elif defined(__linux__) && defined(__aarch64__)
@@ -346,6 +347,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
             case 5: trap_code = 7; break;   // integer overflow
+            case 6: trap_code = 8; break;   // backend/unknown JIT trap
             default: trap_code = 99; break; // unknown
         }
 #elif defined(__APPLE__) && defined(__x86_64__)
@@ -370,6 +372,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
             case 5: trap_code = 7; break;   // integer overflow
+            case 6: trap_code = 8; break;   // backend/unknown JIT trap
             default: trap_code = 99; break; // unknown
         }
 #elif defined(__linux__) && defined(__x86_64__)
@@ -393,6 +396,7 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
             case 3: trap_code = 5; break;   // invalid conversion to integer
             case 4: trap_code = 6; break;   // integer divide by zero
             case 5: trap_code = 7; break;   // integer overflow
+            case 6: trap_code = 8; break;   // backend/unknown JIT trap
             default: trap_code = 99; break; // unknown
         }
 #else
