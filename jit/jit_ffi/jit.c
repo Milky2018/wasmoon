@@ -1289,6 +1289,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_slow_ptr(void) {
     return (int64_t)gc_alloc_array_slow;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(void) {
+    return (int64_t)gc_alloc_array_from_values_slow;
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(int32_t *types_data, int num_types) {

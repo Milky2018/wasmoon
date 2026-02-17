@@ -262,6 +262,8 @@ pub fn c_jit_get_fd_tell_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
 
+pub fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64
+
 pub fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64
 
 pub fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64

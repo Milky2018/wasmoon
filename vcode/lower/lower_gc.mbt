@@ -272,30 +272,13 @@ fn lower_struct_new(
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
-  // Load vmctx from REG_VMCTX (X19)
-  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
-  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
-  block.add_inst(vmctx_mov)
-
-  // Materialize arguments
-  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
-  let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
-
-  // Load function pointer for AllocStructSlow (ctx-passing version)
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocStructSlow))
-  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
-  block.add_inst(load_fp)
-  if num_fields > 0 {
-    // Use the pre-allocated outgoing args area for temporary field storage.
-    // Do not adjust SP dynamically inside function bodies: spills/reloads are
-    // emitted against a fixed SP and would become invalid across calls.
+  // Fast path (AArch64): inline bump allocation with slow-path fallback.
+  // Keep `struct.new_default` as pure slow path (num_fields == 0).
+  // AArch64 LDR/STR (immediate, 64-bit) encodes offsets up to 32760 bytes.
+  if @isa.ISA::current() is @isa.AArch64 && num_fields > 0 && num_fields <= 4092 {
+    // Use outgoing args area as temporary field buffer.
     let stack_space = (num_fields * 8 + 15) / 16 * 16
     ctx.vcode_func.update_max_outgoing_args_size(stack_space)
-
-    // Store each field value into outgoing args area at SP + offset.
     for i in 0..<num_fields {
       let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
@@ -303,14 +286,42 @@ fn lower_struct_new(
       store.add_use(Virtual(field_vreg))
       block.add_inst(store)
     }
+    let alloc_inst = @instr.VCodeInst::new(
+      GCAllocStructInline(type_idx, num_fields),
+    )
+    alloc_inst.add_def({ reg: Virtual(dst) })
+    alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
+    block.add_inst(alloc_inst)
+    return
+  }
 
-    // Outgoing args area starts at current SP.
+  // Fallback path: always use slow libcall.
+  // Load vmctx from pinned register.
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  block.add_inst(vmctx_mov)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
+  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocStructSlow))
+  load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
+  block.add_inst(load_fp)
+  if num_fields > 0 {
+    let stack_space = (num_fields * 8 + 15) / 16 * 16
+    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
+    for i in 0..<num_fields {
+      let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let offset = i * 8
+      let store = @instr.VCodeInst::new(StoreToStack(offset))
+      store.add_use(Virtual(field_vreg))
+      block.add_inst(store)
+    }
     let sp_vreg = ctx.vcode_func.new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
-
-    // Call: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields) -> result
     lower_c_libcall(
       ctx,
       block,
@@ -319,9 +330,7 @@ fn lower_struct_new(
       Some(dst),
     )
   } else {
-    // No fields - pass null pointer
     let null_ptr = materialize_imm(ctx, block, 0L)
-    // Call: gc_alloc_struct_slow(vmctx, type_idx, null, 0) -> result
     lower_c_libcall(
       ctx,
       block,
@@ -680,26 +689,53 @@ fn lower_array_new_fixed(
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
-  // Load vmctx from REG_VMCTX (X19)
+  // Fast path (AArch64): inline fixed-array allocation with slow-path fallback.
+  // AArch64 LDR/STR (immediate, 64-bit) encodes offsets up to 32760 bytes.
+  if @isa.ISA::current() is @isa.AArch64 && len > 0 && len <= 4092 {
+    // Spill all element values to outgoing args area as contiguous int64_t[].
+    let stack_space = (len * 8 + 15) / 16 * 16
+    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
+    let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+    for i in 0..<len {
+      let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let actual_elem = if is_float {
+        let int_val = ctx.vcode_func.new_vreg(Int)
+        let bitcast = @instr.VCodeInst::new(Bitcast)
+        bitcast.add_def({ reg: Virtual(int_val) })
+        bitcast.add_use(Virtual(elem_vreg))
+        block.add_inst(bitcast)
+        int_val
+      } else {
+        elem_vreg
+      }
+      let store = @instr.VCodeInst::new(StoreToStack(i * 8))
+      store.add_use(Virtual(actual_elem))
+      block.add_inst(store)
+    }
+    let alloc_inst = @instr.VCodeInst::new(
+      GCAllocArrayFixedInline(type_idx, len),
+    )
+    alloc_inst.add_def({ reg: Virtual(dst) })
+    alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
+    block.add_inst(alloc_inst)
+    return
+  }
+
+  // Fallback path: existing libcalls.
+  // Load vmctx from pinned register.
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
-
-  // Materialize common values
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   let len_vreg = materialize_imm(ctx, block, len.to_int64())
-
-  // Load AllocArraySlow function pointer (ctx-passing version)
   let array_new_fp = ctx.vcode_func.new_vreg(Int)
   let load_new_fp = @instr.VCodeInst::new(LoadGCFuncPtr(AllocArraySlow))
   load_new_fp.add_def({ reg: Virtual(array_new_fp) })
   block.add_inst(load_new_fp)
   if len == 0 {
-    // Empty array - use zero init and length 0
     let zero_vreg = materialize_imm(ctx, block, 0L)
-    // Call: gc_alloc_array_slow(vmctx, type_idx, length=0, init_value=0) -> result
     lower_c_libcall(
       ctx,
       block,
@@ -707,58 +743,53 @@ fn lower_array_new_fixed(
       [vmctx_vreg, type_idx_vreg, zero_vreg, zero_vreg],
       Some(dst),
     )
+    return
+  }
+
+  let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
+  let actual_first = if is_float {
+    let int_val = ctx.vcode_func.new_vreg(Int)
+    let bitcast = @instr.VCodeInst::new(Bitcast)
+    bitcast.add_def({ reg: Virtual(int_val) })
+    bitcast.add_use(Virtual(first_vreg))
+    block.add_inst(bitcast)
+    int_val
   } else {
-    // Check if element type is float
-    let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
-    // Create array with first element
-    let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
-    let actual_first = if is_float {
-      let int_val = ctx.vcode_func.new_vreg(Int)
-      let bitcast = @instr.VCodeInst::new(Bitcast)
-      bitcast.add_def({ reg: Virtual(int_val) })
-      bitcast.add_use(Virtual(first_vreg))
-      block.add_inst(bitcast)
-      int_val
-    } else {
-      first_vreg
-    }
-    // Call: gc_alloc_array_slow(vmctx, type_idx, length, init_value) -> result
-    lower_c_libcall(
-      ctx,
-      block,
-      array_new_fp,
-      [vmctx_vreg, type_idx_vreg, len_vreg, actual_first],
-      Some(dst),
-    )
-    // Set remaining elements using gc_array_set_impl
-    if len > 1 {
-      // Load ArraySet function pointer once for all set operations
-      let array_set_fp = ctx.vcode_func.new_vreg(Int)
-      let load_set_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArraySet))
-      load_set_fp.add_def({ reg: Virtual(array_set_fp) })
-      block.add_inst(load_set_fp)
-      for i in 1..<len {
-        let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
-        let actual_elem = if is_float {
-          let int_val = ctx.vcode_func.new_vreg(Int)
-          let bitcast = @instr.VCodeInst::new(Bitcast)
-          bitcast.add_def({ reg: Virtual(int_val) })
-          bitcast.add_use(Virtual(elem_vreg))
-          block.add_inst(bitcast)
-          int_val
-        } else {
-          elem_vreg
-        }
-        let idx_vreg = materialize_imm(ctx, block, i.to_int64())
-        // Call: gc_array_set_impl(ref, type_idx, idx, value)
-        lower_c_libcall(
-          ctx,
-          block,
-          array_set_fp,
-          [dst, type_idx_vreg, idx_vreg, actual_elem],
-          None,
-        )
+    first_vreg
+  }
+  lower_c_libcall(
+    ctx,
+    block,
+    array_new_fp,
+    [vmctx_vreg, type_idx_vreg, len_vreg, actual_first],
+    Some(dst),
+  )
+  if len > 1 {
+    let array_set_fp = ctx.vcode_func.new_vreg(Int)
+    let load_set_fp = @instr.VCodeInst::new(LoadGCFuncPtr(ArraySet))
+    load_set_fp.add_def({ reg: Virtual(array_set_fp) })
+    block.add_inst(load_set_fp)
+    for i in 1..<len {
+      let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
+      let actual_elem = if is_float {
+        let int_val = ctx.vcode_func.new_vreg(Int)
+        let bitcast = @instr.VCodeInst::new(Bitcast)
+        bitcast.add_def({ reg: Virtual(int_val) })
+        bitcast.add_use(Virtual(elem_vreg))
+        block.add_inst(bitcast)
+        int_val
+      } else {
+        elem_vreg
       }
+      let idx_vreg = materialize_imm(ctx, block, i.to_int64())
+      lower_c_libcall(
+        ctx,
+        block,
+        array_set_fp,
+        [dst, type_idx_vreg, idx_vreg, actual_elem],
+        None,
+      )
     }
   }
 }

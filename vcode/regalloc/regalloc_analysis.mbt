@@ -442,6 +442,8 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           @instr.CallDirect(_, _, _, call_conv) => call_conv
           // This pseudo-op may call a C helper on a slow path.
           @instr.TypeCheckSubtypeIndirect(_) => @instr.C
+          @instr.GCAllocStructInline(_, _) => @instr.C
+          @instr.GCAllocArrayFixedInline(_, _) => @instr.C
           _ => @instr.Wasm
         }
         result.call_points.push(

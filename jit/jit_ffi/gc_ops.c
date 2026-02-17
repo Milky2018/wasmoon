@@ -471,3 +471,38 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
     // Encode: gc_ref << 1
     return ((int64_t)gc_ref) << 1;
 }
+
+// Slow path for fixed array allocation from an explicit values buffer.
+int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
+                                        int64_t *values, int32_t len) {
+    // Try ctx->gc_heap first, fall back to global g_gc_heap
+    GcHeap *heap = ctx ? (GcHeap *)ctx->gc_heap : NULL;
+    if (!heap) {
+        heap = g_gc_heap;
+    }
+    if (!heap) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    int32_t gc_ref = gc_heap_alloc_array_from_values(heap, type_idx, values, len);
+    if (gc_ref == 0) {
+        g_trap_code = 3;
+        if (g_trap_active) {
+            siglongjmp(g_trap_jmp_buf, 1);
+        }
+        return 0;
+    }
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
+    }
+
+    // Encode: gc_ref << 1
+    return ((int64_t)gc_ref) << 1;
+}

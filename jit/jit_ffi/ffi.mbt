@@ -1032,6 +1032,11 @@ pub extern "c" fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_slow_ptr"
 
 ///|
+/// Get gc_alloc_array_from_values_slow function pointer for fixed-array slow path
+/// Signature: int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx, int64_t *values, int32_t len)
+pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)

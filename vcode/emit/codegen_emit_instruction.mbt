@@ -1543,6 +1543,175 @@ fn MachineCode::emit_instruction(
       let result_reg = wreg_num(inst.defs[0])
       self.emit_add_imm(result_reg, 31, 0)
     }
+    GCAllocStructInline(type_idx, num_fields) => {
+      // Inline bump allocation for struct.new with C slow-path fallback.
+      // Uses: [vmctx], Defs: [result_ref]
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = vmctx_index()
+
+      let gc_header_size = 16
+      let gc_align = 16
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(gc_header_size + num_fields * 8, gc_align)
+      let kind = 1 // GC_KIND_STRUCT
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow_label = self.new_internal_label()
+      let done_label = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr
+      self.emit_ldr_imm(16, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      // end = next + total_size
+      self.emit_load_imm64(17, total_size.to_int64())
+      self.emit_add_reg(17, 16, 17)
+      // if end > vmctx->gc_heap_limit: go slow
+      self.emit_ldr_imm(2, vmctx_reg, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.emit_cmp_reg(17, 2)
+      self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
+
+      // Fast path: initialize header + fields.
+      self.emit_load_imm64(2, header_low)
+      self.emit_str_imm(2, 16, 0)
+      self.emit_load_imm64(2, num_fields.to_int64())
+      self.emit_str_imm(2, 16, 8)
+      for i in 0..<num_fields {
+        let off = i * 8
+        self.emit_ldr_imm(3, 31, stack_base_off + off)
+        self.emit_str_imm(3, 16, gc_header_size + off)
+      }
+      // vmctx->gc_heap_ptr = end
+      self.emit_str_imm(17, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+
+      // register_struct_inline(vmctx, obj_ptr, total_size)
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_mov_reg(1, 16)
+      self.emit_load_imm64(2, total_size.to_int64())
+      self.emit_load_imm64(
+        17,
+        @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+      )
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
+      self.emit_b(done_label)
+
+      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, sp, num_fields)
+      self.define_label(slow_label)
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_load_imm64(1, type_idx.to_int64())
+      self.emit_add_imm(2, 31, 0)
+      if stack_base_off != 0 {
+        if stack_base_off <= 4095 {
+          self.emit_add_imm(2, 2, stack_base_off)
+        } else {
+          self.emit_load_imm64(3, stack_base_off.to_int64())
+          self.emit_add_reg(2, 2, 3)
+        }
+      }
+      self.emit_load_imm64(3, num_fields.to_int64())
+      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
+      self.define_label(done_label)
+    }
+    GCAllocArrayFixedInline(type_idx, len) => {
+      // Inline bump allocation for array.new_fixed with C slow-path fallback.
+      // Uses: [vmctx], Defs: [result_ref]
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = vmctx_index()
+
+      let gc_header_size = 16
+      let gc_align = 16
+      let array_meta_size = 8 // i32 len + i32 padding
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(
+        gc_header_size + array_meta_size + len * 8,
+        gc_align,
+      )
+      let kind = 2 // GC_KIND_ARRAY
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow_label = self.new_internal_label()
+      let done_label = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr
+      self.emit_ldr_imm(16, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      // end = next + total_size
+      self.emit_load_imm64(17, total_size.to_int64())
+      self.emit_add_reg(17, 16, 17)
+      // if end > vmctx->gc_heap_limit: go slow
+      self.emit_ldr_imm(2, vmctx_reg, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.emit_cmp_reg(17, 2)
+      self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
+
+      // Fast path: initialize header + len + elements.
+      self.emit_load_imm64(2, header_low)
+      self.emit_str_imm(2, 16, 0)
+      self.emit_load_imm64(2, 0L) // reserved = 0
+      self.emit_str_imm(2, 16, 8)
+      self.emit_load_imm64(2, len.to_int64())
+      self.emit_str_imm(2, 16, gc_header_size)
+      for i in 0..<len {
+        let off = i * 8
+        self.emit_ldr_imm(3, 31, stack_base_off + off)
+        self.emit_str_imm(3, 16, gc_header_size + array_meta_size + off)
+      }
+      // vmctx->gc_heap_ptr = end
+      self.emit_str_imm(17, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+
+      // register_array_inline(vmctx, obj_ptr, total_size)
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_mov_reg(1, 16)
+      self.emit_load_imm64(2, total_size.to_int64())
+      self.emit_load_imm64(
+        17,
+        @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+      )
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
+      self.emit_b(done_label)
+
+      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, sp, len)
+      self.define_label(slow_label)
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_load_imm64(1, type_idx.to_int64())
+      self.emit_add_imm(2, 31, 0)
+      if stack_base_off != 0 {
+        if stack_base_off <= 4095 {
+          self.emit_add_imm(2, 2, stack_base_off)
+        } else {
+          self.emit_load_imm64(3, stack_base_off.to_int64())
+          self.emit_add_reg(2, 2, 3)
+        }
+      }
+      self.emit_load_imm64(3, len.to_int64())
+      self.emit_load_imm64(
+        17,
+        @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
+      )
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
+      self.define_label(done_label)
+    }
     // ============ SIMD Instructions ============
     _ =>
       self.emit_instruction_simd(

@@ -225,5 +225,7 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
                               int64_t *fields, int32_t num_fields);
 int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
                              int32_t len, int64_t init_value);
+int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
+                                         int64_t *values, int32_t len);
 
 #endif // JIT_INTERNAL_H
