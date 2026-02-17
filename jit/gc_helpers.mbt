@@ -252,6 +252,8 @@ pub fn gc_teardown() -> Unit {
   @jit_ffi.c_jit_gc_clear_cache()
   // Clear the heap pointer
   @jit_ffi.c_jit_gc_clear_heap()
+  // Leave the serialized GC runtime critical section.
+  @jit_ffi.c_jit_gc_leave_critical()
 }
 
 ///|
@@ -299,6 +301,8 @@ pub fn gc_setup(
   if num_funcs > 0 && func_table_ptr == 0L {
     raise MissingFunctionTableContext(num_funcs~)
   }
+  // Serialize access to process-global GC state in jit_ffi.
+  @jit_ffi.c_jit_gc_enter_critical()
   gc_set_heap(heap)
   setup_type_cache_from_types(types, canonical_indices)
   // Set function type indices for funcref subtyping

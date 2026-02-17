@@ -12,6 +12,11 @@ static __thread int64_t g_hostcall_values_ptr = 0;
 static __thread int32_t g_hostcall_num_args = 0;
 static __thread int32_t g_hostcall_num_results = 0;
 
+#ifndef _WIN32
+static pthread_mutex_t g_gc_runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
+static __thread int g_gc_runtime_lock_depth = 0;
+#endif
+
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
@@ -1304,6 +1309,27 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table(int64_t func_table_ptr, in
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(void) {
     clear_type_cache_internal();
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_enter_critical(void) {
+#ifndef _WIN32
+    if (g_gc_runtime_lock_depth == 0) {
+        pthread_mutex_lock(&g_gc_runtime_mutex);
+    }
+    g_gc_runtime_lock_depth++;
+#endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_leave_critical(void) {
+#ifndef _WIN32
+    if (g_gc_runtime_lock_depth <= 0) {
+        return;
+    }
+    g_gc_runtime_lock_depth--;
+    if (g_gc_runtime_lock_depth == 0) {
+        pthread_mutex_unlock(&g_gc_runtime_mutex);
+    }
+#endif
 }
 
 // ============ GC Heap Pointer Management ============

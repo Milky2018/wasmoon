@@ -168,7 +168,11 @@ pub fn c_jit_gc_clear_cache() -> Unit
 
 pub fn c_jit_gc_clear_heap() -> Unit
 
+pub fn c_jit_gc_enter_critical() -> Unit
+
 pub fn c_jit_gc_get_heap() -> Int64
+
+pub fn c_jit_gc_leave_critical() -> Unit
 
 pub fn c_jit_gc_set_canonical_indices(FixedArray[Int], Int) -> Unit
 
