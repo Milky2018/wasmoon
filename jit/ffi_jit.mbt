@@ -163,8 +163,9 @@ priv struct JITContext {
 /// Create a new JIT context - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(ctx)
   // Check if allocation succeeded by verifying the pointer is valid
-  if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
+  if ctx_ptr != 0L {
     Some(JITContext::{ ctx, trampoline_cache: Map::new() })
   } else {
     None
@@ -213,13 +214,6 @@ fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
 }
 
 ///|
-/// Set GC heap in the context for inline allocation
-/// This initializes gc_heap_ptr and gc_heap_limit in VMContext
-fn JITContext::set_gc_heap(self : JITContext, heap_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_gc_heap(self.ptr(), heap_ptr)
-}
-
-///|
 /// Allocate guarded memory with mmap for bounds check elimination
 /// Memory is allocated with guard pages (PROT_NONE) after the accessible region
 /// Access to guard pages triggers SIGSEGV which is caught and converted to a trap
@@ -241,12 +235,6 @@ fn JITContext::alloc_guarded_memory(
 /// Get the function table base pointer
 fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
   @jit_ffi.c_jit_ctx_get_func_table(self.ptr())
-}
-
-///|
-/// Get the function count
-fn JITContext::get_func_count(self : JITContext) -> Int {
-  @jit_ffi.c_jit_ctx_get_func_count(self.ptr())
 }
 
 ///|

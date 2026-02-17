@@ -1074,6 +1074,7 @@ fn run_with_jit(
                     heap,
                     store.module_types,
                     canonical,
+                    ctx_ptr=jm.get_context_ptr(),
                     func_type_indices=instance.func_type_indices,
                     func_table_ptr=jm.get_func_table_ptr(),
                     num_funcs=jm.get_func_count(),
@@ -1090,13 +1091,13 @@ fn run_with_jit(
               }
               let results = jm.call_with_context(f, i64_args) catch {
                 @jit.JITExit(code) => {
-                  @jit.gc_teardown()
+                  @jit.gc_teardown(jm.get_context_ptr())
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   native_exit(code)
                   panic()
                 }
                 @jit.JITTrap(msg) => {
-                  @jit.gc_teardown()
+                  @jit.gc_teardown(jm.get_context_ptr())
                   // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   // Capture and display backtrace if DWARF is enabled
@@ -1124,7 +1125,7 @@ fn run_with_jit(
                 }
               }
               // Tear down GC context after JIT call
-              @jit.gc_teardown()
+              @jit.gc_teardown(jm.get_context_ptr())
               // Sync JIT globals back to interpreter store for consistency.
               @wast.sync_jit_globals_to_store(jit_ctx, store)
               // Convert Int64 results to Value using shared helper

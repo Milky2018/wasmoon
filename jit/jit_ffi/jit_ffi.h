@@ -78,6 +78,16 @@ typedef struct {
     uint8_t *gc_heap_limit;   // +96: Allocation limit (triggers slow path when exceeded)
     void *gc_heap;            // +104: GcHeap* pointer for slow path
 
+    // GC runtime caches (context-local, not accessed by JIT code directly)
+    int32_t *gc_type_cache;
+    int gc_num_types;
+    int32_t *gc_canonical_indices;
+    int gc_num_canonical;
+    int32_t *gc_func_type_indices;
+    int gc_num_funcs;
+    void **gc_func_table;
+    int gc_func_table_size;
+
     // Additional fields (not accessed by JIT code directly)
     int owns_memory0;         // Whether this context owns memory0 (should free it)
     int owns_indirect_table;  // Whether this context owns table0_base (should free it)

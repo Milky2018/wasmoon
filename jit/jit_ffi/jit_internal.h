@@ -148,16 +148,6 @@ void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 #define FUNCREF_TAG   0x2000000000000000LL
 #define REF_TAGS_MASK (EXTERNREF_TAG | FUNCREF_TAG)
 
-// Type cache globals
-extern int32_t *g_gc_type_cache;
-extern int g_gc_num_types;
-extern int32_t *g_gc_canonical_indices;
-extern int g_gc_num_canonical;
-extern int32_t *g_func_type_indices;
-extern int g_num_funcs;
-extern void **g_func_table;
-extern int g_func_table_size;
-
 // Type checking functions
 int is_subtype_cached(int type1, int type2);
 int32_t gc_ref_test_impl(int64_t value, int32_t type_idx, int32_t nullable);
@@ -165,11 +155,11 @@ int64_t gc_ref_cast_impl(int64_t value, int32_t type_idx, int32_t nullable);
 void gc_type_check_subtype_impl(int32_t actual_type, int32_t expected_type);
 
 // Type cache management
-void set_type_cache_internal(int32_t *types_data, int num_types);
-void set_canonical_indices_internal(int32_t *canonical, int num_types);
-void set_func_type_indices_internal(int32_t *indices, int num_funcs);
-void set_func_table_internal(void **func_table_ptr, int num_funcs);
-void clear_type_cache_internal(void);
+void set_type_cache_internal(jit_context_t *ctx, int32_t *types_data, int num_types);
+void set_canonical_indices_internal(jit_context_t *ctx, int32_t *canonical, int num_types);
+void set_func_type_indices_internal(jit_context_t *ctx, int32_t *indices, int num_funcs);
+void set_func_table_internal(jit_context_t *ctx, void **func_table_ptr, int num_funcs);
+void clear_type_cache_internal(jit_context_t *ctx);
 
 // ============ Exception Handling (exception.c) ============
 
@@ -202,9 +192,6 @@ int is_wasm_guard_page_access(jit_context_t *ctx, void *addr);
 jit_context_t *get_current_jit_context(void);
 
 // ============ GC Operations (gc_ops.c) ============
-
-// GC heap pointer (set before JIT execution)
-extern GcHeap *g_gc_heap;
 
 // GC operation implementations
 int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields);

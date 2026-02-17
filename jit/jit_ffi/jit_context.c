@@ -40,6 +40,14 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->gc_heap_ptr = NULL;      // Current allocation pointer
     ctx->gc_heap_limit = NULL;    // Allocation limit
     ctx->gc_heap = NULL;          // GcHeap* pointer
+    ctx->gc_type_cache = NULL;
+    ctx->gc_num_types = 0;
+    ctx->gc_canonical_indices = NULL;
+    ctx->gc_num_canonical = 0;
+    ctx->gc_func_type_indices = NULL;
+    ctx->gc_num_funcs = 0;
+    ctx->gc_func_table = NULL;
+    ctx->gc_func_table_size = 0;
 
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_memory0 = 0;        // Default: does not own memory0
@@ -176,6 +184,16 @@ void free_context_internal(jit_context_t *ctx) {
 
     // Free multi-memory arrays (but not the memory data itself - managed by runtime)
     if (ctx->memories) free(ctx->memories);
+
+    if (ctx->gc_type_cache) {
+        free(ctx->gc_type_cache);
+    }
+    if (ctx->gc_canonical_indices) {
+        free(ctx->gc_canonical_indices);
+    }
+    if (ctx->gc_func_type_indices) {
+        free(ctx->gc_func_type_indices);
+    }
 
     // Free exception handling state
     if (ctx->exception_values) free(ctx->exception_values);

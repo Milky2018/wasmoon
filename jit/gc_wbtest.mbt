@@ -291,10 +291,13 @@ test "gc: field access after collection" {
 ///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
   let missing_types : Result[Unit, GCSetupError] = try? gc_setup(
     heap,
     [],
     [],
+    ctx_ptr~,
     func_type_indices=[],
     func_table_ptr=0L,
     num_funcs=1,
@@ -307,6 +310,7 @@ test "gc_setup: fail fast on inconsistent function table context" {
     heap,
     [],
     [],
+    ctx_ptr~,
     func_type_indices=[0],
     func_table_ptr=0L,
     num_funcs=1,
@@ -318,6 +322,7 @@ test "gc_setup: fail fast on inconsistent function table context" {
     heap,
     [],
     [],
+    ctx_ptr~,
     func_type_indices=[],
     func_table_ptr=0L,
     num_funcs=0,
@@ -325,5 +330,5 @@ test "gc_setup: fail fast on inconsistent function table context" {
   guard zero_funcs_ok is Ok(_) else {
     fail("expected gc_setup success for zero-func module")
   }
-  gc_teardown()
+  gc_teardown(ctx_ptr)
 }

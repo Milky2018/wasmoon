@@ -280,25 +280,30 @@ static void table_fill_impl(
     // Infer the type index for funcref values so call_indirect can type-check.
     // For non-funcref values, keep type_idx = -1.
     int64_t type_idx = -1;
-    if (val != 0 && (val & FUNCREF_TAG) != 0 && g_func_table && g_func_type_indices) {
+    if (
+        val != 0 &&
+        (val & FUNCREF_TAG) != 0 &&
+        ctx->gc_func_table &&
+        ctx->gc_func_type_indices
+    ) {
         void* raw_ptr = (void*)(uintptr_t)(val & ~FUNCREF_TAG);
-        for (int i = 0; i < g_func_table_size; i++) {
-            if (g_func_table[i] == raw_ptr) {
-                int32_t t = g_func_type_indices[i];
-                if (g_gc_canonical_indices && t >= 0 && t < g_gc_num_canonical) {
-                    t = g_gc_canonical_indices[t];
+        for (int i = 0; i < ctx->gc_func_table_size; i++) {
+            if (ctx->gc_func_table[i] == raw_ptr) {
+                int32_t t = ctx->gc_func_type_indices[i];
+                if (ctx->gc_canonical_indices && t >= 0 && t < ctx->gc_num_canonical) {
+                    t = ctx->gc_canonical_indices[t];
                 }
                 type_idx = (int64_t)t;
                 break;
             }
         }
-    } else if (val < 0 && g_func_type_indices) {
+    } else if (val < 0 && ctx->gc_func_type_indices) {
         // IR-encoded funcref index: -(func_idx + 1)
         int32_t func_idx = (int32_t)(-(val + 1));
-        if (func_idx >= 0 && func_idx < g_num_funcs) {
-            int32_t t = g_func_type_indices[func_idx];
-            if (g_gc_canonical_indices && t >= 0 && t < g_gc_num_canonical) {
-                t = g_gc_canonical_indices[t];
+        if (func_idx >= 0 && func_idx < ctx->gc_num_funcs) {
+            int32_t t = ctx->gc_func_type_indices[func_idx];
+            if (ctx->gc_canonical_indices && t >= 0 && t < ctx->gc_num_canonical) {
+                t = ctx->gc_canonical_indices[t];
             }
             type_idx = (int64_t)t;
         }
@@ -495,34 +500,33 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_elem_drop_ptr(void) {
 
 // ============ GC Array Segment Operations ============
 // These require access to data/elem segments AND the GC heap
-// g_gc_heap is already declared in jit_internal.h
 
 // Get element size in bytes for array.new_data/array.init_data.
 // Returns 0 when the array element type has no defined byte size (e.g. refs).
-static size_t get_array_elem_byte_size(int32_t type_idx) {
-    if (!g_gc_type_cache || type_idx < 0 || type_idx >= g_gc_num_types) {
+static size_t get_array_elem_byte_size(jit_context_t *ctx, int32_t type_idx) {
+    if (!ctx || !ctx->gc_type_cache || type_idx < 0 || type_idx >= ctx->gc_num_types) {
         return 0;
     }
-    int kind = g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
+    int kind = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
     if (kind != GC_KIND_ARRAY) {
         return 0;
     }
-    int bytes = g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_BYTES_OFF];
+    int bytes = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_BYTES_OFF];
     if (bytes <= 0) {
         return 0;
     }
     return (size_t)bytes;
 }
 
-static int get_array_elem_tag(int32_t type_idx) {
-    if (!g_gc_type_cache || type_idx < 0 || type_idx >= g_gc_num_types) {
+static int get_array_elem_tag(jit_context_t *ctx, int32_t type_idx) {
+    if (!ctx || !ctx->gc_type_cache || type_idx < 0 || type_idx >= ctx->gc_num_types) {
         return 0;
     }
-    int kind = g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
+    int kind = ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_KIND_OFF];
     if (kind != GC_KIND_ARRAY) {
         return 0;
     }
-    return g_gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_TAG_OFF];
+    return ctx->gc_type_cache[type_idx * GC_TYPE_CACHE_STRIDE + GC_TYPE_ARRAY_ELEM_TAG_OFF];
 }
 
 static inline uint16_t read_u16_le(const uint8_t *p) {
@@ -570,11 +574,12 @@ static int64_t gc_array_new_data_impl(
     int64_t offset,
     int64_t length
 ) {
-    if (!ctx) {
+    if (!ctx || !ctx->gc_heap) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= ctx->data_segment_count) {
@@ -600,8 +605,8 @@ static int64_t gc_array_new_data_impl(
     size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
 
     // Calculate byte size needed
-    size_t elem_size = get_array_elem_byte_size(type_idx);
-    int elem_tag = get_array_elem_tag(type_idx);
+    size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
+    int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
         // Validation should prevent this (ref element types have no data byte size),
         // but trap defensively.
@@ -618,18 +623,13 @@ static int64_t gc_array_new_data_impl(
         return 0;
     }
 
-    if (!g_gc_heap) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
     if (len_u32 > (uint32_t)INT32_MAX) {
         g_trap_code = 3;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(g_gc_heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
         g_trap_code = 3;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -639,7 +639,7 @@ static int64_t gc_array_new_data_impl(
     const uint8_t *p = seg_data + (size_t)off_u32;
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(g_gc_heap, gc_ref, (int32_t)i, v);
+        gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
     }
 
     return ((int64_t)gc_ref) << 1;
@@ -655,11 +655,12 @@ static int64_t gc_array_new_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx) {
+    if (!ctx || !ctx->gc_heap) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
@@ -690,18 +691,13 @@ static int64_t gc_array_new_elem_impl(
         return 0;
     }
 
-    if (!g_gc_heap) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return 0;
-    }
     if (len_u32 > (uint32_t)INT32_MAX) {
         g_trap_code = 3;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(g_gc_heap, type_idx, (int32_t)len_u32, 0);
+    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
         g_trap_code = 3;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -711,7 +707,7 @@ static int64_t gc_array_new_elem_impl(
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t seg_off = ((int64_t)off_u32 + (int64_t)i) * 2;
         int64_t v = seg_data[seg_off];
-        gc_heap_array_set(g_gc_heap, gc_ref, (int32_t)i, v);
+        gc_heap_array_set(heap, gc_ref, (int32_t)i, v);
     }
 
     return ((int64_t)gc_ref) << 1;
@@ -727,11 +723,12 @@ static void gc_array_init_data_impl(
     int64_t data_offset,
     int64_t length
 ) {
-    if (!ctx) {
+    if (!ctx || !ctx->gc_heap) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
 
     // Bounds check data segment index
     if (data_idx < 0 || data_idx >= ctx->data_segment_count) {
@@ -755,8 +752,8 @@ static void gc_array_init_data_impl(
     // Get segment data
     uint8_t *seg_data = ctx->data_segments ? ctx->data_segments[data_idx] : NULL;
     size_t seg_size = ctx->data_segment_sizes ? ctx->data_segment_sizes[data_idx] : 0;
-    size_t elem_size = get_array_elem_byte_size(type_idx);
-    int elem_tag = get_array_elem_tag(type_idx);
+    size_t elem_size = get_array_elem_byte_size(ctx, type_idx);
+    int elem_tag = get_array_elem_tag(ctx, type_idx);
     if (elem_size == 0) {
         g_trap_code = 3;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -771,11 +768,6 @@ static void gc_array_init_data_impl(
         return;
     }
 
-    if (!g_gc_heap) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
     if (array_ref == 0) {
         g_trap_code = 3;  // null array reference
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -783,7 +775,7 @@ static void gc_array_init_data_impl(
     }
 
     int32_t gc_ref = (int32_t)(array_ref >> 1);
-    int32_t array_len = gc_heap_array_len(g_gc_heap, gc_ref);
+    int32_t array_len = gc_heap_array_len(heap, gc_ref);
     if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -793,7 +785,7 @@ static void gc_array_init_data_impl(
     const uint8_t *p = seg_data + (size_t)data_off_u32;
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t v = decode_array_elem_from_bytes(p + (size_t)i * elem_size, elem_tag);
-        gc_heap_array_set(g_gc_heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
+        gc_heap_array_set(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
     }
 }
 
@@ -808,11 +800,12 @@ static void gc_array_init_elem_impl(
     int64_t length
 ) {
     (void)type_idx;
-    if (!ctx) {
+    if (!ctx || !ctx->gc_heap) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
     }
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
 
     // Bounds check element segment index
     if (elem_idx < 0 || elem_idx >= ctx->elem_segment_count) {
@@ -844,11 +837,6 @@ static void gc_array_init_elem_impl(
         return;
     }
 
-    if (!g_gc_heap) {
-        g_trap_code = 3;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return;
-    }
     if (array_ref == 0) {
         g_trap_code = 3;  // null array reference
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -856,7 +844,7 @@ static void gc_array_init_elem_impl(
     }
 
     int32_t gc_ref = (int32_t)(array_ref >> 1);
-    int32_t array_len = gc_heap_array_len(g_gc_heap, gc_ref);
+    int32_t array_len = gc_heap_array_len(heap, gc_ref);
     if ((uint64_t)array_len < (uint64_t)arr_off_u32 || (uint64_t)array_len - (uint64_t)arr_off_u32 < (uint64_t)len_u32) {
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -866,7 +854,7 @@ static void gc_array_init_elem_impl(
     for (uint32_t i = 0; i < len_u32; i++) {
         int64_t seg_off = ((int64_t)elem_off_u32 + (int64_t)i) * 2;
         int64_t v = seg_data[seg_off];
-        gc_heap_array_set(g_gc_heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
+        gc_heap_array_set(heap, gc_ref, (int32_t)(arr_off_u32 + i), v);
     }
 }
 

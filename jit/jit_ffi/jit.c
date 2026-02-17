@@ -12,11 +12,6 @@ static __thread int64_t g_hostcall_values_ptr = 0;
 static __thread int32_t g_hostcall_num_args = 0;
 static __thread int32_t g_hostcall_num_results = 0;
 
-#ifndef _WIN32
-static pthread_mutex_t g_gc_runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
-static __thread int g_gc_runtime_lock_depth = 0;
-#endif
-
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
@@ -1295,59 +1290,66 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(v
 
 // ============ Type Cache Management FFI Exports ============
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(int32_t *types_data, int num_types) {
-    set_type_cache_internal(types_data, num_types);
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
+    int64_t ctx_ptr,
+    int32_t *types_data,
+    int num_types
+) {
+    set_type_cache_internal((jit_context_t *)(uintptr_t)ctx_ptr, types_data, num_types);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices(int32_t *canonical, int num_types) {
-    set_canonical_indices_internal(canonical, num_types);
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_canonical_indices(
+    int64_t ctx_ptr,
+    int32_t *canonical,
+    int num_types
+) {
+    set_canonical_indices_internal((jit_context_t *)(uintptr_t)ctx_ptr, canonical, num_types);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices(int32_t *indices, int num_funcs) {
-    set_func_type_indices_internal(indices, num_funcs);
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_type_indices(
+    int64_t ctx_ptr,
+    int32_t *indices,
+    int num_funcs
+) {
+    set_func_type_indices_internal((jit_context_t *)(uintptr_t)ctx_ptr, indices, num_funcs);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table(int64_t func_table_ptr, int num_funcs) {
-    set_func_table_internal((void **)func_table_ptr, num_funcs);
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_func_table(
+    int64_t ctx_ptr,
+    int64_t func_table_ptr,
+    int num_funcs
+) {
+    set_func_table_internal((jit_context_t *)(uintptr_t)ctx_ptr, (void **)(uintptr_t)func_table_ptr, num_funcs);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(void) {
-    clear_type_cache_internal();
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(int64_t ctx_ptr) {
+    clear_type_cache_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_enter_critical(void) {
-#ifndef _WIN32
-    if (g_gc_runtime_lock_depth == 0) {
-        pthread_mutex_lock(&g_gc_runtime_mutex);
-    }
-    g_gc_runtime_lock_depth++;
-#endif
+    // no-op: GC runtime state is context-local now.
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_leave_critical(void) {
-#ifndef _WIN32
-    if (g_gc_runtime_lock_depth <= 0) {
-        return;
-    }
-    g_gc_runtime_lock_depth--;
-    if (g_gc_runtime_lock_depth == 0) {
-        pthread_mutex_unlock(&g_gc_runtime_mutex);
-    }
-#endif
+    // no-op: GC runtime state is context-local now.
 }
 
 // ============ GC Heap Pointer Management ============
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t heap_ptr) {
-    g_gc_heap = (GcHeap *)(uintptr_t)heap_ptr;
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t ctx_ptr, int64_t heap_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
+    ctx_set_gc_heap_internal(ctx, heap);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap(void) {
-    g_gc_heap = NULL;
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_set_gc_heap_internal(ctx, NULL);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(void) {
-    return (int64_t)(uintptr_t)g_gc_heap;
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return (ctx != NULL) ? (int64_t)(uintptr_t)ctx->gc_heap : 0;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, int64_t heap_ptr) {

@@ -50,13 +50,13 @@ pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit
 
-pub fn gc_clear_heap() -> Unit
+pub fn gc_clear_heap(Int64) -> Unit
 
-pub fn gc_set_heap(CHeap) -> Unit
+pub fn gc_set_heap(Int64, CHeap) -> Unit
 
-pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
+pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
 
-pub fn gc_teardown() -> Unit
+pub fn gc_teardown(Int64) -> Unit
 
 pub fn get_args_get_ptr() -> Int64
 
@@ -220,7 +220,7 @@ pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
 
-pub fn setup_type_cache_from_types(Array[@types.SubType], Array[Int]) -> Unit
+pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
 
 pub fn tag_funcref_ptr(Int64) -> Int64
 
@@ -235,6 +235,7 @@ pub(all) suberror CHeapError {
 }
 
 pub suberror GCSetupError {
+  MissingJITContext
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
@@ -476,6 +477,7 @@ pub fn JITModule::clear_segments(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
+pub fn JITModule::get_context_ptr(Self) -> Int64
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
 pub fn JITModule::get_func_count(Self) -> Int
