@@ -28,7 +28,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
     } else if msg.contains("overflow") {
       5
     } else {
-      0
+      6
     }
   }
 

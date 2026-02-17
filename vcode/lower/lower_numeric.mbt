@@ -950,6 +950,7 @@ fn lower_isub(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
+  let enable_subextend_fusion = true
 
   // Cranelift algebraic cancelation: (x + y) - y -> x.
   if match_add_sub_cancel_value(ctx, lhs_val, rhs_val) is Some(base) {
@@ -966,6 +967,10 @@ fn lower_isub(
     Physical({ index: 31, class: Int })
   } else {
     Virtual(ctx.get_vreg_for_use(lhs_val, block))
+  }
+  let lhs_is_aarch64_zero_reg = match lhs_reg {
+    Physical(preg) => @isa.ISA::current() is @isa.AArch64 && preg.index == 31
+    _ => false
   }
 
   // Pattern: sub(0, mul(x, y)) -> MNEG / MNEG32.
@@ -1014,7 +1019,9 @@ fn lower_isub(
   }
 
   // Pattern: sub(x, uextend/sextend(i32)) -> SubExtend (i64 only).
-  if is_64 &&
+  if enable_subextend_fusion &&
+    is_64 &&
+    !lhs_is_aarch64_zero_reg &&
     match_extend_i32_to_i64(ctx, rhs_val) is Some((inner, ext)) &&
     !(ext is @instr.IndexExtend::None) {
     let rm = ctx.get_vreg_for_use(inner, block)

@@ -867,4 +867,6 @@ test "emit: Trap terminator encodes BRK immediate by trap message" {
   inspect(find_first_brk_imm(bytes_unreachable).unwrap(), content="0")
   let bytes_oob = emit_trap_func("test_trap_oob", "memory out of bounds")
   inspect(find_first_brk_imm(bytes_oob).unwrap(), content="1")
+  let bytes_unknown = emit_trap_func("test_trap_unknown", "jit backend trap")
+  inspect(find_first_brk_imm(bytes_unknown).unwrap(), content="6")
 }

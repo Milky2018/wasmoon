@@ -885,6 +885,35 @@ test "lower i64 sub(x, sextend(y)) to sub.sxtw" {
 }
 
 ///|
+test "lower i64 sub(0, uextend(y)) avoids sub.uxtw on aarch64" {
+  if !(@isa.ISA::current() is @isa.AArch64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("sub_zero_uxtw_test")
+  let y = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst(@ir.Type::I64, 0L)
+  let y64 = builder.uextend(@ir.Type::I64, y)
+  let result = builder.isub(zero, y64)
+  builder.return_([result])
+  let vcode_func = lower_function(builder.get_function())
+  inspect(
+    vcode_func.print(),
+    content=(
+      #|vcode sub_zero_uxtw_test(v0:int) -> int {
+      #|block0:
+      #|    v3 = extend.u32_64 v0
+      #|    v2 = sub x31, v3
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
 test "lower i32 add(x, -imm) to sub32 #imm" {
   // Cranelift lower.isle iadd_imm12_neg_{right,left}.
   let builder = @ir.IRBuilder::new("add_neg_imm_test")

@@ -266,6 +266,7 @@ fn MachineCode::emit_terminator_with_epilogue(
     //   3 invalid conversion to integer
     //   4 integer divide by zero
     //   5 integer overflow
+    //   6 backend/unknown JIT trap
     if msg == "unreachable" {
       0
     } else if msg.contains("out of bounds") {
@@ -279,7 +280,7 @@ fn MachineCode::emit_terminator_with_epilogue(
     } else if msg.contains("overflow") {
       5
     } else {
-      0
+      6
     }
   }
 

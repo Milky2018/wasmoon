@@ -70,6 +70,7 @@ pub fn get_last_trap_details() -> TrapDetails {
 /// 5 = invalid conversion to integer
 /// 6 = integer divide by zero
 /// 7 = integer overflow
+/// 8 = backend/unknown JIT trap site
 /// 99 = unknown trap
 pub fn check_trap() -> Unit raise JITTrap {
   let code = @jit_ffi.c_jit_get_trap_code()
@@ -83,6 +84,7 @@ pub fn check_trap() -> Unit raise JITTrap {
       5 => "invalid conversion to integer"
       6 => "integer divide by zero"
       7 => "integer overflow"
+      8 => "jit backend trap"
       _ => "unknown trap"
     }
     raise JITTrap(msg)
@@ -1188,6 +1190,7 @@ fn JITContext::call_multi_return(
       5 => "invalid conversion to integer"
       6 => "integer divide by zero"
       7 => "integer overflow"
+      8 => "jit backend trap"
       _ => "unknown trap"
     }
     raise JITTrap(msg)
