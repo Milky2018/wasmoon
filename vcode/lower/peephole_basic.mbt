@@ -206,15 +206,13 @@ fn optimize_block(
     // For now, DCE is only done by the register allocator's dead code marking.
 
     let optimized = optimize_instruction(inst, state)
-    match optimized {
-      Some(new_inst) => {
-        new_insts.push(new_inst)
-        // Update state based on the new instruction
-        update_state(new_inst, state)
-      }
-      None =>
-        // Instruction was eliminated
-        eliminated = eliminated + 1
+    if optimized is Some(new_inst) {
+      new_insts.push(new_inst)
+      // Update state based on the new instruction
+      update_state(new_inst, state)
+    } else {
+      // Instruction was eliminated
+      eliminated = eliminated + 1
     }
   }
   // Replace block instructions with optimized ones
@@ -773,22 +771,20 @@ fn optimize_store_merging(
   while i < block.insts.length() - 1 {
     let op1 = get_mem_op_info(block.insts[i])
     let op2 = get_mem_op_info(block.insts[i + 1])
-    match (op1, op2) {
-      (Some(s1), Some(s2)) =>
-        if s1.is_store &&
-          s2.is_store &&
-          s1.bits == 8 &&
-          can_merge_mem_ops(s1, s2) {
-          // Found adjacent store8 pair - merge into store16
-          let new_insts = create_merged_store(func, s1, s2, 16)
-          to_remove.add(i)
-          to_remove.add(i + 1)
-          insertions.push((i, new_insts))
-          merged = merged + 1
-          i = i + 2 // Skip the second store
-          continue
-        }
-      _ => ()
+    if op1 is Some(s1) &&
+      op2 is Some(s2) &&
+      s1.is_store &&
+      s2.is_store &&
+      s1.bits == 8 &&
+      can_merge_mem_ops(s1, s2) {
+      // Found adjacent store8 pair - merge into store16
+      let new_insts = create_merged_store(func, s1, s2, 16)
+      to_remove.add(i)
+      to_remove.add(i + 1)
+      insertions.push((i, new_insts))
+      merged = merged + 1
+      i = i + 2 // Skip the second store
+      continue
     }
     i = i + 1
   }
@@ -860,33 +856,27 @@ fn optimize_load_merging(
   while i < block.insts.length() - 1 {
     let op1 = get_mem_op_info(block.insts[i])
     let op2 = get_mem_op_info(block.insts[i + 1])
-    match (op1, op2) {
-      (Some(l1), Some(l2)) =>
-        if !l1.is_store &&
-          !l2.is_store &&
-          l1.bits == 8 &&
-          can_merge_mem_ops(l1, l2) {
-          // Found adjacent load8 pair
-          // Check if they are used by adjacent store8 pair
-          match find_store_pair_for_loads(block, l1, l2, i + 2) {
-            Some((s1_idx, s2_idx, dst_base, dst_offset)) => {
-              // Can merge both load and store
-              let new_insts = create_merged_load_store(
-                func, l1, dst_base, dst_offset,
-              )
-              to_remove.add(i)
-              to_remove.add(i + 1)
-              to_remove.add(s1_idx)
-              to_remove.add(s2_idx)
-              insertions.push((i, new_insts))
-              merged = merged + 1
-              i = i + 2
-              continue
-            }
-            None => ()
-          }
-        }
-      _ => ()
+    if op1 is Some(l1) &&
+      op2 is Some(l2) &&
+      !l1.is_store &&
+      !l2.is_store &&
+      l1.bits == 8 &&
+      can_merge_mem_ops(l1, l2) {
+      // Found adjacent load8 pair
+      // Check if they are used by adjacent store8 pair
+      if find_store_pair_for_loads(block, l1, l2, i + 2)
+        is Some((s1_idx, s2_idx, dst_base, dst_offset)) {
+        // Can merge both load and store
+        let new_insts = create_merged_load_store(func, l1, dst_base, dst_offset)
+        to_remove.add(i)
+        to_remove.add(i + 1)
+        to_remove.add(s1_idx)
+        to_remove.add(s2_idx)
+        insertions.push((i, new_insts))
+        merged = merged + 1
+        i = i + 2
+        continue
+      }
     }
     i = i + 1
   }

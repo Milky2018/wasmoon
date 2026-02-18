@@ -9,7 +9,7 @@ Examples to find:
 This version handles both single-line and multi-line match expressions.
 """
 
-import re
+import argparse
 from pathlib import Path
 
 
@@ -169,15 +169,69 @@ def scan_file(filepath: Path) -> list[tuple[int, str]]:
         return []
 
 
-def main() -> None:
-    """Scan all .mbt files in the project."""
-    project_root = Path(__file__).parent.parent
-    mbt_files = sorted(project_root.rglob('*.mbt'))
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Scan MoonBit files for trivial match expressions."
+    )
+    parser.add_argument(
+        "--include-generated",
+        action="store_true",
+        help="Include generated/build directories (_build/target/.mooncakes).",
+    )
+    parser.add_argument(
+        "--include-tests",
+        action="store_true",
+        help="Include *_test.mbt and *_wbtest.mbt files.",
+    )
+    parser.add_argument(
+        "--dir",
+        action="append",
+        default=[],
+        help="Restrict scan to a top-level directory (repeatable).",
+    )
+    return parser.parse_args()
 
-    # Exclude .mooncakes and other build directories
+
+def should_skip_file(
+    filepath: Path,
+    project_root: Path,
+    include_generated: bool,
+    include_tests: bool,
+    allowed_dirs: list[str],
+) -> bool:
+    rel = filepath.relative_to(project_root).as_posix()
+    parts = rel.split("/")
+    top_level = parts[0] if parts else ""
+
+    if allowed_dirs and top_level not in allowed_dirs:
+        return True
+
+    if not include_generated and top_level in {".mooncakes", "target", "_build", ".git"}:
+        return True
+
+    if not include_tests and (
+        filepath.name.endswith("_test.mbt") or filepath.name.endswith("_wbtest.mbt")
+    ):
+        return True
+
+    return False
+
+
+def main() -> None:
+    """Scan .mbt files in the project."""
+    args = parse_args()
+    project_root = Path(__file__).parent.parent
+    mbt_files = sorted(project_root.rglob("*.mbt"))
     mbt_files = [
-        f for f in mbt_files
-        if '.mooncakes' not in str(f) and 'target' not in str(f)
+        f
+        for f in mbt_files
+        if not should_skip_file(
+            f,
+            project_root,
+            include_generated=args.include_generated,
+            include_tests=args.include_tests,
+            allowed_dirs=args.dir,
+        )
     ]
 
     print(f"Scanning {len(mbt_files)} .mbt files for trivial match expressions...\n")

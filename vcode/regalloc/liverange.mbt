@@ -198,42 +198,38 @@ pub fn LiveRange::has_fixed_constraint(self : LiveRange) -> Bool {
 /// Get the fixed register constraint if all uses require the same fixed reg
 pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
   fn is_allocatable_fixed(preg : @abi.PReg) -> Bool {
-    match preg.class {
-      @abi.Int =>
-        // Keep architectural reserved/scratch regs out of fixed allocation.
-        // Argument regs (x0-x7) are allowed so fixed-arg constraints can be
-        // satisfied by allocation when profitable, matching regalloc2 style.
-        preg.index != 16 &&
-        preg.index != 17 &&
-        preg.index != 18 &&
-        preg.index != 19 &&
-        preg.index != 29 &&
-        preg.index != 30 &&
-        preg.index != 31
+    if preg.class is @abi.Int {
+      // Keep architectural reserved/scratch regs out of fixed allocation.
+      // Argument regs (x0-x7) are allowed so fixed-arg constraints can be
+      // satisfied by allocation when profitable, matching regalloc2 style.
+      preg.index != 16 &&
+      preg.index != 17 &&
+      preg.index != 18 &&
+      preg.index != 19 &&
+      preg.index != 29 &&
+      preg.index != 30 &&
+      preg.index != 31
+    } else {
       // For float/vector bank, keep v16/v17 reserved as scratch.
-      @abi.Float32 | @abi.Float64 | @abi.Vector =>
-        preg.index != 16 && preg.index != 17
+      preg.index != 16 && preg.index != 17
     }
   }
 
   let mut fixed : @abi.PReg? = None
   for use_pos in self.uses {
-    match use_pos.constraint {
-      FixedReg(preg) => {
-        if !is_allocatable_fixed(preg) {
-          // Treat non-allocatable fixed regs as "use-time constraints" only.
-          // They are satisfied via inserted moves, not by pinning allocation.
-          continue
-        }
-        match fixed {
-          None => fixed = Some(preg)
-          Some(existing) =>
-            if existing.index != preg.index {
-              return None // Conflicting constraints
-            }
-        }
+    if use_pos.constraint is FixedReg(preg) {
+      if !is_allocatable_fixed(preg) {
+        // Treat non-allocatable fixed regs as "use-time constraints" only.
+        // They are satisfied via inserted moves, not by pinning allocation.
+        continue
       }
-      AnyReg => ()
+      match fixed {
+        None => fixed = Some(preg)
+        Some(existing) =>
+          if existing.index != preg.index {
+            return None // Conflicting constraints
+          }
+      }
     }
   }
   fixed

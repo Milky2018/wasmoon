@@ -305,13 +305,9 @@ fn Parser::parse_field_types(
         None
       }
       // Register field name if present (for the first field only)
-      match field_name {
-        Some(name) =>
-          match self.field_names.get(type_idx) {
-            Some(names) => names.set(name, fields.length())
-            None => ()
-          }
-        None => ()
+      if field_name is Some(name) &&
+        self.field_names.get(type_idx) is Some(names) {
+        names.set(name, fields.length())
       }
       // Check for (mut ...) first - this only applies to single field
       if self.current.token == LParen {
@@ -755,33 +751,30 @@ fn Parser::parse_func_def(
     // Check if this type already exists
     let mut found = -1
     for i, subtype in mod_.types {
-      // Only match against function types
-      match subtype.composite {
-        Func(t) =>
-          if t.params.length() == ft.params.length() &&
-            t.results.length() == ft.results.length() {
-            let mut match_ = true
-            for j, p in t.params {
-              if p != ft.params[j] {
-                match_ = false
-                break
-              }
-            }
-            if match_ {
-              for j, r in t.results {
-                if r != ft.results[j] {
-                  match_ = false
-                  break
-                }
-              }
-            }
-            // Implicit types should only match singleton rec groups
-            if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
-              found = i
+      // Only if against function types
+      if subtype.composite is Func(t) &&
+        t.params.length() == ft.params.length() &&
+        t.results.length() == ft.results.length() {
+        let mut match_ = true
+        for j, p in t.params {
+          if p != ft.params[j] {
+            match_ = false
+            break
+          }
+        }
+        if match_ {
+          for j, r in t.results {
+            if r != ft.results[j] {
+              match_ = false
               break
             }
           }
-        _ => ()
+        }
+        // Implicit types should only match singleton rec groups
+        if match_ && is_singleton_rec_group(mod_.type_rec_groups, i) {
+          found = i
+          break
+        }
       }
     }
     if found >= 0 {

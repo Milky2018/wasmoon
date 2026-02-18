@@ -1672,32 +1672,29 @@ fn Parser::find_or_create_func_type(
 ) -> Int {
   // Search existing types for a match
   for i, subtype in self.types {
-    // Only match against function types
-    match subtype.composite {
-      Func(ft) =>
-        if ft.params.length() == params.length() &&
-          ft.results.length() == results.length() {
-          let mut match_ = true
-          for j in 0..<params.length() {
-            if params[j] != ft.params[j] {
-              match_ = false
-              break
-            }
-          }
-          if match_ {
-            for j in 0..<results.length() {
-              if results[j] != ft.results[j] {
-                match_ = false
-                break
-              }
-            }
-          }
-          // Implicit types should only match singleton rec groups
-          if match_ && is_singleton_rec_group(self.type_rec_groups, i) {
-            return i
+    // Only if against function types
+    if subtype.composite is Func(ft) &&
+      ft.params.length() == params.length() &&
+      ft.results.length() == results.length() {
+      let mut match_ = true
+      for j in 0..<params.length() {
+        if params[j] != ft.params[j] {
+          match_ = false
+          break
+        }
+      }
+      if match_ {
+        for j in 0..<results.length() {
+          if results[j] != ft.results[j] {
+            match_ = false
+            break
           }
         }
-      _ => ()
+      }
+      // Implicit types should only match singleton rec groups
+      if match_ && is_singleton_rec_group(self.type_rec_groups, i) {
+        return i
+      }
     }
   }
   // No match found, create a new type

@@ -214,9 +214,9 @@ pub fn VCodeFunction::calls_multi_value_function(self : VCodeFunction) -> Bool {
 pub fn VCodeFunction::has_calls(self : VCodeFunction) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
-      match inst.opcode.call_type() {
-        @instr.Regular | @instr.TailCall => return true
-        _ => ()
+      let call_type = inst.opcode.call_type()
+      if call_type is @instr.Regular || call_type is @instr.TailCall {
+        return true
       }
     }
   }

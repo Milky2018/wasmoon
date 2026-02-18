@@ -10,9 +10,8 @@ fn componenttype_import_func_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot() -> Unit {
@@ -118,9 +117,8 @@ fn componenttype_import_type_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot(as_resource : Bool) -> Int {
@@ -225,10 +223,9 @@ fn componenttype_import_type_bounds_of_decls(
 ) -> Map[String, @component.TypeBound] {
   let out : Map[String, @component.TypeBound] = {}
   for d in decls {
-    match d {
-      @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) =>
-        out.set(name, b)
-      _ => ()
+    if d
+      is @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) {
+      out.set(name, b)
     }
   }
   out
@@ -246,9 +243,8 @@ fn componenttype_export_func_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot() -> Unit {
@@ -275,9 +271,8 @@ fn componenttype_export_func_sigs_of_decls(
   }
 
   fn record_type_slots_for_desc(desc : @component.ExternDesc) -> Unit {
-    match desc {
-      @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
-      _ => ()
+    if desc is @component.ExternDesc::Type(b) {
+      record_type_slot_for_bound(b)
     }
   }
 
@@ -358,15 +353,12 @@ fn component_import_core_module_exports_of(
   }
   let result : Map[String, Map[String, Int]] = {}
   for i in c.imports {
-    match (importname_to_string(i.name), i.desc) {
-      (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) =>
-        if tyidx >= 0 && tyidx < core_type_exports.length() {
-          match core_type_exports[tyidx] {
-            Some(map) => result.set(name, map)
-            None => ()
-          }
-        }
-      _ => ()
+    if (importname_to_string(i.name), i.desc)
+      is (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) &&
+      tyidx >= 0 &&
+      tyidx < core_type_exports.length() &&
+      core_type_exports[tyidx] is Some(map) {
+      result.set(name, map)
     }
   }
   result
@@ -392,21 +384,16 @@ fn component_import_core_module_import_sigs_of(
   }
   let result : Map[String, Map[String, CoreExternType]] = {}
   for i in c.imports {
-    match (importname_to_string(i.name), i.desc) {
-      (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) =>
-        if tyidx >= 0 && tyidx < core_type_imports.length() {
-          match core_type_imports[tyidx] {
-            Some(imps) => {
-              let map : Map[String, CoreExternType] = {}
-              for imp in imps {
-                map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
-              }
-              result.set(name, map)
-            }
-            None => ()
-          }
-        }
-      _ => ()
+    if (importname_to_string(i.name), i.desc)
+      is (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) &&
+      tyidx >= 0 &&
+      tyidx < core_type_imports.length() &&
+      core_type_imports[tyidx] is Some(imps) {
+      let map : Map[String, CoreExternType] = {}
+      for imp in imps {
+        map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
+      }
+      result.set(name, map)
     }
   }
   result
@@ -473,23 +460,16 @@ fn componenttype_import_core_module_sigs_of_decls(
   let import_sigs : Map[String, Map[String, CoreExternType]] = {}
   let export_kinds : Map[String, Map[String, Int]] = {}
   for d in decls {
-    match d {
-      @component.ComponentDecl::Import(name, desc) =>
-        match desc {
-          @component.ExternDesc::CoreModuleType(tyidx) =>
-            if tyidx >= 0 && tyidx < local_core_import_sigs.length() {
-              match local_core_import_sigs[tyidx] {
-                Some(map) => import_sigs.set(name, map)
-                None => ()
-              }
-              match local_core_export_kinds[tyidx] {
-                Some(map) => export_kinds.set(name, map)
-                None => ()
-              }
-            }
-          _ => ()
-        }
-      _ => ()
+    if d is @component.ComponentDecl::Import(name, desc) &&
+      desc is @component.ExternDesc::CoreModuleType(tyidx) &&
+      tyidx >= 0 &&
+      tyidx < local_core_import_sigs.length() {
+      if local_core_import_sigs[tyidx] is Some(map) {
+        import_sigs.set(name, map)
+      }
+      if local_core_export_kinds[tyidx] is Some(map) {
+        export_kinds.set(name, map)
+      }
     }
   }
   (import_sigs, export_kinds)
@@ -624,22 +604,19 @@ fn validate_valtype(
   ty : @component.ValType,
   type_table : Array[@component.TypeDef?],
 ) -> Unit raise ComponentValidationError {
-  match ty {
-    TypeIdx(idx) => {
-      check_typeidx(idx, type_table.length())
-      match type_table[idx] {
-        // Component valtypes may reference any defined type (not function,
-        // component, or instance types).
-        Some(@component.TypeDef::FuncType(_))
-        | Some(@component.TypeDef::ComponentType(_))
-        | Some(@component.TypeDef::InstanceTypeEmpty)
-        | Some(@component.TypeDef::InstanceType(_)) =>
-          raise TypeIndexNotDefinedType(idx)
-        Some(_) => ()
-        None => ()
-      }
+  if ty is TypeIdx(idx) {
+    check_typeidx(idx, type_table.length())
+    match type_table[idx] {
+      // Component valtypes may reference any defined type (not function,
+      // component, or instance types).
+      Some(@component.TypeDef::FuncType(_))
+      | Some(@component.TypeDef::ComponentType(_))
+      | Some(@component.TypeDef::InstanceTypeEmpty)
+      | Some(@component.TypeDef::InstanceType(_)) =>
+        raise TypeIndexNotDefinedType(idx)
+      Some(_) => ()
+      None => ()
     }
-    Prim(_) => ()
   }
 }
 
@@ -1438,9 +1415,8 @@ fn canon_has_post_return(opts : Array[@component.CanonOpt]) -> Bool {
 ///|
 fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      Memory(idx) => return Some(idx)
-      _ => ()
+    if o is Memory(idx) {
+      return Some(idx)
     }
   }
   None
@@ -1449,9 +1425,8 @@ fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
 ///|
 fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      Realloc(idx) => return Some(idx)
-      _ => ()
+    if o is Realloc(idx) {
+      return Some(idx)
     }
   }
   None
@@ -1460,9 +1435,8 @@ fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
 ///|
 fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      PostReturn(idx) => return Some(idx)
-      _ => ()
+    if o is PostReturn(idx) {
+      return Some(idx)
     }
   }
   None

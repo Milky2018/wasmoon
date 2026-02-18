@@ -255,16 +255,14 @@ fn BacktrackingAllocator::constraint_hint_preg(
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for use_pos in range.uses {
-      match use_pos.constraint {
-        FixedReg(preg) =>
-          if preg.class == bundle.reg_class && avail_idx.contains(preg.index) {
-            let cur = match counts.get(preg.index) {
-              Some(v) => v
-              None => 0
-            }
-            counts.set(preg.index, cur + 1)
-          }
-        AnyReg => ()
+      if use_pos.constraint is FixedReg(preg) &&
+        preg.class == bundle.reg_class &&
+        avail_idx.contains(preg.index) {
+        let cur = match counts.get(preg.index) {
+          Some(v) => v
+          None => 0
+        }
+        counts.set(preg.index, cur + 1)
       }
     }
   }
@@ -1183,26 +1181,22 @@ pub fn BacktrackingAllocator::generate_result(
           let use_reg = inst.uses[i]
           if use_reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            match result.assignments.get(vreg.id) {
-              Some(assigned_preg) =>
-                if assigned_preg.index != required_preg.index {
-                  // Need to move from assigned to required
-                  edits.before.push({
-                    from: Reg(assigned_preg),
-                    to: Reg(required_preg),
-                    class: vreg.class,
-                  })
-                }
-              // If already at required_preg, no move needed
-              None =>
-                // Spilled: need to reload to the required register
-                if result.spill_slots.get(vreg.id) is Some(slot) {
-                  edits.before.push({
-                    from: Spill(slot),
-                    to: Reg(required_preg),
-                    class: vreg.class,
-                  })
-                }
+            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+              if assigned_preg.index != required_preg.index {
+                // Need to move from assigned to required
+                edits.before.push({
+                  from: Reg(assigned_preg),
+                  to: Reg(required_preg),
+                  class: vreg.class,
+                })
+              }
+            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+              // Spilled: need to reload to the required register
+              edits.before.push({
+                from: Spill(slot),
+                to: Reg(required_preg),
+                class: vreg.class,
+              })
             }
           }
         }
@@ -1214,26 +1208,23 @@ pub fn BacktrackingAllocator::generate_result(
           let def = inst.defs[i]
           if def.reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            match result.assignments.get(vreg.id) {
-              Some(assigned_preg) =>
-                if assigned_preg.index != required_preg.index {
-                  // Need to move from required to assigned
-                  // (the instruction produces in required_preg, we need to move to assigned)
-                  edits.after.push({
-                    from: Reg(required_preg),
-                    to: Reg(assigned_preg),
-                    class: vreg.class,
-                  })
-                }
-              None =>
-                // Spilled: need to store from required register to spill slot
-                if result.spill_slots.get(vreg.id) is Some(slot) {
-                  edits.after.push({
-                    from: Reg(required_preg),
-                    to: Spill(slot),
-                    class: vreg.class,
-                  })
-                }
+            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+              if assigned_preg.index != required_preg.index {
+                // Need to move from required to assigned
+                // (the instruction produces in required_preg, we need to move to assigned)
+                edits.after.push({
+                  from: Reg(required_preg),
+                  to: Reg(assigned_preg),
+                  class: vreg.class,
+                })
+              }
+            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+              // Spilled: need to store from required register to spill slot
+              edits.after.push({
+                from: Reg(required_preg),
+                to: Spill(slot),
+                class: vreg.class,
+              })
             }
           }
         }
@@ -1484,9 +1475,8 @@ fn BacktrackingAllocator::compact_spill_slots(
 
   // 4) Rewrite all spill-slot references (spill map + constraint edits).
   for vreg_id, old_slot in result.spill_slots {
-    match slot_remap.get(old_slot) {
-      Some(new_slot) => result.spill_slots.set(vreg_id, new_slot)
-      None => ()
+    if slot_remap.get(old_slot) is Some(new_slot) {
+      result.spill_slots.set(vreg_id, new_slot)
     }
   }
   for _key, edits in result.inst_edits {
@@ -1562,17 +1552,14 @@ pub fn build_bundles_with_merging(
   fn range_fixed_reg_conflict(range : LiveRange) -> (@abi.PReg?, Bool) {
     let mut fixed : @abi.PReg? = None
     for use_pos in range.uses {
-      match use_pos.constraint {
-        FixedReg(preg) =>
-          match fixed {
-            None => fixed = Some(preg)
-            Some(existing) =>
-              if existing.index != preg.index ||
-                !same_fixed_bank(existing, preg) {
-                return (None, true)
-              }
-          }
-        AnyReg => ()
+      if use_pos.constraint is FixedReg(preg) {
+        match fixed {
+          None => fixed = Some(preg)
+          Some(existing) =>
+            if existing.index != preg.index || !same_fixed_bank(existing, preg) {
+              return (None, true)
+            }
+        }
       }
     }
     (fixed, false)
@@ -1806,12 +1793,10 @@ pub fn build_bundles_with_merging(
     if conflict_a || conflict_b {
       return false
     }
-    match (fixed_a, fixed_b) {
-      (Some(a_fixed), Some(b_fixed)) =>
-        if a_fixed.index != b_fixed.index || !same_fixed_bank(a_fixed, b_fixed) {
-          return false
-        }
-      _ => ()
+    if fixed_a is Some(a_fixed) &&
+      fixed_b is Some(b_fixed) &&
+      (a_fixed.index != b_fixed.index || !same_fixed_bank(a_fixed, b_fixed)) {
+      return false
     }
 
     // Check for overlap within potential merged bundle.
@@ -1932,13 +1917,10 @@ pub fn build_bundles_with_merging(
         if i >= args.length() {
           break
         }
-        match args[i] {
-          @abi.Virtual(arg_vreg) =>
-            if ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
-              ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
-              try_merge(uf, param_idx, arg_idx, ranges) |> ignore
-            }
-          _ => ()
+        if args[i] is @abi.Virtual(arg_vreg) &&
+          ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
+          ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
+          try_merge(uf, param_idx, arg_idx, ranges) |> ignore
         }
       }
     }

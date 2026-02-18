@@ -109,13 +109,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
   fn pick_scratch_loc(class : @abi.RegClass, avoid_loc : Loc?) -> Loc {
     let mut avoid_idx : Int? = None
-    match avoid_loc {
-      Some(loc) =>
-        match loc {
-          Reg(preg) => avoid_idx = Some(preg.index)
-          Spill(_) => ()
-        }
-      None => ()
+    if avoid_loc is Some(Reg(preg)) {
+      avoid_idx = Some(preg.index)
     }
     let idx = match avoid_idx {
       Some(16) => 17

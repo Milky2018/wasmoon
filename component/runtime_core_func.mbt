@@ -69,12 +69,9 @@ fn call_core_func(
   // Reset any previous canonical trap so we don't leak messages across calls.
   clear_canon_trap_message()
   clear_canon_debug_message()
-  match canon_debug_message_preset[0] {
-    Some(msg) => {
-      canon_debug_message_preset[0] = None
-      set_canon_debug_message(msg)
-    }
-    None => ()
+  if canon_debug_message_preset[0] is Some(msg) {
+    canon_debug_message_preset[0] = None
+    set_canon_debug_message(msg)
   }
   canon_suspend[0] = None
   @executor.call_func_by_index(

@@ -816,30 +816,29 @@ fn Parser::parse_world(self : Parser) -> World raise WitError {
       if self.peek_kw(Ident("")) && self.peek_next_is(Colon) {
         // Peek after ':' to see if this is a named extern-type.
         if self.i + 2 < self.toks.length() {
-          match self.toks[self.i + 2].kind {
-            KwInterface | KwFunc | KwAsync => {
-              let nm = self.parse_ident()
-              self.bump_kw(Colon)
-              if self.peek_kw(KwInterface) {
-                let iface = self.parse_inline_interface()
-                if is_import {
-                  items.push(ImportInlineInterface(nm, iface))
-                } else {
-                  items.push(ExportInlineInterface(nm, iface))
-                }
+          if self.toks[self.i + 2].kind is KwInterface ||
+            self.toks[self.i + 2].kind is KwFunc ||
+            self.toks[self.i + 2].kind is KwAsync {
+            let nm = self.parse_ident()
+            self.bump_kw(Colon)
+            if self.peek_kw(KwInterface) {
+              let iface = self.parse_inline_interface()
+              if is_import {
+                items.push(ImportInlineInterface(nm, iface))
               } else {
-                // func-type ends with ';'
-                let f = self.parse_func_type_after_colon(nm)
-                if is_import {
-                  items.push(ImportFunc(f))
-                } else {
-                  items.push(ExportFunc(f))
-                }
-                self.bump_kw(Semi)
+                items.push(ExportInlineInterface(nm, iface))
               }
-              continue
+            } else {
+              // func-type ends with ';'
+              let f = self.parse_func_type_after_colon(nm)
+              if is_import {
+                items.push(ImportFunc(f))
+              } else {
+                items.push(ExportFunc(f))
+              }
+              self.bump_kw(Semi)
             }
-            _ => ()
+            continue
           }
         }
       }

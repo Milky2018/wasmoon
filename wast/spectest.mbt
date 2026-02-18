@@ -71,9 +71,8 @@ pub fn create_spectest_module(
   }
   let print_char_addr = store.alloc_host_func(
     fn(args) {
-      match args[0] {
-        @types.Value::I32(c) => @wasi.putchar(c)
-        _ => ()
+      if args[0] is @types.Value::I32(c) {
+        @wasi.putchar(c)
       }
       []
     },

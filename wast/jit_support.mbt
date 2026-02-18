@@ -951,33 +951,30 @@ pub fn build_external_imports_for_jit(
   let external : Map[String, Map[String, Int64]] = {}
   let mut func_imp_idx = 0
   for imp in mod_.imports {
-    match imp.desc {
-      Func(_) => {
-        let func_addr = if func_imp_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_imp_idx]
-        } else {
-          -1
-        }
-        func_imp_idx = func_imp_idx + 1
-        if func_addr < 0 {
-          continue
-        }
-        // Prefer built-in trampolines when available.
-        if @jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
-          continue
-        }
-        let inst = store.get_func_inst(func_addr) catch { _ => continue }
-        if inst is @runtime.FuncInst::HostFunc(_) {
-          let encoded = -(func_addr.to_int64() + 1L)
-          let m = match external.get(imp.mod_name) {
-            Some(mm) => mm
-            None => {}
-          }
-          m.set(imp.name, encoded)
-          external.set(imp.mod_name, m)
-        }
+    if imp.desc is Func(_) {
+      let func_addr = if func_imp_idx < instance.func_addrs.length() {
+        instance.func_addrs[func_imp_idx]
+      } else {
+        -1
       }
-      _ => ()
+      func_imp_idx = func_imp_idx + 1
+      if func_addr < 0 {
+        continue
+      }
+      // Prefer built-in trampolines when available.
+      if @jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
+        continue
+      }
+      let inst = store.get_func_inst(func_addr) catch { _ => continue }
+      if inst is @runtime.FuncInst::HostFunc(_) {
+        let encoded = -(func_addr.to_int64() + 1L)
+        let m = match external.get(imp.mod_name) {
+          Some(mm) => mm
+          None => {}
+        }
+        m.set(imp.name, encoded)
+        external.set(imp.mod_name, m)
+      }
     }
   }
   external

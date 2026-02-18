@@ -427,30 +427,23 @@ fn build_output(
       }
       // Also reserve any registers mentioned in fixed-reg constraint edits at this point.
       // If we steal one of these registers and later restore it, we'd clobber the move result.
-      match alloc.inst_edits.get((block_id, inst_idx)) {
-        Some(edits) => {
-          for mv in edits.before {
-            match mv.from {
-              Reg(p) => add_used_reg(used_int, used_fp, p)
-              _ => ()
-            }
-            match mv.to {
-              Reg(p) => add_used_reg(used_int, used_fp, p)
-              _ => ()
-            }
+      if alloc.inst_edits.get((block_id, inst_idx)) is Some(edits) {
+        for mv in edits.before {
+          if mv.from is Reg(p) {
+            add_used_reg(used_int, used_fp, p)
           }
-          for mv in edits.after {
-            match mv.from {
-              Reg(p) => add_used_reg(used_int, used_fp, p)
-              _ => ()
-            }
-            match mv.to {
-              Reg(p) => add_used_reg(used_int, used_fp, p)
-              _ => ()
-            }
+          if mv.to is Reg(p) {
+            add_used_reg(used_int, used_fp, p)
           }
         }
-        None => ()
+        for mv in edits.after {
+          if mv.from is Reg(p) {
+            add_used_reg(used_int, used_fp, p)
+          }
+          if mv.to is Reg(p) {
+            add_used_reg(used_int, used_fp, p)
+          }
+        }
       }
 
       // Reload spilled uses into temps as needed.
@@ -502,22 +495,19 @@ fn build_output(
           )
           temp_cursor = new_cursor
           // If we had to steal a register, save/restore around the instruction.
-          match save_slot {
-            Some(s) => {
-              out.push_edit(
-                block_id,
-                inst_idx,
-                Before,
-                Edit::Move(Reg(tmp), Spill(s), vreg.class),
-              )
-              out.push_edit(
-                block_id,
-                inst_idx,
-                After,
-                Edit::Move(Spill(s), Reg(tmp), vreg.class),
-              )
-            }
-            None => ()
+          if save_slot is Some(s) {
+            out.push_edit(
+              block_id,
+              inst_idx,
+              Before,
+              Edit::Move(Reg(tmp), Spill(s), vreg.class),
+            )
+            out.push_edit(
+              block_id,
+              inst_idx,
+              After,
+              Edit::Move(Spill(s), Reg(tmp), vreg.class),
+            )
           }
           out.push_edit(
             block_id,
@@ -556,15 +546,13 @@ fn build_output(
           temp_cursor = new_cursor
           spill_def_regs.set(vreg.id, tmp)
           add_used_reg(used_int, used_fp, tmp)
-          match save_slot {
-            Some(s) =>
-              out.push_edit(
-                block_id,
-                inst_idx,
-                Before,
-                Edit::Move(Reg(tmp), Spill(s), vreg.class),
-              )
-            None => ()
+          if save_slot is Some(s) {
+            out.push_edit(
+              block_id,
+              inst_idx,
+              Before,
+              Edit::Move(Reg(tmp), Spill(s), vreg.class),
+            )
           }
           out.push_edit(
             block_id,
@@ -572,15 +560,13 @@ fn build_output(
             After,
             Edit::Move(Reg(tmp), Spill(slot), vreg.class),
           )
-          match save_slot {
-            Some(s) =>
-              out.push_edit(
-                block_id,
-                inst_idx,
-                After,
-                Edit::Move(Spill(s), Reg(tmp), vreg.class),
-              )
-            None => ()
+          if save_slot is Some(s) {
+            out.push_edit(
+              block_id,
+              inst_idx,
+              After,
+              Edit::Move(Spill(s), Reg(tmp), vreg.class),
+            )
           }
           // If this slot had an active reload register, it is now stale.
           active_reloads.remove(slot) |> ignore

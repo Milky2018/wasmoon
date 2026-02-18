@@ -50,9 +50,8 @@ pub fn EGraphBuilder::new_with_limits(
 ///|
 /// Register an instruction's definition
 pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
-  match inst.first_result() {
-    Some(v) => self.def_map.set(v.id, inst)
-    None => ()
+  if inst.first_result() is Some(v) {
+    self.def_map.set(v.id, inst)
   }
 }
 
@@ -183,49 +182,46 @@ pub fn EGraphBuilder::add_value(
   value : Value,
 ) -> @egraph.EClassId {
   // Check if already converted
-  match self.value_map.get(value.id) {
-    Some(id) => return self.egraph.find(id) // Return canonical id
-    None => ()
+  if self.value_map.get(value.id) is Some(id) {
+    return self.egraph.find(id) // Return canonical id
   }
 
   // Get the bit width from the value's type
   let bits = type_bits(value.ty)
 
   // Look up the defining instruction
-  let class_id = match self.def_map.get(value.id) {
-    None => {
-      // No definition found - treat as a variable (parameter or external)
-      let id = self.egraph.add_var(value.id)
-      self.egraph.set_type(id, bits)
-      id
-    }
-    Some(inst) =>
-      // Try to convert the opcode (pass full instruction for type info)
-      match opcode_to_eopcode(inst) {
-        None => {
-          // Not an optimizable opcode - treat as variable
-          let id = self.egraph.add_var(value.id)
-          self.egraph.set_type(id, bits)
-          id
-        }
-        Some(eop) =>
-          match eop {
-            Const(c) => {
-              let id = self.egraph.add_const(c)
-              self.egraph.set_type(id, bits)
-              id
-            }
-            _ => {
-              // Recursively add operands
-              let children : Array[@egraph.EClassId] = []
-              for operand in inst.operands {
-                children.push(self.add_value(operand))
-              }
-              // Add the node with type info; rewriting happens in a later saturation step.
-              self.egraph.add_typed({ op: eop, children }, bits)
-            }
-          }
+  let class_id = if self.def_map.get(value.id) is Some(inst) {
+    // Try to convert the opcode (pass full instruction for type info)
+    match opcode_to_eopcode(inst) {
+      None => {
+        // Not an optimizable opcode - treat as variable
+        let id = self.egraph.add_var(value.id)
+        self.egraph.set_type(id, bits)
+        id
       }
+      Some(eop) =>
+        match eop {
+          Const(c) => {
+            let id = self.egraph.add_const(c)
+            self.egraph.set_type(id, bits)
+            id
+          }
+          _ => {
+            // Recursively add operands
+            let children : Array[@egraph.EClassId] = []
+            for operand in inst.operands {
+              children.push(self.add_value(operand))
+            }
+            // Add the node with type info; rewriting happens in a later saturation step.
+            self.egraph.add_typed({ op: eop, children }, bits)
+          }
+        }
+    }
+  } else {
+    // No definition found - treat as a variable (parameter or external)
+    let id = self.egraph.add_var(value.id)
+    self.egraph.set_type(id, bits)
+    id
   }
   self.value_map.set(value.id, class_id)
   class_id
@@ -287,14 +283,9 @@ pub fn optimize_block_with_limits(
 
   // Second pass: add all arithmetic values to e-graph
   for inst in block.instructions {
-    match inst.first_result() {
-      Some(v) =>
-        // Only add if it's an optimizable operation
-        match opcode_to_eopcode(inst) {
-          Some(_) => builder.add_value(v) |> ignore
-          None => ()
-        }
-      None => ()
+    if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+      // Only add if it's an optimizable operation
+      builder.add_value(v) |> ignore
     }
   }
 
@@ -304,13 +295,8 @@ pub fn optimize_block_with_limits(
   // Extract optimized results
   let results : Map[Int, (Int, @egraph.ENode)] = {}
   for inst in block.instructions {
-    match inst.first_result() {
-      Some(v) =>
-        match builder.extract(v) {
-          Some(result) => results.set(v.id, result)
-          None => ()
-        }
-      None => ()
+    if inst.first_result() is Some(v) && builder.extract(v) is Some(result) {
+      results.set(v.id, result)
     }
   }
   results
@@ -379,14 +365,11 @@ fn EGraphBuilder::recompute_representatives_for_block(
 ) -> Unit {
   self.class_to_value.clear()
   fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
-    match self.value_map.get(value.id) {
-      None => ()
-      Some(class_id) => {
-        let canonical = self.egraph.find(class_id)
-        let key : RepKey = { class_id: canonical.0, ty: value.ty }
-        if not(self.class_to_value.contains(key)) {
-          self.class_to_value.set(key, value)
-        }
+    if self.value_map.get(value.id) is Some(class_id) {
+      let canonical = self.egraph.find(class_id)
+      let key : RepKey = { class_id: canonical.0, ty: value.ty }
+      if !self.class_to_value.contains(key) {
+        self.class_to_value.set(key, value)
       }
     }
   }
@@ -402,9 +385,8 @@ fn EGraphBuilder::recompute_representatives_for_block(
     for op in inst.operands {
       try_add_rep(self, op)
     }
-    match inst.first_result() {
-      Some(v) => try_add_rep(self, v)
-      None => ()
+    if inst.first_result() is Some(v) {
+      try_add_rep(self, v)
     }
   }
 }
@@ -447,13 +429,8 @@ pub fn optimize_function_with_stats_with_limits(
 
     // Add all values to e-graph
     for inst in block.instructions {
-      match inst.first_result() {
-        Some(v) =>
-          match opcode_to_eopcode(inst) {
-            Some(_) => builder.add_value(v) |> ignore
-            None => ()
-          }
-        None => ()
+      if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+        builder.add_value(v) |> ignore
       }
     }
 
@@ -471,49 +448,40 @@ pub fn optimize_function_with_stats_with_limits(
       // First, try to simplify operands (e.g., x + 0 -> x means operand can be simplified)
       for i in 0..<inst.operands.length() {
         let operand = inst.operands[i]
-        match builder.get_simplified_operand(operand) {
-          Some(simplified) => {
-            inst.operands[i] = simplified
-            changed = true
-          }
-          None => ()
+        if builder.get_simplified_operand(operand) is Some(simplified) {
+          inst.operands[i] = simplified
+          changed = true
         }
       }
 
       // Then, try to simplify the result value
-      match inst.first_result() {
-        Some(v) =>
-          match builder.get_simplified_opcode(v) {
-            Some(Iconst(c)) => {
-              // Replace with constant only when it materially changes the IR.
-              // Otherwise we can report spurious "changed" forever.
-              let mut inst_changed = false
-              match inst.opcode {
-                Iconst(old_c) =>
-                  if old_c != c || inst.operands.length() > 0 {
-                    inst.opcode = Iconst(c)
-                    inst.operands.clear()
-                    inst_changed = true
-                  }
-                _ => {
-                  inst.opcode = Iconst(c)
-                  inst.operands.clear()
-                  inst_changed = true
-                }
+      if inst.first_result() is Some(v) &&
+        builder.get_simplified_opcode(v) is Some(op) {
+        if op is Iconst(c) {
+          // Replace with constant only when it materially changes the IR.
+          // Otherwise we can report spurious "changed" forever.
+          let mut inst_changed = false
+          match inst.opcode {
+            Iconst(old_c) =>
+              if old_c != c || inst.operands.length() > 0 {
+                inst.opcode = Iconst(c)
+                inst.operands.clear()
+                inst_changed = true
               }
-              if inst_changed {
-                changed = true
-              }
+            _ => {
+              inst.opcode = Iconst(c)
+              inst.operands.clear()
+              inst_changed = true
             }
-            Some(new_op) =>
-              // Opcode changed - update it only when different.
-              if inst.opcode != new_op {
-                inst.opcode = new_op
-                changed = true
-              }
-            None => ()
           }
-        None => ()
+          if inst_changed {
+            changed = true
+          }
+        } else if inst.opcode != op {
+          // Opcode changed - update it only when different.
+          inst.opcode = op
+          changed = true
+        }
       }
     }
   }

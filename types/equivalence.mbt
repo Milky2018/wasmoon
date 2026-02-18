@@ -126,9 +126,8 @@ fn TypeEquivalenceContext::types_structurally_equal(
   } else {
     (idx2, idx1)
   }
-  match self.visited.get(key) {
-    Some(result) => return result
-    None => ()
+  if self.visited.get(key) is Some(result) {
+    return result
   }
   // Assume equal to break cycles (recursive types)
   self.visited[key] = true
@@ -460,16 +459,13 @@ pub fn compute_canonical_type_indices(
       i // singleton rec group
     }
     // Check if we've already determined this rec group's canonical mapping
-    match rec_group_canonical.get(rec_id_i) {
-      Some((canon_rec_id, first_idx)) => {
-        // This rec group already mapped - compute relative canonical index
-        let pos_i = get_rec_group_position(type_rec_groups, i, rec_id_i)
-        canonical[i] = first_idx +
-          pos_i -
-          get_rec_group_position(type_rec_groups, first_idx, canon_rec_id)
-        continue
-      }
-      None => ()
+    if rec_group_canonical.get(rec_id_i) is Some((canon_rec_id, first_idx)) {
+      // This rec group already mapped - compute relative canonical index
+      let pos_i = get_rec_group_position(type_rec_groups, i, rec_id_i)
+      canonical[i] = first_idx +
+        pos_i -
+        get_rec_group_position(type_rec_groups, first_idx, canon_rec_id)
+      continue
     }
     // This is the first type we've seen from this rec group
     // Try to find an equivalent rec group we've already processed

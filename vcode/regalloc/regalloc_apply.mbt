@@ -367,9 +367,8 @@ pub fn apply_allocation(
       let used_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
-          match alloc.assignments.get(vreg.id) {
-            Some(preg) => used_regs.add(preg.index) |> ignore
-            None => ()
+          if alloc.assignments.get(vreg.id) is Some(preg) {
+            used_regs.add(preg.index) |> ignore
           }
         }
       }
@@ -928,12 +927,10 @@ fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
       if inst.opcode is @instr.Move &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 {
-        match (inst.defs[0].reg, inst.uses[0]) {
-          (@abi.Physical(dst), @abi.Physical(src)) =>
-            if same_location(src, dst) {
-              skip = true
-            }
-          _ => ()
+        if inst.defs[0].reg is @abi.Physical(dst) &&
+          inst.uses[0] is @abi.Physical(src) &&
+          same_location(src, dst) {
+          skip = true
         }
       }
       if !skip {

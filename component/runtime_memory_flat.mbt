@@ -12,12 +12,10 @@ fn read_string_from_memory_with_encoding(
   }
   // Pointer alignment requirements:
   // - utf16 and latin1+utf16 require 2-byte alignment.
-  match encoding {
-    Utf16 | Latin1Utf16 =>
-      if (ptr.reinterpret_as_uint() & 1U) != 0U {
-        raise CanonCallError("unaligned pointer")
-      }
-    Utf8 => ()
+  if encoding is Utf16 || encoding is Latin1Utf16 {
+    if (ptr.reinterpret_as_uint() & 1U) != 0U {
+      raise CanonCallError("unaligned pointer")
+    }
   }
   let mem_len = mem.byte_len()
   let mut byte_len = len

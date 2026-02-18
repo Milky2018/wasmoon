@@ -40,13 +40,10 @@ fn instantiate_canon_future_new(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_i64(x : Int64) -> Array[@types.Value] {
       let out = [@types.Value::I64(x)]
@@ -149,13 +146,10 @@ fn instantiate_canon_future_read(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_i32(n : Int) -> Array[@types.Value] {
       let out = [@types.Value::I32(n)]
@@ -378,13 +372,10 @@ fn instantiate_canon_future_write(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_i32(n : Int) -> Array[@types.Value] {
       let out = [@types.Value::I32(n)]

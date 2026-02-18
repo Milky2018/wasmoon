@@ -446,16 +446,13 @@ fn MachineCode::emit_prologue(
   }
 
   // Best-effort: record current wasm func_idx for trap diagnostics.
-  match debug_func_idx {
-    Some(idx) => {
-      self.emit_load_imm64(16, idx.to_int64())
-      self.emit_str_w_imm(
-        16,
-        @abi.REG_CALLEE_VMCTX,
-        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
-      )
-    }
-    None => ()
+  if debug_func_idx is Some(idx) {
+    self.emit_load_imm64(16, idx.to_int64())
+    self.emit_str_w_imm(
+      16,
+      @abi.REG_CALLEE_VMCTX,
+      @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+    )
   }
 
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
@@ -702,26 +699,18 @@ pub fn emit_function(
     let mut def_mask : Int64 = 0L
     for inst in b.insts {
       for u in inst.uses {
-        match u {
-          Physical(p) =>
-            if p.class is Int {
-              let bit = 1L << p.index
-              if (defined & bit) == 0L {
-                use_mask = use_mask | bit
-              }
-            }
-          Virtual(_) => ()
+        if u is Physical(p) && p.class is Int {
+          let bit = 1L << p.index
+          if (defined & bit) == 0L {
+            use_mask = use_mask | bit
+          }
         }
       }
       for d in inst.defs {
-        match d.reg {
-          Physical(p) =>
-            if p.class is Int {
-              let bit = 1L << p.index
-              def_mask = def_mask | bit
-              defined = defined | bit
-            }
-          Virtual(_) => ()
+        if d.reg is Physical(p) && p.class is Int {
+          let bit = 1L << p.index
+          def_mask = def_mask | bit
+          defined = defined | bit
         }
       }
     }
@@ -1027,13 +1016,10 @@ pub fn emit_function(
               } else {
                 Some(add_op0)
               }
-              match base {
-                Some(rn) => {
-                  mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
-                  inst_idx = inst_idx + 2
-                  continue
-                }
-                None => ()
+              if base is Some(rn) {
+                mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
+                inst_idx = inst_idx + 2
+                continue
               }
             }
           }
@@ -1087,58 +1073,49 @@ fn output_uses_preg(
 ) -> Bool {
   // Params.
   for i in 0..<func.get_params().length() {
-    match output.get_param_loc(i) {
-      @regalloc.Reg(p) => if p.index == preg_idx { return true }
-      _ => ()
+    if output.get_param_loc(i) is @regalloc.Reg(p) && p.index == preg_idx {
+      return true
     }
   }
   // Insts + terminators.
   for block in func.get_blocks() {
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        match output.inst_def_loc(block.id, inst_idx, false, di) {
-          @regalloc.Reg(p) => if p.index == preg_idx { return true }
-          _ => ()
+        if output.inst_def_loc(block.id, inst_idx, false, di)
+          is @regalloc.Reg(p) &&
+          p.index == preg_idx {
+          return true
         }
       }
       for ui in 0..<inst.uses.length() {
-        match output.inst_use_loc(block.id, inst_idx, false, ui) {
-          @regalloc.Reg(p) => if p.index == preg_idx { return true }
-          _ => ()
+        if output.inst_use_loc(block.id, inst_idx, false, ui)
+          is @regalloc.Reg(p) &&
+          p.index == preg_idx {
+          return true
         }
       }
       // Edits around the instruction.
       for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        match output.edits_at(block.id, inst_idx, pos) {
-          Some(edits) =>
-            for e in edits {
-              match e {
-                @regalloc.Move(_from, to, _class) =>
-                  match to {
-                    @regalloc.Reg(p) => if p.index == preg_idx { return true }
-                    _ => ()
-                  }
-              }
+        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
+          for e in edits {
+            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+              p.index == preg_idx {
+              return true
             }
-          None => ()
+          }
         }
       }
     }
     if block.terminator is Some(_) {
       let term_inst = block.insts.length()
       for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        match output.edits_at(block.id, term_inst, pos) {
-          Some(edits) =>
-            for e in edits {
-              match e {
-                @regalloc.Move(_from, to, _class) =>
-                  match to {
-                    @regalloc.Reg(p) => if p.index == preg_idx { return true }
-                    _ => ()
-                  }
-              }
+        if output.edits_at(block.id, term_inst, pos) is Some(edits) {
+          for e in edits {
+            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+              p.index == preg_idx {
+              return true
             }
-          None => ()
+          }
         }
       }
       // Terminator operand allocations.
@@ -1155,9 +1132,10 @@ fn output_uses_preg(
         @instr.Jump(_, _) => 0
       }
       for ui in 0..<use_count {
-        match output.inst_use_loc(block.id, term_inst, true, ui) {
-          @regalloc.Reg(p) => if p.index == preg_idx { return true }
-          _ => ()
+        if output.inst_use_loc(block.id, term_inst, true, ui)
+          is @regalloc.Reg(p) &&
+          p.index == preg_idx {
+          return true
         }
       }
     }
@@ -1181,12 +1159,10 @@ fn collect_used_callee_saved_from_output(
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
-    match output.get_param_loc(i) {
-      @regalloc.Reg(p) =>
-        if p.class is @abi.Int && callee_saved_int.contains(p.index) {
-          used.add(p.index)
-        }
-      _ => ()
+    if output.get_param_loc(i) is @regalloc.Reg(p) &&
+      p.class is @abi.Int &&
+      callee_saved_int.contains(p.index) {
+      used.add(p.index)
     }
   }
 
@@ -1195,22 +1171,14 @@ fn collect_used_callee_saved_from_output(
     let term_inst = block.insts.length()
     fn record_edits_at(inst_idx : Int) -> Unit {
       for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        match output.edits_at(block.id, inst_idx, pos) {
-          Some(edits) =>
-            for e in edits {
-              match e {
-                @regalloc.Move(_from, to, _class) =>
-                  match to {
-                    @regalloc.Reg(p) =>
-                      if p.class is @abi.Int &&
-                        callee_saved_int.contains(p.index) {
-                        used.add(p.index)
-                      }
-                    _ => ()
-                  }
-              }
+        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
+          for e in edits {
+            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+              p.class is @abi.Int &&
+              callee_saved_int.contains(p.index) {
+              used.add(p.index)
             }
-          None => ()
+          }
         }
       }
     }
@@ -1229,16 +1197,11 @@ fn collect_used_callee_saved_from_output(
     // design.
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        match inst.defs[di].reg {
-          @abi.Virtual(_) =>
-            match output.inst_def_loc(block.id, inst_idx, false, di) {
-              @regalloc.Reg(p) =>
-                if p.class is @abi.Int && callee_saved_int.contains(p.index) {
-                  used.add(p.index)
-                }
-              _ => ()
-            }
-          _ => ()
+        if inst.defs[di].reg is @abi.Virtual(_) &&
+          output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
+          p.class is @abi.Int &&
+          callee_saved_int.contains(p.index) {
+          used.add(p.index)
         }
       }
     }
@@ -1270,13 +1233,10 @@ fn collect_used_callee_saved_fprs_from_output(
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
-    match output.get_param_loc(i) {
-      @regalloc.Reg(p) =>
-        if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-          callee_saved_fprs.contains(p.index) {
-          used.add(p.index)
-        }
-      _ => ()
+    if output.get_param_loc(i) is @regalloc.Reg(p) &&
+      (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+      callee_saved_fprs.contains(p.index) {
+      used.add(p.index)
     }
   }
 
@@ -1285,22 +1245,14 @@ fn collect_used_callee_saved_fprs_from_output(
     let term_inst = block.insts.length()
     fn record_edits_at(inst_idx : Int) -> Unit {
       for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        match output.edits_at(block.id, inst_idx, pos) {
-          Some(edits) =>
-            for e in edits {
-              match e {
-                @regalloc.Move(_from, to, _class) =>
-                  match to {
-                    @regalloc.Reg(p) =>
-                      if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                        callee_saved_fprs.contains(p.index) {
-                        used.add(p.index)
-                      }
-                    _ => ()
-                  }
-              }
+        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
+          for e in edits {
+            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+              (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+              callee_saved_fprs.contains(p.index) {
+              used.add(p.index)
             }
-          None => ()
+          }
         }
       }
     }
@@ -1314,17 +1266,11 @@ fn collect_used_callee_saved_fprs_from_output(
     // above in collect_used_callee_saved_from_output).
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        match inst.defs[di].reg {
-          @abi.Virtual(_) =>
-            match output.inst_def_loc(block.id, inst_idx, false, di) {
-              @regalloc.Reg(p) =>
-                if (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-                  callee_saved_fprs.contains(p.index) {
-                  used.add(p.index)
-                }
-              _ => ()
-            }
-          _ => ()
+        if inst.defs[di].reg is @abi.Virtual(_) &&
+          output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
+          (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+          callee_saved_fprs.contains(p.index) {
+          used.add(p.index)
         }
       }
     }
@@ -2088,35 +2034,32 @@ pub fn emit_function_with_regalloc(
     mc.define_label(block.id)
     for inst_idx, inst in block.insts {
       // Edits before instruction.
-      match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before) {
-        Some(edits) =>
-          for e in edits {
-            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-          }
-        None => ()
+      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before)
+        is Some(edits) {
+        for e in edits {
+          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
+        }
       }
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
       mc.emit_instruction(mapped, stack_frame)
       invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
-      match output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After) {
-        Some(edits) =>
-          for e in edits {
-            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-          }
-        None => ()
+      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After)
+        is Some(edits) {
+        for e in edits {
+          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
+        }
       }
     }
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
       // Edits before terminator (block-arg moves, terminator reloads, etc).
-      match output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before) {
-        Some(edits) =>
-          for e in edits {
-            emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-          }
-        None => ()
+      if output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before)
+        is Some(edits) {
+        for e in edits {
+          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
+        }
       }
       let next_block = if i + 1 < blocks.length() {
         Some(blocks[i + 1].id)

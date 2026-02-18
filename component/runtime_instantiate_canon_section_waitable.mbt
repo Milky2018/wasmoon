@@ -113,57 +113,47 @@ fn instantiate_canon_waitable_set_wait(
         return
       }
       let sub_key = handle_key(ev.owner_component_id, ev.index)
-      match async_state.subtasks.get(sub_key) {
-        Some(st) =>
-          match st.result_ty {
-            Some(_) =>
-              if st.mem_addr is Some(mem_addr2) {
-                let cancelled = async_state.task_cancelled.get(sub_key)
-                  is Some(true)
-                if cancelled {
-                  return
-                }
-                let vals = match async_state.task_results.get(sub_key) {
-                  Some(v) => v
-                  None => []
-                }
-                let (ft, ftypes) = match st.driver {
-                  SubtaskDriver::CallbackLifted(t) =>
-                    match t.func {
-                      ComponentFunc::Host(func_type, types, _) =>
-                        (func_type, types)
-                      ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
-                        (func_type, types)
-                    }
-                }
-                let mem2 = store.get_mem(mem_addr2) catch { _ => return }
-                let core_vals = component_results_to_core(
-                  vals,
-                  ft,
-                  ftypes,
-                  st.resources,
-                  store,
-                  Some(st.retptr),
-                ) catch {
-                  _e => return
-                }
-                match core_vals {
-                  [@types.Value::I32(n)] =>
-                    mem2.store_i32(st.retptr, n) catch {
-                      _ => ()
-                    }
-                  [@types.Value::I64(n)] =>
-                    mem2.store_i64(st.retptr, n) catch {
-                      _ => ()
-                    }
-                  _ => ()
-                }
-              } else {
-                ()
-              }
-            None => ()
-          }
-        None => ()
+      if async_state.subtasks.get(sub_key) is Some(st) &&
+        st.result_ty is Some(_) &&
+        st.mem_addr is Some(mem_addr2) {
+        let cancelled = async_state.task_cancelled.get(sub_key) is Some(true)
+        if cancelled {
+          return
+        }
+        let vals = match async_state.task_results.get(sub_key) {
+          Some(v) => v
+          None => []
+        }
+        let (ft, ftypes) = match st.driver {
+          SubtaskDriver::CallbackLifted(t) =>
+            match t.func {
+              ComponentFunc::Host(func_type, types, _) => (func_type, types)
+              ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
+                (func_type, types)
+            }
+        }
+        let mem2 = store.get_mem(mem_addr2) catch { _ => return }
+        let core_vals = component_results_to_core(
+          vals,
+          ft,
+          ftypes,
+          st.resources,
+          store,
+          Some(st.retptr),
+        ) catch {
+          _e => return
+        }
+        match core_vals {
+          [@types.Value::I32(n)] =>
+            mem2.store_i32(st.retptr, n) catch {
+              _ => ()
+            }
+          [@types.Value::I64(n)] =>
+            mem2.store_i64(st.retptr, n) catch {
+              _ => ()
+            }
+          _ => ()
+        }
       }
     }
 

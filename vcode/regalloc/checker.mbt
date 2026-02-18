@@ -125,26 +125,23 @@ pub fn verify_allocation(
     // Treat any FixedReg at any point as justification for using a register
     // outside the main allocatable pool (e.g. call-arg registers x0-x7).
     for use_pos in lr.uses {
-      match use_pos.constraint {
-        FixedReg(fr) => {
-          // Compare by bank (int vs float/vector) and index.
-          let same_bank = match (fr.class, preg.class) {
-            (@abi.Int, @abi.Int) => true
-            (
-              @abi.Float32
-              | @abi.Float64
-              | @abi.Vector,
-              @abi.Float32
-              | @abi.Float64
-              | @abi.Vector,
-            ) => true
-            _ => false
-          }
-          if same_bank && fr.index == preg.index {
-            return true
-          }
+      if use_pos.constraint is FixedReg(fr) {
+        // Compare by bank (int vs float/vector) and index.
+        let same_bank = match (fr.class, preg.class) {
+          (@abi.Int, @abi.Int) => true
+          (
+            @abi.Float32
+            | @abi.Float64
+            | @abi.Vector,
+            @abi.Float32
+            | @abi.Float64
+            | @abi.Vector,
+          ) => true
+          _ => false
         }
-        AnyReg => ()
+        if same_bank && fr.index == preg.index {
+          return true
+        }
       }
     }
     false
@@ -154,98 +151,94 @@ pub fn verify_allocation(
   let preg_spans : Map[Int, Array[(Int, ProgPointRange)]] = {}
   for entry in alloc.assignments {
     let (vreg_id, preg) = entry
-    match ranges.get_by_vreg(vreg_id) {
-      Some(lr) => {
-        // Scratch regs must never be assigned.
-        if preg.class is @abi.Int && scratch_int.contains(preg.index) {
-          abort("regalloc verifier: assigned scratch GPR x\{preg.index}")
-        }
-        if preg.class is @abi.Float32 ||
-          preg.class is @abi.Float64 ||
-          preg.class is @abi.Vector {
-          if scratch_float.contains(preg.index) {
-            abort("regalloc verifier: assigned scratch V\{preg.index}")
-          }
-        }
-
-        // Allocatable set checks.
-        let fixed_reg = lr.get_fixed_reg()
-        match lr.vreg.class {
-          @abi.Int =>
-            if !allowed_int.contains(preg.index) {
-              // Allow parameters in ABI argument registers.
-              let is_arg_gpr = preg.index >= 0 &&
-                preg.index < @abi.MAX_REG_PARAMS
-              if !(param_ids.contains(vreg_id) && is_arg_gpr) &&
-                !(is_arg_gpr && !lr.crosses_call) &&
-                !(fixed_reg is Some(fr) && fr.index == preg.index) &&
-                !has_any_fixed_constraint_to(lr, preg) {
-                abort(
-                  "regalloc verifier: v\{vreg_id} assigned non-allocatable GPR x\{preg.index}",
-                )
-              }
-            }
-          @abi.Float32 | @abi.Float64 =>
-            if !allowed_float.contains(preg.index) {
-              if !(param_ids.contains(vreg_id) &&
-                preg.index >= 0 &&
-                preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
-                !(fixed_reg is Some(fr) && fr.index == preg.index) {
-                abort(
-                  "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
-                )
-              }
-            }
-          @abi.Vector =>
-            if !allowed_vector.contains(preg.index) {
-              if !(param_ids.contains(vreg_id) &&
-                preg.index >= 0 &&
-                preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
-                !(fixed_reg is Some(fr) && fr.index == preg.index) {
-                abort(
-                  "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",
-                )
-              }
-            }
-        }
-
-        // Call-clobber safety.
-        if lr.crosses_call {
-          if lr.vreg.class is @abi.Vector {
-            abort("regalloc verifier: vector value live across call must spill")
-          }
-          if preg.class is @abi.Int && call_clobbered_int.contains(preg.index) {
-            abort(
-              "regalloc verifier: value live across call assigned to caller-saved x\{preg.index}",
-            )
-          }
-          if preg.class is @abi.Float32 || preg.class is @abi.Float64 {
-            // If this value crosses any C call, use the scalar same-ABI
-            // caller-saved subset (V8-V15 low 64-bit remain preserved).
-            if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
-              abort(
-                "regalloc verifier: value live across C call assigned to caller-saved v\{preg.index}",
-              )
-            }
-            // If this value crosses any Wasm call, treat the standard caller-saved subset as clobbered.
-            if lr.crosses_wasm_call &&
-              call_clobbered_float_wasm.contains(preg.index) {
-              abort(
-                "regalloc verifier: value live across Wasm call assigned to caller-saved v\{preg.index}",
-              )
-            }
-          }
-        }
-        let key = alias_key(preg)
-        if preg_spans.get(key) is None {
-          preg_spans.set(key, [])
-        }
-        let spans = preg_spans.get(key).unwrap()
-        for span in lr.ranges {
-          spans.push((vreg_id, span))
+    if ranges.get_by_vreg(vreg_id) is Some(lr) {
+      // Scratch regs must never be assigned.
+      if preg.class is @abi.Int && scratch_int.contains(preg.index) {
+        abort("regalloc verifier: assigned scratch GPR x\{preg.index}")
+      }
+      if preg.class is @abi.Float32 ||
+        preg.class is @abi.Float64 ||
+        preg.class is @abi.Vector {
+        if scratch_float.contains(preg.index) {
+          abort("regalloc verifier: assigned scratch V\{preg.index}")
         }
       }
-      None => ()
+
+      // Allocatable set checks.
+      let fixed_reg = lr.get_fixed_reg()
+      match lr.vreg.class {
+        @abi.Int =>
+          if !allowed_int.contains(preg.index) {
+            // Allow parameters in ABI argument registers.
+            let is_arg_gpr = preg.index >= 0 && preg.index < @abi.MAX_REG_PARAMS
+            if !(param_ids.contains(vreg_id) && is_arg_gpr) &&
+              !(is_arg_gpr && !lr.crosses_call) &&
+              !(fixed_reg is Some(fr) && fr.index == preg.index) &&
+              !has_any_fixed_constraint_to(lr, preg) {
+              abort(
+                "regalloc verifier: v\{vreg_id} assigned non-allocatable GPR x\{preg.index}",
+              )
+            }
+          }
+        @abi.Float32 | @abi.Float64 =>
+          if !allowed_float.contains(preg.index) {
+            if !(param_ids.contains(vreg_id) &&
+              preg.index >= 0 &&
+              preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+              !(fixed_reg is Some(fr) && fr.index == preg.index) {
+              abort(
+                "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
+              )
+            }
+          }
+        @abi.Vector =>
+          if !allowed_vector.contains(preg.index) {
+            if !(param_ids.contains(vreg_id) &&
+              preg.index >= 0 &&
+              preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+              !(fixed_reg is Some(fr) && fr.index == preg.index) {
+              abort(
+                "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",
+              )
+            }
+          }
+      }
+
+      // Call-clobber safety.
+      if lr.crosses_call {
+        if lr.vreg.class is @abi.Vector {
+          abort("regalloc verifier: vector value live across call must spill")
+        }
+        if preg.class is @abi.Int && call_clobbered_int.contains(preg.index) {
+          abort(
+            "regalloc verifier: value live across call assigned to caller-saved x\{preg.index}",
+          )
+        }
+        if preg.class is @abi.Float32 || preg.class is @abi.Float64 {
+          // If this value crosses any C call, use the scalar same-ABI
+          // caller-saved subset (V8-V15 low 64-bit remain preserved).
+          if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
+            abort(
+              "regalloc verifier: value live across C call assigned to caller-saved v\{preg.index}",
+            )
+          }
+          // If this value crosses any Wasm call, treat the standard caller-saved subset as clobbered.
+          if lr.crosses_wasm_call &&
+            call_clobbered_float_wasm.contains(preg.index) {
+            abort(
+              "regalloc verifier: value live across Wasm call assigned to caller-saved v\{preg.index}",
+            )
+          }
+        }
+      }
+      let key = alias_key(preg)
+      if preg_spans.get(key) is None {
+        preg_spans.set(key, [])
+      }
+      let spans = preg_spans.get(key).unwrap()
+      for span in lr.ranges {
+        spans.push((vreg_id, span))
+      }
     }
   }
 

@@ -1475,19 +1475,17 @@ fn compile_module_to_jit(
     if perf_on {
       @perf.finish_function(@ir.instruction_count(ir_func), code_size)
     }
-    match debug_db {
-      Some(db) =>
-        // Store best-effort dumps (empty string if unavailable for a stage).
-        db.set(
-          func_idx,
-          @jit.JITFunctionDebug::new(
-            ir_dump.unwrap_or(""),
-            vcode_before_dump.unwrap_or(""),
-            vcode_after_dump.unwrap_or(""),
-            mc_dump.unwrap_or(""),
-          ),
-        )
-      None => ()
+    if debug_db is Some(db) {
+      // Store best-effort dumps (empty string if unavailable for a stage).
+      db.set(
+        func_idx,
+        @jit.JITFunctionDebug::new(
+          ir_dump.unwrap_or(""),
+          vcode_before_dump.unwrap_or(""),
+          vcode_after_dump.unwrap_or(""),
+          mc_dump.unwrap_or(""),
+        ),
+      )
     }
     if @logger.is_debug_enabled() &&
       mod_.codes.length() > 10 &&

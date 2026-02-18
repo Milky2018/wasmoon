@@ -516,9 +516,8 @@ pub fn run_jit(
       if ctx_ptr != 0L {
         @jit.gc_teardown(ctx_ptr)
       }
-      match jm_opt {
-        Some(jm) => jm.clear_segments()
-        None => ()
+      if jm_opt is Some(jm) {
+        jm.clear_segments()
       }
       Err("JIT error: \{e}")
     }

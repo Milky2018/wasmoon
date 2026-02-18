@@ -148,9 +148,8 @@ pub fn Output::summary(self : Output) -> String {
   // Count distinct spill slots referenced (may be less than reserved slots due to reuse).
   let used_slots : @hashset.HashSet[Int] = @hashset.HashSet::new()
   fn record_slot(used : @hashset.HashSet[Int], loc : Loc) -> Unit {
-    match loc {
-      Spill(slot) => used.add(slot) |> ignore
-      _ => ()
+    if loc is Spill(slot) {
+      used.add(slot) |> ignore
     }
   }
 
@@ -190,9 +189,8 @@ pub fn Output::summary(self : Output) -> String {
   }
 
   for loc in self.param_locs {
-    match loc {
-      Reg(p) => record_preg(used_int_pregs, used_fp_pregs, used_vec_pregs, p)
-      Spill(_) => ()
+    if loc is Reg(p) {
+      record_preg(used_int_pregs, used_fp_pregs, used_vec_pregs, p)
     }
   }
   for loc in self.allocs {
@@ -388,9 +386,8 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
   }
 
   fn validate_loc(loc : Loc, ctx_desc_fn : () -> String) -> Unit {
-    match loc {
-      Reg(p) => validate_preg(p, ctx_desc_fn)
-      Spill(_) => ()
+    if loc is Reg(p) {
+      validate_preg(p, ctx_desc_fn)
     }
   }
 

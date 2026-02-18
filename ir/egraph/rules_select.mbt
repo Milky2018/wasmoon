@@ -38,13 +38,12 @@ fn rule_select_icmp_one_zero() -> RewriteRule {
             if eg.find_const(node.children[2]) is Some(0L) {
               // Check if condition is an icmp
               for cond_node in eg.get_nodes(node.children[0]) {
-                match cond_node.op {
-                  Icmp(_) | Eq | Ne => {
-                    // select(icmp, 1, 0) = icmp (the icmp already produces 0/1)
-                    let new_id = eg.merge(class_id, node.children[0])
-                    changed = new_id != class_id || changed
-                  }
-                  _ => ()
+                if cond_node.op is Icmp(_) ||
+                  cond_node.op is Eq ||
+                  cond_node.op is Ne {
+                  // select(icmp, 1, 0) = icmp (the icmp already produces 0/1)
+                  let new_id = eg.merge(class_id, node.children[0])
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -169,29 +168,24 @@ fn rule_select_uextend_cond() -> RewriteRule {
         if node.op is Select && node.children.length() == 3 {
           // Check if condition is uextend of an icmp
           for cond_node in eg.get_nodes(node.children[0]) {
-            match cond_node.op {
-              Uextend(_, _) =>
-                if cond_node.children.length() == 1 {
-                  // Check if inner is an icmp
-                  for inner in eg.get_nodes(cond_node.children[0]) {
-                    match inner.op {
-                      Icmp(_) | Eq | Ne => {
-                        let new_select = eg.add({
-                          op: Select,
-                          children: [
-                            cond_node.children[0],
-                            node.children[1],
-                            node.children[2],
-                          ],
-                        })
-                        let new_id = eg.merge(class_id, new_select)
-                        changed = new_id != class_id || changed
-                      }
-                      _ => ()
-                    }
+            if cond_node.op is Uextend(_, _) {
+              if cond_node.children.length() == 1 {
+                // Check if inner is an icmp
+                for inner in eg.get_nodes(cond_node.children[0]) {
+                  if inner.op is Icmp(_) || inner.op is Eq || inner.op is Ne {
+                    let new_select = eg.add({
+                      op: Select,
+                      children: [
+                        cond_node.children[0],
+                        node.children[1],
+                        node.children[2],
+                      ],
+                    })
+                    let new_id = eg.merge(class_id, new_select)
+                    changed = new_id != class_id || changed
                   }
                 }
-              _ => ()
+              }
             }
           }
         }

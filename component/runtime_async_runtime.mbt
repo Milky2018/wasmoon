@@ -387,16 +387,12 @@ fn wait_for_event(
       raise CanonCallError("unknown waitable set index \{key_local(ws_key)}")
   }
   while true {
-    match pop_waitable_event(async_state, ws_key) {
-      Some(ev) => {
-        acknowledge_waitable_event(async_state, ev)
-        match async_state.waitable_sets.get(ws_key) {
-          Some(set) => set.waiters[0] = set.waiters[0] - 1
-          None => ()
-        }
-        return ev
+    if pop_waitable_event(async_state, ws_key) is Some(ev) {
+      acknowledge_waitable_event(async_state, ev)
+      if async_state.waitable_sets.get(ws_key) is Some(set) {
+        set.waiters[0] = set.waiters[0] - 1
       }
-      None => ()
+      return ev
     }
     if !progress_one_subtask(async_state, store) {
       raise CanonCallError(
@@ -455,21 +451,11 @@ fn step_task_once(
       task.waiting_set[0] = ws_opt
       return
     }
-    match prev {
-      Some(ws) =>
-        match async_state.waitable_sets.get(ws) {
-          Some(set) => set.waiters[0] = set.waiters[0] - 1
-          None => ()
-        }
-      None => ()
+    if prev is Some(ws) && async_state.waitable_sets.get(ws) is Some(set) {
+      set.waiters[0] = set.waiters[0] - 1
     }
-    match ws_opt {
-      Some(ws) =>
-        match async_state.waitable_sets.get(ws) {
-          Some(set) => set.waiters[0] = set.waiters[0] + 1
-          None => ()
-        }
-      None => ()
+    if ws_opt is Some(ws) && async_state.waitable_sets.get(ws) is Some(set) {
+      set.waiters[0] = set.waiters[0] + 1
     }
     task.waiting_set[0] = ws_opt
   }
@@ -930,21 +916,17 @@ fn progress_one_subtask(
         async_state.pending_by_instance.set(key, queue0)
       }
     }
-    match async_state.subtasks.get(next_id) {
-      Some(st) =>
-        if !task_on_stack(next_id) {
-          st.phase[0] = SubtaskPhase::Started
-          async_state.inflight_by_instance.set(key, 1)
-          // Transitioned from STARTING to STARTED: notify via event.
-          let owner_component_id = st.caller_table.id
-          enqueue_waitable_event(
-            async_state,
-            handle_key(owner_component_id, st.id),
-            { owner_component_id, code: 1, index: st.id, payload: 1 },
-          )
-          return true
-        }
-      None => ()
+    if async_state.subtasks.get(next_id) is Some(st) && !task_on_stack(next_id) {
+      st.phase[0] = SubtaskPhase::Started
+      async_state.inflight_by_instance.set(key, 1)
+      // Transitioned from STARTING to STARTED: notify via event.
+      let owner_component_id = st.caller_table.id
+      enqueue_waitable_event(
+        async_state,
+        handle_key(owner_component_id, st.id),
+        { owner_component_id, code: 1, index: st.id, payload: 1 },
+      )
+      return true
     }
   }
 

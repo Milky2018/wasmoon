@@ -1728,29 +1728,27 @@ fn check_instance_subtype(
   actual : InstanceSig?,
   expected : InstanceSig,
 ) -> Unit raise ComponentValidationError {
-  match actual {
-    Some(sig) =>
-      for kv in expected.exports.iter() {
-        let (name, expected_sort) = kv
-        match sig.exports.get(name) {
-          Some(actual_sort) =>
-            if actual_sort != expected_sort {
-              raise ComponentImportTypeMismatch("export \{name}")
-            } else {
-              match expected.nested.get(name) {
-                Some(expected_child) =>
-                  match sig.nested.get(name) {
-                    Some(actual_child) =>
-                      check_instance_subtype(Some(actual_child), expected_child)
-                    None => ()
-                  }
-                None => ()
-              }
+  if actual is Some(sig) {
+    for kv in expected.exports.iter() {
+      let (name, expected_sort) = kv
+      match sig.exports.get(name) {
+        Some(actual_sort) =>
+          if actual_sort != expected_sort {
+            raise ComponentImportTypeMismatch("export \{name}")
+          } else {
+            match expected.nested.get(name) {
+              Some(expected_child) =>
+                match sig.nested.get(name) {
+                  Some(actual_child) =>
+                    check_instance_subtype(Some(actual_child), expected_child)
+                  None => ()
+                }
+              None => ()
             }
-          None => raise MissingExpectedExport(name)
-        }
+          }
+        None => raise MissingExpectedExport(name)
       }
-    None => ()
+    }
   }
 }
 
@@ -1759,18 +1757,16 @@ fn check_core_module_subtype(
   actual : Map[String, Int]?,
   expected : Map[String, Int],
 ) -> Unit raise ComponentValidationError {
-  match actual {
-    Some(map) =>
-      for kv in expected.iter() {
-        let (name, expected_kind) = kv
-        match map.get(name) {
-          Some(actual_kind) =>
-            if actual_kind != expected_kind {
-              raise ComponentImportTypeMismatch("export \{name}")
-            }
-          None => raise MissingExpectedExport(name)
-        }
+  if actual is Some(map) {
+    for kv in expected.iter() {
+      let (name, expected_kind) = kv
+      match map.get(name) {
+        Some(actual_kind) =>
+          if actual_kind != expected_kind {
+            raise ComponentImportTypeMismatch("export \{name}")
+          }
+        None => raise MissingExpectedExport(name)
       }
-    None => ()
+    }
   }
 }

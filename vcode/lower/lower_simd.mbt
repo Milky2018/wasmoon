@@ -211,15 +211,12 @@ fn lower_v128_unary(
     vcode_inst.add_def({ reg: Virtual(dst) })
     // Some opcode expansions in the emitter require an extra temporary vector
     // register. Model it as an extra def so regalloc accounts for it.
-    match opcode {
-      SIMDTruncSatF64ToI32SZero
-      | SIMDTruncSatF64ToI32UZero
-      | SIMDConvertLowI32ToF64S
-      | SIMDConvertLowI32ToF64U => {
-        let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
-        vcode_inst.add_def({ reg: Virtual(tmp) })
-      }
-      _ => ()
+    if opcode is SIMDTruncSatF64ToI32SZero ||
+      opcode is SIMDTruncSatF64ToI32UZero ||
+      opcode is SIMDConvertLowI32ToF64S ||
+      opcode is SIMDConvertLowI32ToF64U {
+      let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+      vcode_inst.add_def({ reg: Virtual(tmp) })
     }
     vcode_inst.add_use(Virtual(src))
     block.add_inst(vcode_inst)

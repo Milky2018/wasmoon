@@ -84,9 +84,9 @@ fn allocate_reload_registers(
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
 ) -> Unit {
-  match @sys.get_env_var("WASMOON_DISABLE_RELOAD_COALESCING") {
-    Some(v) => if v == "1" || v == "true" || v == "TRUE" { return }
-    None => ()
+  if @sys.get_env_var("WASMOON_DISABLE_RELOAD_COALESCING") is Some(v) &&
+    (v == "1" || v == "true" || v == "TRUE") {
+    return
   }
 
   // Reserve special registers that are not part of the allocator pool but are
