@@ -458,6 +458,7 @@ pub fn run_jit(
       c_heap,
       mod_.types,
       canonical_indices,
+      ctx_ptr=jm.get_context_ptr(),
       func_type_indices=module_func_type_indices,
       func_table_ptr=jm.get_func_table_ptr(),
       num_funcs=jm.get_func_count(),
@@ -467,7 +468,7 @@ pub fn run_jit(
 
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
-      @jit.gc_teardown()
+      @jit.gc_teardown(jm.get_context_ptr())
       jm.clear_segments()
       return Err("Failed to get JIT function")
     }
@@ -499,7 +500,7 @@ pub fn run_jit(
     let raw_results = jm.call_with_context(f, jit_args)
 
     // Tear down GC context and per-context segments after JIT call
-    @jit.gc_teardown()
+    @jit.gc_teardown(jm.get_context_ptr())
     jm.clear_segments()
 
     // Convert to Values
@@ -508,7 +509,13 @@ pub fn run_jit(
   } catch {
     e => {
       // Ensure GC teardown and segment cleanup on error path
-      @jit.gc_teardown()
+      let ctx_ptr = match jm_opt {
+        Some(jm) => jm.get_context_ptr()
+        None => 0L
+      }
+      if ctx_ptr != 0L {
+        @jit.gc_teardown(ctx_ptr)
+      }
       match jm_opt {
         Some(jm) => jm.clear_segments()
         None => ()

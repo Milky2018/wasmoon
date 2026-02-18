@@ -1032,10 +1032,16 @@ pub extern "c" fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64 = "wasmoon_jit_g
 pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_slow_ptr"
 
 ///|
+/// Get gc_alloc_array_from_values_slow function pointer for fixed-array slow path
+/// Signature: int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx, int64_t *values, int32_t len)
+pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)
 pub extern "c" fn c_jit_gc_set_type_cache(
+  ctx_ptr : Int64,
   types_data : FixedArray[Int],
   num_types : Int,
 ) -> Unit = "wasmoon_jit_gc_set_type_cache"
@@ -1044,6 +1050,7 @@ pub extern "c" fn c_jit_gc_set_type_cache(
 /// Set canonical type indices for subtyping
 #borrow(canonical)
 pub extern "c" fn c_jit_gc_set_canonical_indices(
+  ctx_ptr : Int64,
   canonical : FixedArray[Int],
   num_types : Int,
 ) -> Unit = "wasmoon_jit_gc_set_canonical_indices"
@@ -1052,6 +1059,7 @@ pub extern "c" fn c_jit_gc_set_canonical_indices(
 /// Set function type indices for funcref subtyping
 #borrow(func_type_indices)
 pub extern "c" fn c_jit_gc_set_func_type_indices(
+  ctx_ptr : Int64,
   func_type_indices : FixedArray[Int],
   num_funcs : Int,
 ) -> Unit = "wasmoon_jit_gc_set_func_type_indices"
@@ -1059,25 +1067,34 @@ pub extern "c" fn c_jit_gc_set_func_type_indices(
 ///|
 /// Set function table pointer for funcref lookup
 pub extern "c" fn c_jit_gc_set_func_table(
+  ctx_ptr : Int64,
   func_table_ptr : Int64,
   num_funcs : Int,
 ) -> Unit = "wasmoon_jit_gc_set_func_table"
 
 ///|
 /// Clear GC cache after JIT execution
-pub extern "c" fn c_jit_gc_clear_cache() -> Unit = "wasmoon_jit_gc_clear_cache"
+pub extern "c" fn c_jit_gc_clear_cache(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_cache"
+
+///|
+/// Enter GC critical section (compatibility no-op)
+pub extern "c" fn c_jit_gc_enter_critical() -> Unit = "wasmoon_jit_gc_enter_critical"
+
+///|
+/// Leave GC critical section (compatibility no-op)
+pub extern "c" fn c_jit_gc_leave_critical() -> Unit = "wasmoon_jit_gc_leave_critical"
 
 ///|
 /// Set GC heap pointer for JIT execution
-pub extern "c" fn c_jit_gc_set_heap(heap_ptr : Int64) -> Unit = "wasmoon_jit_gc_set_heap"
+pub extern "c" fn c_jit_gc_set_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wasmoon_jit_gc_set_heap"
 
 ///|
 /// Clear GC heap pointer after JIT execution
-pub extern "c" fn c_jit_gc_clear_heap() -> Unit = "wasmoon_jit_gc_clear_heap"
+pub extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_heap"
 
 ///|
 /// Get current GC heap pointer (for debugging)
-pub extern "c" fn c_jit_gc_get_heap() -> Int64 = "wasmoon_jit_gc_get_heap"
+pub extern "c" fn c_jit_gc_get_heap(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_gc_get_heap"
 
 ///|
 /// Set GC heap pointer in VMContext for inline allocation

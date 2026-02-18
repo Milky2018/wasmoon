@@ -3,7 +3,7 @@
 ///
 /// This module provides runtime helper functions for GC operations in JIT code.
 /// All GC operations (allocation, access, type checking) are implemented as
-/// libcalls that access global state set up before JIT execution.
+/// libcalls that access VMContext-local state set up before JIT execution.
 ///
 /// Value representation in JIT (Int64):
 /// - i31ref: (value << 1) | 1 (lowest bit = 1 for tagging)
@@ -174,6 +174,7 @@ pub fn get_gc_type_check_subtype_ptr() -> Int64 {
 /// types: Array of SubType from the module
 /// canonical_indices: Array of canonical type indices
 pub fn setup_type_cache_from_types(
+  ctx_ptr : Int64,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
 ) -> Unit {
@@ -231,7 +232,7 @@ pub fn setup_type_cache_from_types(
     }
   }
   // Set the type cache in C
-  @jit_ffi.c_jit_gc_set_type_cache(types_data, num_types)
+  @jit_ffi.c_jit_gc_set_type_cache(ctx_ptr, types_data, num_types)
   // Also set canonical indices if available
   if canonical_indices.length() > 0 {
     let canonical = FixedArray::make(canonical_indices.length(), 0)
@@ -239,6 +240,7 @@ pub fn setup_type_cache_from_types(
       canonical[i] = idx
     }
     @jit_ffi.c_jit_gc_set_canonical_indices(
+      ctx_ptr,
       canonical,
       canonical_indices.length(),
     )
@@ -247,29 +249,30 @@ pub fn setup_type_cache_from_types(
 
 ///|
 /// Clean up GC context after JIT execution
-pub fn gc_teardown() -> Unit {
+pub fn gc_teardown(ctx_ptr : Int64) -> Unit {
   // Clear the type cache
-  @jit_ffi.c_jit_gc_clear_cache()
+  @jit_ffi.c_jit_gc_clear_cache(ctx_ptr)
   // Clear the heap pointer
-  @jit_ffi.c_jit_gc_clear_heap()
+  @jit_ffi.c_jit_gc_clear_heap(ctx_ptr)
 }
 
 ///|
 /// Set up the GC heap for JIT execution
 /// heap: The CHeap pointer from Store
-pub fn gc_set_heap(heap : CHeap) -> Unit {
-  @jit_ffi.c_jit_gc_set_heap(heap.get_ptr())
+pub fn gc_set_heap(ctx_ptr : Int64, heap : CHeap) -> Unit {
+  @jit_ffi.c_jit_gc_set_heap(ctx_ptr, heap.get_ptr())
 }
 
 ///|
 /// Clear the GC heap pointer after JIT execution
-pub fn gc_clear_heap() -> Unit {
-  @jit_ffi.c_jit_gc_clear_heap()
+pub fn gc_clear_heap(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_gc_clear_heap(ctx_ptr)
 }
 
 ///|
 /// Error for invalid JIT GC setup context
 pub suberror GCSetupError {
+  MissingJITContext
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
@@ -283,10 +286,14 @@ pub fn gc_setup(
   heap : CHeap,
   types : Array[@types.SubType],
   canonical_indices : Array[Int],
+  ctx_ptr~ : Int64,
   func_type_indices~ : Array[Int],
   func_table_ptr~ : Int64,
   num_funcs~ : Int,
 ) -> Unit raise GCSetupError {
+  if ctx_ptr == 0L {
+    raise MissingJITContext
+  }
   if num_funcs < 0 {
     raise InvalidFuncCount(num_funcs~)
   }
@@ -299,15 +306,19 @@ pub fn gc_setup(
   if num_funcs > 0 && func_table_ptr == 0L {
     raise MissingFunctionTableContext(num_funcs~)
   }
-  gc_set_heap(heap)
-  setup_type_cache_from_types(types, canonical_indices)
+  gc_set_heap(ctx_ptr, heap)
+  setup_type_cache_from_types(ctx_ptr, types, canonical_indices)
   // Set function type indices for funcref subtyping
   let indices = FixedArray::make(func_type_indices.length(), 0)
   for i, idx in func_type_indices {
     indices[i] = idx
   }
-  @jit_ffi.c_jit_gc_set_func_type_indices(indices, func_type_indices.length())
+  @jit_ffi.c_jit_gc_set_func_type_indices(
+    ctx_ptr,
+    indices,
+    func_type_indices.length(),
+  )
 
   // Set function table pointer for tagged pointer funcref lookups.
-  @jit_ffi.c_jit_gc_set_func_table(func_table_ptr, num_funcs)
+  @jit_ffi.c_jit_gc_set_func_table(ctx_ptr, func_table_ptr, num_funcs)
 }

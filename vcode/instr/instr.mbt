@@ -480,6 +480,24 @@ pub(all) enum VCodeOpcode {
   // Used for passing stack addresses to C functions
   LoadSP
 
+  // GC inline allocation helpers (AArch64 fast path + C slow-path fallback)
+  //
+  // GCAllocStructInline(type_idx, num_fields):
+  //   Uses: [vmctx], Defs: [result_ref]
+  //   - Fast path: inline bump allocation + header/field stores.
+  //   - Fields source is fixed to caller stack pointer (SP outgoing args area).
+  //   - Slow path: calls gc_alloc_struct_slow(vmctx, type_idx, SP, num_fields).
+  //   - Always registers allocated object via gc_register_struct_inline.
+  GCAllocStructInline(Int, Int)
+
+  // GCAllocArrayFixedInline(type_idx, len):
+  //   Uses: [vmctx], Defs: [result_ref]
+  //   - Fast path: inline bump allocation + header/len/element stores.
+  //   - Values source is fixed to caller stack pointer (SP outgoing args area).
+  //   - Slow path: calls gc_alloc_array_from_values_slow(vmctx, type_idx, SP, len).
+  //   - Always registers allocated object via gc_register_array_inline.
+  GCAllocArrayFixedInline(Int, Int)
+
   // ============ SIMD Instructions (AArch64 NEON) ============
 
   // V128 constant load - load 128-bit immediate
@@ -1076,6 +1094,10 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, sp"
+    GCAllocStructInline(type_idx, num_fields) =>
+      "gc_alloc_struct_inline type=\{type_idx} fields=\{num_fields}"
+    GCAllocArrayFixedInline(type_idx, len) =>
+      "gc_alloc_array_fixed_inline type=\{type_idx} len=\{len}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
     SIMDSplat(lane_size) => "dup.\{lane_size}"
@@ -1619,7 +1641,10 @@ pub impl Show for VCodeTerminator with output(self, logger) {
 pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
-    CallPtr(_, _, _) | CallDirect(_, _, _, _) => Regular
+    CallPtr(_, _, _)
+    | CallDirect(_, _, _, _)
+    | GCAllocStructInline(_, _)
+    | GCAllocArrayFixedInline(_, _) => Regular
     // TypeCheckSubtypeIndirect can call a C helper on the slow path; treat it as a call.
     TypeCheckSubtypeIndirect(_) => Regular
     // Tail calls that don't return to caller

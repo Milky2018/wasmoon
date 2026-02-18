@@ -136,6 +136,7 @@ struct JITModule {
   by_name : Map[String, Int]
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
+  mut context_ptr : Int64
   mut debug_db : JITDebugDB?
   mut last_trap_report : TrapReport?
   // Keep generated import trampolines alive (GC-managed executable memory).
@@ -153,6 +154,7 @@ pub fn JITModule::new() -> JITModule {
     by_name: Map::new(),
     address_ranges: [],
     context: None,
+    context_ptr: 0L,
     debug_db: None,
     last_trap_report: None,
     import_exec_codes: [],
@@ -487,7 +489,9 @@ pub fn JITModule::load_with_imports(
       }
 
       // Store context in module
+      let context_ptr = ctx.ptr()
       jit_module.context = Some(ctx)
+      jit_module.context_ptr = context_ptr
       jit_module.debug_db = debug_db
 
       // Patch direct-call function address loads now that pointers are known.
@@ -558,7 +562,9 @@ pub fn JITModule::from_single_function(
           let jit_module = JITModule::new()
           jit_module.functions.set(0, jit_func)
           jit_module.by_name.set(func_name, 0)
+          let context_ptr = ctx.ptr()
           jit_module.context = Some(ctx)
+          jit_module.context_ptr = context_ptr
           // Build address_ranges for this single function
           let start = ec.ptr()
           let end_ = start + code_bytes.length().to_int64()
@@ -571,12 +577,20 @@ pub fn JITModule::from_single_function(
 }
 
 ///|
+/// Get the raw VMContext pointer for this JIT module
+/// Returns 0 if no context is available
+pub fn JITModule::get_context_ptr(self : JITModule) -> Int64 {
+  self.context_ptr
+}
+
+///|
 /// Get the function table pointer for GC subtyping checks
 /// Returns 0 if no context is available
 pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
-  match self.context {
-    Some(ctx) => ctx.get_func_table_ptr()
-    None => 0L
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_func_table(self.context_ptr)
+  } else {
+    0L
   }
 }
 
@@ -584,9 +598,10 @@ pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
 /// Get the number of functions in the function table
 /// Returns 0 if no context is available
 pub fn JITModule::get_func_count(self : JITModule) -> Int {
-  match self.context {
-    Some(ctx) => ctx.get_func_count()
-    None => 0
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_func_count(self.context_ptr)
+  } else {
+    0
   }
 }
 
@@ -1185,8 +1200,8 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 /// Set GC heap in the JIT context for inline allocation
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
 pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.set_gc_heap(heap_ptr)
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_set_gc_heap(self.context_ptr, heap_ptr)
   }
 }
 
@@ -1426,8 +1441,8 @@ pub fn JITModule::setup_segments(
 ///|
 /// Clear per-context segment state (frees owned segment buffers).
 pub fn JITModule::clear_segments(self : JITModule) -> Unit {
-  if self.context is Some(ctx) {
-    @jit_ffi.c_jit_ctx_clear_segments(ctx.ptr())
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_clear_segments(self.context_ptr)
   }
 }
 

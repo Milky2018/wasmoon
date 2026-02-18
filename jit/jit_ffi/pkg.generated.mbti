@@ -164,21 +164,25 @@ pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
 pub fn c_jit_free_wasi_fds(Int64) -> Unit
 
-pub fn c_jit_gc_clear_cache() -> Unit
+pub fn c_jit_gc_clear_cache(Int64) -> Unit
 
-pub fn c_jit_gc_clear_heap() -> Unit
+pub fn c_jit_gc_clear_heap(Int64) -> Unit
 
-pub fn c_jit_gc_get_heap() -> Int64
+pub fn c_jit_gc_enter_critical() -> Unit
 
-pub fn c_jit_gc_set_canonical_indices(FixedArray[Int], Int) -> Unit
+pub fn c_jit_gc_get_heap(Int64) -> Int64
 
-pub fn c_jit_gc_set_func_table(Int64, Int) -> Unit
+pub fn c_jit_gc_leave_critical() -> Unit
 
-pub fn c_jit_gc_set_func_type_indices(FixedArray[Int], Int) -> Unit
+pub fn c_jit_gc_set_canonical_indices(Int64, FixedArray[Int], Int) -> Unit
 
-pub fn c_jit_gc_set_heap(Int64) -> Unit
+pub fn c_jit_gc_set_func_table(Int64, Int64, Int) -> Unit
 
-pub fn c_jit_gc_set_type_cache(FixedArray[Int], Int) -> Unit
+pub fn c_jit_gc_set_func_type_indices(Int64, FixedArray[Int], Int) -> Unit
+
+pub fn c_jit_gc_set_heap(Int64, Int64) -> Unit
+
+pub fn c_jit_gc_set_type_cache(Int64, FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_get_args_get_ptr() -> Int64
 
@@ -257,6 +261,8 @@ pub fn c_jit_get_fd_sync_ptr() -> Int64
 pub fn c_jit_get_fd_tell_ptr() -> Int64
 
 pub fn c_jit_get_fd_write_ptr() -> Int64
+
+pub fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64
 
 pub fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64
 

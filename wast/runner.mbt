@@ -728,6 +728,7 @@ pub fn invoke_action(
                     heap,
                     ctx.store.module_types,
                     canonical,
+                    ctx_ptr=jit.jit_module.get_context_ptr(),
                     func_type_indices=jit_func_type_indices,
                     func_table_ptr=jit.jit_module.get_func_table_ptr(),
                     num_funcs=jit.jit_module.get_func_count(),
@@ -746,21 +747,21 @@ pub fn invoke_action(
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITExit(code) => {
                   // Tear down GC context on exit
-                  @jit.gc_teardown()
+                  @jit.gc_teardown(jit.jit_module.get_context_ptr())
                   // Sync globals even on exit
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError("WASI exit: \{code}")
                 }
                 @jit.JITTrap(msg) => {
                   // Tear down GC context on trap
-                  @jit.gc_teardown()
+                  @jit.gc_teardown(jit.jit_module.get_context_ptr())
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
               }
               // Tear down GC context after JIT call
-              @jit.gc_teardown()
+              @jit.gc_teardown(jit.jit_module.get_context_ptr())
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
