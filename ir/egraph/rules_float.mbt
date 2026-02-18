@@ -8,73 +8,71 @@ fn rule_fconst_fold_binary() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.children.length() == 2 {
-          if eg.find_fconst(node.children[0]) is Some(lhs_bits) {
-            if eg.find_fconst(node.children[1]) is Some(rhs_bits) {
-              // Interpret as f64 (assumes 64-bit floats)
-              let lhs = lhs_bits.reinterpret_as_double()
-              let rhs = rhs_bits.reinterpret_as_double()
-              let result : Double? = match node.op {
-                Fadd => {
-                  let r = lhs + rhs
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fsub => {
-                  let r = lhs - rhs
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fmul => {
-                  let r = lhs * rhs
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fdiv => {
-                  let r = lhs / rhs
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fmin => {
-                  let r = if lhs < rhs { lhs } else { rhs }
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fmax => {
-                  let r = if lhs > rhs { lhs } else { rhs }
-                  if r.is_nan() {
-                    None
-                  } else {
-                    Some(r)
-                  }
-                }
-                Fcopysign =>
-                  // copysign always produces a valid result
-                  Some(lhs.abs() * (if rhs < 0.0 { -1.0 } else { 1.0 }))
-                _ => None
-              }
-              if result is Some(r) {
-                let result_bits = r.reinterpret_as_uint64()
-                let result_node = eg.add_fconst(result_bits)
-                let new_id = eg.merge(class_id, result_node)
-                changed = new_id != class_id || changed
+        if node.children.length() == 2 &&
+          eg.find_fconst(node.children[0]) is Some(lhs_bits) &&
+          eg.find_fconst(node.children[1]) is Some(rhs_bits) {
+          // Interpret as f64 (assumes 64-bit floats)
+          let lhs = lhs_bits.reinterpret_as_double()
+          let rhs = rhs_bits.reinterpret_as_double()
+          let result : Double? = match node.op {
+            Fadd => {
+              let r = lhs + rhs
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
               }
             }
+            Fsub => {
+              let r = lhs - rhs
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fmul => {
+              let r = lhs * rhs
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fdiv => {
+              let r = lhs / rhs
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fmin => {
+              let r = if lhs < rhs { lhs } else { rhs }
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fmax => {
+              let r = if lhs > rhs { lhs } else { rhs }
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fcopysign =>
+              // copysign always produces a valid result
+              Some(lhs.abs() * (if rhs < 0.0 { -1.0 } else { 1.0 }))
+            _ => None
+          }
+          if result is Some(r) {
+            let result_bits = r.reinterpret_as_uint64()
+            let result_node = eg.add_fconst(result_bits)
+            let new_id = eg.merge(class_id, result_node)
+            changed = new_id != class_id || changed
           }
         }
       }
@@ -90,60 +88,59 @@ fn rule_fconst_fold_unary() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.children.length() == 1 {
-          if eg.find_fconst(node.children[0]) is Some(x_bits) {
-            let x = x_bits.reinterpret_as_double()
-            let result : Double? = match node.op {
-              Fneg => Some(-x) // fneg always works
-              Fabs => Some(x.abs()) // fabs always works
-              Fsqrt => {
-                let r = x.sqrt()
-                if r.is_nan() {
-                  None
-                } else {
-                  Some(r)
-                }
+        if node.children.length() == 1 &&
+          eg.find_fconst(node.children[0]) is Some(x_bits) {
+          let x = x_bits.reinterpret_as_double()
+          let result : Double? = match node.op {
+            Fneg => Some(-x) // fneg always works
+            Fabs => Some(x.abs()) // fabs always works
+            Fsqrt => {
+              let r = x.sqrt()
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
               }
-              Fceil => {
-                let r = x.ceil()
-                if r.is_nan() {
-                  None
-                } else {
-                  Some(r)
-                }
-              }
-              Ffloor => {
-                let r = x.floor()
-                if r.is_nan() {
-                  None
-                } else {
-                  Some(r)
-                }
-              }
-              Ftrunc => {
-                let r = x.trunc()
-                if r.is_nan() {
-                  None
-                } else {
-                  Some(r)
-                }
-              }
-              Fnearest => {
-                let r = x.round()
-                if r.is_nan() {
-                  None
-                } else {
-                  Some(r)
-                }
-              }
-              _ => None
             }
-            if result is Some(r) {
-              let result_bits = r.reinterpret_as_uint64()
-              let result_node = eg.add_fconst(result_bits)
-              let new_id = eg.merge(class_id, result_node)
-              changed = new_id != class_id || changed
+            Fceil => {
+              let r = x.ceil()
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
             }
+            Ffloor => {
+              let r = x.floor()
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Ftrunc => {
+              let r = x.trunc()
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            Fnearest => {
+              let r = x.round()
+              if r.is_nan() {
+                None
+              } else {
+                Some(r)
+              }
+            }
+            _ => None
+          }
+          if result is Some(r) {
+            let result_bits = r.reinterpret_as_uint64()
+            let result_node = eg.add_fconst(result_bits)
+            let new_id = eg.merge(class_id, result_node)
+            changed = new_id != class_id || changed
           }
         }
       }

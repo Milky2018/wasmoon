@@ -36,24 +36,20 @@ fn rule_udiv_select_pow2() -> RewriteRule {
               let cond = divisor_node.children[0]
               // Check if both branches are power of 2 constants
               if eg.find_const(divisor_node.children[1]) is Some(n_val) &&
-                eg.find_const(divisor_node.children[2]) is Some(m_val) {
-                if is_power_of_two(n_val) is Some(n_log) &&
-                  is_power_of_two(m_val) is Some(m_log) {
-                  // Create select(cond, n_log, m_log)
-                  let n_const = eg.add_const(n_log)
-                  let m_const = eg.add_const(m_log)
-                  let shift_select = eg.add({
-                    op: Select,
-                    children: [cond, n_const, m_const],
-                  })
-                  // Create ushr(y, select(...))
-                  let new_node = eg.add({
-                    op: Ushr,
-                    children: [y, shift_select],
-                  })
-                  let new_id = eg.merge(class_id, new_node)
-                  changed = new_id != class_id || changed
-                }
+                eg.find_const(divisor_node.children[2]) is Some(m_val) &&
+                is_power_of_two(n_val) is Some(n_log) &&
+                is_power_of_two(m_val) is Some(m_log) {
+                // Create select(cond, n_log, m_log)
+                let n_const = eg.add_const(n_log)
+                let m_const = eg.add_const(m_log)
+                let shift_select = eg.add({
+                  op: Select,
+                  children: [cond, n_const, m_const],
+                })
+                // Create ushr(y, select(...))
+                let new_node = eg.add({ op: Ushr, children: [y, shift_select] })
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
               }
             }
           }

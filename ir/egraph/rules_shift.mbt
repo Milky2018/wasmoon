@@ -10,11 +10,11 @@ fn rule_shl_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Shl && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          }
+        if node.op is Shl &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -29,11 +29,11 @@ fn rule_shr_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if (node.op is Sshr || node.op is Ushr) && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          }
+        if (node.op is Sshr || node.op is Ushr) &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -49,12 +49,11 @@ fn rule_shift_of_zero() -> RewriteRule {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
         if (node.op is Shl || node.op is Sshr || node.op is Ushr) &&
-          node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(0L) {
-            let zero = eg.add_const(0L)
-            let new_id = eg.merge(class_id, zero)
-            changed = new_id != class_id || changed
-          }
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(0L) {
+          let zero = eg.add_const(0L)
+          let new_id = eg.merge(class_id, zero)
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -69,19 +68,19 @@ fn rule_shl_shl() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Shl && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(b) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Shl && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(a) {
-                  let total = a + b
-                  if total >= 0L && total < 64L {
-                    let total_const = eg.add_const(total)
-                    let new_node = eg.add_shl(inner.children[0], total_const)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Shl &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(b) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Shl &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(a) {
+              let total = a + b
+              if total >= 0L && total < 64L {
+                let total_const = eg.add_const(total)
+                let new_node = eg.add_shl(inner.children[0], total_const)
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -99,22 +98,22 @@ fn rule_ushr_ushr() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Ushr && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(b) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Ushr && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(a) {
-                  let total = a + b
-                  if total >= 0L && total < 64L {
-                    let total_const = eg.add_const(total)
-                    let new_node = eg.add({
-                      op: Ushr,
-                      children: [inner.children[0], total_const],
-                    })
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Ushr &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(b) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Ushr &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(a) {
+              let total = a + b
+              if total >= 0L && total < 64L {
+                let total_const = eg.add_const(total)
+                let new_node = eg.add({
+                  op: Ushr,
+                  children: [inner.children[0], total_const],
+                })
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -132,22 +131,22 @@ fn rule_sshr_sshr() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Sshr && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(b) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Sshr && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(a) {
-                  let total = a + b
-                  if total >= 0L && total < 64L {
-                    let total_const = eg.add_const(total)
-                    let new_node = eg.add({
-                      op: Sshr,
-                      children: [inner.children[0], total_const],
-                    })
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Sshr &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(b) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Sshr &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(a) {
+              let total = a + b
+              if total >= 0L && total < 64L {
+                let total_const = eg.add_const(total)
+                let new_node = eg.add({
+                  op: Sshr,
+                  children: [inner.children[0], total_const],
+                })
+                let new_id = eg.merge(class_id, new_node)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -165,11 +164,11 @@ fn rule_rot_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if (node.op is Rotl || node.op is Rotr) && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          }
+        if (node.op is Rotl || node.op is Rotr) &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -187,11 +186,11 @@ fn rule_rotl_rotr_cancel() -> RewriteRule {
         if node.op is Rotl && node.children.length() == 2 {
           let y = node.children[1]
           for inner in eg.get_nodes(node.children[0]) {
-            if inner.op is Rotr && inner.children.length() == 2 {
-              if eg.equiv(inner.children[1], y) {
-                let new_id = eg.subsume(class_id, inner.children[0])
-                changed = new_id != class_id || changed
-              }
+            if inner.op is Rotr &&
+              inner.children.length() == 2 &&
+              eg.equiv(inner.children[1], y) {
+              let new_id = eg.subsume(class_id, inner.children[0])
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -211,11 +210,11 @@ fn rule_rotr_rotl_cancel() -> RewriteRule {
         if node.op is Rotr && node.children.length() == 2 {
           let y = node.children[1]
           for inner in eg.get_nodes(node.children[0]) {
-            if inner.op is Rotl && inner.children.length() == 2 {
-              if eg.equiv(inner.children[1], y) {
-                let new_id = eg.subsume(class_id, inner.children[0])
-                changed = new_id != class_id || changed
-              }
+            if inner.op is Rotl &&
+              inner.children.length() == 2 &&
+              eg.equiv(inner.children[1], y) {
+              let new_id = eg.subsume(class_id, inner.children[0])
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -232,21 +231,22 @@ fn rule_ushr_shl_mask() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Shl && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(k) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Ushr && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(k2) {
-                  if k == k2 && k >= 0L && k < 64L {
-                    // (x >> k) << k = x & (0xFFFFFFFFFFFFFFFF << k)
-                    let mask = -1L << k.to_int()
-                    let mask_const = eg.add_const(mask)
-                    let new_node = eg.add_and(inner.children[0], mask_const)
-                    let new_id = eg.subsume(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
-                }
-              }
+        if node.op is Shl &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(k) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Ushr &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(k2) &&
+              k == k2 &&
+              k >= 0L &&
+              k < 64L {
+              // (x >> k) << k = x & (0xFFFFFFFFFFFFFFFF << k)
+              let mask = -1L << k.to_int()
+              let mask_const = eg.add_const(mask)
+              let new_node = eg.add_and(inner.children[0], mask_const)
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -263,21 +263,22 @@ fn rule_shl_ushr_mask() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Ushr && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(k) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Shl && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(k2) {
-                  if k == k2 && k >= 0L && k < 64L {
-                    // (x << k) >> k = x & (0xFFFFFFFFFFFFFFFF >> k)
-                    let mask = ((-1L).reinterpret_as_uint64() >> k.to_int()).reinterpret_as_int64()
-                    let mask_const = eg.add_const(mask)
-                    let new_node = eg.add_and(inner.children[0], mask_const)
-                    let new_id = eg.subsume(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
-                }
-              }
+        if node.op is Ushr &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(k) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Shl &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(k2) &&
+              k == k2 &&
+              k >= 0L &&
+              k < 64L {
+              // (x << k) >> k = x & (0xFFFFFFFFFFFFFFFF >> k)
+              let mask = ((-1L).reinterpret_as_uint64() >> k.to_int()).reinterpret_as_int64()
+              let mask_const = eg.add_const(mask)
+              let new_node = eg.add_and(inner.children[0], mask_const)
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -299,14 +300,14 @@ fn rule_band_shl_shl() -> RewriteRule {
           for left in eg.get_nodes(node.children[0]) {
             if left.op is Shl && left.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Shl && right.children.length() == 2 {
-                  if eg.equiv(left.children[1], right.children[1]) {
-                    let z = left.children[1]
-                    let xy_and = eg.add_and(left.children[0], right.children[0])
-                    let new_node = eg.add_shl(xy_and, z)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
+                if right.op is Shl &&
+                  right.children.length() == 2 &&
+                  eg.equiv(left.children[1], right.children[1]) {
+                  let z = left.children[1]
+                  let xy_and = eg.add_and(left.children[0], right.children[0])
+                  let new_node = eg.add_shl(xy_and, z)
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -330,14 +331,14 @@ fn rule_sub_shl_shl() -> RewriteRule {
           for left in eg.get_nodes(node.children[0]) {
             if left.op is Shl && left.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Shl && right.children.length() == 2 {
-                  if eg.equiv(left.children[1], right.children[1]) {
-                    let z = left.children[1]
-                    let xy_sub = eg.add_sub(left.children[0], right.children[0])
-                    let new_node = eg.add_shl(xy_sub, z)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
+                if right.op is Shl &&
+                  right.children.length() == 2 &&
+                  eg.equiv(left.children[1], right.children[1]) {
+                  let z = left.children[1]
+                  let xy_sub = eg.add_sub(left.children[0], right.children[0])
+                  let new_node = eg.add_shl(xy_sub, z)
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -361,14 +362,14 @@ fn rule_add_shl_shl() -> RewriteRule {
           for left in eg.get_nodes(node.children[0]) {
             if left.op is Shl && left.children.length() == 2 {
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Shl && right.children.length() == 2 {
-                  if eg.equiv(left.children[1], right.children[1]) {
-                    let z = left.children[1]
-                    let xy_add = eg.add_add(left.children[0], right.children[0])
-                    let new_node = eg.add_shl(xy_add, z)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
+                if right.op is Shl &&
+                  right.children.length() == 2 &&
+                  eg.equiv(left.children[1], right.children[1]) {
+                  let z = left.children[1]
+                  let xy_add = eg.add_add(left.children[0], right.children[0])
+                  let new_node = eg.add_shl(xy_add, z)
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -393,28 +394,28 @@ fn rule_ushr_band_shl() -> RewriteRule {
             if inner.op is And && inner.children.length() == 2 {
               // Check if left of and is (x << y)
               for left in eg.get_nodes(inner.children[0]) {
-                if left.op is Shl && left.children.length() == 2 {
-                  if eg.equiv(left.children[1], y) {
-                    let x = left.children[0]
-                    let z = inner.children[1]
-                    let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
-                    let new_node = eg.add_and(x, z_ushr_y)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
+                if left.op is Shl &&
+                  left.children.length() == 2 &&
+                  eg.equiv(left.children[1], y) {
+                  let x = left.children[0]
+                  let z = inner.children[1]
+                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
+                  let new_node = eg.add_and(x, z_ushr_y)
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
               // Also check if right of and is (x << y)
               for right in eg.get_nodes(inner.children[1]) {
-                if right.op is Shl && right.children.length() == 2 {
-                  if eg.equiv(right.children[1], y) {
-                    let x = right.children[0]
-                    let z = inner.children[0]
-                    let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
-                    let new_node = eg.add_and(x, z_ushr_y)
-                    let new_id = eg.merge(class_id, new_node)
-                    changed = new_id != class_id || changed
-                  }
+                if right.op is Shl &&
+                  right.children.length() == 2 &&
+                  eg.equiv(right.children[1], y) {
+                  let x = right.children[0]
+                  let z = inner.children[0]
+                  let z_ushr_y = eg.add({ op: Ushr, children: [z, y] })
+                  let new_node = eg.add_and(x, z_ushr_y)
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -436,19 +437,17 @@ fn rule_neg_ushr_to_sshr() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Neg && node.children.length() == 1 {
           for inner in eg.get_nodes(node.children[0]) {
-            if inner.op is Ushr && inner.children.length() == 2 {
-              // Check if shift amount is bits-1 (63 for 64-bit, 31 for 32-bit)
-              if eg.find_const(inner.children[1]) is Some(k) {
-                if k == 63L || k == 31L {
-                  // ineg(ushr(x, k)) = sshr(x, k)
-                  let new_node = eg.add({
-                    op: Sshr,
-                    children: [inner.children[0], inner.children[1]],
-                  })
-                  let new_id = eg.subsume(class_id, new_node)
-                  changed = new_id != class_id || changed
-                }
-              }
+            if inner.op is Ushr &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(k) &&
+              (k == 63L || k == 31L) {
+              // ineg(ushr(x, k)) = sshr(x, k)
+              let new_node = eg.add({
+                op: Sshr,
+                children: [inner.children[0], inner.children[1]],
+              })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -466,19 +465,19 @@ fn rule_shl_shl_overflow() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Shl && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(k2) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Shl && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(k1) {
-                  let total = k1 + k2
-                  // Overflow for 64-bit and 32-bit
-                  if total >= 64L {
-                    let zero = eg.add_const(0L)
-                    let new_id = eg.subsume(class_id, zero)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Shl &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(k2) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Shl &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(k1) {
+              let total = k1 + k2
+              // Overflow for 64-bit and 32-bit
+              if total >= 64L {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -497,18 +496,18 @@ fn rule_ushr_ushr_overflow() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Ushr && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(k2) {
-            for inner in eg.get_nodes(node.children[0]) {
-              if inner.op is Ushr && inner.children.length() == 2 {
-                if eg.find_const(inner.children[1]) is Some(k1) {
-                  let total = k1 + k2
-                  if total >= 64L {
-                    let zero = eg.add_const(0L)
-                    let new_id = eg.subsume(class_id, zero)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Ushr &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(k2) {
+          for inner in eg.get_nodes(node.children[0]) {
+            if inner.op is Ushr &&
+              inner.children.length() == 2 &&
+              eg.find_const(inner.children[1]) is Some(k1) {
+              let total = k1 + k2
+              if total >= 64L {
+                let zero = eg.add_const(0L)
+                let new_id = eg.subsume(class_id, zero)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -651,14 +650,15 @@ fn rule_shift_extend_amount() -> RewriteRule {
           let x = node.children[0]
           for amount_node in eg.get_nodes(node.children[1]) {
             // Check if shift amount is an extend operation
-            if amount_node.op is Uextend(_, _) ||
-              amount_node.op is Sextend(_, _) {
-              if amount_node.children.length() == 1 {
-                let y = amount_node.children[0]
-                let new_node = eg.add({ op: node.op, children: [x, y] })
-                let new_id = eg.merge(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if (
+                amount_node.op is Uextend(_, _) ||
+                amount_node.op is Sextend(_, _)
+              ) &&
+              amount_node.children.length() == 1 {
+              let y = amount_node.children[0]
+              let new_node = eg.add({ op: node.op, children: [x, y] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -688,13 +688,12 @@ fn rule_shift_reduce_amount() -> RewriteRule {
           let x = node.children[0]
           for amount_node in eg.get_nodes(node.children[1]) {
             // Check if shift amount is an ireduce operation
-            if amount_node.op is Ireduce(_, _) {
-              if amount_node.children.length() == 1 {
-                let y = amount_node.children[0]
-                let new_node = eg.add({ op: node.op, children: [x, y] })
-                let new_id = eg.merge(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if amount_node.op is Ireduce(_, _) &&
+              amount_node.children.length() == 1 {
+              let y = amount_node.children[0]
+              let new_node = eg.add({ op: node.op, children: [x, y] })
+              let new_id = eg.merge(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -715,48 +714,46 @@ fn rule_shl_ushr_to_rotl() -> RewriteRule {
         if node.op is Or && node.children.length() == 2 {
           // Check both orderings
           for left in eg.get_nodes(node.children[0]) {
-            if left.op is Shl && left.children.length() == 2 {
-              if eg.find_const(left.children[1]) is Some(k1) {
-                for right in eg.get_nodes(node.children[1]) {
-                  if right.op is Ushr && right.children.length() == 2 {
-                    if eg.find_const(right.children[1]) is Some(k2) {
-                      // Check if they operate on the same value
-                      if eg.equiv(left.children[0], right.children[0]) {
-                        // Check if k1 + k2 = 64 (for 64-bit rotation)
-                        if k1 + k2 == 64L && k1 > 0L && k2 > 0L {
-                          let new_node = eg.add({
-                            op: Rotl,
-                            children: [left.children[0], left.children[1]],
-                          })
-                          let new_id = eg.merge(class_id, new_node)
-                          changed = new_id != class_id || changed
-                        }
-                      }
-                    }
-                  }
+            if left.op is Shl &&
+              left.children.length() == 2 &&
+              eg.find_const(left.children[1]) is Some(k1) {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Ushr &&
+                  right.children.length() == 2 &&
+                  eg.find_const(right.children[1]) is Some(k2) &&
+                  eg.equiv(left.children[0], right.children[0]) &&
+                  k1 + k2 == 64L &&
+                  k1 > 0L &&
+                  k2 > 0L {
+                  let new_node = eg.add({
+                    op: Rotl,
+                    children: [left.children[0], left.children[1]],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }
           }
           // Also check ushr | shl ordering
           for left in eg.get_nodes(node.children[0]) {
-            if left.op is Ushr && left.children.length() == 2 {
-              if eg.find_const(left.children[1]) is Some(k2) {
-                for right in eg.get_nodes(node.children[1]) {
-                  if right.op is Shl && right.children.length() == 2 {
-                    if eg.find_const(right.children[1]) is Some(k1) {
-                      if eg.equiv(left.children[0], right.children[0]) {
-                        if k1 + k2 == 64L && k1 > 0L && k2 > 0L {
-                          let new_node = eg.add({
-                            op: Rotl,
-                            children: [right.children[0], right.children[1]],
-                          })
-                          let new_id = eg.merge(class_id, new_node)
-                          changed = new_id != class_id || changed
-                        }
-                      }
-                    }
-                  }
+            if left.op is Ushr &&
+              left.children.length() == 2 &&
+              eg.find_const(left.children[1]) is Some(k2) {
+              for right in eg.get_nodes(node.children[1]) {
+                if right.op is Shl &&
+                  right.children.length() == 2 &&
+                  eg.find_const(right.children[1]) is Some(k1) &&
+                  eg.equiv(left.children[0], right.children[0]) &&
+                  k1 + k2 == 64L &&
+                  k1 > 0L &&
+                  k2 > 0L {
+                  let new_node = eg.add({
+                    op: Rotl,
+                    children: [right.children[0], right.children[1]],
+                  })
+                  let new_id = eg.merge(class_id, new_node)
+                  changed = new_id != class_id || changed
                 }
               }
             }

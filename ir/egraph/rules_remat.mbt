@@ -93,12 +93,11 @@ fn rule_remat_iadd_iconst_left() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Add && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Add &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -113,12 +112,11 @@ fn rule_remat_iadd_iconst_right() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Add && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Add &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -133,12 +131,11 @@ fn rule_remat_isub_iconst_left() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Sub && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Sub &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -153,12 +150,11 @@ fn rule_remat_isub_iconst_right() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Sub && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Sub &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -173,12 +169,11 @@ fn rule_remat_band_iconst_left() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is And &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -193,12 +188,11 @@ fn rule_remat_band_iconst_right() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is And &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -213,12 +207,11 @@ fn rule_remat_bor_iconst_left() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Or && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Or &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -233,12 +226,11 @@ fn rule_remat_bor_iconst_right() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Or && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Or &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -253,12 +245,11 @@ fn rule_remat_bxor_iconst_left() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -273,12 +264,11 @@ fn rule_remat_bxor_iconst_right() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(_) {
-            if eg.mark_rematerializable(class_id) {
-              changed = true
-            }
-          }
+        if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(_) &&
+          eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -293,10 +283,8 @@ fn rule_remat_bnot() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Bnot {
-          if eg.mark_rematerializable(class_id) {
-            changed = true
-          }
+        if node.op is Bnot && eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -311,10 +299,8 @@ fn rule_remat_iconst() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Const(_) {
-          if eg.mark_rematerializable(class_id) {
-            changed = true
-          }
+        if node.op is Const(_) && eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed
@@ -329,10 +315,8 @@ fn rule_remat_fconst() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Fconst(_) {
-          if eg.mark_rematerializable(class_id) {
-            changed = true
-          }
+        if node.op is Fconst(_) && eg.mark_rematerializable(class_id) {
+          changed = true
         }
       }
       changed

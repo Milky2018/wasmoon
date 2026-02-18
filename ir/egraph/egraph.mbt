@@ -682,10 +682,8 @@ pub fn EGraph::subsume(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   let b = EClassId(keep_root)
 
   // Transfer type information from a to b if b doesn't have it
-  if self.type_map.get(b.0) is None {
-    if self.type_map.get(a.0) is Some(bits) {
-      self.type_map.set(b.0, bits)
-    }
+  if self.type_map.get(b.0) is None && self.type_map.get(a.0) is Some(bits) {
+    self.type_map.set(b.0, bits)
   }
   // Remove type entry for the subsumed class
   self.type_map.remove(a.0)

@@ -90,19 +90,17 @@ fn validate_component_section_alias(
         }
       }
     }
-    if a.sort is Component {
-      if a.target is Outer(ct, idx) {
-        if ct == 0 {
-          if idx >= 0 && idx < component_sizes.length() {
-            new_component_size = component_sizes[idx]
-          }
-        } else {
-          let depth = ct - 1
-          if depth >= 0 && depth < component_size_outers.length() {
-            let tbl = component_size_outers[depth]
-            if idx >= 0 && idx < tbl.length() {
-              new_component_size = tbl[idx]
-            }
+    if a.sort is Component && a.target is Outer(ct, idx) {
+      if ct == 0 {
+        if idx >= 0 && idx < component_sizes.length() {
+          new_component_size = component_sizes[idx]
+        }
+      } else {
+        let depth = ct - 1
+        if depth >= 0 && depth < component_size_outers.length() {
+          let tbl = component_size_outers[depth]
+          if idx >= 0 && idx < tbl.length() {
+            new_component_size = tbl[idx]
           }
         }
       }
@@ -121,18 +119,16 @@ fn validate_component_section_alias(
         new_instance_sig = Some(child)
       }
       if instance_idx >= 0 &&
-        instance_idx < instance_nested_instance_type_sigs.length() {
-        if instance_nested_instance_type_sigs[instance_idx] is Some(map) &&
-          map.get(name) is Some(m) {
-          new_instance_export_type_sigs = Some(m)
-        }
+        instance_idx < instance_nested_instance_type_sigs.length() &&
+        instance_nested_instance_type_sigs[instance_idx] is Some(map) &&
+        map.get(name) is Some(m) {
+        new_instance_export_type_sigs = Some(m)
       }
       if instance_idx >= 0 &&
-        instance_idx < instance_nested_instance_func_sigs.length() {
-        if instance_nested_instance_func_sigs[instance_idx] is Some(map) &&
-          map.get(name) is Some(m) {
-          new_instance_export_func_sigs = Some(m)
-        }
+        instance_idx < instance_nested_instance_func_sigs.length() &&
+        instance_nested_instance_func_sigs[instance_idx] is Some(map) &&
+        map.get(name) is Some(m) {
+        new_instance_export_func_sigs = Some(m)
       }
     }
     match a.target {
@@ -327,10 +323,9 @@ fn validate_component_section_alias(
       resource_ids.push(new_rid)
       type_sizes.push(new_size)
       type_depths.push(new_depth)
-      if a.target is Export(instance_idx, _name) {
-        if interface_instance_idxs.get(instance_idx) is Some(_) {
-          named_types.set(type_table.length() - 1, 1)
-        }
+      if a.target is Export(instance_idx, _name) &&
+        interface_instance_idxs.get(instance_idx) is Some(_) {
+        named_types.set(type_table.length() - 1, 1)
       }
     } else {
       count_alias(a.sort, counts)
