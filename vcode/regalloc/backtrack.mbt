@@ -1484,9 +1484,8 @@ fn BacktrackingAllocator::compact_spill_slots(
 
   // 4) Rewrite all spill-slot references (spill map + constraint edits).
   for vreg_id, old_slot in result.spill_slots {
-    match slot_remap.get(old_slot) {
-      Some(new_slot) => result.spill_slots.set(vreg_id, new_slot)
-      None => ()
+    if slot_remap.get(old_slot) is Some(new_slot) {
+      result.spill_slots.set(vreg_id, new_slot)
     }
   }
   for _key, edits in result.inst_edits {

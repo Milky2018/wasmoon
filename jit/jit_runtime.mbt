@@ -276,17 +276,14 @@ fn apply_func_addr_fixups(
     if entry.func_addr_fixups.length() == 0 {
       continue
     }
-    match jit_module.functions.get(entry.func_idx) {
-      Some(func) => {
-        let exec_ptr = func.exec_code.ptr()
-        for fixup in entry.func_addr_fixups {
-          let target_ptr = c_jit_read_i64(
-            func_table_ptr + fixup.func_idx.to_int64() * 8L,
-          )
-          patch_load_imm64_fixed(exec_ptr, fixup, target_ptr)
-        }
+    if jit_module.functions.get(entry.func_idx) is Some(func) {
+      let exec_ptr = func.exec_code.ptr()
+      for fixup in entry.func_addr_fixups {
+        let target_ptr = c_jit_read_i64(
+          func_table_ptr + fixup.func_idx.to_int64() * 8L,
+        )
+        patch_load_imm64_fixed(exec_ptr, fixup, target_ptr)
       }
-      None => ()
     }
   }
 }
@@ -342,25 +339,22 @@ fn apply_call_fixups(
     if entry.call_fixups.length() == 0 {
       continue
     }
-    match jit_module.functions.get(entry.func_idx) {
-      Some(func) => {
-        let exec_ptr = func.exec_code.ptr()
-        for fixup in entry.call_fixups {
-          let target_ptr = if fixup.func_idx >= 0 {
-            c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
-          } else {
-            match jit_module.direct_call_targets.get(fixup.func_idx) {
-              Some(ptr) => ptr
-              None =>
-                abort(
-                  "missing direct-call target for pseudo idx \{fixup.func_idx}",
-                )
-            }
+    if jit_module.functions.get(entry.func_idx) is Some(func) {
+      let exec_ptr = func.exec_code.ptr()
+      for fixup in entry.call_fixups {
+        let target_ptr = if fixup.func_idx >= 0 {
+          c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
+        } else {
+          match jit_module.direct_call_targets.get(fixup.func_idx) {
+            Some(ptr) => ptr
+            None =>
+              abort(
+                "missing direct-call target for pseudo idx \{fixup.func_idx}",
+              )
           }
-          patch_direct_call(exec_ptr, fixup, target_ptr)
         }
+        patch_direct_call(exec_ptr, fixup, target_ptr)
       }
-      None => ()
     }
   }
 }
@@ -1099,9 +1093,8 @@ fn JITModule::format_trap_report_message(
       "caller=\{caller.func_idx} '\{caller.func_name}'+0x\{@types.int_to_hex(caller.wasm_offset.to_int())}",
     )
   }
-  match report.dump_path {
-    Some(path) => fields.push("dump=\{path}")
-    None => ()
+  if report.dump_path is Some(path) {
+    fields.push("dump=\{path}")
   }
   if fields.is_empty() {
     report.message
@@ -1276,17 +1269,15 @@ pub fn JITModule::set_hostcall_callback(
   self : JITModule,
   callback : () -> Int,
 ) -> Unit {
-  match self.context {
-    Some(ctx) => ctx.set_hostcall_callback(callback)
-    None => ()
+  if self.context is Some(ctx) {
+    ctx.set_hostcall_callback(callback)
   }
 }
 
 ///|
 pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
-  match self.context {
-    Some(ctx) => ctx.clear_hostcall_callback()
-    None => ()
+  if self.context is Some(ctx) {
+    ctx.clear_hostcall_callback()
   }
 }
 

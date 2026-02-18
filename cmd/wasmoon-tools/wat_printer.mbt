@@ -104,9 +104,8 @@ fn module_to_wat(mod_ : @types.Module) -> String {
   // Count imported functions for indexing
   let mut import_func_count = 0
   for imp in mod_.imports {
-    match imp.desc {
-      Func(_) => import_func_count = import_func_count + 1
-      _ => ()
+    if imp.desc is Func(_) {
+      import_func_count = import_func_count + 1
     }
   }
 
@@ -178,13 +177,10 @@ fn module_to_wat(mod_ : @types.Module) -> String {
   }
 
   // Start section
-  match mod_.start {
-    Some(start_idx) => {
-      sb.write_string("  (start ")
-      sb.write_string(start_idx.to_string())
-      sb.write_string(")\n")
-    }
-    None => ()
+  if mod_.start is Some(start_idx) {
+    sb.write_string("  (start ")
+    sb.write_string(start_idx.to_string())
+    sb.write_string(")\n")
   }
 
   // Elements section

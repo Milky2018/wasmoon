@@ -367,9 +367,8 @@ pub fn apply_allocation(
       let used_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
-          match alloc.assignments.get(vreg.id) {
-            Some(preg) => used_regs.add(preg.index) |> ignore
-            None => ()
+          if alloc.assignments.get(vreg.id) is Some(preg) {
+            used_regs.add(preg.index) |> ignore
           }
         }
       }

@@ -298,12 +298,10 @@ fn parse_values(
   vals : Array[JsonValue]?,
 ) -> Array[@component.ComponentValue] raise ComponentTestError {
   let result : Array[@component.ComponentValue] = []
-  match vals {
-    Some(arr) =>
-      for v in arr {
-        result.push(parse_component_value(v))
-      }
-    None => ()
+  if vals is Some(arr) {
+    for v in arr {
+      result.push(parse_component_value(v))
+    }
   }
   result
 }

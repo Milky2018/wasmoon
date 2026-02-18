@@ -18,21 +18,19 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   }
 
   // Determine output path
-  let output_path = match output_opt {
-    Some(path) => path
-    None =>
-      // Replace .wat extension with .wasm
-      if file.has_suffix(".wat") {
-        // Remove .wat suffix and add .wasm
-        let sb = StringBuilder::new()
-        for i in 0..<(file.length() - 4) {
-          sb.write_char(file[i].to_int().unsafe_to_char())
-        }
-        sb.write_string(".wasm")
-        sb.to_string()
-      } else {
-        file + ".wasm"
-      }
+  let output_path = if output_opt is Some(path) {
+    path
+    // Replace .wat extension with .wasm
+  } else if file.has_suffix(".wat") {
+    // Remove .wat suffix and add .wasm
+    let sb = StringBuilder::new()
+    for i in 0..<(file.length() - 4) {
+      sb.write_char(file[i].to_int().unsafe_to_char())
+    }
+    sb.write_string(".wasm")
+    sb.to_string()
+  } else {
+    file + ".wasm"
   }
 
   // Encode module to binary format
