@@ -12,6 +12,8 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **Interpreter**: Full WebAssembly 1.0 support as fallback
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
+- **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
+- **Component Model**: Component parser/validator/runtime with component-spec runner support
 
 ## Installation
 
@@ -116,13 +118,17 @@ WIT support is still evolving. `wasmoon-tools wit` implements directory + `deps/
 
 ### JIT GC Setup Migration
 
-`@jit.gc_setup(...)` now requires full function-table context for typed funcref/ref.func safety:
+`@jit.gc_setup(...)` now requires VMContext + full function-table context for typed funcref/ref.func safety:
 
+- `ctx_ptr`
 - `func_type_indices`
 - `func_table_ptr`
 - `num_funcs`
 
-The API now fails fast with `GCSetupError` when these values are inconsistent, instead of continuing with incomplete context.
+`@jit.gc_teardown(...)` also requires the same `ctx_ptr`.
+
+GC runtime caches/heap references are now VMContext-local (no process-global GC cache state), aligned with Wasmtime-style per-store/per-context runtime isolation.
+The API fails fast with `GCSetupError` when setup context is incomplete or inconsistent.
 
 ### Basic Example
 
@@ -244,9 +250,9 @@ test "host function" {
 - [x] Reference types (funcref, externref)
 - [x] Tail calls
 - [x] Cross-module function calls
-- [ ] WASI Preview 1 (partial)
-- [ ] GC proposal (in progress)
-- [ ] Component Model
+- [x] WASI Preview 1 support
+- [x] GC proposal support (current implemented subset; experimental)
+- [x] Component Model support
 - [ ] JIT optimizations (constant folding, dead code elimination, etc.)
 
 ## License
