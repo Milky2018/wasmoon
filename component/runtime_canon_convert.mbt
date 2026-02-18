@@ -321,15 +321,12 @@ fn component_args_to_core(
   // Cache memory/realloc handles (if provided) for canonical ABI operations.
   let mut mem : @runtime.Memory? = None
   let mut mem_is_64 = false
-  match resources.mem_addr {
-    Some(addr) => {
-      let m = store.get_mem(addr) catch {
-        e => raise CanonCallError(e.to_string())
-      }
-      mem_is_64 = m.is_memory64()
-      mem = Some(m)
+  if resources.mem_addr is Some(addr) {
+    let m = store.get_mem(addr) catch {
+      e => raise CanonCallError(e.to_string())
     }
-    None => ()
+    mem_is_64 = m.is_memory64()
+    mem = Some(m)
   }
   fn lower_value(
     val : ComponentValue,
@@ -1026,15 +1023,12 @@ fn core_args_to_component(
 
   let mut mem_is_64 = false
   let mut mem : @runtime.Memory? = None
-  match resources.mem_addr {
-    Some(addr) => {
-      let m = store.get_mem(addr) catch {
-        e => raise CanonCallError(e.to_string())
-      }
-      mem_is_64 = m.is_memory64()
-      mem = Some(m)
+  if resources.mem_addr is Some(addr) {
+    let m = store.get_mem(addr) catch {
+      e => raise CanonCallError(e.to_string())
     }
-    None => ()
+    mem_is_64 = m.is_memory64()
+    mem = Some(m)
   }
   let flat_param_types : Array[@types.ValueType] = []
   for p in func_type.params {
@@ -1105,23 +1099,27 @@ fn core_args_to_component(
     )
     // Validate top-level resource handles to avoid passing invalid integers into
     // host/component functions.
-    match resolve_valtype(p.ty, types) {
-      TypeIdx(ti) =>
-        match types.get(ti) {
-          Some(Some(TypeDef::Own(resource_tyidx)))
-          | Some(Some(TypeDef::Borrow(resource_tyidx))) => {
-            let (type_id, kind) = resource_type_info(resource_tyidx, types)
-            match v {
-              ComponentValue::U32(h) =>
-                validate_resource_handle(h, type_id, kind, resource_table)
-              ComponentValue::S32(h) =>
-                validate_resource_handle(h, type_id, kind, resource_table)
-              _ => ()
-            }
-          }
+    if resolve_valtype(p.ty, types) is TypeIdx(ti) {
+      let type_def = types.get(ti)
+      if type_def is Some(Some(TypeDef::Own(resource_tyidx))) {
+        let (type_id, kind) = resource_type_info(resource_tyidx, types)
+        match v {
+          ComponentValue::U32(h) =>
+            validate_resource_handle(h, type_id, kind, resource_table)
+          ComponentValue::S32(h) =>
+            validate_resource_handle(h, type_id, kind, resource_table)
           _ => ()
         }
-      _ => ()
+      } else if type_def is Some(Some(TypeDef::Borrow(resource_tyidx))) {
+        let (type_id, kind) = resource_type_info(resource_tyidx, types)
+        match v {
+          ComponentValue::U32(h) =>
+            validate_resource_handle(h, type_id, kind, resource_table)
+          ComponentValue::S32(h) =>
+            validate_resource_handle(h, type_id, kind, resource_table)
+          _ => ()
+        }
+      }
     }
     values.push(v)
     pos += n

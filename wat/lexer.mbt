@@ -131,58 +131,60 @@ fn Lexer::advance_pos(self : Lexer) -> Unit {
 ///|
 fn Lexer::skip_whitespace(self : Lexer) -> Unit {
   while !self.is_eof() {
-    match self.peek_char() {
-      Some(' ') | Some('\t') | Some('\n') | Some('\r') => self.advance_pos()
-      Some(';') =>
-        // Skip line comment
-        if self.pos + 1 < self.input.length() &&
-          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-          while !self.is_eof() {
-            match self.peek_char() {
-              Some('\n') | Some('\r') => {
-                self.advance_pos()
-                break
-              }
-              _ => self.advance_pos()
+    let c = self.peek_char()
+    if c is Some(' ') || c is Some('\t') || c is Some('\n') || c is Some('\r') {
+      self.advance_pos()
+    } else if c is Some(';') {
+      // Skip line comment
+      if self.pos + 1 < self.input.length() &&
+        self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
+        while !self.is_eof() {
+          match self.peek_char() {
+            Some('\n') | Some('\r') => {
+              self.advance_pos()
+              break
             }
+            _ => self.advance_pos()
           }
-        } else {
-          break
         }
-      Some('(') =>
-        // Check for block comment (; ... ;)
-        if self.pos + 1 < self.input.length() &&
-          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
-          self.advance_pos()
-          self.advance_pos()
-          let mut depth = 1
-          while !self.is_eof() && depth > 0 {
-            if self.pos + 1 < self.input.length() {
-              let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
-              let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
-              if c1 == ';' && c2 == ')' {
-                depth -= 1
-                self.advance_pos()
-                self.advance_pos()
-              } else if c1 == '(' && c2 == ';' {
-                depth += 1
-                self.advance_pos()
-                self.advance_pos()
-              } else {
-                self.advance_pos()
-              }
+      } else {
+        break
+      }
+    } else if c is Some('(') {
+      // Check for block comment (; ... ;)
+      if self.pos + 1 < self.input.length() &&
+        self.input.code_unit_at(self.pos + 1).unsafe_to_char() == ';' {
+        self.advance_pos()
+        self.advance_pos()
+        let mut depth = 1
+        while !self.is_eof() && depth > 0 {
+          if self.pos + 1 < self.input.length() {
+            let c1 = self.input.code_unit_at(self.pos).unsafe_to_char()
+            let c2 = self.input.code_unit_at(self.pos + 1).unsafe_to_char()
+            if c1 == ';' && c2 == ')' {
+              depth -= 1
+              self.advance_pos()
+              self.advance_pos()
+            } else if c1 == '(' && c2 == ';' {
+              depth += 1
+              self.advance_pos()
+              self.advance_pos()
             } else {
               self.advance_pos()
             }
+          } else {
+            self.advance_pos()
           }
-        } else if self.pos + 1 < self.input.length() &&
-          self.input.code_unit_at(self.pos + 1).unsafe_to_char() == '@' {
-          // Skip annotation (@id ...)
-          self.skip_annotation()
-        } else {
-          break
         }
-      _ => break
+      } else if self.pos + 1 < self.input.length() &&
+        self.input.code_unit_at(self.pos + 1).unsafe_to_char() == '@' {
+        // Skip annotation (@id ...)
+        self.skip_annotation()
+      } else {
+        break
+      }
+    } else {
+      break
     }
   }
 }

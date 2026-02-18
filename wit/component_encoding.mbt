@@ -1018,9 +1018,8 @@ fn encode_interface_instancetype_full(
 
   // Export local resources.
   for it in iface.items {
-    match it {
-      Resource(r) => env.export_resource(r.name) |> ignore
-      _ => ()
+    if it is Resource(r) {
+      env.export_resource(r.name) |> ignore
     }
   }
 
@@ -1104,14 +1103,18 @@ fn encode_interface_instancetype_types_only(
   // Keep it simple: build a synthetic interface containing only type items.
   let items : Array[InterfaceItem] = []
   for it in iface.items {
-    match it {
-      TypeAlias(_)
-      | Record(_)
-      | Variant(_)
-      | Flags(_)
-      | Enum(_)
-      | Resource(_) => items.push(it)
-      _ => ()
+    if it is TypeAlias(_) {
+      items.push(it)
+    } else if it is Record(_) {
+      items.push(it)
+    } else if it is Variant(_) {
+      items.push(it)
+    } else if it is Flags(_) {
+      items.push(it)
+    } else if it is Enum(_) {
+      items.push(it)
+    } else if it is Resource(_) {
+      items.push(it)
     }
   }
   let iface2 : Interface = { name: iface.name, items }
@@ -1139,21 +1142,18 @@ fn encode_componenttype_wrapper_for_interface(
   // Collect interface-level `use` dependencies.
   let deps : Map[String, Array[(String, String?)]] = {} // iface_key -> [(remote, local?)]
   for it in iface.items {
-    match it {
-      Use(u) => {
-        let (pkg_key_opt, name, _) = split_use_path(u.path)
-        let dep_key = match pkg_key_opt {
-          Some(k) => k
-          None => pkg_key
-        }
-        let iface_key = dep_key + "#" + name
-        let list = deps.get(iface_key).unwrap_or([])
-        for pair in u.names {
-          list.push(pair)
-        }
-        deps.set(iface_key, list)
+    if it is Use(u) {
+      let (pkg_key_opt, name, _) = split_use_path(u.path)
+      let dep_key = match pkg_key_opt {
+        Some(k) => k
+        None => pkg_key
       }
-      _ => ()
+      let iface_key = dep_key + "#" + name
+      let list = deps.get(iface_key).unwrap_or([])
+      for pair in u.names {
+        list.push(pair)
+      }
+      deps.set(iface_key, list)
     }
   }
   let decls : Array[Bytes] = []
@@ -1202,9 +1202,10 @@ fn encode_componenttype_wrapper_for_interface(
       // Determine if this is a resource in the dependency interface.
       let mut is_res = false
       for it2 in dep_iface.items {
-        match it2 {
-          Resource(r) => if r.name == remote { is_res = true }
-          _ => ()
+        if it2 is Resource(r) {
+          if r.name == remote {
+            is_res = true
+          }
         }
       }
       imported_types.push((local_name, outer_ti, is_res))
@@ -1405,9 +1406,8 @@ pub fn encode_wit_component_wasm(res : ResolveResult) -> Bytes raise WitError {
   for pkg in all {
     let pkg_key = pkg_key_of(pkg)
     for it in pkg.items {
-      match it {
-        Interface(i) => iface_map.set(pkg_key + "#" + i.name, i)
-        _ => ()
+      if it is Interface(i) {
+        iface_map.set(pkg_key + "#" + i.name, i)
       }
     }
   }

@@ -1,20 +1,14 @@
 ///|
 pub fn format_package(pkg : Package) -> String {
   let sb = StringBuilder::new()
-  match pkg.name {
-    Some(n) => {
-      sb.write_string("package ")
-      sb.write_string(n)
-      match pkg.version {
-        Some(v) => {
-          sb.write_char('@')
-          sb.write_string(v)
-        }
-        None => ()
-      }
-      sb.write_string(";\n\n")
+  if pkg.name is Some(n) {
+    sb.write_string("package ")
+    sb.write_string(n)
+    if pkg.version is Some(v) {
+      sb.write_char('@')
+      sb.write_string(v)
     }
-    None => ()
+    sb.write_string(";\n\n")
   }
   let mut first = true
   let mut prev_world = false
@@ -73,12 +67,9 @@ fn format_nested_package(sb : StringBuilder, pkg : Package) -> Unit {
   let name = pkg.name.unwrap_or_else(fn() { "<unknown>" })
   sb.write_string("package ")
   sb.write_string(name)
-  match pkg.version {
-    Some(v) => {
-      sb.write_char('@')
-      sb.write_string(v)
-    }
-    None => ()
+  if pkg.version is Some(v) {
+    sb.write_char('@')
+    sb.write_string(v)
   }
   sb.write_string(" {\n")
   for it in pkg.items {
@@ -142,28 +133,22 @@ fn format_interface(sb : StringBuilder, it : Interface) -> Unit {
   }
   if has_use {
     for item in it.items {
-      match item {
-        Use(u) => {
-          sb.write_string("  use ")
-          sb.write_string(u.path.raw)
-          sb.write_string(".{")
-          for i in 0..<u.names.length() {
-            if i > 0 {
-              sb.write_string(", ")
-            }
-            let (n, asn) = u.names[i]
-            sb.write_string(n)
-            match asn {
-              Some(nn) => {
-                sb.write_string(" as ")
-                sb.write_string(nn)
-              }
-              None => ()
-            }
+      if item is Use(u) {
+        sb.write_string("  use ")
+        sb.write_string(u.path.raw)
+        sb.write_string(".{")
+        for i in 0..<u.names.length() {
+          if i > 0 {
+            sb.write_string(", ")
           }
-          sb.write_string("};\n")
+          let (n, asn) = u.names[i]
+          sb.write_string(n)
+          if asn is Some(nn) {
+            sb.write_string(" as ")
+            sb.write_string(nn)
+          }
         }
-        _ => ()
+        sb.write_string("};\n")
       }
     }
     if has_other {

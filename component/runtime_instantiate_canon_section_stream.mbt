@@ -49,14 +49,11 @@ fn instantiate_canon_stream_new(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        set_canon_debug_message("stream.new(replay cur=\{cur})-> \{v}")
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      set_canon_debug_message("stream.new(replay cur=\{cur})-> \{v}")
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_i64(x : Int64) -> Array[@types.Value] {
       let out = [@types.Value::I64(x)]
@@ -165,14 +162,11 @@ fn instantiate_canon_stream_read(
         }
       }
     }
-    match per_task.get(cur) {
-      Some(code) => {
-        set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
-        async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-        1] = cur + 1
-        return [@types.Value::I32(code)]
-      }
-      None => ()
+    if per_task.get(cur) is Some(code) {
+      set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
+      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
+      1] = cur + 1
+      return [@types.Value::I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
       per_task.set(cur, code)
@@ -730,14 +724,11 @@ fn instantiate_canon_stream_write(
         }
       }
     }
-    match per_task.get(cur) {
-      Some(code) => {
-        set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
-        async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-        1] = cur + 1
-        return [@types.Value::I32(code)]
-      }
-      None => ()
+    if per_task.get(cur) is Some(code) {
+      set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
+      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
+      1] = cur + 1
+      return [@types.Value::I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
       per_task.set(cur, code)

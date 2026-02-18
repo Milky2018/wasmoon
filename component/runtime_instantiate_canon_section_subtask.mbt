@@ -34,13 +34,10 @@ fn instantiate_canon_subtask_cancel(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_i32(n : Int) -> Array[@types.Value] {
       let out = [@types.Value::I32(n)]
@@ -172,13 +169,10 @@ fn instantiate_canon_subtask_drop(
         m
       }
     }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        return v
-      }
-      None => ()
+    if per_task.get(cur) is Some(v) {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+        1
+      return v
     }
     fn cache_void() -> Array[@types.Value] {
       let out : Array[@types.Value] = []

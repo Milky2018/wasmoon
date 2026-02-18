@@ -114,43 +114,40 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
         Some(idx) => func.blocks[idx]
         None => continue
       }
-      match block.terminator {
-        Some(Jump(target, args)) => {
-          if args.length() == 0 {
+      if block.terminator is Some(Jump(target, args)) {
+        if args.length() == 0 {
+          continue
+        }
+        let target_block = match block_idx.get(target) {
+          Some(idx) => func.blocks[idx]
+          None => continue
+        }
+        let param_count = target_block.params.length()
+        let arg_count = args.length()
+        let count = if param_count < arg_count {
+          param_count
+        } else {
+          arg_count
+        }
+        for i in 0..<count {
+          let (formal, _) = target_block.params[i]
+          if state.get(formal.id) is None {
             continue
           }
-          let target_block = match block_idx.get(target) {
-            Some(idx) => func.blocks[idx]
-            None => continue
+          let actual = args[i]
+          let actual_absval = match state.get(actual.id) {
+            Some(absval) => absval
+            None => PhiAbstractValue::One(actual.id)
           }
-          let param_count = target_block.params.length()
-          let arg_count = args.length()
-          let count = if param_count < arg_count {
-            param_count
-          } else {
-            arg_count
-          }
-          for i in 0..<count {
-            let (formal, _) = target_block.params[i]
-            if state.get(formal.id) is None {
-              continue
-            }
-            let actual = args[i]
-            let actual_absval = match state.get(actual.id) {
-              Some(absval) => absval
-              None => PhiAbstractValue::One(actual.id)
-            }
-            let old_absval = state
-              .get(formal.id)
-              .unwrap_or(PhiAbstractValue::None)
-            let new_absval = old_absval.join(actual_absval)
-            if new_absval != old_absval {
-              state.set(formal.id, new_absval)
-              changed = true
-            }
+          let old_absval = state
+            .get(formal.id)
+            .unwrap_or(PhiAbstractValue::None)
+          let new_absval = old_absval.join(actual_absval)
+          if new_absval != old_absval {
+            state.set(formal.id, new_absval)
+            changed = true
           }
         }
-        _ => ()
       }
     }
   }
@@ -186,21 +183,18 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
   }
   for block in func.blocks {
-    match block.terminator {
-      Some(Jump(target, args)) => {
-        let keep = params_to_keep.get(target).unwrap_or([])
-        if keep.length() != args.length() {
-          let new_args : Array[Value] = []
-          for idx in keep {
-            if idx < args.length() {
-              new_args.push(args[idx])
-            }
+    if block.terminator is Some(Jump(target, args)) {
+      let keep = params_to_keep.get(target).unwrap_or([])
+      if keep.length() != args.length() {
+        let new_args : Array[Value] = []
+        for idx in keep {
+          if idx < args.length() {
+            new_args.push(args[idx])
           }
-          block.terminator = Some(Terminator::Jump(target, new_args))
-          result.mark_changed()
         }
+        block.terminator = Some(Terminator::Jump(target, new_args))
+        result.mark_changed()
       }
-      _ => ()
     }
   }
   let value_map = build_value_map(func)
@@ -406,28 +400,26 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   while changed {
     changed = false
     for block in func.blocks {
-      match block.terminator {
-        Some(Jump(target, args)) =>
-          // Find target block and its parameters
-          for target_block in func.blocks {
-            if target_block.id == target {
-              // For each parameter-argument pair
-              for i, param in target_block.params {
-                let (param_v, _) = param
-                if i < args.length() {
-                  let arg = args[i]
-                  // If target param is used, mark the argument as used
-                  if used.get(param_v.id).unwrap_or(false) &&
-                    !used.get(arg.id).unwrap_or(false) {
-                    used.set(arg.id, true)
-                    changed = true
-                  }
+      if block.terminator is Some(Jump(target, args)) {
+        // Find target block and its parameters
+        for target_block in func.blocks {
+          if target_block.id == target {
+            // For each parameter-argument pair
+            for i, param in target_block.params {
+              let (param_v, _) = param
+              if i < args.length() {
+                let arg = args[i]
+                // If target param is used, mark the argument as used
+                if used.get(param_v.id).unwrap_or(false) &&
+                  !used.get(arg.id).unwrap_or(false) {
+                  used.set(arg.id, true)
+                  changed = true
                 }
               }
-              break
             }
+            break
           }
-        _ => ()
+        }
       }
     }
   }

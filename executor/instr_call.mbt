@@ -201,29 +201,25 @@ fn ExecContext::call_func_inst_with_context(
   args : Array[@types.Value],
   num_results : Int,
 ) -> Unit raise {
-  match func_inst {
-    WasmFunc(code) =>
-      // Check if this function belongs to a different module
-      match self.store.get_func_owner(store_addr) {
-        Some(owner_instance) =>
-          // Call with the owner's context
-          self.call_wasm_func_with_instance(
-            owner_instance, code, args, num_results,
-          )
-        None =>
-          // No registered owner, use current instance (backward compatibility)
-          self.call_wasm_func(code, args, num_results)
-      }
-    HostFunc(host_fn) => {
-      // Call host function directly
-      let caller = @runtime.Caller::new(self.store, self.instance)
-      let results = host_fn(caller, args) catch {
-        e => raise InvocationSignal::HostInvocation(e)
-      }
-      // Push results onto the stack
-      for result in results {
-        self.stack.push(result)
-      }
+  if func_inst is WasmFunc(code) {
+    // Check if this function belongs to a different module
+    let owner = self.store.get_func_owner(store_addr)
+    if owner is Some(owner_instance) {
+      // Call with the owner's context
+      self.call_wasm_func_with_instance(owner_instance, code, args, num_results)
+    } else {
+      // No registered owner, use current instance (backward compatibility)
+      self.call_wasm_func(code, args, num_results)
+    }
+  } else if func_inst is HostFunc(host_fn) {
+    // Call host function directly
+    let caller = @runtime.Caller::new(self.store, self.instance)
+    let results = host_fn(caller, args) catch {
+      e => raise InvocationSignal::HostInvocation(e)
+    }
+    // Push results onto the stack
+    for result in results {
+      self.stack.push(result)
     }
   }
 }

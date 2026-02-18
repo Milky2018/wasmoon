@@ -294,17 +294,15 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
           }
         }
       }
-      match inst.opcode {
-        Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
-        | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) =>
-          if inst.defs.length() == 1 && inst.uses.length() == 1 {
-            if is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) {
-              if get_def_vreg_id(inst.defs[0]) is Some(did) {
-                func_table_ptrs.add(did)
-              }
+      if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
+        inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) {
+        if inst.defs.length() == 1 && inst.uses.length() == 1 {
+          if is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) {
+            if get_def_vreg_id(inst.defs[0]) is Some(did) {
+              func_table_ptrs.add(did)
             }
           }
-        _ => ()
+        }
       }
     }
   }
@@ -396,33 +394,30 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
       // - func_table: `load.i64 +8 x19`
       // - globals ptr: `load.i64 +32 x19`
       if !replaced {
-        match inst.opcode {
-          Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
-          | Load(I64, @abi.VMCTX_GLOBALS_OFFSET)
-          | LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
-          | LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET) =>
-            if inst.defs.length() == 1 &&
-              inst.uses.length() == 1 &&
-              is_vmctx(inst.uses[0]) {
-              let key = match inst.opcode {
-                Load(_, off) | LoadPtr(_, off) =>
-                  "vmctx_base|" + off.to_string()
-                _ => "vmctx_base"
-              }
-              if seen.get(key) is Some(prev_id) {
-                let mv = @instr.VCodeInst::new(Move)
-                mv.add_def(inst.defs[0])
-                mv.add_use(Virtual({ id: prev_id, class: Int }))
-                new_insts.push(mv)
-                if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-                  copies.set(dst, canonical_id(prev_id, copies))
-                }
-                replaced = true
-              } else {
-                seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
-              }
+        if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
+          inst.opcode is Load(I64, @abi.VMCTX_GLOBALS_OFFSET) ||
+          inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
+          inst.opcode is LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET) {
+          if inst.defs.length() == 1 &&
+            inst.uses.length() == 1 &&
+            is_vmctx(inst.uses[0]) {
+            let key = match inst.opcode {
+              Load(_, off) | LoadPtr(_, off) => "vmctx_base|" + off.to_string()
+              _ => "vmctx_base"
             }
-          _ => ()
+            if seen.get(key) is Some(prev_id) {
+              let mv = @instr.VCodeInst::new(Move)
+              mv.add_def(inst.defs[0])
+              mv.add_use(Virtual({ id: prev_id, class: Int }))
+              new_insts.push(mv)
+              if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+                copies.set(dst, canonical_id(prev_id, copies))
+              }
+              replaced = true
+            } else {
+              seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
+            }
+          }
         }
       }
       if !replaced {

@@ -346,15 +346,13 @@ fn rule_div_one() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        match node.op {
-          Sdiv | Udiv =>
-            if node.children.length() == 2 {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let new_id = eg.merge(class_id, node.children[0])
-                changed = new_id != class_id || changed
-              }
+        if node.op is Sdiv || node.op is Udiv {
+          if node.children.length() == 2 {
+            if eg.find_const(node.children[1]) is Some(1L) {
+              let new_id = eg.merge(class_id, node.children[0])
+              changed = new_id != class_id || changed
             }
-          _ => ()
+          }
         }
       }
       changed
@@ -369,16 +367,14 @@ fn rule_rem_one() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        match node.op {
-          Srem | Urem =>
-            if node.children.length() == 2 {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let zero = eg.add_const(0L)
-                let new_id = eg.merge(class_id, zero)
-                changed = new_id != class_id || changed
-              }
+        if node.op is Srem || node.op is Urem {
+          if node.children.length() == 2 {
+            if eg.find_const(node.children[1]) is Some(1L) {
+              let zero = eg.add_const(0L)
+              let new_id = eg.merge(class_id, zero)
+              changed = new_id != class_id || changed
             }
-          _ => ()
+          }
         }
       }
       changed

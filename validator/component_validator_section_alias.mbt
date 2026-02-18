@@ -91,67 +91,49 @@ fn validate_component_section_alias(
       }
     }
     if a.sort is Component {
-      match a.target {
-        Outer(ct, idx) =>
-          if ct == 0 {
-            if idx >= 0 && idx < component_sizes.length() {
-              new_component_size = component_sizes[idx]
-            }
-          } else {
-            let depth = ct - 1
-            if depth >= 0 && depth < component_size_outers.length() {
-              let tbl = component_size_outers[depth]
-              if idx >= 0 && idx < tbl.length() {
-                new_component_size = tbl[idx]
-              }
+      if a.target is Outer(ct, idx) {
+        if ct == 0 {
+          if idx >= 0 && idx < component_sizes.length() {
+            new_component_size = component_sizes[idx]
+          }
+        } else {
+          let depth = ct - 1
+          if depth >= 0 && depth < component_size_outers.length() {
+            let tbl = component_size_outers[depth]
+            if idx >= 0 && idx < tbl.length() {
+              new_component_size = tbl[idx]
             }
           }
-        _ => ()
+        }
       }
     }
     // If we are aliasing an instance export that has a known ascribed
     // instance type, propagate its export signature into the new
     // instance index-space entry.
-    match (a.sort, a.target) {
-      (@component.Sort::Instance, Export(instance_idx, name)) => {
-        let parent = if instance_idx >= 0 &&
-          instance_idx < instance_sigs.length() {
-          instance_sigs[instance_idx]
-        } else {
-          None
-        }
-        match parent {
-          Some(sig) =>
-            match sig.nested.get(name) {
-              Some(child) => new_instance_sig = Some(child)
-              None => ()
-            }
-          None => ()
-        }
-        if instance_idx >= 0 &&
-          instance_idx < instance_nested_instance_type_sigs.length() {
-          match instance_nested_instance_type_sigs[instance_idx] {
-            Some(map) =>
-              match map.get(name) {
-                Some(m) => new_instance_export_type_sigs = Some(m)
-                None => ()
-              }
-            None => ()
-          }
-        }
-        if instance_idx >= 0 &&
-          instance_idx < instance_nested_instance_func_sigs.length() {
-          match instance_nested_instance_func_sigs[instance_idx] {
-            Some(map) =>
-              match map.get(name) {
-                Some(m) => new_instance_export_func_sigs = Some(m)
-                None => ()
-              }
-            None => ()
-          }
+    if (a.sort, a.target)
+      is (@component.Sort::Instance, Export(instance_idx, name)) {
+      let parent = if instance_idx >= 0 && instance_idx < instance_sigs.length() {
+        instance_sigs[instance_idx]
+      } else {
+        None
+      }
+      if parent is Some(sig) && sig.nested.get(name) is Some(child) {
+        new_instance_sig = Some(child)
+      }
+      if instance_idx >= 0 &&
+        instance_idx < instance_nested_instance_type_sigs.length() {
+        if instance_nested_instance_type_sigs[instance_idx] is Some(map) &&
+          map.get(name) is Some(m) {
+          new_instance_export_type_sigs = Some(m)
         }
       }
-      _ => ()
+      if instance_idx >= 0 &&
+        instance_idx < instance_nested_instance_func_sigs.length() {
+        if instance_nested_instance_func_sigs[instance_idx] is Some(map) &&
+          map.get(name) is Some(m) {
+          new_instance_export_func_sigs = Some(m)
+        }
+      }
     }
     match a.target {
       Export(instance_idx, name) => {
@@ -345,12 +327,10 @@ fn validate_component_section_alias(
       resource_ids.push(new_rid)
       type_sizes.push(new_size)
       type_depths.push(new_depth)
-      match a.target {
-        Export(instance_idx, _name) =>
-          if interface_instance_idxs.get(instance_idx) is Some(_) {
-            named_types.set(type_table.length() - 1, 1)
-          }
-        _ => ()
+      if a.target is Export(instance_idx, _name) {
+        if interface_instance_idxs.get(instance_idx) is Some(_) {
+          named_types.set(type_table.length() - 1, 1)
+        }
       }
     } else {
       count_alias(a.sort, counts)

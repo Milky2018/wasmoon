@@ -743,9 +743,9 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
   let other_id = a
 
   // Merge type information: prefer existing type, or take from other class
-  match (self.type_map.get(new_id.0), self.type_map.get(other_id.0)) {
-    (None, Some(bits)) => self.type_map.set(new_id.0, bits)
-    _ => () // Keep new_id's type or both None
+  if (self.type_map.get(new_id.0), self.type_map.get(other_id.0))
+    is (None, Some(bits)) {
+    self.type_map.set(new_id.0, bits)
   }
   // Remove old type entry
   self.type_map.remove(other_id.0)

@@ -1591,39 +1591,36 @@ pub fn poll_oneoff_impl(
   let mut clock_ready = false
   if fds.length() > 0 {
     let poll_result = native_poll(fds, events, timeout_ms)
-    match poll_result {
-      Some(result) => {
-        if result.ready_count == 0 {
-          clock_ready = true
-        }
-        // Write fd events
-        for i, sub_idx in sub_indices {
-          let revent = result.revents[i]
-          if revent != 0 {
-            let sub_ptr = in_ptr + sub_idx * 48
-            let userdata = mem.read_i64(sub_ptr)
-            let tag = mem.read_byte(sub_ptr + 8).to_int()
-            let event_ptr = out_ptr + events_written * 32
-            mem.write_i64(event_ptr, userdata)
-            mem.write_byte(event_ptr + 8, b'\x00') // error = success
-            mem.write_byte(event_ptr + 9, b'\x00')
-            mem.write_byte(event_ptr + 10, tag.to_byte()) // type
-            // padding
-            for j in 11..<16 {
-              mem.write_byte(event_ptr + j, b'\x00')
-            }
-            mem.write_i64(event_ptr + 16, 0L) // nbytes (unknown)
-            mem.write_byte(event_ptr + 24, b'\x00') // flags
-            mem.write_byte(event_ptr + 25, b'\x00')
-            // padding
-            for j in 26..<32 {
-              mem.write_byte(event_ptr + j, b'\x00')
-            }
-            events_written = events_written + 1
+    if poll_result is Some(result) {
+      if result.ready_count == 0 {
+        clock_ready = true
+      }
+      // Write fd events
+      for i, sub_idx in sub_indices {
+        let revent = result.revents[i]
+        if revent != 0 {
+          let sub_ptr = in_ptr + sub_idx * 48
+          let userdata = mem.read_i64(sub_ptr)
+          let tag = mem.read_byte(sub_ptr + 8).to_int()
+          let event_ptr = out_ptr + events_written * 32
+          mem.write_i64(event_ptr, userdata)
+          mem.write_byte(event_ptr + 8, b'\x00') // error = success
+          mem.write_byte(event_ptr + 9, b'\x00')
+          mem.write_byte(event_ptr + 10, tag.to_byte()) // type
+          // padding
+          for j in 11..<16 {
+            mem.write_byte(event_ptr + j, b'\x00')
           }
+          mem.write_i64(event_ptr + 16, 0L) // nbytes (unknown)
+          mem.write_byte(event_ptr + 24, b'\x00') // flags
+          mem.write_byte(event_ptr + 25, b'\x00')
+          // padding
+          for j in 26..<32 {
+            mem.write_byte(event_ptr + j, b'\x00')
+          }
+          events_written = events_written + 1
         }
       }
-      None => ()
     }
   } else if min_timeout_ns >= 0L {
     // Just sleep
@@ -1753,16 +1750,16 @@ pub fn sock_send_impl(
 ///|
 /// sock_shutdown - Shutdown socket
 pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
-  match ctx.get_file(fd) {
-    Some(file) =>
-      // WASI: 0=RD, 1=WR, 2=RDWR
-      // POSIX: 0=SHUT_RD, 1=SHUT_WR, 2=SHUT_RDWR
-      if native_shutdown(file.native_fd, how) {
-        Errno::Success.to_i32()
-      } else {
-        Errno::IO.to_i32()
-      }
-    None => Errno::Badf.to_i32()
+  if ctx.get_file(fd) is Some(file) {
+    // WASI: 0=RD, 1=WR, 2=RDWR
+    // POSIX: 0=SHUT_RD, 1=SHUT_WR, 2=SHUT_RDWR
+    if native_shutdown(file.native_fd, how) {
+      Errno::Success.to_i32()
+    } else {
+      Errno::IO.to_i32()
+    }
+  } else {
+    Errno::Badf.to_i32()
   }
 }
 

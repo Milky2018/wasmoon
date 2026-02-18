@@ -206,15 +206,13 @@ fn optimize_block(
     // For now, DCE is only done by the register allocator's dead code marking.
 
     let optimized = optimize_instruction(inst, state)
-    match optimized {
-      Some(new_inst) => {
-        new_insts.push(new_inst)
-        // Update state based on the new instruction
-        update_state(new_inst, state)
-      }
-      None =>
-        // Instruction was eliminated
-        eliminated = eliminated + 1
+    if optimized is Some(new_inst) {
+      new_insts.push(new_inst)
+      // Update state based on the new instruction
+      update_state(new_inst, state)
+    } else {
+      // Instruction was eliminated
+      eliminated = eliminated + 1
     }
   }
   // Replace block instructions with optimized ones

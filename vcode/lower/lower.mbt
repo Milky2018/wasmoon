@@ -566,23 +566,36 @@ fn compute_fused_icmps(
       }
     }
     if block.terminator is Some(term) {
-      match term {
-        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
-          // Check if the condition is an Icmp result with exactly one use
-          if use_counts.get(cond.id).unwrap_or(0) == 1 {
-            // Find the defining instruction of the condition
-            for b in ir_func.blocks {
-              for i in b.instructions {
-                if i.first_result() is Some(r) && r.id == cond.id {
-                  // Check if it's an Icmp
-                  if i.opcode is @ir.Opcode::Icmp(_) {
-                    fused.add(cond.id)
-                  }
+      if term is @ir.Terminator::Brz(cond, _, _) {
+        // Check if the condition is an Icmp result with exactly one use
+        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+          // Find the defining instruction of the condition
+          for b in ir_func.blocks {
+            for i in b.instructions {
+              if i.first_result() is Some(r) && r.id == cond.id {
+                // Check if it's an Icmp
+                if i.opcode is @ir.Opcode::Icmp(_) {
+                  fused.add(cond.id)
                 }
               }
             }
           }
-        _ => ()
+        }
+      } else if term is @ir.Terminator::Brnz(cond, _, _) {
+        // Check if the condition is an Icmp result with exactly one use
+        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+          // Find the defining instruction of the condition
+          for b in ir_func.blocks {
+            for i in b.instructions {
+              if i.first_result() is Some(r) && r.id == cond.id {
+                // Check if it's an Icmp
+                if i.opcode is @ir.Opcode::Icmp(_) {
+                  fused.add(cond.id)
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -1253,28 +1266,25 @@ pub fn lower_function(
   for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
-    match class {
-      Int =>
-        if int_reg_count < max_int_reg_params {
-          // Register parameter: allocate @abi.VReg
-          let vreg = ctx.vcode_func.add_param(class)
-          ctx.value_map.set(value.id, vreg)
-          int_reg_count = int_reg_count + 1
-        } else {
-          // Stack parameter: laid out in overflow area (entry SP).
-          int_stack_values.push(value)
-        }
-      Float32 | Float64 | Vector =>
-        // Vector uses same V0-V7 registers as floats on AArch64
-        if float_reg_count < max_float_reg_params {
-          // Register parameter: allocate @abi.VReg
-          let vreg = ctx.vcode_func.add_param(class)
-          ctx.value_map.set(value.id, vreg)
-          float_reg_count = float_reg_count + 1
-        } else {
-          float_stack_values.push((value, class))
-          float_stack_classes.push(class)
-        }
+    if class is Int {
+      if int_reg_count < max_int_reg_params {
+        // Register parameter: allocate @abi.VReg
+        let vreg = ctx.vcode_func.add_param(class)
+        ctx.value_map.set(value.id, vreg)
+        int_reg_count = int_reg_count + 1
+      } else {
+        // Stack parameter: laid out in overflow area (entry SP).
+        int_stack_values.push(value)
+      }
+      // Vector uses same V0-V7 registers as floats on AArch64
+    } else if float_reg_count < max_float_reg_params {
+      // Register parameter: allocate @abi.VReg
+      let vreg = ctx.vcode_func.add_param(class)
+      ctx.value_map.set(value.id, vreg)
+      float_reg_count = float_reg_count + 1
+    } else {
+      float_stack_values.push((value, class))
+      float_stack_classes.push(class)
     }
   }
   let (int_offsets, float_offsets, _) = @abi.wasm_layout_overflow_stack(
@@ -1371,16 +1381,17 @@ fn fixup_aarch64_mem0_desc_constraints(
 fn fixup_amd64_shift_count_constraints(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     for inst in block.insts {
-      match inst.opcode {
-        @instr.Shl(_) | @instr.LShr(_) | @instr.AShr(_) | @instr.Rotr(_) =>
-          if inst.uses.length() >= 2 {
-            match inst.use_constraints[1] {
-              @abi.FixedReg(_) => ()
-              _ =>
-                inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
-            }
+      if inst.opcode is @instr.Shl(_) ||
+        inst.opcode is @instr.LShr(_) ||
+        inst.opcode is @instr.AShr(_) ||
+        inst.opcode is @instr.Rotr(_) {
+        if inst.uses.length() >= 2 {
+          match inst.use_constraints[1] {
+            @abi.FixedReg(_) => ()
+            _ =>
+              inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
           }
-        _ => ()
+        }
       }
     }
   }

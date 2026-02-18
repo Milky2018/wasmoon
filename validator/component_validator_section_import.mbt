@@ -363,40 +363,37 @@ fn validate_component_section_import(
       let mut export_instance_sigs : Map[String, InstanceSig]? = None
       let mut export_func_sigs : Map[String, FuncSigShape]? = None
       if tyidx >= 0 && tyidx < type_table.length() {
-        match type_table[tyidx] {
-          Some(@component.TypeDef::ComponentType(decls)) => {
-            let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
-              decls, type_table,
-            )
-            import_sorts = Some(imp_sorts)
-            import_instance_sigs = Some(imp_inst_sigs)
-            import_func_sigs = Some(
-              componenttype_import_func_sigs_of_decls(
-                decls, type_table, resource_ids,
-              ),
-            )
-            let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
-              decls,
-            )
-            import_core_module_import_sigs = Some(core_imports)
-            import_core_module_exports = Some(core_exports)
-            import_type_sigs = Some(
-              componenttype_import_type_sigs_of_decls(
-                decls, type_table, resource_ids,
-              ),
-            )
-            import_type_bounds = Some(
-              componenttype_import_type_bounds_of_decls(decls),
-            )
-            export_sorts = Some(exp_sorts)
-            export_instance_sigs = Some(exp_inst_sigs)
-            export_func_sigs = Some(
-              componenttype_export_func_sigs_of_decls(
-                decls, type_table, resource_ids,
-              ),
-            )
-          }
-          _ => ()
+        if type_table[tyidx] is Some(@component.TypeDef::ComponentType(decls)) {
+          let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
+            decls, type_table,
+          )
+          import_sorts = Some(imp_sorts)
+          import_instance_sigs = Some(imp_inst_sigs)
+          import_func_sigs = Some(
+            componenttype_import_func_sigs_of_decls(
+              decls, type_table, resource_ids,
+            ),
+          )
+          let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
+            decls,
+          )
+          import_core_module_import_sigs = Some(core_imports)
+          import_core_module_exports = Some(core_exports)
+          import_type_sigs = Some(
+            componenttype_import_type_sigs_of_decls(
+              decls, type_table, resource_ids,
+            ),
+          )
+          import_type_bounds = Some(
+            componenttype_import_type_bounds_of_decls(decls),
+          )
+          export_sorts = Some(exp_sorts)
+          export_instance_sigs = Some(exp_inst_sigs)
+          export_func_sigs = Some(
+            componenttype_export_func_sigs_of_decls(
+              decls, type_table, resource_ids,
+            ),
+          )
         }
       }
       component_import_sorts.push(import_sorts)
@@ -506,15 +503,13 @@ fn validate_component_section_import(
         ) {
         raise SectionParseError(10, "type not valid to be used as import")
       }
-      match type_table[new_idx] {
-        Some(@component.TypeDef::InstanceType(_))
-        | Some(@component.TypeDef::InstanceTypeEmpty) =>
-          if !instancetype_valid_for_use_as_interface(
-              new_idx, type_table, type_outers,
-            ) {
-            raise SectionParseError(10, "type not valid to be used as import")
-          }
-        _ => ()
+      if type_table[new_idx] is Some(@component.TypeDef::InstanceType(_)) ||
+        type_table[new_idx] is Some(@component.TypeDef::InstanceTypeEmpty) {
+        if !instancetype_valid_for_use_as_interface(
+            new_idx, type_table, type_outers,
+          ) {
+          raise SectionParseError(10, "type not valid to be used as import")
+        }
       }
     }
     count_import(i.desc, counts)

@@ -136,20 +136,17 @@ pub impl TargetISA for AArch64 with get_preg(
   class : @abi.RegClass,
   index : Int,
 ) -> @abi.PReg? {
-  match class {
-    Int =>
-      if index >= 0 && index < 31 {
-        Some({ index, class: Int })
-      } else {
-        None
-      }
-    Float32 | Float64 | Vector =>
-      // Vector uses same V0-V31 registers as floats on AArch64
-      if index >= 0 && index < 32 {
-        Some({ index, class })
-      } else {
-        None
-      }
+  if class is Int {
+    if index >= 0 && index < 31 {
+      Some({ index, class: Int })
+    } else {
+      None
+    }
+    // Vector uses same V0-V31 registers as floats on AArch64
+  } else if index >= 0 && index < 32 {
+    Some({ index, class })
+  } else {
+    None
   }
 }
 
