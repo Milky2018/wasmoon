@@ -565,8 +565,9 @@ fn compute_fused_icmps(
         }
       }
     }
-    if block.terminator is Some(term) {
-      if term is @ir.Terminator::Brz(cond, _, _) {
+    match block.terminator {
+      Some(@ir.Terminator::Brz(cond, _, _))
+      | Some(@ir.Terminator::Brnz(cond, _, _)) =>
         // Check if the condition is an Icmp result with exactly one use
         if use_counts.get(cond.id).unwrap_or(0) == 1 {
           // Find the defining instruction of the condition
@@ -581,22 +582,7 @@ fn compute_fused_icmps(
             }
           }
         }
-      } else if term is @ir.Terminator::Brnz(cond, _, _) {
-        // Check if the condition is an Icmp result with exactly one use
-        if use_counts.get(cond.id).unwrap_or(0) == 1 {
-          // Find the defining instruction of the condition
-          for b in ir_func.blocks {
-            for i in b.instructions {
-              if i.first_result() is Some(r) && r.id == cond.id {
-                // Check if it's an Icmp
-                if i.opcode is @ir.Opcode::Icmp(_) {
-                  fused.add(cond.id)
-                }
-              }
-            }
-          }
-        }
-      }
+      _ => ()
     }
   }
   fused
@@ -968,10 +954,8 @@ fn resolve_iconst_value(ctx : LoweringContext, value0 : @ir.Value) -> Int64? {
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
 /// Returns Some(val) if the value is a constant in valid 12-bit immediate range
 fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if resolve_iconst_value(ctx, value) is Some(val) {
-    if is_valid_add_imm(val) {
-      return Some(val)
-    }
+  if resolve_iconst_value(ctx, value) is Some(val) && is_valid_add_imm(val) {
+    return Some(val)
   }
   None
 }
@@ -1381,16 +1365,16 @@ fn fixup_aarch64_mem0_desc_constraints(
 fn fixup_amd64_shift_count_constraints(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     for inst in block.insts {
-      if inst.opcode is @instr.Shl(_) ||
-        inst.opcode is @instr.LShr(_) ||
-        inst.opcode is @instr.AShr(_) ||
-        inst.opcode is @instr.Rotr(_) {
-        if inst.uses.length() >= 2 {
-          match inst.use_constraints[1] {
-            @abi.FixedReg(_) => ()
-            _ =>
-              inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
-          }
+      if (
+          inst.opcode is @instr.Shl(_) ||
+          inst.opcode is @instr.LShr(_) ||
+          inst.opcode is @instr.AShr(_) ||
+          inst.opcode is @instr.Rotr(_)
+        ) &&
+        inst.uses.length() >= 2 {
+        match inst.use_constraints[1] {
+          @abi.FixedReg(_) => ()
+          _ => inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
         }
       }
     }

@@ -21,29 +21,31 @@ fn rule_spaceship_eq_zero() -> RewriteRule {
           node.children.length() == 2 {
           // Check if one operand is spaceship and other is zero
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS ||
-              spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                // (spaceship(x, y) == 0) → (x == y)
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Eq, children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if (
+                spaceship_node.op is SpaceshipS ||
+                spaceship_node.op is SpaceshipU
+              ) &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              // (spaceship(x, y) == 0) → (x == y)
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Eq, children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
           // Check the other way around
           for spaceship_node in eg.get_nodes(node.children[1]) {
-            if spaceship_node.op is SpaceshipS ||
-              spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[0]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Eq, children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if (
+                spaceship_node.op is SpaceshipS ||
+                spaceship_node.op is SpaceshipU
+              ) &&
+              eg.find_const(node.children[0]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Eq, children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -64,27 +66,29 @@ fn rule_spaceship_ne_zero() -> RewriteRule {
         if (node.op is Ne || node.op is Icmp(CC_NE)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS ||
-              spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Ne, children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if (
+                spaceship_node.op is SpaceshipS ||
+                spaceship_node.op is SpaceshipU
+              ) &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Ne, children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
           for spaceship_node in eg.get_nodes(node.children[1]) {
-            if spaceship_node.op is SpaceshipS ||
-              spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[0]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Ne, children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if (
+                spaceship_node.op is SpaceshipS ||
+                spaceship_node.op is SpaceshipU
+              ) &&
+              eg.find_const(node.children[0]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Ne, children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -104,14 +108,13 @@ fn rule_spaceship_s_lt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SLT) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -131,14 +134,13 @@ fn rule_spaceship_u_lt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SLT) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -157,14 +159,13 @@ fn rule_spaceship_s_le_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SLE) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -183,14 +184,13 @@ fn rule_spaceship_u_le_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SLE) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -209,14 +209,13 @@ fn rule_spaceship_s_gt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SGT) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -235,14 +234,13 @@ fn rule_spaceship_u_gt_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SGT) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -261,14 +259,13 @@ fn rule_spaceship_s_ge_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SGE) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -287,14 +284,13 @@ fn rule_spaceship_u_ge_zero() -> RewriteRule {
       for node in eg.get_nodes(class_id) {
         if node.op is Icmp(CC_SGE) && node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(0L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(0L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -314,14 +310,14 @@ fn rule_spaceship_s_eq_neg_one() -> RewriteRule {
         if (node.op is Eq || node.op is Icmp(CC_EQ)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(v) && is_neg_one(v) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(v) &&
+              is_neg_one(v) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -341,14 +337,14 @@ fn rule_spaceship_u_eq_neg_one() -> RewriteRule {
         if (node.op is Eq || node.op is Icmp(CC_EQ)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(v) && is_neg_one(v) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(v) &&
+              is_neg_one(v) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -368,14 +364,14 @@ fn rule_spaceship_s_ne_neg_one() -> RewriteRule {
         if (node.op is Ne || node.op is Icmp(CC_NE)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(v) && is_neg_one(v) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(v) &&
+              is_neg_one(v) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SGE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -395,14 +391,14 @@ fn rule_spaceship_u_ne_neg_one() -> RewriteRule {
         if (node.op is Ne || node.op is Icmp(CC_NE)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(v) && is_neg_one(v) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(v) &&
+              is_neg_one(v) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_UGE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -422,14 +418,13 @@ fn rule_spaceship_s_eq_one() -> RewriteRule {
         if (node.op is Eq || node.op is Icmp(CC_EQ)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(1L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -449,14 +444,13 @@ fn rule_spaceship_u_eq_one() -> RewriteRule {
         if (node.op is Eq || node.op is Icmp(CC_EQ)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(1L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -476,14 +470,13 @@ fn rule_spaceship_s_ne_one() -> RewriteRule {
         if (node.op is Ne || node.op is Icmp(CC_NE)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipS {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipS &&
+              eg.find_const(node.children[1]) is Some(1L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_SLE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -503,14 +496,13 @@ fn rule_spaceship_u_ne_one() -> RewriteRule {
         if (node.op is Ne || node.op is Icmp(CC_NE)) &&
           node.children.length() == 2 {
           for spaceship_node in eg.get_nodes(node.children[0]) {
-            if spaceship_node.op is SpaceshipU {
-              if eg.find_const(node.children[1]) is Some(1L) {
-                let x = spaceship_node.children[0]
-                let y = spaceship_node.children[1]
-                let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
-                let new_id = eg.subsume(class_id, new_node)
-                changed = new_id != class_id || changed
-              }
+            if spaceship_node.op is SpaceshipU &&
+              eg.find_const(node.children[1]) is Some(1L) {
+              let x = spaceship_node.children[0]
+              let y = spaceship_node.children[1]
+              let new_node = eg.add({ op: Icmp(CC_ULE), children: [x, y] })
+              let new_id = eg.subsume(class_id, new_node)
+              changed = new_id != class_id || changed
             }
           }
         }

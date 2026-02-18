@@ -212,7 +212,11 @@ def main():
     # Walk through directory
     for root, dirs, files in os.walk(search_dir):
         # Skip hidden directories and common non-source dirs
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['target', 'node_modules', '.mooncakes']]
+        dirs[:] = [
+            d for d in dirs
+            if not d.startswith('.') and
+            d not in ['target', 'node_modules', '.mooncakes', '_build']
+        ]
 
         for filename in files:
             if filename.endswith('.mbt'):
@@ -243,4 +247,11 @@ def main():
     print(f"Total found: {len(all_results)}")
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BrokenPipeError:
+        try:
+            sys.stdout.close()
+        except Exception:
+            pass
+        sys.exit(0)

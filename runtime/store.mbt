@@ -729,18 +729,18 @@ pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int 
   // Set ownership only for unowned WASM functions
   // HostFunc and already-owned functions are not changed
   for func_addr in instance.func_addrs {
-    if func_addr >= 0 && func_addr < self.func_owners.length() {
-      if self.func_owners[func_addr] == FuncOwner::Unowned {
-        self.func_owners[func_addr] = FuncOwner::Module(instance_idx)
-      }
+    if func_addr >= 0 &&
+      func_addr < self.func_owners.length() &&
+      self.func_owners[func_addr] == FuncOwner::Unowned {
+      self.func_owners[func_addr] = FuncOwner::Module(instance_idx)
     }
   }
   // Set ownership for unowned tags
   for tag_addr in instance.tag_addrs {
-    if tag_addr >= 0 && tag_addr < self.tag_owners.length() {
-      if self.tag_owners[tag_addr] == FuncOwner::Unowned {
-        self.tag_owners[tag_addr] = FuncOwner::Module(instance_idx)
-      }
+    if tag_addr >= 0 &&
+      tag_addr < self.tag_owners.length() &&
+      self.tag_owners[tag_addr] == FuncOwner::Unowned {
+      self.tag_owners[tag_addr] = FuncOwner::Module(instance_idx)
     }
   }
   instance_idx

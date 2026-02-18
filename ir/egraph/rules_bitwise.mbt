@@ -10,13 +10,15 @@ fn rule_and_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(0L) ||
-            eg.find_const(node.children[1]) is Some(0L) {
-            let zero = eg.add_const(0L)
-            let new_id = eg.merge(class_id, zero)
-            changed = new_id != class_id || changed
-          }
+        if node.op is And &&
+          node.children.length() == 2 &&
+          (
+            eg.find_const(node.children[0]) is Some(0L) ||
+            eg.find_const(node.children[1]) is Some(0L)
+          ) {
+          let zero = eg.add_const(0L)
+          let new_id = eg.merge(class_id, zero)
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -31,14 +33,16 @@ fn rule_or_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Or && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          } else if eg.find_const(node.children[0]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[1])
-            changed = new_id != class_id || changed
-          }
+        if node.op is Or &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
+        } else if node.op is Or &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[1])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -53,14 +57,16 @@ fn rule_xor_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          } else if eg.find_const(node.children[0]) is Some(0L) {
-            let new_id = eg.merge(class_id, node.children[1])
-            changed = new_id != class_id || changed
-          }
+        if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
+        } else if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(0L) {
+          let new_id = eg.merge(class_id, node.children[1])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -75,14 +81,16 @@ fn rule_and_all_ones() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is And && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(-1L) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          } else if eg.find_const(node.children[0]) is Some(-1L) {
-            let new_id = eg.merge(class_id, node.children[1])
-            changed = new_id != class_id || changed
-          }
+        if node.op is And &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(-1L) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
+        } else if node.op is And &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(-1L) {
+          let new_id = eg.merge(class_id, node.children[1])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -97,13 +105,15 @@ fn rule_or_all_ones() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Or && node.children.length() == 2 {
-          if eg.find_const(node.children[0]) is Some(-1L) ||
-            eg.find_const(node.children[1]) is Some(-1L) {
-            let all_ones = eg.add_const(-1L)
-            let new_id = eg.merge(class_id, all_ones)
-            changed = new_id != class_id || changed
-          }
+        if node.op is Or &&
+          node.children.length() == 2 &&
+          (
+            eg.find_const(node.children[0]) is Some(-1L) ||
+            eg.find_const(node.children[1]) is Some(-1L)
+          ) {
+          let all_ones = eg.add_const(-1L)
+          let new_id = eg.merge(class_id, all_ones)
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -118,11 +128,11 @@ fn rule_or_self() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Or && node.children.length() == 2 {
-          if eg.equiv(node.children[0], node.children[1]) {
-            let new_id = eg.merge(class_id, node.children[0])
-            changed = new_id != class_id || changed
-          }
+        if node.op is Or &&
+          node.children.length() == 2 &&
+          eg.equiv(node.children[0], node.children[1]) {
+          let new_id = eg.merge(class_id, node.children[0])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -142,22 +152,22 @@ fn rule_xor_not() -> RewriteRule {
           let y = node.children[1]
           // Check if y = ~x
           for y_node in eg.get_nodes(y) {
-            if y_node.op is Bnot && y_node.children.length() == 1 {
-              if eg.equiv(y_node.children[0], x) {
-                let all_ones = eg.add_const(-1L)
-                let new_id = eg.merge(class_id, all_ones)
-                changed = new_id != class_id || changed
-              }
+            if y_node.op is Bnot &&
+              y_node.children.length() == 1 &&
+              eg.equiv(y_node.children[0], x) {
+              let all_ones = eg.add_const(-1L)
+              let new_id = eg.merge(class_id, all_ones)
+              changed = new_id != class_id || changed
             }
           }
           // Check if x = ~y
           for x_node in eg.get_nodes(x) {
-            if x_node.op is Bnot && x_node.children.length() == 1 {
-              if eg.equiv(x_node.children[0], y) {
-                let all_ones = eg.add_const(-1L)
-                let new_id = eg.merge(class_id, all_ones)
-                changed = new_id != class_id || changed
-              }
+            if x_node.op is Bnot &&
+              x_node.children.length() == 1 &&
+              eg.equiv(x_node.children[0], y) {
+              let all_ones = eg.add_const(-1L)
+              let new_id = eg.merge(class_id, all_ones)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -179,22 +189,22 @@ fn rule_or_not() -> RewriteRule {
           let y = node.children[1]
           // Check if y = ~x
           for y_node in eg.get_nodes(y) {
-            if y_node.op is Bnot && y_node.children.length() == 1 {
-              if eg.equiv(y_node.children[0], x) {
-                let all_ones = eg.add_const(-1L)
-                let new_id = eg.merge(class_id, all_ones)
-                changed = new_id != class_id || changed
-              }
+            if y_node.op is Bnot &&
+              y_node.children.length() == 1 &&
+              eg.equiv(y_node.children[0], x) {
+              let all_ones = eg.add_const(-1L)
+              let new_id = eg.merge(class_id, all_ones)
+              changed = new_id != class_id || changed
             }
           }
           // Check if x = ~y
           for x_node in eg.get_nodes(x) {
-            if x_node.op is Bnot && x_node.children.length() == 1 {
-              if eg.equiv(x_node.children[0], y) {
-                let all_ones = eg.add_const(-1L)
-                let new_id = eg.merge(class_id, all_ones)
-                changed = new_id != class_id || changed
-              }
+            if x_node.op is Bnot &&
+              x_node.children.length() == 1 &&
+              eg.equiv(x_node.children[0], y) {
+              let all_ones = eg.add_const(-1L)
+              let new_id = eg.merge(class_id, all_ones)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -216,22 +226,22 @@ fn rule_and_not() -> RewriteRule {
           let y = node.children[1]
           // Check if y = ~x
           for y_node in eg.get_nodes(y) {
-            if y_node.op is Bnot && y_node.children.length() == 1 {
-              if eg.equiv(y_node.children[0], x) {
-                let zero = eg.add_const(0L)
-                let new_id = eg.merge(class_id, zero)
-                changed = new_id != class_id || changed
-              }
+            if y_node.op is Bnot &&
+              y_node.children.length() == 1 &&
+              eg.equiv(y_node.children[0], x) {
+              let zero = eg.add_const(0L)
+              let new_id = eg.merge(class_id, zero)
+              changed = new_id != class_id || changed
             }
           }
           // Check if x = ~y
           for x_node in eg.get_nodes(x) {
-            if x_node.op is Bnot && x_node.children.length() == 1 {
-              if eg.equiv(x_node.children[0], y) {
-                let zero = eg.add_const(0L)
-                let new_id = eg.merge(class_id, zero)
-                changed = new_id != class_id || changed
-              }
+            if x_node.op is Bnot &&
+              x_node.children.length() == 1 &&
+              eg.equiv(x_node.children[0], y) {
+              let zero = eg.add_const(0L)
+              let new_id = eg.merge(class_id, zero)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -317,16 +327,18 @@ fn rule_xor_all_ones() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Xor && node.children.length() == 2 {
-          if eg.find_const(node.children[1]) is Some(-1L) {
-            let result = eg.add_bnot(node.children[0])
-            let new_id = eg.merge(class_id, result)
-            changed = new_id != class_id || changed
-          } else if eg.find_const(node.children[0]) is Some(-1L) {
-            let result = eg.add_bnot(node.children[1])
-            let new_id = eg.merge(class_id, result)
-            changed = new_id != class_id || changed
-          }
+        if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[1]) is Some(-1L) {
+          let result = eg.add_bnot(node.children[0])
+          let new_id = eg.merge(class_id, result)
+          changed = new_id != class_id || changed
+        } else if node.op is Xor &&
+          node.children.length() == 2 &&
+          eg.find_const(node.children[0]) is Some(-1L) {
+          let result = eg.add_bnot(node.children[1])
+          let new_id = eg.merge(class_id, result)
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -348,19 +360,21 @@ fn rule_and_xor_xor() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Xor && right.children.length() == 2 {
-                  if (
+                if right.op is Xor &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_or(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_or(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -371,19 +385,21 @@ fn rule_and_xor_xor() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is And && right.children.length() == 2 {
-                  if (
+                if right.op is And &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_or(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_or(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -409,19 +425,21 @@ fn rule_or_xor_and() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is And && right.children.length() == 2 {
-                  if (
+                if right.op is And &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_xor(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_xor(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -432,19 +450,21 @@ fn rule_or_xor_and() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Or && right.children.length() == 2 {
-                  if (
+                if right.op is Or &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_xor(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_xor(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -468,22 +488,26 @@ fn rule_and_or_absorb() -> RewriteRule {
           let b = node.children[1]
           // Check if a is (x & y) and b is x or y
           for a_node in eg.get_nodes(a) {
-            if a_node.op is And && a_node.children.length() == 2 {
-              if eg.equiv(a_node.children[0], b) ||
-                eg.equiv(a_node.children[1], b) {
-                let new_id = eg.merge(class_id, b)
-                changed = new_id != class_id || changed
-              }
+            if a_node.op is And &&
+              a_node.children.length() == 2 &&
+              (
+                eg.equiv(a_node.children[0], b) ||
+                eg.equiv(a_node.children[1], b)
+              ) {
+              let new_id = eg.merge(class_id, b)
+              changed = new_id != class_id || changed
             }
           }
           // Check if b is (x & y) and a is x or y
           for b_node in eg.get_nodes(b) {
-            if b_node.op is And && b_node.children.length() == 2 {
-              if eg.equiv(b_node.children[0], a) ||
-                eg.equiv(b_node.children[1], a) {
-                let new_id = eg.merge(class_id, a)
-                changed = new_id != class_id || changed
-              }
+            if b_node.op is And &&
+              b_node.children.length() == 2 &&
+              (
+                eg.equiv(b_node.children[0], a) ||
+                eg.equiv(b_node.children[1], a)
+              ) {
+              let new_id = eg.merge(class_id, a)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -505,26 +529,30 @@ fn rule_xor_xor_cancel() -> RewriteRule {
           let b = node.children[1]
           // Check if a is (x ^ y) and b is y
           for a_node in eg.get_nodes(a) {
-            if a_node.op is Xor && a_node.children.length() == 2 {
-              if eg.equiv(a_node.children[1], b) {
-                let new_id = eg.merge(class_id, a_node.children[0])
-                changed = new_id != class_id || changed
-              } else if eg.equiv(a_node.children[0], b) {
-                let new_id = eg.merge(class_id, a_node.children[1])
-                changed = new_id != class_id || changed
-              }
+            if a_node.op is Xor &&
+              a_node.children.length() == 2 &&
+              eg.equiv(a_node.children[1], b) {
+              let new_id = eg.merge(class_id, a_node.children[0])
+              changed = new_id != class_id || changed
+            } else if a_node.op is Xor &&
+              a_node.children.length() == 2 &&
+              eg.equiv(a_node.children[0], b) {
+              let new_id = eg.merge(class_id, a_node.children[1])
+              changed = new_id != class_id || changed
             }
           }
           // Check if b is (x ^ y) and a is y
           for b_node in eg.get_nodes(b) {
-            if b_node.op is Xor && b_node.children.length() == 2 {
-              if eg.equiv(b_node.children[1], a) {
-                let new_id = eg.merge(class_id, b_node.children[0])
-                changed = new_id != class_id || changed
-              } else if eg.equiv(b_node.children[0], a) {
-                let new_id = eg.merge(class_id, b_node.children[1])
-                changed = new_id != class_id || changed
-              }
+            if b_node.op is Xor &&
+              b_node.children.length() == 2 &&
+              eg.equiv(b_node.children[1], a) {
+              let new_id = eg.merge(class_id, b_node.children[0])
+              changed = new_id != class_id || changed
+            } else if b_node.op is Xor &&
+              b_node.children.length() == 2 &&
+              eg.equiv(b_node.children[0], a) {
+              let new_id = eg.merge(class_id, b_node.children[1])
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -591,19 +619,21 @@ fn rule_and_add_xor() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Xor && right.children.length() == 2 {
-                  if (
+                if right.op is Xor &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_or(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_or(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -614,19 +644,21 @@ fn rule_and_add_xor() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is And && right.children.length() == 2 {
-                  if (
+                if right.op is And &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_or(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_or(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -652,19 +684,21 @@ fn rule_or_add_and() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is And && right.children.length() == 2 {
-                  if (
+                if right.op is And &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_add(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_add(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -675,19 +709,21 @@ fn rule_or_add_and() -> RewriteRule {
               let x = left.children[0]
               let y = left.children[1]
               for right in eg.get_nodes(node.children[1]) {
-                if right.op is Or && right.children.length() == 2 {
-                  if (
+                if right.op is Or &&
+                  right.children.length() == 2 &&
+                  (
+                    (
                       eg.equiv(right.children[0], x) &&
                       eg.equiv(right.children[1], y)
                     ) ||
                     (
                       eg.equiv(right.children[0], y) &&
                       eg.equiv(right.children[1], x)
-                    ) {
-                    let result = eg.add_add(x, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                    )
+                  ) {
+                  let result = eg.add_add(x, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -716,18 +752,20 @@ fn rule_or_and_not() -> RewriteRule {
               let x = a_node.children[0]
               let y = a_node.children[1]
               for b_node in eg.get_nodes(b) {
-                if b_node.op is Bnot && b_node.children.length() == 1 {
-                  if eg.equiv(b_node.children[0], y) {
-                    // (x & y) | ~y = x | ~y
-                    let result = eg.add_or(x, b)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  } else if eg.equiv(b_node.children[0], x) {
-                    // (x & y) | ~x = y | ~x
-                    let result = eg.add_or(y, b)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if b_node.op is Bnot &&
+                  b_node.children.length() == 1 &&
+                  eg.equiv(b_node.children[0], y) {
+                  // (x & y) | ~y = x | ~y
+                  let result = eg.add_or(x, b)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
+                } else if b_node.op is Bnot &&
+                  b_node.children.length() == 1 &&
+                  eg.equiv(b_node.children[0], x) {
+                  // (x & y) | ~x = y | ~x
+                  let result = eg.add_or(y, b)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -738,18 +776,20 @@ fn rule_or_and_not() -> RewriteRule {
               let x = b_node.children[0]
               let y = b_node.children[1]
               for a_node in eg.get_nodes(a) {
-                if a_node.op is Bnot && a_node.children.length() == 1 {
-                  if eg.equiv(a_node.children[0], y) {
-                    // ~y | (x & y) = x | ~y
-                    let result = eg.add_or(x, a)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  } else if eg.equiv(a_node.children[0], x) {
-                    // ~x | (x & y) = y | ~x
-                    let result = eg.add_or(y, a)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if a_node.op is Bnot &&
+                  a_node.children.length() == 1 &&
+                  eg.equiv(a_node.children[0], y) {
+                  // ~y | (x & y) = x | ~y
+                  let result = eg.add_or(x, a)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
+                } else if a_node.op is Bnot &&
+                  a_node.children.length() == 1 &&
+                  eg.equiv(a_node.children[0], x) {
+                  // ~x | (x & y) = y | ~x
+                  let result = eg.add_or(y, a)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -773,24 +813,28 @@ fn rule_or_or_absorb() -> RewriteRule {
           let b = node.children[1]
           // Check if a is (x | y) and b is x or y
           for a_node in eg.get_nodes(a) {
-            if a_node.op is Or && a_node.children.length() == 2 {
-              if eg.equiv(a_node.children[0], b) ||
-                eg.equiv(a_node.children[1], b) {
-                // (x | y) | x = x | y, (x | y) | y = x | y
-                let new_id = eg.subsume(class_id, a)
-                changed = new_id != class_id || changed
-              }
+            if a_node.op is Or &&
+              a_node.children.length() == 2 &&
+              (
+                eg.equiv(a_node.children[0], b) ||
+                eg.equiv(a_node.children[1], b)
+              ) {
+              // (x | y) | x = x | y, (x | y) | y = x | y
+              let new_id = eg.subsume(class_id, a)
+              changed = new_id != class_id || changed
             }
           }
           // Check if b is (x | y) and a is x or y
           for b_node in eg.get_nodes(b) {
-            if b_node.op is Or && b_node.children.length() == 2 {
-              if eg.equiv(b_node.children[0], a) ||
-                eg.equiv(b_node.children[1], a) {
-                // x | (x | y) = x | y, y | (x | y) = x | y
-                let new_id = eg.subsume(class_id, b)
-                changed = new_id != class_id || changed
-              }
+            if b_node.op is Or &&
+              b_node.children.length() == 2 &&
+              (
+                eg.equiv(b_node.children[0], a) ||
+                eg.equiv(b_node.children[1], a)
+              ) {
+              // x | (x | y) = x | y, y | (x | y) = x | y
+              let new_id = eg.subsume(class_id, b)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -812,24 +856,28 @@ fn rule_and_and_absorb() -> RewriteRule {
           let b = node.children[1]
           // Check if a is (x & y) and b is x or y
           for a_node in eg.get_nodes(a) {
-            if a_node.op is And && a_node.children.length() == 2 {
-              if eg.equiv(a_node.children[0], b) ||
-                eg.equiv(a_node.children[1], b) {
-                // (x & y) & x = x & y, (x & y) & y = x & y
-                let new_id = eg.subsume(class_id, a)
-                changed = new_id != class_id || changed
-              }
+            if a_node.op is And &&
+              a_node.children.length() == 2 &&
+              (
+                eg.equiv(a_node.children[0], b) ||
+                eg.equiv(a_node.children[1], b)
+              ) {
+              // (x & y) & x = x & y, (x & y) & y = x & y
+              let new_id = eg.subsume(class_id, a)
+              changed = new_id != class_id || changed
             }
           }
           // Check if b is (x & y) and a is x or y
           for b_node in eg.get_nodes(b) {
-            if b_node.op is And && b_node.children.length() == 2 {
-              if eg.equiv(b_node.children[0], a) ||
-                eg.equiv(b_node.children[1], a) {
-                // x & (x & y) = x & y, y & (x & y) = x & y
-                let new_id = eg.subsume(class_id, b)
-                changed = new_id != class_id || changed
-              }
+            if b_node.op is And &&
+              b_node.children.length() == 2 &&
+              (
+                eg.equiv(b_node.children[0], a) ||
+                eg.equiv(b_node.children[1], a)
+              ) {
+              // x & (x & y) = x & y, y & (x & y) = x & y
+              let new_id = eg.subsume(class_id, b)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -856,26 +904,26 @@ fn rule_xor_not_and() -> RewriteRule {
               let right = a_node.children[1]
               // Check if right is ~y and left is x where b == x
               for right_node in eg.get_nodes(right) {
-                if right_node.op is Bnot && right_node.children.length() == 1 {
-                  if eg.equiv(left, b) {
-                    // (x ^ ~y) & x = x & y
-                    let y = right_node.children[0]
-                    let result = eg.add_and(b, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if right_node.op is Bnot &&
+                  right_node.children.length() == 1 &&
+                  eg.equiv(left, b) {
+                  // (x ^ ~y) & x = x & y
+                  let y = right_node.children[0]
+                  let result = eg.add_and(b, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
               // Check if left is ~y and right is x where b == x
               for left_node in eg.get_nodes(left) {
-                if left_node.op is Bnot && left_node.children.length() == 1 {
-                  if eg.equiv(right, b) {
-                    // (~y ^ x) & x = x & y
-                    let y = left_node.children[0]
-                    let result = eg.add_and(b, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if left_node.op is Bnot &&
+                  left_node.children.length() == 1 &&
+                  eg.equiv(right, b) {
+                  // (~y ^ x) & x = x & y
+                  let y = left_node.children[0]
+                  let result = eg.add_and(b, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -887,26 +935,26 @@ fn rule_xor_not_and() -> RewriteRule {
               let right = b_node.children[1]
               // Check if right is ~y and left is x where a == x
               for right_node in eg.get_nodes(right) {
-                if right_node.op is Bnot && right_node.children.length() == 1 {
-                  if eg.equiv(left, a) {
-                    // x & (x ^ ~y) = x & y
-                    let y = right_node.children[0]
-                    let result = eg.add_and(a, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if right_node.op is Bnot &&
+                  right_node.children.length() == 1 &&
+                  eg.equiv(left, a) {
+                  // x & (x ^ ~y) = x & y
+                  let y = right_node.children[0]
+                  let result = eg.add_and(a, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
               // Check if left is ~y and right is x where a == x
               for left_node in eg.get_nodes(left) {
-                if left_node.op is Bnot && left_node.children.length() == 1 {
-                  if eg.equiv(right, a) {
-                    // x & (~y ^ x) = x & y
-                    let y = left_node.children[0]
-                    let result = eg.add_and(a, y)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if left_node.op is Bnot &&
+                  left_node.children.length() == 1 &&
+                  eg.equiv(right, a) {
+                  // x & (~y ^ x) = x & y
+                  let y = left_node.children[0]
+                  let result = eg.add_and(a, y)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -934,18 +982,20 @@ fn rule_and_or_not() -> RewriteRule {
               let x = a_node.children[0]
               let y = a_node.children[1]
               for b_node in eg.get_nodes(b) {
-                if b_node.op is Bnot && b_node.children.length() == 1 {
-                  if eg.equiv(b_node.children[0], x) {
-                    // (x & y) | ~x = y | ~x
-                    let result = eg.add_or(y, b)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  } else if eg.equiv(b_node.children[0], y) {
-                    // (x & y) | ~y = x | ~y
-                    let result = eg.add_or(x, b)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if b_node.op is Bnot &&
+                  b_node.children.length() == 1 &&
+                  eg.equiv(b_node.children[0], x) {
+                  // (x & y) | ~x = y | ~x
+                  let result = eg.add_or(y, b)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
+                } else if b_node.op is Bnot &&
+                  b_node.children.length() == 1 &&
+                  eg.equiv(b_node.children[0], y) {
+                  // (x & y) | ~y = x | ~y
+                  let result = eg.add_or(x, b)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -956,18 +1006,20 @@ fn rule_and_or_not() -> RewriteRule {
               let x = b_node.children[0]
               let y = b_node.children[1]
               for a_node in eg.get_nodes(a) {
-                if a_node.op is Bnot && a_node.children.length() == 1 {
-                  if eg.equiv(a_node.children[0], x) {
-                    // ~x | (x & y) = y | ~x
-                    let result = eg.add_or(y, a)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  } else if eg.equiv(a_node.children[0], y) {
-                    // ~y | (x & y) = x | ~y
-                    let result = eg.add_or(x, a)
-                    let new_id = eg.merge(class_id, result)
-                    changed = new_id != class_id || changed
-                  }
+                if a_node.op is Bnot &&
+                  a_node.children.length() == 1 &&
+                  eg.equiv(a_node.children[0], x) {
+                  // ~x | (x & y) = y | ~x
+                  let result = eg.add_or(y, a)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
+                } else if a_node.op is Bnot &&
+                  a_node.children.length() == 1 &&
+                  eg.equiv(a_node.children[0], y) {
+                  // ~y | (x & y) = x | ~y
+                  let result = eg.add_or(x, a)
+                  let new_id = eg.merge(class_id, result)
+                  changed = new_id != class_id || changed
                 }
               }
             }

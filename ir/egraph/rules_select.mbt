@@ -11,12 +11,11 @@ fn rule_select_same() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Select && node.children.length() == 3 {
-          // select(cond, x, y) where x == y
-          if eg.equiv(node.children[1], node.children[2]) {
-            let new_id = eg.subsume(class_id, node.children[1])
-            changed = new_id != class_id || changed
-          }
+        if node.op is Select &&
+          node.children.length() == 3 &&
+          eg.equiv(node.children[1], node.children[2]) {
+          let new_id = eg.subsume(class_id, node.children[1])
+          changed = new_id != class_id || changed
         }
       }
       changed
@@ -32,20 +31,18 @@ fn rule_select_icmp_one_zero() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Select && node.children.length() == 3 {
-          // Check if true branch is 1 and false branch is 0
-          if eg.find_const(node.children[1]) is Some(1L) {
-            if eg.find_const(node.children[2]) is Some(0L) {
-              // Check if condition is an icmp
-              for cond_node in eg.get_nodes(node.children[0]) {
-                if cond_node.op is Icmp(_) ||
-                  cond_node.op is Eq ||
-                  cond_node.op is Ne {
-                  // select(icmp, 1, 0) = icmp (the icmp already produces 0/1)
-                  let new_id = eg.merge(class_id, node.children[0])
-                  changed = new_id != class_id || changed
-                }
-              }
+        if node.op is Select &&
+          node.children.length() == 3 &&
+          eg.find_const(node.children[1]) is Some(1L) &&
+          eg.find_const(node.children[2]) is Some(0L) {
+          // Check if condition is an icmp
+          for cond_node in eg.get_nodes(node.children[0]) {
+            if cond_node.op is Icmp(_) ||
+              cond_node.op is Eq ||
+              cond_node.op is Ne {
+              // select(icmp, 1, 0) = icmp (the icmp already produces 0/1)
+              let new_id = eg.merge(class_id, node.children[0])
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -63,26 +60,25 @@ fn rule_select_icmp_zero_one() -> RewriteRule {
     apply: fn(eg, class_id) {
       let mut changed = false
       for node in eg.get_nodes(class_id) {
-        if node.op is Select && node.children.length() == 3 {
-          // Check if true branch is 0 and false branch is non-zero
-          if eg.find_const(node.children[1]) is Some(0L) {
-            if eg.find_const(node.children[2]) is Some(nz) && nz != 0L {
-              // Check if condition is an icmp
-              for cond_node in eg.get_nodes(node.children[0]) {
-                if cond_node.op is Icmp(cc) {
-                  // select(icmp(cc), 0, 1) = icmp(complement(cc))
-                  let comp_cc = intcc_complement(cc)
-                  let new_icmp = eg.add({
-                    op: Icmp(comp_cc),
-                    children: cond_node.children,
-                  })
-                  // Now we have select(icmp_comp, nonzero, 0) which is truthy form
-                  // But if nonzero is 1, we can just use icmp_comp
-                  if nz == 1L {
-                    let new_id = eg.merge(class_id, new_icmp)
-                    changed = new_id != class_id || changed
-                  }
-                }
+        if node.op is Select &&
+          node.children.length() == 3 &&
+          eg.find_const(node.children[1]) is Some(0L) &&
+          eg.find_const(node.children[2]) is Some(nz) &&
+          nz != 0L {
+          // Check if condition is an icmp
+          for cond_node in eg.get_nodes(node.children[0]) {
+            if cond_node.op is Icmp(cc) {
+              // select(icmp(cc), 0, 1) = icmp(complement(cc))
+              let comp_cc = intcc_complement(cc)
+              let new_icmp = eg.add({
+                op: Icmp(comp_cc),
+                children: cond_node.children,
+              })
+              // Now we have select(icmp_comp, nonzero, 0) which is truthy form
+              // But if nonzero is 1, we can just use icmp_comp
+              if nz == 1L {
+                let new_id = eg.merge(class_id, new_icmp)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -106,16 +102,16 @@ fn rule_select_nested_same_cond_right() -> RewriteRule {
           let a = node.children[1]
           // Check if false branch is also a select with same condition
           for inner in eg.get_nodes(node.children[2]) {
-            if inner.op is Select && inner.children.length() == 3 {
-              if eg.equiv(inner.children[0], d) {
-                // select(d, a, select(d, _, y)) = select(d, a, y)
-                let new_select = eg.add({
-                  op: Select,
-                  children: [d, a, inner.children[2]],
-                })
-                let new_id = eg.subsume(class_id, new_select)
-                changed = new_id != class_id || changed
-              }
+            if inner.op is Select &&
+              inner.children.length() == 3 &&
+              eg.equiv(inner.children[0], d) {
+              // select(d, a, select(d, _, y)) = select(d, a, y)
+              let new_select = eg.add({
+                op: Select,
+                children: [d, a, inner.children[2]],
+              })
+              let new_id = eg.subsume(class_id, new_select)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -138,16 +134,16 @@ fn rule_select_nested_same_cond_left() -> RewriteRule {
           let a = node.children[2]
           // Check if true branch is also a select with same condition
           for inner in eg.get_nodes(node.children[1]) {
-            if inner.op is Select && inner.children.length() == 3 {
-              if eg.equiv(inner.children[0], d) {
-                // select(d, select(d, x, _), a) = select(d, x, a)
-                let new_select = eg.add({
-                  op: Select,
-                  children: [d, inner.children[1], a],
-                })
-                let new_id = eg.subsume(class_id, new_select)
-                changed = new_id != class_id || changed
-              }
+            if inner.op is Select &&
+              inner.children.length() == 3 &&
+              eg.equiv(inner.children[0], d) {
+              // select(d, select(d, x, _), a) = select(d, x, a)
+              let new_select = eg.add({
+                op: Select,
+                children: [d, inner.children[1], a],
+              })
+              let new_id = eg.subsume(class_id, new_select)
+              changed = new_id != class_id || changed
             }
           }
         }
@@ -168,22 +164,20 @@ fn rule_select_uextend_cond() -> RewriteRule {
         if node.op is Select && node.children.length() == 3 {
           // Check if condition is uextend of an icmp
           for cond_node in eg.get_nodes(node.children[0]) {
-            if cond_node.op is Uextend(_, _) {
-              if cond_node.children.length() == 1 {
-                // Check if inner is an icmp
-                for inner in eg.get_nodes(cond_node.children[0]) {
-                  if inner.op is Icmp(_) || inner.op is Eq || inner.op is Ne {
-                    let new_select = eg.add({
-                      op: Select,
-                      children: [
-                        cond_node.children[0],
-                        node.children[1],
-                        node.children[2],
-                      ],
-                    })
-                    let new_id = eg.merge(class_id, new_select)
-                    changed = new_id != class_id || changed
-                  }
+            if cond_node.op is Uextend(_, _) && cond_node.children.length() == 1 {
+              // Check if inner is an icmp
+              for inner in eg.get_nodes(cond_node.children[0]) {
+                if inner.op is Icmp(_) || inner.op is Eq || inner.op is Ne {
+                  let new_select = eg.add({
+                    op: Select,
+                    children: [
+                      cond_node.children[0],
+                      node.children[1],
+                      node.children[2],
+                    ],
+                  })
+                  let new_id = eg.merge(class_id, new_select)
+                  changed = new_id != class_id || changed
                 }
               }
             }
@@ -208,40 +202,37 @@ fn rule_add_select_const() -> RewriteRule {
           if eg.find_const(node.children[1]) is Some(z) {
             // Check if first operand is select
             for sel in eg.get_nodes(node.children[0]) {
-              if sel.op is Select && sel.children.length() == 3 {
-                // Check if both branches are constants
-                if eg.find_const(sel.children[1]) is Some(x) {
-                  if eg.find_const(sel.children[2]) is Some(y) {
-                    // iadd(select(c, x, y), z) = select(c, x+z, y+z)
-                    let x_plus_z = eg.add_const(x + z)
-                    let y_plus_z = eg.add_const(y + z)
-                    let new_select = eg.add({
-                      op: Select,
-                      children: [sel.children[0], x_plus_z, y_plus_z],
-                    })
-                    let new_id = eg.subsume(class_id, new_select)
-                    changed = new_id != class_id || changed
-                  }
-                }
+              if sel.op is Select &&
+                sel.children.length() == 3 &&
+                eg.find_const(sel.children[1]) is Some(x) &&
+                eg.find_const(sel.children[2]) is Some(y) {
+                // iadd(select(c, x, y), z) = select(c, x+z, y+z)
+                let x_plus_z = eg.add_const(x + z)
+                let y_plus_z = eg.add_const(y + z)
+                let new_select = eg.add({
+                  op: Select,
+                  children: [sel.children[0], x_plus_z, y_plus_z],
+                })
+                let new_id = eg.subsume(class_id, new_select)
+                changed = new_id != class_id || changed
               }
             }
           }
           // Also check the symmetric case: iadd(z, select(c, x, y))
           if eg.find_const(node.children[0]) is Some(z) {
             for sel in eg.get_nodes(node.children[1]) {
-              if sel.op is Select && sel.children.length() == 3 {
-                if eg.find_const(sel.children[1]) is Some(x) {
-                  if eg.find_const(sel.children[2]) is Some(y) {
-                    let x_plus_z = eg.add_const(x + z)
-                    let y_plus_z = eg.add_const(y + z)
-                    let new_select = eg.add({
-                      op: Select,
-                      children: [sel.children[0], x_plus_z, y_plus_z],
-                    })
-                    let new_id = eg.subsume(class_id, new_select)
-                    changed = new_id != class_id || changed
-                  }
-                }
+              if sel.op is Select &&
+                sel.children.length() == 3 &&
+                eg.find_const(sel.children[1]) is Some(x) &&
+                eg.find_const(sel.children[2]) is Some(y) {
+                let x_plus_z = eg.add_const(x + z)
+                let y_plus_z = eg.add_const(y + z)
+                let new_select = eg.add({
+                  op: Select,
+                  children: [sel.children[0], x_plus_z, y_plus_z],
+                })
+                let new_id = eg.subsume(class_id, new_select)
+                changed = new_id != class_id || changed
               }
             }
           }
@@ -551,17 +542,15 @@ fn rule_select_to_iabs_positive() -> RewriteRule {
               cond_node.children.length() == 2 {
               let x = cond_node.children[0]
               // Check if comparing with 0
-              if eg.find_const(cond_node.children[1]) is Some(0L) {
-                // Check if true_val = x and false_val = -x
-                if eg.equiv(true_val, x) {
-                  for neg_node in eg.get_nodes(false_val) {
-                    if neg_node.op is Neg && neg_node.children.length() == 1 {
-                      if eg.equiv(neg_node.children[0], x) {
-                        let iabs = eg.add({ op: Iabs, children: [x] })
-                        let new_id = eg.subsume(class_id, iabs)
-                        changed = new_id != class_id || changed
-                      }
-                    }
+              if eg.find_const(cond_node.children[1]) is Some(0L) &&
+                eg.equiv(true_val, x) {
+                for neg_node in eg.get_nodes(false_val) {
+                  if neg_node.op is Neg &&
+                    neg_node.children.length() == 1 &&
+                    eg.equiv(neg_node.children[0], x) {
+                    let iabs = eg.add({ op: Iabs, children: [x] })
+                    let new_id = eg.subsume(class_id, iabs)
+                    changed = new_id != class_id || changed
                   }
                 }
               }
@@ -592,17 +581,15 @@ fn rule_select_to_iabs_negative() -> RewriteRule {
               cond_node.children.length() == 2 {
               let x = cond_node.children[0]
               // Check if comparing with 0
-              if eg.find_const(cond_node.children[1]) is Some(0L) {
-                // Check if true_val = -x and false_val = x
-                if eg.equiv(false_val, x) {
-                  for neg_node in eg.get_nodes(true_val) {
-                    if neg_node.op is Neg && neg_node.children.length() == 1 {
-                      if eg.equiv(neg_node.children[0], x) {
-                        let iabs = eg.add({ op: Iabs, children: [x] })
-                        let new_id = eg.subsume(class_id, iabs)
-                        changed = new_id != class_id || changed
-                      }
-                    }
+              if eg.find_const(cond_node.children[1]) is Some(0L) &&
+                eg.equiv(false_val, x) {
+                for neg_node in eg.get_nodes(true_val) {
+                  if neg_node.op is Neg &&
+                    neg_node.children.length() == 1 &&
+                    eg.equiv(neg_node.children[0], x) {
+                    let iabs = eg.add({ op: Iabs, children: [x] })
+                    let new_id = eg.subsume(class_id, iabs)
+                    changed = new_id != class_id || changed
                   }
                 }
               }

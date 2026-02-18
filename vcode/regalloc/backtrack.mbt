@@ -1880,16 +1880,14 @@ pub fn build_bundles_with_merging(
           @abi.Virtual(vreg) => Some(vreg.id)
           _ => None
         }
-        if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) {
-          if ranges.vreg_to_range.get(src_id) is Some(src_idx) {
-            if ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-              let src_range = ranges.get(src_idx)
-              let dst_range = ranges.get(dst_idx)
-              if src_range.crosses_wasm_call == dst_range.crosses_wasm_call &&
-                src_range.crosses_c_call == dst_range.crosses_c_call {
-                try_merge(uf, src_idx, dst_idx, ranges) |> ignore
-              }
-            }
+        if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) &&
+          ranges.vreg_to_range.get(src_id) is Some(src_idx) &&
+          ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
+          let src_range = ranges.get(src_idx)
+          let dst_range = ranges.get(dst_idx)
+          if src_range.crosses_wasm_call == dst_range.crosses_wasm_call &&
+            src_range.crosses_c_call == dst_range.crosses_c_call {
+            try_merge(uf, src_idx, dst_idx, ranges) |> ignore
           }
         }
       }

@@ -813,34 +813,34 @@ fn Parser::parse_world(self : Parser) -> World raise WitError {
       // Disambiguation:
       // - named form: `id ':' ('interface' | 'async'? 'func')`
       // - use-path form: includes ':' but next token is `Ident`, not `interface`/`func`.
-      if self.peek_kw(Ident("")) && self.peek_next_is(Colon) {
-        // Peek after ':' to see if this is a named extern-type.
-        if self.i + 2 < self.toks.length() {
-          if self.toks[self.i + 2].kind is KwInterface ||
-            self.toks[self.i + 2].kind is KwFunc ||
-            self.toks[self.i + 2].kind is KwAsync {
-            let nm = self.parse_ident()
-            self.bump_kw(Colon)
-            if self.peek_kw(KwInterface) {
-              let iface = self.parse_inline_interface()
-              if is_import {
-                items.push(ImportInlineInterface(nm, iface))
-              } else {
-                items.push(ExportInlineInterface(nm, iface))
-              }
-            } else {
-              // func-type ends with ';'
-              let f = self.parse_func_type_after_colon(nm)
-              if is_import {
-                items.push(ImportFunc(f))
-              } else {
-                items.push(ExportFunc(f))
-              }
-              self.bump_kw(Semi)
-            }
-            continue
+      if self.peek_kw(Ident("")) &&
+        self.peek_next_is(Colon) &&
+        self.i + 2 < self.toks.length() &&
+        (
+          self.toks[self.i + 2].kind is KwInterface ||
+          self.toks[self.i + 2].kind is KwFunc ||
+          self.toks[self.i + 2].kind is KwAsync
+        ) {
+        let nm = self.parse_ident()
+        self.bump_kw(Colon)
+        if self.peek_kw(KwInterface) {
+          let iface = self.parse_inline_interface()
+          if is_import {
+            items.push(ImportInlineInterface(nm, iface))
+          } else {
+            items.push(ExportInlineInterface(nm, iface))
           }
+        } else {
+          // func-type ends with ';'
+          let f = self.parse_func_type_after_colon(nm)
+          if is_import {
+            items.push(ImportFunc(f))
+          } else {
+            items.push(ExportFunc(f))
+          }
+          self.bump_kw(Semi)
         }
+        continue
       }
       // Otherwise parse as `use-path;`
       let p = self.parse_use_path_until([Semi])

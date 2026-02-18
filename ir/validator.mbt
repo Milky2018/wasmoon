@@ -111,10 +111,9 @@ fn validate_instruction(
         }
 
         // mulhi ops are only defined for i64
-        if inst.opcode is Umulh || inst.opcode is Smulh {
-          if !types_match(a.ty, Type::I64) {
-            result.add_error("mulhi expects i64 operands, got \{a.ty}")
-          }
+        if (inst.opcode is Umulh || inst.opcode is Smulh) &&
+          !types_match(a.ty, Type::I64) {
+          result.add_error("mulhi expects i64 operands, got \{a.ty}")
         }
       }
 

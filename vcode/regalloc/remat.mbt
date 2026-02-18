@@ -94,17 +94,16 @@ pub fn rematerialize_long_distance_constants(
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
         inst.def_constraints[0] is @abi.Any &&
-        inst.defs[0].reg is @abi.Virtual(vreg) {
-        if remat_defs.get(vreg.id) is None {
-          remat_defs.set(vreg.id, {
-            opcode: inst.opcode,
-            def_block_id: block.id,
-            def_inst_idx: inst_idx,
-            cls: vreg.class,
-            uses: inst.uses.copy(),
-            use_constraints: inst.use_constraints.copy(),
-          })
-        }
+        inst.defs[0].reg is @abi.Virtual(vreg) &&
+        remat_defs.get(vreg.id) is None {
+        remat_defs.set(vreg.id, {
+          opcode: inst.opcode,
+          def_block_id: block.id,
+          def_inst_idx: inst_idx,
+          cls: vreg.class,
+          uses: inst.uses.copy(),
+          use_constraints: inst.use_constraints.copy(),
+        })
       }
     }
   }
@@ -343,17 +342,16 @@ pub fn rematerialize_cross_block_constants(
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
         inst.def_constraints[0] is @abi.Any &&
-        inst.defs[0].reg is @abi.Virtual(vreg) {
-        if remat_defs.get(vreg.id) is None {
-          remat_defs.set(vreg.id, {
-            opcode: inst.opcode,
-            def_block_id: block.id,
-            def_inst_idx: inst_idx,
-            cls: vreg.class,
-            uses: inst.uses.copy(),
-            use_constraints: inst.use_constraints.copy(),
-          })
-        }
+        inst.defs[0].reg is @abi.Virtual(vreg) &&
+        remat_defs.get(vreg.id) is None {
+        remat_defs.set(vreg.id, {
+          opcode: inst.opcode,
+          def_block_id: block.id,
+          def_inst_idx: inst_idx,
+          cls: vreg.class,
+          uses: inst.uses.copy(),
+          use_constraints: inst.use_constraints.copy(),
+        })
       }
     }
   }

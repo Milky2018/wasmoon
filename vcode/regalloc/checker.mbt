@@ -156,12 +156,13 @@ pub fn verify_allocation(
       if preg.class is @abi.Int && scratch_int.contains(preg.index) {
         abort("regalloc verifier: assigned scratch GPR x\{preg.index}")
       }
-      if preg.class is @abi.Float32 ||
-        preg.class is @abi.Float64 ||
-        preg.class is @abi.Vector {
-        if scratch_float.contains(preg.index) {
-          abort("regalloc verifier: assigned scratch V\{preg.index}")
-        }
+      if (
+          preg.class is @abi.Float32 ||
+          preg.class is @abi.Float64 ||
+          preg.class is @abi.Vector
+        ) &&
+        scratch_float.contains(preg.index) {
+        abort("regalloc verifier: assigned scratch V\{preg.index}")
       }
 
       // Allocatable set checks.
@@ -181,26 +182,24 @@ pub fn verify_allocation(
             }
           }
         @abi.Float32 | @abi.Float64 =>
-          if !allowed_float.contains(preg.index) {
-            if !(param_ids.contains(vreg_id) &&
-              preg.index >= 0 &&
-              preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
-              !(fixed_reg is Some(fr) && fr.index == preg.index) {
-              abort(
-                "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
-              )
-            }
+          if !allowed_float.contains(preg.index) &&
+            !(param_ids.contains(vreg_id) &&
+            preg.index >= 0 &&
+            preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+            !(fixed_reg is Some(fr) && fr.index == preg.index) {
+            abort(
+              "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
+            )
           }
         @abi.Vector =>
-          if !allowed_vector.contains(preg.index) {
-            if !(param_ids.contains(vreg_id) &&
-              preg.index >= 0 &&
-              preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
-              !(fixed_reg is Some(fr) && fr.index == preg.index) {
-              abort(
-                "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",
-              )
-            }
+          if !allowed_vector.contains(preg.index) &&
+            !(param_ids.contains(vreg_id) &&
+            preg.index >= 0 &&
+            preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+            !(fixed_reg is Some(fr) && fr.index == preg.index) {
+            abort(
+              "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",
+            )
           }
       }
 

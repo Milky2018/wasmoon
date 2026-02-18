@@ -141,11 +141,9 @@ fn optimize_o1(func : Function) -> OptResult {
     let before_blocks = func.blocks.length()
     // Cranelift-style aegraph scheduling: run once up-front, then let
     // canonical passes drive the fixed point.
-    if iterations == 1 {
-      if run_egraph_pass(func) {
-        changed = true
-        result.mark_changed()
-      }
+    if iterations == 1 && run_egraph_pass(func) {
+      changed = true
+      result.mark_changed()
     }
     // Basic optimizations only
     let cf_result = run_opt_pass(func, "const_fold", fold_constants)
@@ -226,11 +224,9 @@ pub fn optimize(func : Function) -> OptResult {
     let before_blocks = func.blocks.length()
     // Cranelift-style aegraph scheduling: run once up-front, then let
     // canonical passes drive the fixed point.
-    if iterations == 1 {
-      if run_egraph_pass(func) {
-        changed = true
-        result.mark_changed()
-      }
+    if iterations == 1 && run_egraph_pass(func) {
+      changed = true
+      result.mark_changed()
     }
     // Run each optimization pass
     let cf_result = run_opt_pass(func, "const_fold", fold_constants)

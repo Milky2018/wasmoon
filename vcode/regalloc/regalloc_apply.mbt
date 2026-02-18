@@ -96,16 +96,17 @@ pub fn apply_allocation(
       let mut emitted = false
       match inst.opcode {
         @instr.StackLoad(offset) =>
-          if inst.defs.length() == 1 && inst.defs[0].reg is @abi.Physical(dst) {
-            if slot_cache.get(offset) is Some(src) && src.class == dst.class {
-              if src.index != dst.index {
-                let mv = @instr.VCodeInst::new(@instr.Move)
-                mv.add_def({ reg: @abi.Physical(dst) })
-                mv.add_use(@abi.Physical(src))
-                optimized.push(mv)
-              }
-              emitted = true
+          if inst.defs.length() == 1 &&
+            inst.defs[0].reg is @abi.Physical(dst) &&
+            slot_cache.get(offset) is Some(src) &&
+            src.class == dst.class {
+            if src.index != dst.index {
+              let mv = @instr.VCodeInst::new(@instr.Move)
+              mv.add_def({ reg: @abi.Physical(dst) })
+              mv.add_use(@abi.Physical(src))
+              optimized.push(mv)
             }
+            emitted = true
           }
         @instr.LoadPtr(load_ty, load_offset) =>
           if inst.defs.length() == 1 &&
@@ -366,10 +367,9 @@ pub fn apply_allocation(
       // to avoid clobbering them with scratch register reloads
       let used_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
-          if alloc.assignments.get(vreg.id) is Some(preg) {
-            used_regs.add(preg.index) |> ignore
-          }
+        if use_reg is @abi.Virtual(vreg) &&
+          alloc.assignments.get(vreg.id) is Some(preg) {
+          used_regs.add(preg.index) |> ignore
         }
       }
       let mut inst_spill_idx = 0
@@ -926,12 +926,11 @@ fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
       let mut skip = false
       if inst.opcode is @instr.Move &&
         inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        if inst.defs[0].reg is @abi.Physical(dst) &&
-          inst.uses[0] is @abi.Physical(src) &&
-          same_location(src, dst) {
-          skip = true
-        }
+        inst.uses.length() == 1 &&
+        inst.defs[0].reg is @abi.Physical(dst) &&
+        inst.uses[0] is @abi.Physical(src) &&
+        same_location(src, dst) {
+        skip = true
       }
       if !skip {
         new_block.add_inst(inst)

@@ -37,10 +37,9 @@ pub fn disassemble(mod_ : @types.Module) -> String {
     buf.write_string(type_idx.to_string())
     buf.write_string(")")
     // Get function type for signature
-    if type_idx < mod_.types.length() {
-      if mod_.types[type_idx].composite is Func(func_type) {
-        write_func_params_results(buf, func_type)
-      }
+    if type_idx < mod_.types.length() &&
+      mod_.types[type_idx].composite is Func(func_type) {
+      write_func_params_results(buf, func_type)
     }
     buf.write_string("\n")
     // Write function body

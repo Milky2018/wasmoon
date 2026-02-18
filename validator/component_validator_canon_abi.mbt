@@ -350,15 +350,12 @@ fn validate_canon(
               }
             None => ()
           }
-          if functype_needs_memory(ft, type_table) {
-            if !canon_has_memory(opts) {
-              raise MissingCanonOption("memory")
-            }
+          if functype_needs_memory(ft, type_table) && !canon_has_memory(opts) {
+            raise MissingCanonOption("memory")
           }
-          if functype_needs_realloc_for_lift(ft, type_table) {
-            if !canon_has_realloc(opts) {
-              raise MissingCanonOption("realloc")
-            }
+          if functype_needs_realloc_for_lift(ft, type_table) &&
+            !canon_has_realloc(opts) {
+            raise MissingCanonOption("realloc")
           }
           // Async-lifted functions use a callback/event-code ABI and do not
           // match the direct lowering signature.

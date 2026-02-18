@@ -127,12 +127,11 @@ fn validate_component_section_export(
       e.sortidx.idx >= 0 &&
       e.sortidx.idx < func_types.length() {
       let mut ft : @component.FuncType? = None
-      if e.desc is Some(@component.ExternDesc::FuncType(tyidx)) {
-        if tyidx >= 0 &&
-          tyidx < type_table.length() &&
-          type_table[tyidx] is Some(@component.TypeDef::FuncType(t)) {
-          ft = Some(t)
-        }
+      if e.desc is Some(@component.ExternDesc::FuncType(tyidx)) &&
+        tyidx >= 0 &&
+        tyidx < type_table.length() &&
+        type_table[tyidx] is Some(@component.TypeDef::FuncType(t)) {
+        ft = Some(t)
       }
       if ft is None {
         ft = func_types[e.sortidx.idx]

@@ -1202,10 +1202,8 @@ fn encode_componenttype_wrapper_for_interface(
       // Determine if this is a resource in the dependency interface.
       let mut is_res = false
       for it2 in dep_iface.items {
-        if it2 is Resource(r) {
-          if r.name == remote {
-            is_res = true
-          }
+        if it2 is Resource(r) && r.name == remote {
+          is_res = true
         }
       }
       imported_types.push((local_name, outer_ti, is_res))

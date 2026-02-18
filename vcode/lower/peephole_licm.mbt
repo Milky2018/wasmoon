@@ -205,16 +205,15 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
             }
 
             // 2) Hoistable loads from immutable regions
-            if inst.defs.length() == 1 && inst.uses.length() == 1 {
-              if get_def_vreg_id(inst.defs[0]) is Some(def_id) {
-                if !used_outside.contains(def_id) &&
-                  base_is_invariant(inst.uses[0]) &&
-                  is_hoistable_load(inst.opcode, inst.uses[0]) {
-                  hoisted.push(inst)
-                  hoisted_defs.add(def_id)
-                  continue
-                }
-              }
+            if inst.defs.length() == 1 &&
+              inst.uses.length() == 1 &&
+              get_def_vreg_id(inst.defs[0]) is Some(def_id) &&
+              !used_outside.contains(def_id) &&
+              base_is_invariant(inst.uses[0]) &&
+              is_hoistable_load(inst.opcode, inst.uses[0]) {
+              hoisted.push(inst)
+              hoisted_defs.add(def_id)
+              continue
             }
             new_insts.push(inst)
           }
@@ -277,32 +276,30 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
     for inst in blk.insts {
       if inst.opcode is Move &&
         inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-          if get_vreg_id(inst.uses[0]) is Some(src) {
-            let mut src_root = src
-            while copies.get(src_root) is Some(next) {
-              if next == src_root {
-                break
-              }
-              src_root = next
-            }
-            copies.set(dst, src_root)
-            if vmctx_aliases.contains(src_root) {
-              vmctx_aliases.add(dst)
-            }
+        inst.uses.length() == 1 &&
+        get_def_vreg_id(inst.defs[0]) is Some(dst) &&
+        get_vreg_id(inst.uses[0]) is Some(src) {
+        let mut src_root = src
+        while copies.get(src_root) is Some(next) {
+          if next == src_root {
+            break
           }
+          src_root = next
+        }
+        copies.set(dst, src_root)
+        if vmctx_aliases.contains(src_root) {
+          vmctx_aliases.add(dst)
         }
       }
-      if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
-        inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) {
-        if inst.defs.length() == 1 && inst.uses.length() == 1 {
-          if is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) {
-            if get_def_vreg_id(inst.defs[0]) is Some(did) {
-              func_table_ptrs.add(did)
-            }
-          }
-        }
+      if (
+          inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
+          inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
+        ) &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 &&
+        is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) &&
+        get_def_vreg_id(inst.defs[0]) is Some(did) {
+        func_table_ptrs.add(did)
       }
     }
   }
@@ -334,12 +331,10 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
       // Track simple virtual copies for canonicalization.
       if inst.opcode is Move &&
         inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-          if get_vreg_id(inst.uses[0]) is Some(src) {
-            copies.set(dst, canonical_id(src, copies))
-          }
-        }
+        inst.uses.length() == 1 &&
+        get_def_vreg_id(inst.defs[0]) is Some(dst) &&
+        get_vreg_id(inst.uses[0]) is Some(src) {
+        copies.set(dst, canonical_id(src, copies))
       }
       let mut replaced = false
       match inst.opcode {
@@ -393,31 +388,31 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
       // Also CSE duplicate vmctx-derived immutable base loads:
       // - func_table: `load.i64 +8 x19`
       // - globals ptr: `load.i64 +32 x19`
-      if !replaced {
-        if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
+      if !replaced &&
+        (
+          inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
           inst.opcode is Load(I64, @abi.VMCTX_GLOBALS_OFFSET) ||
           inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
-          inst.opcode is LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET) {
-          if inst.defs.length() == 1 &&
-            inst.uses.length() == 1 &&
-            is_vmctx(inst.uses[0]) {
-            let key = match inst.opcode {
-              Load(_, off) | LoadPtr(_, off) => "vmctx_base|" + off.to_string()
-              _ => "vmctx_base"
-            }
-            if seen.get(key) is Some(prev_id) {
-              let mv = @instr.VCodeInst::new(Move)
-              mv.add_def(inst.defs[0])
-              mv.add_use(Virtual({ id: prev_id, class: Int }))
-              new_insts.push(mv)
-              if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-                copies.set(dst, canonical_id(prev_id, copies))
-              }
-              replaced = true
-            } else {
-              seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
-            }
+          inst.opcode is LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET)
+        ) &&
+        inst.defs.length() == 1 &&
+        inst.uses.length() == 1 &&
+        is_vmctx(inst.uses[0]) {
+        let key = match inst.opcode {
+          Load(_, off) | LoadPtr(_, off) => "vmctx_base|" + off.to_string()
+          _ => "vmctx_base"
+        }
+        if seen.get(key) is Some(prev_id) {
+          let mv = @instr.VCodeInst::new(Move)
+          mv.add_def(inst.defs[0])
+          mv.add_use(Virtual({ id: prev_id, class: Int }))
+          new_insts.push(mv)
+          if get_def_vreg_id(inst.defs[0]) is Some(dst) {
+            copies.set(dst, canonical_id(prev_id, copies))
           }
+          replaced = true
+        } else {
+          seen.set(key, get_def_vreg_id(inst.defs[0]).unwrap())
         }
       }
       if !replaced {
@@ -578,18 +573,18 @@ fn propagate_single_use_moves(
   let copies : Map[Int, @abi.VReg] = {}
   let to_remove : @hashset.HashSet[Int] = @hashset.new()
   for i, inst in block.insts {
-    if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
-      if inst.defs[0].reg is Virtual(dst_vreg) &&
-        inst.uses[0] is Virtual(src_vreg) {
-        if same_reg_class(dst_vreg.class, src_vreg.class) &&
-          use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
-          global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
-          use_counts.get(dst_vreg.id).unwrap_or(0) {
-          let resolved = resolve_copy(src_vreg, copies)
-          copies.set(dst_vreg.id, resolved)
-          to_remove.add(i)
-        }
-      }
+    if inst.opcode is Move &&
+      inst.defs.length() == 1 &&
+      inst.uses.length() == 1 &&
+      inst.defs[0].reg is Virtual(dst_vreg) &&
+      inst.uses[0] is Virtual(src_vreg) &&
+      same_reg_class(dst_vreg.class, src_vreg.class) &&
+      use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
+      global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
+      use_counts.get(dst_vreg.id).unwrap_or(0) {
+      let resolved = resolve_copy(src_vreg, copies)
+      copies.set(dst_vreg.id, resolved)
+      to_remove.add(i)
     }
   }
   let rewrite_reg = fn(reg : @abi.Reg) -> @abi.Reg {
@@ -706,16 +701,14 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     for inst_idx, inst in block.insts {
       if inst.opcode is Move &&
         inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        if inst.defs[0].reg is Virtual(dst_vreg) &&
-          inst.uses[0] is Virtual(src_vreg) {
-          if same_reg_class(dst_vreg.class, src_vreg.class) &&
-            def_pos.get(src_vreg.id) is Some((src_block, src_inst)) &&
-            dom[block.id].contains(src_block) &&
-            (src_block != block.id || src_inst < inst_idx) {
-            copies.set(dst_vreg.id, src_vreg)
-          }
-        }
+        inst.uses.length() == 1 &&
+        inst.defs[0].reg is Virtual(dst_vreg) &&
+        inst.uses[0] is Virtual(src_vreg) &&
+        same_reg_class(dst_vreg.class, src_vreg.class) &&
+        def_pos.get(src_vreg.id) is Some((src_block, src_inst)) &&
+        dom[block.id].contains(src_block) &&
+        (src_block != block.id || src_inst < inst_idx) {
+        copies.set(dst_vreg.id, src_vreg)
       }
     }
   }
@@ -986,15 +979,14 @@ fn cse_mem_base_loads(func : @regalloc.VCodeFunction) -> Unit {
           state.clear()
           continue
         }
-        if inst.opcode is LoadMemBase(mem_idx) && inst.defs.length() == 1 {
-          if get_def_vreg_id(inst.defs[0]) is Some(dst) {
-            // Keep the first dominating value-id for each mem-base key.
-            // This allows predecessor intersections to succeed more often
-            // across blocks, reducing duplicated base materialization.
-            if state.get(mem_idx) is None {
-              state.set(mem_idx, dst)
-            }
-          }
+        if inst.opcode is LoadMemBase(mem_idx) &&
+          inst.defs.length() == 1 &&
+          get_def_vreg_id(inst.defs[0]) is Some(dst) &&
+          state.get(mem_idx) is None {
+          // Keep the first dominating value-id for each mem-base key.
+          // This allows predecessor intersections to succeed more often
+          // across blocks, reducing duplicated base materialization.
+          state.set(mem_idx, dst)
         }
       }
       if !same_mem_base_env(out_env[block_idx], state) {
@@ -1051,10 +1043,10 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
   let const_defs : Map[Int, Int64] = {}
   for blk in func.blocks {
     for inst in blk.insts {
-      if inst.opcode is LoadConst(val) && inst.defs.length() == 1 {
-        if get_def_vreg_id(inst.defs[0]) is Some(did) {
-          const_defs.set(did, val)
-        }
+      if inst.opcode is LoadConst(val) &&
+        inst.defs.length() == 1 &&
+        get_def_vreg_id(inst.defs[0]) is Some(did) {
+        const_defs.set(did, val)
       }
     }
   }

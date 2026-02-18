@@ -195,11 +195,11 @@ fn decode_full_name(full : String) -> (String, String, String?) {
   let mut ver : String? = None
   let mut base = full
   if find_last_code_unit(full, 64) // '@'
-    is Some(i) {
-    if i > 0 && i + 1 < full.length() {
-      ver = Some(slice_ascii(full, i + 1, full.length()))
-      base = slice_ascii(full, 0, i)
-    }
+    is Some(i) &&
+    i > 0 &&
+    i + 1 < full.length() {
+    ver = Some(slice_ascii(full, i + 1, full.length()))
+    base = slice_ascii(full, 0, i)
   }
   match find_last_code_unit(base, 47) { // '/'
     Some(i) => {
@@ -395,127 +395,124 @@ fn decode_interface_from_componenttype(
   // Collect named types.
   let type_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(tname, @component.ExternDesc::Type(bound)) {
-      if bound is @component.TypeBound::Eq(ti) {
-        // If this is an alias to an outer type, try to resolve it through
-        // the imported instance signature.
-        match slots[ti] {
-          AliasOuter(count, outer_idx) =>
-            if count == 1 {
-              match
-                resolve_outer_export_typedef(
-                  type_space, inst_sig_typeidx_by_inst, alias_export_by_typeidx,
-                  outer_idx,
-                ) {
-                Some((None, Some(@component.TypeBound::SubResource))) => {
-                  // Treat as a re-exported resource.
-                  resources.set(tname, { name: tname, methods: [] })
-                  // Also treat this exported nominal type index as a resource for own/borrow decoding.
-                  match idx_by_name.get(tname) {
-                    Some(exp_idx) => resource_by_idx.set(exp_idx, tname)
-                    None => ()
-                  }
+    if d is Export(tname, @component.ExternDesc::Type(bound)) &&
+      bound is @component.TypeBound::Eq(ti) {
+      // If this is an alias to an outer type, try to resolve it through
+      // the imported instance signature.
+      match slots[ti] {
+        AliasOuter(count, outer_idx) =>
+          if count == 1 {
+            match
+              resolve_outer_export_typedef(
+                type_space, inst_sig_typeidx_by_inst, alias_export_by_typeidx, outer_idx,
+              ) {
+              Some((None, Some(@component.TypeBound::SubResource))) => {
+                // Treat as a re-exported resource.
+                resources.set(tname, { name: tname, methods: [] })
+                // Also treat this exported nominal type index as a resource for own/borrow decoding.
+                match idx_by_name.get(tname) {
+                  Some(exp_idx) => resource_by_idx.set(exp_idx, tname)
+                  None => ()
                 }
-                Some((Some(td2), _b)) =>
-                  match td2 {
-                    @component.TypeDef::Record(fields) => {
-                      let fs : Array[(String, TypeExpr)] = []
-                      for f in fields {
-                        fs.push(
-                          (
-                            f.label,
-                            typeexpr_of_valtype(
-                              slots,
-                              f.ty,
-                              export_name_by_idx,
-                              resource_by_idx,
-                            ),
+              }
+              Some((Some(td2), _b)) =>
+                match td2 {
+                  @component.TypeDef::Record(fields) => {
+                    let fs : Array[(String, TypeExpr)] = []
+                    for f in fields {
+                      fs.push(
+                        (
+                          f.label,
+                          typeexpr_of_valtype(
+                            slots,
+                            f.ty,
+                            export_name_by_idx,
+                            resource_by_idx,
                           ),
-                        )
-                      }
-                      type_items.push(Record({ name: tname, fields: fs }))
-                    }
-                    @component.TypeDef::Flags(xs) =>
-                      type_items.push(Flags({ name: tname, flags: xs }))
-                    @component.TypeDef::Enum(xs) =>
-                      type_items.push(Enum({ name: tname, cases: xs }))
-                    @component.TypeDef::Variant(cases) => {
-                      let cs : Array[VariantCase] = []
-                      for c in cases {
-                        let payload = match c.ty {
-                          None => None
-                          Some(v) =>
-                            Some(
-                              typeexpr_of_valtype(
-                                slots, v, export_name_by_idx, resource_by_idx,
-                              ),
-                            )
-                        }
-                        cs.push({ name: c.label, payload })
-                      }
-                      type_items.push(Variant({ name: tname, cases: cs }))
-                    }
-                    _ => {
-                      let ty = typeexpr_of_typedef(
-                        slots, td2, export_name_by_idx, resource_by_idx,
-                      )
-                      type_items.push(TypeAlias({ name: tname, ty }))
-                    }
-                  }
-                _ =>
-                  type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
-              }
-            } else {
-              type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
-            }
-          Def(td2) =>
-            match td2 {
-              @component.TypeDef::Record(fields) => {
-                let fs : Array[(String, TypeExpr)] = []
-                for f in fields {
-                  fs.push(
-                    (
-                      f.label,
-                      typeexpr_of_valtype(
-                        slots,
-                        f.ty,
-                        export_name_by_idx,
-                        resource_by_idx,
-                      ),
-                    ),
-                  )
-                }
-                type_items.push(Record({ name: tname, fields: fs }))
-              }
-              @component.TypeDef::Flags(xs) =>
-                type_items.push(Flags({ name: tname, flags: xs }))
-              @component.TypeDef::Enum(xs) =>
-                type_items.push(Enum({ name: tname, cases: xs }))
-              @component.TypeDef::Variant(cases) => {
-                let cs : Array[VariantCase] = []
-                for c in cases {
-                  let payload = match c.ty {
-                    None => None
-                    Some(v) =>
-                      Some(
-                        typeexpr_of_valtype(
-                          slots, v, export_name_by_idx, resource_by_idx,
                         ),
                       )
+                    }
+                    type_items.push(Record({ name: tname, fields: fs }))
                   }
-                  cs.push({ name: c.label, payload })
+                  @component.TypeDef::Flags(xs) =>
+                    type_items.push(Flags({ name: tname, flags: xs }))
+                  @component.TypeDef::Enum(xs) =>
+                    type_items.push(Enum({ name: tname, cases: xs }))
+                  @component.TypeDef::Variant(cases) => {
+                    let cs : Array[VariantCase] = []
+                    for c in cases {
+                      let payload = match c.ty {
+                        None => None
+                        Some(v) =>
+                          Some(
+                            typeexpr_of_valtype(
+                              slots, v, export_name_by_idx, resource_by_idx,
+                            ),
+                          )
+                      }
+                      cs.push({ name: c.label, payload })
+                    }
+                    type_items.push(Variant({ name: tname, cases: cs }))
+                  }
+                  _ => {
+                    let ty = typeexpr_of_typedef(
+                      slots, td2, export_name_by_idx, resource_by_idx,
+                    )
+                    type_items.push(TypeAlias({ name: tname, ty }))
+                  }
                 }
-                type_items.push(Variant({ name: tname, cases: cs }))
-              }
-              _ => {
-                let ty = typeexpr_of_typedef(
-                  slots, td2, export_name_by_idx, resource_by_idx,
-                )
-                type_items.push(TypeAlias({ name: tname, ty }))
-              }
+              _ => type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
             }
-          _ => type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
-        }
+          } else {
+            type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
+          }
+        Def(td2) =>
+          match td2 {
+            @component.TypeDef::Record(fields) => {
+              let fs : Array[(String, TypeExpr)] = []
+              for f in fields {
+                fs.push(
+                  (
+                    f.label,
+                    typeexpr_of_valtype(
+                      slots,
+                      f.ty,
+                      export_name_by_idx,
+                      resource_by_idx,
+                    ),
+                  ),
+                )
+              }
+              type_items.push(Record({ name: tname, fields: fs }))
+            }
+            @component.TypeDef::Flags(xs) =>
+              type_items.push(Flags({ name: tname, flags: xs }))
+            @component.TypeDef::Enum(xs) =>
+              type_items.push(Enum({ name: tname, cases: xs }))
+            @component.TypeDef::Variant(cases) => {
+              let cs : Array[VariantCase] = []
+              for c in cases {
+                let payload = match c.ty {
+                  None => None
+                  Some(v) =>
+                    Some(
+                      typeexpr_of_valtype(
+                        slots, v, export_name_by_idx, resource_by_idx,
+                      ),
+                    )
+                }
+                cs.push({ name: c.label, payload })
+              }
+              type_items.push(Variant({ name: tname, cases: cs }))
+            }
+            _ => {
+              let ty = typeexpr_of_typedef(
+                slots, td2, export_name_by_idx, resource_by_idx,
+              )
+              type_items.push(TypeAlias({ name: tname, ty }))
+            }
+          }
+        _ => type_items.push(TypeAlias({ name: tname, ty: Id("other") }))
       }
     }
   }
@@ -523,90 +520,88 @@ fn decode_interface_from_componenttype(
   // Collect exported funcs and resource methods.
   let func_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(fname, @component.ExternDesc::FuncType(ti)) {
-      if slots[ti] is Def(@component.TypeDef::FuncType(ft)) {
-        // Resource methods follow `[method]res.name`.
-        if fname.has_prefix("[method]") {
-          let rest = slice_ascii(fname, 8, fname.length())
-          if find_last_code_unit(rest, 46) is Some(dot) { // '.'
-            let rname = slice_ascii(rest, 0, dot)
-            let mname = slice_ascii(rest, dot + 1, rest.length())
-            if resources.get(rname) is Some(r0) {
-              let r = r0
-              let params : Array[(String, TypeExpr)] = []
-              // Drop implicit self param when present.
-              let mut start = 0
-              if ft.params.length() > 0 && ft.params[0].label == "self" {
-                start = 1
-              }
-              for i in start..<ft.params.length() {
-                let p = ft.params[i]
-                params.push(
-                  (
-                    p.label,
-                    typeexpr_of_valtype(
-                      slots,
-                      p.ty,
-                      export_name_by_idx,
-                      resource_by_idx,
-                    ),
-                  ),
-                )
-              }
-              let results : Array[(String?, TypeExpr)] = []
-              match ft.result {
-                None => ()
-                Some(v) =>
-                  results.push(
-                    (
-                      None,
-                      typeexpr_of_valtype(
-                        slots, v, export_name_by_idx, resource_by_idx,
-                      ),
-                    ),
-                  )
-              }
-              r.methods.push({
-                name: mname,
-                is_async: ft.is_async,
-                params,
-                results,
-              })
-              resources.set(rname, r)
+    if d is Export(fname, @component.ExternDesc::FuncType(ti)) &&
+      slots[ti] is Def(@component.TypeDef::FuncType(ft)) {
+      if fname.has_prefix("[method]") {
+        let rest = slice_ascii(fname, 8, fname.length())
+        if find_last_code_unit(rest, 46) is Some(dot) { // '.'
+          let rname = slice_ascii(rest, 0, dot)
+          let mname = slice_ascii(rest, dot + 1, rest.length())
+          if resources.get(rname) is Some(r0) {
+            let r = r0
+            let params : Array[(String, TypeExpr)] = []
+            // Drop implicit self param when present.
+            let mut start = 0
+            if ft.params.length() > 0 && ft.params[0].label == "self" {
+              start = 1
             }
-          }
-        } else {
-          let params : Array[(String, TypeExpr)] = []
-          for p in ft.params {
-            params.push(
-              (
-                p.label,
-                typeexpr_of_valtype(
-                  slots,
-                  p.ty,
-                  export_name_by_idx,
-                  resource_by_idx,
-                ),
-              ),
-            )
-          }
-          let results : Array[(String?, TypeExpr)] = []
-          match ft.result {
-            None => ()
-            Some(v) =>
-              results.push(
+            for i in start..<ft.params.length() {
+              let p = ft.params[i]
+              params.push(
                 (
-                  None,
+                  p.label,
                   typeexpr_of_valtype(
-                    slots, v, export_name_by_idx, resource_by_idx,
+                    slots,
+                    p.ty,
+                    export_name_by_idx,
+                    resource_by_idx,
                   ),
                 ),
               )
+            }
+            let results : Array[(String?, TypeExpr)] = []
+            match ft.result {
+              None => ()
+              Some(v) =>
+                results.push(
+                  (
+                    None,
+                    typeexpr_of_valtype(
+                      slots, v, export_name_by_idx, resource_by_idx,
+                    ),
+                  ),
+                )
+            }
+            r.methods.push({
+              name: mname,
+              is_async: ft.is_async,
+              params,
+              results,
+            })
+            resources.set(rname, r)
           }
-          func_items.push(
-            Func({ name: fname, is_async: ft.is_async, params, results }),
+        }
+      } else {
+        let params : Array[(String, TypeExpr)] = []
+        for p in ft.params {
+          params.push(
+            (
+              p.label,
+              typeexpr_of_valtype(
+                slots,
+                p.ty,
+                export_name_by_idx,
+                resource_by_idx,
+              ),
+            ),
           )
         }
+        let results : Array[(String?, TypeExpr)] = []
+        match ft.result {
+          None => ()
+          Some(v) =>
+            results.push(
+              (
+                None,
+                typeexpr_of_valtype(
+                  slots, v, export_name_by_idx, resource_by_idx,
+                ),
+              ),
+            )
+        }
+        func_items.push(
+          Func({ name: fname, is_async: ft.is_async, params, results }),
+        )
       }
     }
   }
