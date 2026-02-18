@@ -79,120 +79,93 @@ fn validate_component_section_export(
         11, "exporting a component from the root component is not supported",
       )
     }
-    match exportname_to_string(e.name) {
-      Some(name) => {
-        // wasm-tools' very-nested.wast relies on long export names to
-        // trigger the effective-size limiter.
-        export_size = add_type_size(export_size, name.length())
-        let key = if cfg.wit_names { wit_conflict_key(name) } else { name }
-        match seen_export_names.get(key) {
-          Some(prev) =>
-            if prev == name {
-              raise DuplicateExportName(name)
-            } else {
-              raise SectionParseError(
-                11,
-                "export name `\{name}` conflicts with previous name `\{prev}`",
-              )
-            }
-          None => seen_export_names.set(key, name)
-        }
+    if exportname_to_string(e.name) is Some(name) {
+      // wasm-tools' very-nested.wast relies on long export names to
+      // trigger the effective-size limiter.
+      export_size = add_type_size(export_size, name.length())
+      let key = if cfg.wit_names { wit_conflict_key(name) } else { name }
+      match seen_export_names.get(key) {
+        Some(prev) =>
+          if prev == name {
+            raise DuplicateExportName(name)
+          } else {
+            raise SectionParseError(
+              11,
+              "export name `\{name}` conflicts with previous name `\{prev}`",
+            )
+          }
+        None => seen_export_names.set(key, name)
       }
-      None => ()
     }
-    match exportname_to_string(e.name) {
-      Some(name) => my_export_sorts.set(name, e.sortidx.sort)
-      None => ()
+    if exportname_to_string(e.name) is Some(name) {
+      my_export_sorts.set(name, e.sortidx.sort)
     }
-    match exportname_to_string(e.name) {
-      Some(name) =>
-        if parse_bracket_resource_name(name) is Some(_) &&
-          !(e.sortidx.sort is @component.Sort::Func) {
-          raise SectionParseError(11, "is not a func")
-        }
-      None => ()
+    if exportname_to_string(e.name) is Some(name) &&
+      parse_bracket_resource_name(name) is Some(_) &&
+      !(e.sortidx.sort is @component.Sort::Func) {
+      raise SectionParseError(11, "is not a func")
     }
     if is_root && e.sortidx.sort is Func && e.sortidx.idx < imported_funcs {
       raise ExportedImportedFunc(e.sortidx.idx)
     }
     check_sortidx(e.sortidx, counts, type_table.length())
     if e.sortidx.sort is @component.Sort::Type {
-      match exportname_to_string(e.name) {
-        Some(name) =>
-          my_export_type_sigs.set(
-            name,
-            type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids),
-          )
-        None => ()
+      if exportname_to_string(e.name) is Some(name) {
+        my_export_type_sigs.set(
+          name,
+          type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids),
+        )
       }
-      match exportname_to_string(e.name) {
-        Some(name) =>
-          if type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
-            is TypeSig::Resource(_) {
-            export_resource_names.set(name, e.sortidx.idx)
-          }
-        None => ()
+      if exportname_to_string(e.name) is Some(name) &&
+        type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
+        is TypeSig::Resource(_) {
+        export_resource_names.set(name, e.sortidx.idx)
       }
     }
-    if e.sortidx.sort is @component.Sort::Func {
-      match exportname_to_string(e.name) {
-        Some(name) =>
-          if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
-            let mut ft : @component.FuncType? = None
-            match e.desc {
-              Some(@component.ExternDesc::FuncType(tyidx)) =>
-                if tyidx >= 0 && tyidx < type_table.length() {
-                  match type_table[tyidx] {
-                    Some(@component.TypeDef::FuncType(t)) => ft = Some(t)
-                    _ => ()
-                  }
-                }
+    if e.sortidx.sort is @component.Sort::Func &&
+      exportname_to_string(e.name) is Some(name) &&
+      e.sortidx.idx >= 0 &&
+      e.sortidx.idx < func_types.length() {
+      let mut ft : @component.FuncType? = None
+      match e.desc {
+        Some(@component.ExternDesc::FuncType(tyidx)) =>
+          if tyidx >= 0 && tyidx < type_table.length() {
+            match type_table[tyidx] {
+              Some(@component.TypeDef::FuncType(t)) => ft = Some(t)
               _ => ()
             }
-            if ft is None {
-              ft = func_types[e.sortidx.idx]
-            }
-            match ft {
-              Some(ft) => {
-                validate_bracketed_func_name(
-                  11, name, ft, type_table, resource_ids, export_resource_names,
-                )
-                my_export_func_sigs.set(
-                  name,
-                  funcsig_of_functype(ft, type_table, resource_ids),
-                )
-              }
-              None => ()
-            }
           }
-        None => ()
+        _ => ()
+      }
+      if ft is None {
+        ft = func_types[e.sortidx.idx]
+      }
+      if ft is Some(ft) {
+        validate_bracketed_func_name(
+          11, name, ft, type_table, resource_ids, export_resource_names,
+        )
+        my_export_func_sigs.set(
+          name,
+          funcsig_of_functype(ft, type_table, resource_ids),
+        )
       }
     }
-    if e.sortidx.sort is @component.Sort::Instance {
-      match exportname_to_string(e.name) {
-        Some(name) => {
-          if e.sortidx.idx >= 0 && e.sortidx.idx < instance_sigs.length() {
-            match instance_sigs[e.sortidx.idx] {
-              Some(sig) => my_export_instance_sigs.set(name, sig)
-              None => ()
-            }
-          }
-          if e.sortidx.idx >= 0 &&
-            e.sortidx.idx < instance_export_type_sigs.length() {
-            match instance_export_type_sigs[e.sortidx.idx] {
-              Some(map) => my_export_instance_type_sigs.set(name, map)
-              None => ()
-            }
-          }
-          if e.sortidx.idx >= 0 &&
-            e.sortidx.idx < instance_export_func_sigs.length() {
-            match instance_export_func_sigs[e.sortidx.idx] {
-              Some(map) => my_export_instance_func_sigs.set(name, map)
-              None => ()
-            }
-          }
-        }
-        None => ()
+    if e.sortidx.sort is @component.Sort::Instance &&
+      exportname_to_string(e.name) is Some(name) {
+      if e.sortidx.idx >= 0 &&
+        e.sortidx.idx < instance_sigs.length() &&
+        instance_sigs[e.sortidx.idx] is Some(sig) {
+        my_export_instance_sigs.set(name, sig)
+      }
+      if e.sortidx.idx >= 0 &&
+        e.sortidx.idx < instance_export_type_sigs.length() &&
+        instance_export_type_sigs[e.sortidx.idx] is Some(map) {
+        my_export_instance_type_sigs.set(name, map)
+      }
+      if e.sortidx.idx >= 0 &&
+        e.sortidx.idx < instance_export_func_sigs.length() &&
+        instance_export_func_sigs[e.sortidx.idx] is Some(map) {
+        my_export_instance_func_sigs.set(name, map)
       }
     }
 
@@ -459,9 +432,8 @@ fn validate_component_section_export(
       }
       _ => export_size = add_type_size(export_size, 1)
     }
-    match e.desc {
-      Some(d) => validate_externdesc(d, type_table, counts.core_type)
-      None => ()
+    if e.desc is Some(d) {
+      validate_externdesc(d, type_table, counts.core_type)
     }
     // Export ascription: if a type is provided, it must be compatible with
     // the actual export (we currently model instance-type compatibility).

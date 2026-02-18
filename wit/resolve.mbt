@@ -293,13 +293,8 @@ fn collect_pkg_deps_from_interface_item(
   item : InterfaceItem,
   out : Map[String, Bool],
 ) -> Unit {
-  match item {
-    Use(u) =>
-      match split_use_path(u.path) {
-        (Some(k), _, _) => if k != pkg_key { out.set(k, true) }
-        _ => ()
-      }
-    _ => ()
+  if item is Use(u) && split_use_path(u.path) is (Some(k), _, _) && k != pkg_key {
+    out.set(k, true)
   }
 }
 
@@ -418,15 +413,12 @@ fn resolve_one_package(
     let local_edges : Array[String] = []
     let deps_arr : Array[IfaceRef] = []
     for item in iface.items {
-      match item {
-        Use(u) => {
-          let dep = use_path_to_iface_ref(pkg_key, u.path)
-          deps_arr.push(dep)
-          if dep.pkg_key == pkg_key {
-            local_edges.push(dep.name)
-          }
+      if item is Use(u) {
+        let dep = use_path_to_iface_ref(pkg_key, u.path)
+        deps_arr.push(dep)
+        if dep.pkg_key == pkg_key {
+          local_edges.push(dep.name)
         }
-        _ => ()
       }
     }
     local_edges.sort()
@@ -465,13 +457,8 @@ fn resolve_one_package(
       .unwrap_or_else(() => raise WitError::Error("internal: missing world"))
     let edges : Array[String] = []
     for wi in w.items {
-      match wi {
-        Include(inc) =>
-          match split_use_path(inc.path) {
-            (None, wn, _) => edges.push(wn)
-            _ => ()
-          }
-        _ => ()
+      if wi is Include(inc) && split_use_path(inc.path) is (None, wn, _) {
+        edges.push(wn)
       }
     }
     edges.sort()
@@ -561,36 +548,31 @@ fn resolve_interface_in_package(
   // Second pass: `use` imports types/resources into the interface namespace.
   let deps_arr : Array[IfaceRef] = []
   for item in iface.items {
-    match item {
-      Use(u) => {
-        let target = use_path_to_iface_ref(pkg_key, u.path)
-        deps_arr.push(target)
-        let exports = get_iface_type_exports(target, pkgs, iface_type_exports)
-        for pair in u.names {
-          let (n, asn) = pair
-          if exports.get(n) is None {
-            raise WitError::Error(
-              "unknown name `" + n + "` in use " + u.path.raw,
-            )
-          }
-          let local_name = match asn {
-            Some(x) => x
-            None => n
-          }
-          if names.get(local_name) is Some(_) {
-            raise WitError::Error(
-              "duplicate name `" +
-              local_name +
-              "` in interface `" +
-              iface.name +
-              "`",
-            )
-          }
-          names.set(local_name, true)
-          type_exports.set(local_name, true)
+    if item is Use(u) {
+      let target = use_path_to_iface_ref(pkg_key, u.path)
+      deps_arr.push(target)
+      let exports = get_iface_type_exports(target, pkgs, iface_type_exports)
+      for pair in u.names {
+        let (n, asn) = pair
+        if exports.get(n) is None {
+          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
         }
+        let local_name = match asn {
+          Some(x) => x
+          None => n
+        }
+        if names.get(local_name) is Some(_) {
+          raise WitError::Error(
+            "duplicate name `" +
+            local_name +
+            "` in interface `" +
+            iface.name +
+            "`",
+          )
+        }
+        names.set(local_name, true)
+        type_exports.set(local_name, true)
       }
-      _ => ()
     }
   }
 
@@ -972,9 +954,8 @@ fn resolve_world_in_package(
   }
   // Keep non-interface-import items in original order, skipping old interface imports.
   for wi in items {
-    match wi {
-      Import(_) => () // replaced
-      _ => rebuilt.push(wi)
+    if !(wi is Import(_)) {
+      rebuilt.push(wi)
     }
   }
   // Validate world-local type definitions and world-level function signatures.
@@ -1301,31 +1282,26 @@ fn validate_inline_interface_types(
     }
   }
   for item in iface.items {
-    match item {
-      Use(u) => {
-        let r = use_path_to_iface_ref(pkg_key, u.path)
-        let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
-        for pair in u.names {
-          let (n, asn) = pair
-          if exports.get(n) is None {
-            raise WitError::Error(
-              "unknown name `" + n + "` in use " + u.path.raw,
-            )
-          }
-          let local_name = match asn {
-            Some(x) => x
-            None => n
-          }
-          if ns.get(local_name) is Some(_) {
-            raise WitError::Error(
-              "duplicate name `" + local_name + "` in inline interface",
-            )
-          }
-          ns.set(local_name, true)
-          visible.set(local_name, true)
+    if item is Use(u) {
+      let r = use_path_to_iface_ref(pkg_key, u.path)
+      let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
+      for pair in u.names {
+        let (n, asn) = pair
+        if exports.get(n) is None {
+          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
         }
+        let local_name = match asn {
+          Some(x) => x
+          None => n
+        }
+        if ns.get(local_name) is Some(_) {
+          raise WitError::Error(
+            "duplicate name `" + local_name + "` in inline interface",
+          )
+        }
+        ns.set(local_name, true)
+        visible.set(local_name, true)
       }
-      _ => ()
     }
   }
   for item in iface.items {
@@ -1391,35 +1367,26 @@ fn validate_world_types(
     }
   }
   for wi in items {
-    match wi {
-      Use(u) => {
-        let r = use_path_to_iface_ref(pkg_key, u.path)
-        let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
-        for pair in u.names {
-          let (n, asn) = pair
-          if exports.get(n) is None {
-            raise WitError::Error(
-              "unknown name `" + n + "` in use " + u.path.raw,
-            )
-          }
-          let local_name = match asn {
-            Some(x) => x
-            None => n
-          }
-          if ns.get(local_name) is Some(_) {
-            raise WitError::Error(
-              "duplicate name `" +
-              local_name +
-              "` in world `" +
-              world_name +
-              "`",
-            )
-          }
-          ns.set(local_name, true)
-          visible.set(local_name, true)
+    if wi is Use(u) {
+      let r = use_path_to_iface_ref(pkg_key, u.path)
+      let exports = get_iface_type_exports(r, pkgs, iface_type_exports)
+      for pair in u.names {
+        let (n, asn) = pair
+        if exports.get(n) is None {
+          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
         }
+        let local_name = match asn {
+          Some(x) => x
+          None => n
+        }
+        if ns.get(local_name) is Some(_) {
+          raise WitError::Error(
+            "duplicate name `" + local_name + "` in world `" + world_name + "`",
+          )
+        }
+        ns.set(local_name, true)
+        visible.set(local_name, true)
       }
-      _ => ()
     }
   }
   for wi in items {
@@ -1449,15 +1416,12 @@ fn validate_world_types(
 fn collect_toplevel_aliases(pkg : Package) -> Map[String, UsePath] {
   let m : Map[String, UsePath] = {}
   for it in pkg.items {
-    match it {
-      ToplevelUse(u) => {
-        let name = match u.as_name {
-          Some(n) => n
-          None => infer_toplevel_use_name(u.path)
-        }
-        m.set(name, u.path)
+    if it is ToplevelUse(u) {
+      let name = match u.as_name {
+        Some(n) => n
+        None => infer_toplevel_use_name(u.path)
       }
-      _ => ()
+      m.set(name, u.path)
     }
   }
   m

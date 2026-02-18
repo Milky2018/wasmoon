@@ -364,14 +364,11 @@ fn InstanceSig::empty() -> InstanceSig {
 fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? {
   let mut imported = 0
   for imp in m.imports {
-    match imp.desc {
-      @types.ImportDesc::Func(tyidx) => {
-        if imported == func_idx {
-          return Some(m.get_func_type(tyidx))
-        }
-        imported += 1
+    if imp.desc is @types.ImportDesc::Func(tyidx) {
+      if imported == func_idx {
+        return Some(m.get_func_type(tyidx))
       }
-      _ => ()
+      imported += 1
     }
   }
   let local_idx = func_idx - imported
@@ -389,14 +386,11 @@ fn core_table_type_of_idx(
 ) -> @types.TableType? {
   let mut imported = 0
   for imp in m.imports {
-    match imp.desc {
-      @types.ImportDesc::Table(tt) => {
-        if imported == table_idx {
-          return Some(tt)
-        }
-        imported += 1
+    if imp.desc is @types.ImportDesc::Table(tt) {
+      if imported == table_idx {
+        return Some(tt)
       }
-      _ => ()
+      imported += 1
     }
   }
   let local_idx = table_idx - imported
@@ -413,14 +407,11 @@ fn core_memory_type_of_idx(
 ) -> @types.MemoryType? {
   let mut imported = 0
   for imp in m.imports {
-    match imp.desc {
-      @types.ImportDesc::Memory(mt) => {
-        if imported == mem_idx {
-          return Some(mt)
-        }
-        imported += 1
+    if imp.desc is @types.ImportDesc::Memory(mt) {
+      if imported == mem_idx {
+        return Some(mt)
       }
-      _ => ()
+      imported += 1
     }
   }
   let local_idx = mem_idx - imported
@@ -437,14 +428,11 @@ fn core_global_type_of_idx(
 ) -> @types.GlobalType? {
   let mut imported = 0
   for imp in m.imports {
-    match imp.desc {
-      @types.ImportDesc::Global(gt) => {
-        if imported == global_idx {
-          return Some(gt)
-        }
-        imported += 1
+    if imp.desc is @types.ImportDesc::Global(gt) {
+      if imported == global_idx {
+        return Some(gt)
       }
-      _ => ()
+      imported += 1
     }
   }
   let local_idx = global_idx - imported
@@ -551,9 +539,8 @@ fn core_module_import_sig_of_module(
 ) -> Map[String, CoreExternType] {
   let out : Map[String, CoreExternType] = {}
   for imp in m.imports {
-    match core_import_type_of_module(m, imp.desc) {
-      Some(ty) => out.set("\{imp.mod_name}::\{imp.name}", ty)
-      None => ()
+    if core_import_type_of_module(m, imp.desc) is Some(ty) {
+      out.set("\{imp.mod_name}::\{imp.name}", ty)
     }
   }
   out
@@ -600,19 +587,17 @@ fn check_core_module_import_subtype(
   actual : Map[String, CoreExternType]?,
   expected : Map[String, CoreExternType],
 ) -> Unit raise ComponentValidationError {
-  match actual {
-    Some(map) =>
-      for kv in map.iter() {
-        let (key, actual_ty) = kv
-        match expected.get(key) {
-          None => raise ComponentImportTypeMismatch("import \{key}")
-          Some(expected_ty) =>
-            if !core_import_compatible(actual_ty, expected_ty) {
-              raise ComponentImportTypeMismatch("import \{key}")
-            }
-        }
+  if actual is Some(map) {
+    for kv in map.iter() {
+      let (key, actual_ty) = kv
+      match expected.get(key) {
+        None => raise ComponentImportTypeMismatch("import \{key}")
+        Some(expected_ty) =>
+          if !core_import_compatible(actual_ty, expected_ty) {
+            raise ComponentImportTypeMismatch("import \{key}")
+          }
       }
-    None => ()
+    }
   }
 }
 

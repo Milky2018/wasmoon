@@ -497,25 +497,19 @@ fn remove_waitable_membership(
   handle : Int,
 ) -> Unit {
   let wkey = handle_key(owner_component_id, handle)
-  match async_state.waitable_to_set.get(wkey) {
-    Some(ws_key) => {
-      async_state.waitable_to_set.remove(wkey)
-      match async_state.waitable_sets.get(ws_key) {
-        Some(set) => {
-          set.members.remove(handle)
-          let mut i = 0
-          while i < set.queue.length() {
-            if set.queue[i].index == handle {
-              set.queue.remove(i) |> ignore
-            } else {
-              i = i + 1
-            }
-          }
+  if async_state.waitable_to_set.get(wkey) is Some(ws_key) {
+    async_state.waitable_to_set.remove(wkey)
+    if async_state.waitable_sets.get(ws_key) is Some(set) {
+      set.members.remove(handle)
+      let mut i = 0
+      while i < set.queue.length() {
+        if set.queue[i].index == handle {
+          set.queue.remove(i) |> ignore
+        } else {
+          i = i + 1
         }
-        None => ()
       }
     }
-    None => ()
   }
   async_state.waitable_events.remove(wkey)
 }
@@ -531,41 +525,32 @@ fn remove_waitable_events_for(
   code : Int,
 ) -> Unit {
   let wkey = handle_key(owner_component_id, handle)
-  match async_state.waitable_events.get(wkey) {
-    Some(list0) => {
-      let list = list0
-      let mut i = 0
-      while i < list.length() {
-        if list[i].code == code && list[i].index == handle {
-          list.remove(i) |> ignore
-        } else {
-          i = i + 1
-        }
-      }
-      if list.length() == 0 {
-        async_state.waitable_events.remove(wkey)
+  if async_state.waitable_events.get(wkey) is Some(list0) {
+    let list = list0
+    let mut i = 0
+    while i < list.length() {
+      if list[i].code == code && list[i].index == handle {
+        list.remove(i) |> ignore
       } else {
-        async_state.waitable_events.set(wkey, list)
+        i = i + 1
       }
     }
-    None => ()
+    if list.length() == 0 {
+      async_state.waitable_events.remove(wkey)
+    } else {
+      async_state.waitable_events.set(wkey, list)
+    }
   }
-  match async_state.waitable_to_set.get(wkey) {
-    Some(ws_key) =>
-      match async_state.waitable_sets.get(ws_key) {
-        Some(set) => {
-          let mut i = 0
-          while i < set.queue.length() {
-            if set.queue[i].code == code && set.queue[i].index == handle {
-              set.queue.remove(i) |> ignore
-            } else {
-              i = i + 1
-            }
-          }
-        }
-        None => ()
+  if async_state.waitable_to_set.get(wkey) is Some(ws_key) &&
+    async_state.waitable_sets.get(ws_key) is Some(set) {
+    let mut i = 0
+    while i < set.queue.length() {
+      if set.queue[i].code == code && set.queue[i].index == handle {
+        set.queue.remove(i) |> ignore
+      } else {
+        i = i + 1
       }
-    None => ()
+    }
   }
 }
 
@@ -576,61 +561,43 @@ fn acknowledge_waitable_event(async_state : AsyncState, ev : WaitEvent) -> Unit 
   // drop-readable/drop-writable can proceed and handle reuse does not see stale state.
   if ev.code == 2 {
     let ep_key = handle_key(ev.owner_component_id, ev.index)
-    match async_state.stream_table.endpoints.get(ep_key) {
-      Some(ep) => {
-        // If the event indicates the peer dropped, remember that this endpoint has
-        // been notified so subsequent reads/lifts trap (component-spec "done" semantics).
-        if (ev.payload.reinterpret_as_uint() & 1U) != 0U {
-          ep.notified_peer_dropped[0] = true
-        }
-        match async_state.stream_table.streams.get(ep.stream_id) {
-          Some(st0) =>
-            match st0.pending_read {
-              Some(pr) =>
-                if pr.reader_handle == ev.index {
-                  async_state.stream_table.streams.set(ep.stream_id, {
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
-                    pending_read: None,
-                    pending_write: st0.pending_write,
-                    readable_dropped: st0.readable_dropped,
-                    writable_dropped: st0.writable_dropped,
-                  })
-                }
-              None => ()
-            }
-          None => ()
-        }
+    if async_state.stream_table.endpoints.get(ep_key) is Some(ep) {
+      // If the event indicates the peer dropped, remember that this endpoint has
+      // been notified so subsequent reads/lifts trap (component-spec "done" semantics).
+      if (ev.payload.reinterpret_as_uint() & 1U) != 0U {
+        ep.notified_peer_dropped[0] = true
       }
-      None => ()
+      if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
+        st0.pending_read is Some(pr) &&
+        pr.reader_handle == ev.index {
+        async_state.stream_table.streams.set(ep.stream_id, {
+          elem_size: st0.elem_size,
+          own_resource_type_id: st0.own_resource_type_id,
+          pending_read: None,
+          pending_write: st0.pending_write,
+          readable_dropped: st0.readable_dropped,
+          writable_dropped: st0.writable_dropped,
+        })
+      }
     }
   } else if ev.code == 3 {
     let ep_key = handle_key(ev.owner_component_id, ev.index)
-    match async_state.stream_table.endpoints.get(ep_key) {
-      Some(ep) => {
-        if (ev.payload.reinterpret_as_uint() & 1U) != 0U {
-          ep.notified_peer_dropped[0] = true
-        }
-        match async_state.stream_table.streams.get(ep.stream_id) {
-          Some(st0) =>
-            match st0.pending_write {
-              Some(pw) =>
-                if pw.writer_handle == ev.index {
-                  async_state.stream_table.streams.set(ep.stream_id, {
-                    elem_size: st0.elem_size,
-                    own_resource_type_id: st0.own_resource_type_id,
-                    pending_read: st0.pending_read,
-                    pending_write: None,
-                    readable_dropped: st0.readable_dropped,
-                    writable_dropped: st0.writable_dropped,
-                  })
-                }
-              None => ()
-            }
-          None => ()
-        }
+    if async_state.stream_table.endpoints.get(ep_key) is Some(ep) {
+      if (ev.payload.reinterpret_as_uint() & 1U) != 0U {
+        ep.notified_peer_dropped[0] = true
       }
-      None => ()
+      if async_state.stream_table.streams.get(ep.stream_id) is Some(st0) &&
+        st0.pending_write is Some(pw) &&
+        pw.writer_handle == ev.index {
+        async_state.stream_table.streams.set(ep.stream_id, {
+          elem_size: st0.elem_size,
+          own_resource_type_id: st0.own_resource_type_id,
+          pending_read: st0.pending_read,
+          pending_write: None,
+          readable_dropped: st0.readable_dropped,
+          writable_dropped: st0.writable_dropped,
+        })
+      }
     }
   }
 }
@@ -1493,15 +1460,12 @@ fn ensure_task_thread(
 
 ///|
 fn drop_task_thread(async_state : AsyncState, task_id : Int64) -> Unit {
-  match async_state.task_thread.get(task_id) {
-    Some(m) => {
-      async_state.task_thread.remove(task_id)
-      for entry in m {
-        let (owner_component_id, th) = entry
-        free_shared_handle(async_state, owner_component_id, th)
-      }
+  if async_state.task_thread.get(task_id) is Some(m) {
+    async_state.task_thread.remove(task_id)
+    for entry in m {
+      let (owner_component_id, th) = entry
+      free_shared_handle(async_state, owner_component_id, th)
     }
-    None => ()
   }
 }
 
@@ -1599,13 +1563,9 @@ fn enqueue_waitable_event(
   }
   list.push(ev)
   async_state.waitable_events.set(waitable_key, list)
-  match async_state.waitable_to_set.get(waitable_key) {
-    Some(ws_key) =>
-      match async_state.waitable_sets.get(ws_key) {
-        Some(set) => set.queue.push(ev)
-        None => ()
-      }
-    None => ()
+  if async_state.waitable_to_set.get(waitable_key) is Some(ws_key) &&
+    async_state.waitable_sets.get(ws_key) is Some(set) {
+    set.queue.push(ev)
   }
 }
 
@@ -1620,17 +1580,14 @@ fn pop_waitable_event(async_state : AsyncState, ws_key : Int64) -> WaitEvent? {
         let ev = set.queue.remove(0)
         // Consume from the per-waitable backlog as well.
         let wkey = handle_key(ev.owner_component_id, ev.index)
-        match async_state.waitable_events.get(wkey) {
-          Some(list0) =>
-            if list0.length() > 0 {
-              list0.remove(0) |> ignore
-              if list0.length() == 0 {
-                async_state.waitable_events.remove(wkey)
-              } else {
-                async_state.waitable_events.set(wkey, list0)
-              }
-            }
-          None => ()
+        if async_state.waitable_events.get(wkey) is Some(list0) &&
+          list0.length() > 0 {
+          list0.remove(0) |> ignore
+          if list0.length() == 0 {
+            async_state.waitable_events.remove(wkey)
+          } else {
+            async_state.waitable_events.set(wkey, list0)
+          }
         }
         Some(ev)
       }

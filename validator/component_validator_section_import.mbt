@@ -80,35 +80,28 @@ fn validate_component_section_import(
         10, "root-level component imports are not supported",
       )
     }
-    match importname_to_string(i.name) {
-      Some(name) => {
-        let key = if cfg.wit_names { wit_conflict_key(name) } else { name }
-        match seen_import_names.get(key) {
-          Some(prev) =>
-            if prev == name {
-              raise DuplicateImportName(name)
-            } else {
-              raise SectionParseError(
-                10,
-                "import name `\{name}` conflicts with previous name `\{prev}`",
-              )
-            }
-          None => seen_import_names.set(key, name)
-        }
+    if importname_to_string(i.name) is Some(name) {
+      let key = if cfg.wit_names { wit_conflict_key(name) } else { name }
+      match seen_import_names.get(key) {
+        Some(prev) =>
+          if prev == name {
+            raise DuplicateImportName(name)
+          } else {
+            raise SectionParseError(
+              10,
+              "import name `\{name}` conflicts with previous name `\{prev}`",
+            )
+          }
+        None => seen_import_names.set(key, name)
       }
-      None => ()
     }
-    match importname_to_string(i.name) {
-      Some(name) => my_import_sorts.set(name, sort_of_externdesc(i.desc))
-      None => ()
+    if importname_to_string(i.name) is Some(name) {
+      my_import_sorts.set(name, sort_of_externdesc(i.desc))
     }
-    match importname_to_string(i.name) {
-      Some(name) =>
-        if parse_bracket_resource_name(name) is Some(_) &&
-          !(i.desc is @component.ExternDesc::FuncType(_)) {
-          raise SectionParseError(10, "is not a func")
-        }
-      None => ()
+    if importname_to_string(i.name) is Some(name) &&
+      parse_bracket_resource_name(name) is Some(_) &&
+      !(i.desc is @component.ExternDesc::FuncType(_)) {
+      raise SectionParseError(10, "is not a func")
     }
     // Import type references must be in-bounds at the point they appear.
     validate_externdesc(i.desc, type_table, counts.core_type)
@@ -134,48 +127,41 @@ fn validate_component_section_import(
         }
       _ => ()
     }
-    match i.desc {
-      FuncType(tyidx) =>
-        match type_table[tyidx] {
-          Some(@component.TypeDef::FuncType(ft)) => {
-            let sig = funcsig_of_functype(ft, type_table, resource_ids)
-            match importname_to_string(i.name) {
-              Some(name) =>
-                validate_bracketed_func_name(
-                  10, name, ft, type_table, resource_ids, import_resource_names,
-                )
-              None => ()
-            }
-            if !functype_valid_in_interface(
-                ft, type_table, resource_ids, import_named_types,
-              ) {
-              raise SectionParseError(10, "func not valid to be used as import")
-            }
-            func_types.push(Some(ft))
-            func_sig_shapes.push(Some(sig))
-            match importname_to_string(i.name) {
-              Some(name) => my_import_func_sigs.set(name, sig)
-              None => ()
-            }
+    if i.desc is FuncType(tyidx) {
+      match type_table[tyidx] {
+        Some(@component.TypeDef::FuncType(ft)) => {
+          let sig = funcsig_of_functype(ft, type_table, resource_ids)
+          if importname_to_string(i.name) is Some(name) {
+            validate_bracketed_func_name(
+              10, name, ft, type_table, resource_ids, import_resource_names,
+            )
           }
-          _ => {
-            func_types.push(None)
-            func_sig_shapes.push(None)
+          if !functype_valid_in_interface(
+              ft, type_table, resource_ids, import_named_types,
+            ) {
+            raise SectionParseError(10, "func not valid to be used as import")
+          }
+          func_types.push(Some(ft))
+          func_sig_shapes.push(Some(sig))
+          if importname_to_string(i.name) is Some(name) {
+            my_import_func_sigs.set(name, sig)
           }
         }
-      _ => ()
+        _ => {
+          func_types.push(None)
+          func_sig_shapes.push(None)
+        }
+      }
     }
-    match i.desc {
-      CoreModuleType(tyidx) =>
-        if tyidx >= 0 && tyidx < core_type_exports.length() {
-          match core_type_exports[tyidx] {
-            Some(map) => core_module_exports.push(Some(map))
-            None => raise CoreTypeIndexNotModuleType(tyidx)
-          }
-        } else {
-          core_module_exports.push(None)
+    if i.desc is CoreModuleType(tyidx) {
+      if tyidx >= 0 && tyidx < core_type_exports.length() {
+        match core_type_exports[tyidx] {
+          Some(map) => core_module_exports.push(Some(map))
+          None => raise CoreTypeIndexNotModuleType(tyidx)
         }
-      _ => ()
+      } else {
+        core_module_exports.push(None)
+      }
     }
     match i.desc {
       CoreModuleType(tyidx) => {
@@ -200,9 +186,8 @@ fn validate_component_section_import(
           Some(td) => {
             let sig = instancetype_sig_of_typedef(td, type_table, {})
             instance_sigs.push(Some(sig))
-            match importname_to_string(i.name) {
-              Some(name) => my_import_instance_sigs.set(name, sig)
-              None => ()
+            if importname_to_string(i.name) is Some(name) {
+              my_import_instance_sigs.set(name, sig)
             }
             match td {
               @component.TypeDef::InstanceType(decls) => {
@@ -363,185 +348,174 @@ fn validate_component_section_import(
     if i.desc is FuncType(_) {
       imported_funcs += 1
     }
-    match i.desc {
-      ComponentType(tyidx) => {
-        let mut import_sorts : Map[String, @component.Sort]? = None
-        let mut import_instance_sigs : Map[String, InstanceSig]? = None
-        let mut import_func_sigs : Map[String, FuncSigShape]? = None
-        let mut import_core_module_import_sigs : Map[
-          String,
-          Map[String, CoreExternType],
-        ]? = None
-        let mut import_core_module_exports : Map[String, Map[String, Int]]? = None
-        let mut import_type_sigs : Map[String, TypeSig]? = None
-        let mut import_type_bounds : Map[String, @component.TypeBound]? = None
-        let mut export_sorts : Map[String, @component.Sort]? = None
-        let mut export_instance_sigs : Map[String, InstanceSig]? = None
-        let mut export_func_sigs : Map[String, FuncSigShape]? = None
-        if tyidx >= 0 && tyidx < type_table.length() {
-          match type_table[tyidx] {
-            Some(@component.TypeDef::ComponentType(decls)) => {
-              let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
-                decls, type_table,
-              )
-              import_sorts = Some(imp_sorts)
-              import_instance_sigs = Some(imp_inst_sigs)
-              import_func_sigs = Some(
-                componenttype_import_func_sigs_of_decls(
-                  decls, type_table, resource_ids,
-                ),
-              )
-              let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
-                decls,
-              )
-              import_core_module_import_sigs = Some(core_imports)
-              import_core_module_exports = Some(core_exports)
-              import_type_sigs = Some(
-                componenttype_import_type_sigs_of_decls(
-                  decls, type_table, resource_ids,
-                ),
-              )
-              import_type_bounds = Some(
-                componenttype_import_type_bounds_of_decls(decls),
-              )
-              export_sorts = Some(exp_sorts)
-              export_instance_sigs = Some(exp_inst_sigs)
-              export_func_sigs = Some(
-                componenttype_export_func_sigs_of_decls(
-                  decls, type_table, resource_ids,
-                ),
-              )
-            }
-            _ => ()
+    if i.desc is ComponentType(tyidx) {
+      let mut import_sorts : Map[String, @component.Sort]? = None
+      let mut import_instance_sigs : Map[String, InstanceSig]? = None
+      let mut import_func_sigs : Map[String, FuncSigShape]? = None
+      let mut import_core_module_import_sigs : Map[
+        String,
+        Map[String, CoreExternType],
+      ]? = None
+      let mut import_core_module_exports : Map[String, Map[String, Int]]? = None
+      let mut import_type_sigs : Map[String, TypeSig]? = None
+      let mut import_type_bounds : Map[String, @component.TypeBound]? = None
+      let mut export_sorts : Map[String, @component.Sort]? = None
+      let mut export_instance_sigs : Map[String, InstanceSig]? = None
+      let mut export_func_sigs : Map[String, FuncSigShape]? = None
+      if tyidx >= 0 && tyidx < type_table.length() {
+        match type_table[tyidx] {
+          Some(@component.TypeDef::ComponentType(decls)) => {
+            let (imp_sorts, imp_inst_sigs, exp_sorts, exp_inst_sigs) = componenttype_signature_of_decls(
+              decls, type_table,
+            )
+            import_sorts = Some(imp_sorts)
+            import_instance_sigs = Some(imp_inst_sigs)
+            import_func_sigs = Some(
+              componenttype_import_func_sigs_of_decls(
+                decls, type_table, resource_ids,
+              ),
+            )
+            let (core_imports, core_exports) = componenttype_import_core_module_sigs_of_decls(
+              decls,
+            )
+            import_core_module_import_sigs = Some(core_imports)
+            import_core_module_exports = Some(core_exports)
+            import_type_sigs = Some(
+              componenttype_import_type_sigs_of_decls(
+                decls, type_table, resource_ids,
+              ),
+            )
+            import_type_bounds = Some(
+              componenttype_import_type_bounds_of_decls(decls),
+            )
+            export_sorts = Some(exp_sorts)
+            export_instance_sigs = Some(exp_inst_sigs)
+            export_func_sigs = Some(
+              componenttype_export_func_sigs_of_decls(
+                decls, type_table, resource_ids,
+              ),
+            )
           }
+          _ => ()
         }
-        component_import_sorts.push(import_sorts)
-        component_import_instance_sigs.push(import_instance_sigs)
-        component_import_func_sigs.push(import_func_sigs)
-        component_import_instance_resource_exports.push(None)
-        component_import_core_module_exports.push(import_core_module_exports)
-        component_import_core_module_import_sigs.push(
-          import_core_module_import_sigs,
-        )
-        component_import_type_bounds.push(import_type_bounds)
-        component_import_type_sigs.push(import_type_sigs)
-        component_export_sorts.push(export_sorts)
-        component_export_instance_sigs.push(export_instance_sigs)
-        component_export_instance_type_sigs.push(None)
-        component_export_instance_func_sigs.push(None)
-        component_export_type_sigs.push(None)
-        component_export_func_sigs.push(export_func_sigs)
-        // Imported component size is unknown; treat as 1.
-        component_sizes.push(1)
       }
-      _ => ()
+      component_import_sorts.push(import_sorts)
+      component_import_instance_sigs.push(import_instance_sigs)
+      component_import_func_sigs.push(import_func_sigs)
+      component_import_instance_resource_exports.push(None)
+      component_import_core_module_exports.push(import_core_module_exports)
+      component_import_core_module_import_sigs.push(
+        import_core_module_import_sigs,
+      )
+      component_import_type_bounds.push(import_type_bounds)
+      component_import_type_sigs.push(import_type_sigs)
+      component_export_sorts.push(export_sorts)
+      component_export_instance_sigs.push(export_instance_sigs)
+      component_export_instance_type_sigs.push(None)
+      component_export_instance_func_sigs.push(None)
+      component_export_type_sigs.push(None)
+      component_export_func_sigs.push(export_func_sigs)
+      // Imported component size is unknown; treat as 1.
+      component_sizes.push(1)
     }
-    match i.desc {
+    if i.desc is Type(b) {
       // Type imports extend the type index space.
       //
       // `eq` imports are aliases to an existing type, so we can propagate
       // the underlying definition/size/depth. `sub resource` is treated
       // as abstract for now.
-      Type(b) => {
-        match b {
-          Eq(tyidx) =>
-            if tyidx >= 0 && tyidx < type_table.length() {
-              type_table.push(type_table[tyidx])
-              if tyidx >= 0 && tyidx < local_resource_types.length() {
-                local_resource_types.push(local_resource_types[tyidx])
-              } else {
-                local_resource_types.push(false)
-              }
-              if tyidx >= 0 && tyidx < resource_ids.length() {
-                resource_ids.push(resource_ids[tyidx])
-              } else {
-                resource_ids.push(None)
-              }
-              if tyidx >= 0 && tyidx < type_sizes.length() {
-                type_sizes.push(type_sizes[tyidx])
-              } else {
-                type_sizes.push(1)
-              }
-              if tyidx >= 0 && tyidx < type_depths.length() {
-                type_depths.push(type_depths[tyidx])
-              } else {
-                type_depths.push(1)
-              }
+      match b {
+        Eq(tyidx) =>
+          if tyidx >= 0 && tyidx < type_table.length() {
+            type_table.push(type_table[tyidx])
+            if tyidx >= 0 && tyidx < local_resource_types.length() {
+              local_resource_types.push(local_resource_types[tyidx])
             } else {
-              type_table.push(None)
               local_resource_types.push(false)
+            }
+            if tyidx >= 0 && tyidx < resource_ids.length() {
+              resource_ids.push(resource_ids[tyidx])
+            } else {
               resource_ids.push(None)
+            }
+            if tyidx >= 0 && tyidx < type_sizes.length() {
+              type_sizes.push(type_sizes[tyidx])
+            } else {
               type_sizes.push(1)
+            }
+            if tyidx >= 0 && tyidx < type_depths.length() {
+              type_depths.push(type_depths[tyidx])
+            } else {
               type_depths.push(1)
             }
-          SubResource => {
-            type_table.push(
-              Some(
-                @component.TypeDef::ResourceType(
-                  -1,
-                  0x7f,
-                  None,
-                  @component.ResourceKind::HostDefined,
-                ),
-              ),
-            )
+          } else {
+            type_table.push(None)
             local_resource_types.push(false)
-            resource_ids.push(Some(next_resource_id))
-            next_resource_id += 1
+            resource_ids.push(None)
             type_sizes.push(1)
             type_depths.push(1)
           }
-        }
-        // Imported types are named by their import string, so the newly
-        // introduced type index is available as a named type.
-        let new_idx = type_table.length() - 1
-        named_types.set(new_idx, 1)
-        import_named_types.set(new_idx, 1)
-        match importname_to_string(i.name) {
-          Some(name) =>
-            match b {
-              Eq(tyidx) => {
-                my_import_type_bounds.set(name, @component.TypeBound::Eq(tyidx))
-                my_import_type_sigs.set(
-                  name,
-                  type_sig_of_typeidx(tyidx, type_table, resource_ids),
-                )
-              }
-              SubResource => {
-                import_resource_names.set(name, new_idx)
-                my_import_type_bounds.set(
-                  name,
-                  @component.TypeBound::SubResource,
-                )
-                my_import_type_sigs.set(
-                  name,
-                  type_sig_of_typeidx(new_idx, type_table, resource_ids),
-                )
-              }
-            }
-          None => ()
-        }
-        if !valtype_valid_for_type_import_export(
-            @component.ValType::TypeIdx(new_idx),
-            type_table,
-            resource_ids,
-            import_named_types,
-            {},
-          ) {
-          raise SectionParseError(10, "type not valid to be used as import")
-        }
-        match type_table[new_idx] {
-          Some(@component.TypeDef::InstanceType(_))
-          | Some(@component.TypeDef::InstanceTypeEmpty) =>
-            if !instancetype_valid_for_use_as_interface(
-                new_idx, type_table, type_outers,
-              ) {
-              raise SectionParseError(10, "type not valid to be used as import")
-            }
-          _ => ()
+        SubResource => {
+          type_table.push(
+            Some(
+              @component.TypeDef::ResourceType(
+                -1,
+                0x7f,
+                None,
+                @component.ResourceKind::HostDefined,
+              ),
+            ),
+          )
+          local_resource_types.push(false)
+          resource_ids.push(Some(next_resource_id))
+          next_resource_id += 1
+          type_sizes.push(1)
+          type_depths.push(1)
         }
       }
-      _ => ()
+      // Imported types are named by their import string, so the newly
+      // introduced type index is available as a named type.
+      let new_idx = type_table.length() - 1
+      named_types.set(new_idx, 1)
+      import_named_types.set(new_idx, 1)
+      if importname_to_string(i.name) is Some(name) {
+        match b {
+          Eq(tyidx) => {
+            my_import_type_bounds.set(name, @component.TypeBound::Eq(tyidx))
+            my_import_type_sigs.set(
+              name,
+              type_sig_of_typeidx(tyidx, type_table, resource_ids),
+            )
+          }
+          SubResource => {
+            import_resource_names.set(name, new_idx)
+            my_import_type_bounds.set(name, @component.TypeBound::SubResource)
+            my_import_type_sigs.set(
+              name,
+              type_sig_of_typeidx(new_idx, type_table, resource_ids),
+            )
+          }
+        }
+      }
+      if !valtype_valid_for_type_import_export(
+          @component.ValType::TypeIdx(new_idx),
+          type_table,
+          resource_ids,
+          import_named_types,
+          {},
+        ) {
+        raise SectionParseError(10, "type not valid to be used as import")
+      }
+      match type_table[new_idx] {
+        Some(@component.TypeDef::InstanceType(_))
+        | Some(@component.TypeDef::InstanceTypeEmpty) =>
+          if !instancetype_valid_for_use_as_interface(
+              new_idx, type_table, type_outers,
+            ) {
+            raise SectionParseError(10, "type not valid to be used as import")
+          }
+        _ => ()
+      }
     }
     count_import(i.desc, counts)
   }
