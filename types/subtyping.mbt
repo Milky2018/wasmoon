@@ -88,9 +88,8 @@ pub fn SubtypingContext::is_subtype(
   }
   // Check cache to handle cycles
   let key = (idx1, idx2)
-  match self.visited.get(key) {
-    Some(result) => return result
-    None => ()
+  if self.visited.get(key) is Some(result) {
+    return result
   }
   // Assume true to break cycles (if we reach here again, types are compatible)
   self.visited[key] = true

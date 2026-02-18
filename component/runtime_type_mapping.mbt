@@ -280,9 +280,8 @@ fn resolve_canon_resources(
 ///|
 fn canon_opt_is_async(opts : Array[CanonOpt]) -> Bool {
   for opt in opts {
-    match opt {
-      CanonOpt::Async => return true
-      _ => ()
+    if opt is CanonOpt::Async {
+      return true
     }
   }
   false
@@ -294,14 +293,11 @@ fn resolve_canon_callback(
   state : BuildState,
 ) -> CoreFuncRef? raise ComponentRuntimeError {
   for opt in opts {
-    match opt {
-      CanonOpt::Callback(idx) => {
-        if idx < 0 || idx >= state.core_funcs.length() {
-          raise InvalidCoreFuncIndex(idx)
-        }
-        return Some(state.core_funcs[idx])
+    if opt is CanonOpt::Callback(idx) {
+      if idx < 0 || idx >= state.core_funcs.length() {
+        raise InvalidCoreFuncIndex(idx)
       }
-      _ => ()
+      return Some(state.core_funcs[idx])
     }
   }
   None
