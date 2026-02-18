@@ -192,19 +192,16 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
             }
 
             // 1) Constants
-            match inst.opcode {
-              LoadConst(value) =>
-                if inst.defs.length() == 1 &&
-                  get_def_vreg_id(inst.defs[0]) is Some(def_id) {
-                  let use_cnt = use_count_in_loop.get(def_id).unwrap_or(0)
-                  if !used_outside.contains(def_id) &&
-                    (is_expensive_const(value) || use_cnt >= 3) {
-                    hoisted.push(inst)
-                    hoisted_defs.add(def_id)
-                    continue
-                  }
-                }
-              _ => ()
+            if inst.opcode is LoadConst(value) &&
+              inst.defs.length() == 1 &&
+              get_def_vreg_id(inst.defs[0]) is Some(def_id) {
+              let use_cnt = use_count_in_loop.get(def_id).unwrap_or(0)
+              if !used_outside.contains(def_id) &&
+                (is_expensive_const(value) || use_cnt >= 3) {
+                hoisted.push(inst)
+                hoisted_defs.add(def_id)
+                continue
+              }
             }
 
             // 2) Hoistable loads from immutable regions
@@ -1067,67 +1064,66 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   for blk in func.blocks {
-    match blk.terminator {
-      Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) =>
-        if cond is Virtual(cond_vreg) && blk.insts.length() > 0 {
-          let mut cond_uses = 0
-          for inst in blk.insts {
-            for use_ in inst.uses {
-              if get_vreg_id(use_) is Some(uid) && uid == cond_vreg.id {
-                cond_uses = cond_uses + 1
-              }
-            }
-          }
-          if cond_uses == 0 {
-            let mut cmp_idx : Int? = None
-            let mut cmp_inst : @instr.VCodeInst? = None
-            for i, inst in blk.insts {
-              if inst.defs.length() == 1 &&
-                get_def_vreg_id(inst.defs[0]) == Some(cond_vreg.id) {
-                cmp_idx = Some(i)
-                cmp_inst = Some(inst)
-                break
-              }
-            }
-            if cmp_idx is Some(idx) &&
-              cmp_inst is Some(cmp) &&
-              cmp.opcode is Cmp(kind, is_64) &&
-              cmp.defs.length() == 1 &&
-              cmp.uses.length() == 2 {
-              let lhs = cmp.uses[0]
-              let rhs = cmp.uses[1]
-              let cond = cmp_kind_to_cond(kind)
-              let new_term = if rhs is Virtual(rhs_vreg) &&
-                const_defs.get(rhs_vreg.id) is Some(val) &&
-                is_valid_add_imm(val) {
-                @instr.VCodeTerminator::BranchCmpImm(
-                  lhs,
-                  val.to_int(),
-                  cond,
-                  is_64,
-                  then_id,
-                  else_id,
-                )
-              } else {
-                @instr.VCodeTerminator::BranchCmp(
-                  lhs, rhs, cond, is_64, then_id, else_id,
-                )
-              }
-              let new_insts : Array[@instr.VCodeInst] = []
-              for i, inst in blk.insts {
-                if i != idx {
-                  new_insts.push(inst)
-                }
-              }
-              blk.insts.clear()
-              for inst in new_insts {
-                blk.insts.push(inst)
-              }
-              blk.set_terminator(new_term)
-            }
+    if blk.terminator
+      is Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) &&
+      cond is Virtual(cond_vreg) &&
+      blk.insts.length() > 0 {
+      let mut cond_uses = 0
+      for inst in blk.insts {
+        for use_ in inst.uses {
+          if get_vreg_id(use_) is Some(uid) && uid == cond_vreg.id {
+            cond_uses = cond_uses + 1
           }
         }
-      _ => ()
+      }
+      if cond_uses == 0 {
+        let mut cmp_idx : Int? = None
+        let mut cmp_inst : @instr.VCodeInst? = None
+        for i, inst in blk.insts {
+          if inst.defs.length() == 1 &&
+            get_def_vreg_id(inst.defs[0]) == Some(cond_vreg.id) {
+            cmp_idx = Some(i)
+            cmp_inst = Some(inst)
+            break
+          }
+        }
+        if cmp_idx is Some(idx) &&
+          cmp_inst is Some(cmp) &&
+          cmp.opcode is Cmp(kind, is_64) &&
+          cmp.defs.length() == 1 &&
+          cmp.uses.length() == 2 {
+          let lhs = cmp.uses[0]
+          let rhs = cmp.uses[1]
+          let cond = cmp_kind_to_cond(kind)
+          let new_term = if rhs is Virtual(rhs_vreg) &&
+            const_defs.get(rhs_vreg.id) is Some(val) &&
+            is_valid_add_imm(val) {
+            @instr.VCodeTerminator::BranchCmpImm(
+              lhs,
+              val.to_int(),
+              cond,
+              is_64,
+              then_id,
+              else_id,
+            )
+          } else {
+            @instr.VCodeTerminator::BranchCmp(
+              lhs, rhs, cond, is_64, then_id, else_id,
+            )
+          }
+          let new_insts : Array[@instr.VCodeInst] = []
+          for i, inst in blk.insts {
+            if i != idx {
+              new_insts.push(inst)
+            }
+          }
+          blk.insts.clear()
+          for inst in new_insts {
+            blk.insts.push(inst)
+          }
+          blk.set_terminator(new_term)
+        }
+      }
     }
   }
 }

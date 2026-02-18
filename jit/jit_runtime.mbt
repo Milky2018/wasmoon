@@ -953,78 +953,73 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
   }
 
   let mut dump_path : String? = None
-  match (wasm_func_idx, self.debug_db) {
-    (Some(func_idx), Some(db)) =>
-      match db.get(func_idx) {
-        Some(dbg) => {
-          let name = match self.functions.get(func_idx) {
-            Some(f) => f.name
-            None => "func\{func_idx}"
-          }
-          let path = "target/jit-trap-\{func_idx}-\{sanitize_filename(name)}.log"
-          let content = "func_idx: \{func_idx}\n" +
-            "name: \{name}\n" +
-            "signal: \{details.signal}\n" +
-            "pc: \{to_hex_u64(details.pc)}\n" +
-            "lr: \{to_hex_u64(details.lr)}\n" +
-            "frame_lr: \{to_hex_u64(details.frame_lr)}\n" +
-            "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
-            "brk_imm: \{details.brk_imm}\n\n" +
-            "== IR ==\n" +
-            dbg.ir +
-            "\n\n" +
-            "== VCode (before regalloc) ==\n" +
-            dbg.vcode_before_regalloc +
-            "\n\n" +
-            "== VCode (after regalloc) ==\n" +
-            dbg.vcode_after_regalloc +
-            "\n\n" +
-            "== Machine Code ==\n" +
-            dbg.machine_code +
-            "\n"
-          let content = match caller_func_idx {
-            Some(caller_idx) =>
-              match db.get(caller_idx) {
-                Some(cdbg) => {
-                  let caller_name = match self.functions.get(caller_idx) {
-                    Some(f) => f.name
-                    None => "func_\{caller_idx}"
-                  }
-                  let caller_pc = if wasm_frames.length() > 1 {
-                    wasm_frames[1].pc
-                  } else {
-                    0L
-                  }
-                  content +
-                  "\n== Caller ==\n" +
-                  "caller_func_idx: \{caller_idx}\n" +
-                  "caller_name: \{caller_name}\n" +
-                  "caller_pc: \{to_hex_u64(caller_pc)}\n\n" +
-                  "== Caller IR ==\n" +
-                  cdbg.ir +
-                  "\n\n" +
-                  "== Caller VCode (before regalloc) ==\n" +
-                  cdbg.vcode_before_regalloc +
-                  "\n\n" +
-                  "== Caller VCode (after regalloc) ==\n" +
-                  cdbg.vcode_after_regalloc +
-                  "\n\n" +
-                  "== Caller Machine Code ==\n" +
-                  cdbg.machine_code +
-                  "\n"
-                }
-                None => content
+  if wasm_func_idx is Some(func_idx) && self.debug_db is Some(db) {
+    if db.get(func_idx) is Some(dbg) {
+      let name = match self.functions.get(func_idx) {
+        Some(f) => f.name
+        None => "func\{func_idx}"
+      }
+      let path = "target/jit-trap-\{func_idx}-\{sanitize_filename(name)}.log"
+      let content = "func_idx: \{func_idx}\n" +
+        "name: \{name}\n" +
+        "signal: \{details.signal}\n" +
+        "pc: \{to_hex_u64(details.pc)}\n" +
+        "lr: \{to_hex_u64(details.lr)}\n" +
+        "frame_lr: \{to_hex_u64(details.frame_lr)}\n" +
+        "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
+        "brk_imm: \{details.brk_imm}\n\n" +
+        "== IR ==\n" +
+        dbg.ir +
+        "\n\n" +
+        "== VCode (before regalloc) ==\n" +
+        dbg.vcode_before_regalloc +
+        "\n\n" +
+        "== VCode (after regalloc) ==\n" +
+        dbg.vcode_after_regalloc +
+        "\n\n" +
+        "== Machine Code ==\n" +
+        dbg.machine_code +
+        "\n"
+      let content = match caller_func_idx {
+        Some(caller_idx) =>
+          match db.get(caller_idx) {
+            Some(cdbg) => {
+              let caller_name = match self.functions.get(caller_idx) {
+                Some(f) => f.name
+                None => "func_\{caller_idx}"
               }
+              let caller_pc = if wasm_frames.length() > 1 {
+                wasm_frames[1].pc
+              } else {
+                0L
+              }
+              content +
+              "\n== Caller ==\n" +
+              "caller_func_idx: \{caller_idx}\n" +
+              "caller_name: \{caller_name}\n" +
+              "caller_pc: \{to_hex_u64(caller_pc)}\n\n" +
+              "== Caller IR ==\n" +
+              cdbg.ir +
+              "\n\n" +
+              "== Caller VCode (before regalloc) ==\n" +
+              cdbg.vcode_before_regalloc +
+              "\n\n" +
+              "== Caller VCode (after regalloc) ==\n" +
+              cdbg.vcode_after_regalloc +
+              "\n\n" +
+              "== Caller Machine Code ==\n" +
+              cdbg.machine_code +
+              "\n"
+            }
             None => content
           }
-          @fs.write_string_to_file(path, content) catch {
-            _ => ()
-          }
-          dump_path = Some(path)
-        }
-        None => ()
+        None => content
       }
-    _ => ()
+      @fs.write_string_to_file(path, content) catch {
+        _ => ()
+      }
+      dump_path = Some(path)
+    }
   }
 
   {
@@ -1071,21 +1066,17 @@ fn JITModule::format_trap_report_message(
   if report.brk_imm >= 0 {
     fields.push("brk_imm=\{report.brk_imm}")
   }
-  match report.wasm_func_idx {
-    Some(func_idx) =>
-      match (report.wasm_func_name, report.wasm_offset) {
-        (Some(name), Some(offset)) =>
-          fields.push(
-            "wasm=\{func_idx} '\{name}'+0x\{@types.int_to_hex(offset.to_int())}",
-          )
-        (Some(name), None) => fields.push("wasm=\{func_idx} '\{name}'")
-        (None, Some(offset)) =>
-          fields.push(
-            "wasm=\{func_idx} +0x\{@types.int_to_hex(offset.to_int())}",
-          )
-        (None, None) => fields.push("wasm=\{func_idx}")
-      }
-    None => ()
+  if report.wasm_func_idx is Some(func_idx) {
+    match (report.wasm_func_name, report.wasm_offset) {
+      (Some(name), Some(offset)) =>
+        fields.push(
+          "wasm=\{func_idx} '\{name}'+0x\{@types.int_to_hex(offset.to_int())}",
+        )
+      (Some(name), None) => fields.push("wasm=\{func_idx} '\{name}'")
+      (None, Some(offset)) =>
+        fields.push("wasm=\{func_idx} +0x\{@types.int_to_hex(offset.to_int())}")
+      (None, None) => fields.push("wasm=\{func_idx}")
+    }
   }
   if report.wasm_frames.length() > 1 {
     let caller = report.wasm_frames[1]

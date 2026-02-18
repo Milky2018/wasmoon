@@ -218,22 +218,19 @@ pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
 
   let mut fixed : @abi.PReg? = None
   for use_pos in self.uses {
-    match use_pos.constraint {
-      FixedReg(preg) => {
-        if !is_allocatable_fixed(preg) {
-          // Treat non-allocatable fixed regs as "use-time constraints" only.
-          // They are satisfied via inserted moves, not by pinning allocation.
-          continue
-        }
-        match fixed {
-          None => fixed = Some(preg)
-          Some(existing) =>
-            if existing.index != preg.index {
-              return None // Conflicting constraints
-            }
-        }
+    if use_pos.constraint is FixedReg(preg) {
+      if !is_allocatable_fixed(preg) {
+        // Treat non-allocatable fixed regs as "use-time constraints" only.
+        // They are satisfied via inserted moves, not by pinning allocation.
+        continue
       }
-      AnyReg => ()
+      match fixed {
+        None => fixed = Some(preg)
+        Some(existing) =>
+          if existing.index != preg.index {
+            return None // Conflicting constraints
+          }
+      }
     }
   }
   fixed
