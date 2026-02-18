@@ -391,15 +391,13 @@ pub fn MarkSweepHeap::mark_roots(
 pub fn MarkSweepHeap::sweep(self : MarkSweepHeap) -> Int {
   let mut collected = 0
   for i in 0..<self.objects.length() {
-    if self.objects[i] is Some(object) {
-      if not(self.marks[i]) {
-        // Object is not reachable, collect it
-        self.bytes_collected += gc_object_size_bytes(object)
-        self.objects[i] = None
-        self.free_list.push(i)
-        self.total_live -= 1
-        collected += 1
-      }
+    if self.objects[i] is Some(object) && !self.marks[i] {
+      // Object is not reachable, collect it
+      self.bytes_collected += gc_object_size_bytes(object)
+      self.objects[i] = None
+      self.free_list.push(i)
+      self.total_live -= 1
+      collected += 1
     }
     // Reset mark bit for next collection
     self.marks[i] = false

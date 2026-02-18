@@ -136,18 +136,16 @@ fn resolve_threaded_jump(
     match block_idx_by_id.get(current) {
       Some(block_idx) => {
         let block = blocks[block_idx]
-        if block.insts.length() == 0 {
-          if block.terminator is Some(@instr.Jump(next, next_args)) &&
-            next != current &&
-            block.params.length() == current_args.length() {
-            if substitute_forwarded_args(next_args, block.params, current_args)
-              is Some(mapped) {
-              current = next
-              current_args = mapped
-              changed = true
-              continue
-            }
-          }
+        if block.insts.length() == 0 &&
+          block.terminator is Some(@instr.Jump(next, next_args)) &&
+          next != current &&
+          block.params.length() == current_args.length() &&
+          substitute_forwarded_args(next_args, block.params, current_args)
+          is Some(mapped) {
+          current = next
+          current_args = mapped
+          changed = true
+          continue
         }
         return (current, current_args, changed)
       }

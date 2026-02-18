@@ -2445,13 +2445,9 @@ fn MachineCode::emit_instruction_x86_64(
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
-      if (idx & 7) != 4 {
-        if bits == 32 {
-          self.x86_emit_mov_m32_r32_base_index_scale_disp(
-            base, idx, 0, 0, value,
-          )
-          return
-        }
+      if (idx & 7) != 4 && bits == 32 {
+        self.x86_emit_mov_m32_r32_base_index_scale_disp(base, idx, 0, 0, value)
+        return
       }
       self.x86_emit_add_rr(idx, base)
       match bits {

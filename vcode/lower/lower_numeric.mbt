@@ -516,51 +516,51 @@ fn lower_div(
   let enable_magic_div = !(@isa.ISA::current() is @isa.AMD64)
 
   // Check if divisor is a constant suitable for magic division
-  if enable_magic_div && inst.first_result() is Some(result) {
-    if get_const_value(ctx, lhs_val) is Some(divisor) {
-      if is_64 {
-        // 64-bit magic division
-        let use_magic = if signed {
-          // For signed: |d| > 1 and d != -1
-          divisor > 1L || divisor < -1L
-        } else {
-          // For unsigned: d > 1
-          divisor > 1L
-        }
-        if use_magic {
-          let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-          let dst = ctx.get_vreg(result)
-          if signed {
-            let magic = magic_s64(divisor)
-            lower_magic_sdiv64(ctx, block, dst, lhs, divisor, magic)
-          } else {
-            let magic = magic_u64(divisor.reinterpret_as_uint64())
-            lower_magic_udiv64(ctx, block, dst, lhs, magic)
-          }
-          return
-        }
+  if enable_magic_div &&
+    inst.first_result() is Some(result) &&
+    get_const_value(ctx, lhs_val) is Some(divisor) {
+    if is_64 {
+      // 64-bit magic division
+      let use_magic = if signed {
+        // For signed: |d| > 1 and d != -1
+        divisor > 1L || divisor < -1L
       } else {
-        // 32-bit magic division
-        let divisor32 = divisor.to_int()
-        let use_magic = if signed {
-          // For signed: |d| > 1 and d != -1
-          divisor32 > 1 || divisor32 < -1
+        // For unsigned: d > 1
+        divisor > 1L
+      }
+      if use_magic {
+        let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+        let dst = ctx.get_vreg(result)
+        if signed {
+          let magic = magic_s64(divisor)
+          lower_magic_sdiv64(ctx, block, dst, lhs, divisor, magic)
         } else {
-          // For unsigned: d > 1
-          divisor32 > 1
+          let magic = magic_u64(divisor.reinterpret_as_uint64())
+          lower_magic_udiv64(ctx, block, dst, lhs, magic)
         }
-        if use_magic {
-          let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
-          let dst = ctx.get_vreg(result)
-          if signed {
-            let magic = magic_s32(divisor32)
-            lower_magic_sdiv32(ctx, block, dst, lhs, divisor32, magic)
-          } else {
-            let magic = magic_u32(divisor32.reinterpret_as_uint())
-            lower_magic_udiv32(ctx, block, dst, lhs, magic)
-          }
-          return
+        return
+      }
+    } else {
+      // 32-bit magic division
+      let divisor32 = divisor.to_int()
+      let use_magic = if signed {
+        // For signed: |d| > 1 and d != -1
+        divisor32 > 1 || divisor32 < -1
+      } else {
+        // For unsigned: d > 1
+        divisor32 > 1
+      }
+      if use_magic {
+        let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
+        let dst = ctx.get_vreg(result)
+        if signed {
+          let magic = magic_s32(divisor32)
+          lower_magic_sdiv32(ctx, block, dst, lhs, divisor32, magic)
+        } else {
+          let magic = magic_u32(divisor32.reinterpret_as_uint())
+          lower_magic_udiv32(ctx, block, dst, lhs, magic)
         }
+        return
       }
     }
   }

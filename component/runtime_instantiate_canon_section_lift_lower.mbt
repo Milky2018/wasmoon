@@ -97,10 +97,9 @@ fn instantiate_canon_lower(
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) {
-        if !may_enter[0] {
-          trap_canon("wasm trap: cannot enter component instance")
-        }
+      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) &&
+        !may_enter[0] {
+        trap_canon("wasm trap: cannot enter component instance")
       }
       let cur_task_id = current_task_id(async_state)
       let cur = if async_state.call_cursor_stack.length() == 0 {
@@ -568,10 +567,9 @@ fn instantiate_canon_lower(
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) {
-        if !may_enter[0] {
-          trap_canon("wasm trap: cannot enter component instance")
-        }
+      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) &&
+        !may_enter[0] {
+        trap_canon("wasm trap: cannot enter component instance")
       }
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
@@ -726,94 +724,93 @@ fn instantiate_canon_lower(
           // (component-spec/async/zero-length.wast).
           if is_callback_task &&
             step != TaskStep::Done &&
-            async_state.task_returned.get(st.task_id) is Some(true) {
-            if async_state.task_results.get(st.task_id) is Some(vals) {
-              // Promote the task to a detached background subtask so the event loop can
-              // continue driving it after this sync-lowered call returns.
-              // Prefer the owner recorded by `canon task.return` if present. This avoids
-              // mis-attributing stream/future handles produced by nested components.
-              let result_owner = match
-                async_state.task_result_owner.get(st.task_id) {
-                Some(o) => o
-                None => callee_instance_id
-              }
-              let vals0 = try {
-                match func_type.result {
-                  Some(rty) =>
-                    if vals.length() > 0 {
-                      [
-                        transfer_stream_future_value(
-                          rty,
-                          vals[0],
-                          func_types,
-                          async_state,
-                          result_owner,
-                          state.resource_table.id,
-                        ),
-                      ]
-                    } else {
-                      vals
-                    }
-                  None => vals
-                }
-              } catch {
-                e => {
-                  trap_canon(canon_err_message(e))
-                  return ([] : Array[@types.Value])
-                }
-              }
-              async_state.subtasks.set(st.task_id, {
-                // Detached background task: no guest-visible waitable handle.
-                id: 0,
-                detached: true,
-                phase: [SubtaskPhase::Started],
-                caller_table: state.resource_table,
-                callee_instance_id,
-                bp_key: 0,
-                retptr: 0,
-                mem_addr: resources.mem_addr,
-                result_ty: None,
-                types: func_types,
-                resources,
-                driver: SubtaskDriver::CallbackLifted(st.task),
-              })
-              per_task_state.remove(cur) |> ignore
-
-              // Cache and advance call cursor (replay-safe).
-              let mut out_ptr : Int? = None
-              if func_type.result is Some(rty) {
-                let flat = core_types_for_valtype(
-                  rty,
-                  func_types,
-                  mem.is_memory64(),
-                ) catch {
-                  _ => []
-                }
-                if flat.length() > 1 {
-                  if args.length() == 0 {
-                    trap_canon("missing retptr")
+            async_state.task_returned.get(st.task_id) is Some(true) &&
+            async_state.task_results.get(st.task_id) is Some(vals) {
+            // Promote the task to a detached background subtask so the event loop can
+            // continue driving it after this sync-lowered call returns.
+            // Prefer the owner recorded by `canon task.return` if present. This avoids
+            // mis-attributing stream/future handles produced by nested components.
+            let result_owner = match
+              async_state.task_result_owner.get(st.task_id) {
+              Some(o) => o
+              None => callee_instance_id
+            }
+            let vals0 = try {
+              match func_type.result {
+                Some(rty) =>
+                  if vals.length() > 0 {
+                    [
+                      transfer_stream_future_value(
+                        rty,
+                        vals[0],
+                        func_types,
+                        async_state,
+                        result_owner,
+                        state.resource_table.id,
+                      ),
+                    ]
                   } else {
-                    out_ptr = match args[args.length() - 1] {
-                      @types.Value::I32(n) => Some(n)
-                      @types.Value::I64(n) => Some(n.to_int())
-                      _ => None
-                    }
+                    vals
+                  }
+                None => vals
+              }
+            } catch {
+              e => {
+                trap_canon(canon_err_message(e))
+                return ([] : Array[@types.Value])
+              }
+            }
+            async_state.subtasks.set(st.task_id, {
+              // Detached background task: no guest-visible waitable handle.
+              id: 0,
+              detached: true,
+              phase: [SubtaskPhase::Started],
+              caller_table: state.resource_table,
+              callee_instance_id,
+              bp_key: 0,
+              retptr: 0,
+              mem_addr: resources.mem_addr,
+              result_ty: None,
+              types: func_types,
+              resources,
+              driver: SubtaskDriver::CallbackLifted(st.task),
+            })
+            per_task_state.remove(cur) |> ignore
+
+            // Cache and advance call cursor (replay-safe).
+            let mut out_ptr : Int? = None
+            if func_type.result is Some(rty) {
+              let flat = core_types_for_valtype(
+                rty,
+                func_types,
+                mem.is_memory64(),
+              ) catch {
+                _ => []
+              }
+              if flat.length() > 1 {
+                if args.length() == 0 {
+                  trap_canon("missing retptr")
+                } else {
+                  out_ptr = match args[args.length() - 1] {
+                    @types.Value::I32(n) => Some(n)
+                    @types.Value::I64(n) => Some(n.to_int())
+                    _ => None
                   }
                 }
               }
-              let out = component_results_to_core(
-                vals0, func_type, func_types, resources, store, out_ptr,
-              ) catch {
-                e => {
-                  trap_canon(canon_err_message(e))
-                  ([] : Array[@types.Value])
-                }
-              }
-              per_task_calls.set(cur, out)
-              async_state.call_cursor_stack[async_state.call_cursor_stack.length() -
-              1] = cur + 1
-              return out
             }
+            let out = component_results_to_core(
+              vals0, func_type, func_types, resources, store, out_ptr,
+            ) catch {
+              e => {
+                trap_canon(canon_err_message(e))
+                ([] : Array[@types.Value])
+              }
+            }
+            per_task_calls.set(cur, out)
+            async_state.call_cursor_stack[async_state.call_cursor_stack.length() -
+            1] = cur + 1
+            return out
           }
           match step {
             TaskStep::Done => {

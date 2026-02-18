@@ -156,10 +156,8 @@ fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
       }
     }
     // Check terminator for X19 usage
-    if block.terminator is Some(term) {
-      if terminator_uses_vmctx(term) {
-        return true
-      }
+    if block.terminator is Some(term) && terminator_uses_vmctx(term) {
+      return true
     }
   }
   false

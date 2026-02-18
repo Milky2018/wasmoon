@@ -558,53 +558,49 @@ fn run_global_value_numbering(
           }
         }
         // Store opcodes get selective alias invalidation instead of full flush.
-        if inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_) {
-          if ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) {
-            let reads_to_remove : Array[Inst] = []
-            for key in memory_keys {
-              match ptr_access_from_inst(key, ptr_base_infos) {
-                Some(read_access) =>
-                  if may_alias_ptr_access(
-                      read_access, store_access, iconst_values,
-                    ) {
-                    reads_to_remove.push(key)
-                  }
-                None => reads_to_remove.push(key)
-              }
+        if (inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_)) &&
+          ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) {
+          let reads_to_remove : Array[Inst] = []
+          for key in memory_keys {
+            match ptr_access_from_inst(key, ptr_base_infos) {
+              Some(read_access) =>
+                if may_alias_ptr_access(
+                    read_access, store_access, iconst_values,
+                  ) {
+                  reads_to_remove.push(key)
+                }
+              None => reads_to_remove.push(key)
             }
-            for key in reads_to_remove {
-              if value_table.get(key) is Some(prev) {
-                local_entries.push((key, Some(prev)))
-              }
-              value_table.remove(key)
-              memory_keys.remove(key)
-            }
-            let stores_to_remove : Array[PtrLocationKey] = []
-            for entry in last_store.iter() {
-              let (key, saved) = entry
-              let previous_access = ptr_access_from_location_key(
-                key,
-                saved.size,
-              )
-              if may_alias_ptr_access(
-                  previous_access, store_access, iconst_values,
-                ) {
-                stores_to_remove.push(key)
-              }
-            }
-            for key in stores_to_remove {
-              let prev = last_store.get(key)
-              local_store_entries.push((key, prev))
-              last_store.remove(key)
-            }
-            if store_forward_entry_from_inst(inst, store_access) is Some(saved) {
-              let key = store_access.location_key()
-              let prev = last_store.get(key)
-              local_store_entries.push((key, prev))
-              last_store.set(key, saved)
-            }
-            continue
           }
+          for key in reads_to_remove {
+            if value_table.get(key) is Some(prev) {
+              local_entries.push((key, Some(prev)))
+            }
+            value_table.remove(key)
+            memory_keys.remove(key)
+          }
+          let stores_to_remove : Array[PtrLocationKey] = []
+          for entry in last_store.iter() {
+            let (key, saved) = entry
+            let previous_access = ptr_access_from_location_key(key, saved.size)
+            if may_alias_ptr_access(
+                previous_access, store_access, iconst_values,
+              ) {
+              stores_to_remove.push(key)
+            }
+          }
+          for key in stores_to_remove {
+            let prev = last_store.get(key)
+            local_store_entries.push((key, prev))
+            last_store.remove(key)
+          }
+          if store_forward_entry_from_inst(inst, store_access) is Some(saved) {
+            let key = store_access.location_key()
+            let prev = last_store.get(key)
+            local_store_entries.push((key, prev))
+            last_store.set(key, saved)
+          }
+          continue
         }
         // Check if this instruction may invalidate memory-based expressions
         if may_write_memory(inst.opcode) {

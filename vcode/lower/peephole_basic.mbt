@@ -343,12 +343,11 @@ fn optimize_instruction(
           return None
         }
         // If source is a known constant, replace with LoadConst
-        if get_vreg_id(use_) is Some(use_id) {
-          if state.constants.get(use_id) is Some(const_val) {
-            let new_inst = @instr.VCodeInst::new(LoadConst(const_val))
-            new_inst.add_def(def)
-            return Some(new_inst)
-          }
+        if get_vreg_id(use_) is Some(use_id) &&
+          state.constants.get(use_id) is Some(const_val) {
+          let new_inst = @instr.VCodeInst::new(LoadConst(const_val))
+          new_inst.add_def(def)
+          return Some(new_inst)
         }
       }
       Some(inst)
@@ -357,45 +356,38 @@ fn optimize_instruction(
     Add(is_64) => {
       if inst.uses.length() >= 2 {
         // Check if second operand is known to be 0
-        if get_vreg_id(inst.uses[1]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(0L) {
-            // add x, y, const_0 → mov x, y
-            if inst.defs.length() > 0 {
-              let def = inst.defs[0]
-              let use_ = inst.uses[0]
-              if same_vreg(def.reg, use_) {
-                return None
-              }
-              return Some(make_move(def, use_))
+        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(0L) {
+          // add x, y, const_0 → mov x, y
+          if inst.defs.length() > 0 {
+            let def = inst.defs[0]
+            let use_ = inst.uses[0]
+            if same_vreg(def.reg, use_) {
+              return None
             }
+            return Some(make_move(def, use_))
           }
         }
         // Check if first operand is known to be 0
-        if get_vreg_id(inst.uses[0]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(0L) {
-            // add x, const_0, y → mov x, y
-            if inst.defs.length() > 0 {
-              let def = inst.defs[0]
-              let use_ = inst.uses[1]
-              if same_vreg(def.reg, use_) {
-                return None
-              }
-              return Some(make_move(def, use_))
+        if get_vreg_id(inst.uses[0]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(0L) {
+          // add x, const_0, y → mov x, y
+          if inst.defs.length() > 0 {
+            let def = inst.defs[0]
+            let use_ = inst.uses[1]
+            if same_vreg(def.reg, use_) {
+              return None
             }
+            return Some(make_move(def, use_))
           }
         }
         // Check if we can use AddImm instead of Add with reg
-        if get_vreg_id(inst.uses[1]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(const_val) {
-            let imm = const_val.to_int()
-            // AArch64 ADD immediate: 12-bit unsigned (0-4095)
-            if imm >= 0 && imm <= 4095 {
-              if inst.defs.length() > 0 {
-                return Some(
-                  make_add_imm(imm, is_64, inst.defs[0], inst.uses[0]),
-                )
-              }
-            }
+        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(const_val) {
+          let imm = const_val.to_int()
+          // AArch64 ADD immediate: 12-bit unsigned (0-4095)
+          if imm >= 0 && imm <= 4095 && inst.defs.length() > 0 {
+            return Some(make_add_imm(imm, is_64, inst.defs[0], inst.uses[0]))
           }
         }
       }
@@ -405,31 +397,25 @@ fn optimize_instruction(
     Sub(is_64) => {
       if inst.uses.length() >= 2 {
         // Check if second operand is known to be 0
-        if get_vreg_id(inst.uses[1]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(0L) {
-            // sub x, y, const_0 → mov x, y
-            if inst.defs.length() > 0 {
-              let def = inst.defs[0]
-              let use_ = inst.uses[0]
-              if same_vreg(def.reg, use_) {
-                return None
-              }
-              return Some(make_move(def, use_))
+        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(0L) {
+          // sub x, y, const_0 → mov x, y
+          if inst.defs.length() > 0 {
+            let def = inst.defs[0]
+            let use_ = inst.uses[0]
+            if same_vreg(def.reg, use_) {
+              return None
             }
+            return Some(make_move(def, use_))
           }
         }
         // Check if we can use SubImm instead of Sub with reg
-        if get_vreg_id(inst.uses[1]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(const_val) {
-            let imm = const_val.to_int()
-            // AArch64 SUB immediate: 12-bit unsigned (0-4095)
-            if imm >= 0 && imm <= 4095 {
-              if inst.defs.length() > 0 {
-                return Some(
-                  make_sub_imm(imm, is_64, inst.defs[0], inst.uses[0]),
-                )
-              }
-            }
+        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(const_val) {
+          let imm = const_val.to_int()
+          // AArch64 SUB immediate: 12-bit unsigned (0-4095)
+          if imm >= 0 && imm <= 4095 && inst.defs.length() > 0 {
+            return Some(make_sub_imm(imm, is_64, inst.defs[0], inst.uses[0]))
           }
         }
       }
@@ -438,29 +424,21 @@ fn optimize_instruction(
     // Mul by power-of-two constant → ShlImm
     Mul(is_64) => {
       if inst.uses.length() >= 2 && inst.defs.length() > 0 {
-        if get_vreg_id(inst.uses[1]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(const_val) {
-            if power_of_two_shift(const_val, is_64) is Some(shift) {
-              if shift == 0 {
-                return Some(make_move(inst.defs[0], inst.uses[0]))
-              }
-              return Some(
-                make_shl_imm(shift, is_64, inst.defs[0], inst.uses[0]),
-              )
-            }
+        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(const_val) &&
+          power_of_two_shift(const_val, is_64) is Some(shift) {
+          if shift == 0 {
+            return Some(make_move(inst.defs[0], inst.uses[0]))
           }
+          return Some(make_shl_imm(shift, is_64, inst.defs[0], inst.uses[0]))
         }
-        if get_vreg_id(inst.uses[0]) is Some(use_id) {
-          if state.constants.get(use_id) is Some(const_val) {
-            if power_of_two_shift(const_val, is_64) is Some(shift) {
-              if shift == 0 {
-                return Some(make_move(inst.defs[0], inst.uses[1]))
-              }
-              return Some(
-                make_shl_imm(shift, is_64, inst.defs[0], inst.uses[1]),
-              )
-            }
+        if get_vreg_id(inst.uses[0]) is Some(use_id) &&
+          state.constants.get(use_id) is Some(const_val) &&
+          power_of_two_shift(const_val, is_64) is Some(shift) {
+          if shift == 0 {
+            return Some(make_move(inst.defs[0], inst.uses[1]))
           }
+          return Some(make_shl_imm(shift, is_64, inst.defs[0], inst.uses[1]))
         }
       }
       Some(inst)
@@ -478,22 +456,19 @@ fn update_state(inst : @instr.VCodeInst, state : PeepholeState) -> Unit {
   match inst.opcode {
     // Track constant loads
     LoadConst(value) =>
-      if inst.defs.length() > 0 {
-        if get_def_vreg_id(inst.defs[0]) is Some(def_id) {
-          state.constants.set(def_id, value)
-        }
+      if inst.defs.length() > 0 && get_def_vreg_id(inst.defs[0]) is Some(def_id) {
+        state.constants.set(def_id, value)
       }
     // Track moves as copies
     Move =>
-      if inst.defs.length() > 0 && inst.uses.length() > 0 {
-        if get_def_vreg_id(inst.defs[0]) is Some(def_id) {
-          if get_vreg_id(inst.uses[0]) is Some(use_id) {
-            state.copies.set(def_id, use_id)
-            // If source has a known constant, propagate it
-            if state.constants.get(use_id) is Some(c) {
-              state.constants.set(def_id, c)
-            }
-          }
+      if inst.defs.length() > 0 &&
+        inst.uses.length() > 0 &&
+        get_def_vreg_id(inst.defs[0]) is Some(def_id) &&
+        get_vreg_id(inst.uses[0]) is Some(use_id) {
+        state.copies.set(def_id, use_id)
+        // If source has a known constant, propagate it
+        if state.constants.get(use_id) is Some(c) {
+          state.constants.set(def_id, c)
         }
       }
     // Any other def invalidates tracking for that vreg
@@ -583,39 +558,38 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
       if def_vreg is Some(dst_id) && use_vreg is Some(src_id) {
         // This is: dst = mov src
         // Check if src is defined in this block and has only 1 use (this mov)
-        if def_inst.get(src_id) is Some(def_idx) {
-          if use_count.get(src_id) == Some(1) {
-            // src is only used by this mov
-            let def_instr = block.insts[def_idx]
-            // Check if dst is an operand of the def instruction
-            let mut dst_is_operand = false
-            for use_ in def_instr.uses {
-              if get_vreg_id(use_) == Some(dst_id) {
-                dst_is_operand = true
-                break
-              }
+        if def_inst.get(src_id) is Some(def_idx) &&
+          use_count.get(src_id) == Some(1) {
+          // src is only used by this mov
+          let def_instr = block.insts[def_idx]
+          // Check if dst is an operand of the def instruction
+          let mut dst_is_operand = false
+          for use_ in def_instr.uses {
+            if get_vreg_id(use_) == Some(dst_id) {
+              dst_is_operand = true
+              break
             }
-            if dst_is_operand && is_inplace_safe(def_instr.opcode) {
-              // Pattern matched! vA = op ... vB ...; vB = mov vA
-              // Now check that vB (dst_id) is not used between def and mov
-              let mut dst_used_between = false
-              for j = def_idx + 1; j < i; j = j + 1 {
-                for use_ in block.insts[j].uses {
-                  if get_vreg_id(use_) == Some(dst_id) {
-                    dst_used_between = true
-                    break
-                  }
-                }
-                if dst_used_between {
+          }
+          if dst_is_operand && is_inplace_safe(def_instr.opcode) {
+            // Pattern matched! vA = op ... vB ...; vB = mov vA
+            // Now check that vB (dst_id) is not used between def and mov
+            let mut dst_used_between = false
+            for j = def_idx + 1; j < i; j = j + 1 {
+              for use_ in block.insts[j].uses {
+                if get_vreg_id(use_) == Some(dst_id) {
+                  dst_used_between = true
                   break
                 }
               }
-              if !dst_used_between {
-                // Safe to apply optimization
-                to_eliminate.add(i)
-                replace_def.set(def_idx, dst_id)
-                eliminated = eliminated + 1
+              if dst_used_between {
+                break
               }
+            }
+            if !dst_used_between {
+              // Safe to apply optimization
+              to_eliminate.add(i)
+              replace_def.set(def_idx, dst_id)
+              eliminated = eliminated + 1
             }
           }
         }
@@ -904,10 +878,10 @@ fn find_store_pair_for_loads(
         found_s1 = Some((j, s.base_vreg_id, s.offset))
       } else if s.value_vreg_id == load2.value_vreg_id {
         // Found store of load2 result - check if it matches
-        if found_s1 is Some((s1_idx, s1_base, s1_off)) {
-          if s.base_vreg_id == s1_base && s.offset == s1_off + 1 {
-            return Some((s1_idx, j, s1_base, s1_off))
-          }
+        if found_s1 is Some((s1_idx, s1_base, s1_off)) &&
+          s.base_vreg_id == s1_base &&
+          s.offset == s1_off + 1 {
+          return Some((s1_idx, j, s1_base, s1_off))
         }
       }
     }
@@ -956,40 +930,38 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
     match inst.opcode {
       StorePtrNarrow(bits, offset) => {
         store_map.clear()
-        if inst.uses.length() >= 2 {
-          if get_vreg_id(inst.uses[0]) is Some(base) &&
-            get_vreg_id(inst.uses[1]) is Some(val) {
-            let key = "\{base}:\{offset}:\{bits}"
-            store_map.set(key, val)
-          }
+        if inst.uses.length() >= 2 &&
+          get_vreg_id(inst.uses[0]) is Some(base) &&
+          get_vreg_id(inst.uses[1]) is Some(val) {
+          let key = "\{base}:\{offset}:\{bits}"
+          store_map.set(key, val)
         }
       }
       LoadPtrNarrow(bits, signed, offset) =>
-        if inst.uses.length() >= 1 && inst.defs.length() >= 1 {
-          if get_vreg_id(inst.uses[0]) is Some(base) {
-            let key = "\{base}:\{offset}:\{bits}"
-            if store_map.get(key) is Some(val_vreg) {
-              if get_def_vreg_id(inst.defs[0]) is Some(_) {
-                // Forwarding must preserve the load semantics:
-                // - narrow stores truncate to `bits`
-                // - loads sign/zero-extend from `bits`
-                // Implement by extending the stored value.
-                let kind = match (bits, signed) {
-                  (8, true) => @instr.Signed8To64
-                  (8, false) => @instr.Unsigned8To64
-                  (16, true) => @instr.Signed16To64
-                  (16, false) => @instr.Unsigned16To64
-                  (32, true) => @instr.Signed32To64
-                  (32, false) => @instr.Unsigned32To64
-                  _ => continue
-                }
-                let ext = @instr.VCodeInst::new(Extend(kind))
-                ext.add_def(inst.defs[0])
-                ext.add_use(Virtual({ id: val_vreg, class: Int }))
-                to_replace.push((i, ext))
-                forwarded = forwarded + 1
-              }
+        if inst.uses.length() >= 1 &&
+          inst.defs.length() >= 1 &&
+          get_vreg_id(inst.uses[0]) is Some(base) {
+          let key = "\{base}:\{offset}:\{bits}"
+          if store_map.get(key) is Some(val_vreg) &&
+            get_def_vreg_id(inst.defs[0]) is Some(_) {
+            // Forwarding must preserve the load semantics:
+            // - narrow stores truncate to `bits`
+            // - loads sign/zero-extend from `bits`
+            // Implement by extending the stored value.
+            let kind = match (bits, signed) {
+              (8, true) => @instr.Signed8To64
+              (8, false) => @instr.Unsigned8To64
+              (16, true) => @instr.Signed16To64
+              (16, false) => @instr.Unsigned16To64
+              (32, true) => @instr.Signed32To64
+              (32, false) => @instr.Unsigned32To64
+              _ => continue
             }
+            let ext = @instr.VCodeInst::new(Extend(kind))
+            ext.add_def(inst.defs[0])
+            ext.add_use(Virtual({ id: val_vreg, class: Int }))
+            to_replace.push((i, ext))
+            forwarded = forwarded + 1
           }
         }
       // Any other store invalidates the map (conservative)

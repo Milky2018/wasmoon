@@ -1120,15 +1120,13 @@ fn ExecContext::exec_br_on_cast_fail(
   let val = self.stack.pop()
   // br_on_cast_fail branches if the cast fails
   // For null values, cast fails only if target type is non-null
-  if val is Null {
-    if target_type.is_nullable() {
-      // Null matches nullable type, cast succeeds, don't branch
-      self.stack.push(val)
-      return
-    } else {
-      // Null doesn't match non-null type, cast fails, branch
-      raise BranchWith(label_idx, [val])
-    }
+  if val is Null && target_type.is_nullable() {
+    // Null matches nullable type, cast succeeds, don't branch
+    self.stack.push(val)
+    return
+  } else if val is Null {
+    // Null doesn't match non-null type, cast fails, branch
+    raise BranchWith(label_idx, [val])
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
   if not(matches) {
