@@ -101,12 +101,9 @@ fn ensure_module_state() -> ModuleMetricsReport {
 
 ///|
 fn flush_current_function_if_any() -> Unit {
-  match current_function_state.val {
-    Some(m) => {
-      ensure_module_state().functions.push(m)
-      current_function_state.val = None
-    }
-    None => ()
+  if current_function_state.val is Some(m) {
+    ensure_module_state().functions.push(m)
+    current_function_state.val = None
   }
 }
 
@@ -169,35 +166,31 @@ pub fn record_ir_pass(
   egraph_rule_apps? : Int? = None,
 ) -> Unit {
   guard enabled() else { return }
-  match current_function_state.val {
-    Some(m) =>
-      m.ir_passes.push({
-        name: pass_name,
-        duration_us,
-        before_insts,
-        after_insts,
-        changed,
-        egraph_classes,
-        egraph_nodes,
-        egraph_rule_apps,
-      })
-    None => ()
+  if current_function_state.val is Some(m) {
+    m.ir_passes.push({
+      name: pass_name,
+      duration_us,
+      before_insts,
+      after_insts,
+      changed,
+      egraph_classes,
+      egraph_nodes,
+      egraph_rule_apps,
+    })
   }
 }
 
 ///|
 pub fn record_stage_us(stage_name : String, duration_us : Int64) -> Unit {
   guard enabled() else { return }
-  match current_function_state.val {
-    Some(m) =>
-      match stage_name {
-        "optimize" => m.optimize_us = duration_us
-        "lower" => m.lower_us = duration_us
-        "regalloc" => m.regalloc_us = duration_us
-        "emit" => m.emit_us = duration_us
-        _ => ()
-      }
-    None => ()
+  if current_function_state.val is Some(m) {
+    match stage_name {
+      "optimize" => m.optimize_us = duration_us
+      "lower" => m.lower_us = duration_us
+      "regalloc" => m.regalloc_us = duration_us
+      "emit" => m.emit_us = duration_us
+      _ => ()
+    }
   }
 }
 
@@ -210,28 +203,22 @@ pub fn record_regalloc_stats(
   spill_to_spill : Int,
 ) -> Unit {
   guard enabled() else { return }
-  match current_function_state.val {
-    Some(m) => {
-      m.spill_slots = spill_slots
-      m.spills = spills
-      m.reloads = reloads
-      m.reg_moves = reg_moves
-      m.spill_to_spill = spill_to_spill
-    }
-    None => ()
+  if current_function_state.val is Some(m) {
+    m.spill_slots = spill_slots
+    m.spills = spills
+    m.reloads = reloads
+    m.reg_moves = reg_moves
+    m.spill_to_spill = spill_to_spill
   }
 }
 
 ///|
 pub fn finish_function(ir_insts_after : Int, code_size : Int) -> Unit {
   guard enabled() else { return }
-  match current_function_state.val {
-    Some(m) => {
-      m.ir_insts_after = ir_insts_after
-      m.code_size = code_size
-      flush_current_function_if_any()
-    }
-    None => ()
+  if current_function_state.val is Some(m) {
+    m.ir_insts_after = ir_insts_after
+    m.code_size = code_size
+    flush_current_function_if_any()
   }
 }
 

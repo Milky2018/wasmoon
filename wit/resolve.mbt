@@ -652,9 +652,8 @@ fn get_iface_type_exports(
     })
   let mut found = false
   for it in pkg.items {
-    match it {
-      Interface(i) => if i.name == target.name { found = true }
-      _ => ()
+    if it is Interface(i) && i.name == target.name {
+      found = true
     }
   }
   if !found {
@@ -1158,9 +1157,8 @@ fn validate_iface_exists(
   // Ensure the interface name exists in the parsed package even if it has no exports.
   let mut found = false
   for it in pkg.items {
-    match it {
-      Interface(i) => if i.name == r.name { found = true }
-      _ => ()
+    if it is Interface(i) && i.name == r.name {
+      found = true
     }
   }
   if !found {
@@ -1470,9 +1468,8 @@ fn infer_toplevel_use_name(p : UsePath) -> String {
   // Inferred name is the last path segment before any `@version`.
   let raw = p.raw
   let mut base = raw
-  match find_last_code_unit(raw, 64) {
-    Some(i) => if i > 0 { base = slice_ascii(raw, 0, i) }
-    None => ()
+  if find_last_code_unit(raw, 64) is Some(i) && i > 0 {
+    base = slice_ascii(raw, 0, i)
   }
   match find_last_code_unit(base, 47) {
     Some(i) => slice_ascii(base, i + 1, base.length())
@@ -1612,13 +1609,9 @@ fn split_use_path(path : UsePath) -> (String?, String, String?) {
   let mut ver : String? = None
   // Version is a trailing `@...` with no further `/`.
   // '@' (64)
-  match find_last_code_unit(raw, 64) {
-    Some(i) =>
-      if i > 0 && i + 1 < raw.length() {
-        ver = Some(slice_ascii(raw, i + 1, raw.length()))
-        base = slice_ascii(raw, 0, i)
-      }
-    None => ()
+  if find_last_code_unit(raw, 64) is Some(i) && i > 0 && i + 1 < raw.length() {
+    ver = Some(slice_ascii(raw, i + 1, raw.length()))
+    base = slice_ascii(raw, 0, i)
   }
   // '/' (47)
   match find_last_code_unit(base, 47) {

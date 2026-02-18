@@ -92,12 +92,9 @@ pub fn ResourceTable::free(
   handle : Int,
 ) -> ResourceHandle? {
   let entry = self.entries.get(handle)
-  match entry {
-    Some(_) => {
-      self.entries.remove(handle)
-      self.free_handles.push(handle)
-    }
-    None => ()
+  if entry is Some(_) {
+    self.entries.remove(handle)
+    self.free_handles.push(handle)
   }
   entry
 }
@@ -1437,13 +1434,11 @@ fn migrate_task_meta(
   from_id : Int64,
   to_id : Int64,
 ) -> Unit {
-  match async_state.task_instance.get(from_id) {
-    Some(inst) => async_state.task_instance.set(to_id, inst)
-    None => ()
+  if async_state.task_instance.get(from_id) is Some(inst) {
+    async_state.task_instance.set(to_id, inst)
   }
-  match async_state.task_caller.get(from_id) {
-    Some(parent) => async_state.task_caller.set(to_id, parent)
-    None => ()
+  if async_state.task_caller.get(from_id) is Some(parent) {
+    async_state.task_caller.set(to_id, parent)
   }
   remove_task_meta(async_state, from_id)
 }
@@ -1462,9 +1457,10 @@ fn may_enter_instance_from_task(
 ) -> Bool {
   let mut t = caller_task_id
   while t != 0L {
-    match async_state.task_instance.get(t) {
-      Some(inst) => if inst >= 0 && inst == callee_instance_id { return false }
-      None => ()
+    if async_state.task_instance.get(t) is Some(inst) &&
+      inst >= 0 &&
+      inst == callee_instance_id {
+      return false
     }
     t = match async_state.task_caller.get(t) {
       Some(p) => p
@@ -1585,9 +1581,8 @@ fn take_task_result(
   task_id : Int64,
 ) -> Array[ComponentValue]? {
   let v = async_state.task_results.get(task_id)
-  match v {
-    Some(_) => async_state.task_results.remove(task_id)
-    None => ()
+  if v is Some(_) {
+    async_state.task_results.remove(task_id)
   }
   v
 }

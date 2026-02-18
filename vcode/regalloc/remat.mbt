@@ -173,151 +173,148 @@ pub fn rematerialize_long_distance_constants(
       }
       new_block.insts.push(inst)
     }
-    match block.terminator {
-      Some(term) => {
-        let term_idx = block.insts.length()
-        let new_term = match term {
-          @instr.Jump(target, args) => {
-            let new_args : Array[@abi.Reg] = []
-            for a in args {
-              new_args.push(
-                maybe_remat_use(
-                  func,
-                  a,
-                  block.id,
-                  term_idx,
-                  remat_defs,
-                  clone_count,
-                  new_block,
-                  min_distance,
-                  per_vreg_clone_cap,
-                ),
-              )
-            }
-            @instr.Jump(target, new_args)
+    if block.terminator is Some(term) {
+      let term_idx = block.insts.length()
+      let new_term = match term {
+        @instr.Jump(target, args) => {
+          let new_args : Array[@abi.Reg] = []
+          for a in args {
+            new_args.push(
+              maybe_remat_use(
+                func,
+                a,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+            )
           }
-          @instr.Branch(cond, t, e) =>
-            @instr.Branch(
-              maybe_remat_use(
-                func,
-                cond,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              t,
-              e,
-            )
-          @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
-            @instr.BranchCmp(
-              maybe_remat_use(
-                func,
-                lhs,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              maybe_remat_use(
-                func,
-                rhs,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              cond,
-              is64,
-              t,
-              e,
-            )
-          @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
-            @instr.BranchCmpImm(
-              maybe_remat_use(
-                func,
-                lhs,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              imm,
-              cond,
-              is64,
-              t,
-              e,
-            )
-          @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
-            @instr.BranchZero(
-              maybe_remat_use(
-                func,
-                reg,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              is_nonzero,
-              is64,
-              t,
-              e,
-            )
-          @instr.BrTable(index, targets, default) =>
-            @instr.BrTable(
-              maybe_remat_use(
-                func,
-                index,
-                block.id,
-                term_idx,
-                remat_defs,
-                clone_count,
-                new_block,
-                min_distance,
-                per_vreg_clone_cap,
-              ),
-              targets,
-              default,
-            )
-          @instr.Return(vals) => {
-            let new_vals : Array[@abi.Reg] = []
-            for v in vals {
-              new_vals.push(
-                maybe_remat_use(
-                  func,
-                  v,
-                  block.id,
-                  term_idx,
-                  remat_defs,
-                  clone_count,
-                  new_block,
-                  min_distance,
-                  per_vreg_clone_cap,
-                ),
-              )
-            }
-            @instr.Return(new_vals)
-          }
-          @instr.Trap(msg) => @instr.Trap(msg)
+          @instr.Jump(target, new_args)
         }
-        new_block.set_terminator(new_term)
+        @instr.Branch(cond, t, e) =>
+          @instr.Branch(
+            maybe_remat_use(
+              func,
+              cond,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            t,
+            e,
+          )
+        @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
+          @instr.BranchCmp(
+            maybe_remat_use(
+              func,
+              lhs,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            maybe_remat_use(
+              func,
+              rhs,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            cond,
+            is64,
+            t,
+            e,
+          )
+        @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
+          @instr.BranchCmpImm(
+            maybe_remat_use(
+              func,
+              lhs,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            imm,
+            cond,
+            is64,
+            t,
+            e,
+          )
+        @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
+          @instr.BranchZero(
+            maybe_remat_use(
+              func,
+              reg,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            is_nonzero,
+            is64,
+            t,
+            e,
+          )
+        @instr.BrTable(index, targets, default) =>
+          @instr.BrTable(
+            maybe_remat_use(
+              func,
+              index,
+              block.id,
+              term_idx,
+              remat_defs,
+              clone_count,
+              new_block,
+              min_distance,
+              per_vreg_clone_cap,
+            ),
+            targets,
+            default,
+          )
+        @instr.Return(vals) => {
+          let new_vals : Array[@abi.Reg] = []
+          for v in vals {
+            new_vals.push(
+              maybe_remat_use(
+                func,
+                v,
+                block.id,
+                term_idx,
+                remat_defs,
+                clone_count,
+                new_block,
+                min_distance,
+                per_vreg_clone_cap,
+              ),
+            )
+          }
+          @instr.Return(new_vals)
+        }
+        @instr.Trap(msg) => @instr.Trap(msg)
       }
-      None => ()
+      new_block.set_terminator(new_term)
     }
     func.blocks[i] = new_block
   }
@@ -416,126 +413,123 @@ pub fn rematerialize_cross_block_constants(
       }
       new_block.insts.push(inst)
     }
-    match block.terminator {
-      Some(term) => {
-        let new_term = match term {
-          @instr.Jump(target, args) => {
-            let new_args : Array[@abi.Reg] = []
-            for a in args {
-              new_args.push(
-                rewrite_use_with_local_remat(
-                  func,
-                  a,
-                  remat_defs,
-                  local_map,
-                  block.id,
-                  new_block,
-                ),
-              )
-            }
-            @instr.Jump(target, new_args)
+    if block.terminator is Some(term) {
+      let new_term = match term {
+        @instr.Jump(target, args) => {
+          let new_args : Array[@abi.Reg] = []
+          for a in args {
+            new_args.push(
+              rewrite_use_with_local_remat(
+                func,
+                a,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
+            )
           }
-          @instr.Branch(cond, t, e) =>
-            @instr.Branch(
-              rewrite_use_with_local_remat(
-                func,
-                cond,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              t,
-              e,
-            )
-          @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
-            @instr.BranchCmp(
-              rewrite_use_with_local_remat(
-                func,
-                lhs,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              rewrite_use_with_local_remat(
-                func,
-                rhs,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              cond,
-              is64,
-              t,
-              e,
-            )
-          @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
-            @instr.BranchZero(
-              rewrite_use_with_local_remat(
-                func,
-                reg,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              is_nonzero,
-              is64,
-              t,
-              e,
-            )
-          @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
-            @instr.BranchCmpImm(
-              rewrite_use_with_local_remat(
-                func,
-                lhs,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              imm,
-              cond,
-              is64,
-              t,
-              e,
-            )
-          @instr.Return(vals) => {
-            let new_vals : Array[@abi.Reg] = []
-            for r in vals {
-              new_vals.push(
-                rewrite_use_with_local_remat(
-                  func,
-                  r,
-                  remat_defs,
-                  local_map,
-                  block.id,
-                  new_block,
-                ),
-              )
-            }
-            @instr.Return(new_vals)
-          }
-          @instr.BrTable(index, targets, default) =>
-            @instr.BrTable(
-              rewrite_use_with_local_remat(
-                func,
-                index,
-                remat_defs,
-                local_map,
-                block.id,
-                new_block,
-              ),
-              targets,
-              default,
-            )
-          @instr.Trap(msg) => @instr.Trap(msg)
+          @instr.Jump(target, new_args)
         }
-        new_block.set_terminator(new_term)
+        @instr.Branch(cond, t, e) =>
+          @instr.Branch(
+            rewrite_use_with_local_remat(
+              func,
+              cond,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            t,
+            e,
+          )
+        @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
+          @instr.BranchCmp(
+            rewrite_use_with_local_remat(
+              func,
+              lhs,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            rewrite_use_with_local_remat(
+              func,
+              rhs,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            cond,
+            is64,
+            t,
+            e,
+          )
+        @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
+          @instr.BranchZero(
+            rewrite_use_with_local_remat(
+              func,
+              reg,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            is_nonzero,
+            is64,
+            t,
+            e,
+          )
+        @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
+          @instr.BranchCmpImm(
+            rewrite_use_with_local_remat(
+              func,
+              lhs,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            imm,
+            cond,
+            is64,
+            t,
+            e,
+          )
+        @instr.Return(vals) => {
+          let new_vals : Array[@abi.Reg] = []
+          for r in vals {
+            new_vals.push(
+              rewrite_use_with_local_remat(
+                func,
+                r,
+                remat_defs,
+                local_map,
+                block.id,
+                new_block,
+              ),
+            )
+          }
+          @instr.Return(new_vals)
+        }
+        @instr.BrTable(index, targets, default) =>
+          @instr.BrTable(
+            rewrite_use_with_local_remat(
+              func,
+              index,
+              remat_defs,
+              local_map,
+              block.id,
+              new_block,
+            ),
+            targets,
+            default,
+          )
+        @instr.Trap(msg) => @instr.Trap(msg)
       }
-      None => ()
+      new_block.set_terminator(new_term)
     }
     func.blocks[i] = new_block
   }

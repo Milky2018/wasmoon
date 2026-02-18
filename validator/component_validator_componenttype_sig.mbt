@@ -10,9 +10,8 @@ fn componenttype_import_func_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot() -> Unit {
@@ -118,9 +117,8 @@ fn componenttype_import_type_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot(as_resource : Bool) -> Int {
@@ -225,10 +223,9 @@ fn componenttype_import_type_bounds_of_decls(
 ) -> Map[String, @component.TypeBound] {
   let out : Map[String, @component.TypeBound] = {}
   for d in decls {
-    match d {
-      @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) =>
-        out.set(name, b)
-      _ => ()
+    if d
+      is @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) {
+      out.set(name, b)
     }
   }
   out
@@ -246,9 +243,8 @@ fn componenttype_export_func_sigs_of_decls(
   // Avoid collisions with the enclosing component's nominal resource ids.
   let mut next_rid = 0
   for rid in global_resource_ids {
-    match rid {
-      Some(v) => if v >= next_rid { next_rid = v + 1 }
-      None => ()
+    if rid is Some(v) && v >= next_rid {
+      next_rid = v + 1
     }
   }
   fn record_type_slot() -> Unit {
@@ -275,9 +271,8 @@ fn componenttype_export_func_sigs_of_decls(
   }
 
   fn record_type_slots_for_desc(desc : @component.ExternDesc) -> Unit {
-    match desc {
-      @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
-      _ => ()
+    if desc is @component.ExternDesc::Type(b) {
+      record_type_slot_for_bound(b)
     }
   }
 
@@ -1438,9 +1433,8 @@ fn canon_has_post_return(opts : Array[@component.CanonOpt]) -> Bool {
 ///|
 fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      Memory(idx) => return Some(idx)
-      _ => ()
+    if o is Memory(idx) {
+      return Some(idx)
     }
   }
   None
@@ -1449,9 +1443,8 @@ fn canon_memory_idx(opts : Array[@component.CanonOpt]) -> Int? {
 ///|
 fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      Realloc(idx) => return Some(idx)
-      _ => ()
+    if o is Realloc(idx) {
+      return Some(idx)
     }
   }
   None
@@ -1460,9 +1453,8 @@ fn canon_realloc_idx(opts : Array[@component.CanonOpt]) -> Int? {
 ///|
 fn canon_post_return_idx(opts : Array[@component.CanonOpt]) -> Int? {
   for o in opts {
-    match o {
-      PostReturn(idx) => return Some(idx)
-      _ => ()
+    if o is PostReturn(idx) {
+      return Some(idx)
     }
   }
   None
