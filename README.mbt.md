@@ -253,7 +253,7 @@ test "host function" {
 - [x] WASI Preview 1 support
 - [x] GC proposal support (current implemented subset; experimental)
 - [x] Component Model support
-- [ ] JIT optimizations (constant folding, dead code elimination, etc.)
+- [x] JIT optimizations (constant folding, dead code elimination, etc.)
 
 ## License
 
