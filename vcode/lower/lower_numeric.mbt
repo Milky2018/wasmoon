@@ -144,7 +144,7 @@ fn lower_magic_udiv64(
   block : @block.VCodeBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
-  magic : MagicU64,
+  magic : @divmagic.MagicU64,
 ) -> Unit {
   // Load magic constant
   let magic_reg = ctx.new_vreg(@abi.Int)
@@ -230,7 +230,7 @@ fn lower_magic_sdiv64(
   dst : @abi.VReg,
   lhs : @abi.VReg,
   divisor : Int64,
-  magic : MagicS64,
+  magic : @divmagic.MagicS64,
 ) -> Unit {
   // Load magic constant
   let magic_reg = ctx.new_vreg(@abi.Int)
@@ -314,7 +314,7 @@ fn lower_magic_udiv32(
   block : @block.VCodeBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
-  magic : MagicU32,
+  magic : @divmagic.MagicU32,
 ) -> Unit {
   // Load magic constant (32-bit, zero-extended to 64-bit for UMULL)
   let magic_reg = ctx.new_vreg(@abi.Int)
@@ -412,7 +412,7 @@ fn lower_magic_sdiv32(
   dst : @abi.VReg,
   lhs : @abi.VReg,
   divisor : Int,
-  magic : MagicS32,
+  magic : @divmagic.MagicS32,
 ) -> Unit {
   // Load magic constant (sign-extended for SMULL)
   let magic_reg = ctx.new_vreg(@abi.Int)
@@ -532,10 +532,10 @@ fn lower_div(
         let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
         let dst = ctx.get_vreg(result)
         if signed {
-          let magic = magic_s64(divisor)
+          let magic = @divmagic.magic_s64(divisor)
           lower_magic_sdiv64(ctx, block, dst, lhs, divisor, magic)
         } else {
-          let magic = magic_u64(divisor.reinterpret_as_uint64())
+          let magic = @divmagic.magic_u64(divisor.reinterpret_as_uint64())
           lower_magic_udiv64(ctx, block, dst, lhs, magic)
         }
         return
@@ -554,10 +554,10 @@ fn lower_div(
         let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
         let dst = ctx.get_vreg(result)
         if signed {
-          let magic = magic_s32(divisor32)
+          let magic = @divmagic.magic_s32(divisor32)
           lower_magic_sdiv32(ctx, block, dst, lhs, divisor32, magic)
         } else {
-          let magic = magic_u32(divisor32.reinterpret_as_uint())
+          let magic = @divmagic.magic_u32(divisor32.reinterpret_as_uint())
           lower_magic_udiv32(ctx, block, dst, lhs, magic)
         }
         return

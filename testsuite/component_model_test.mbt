@@ -29,7 +29,7 @@ test "component_validate_minimal_preamble" {
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
   ])
   let component = @component.parse_component(bytes)
-  inspect(try? @validator.validate_component(component), content="Ok(())")
+  inspect(try? @component_model.validate_component(component), content="Ok(())")
 }
 
 ///|
@@ -43,7 +43,7 @@ test "component_validate_embedded_core_module" {
      b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x00', b'\x00',
   ])
   let component = @component.parse_component(bytes)
-  inspect(try? @validator.validate_component(component), content="Ok(())")
+  inspect(try? @component_model.validate_component(component), content="Ok(())")
 }
 
 ///|
@@ -62,7 +62,7 @@ test "component_validate_import_typeidx_oob" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @validator.validate_component(component),
+    try? @component_model.validate_component(component),
     content="Err(InvalidTypeIndex(0))",
   )
 }
@@ -85,7 +85,7 @@ test "component_validate_export_sortidx_oob" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @validator.validate_component(component),
+    try? @component_model.validate_component(component),
     content="Err(InvalidTypeIndex(0))",
   )
 }
@@ -125,7 +125,7 @@ test "component_validate_canon_string_requires_memory" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @validator.validate_component(component),
+    try? @component_model.validate_component(component),
     content=(
       #|Err(MissingCanonOption("memory"))
     ),

@@ -1391,7 +1391,7 @@ test "liverange: basic operations" {
 ///|
 /// Test UnionFind operations
 test "union_find: basic operations" {
-  let uf = UnionFind::new(5)
+  let uf = @unionfind.UnionFind::new(5)
 
   // Initially all separate
   inspect(uf.num_sets(), content="5")

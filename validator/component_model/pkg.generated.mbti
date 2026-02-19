@@ -1,0 +1,73 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/validator/component_model"
+
+import {
+  "Milky2018/wasmoon/component/model",
+}
+
+// Values
+pub fn validate_component(@model.Component) -> Unit raise ComponentValidationError
+
+pub fn validate_component_with_config(@model.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
+
+// Errors
+pub(all) suberror ComponentValidationError {
+  InvalidTypeIndex(Int)
+  TypeIndexNotFuncType(Int)
+  TypeIndexNotComponentType(Int)
+  TypeIndexNotInstanceType(Int)
+  TypeIndexNotDefinedType(Int)
+  TypeIndexNotResourceType(Int)
+  InvalidFuncIndex(Int)
+  InvalidValueIndex(Int)
+  InvalidComponentIndex(Int)
+  InvalidInstanceIndex(Int)
+  InvalidCoreFuncIndex(Int)
+  InvalidCoreModuleIndex(Int)
+  InvalidCoreInstanceIndex(Int)
+  InvalidCoreTypeIndex(Int)
+  CoreTypeIndexNotModuleType(Int)
+  InvalidCoreTableIndex(Int)
+  InvalidCoreMemoryIndex(Int)
+  InvalidCoreGlobalIndex(Int)
+  InvalidCoreTagIndex(Int)
+  DuplicateCanonOption(String)
+  MissingCanonOption(String)
+  CanonExpectedFuncType(Int)
+  CanonAsyncTypeMismatch(Int)
+  CanonMemoryNot32Bit(Int)
+  CanonCoreFuncTypeMismatch(String)
+  CanonOptionNotAllowed(String)
+  UnsupportedCoreSort(Int)
+  UnsupportedComponentImport
+  UnsupportedComponentExport
+  ExportedImportedFunc(Int)
+  InvalidKebabName(String)
+  DuplicateImportName(String)
+  DuplicateExportName(String)
+  FuncParamNameConflict(String, String)
+  DuplicateInstantiationArg(String)
+  MissingInstanceExport(Int, String)
+  MissingCoreInstanceExport(Int, String)
+  MissingComponentImport(String)
+  ComponentImportTypeMismatch(String)
+  MissingExpectedExport(String)
+  AscribedExportTypeIncompatible
+  AliasTargetMismatch(String)
+  SectionParseError(Int, String)
+  CoreModuleError(String)
+}
+pub impl Eq for ComponentValidationError
+pub impl Show for ComponentValidationError
+
+// Types and methods
+pub struct ComponentValidationConfig {
+  wit_names : Bool
+}
+pub fn ComponentValidationConfig::default() -> Self
+pub fn ComponentValidationConfig::new(Bool) -> Self
+
+// Type aliases
+
+// Traits
+

@@ -199,7 +199,7 @@ fn main {
                   Some(true) => false
                   _ => true
                 }
-                run_wasm(
+                @commands.run_wasm(
                   file_path, invoke_opt, func_args, wasm_args, preloads, dirs, envs,
                   wasi_options, debug, dump_on_trap, use_jit, opt_level, enable_dwarf,
                 )
@@ -215,7 +215,7 @@ fn main {
                   _ => true
                 }
                 let show_success = sub.flags.get("show-success") is Some(true)
-                run_testsuite(positional[0], use_jit, show_success)
+                @commands.run_testsuite(positional[0], use_jit, show_success)
               } else {
                 println("Error: missing file argument")
               }
@@ -223,7 +223,7 @@ fn main {
             "disasm" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
-                run_disasm(positional[0])
+                @commands.run_disasm(positional[0])
               } else {
                 println("Error: missing file argument")
               }
@@ -237,7 +237,12 @@ fn main {
                   Some(true) => false
                   _ => true
                 }
-                run_component_command(positional[0], dump, validate, wit_names)
+                @commands.run_component_command(
+                  positional[0],
+                  dump,
+                  validate,
+                  wit_names,
+                )
               } else {
                 println("Error: missing file argument")
               }
@@ -245,7 +250,7 @@ fn main {
             "component-test" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
-                run_component_script(positional[0])
+                @commands.run_component_script(positional[0])
               } else {
                 println("Error: missing file argument")
               }
@@ -253,7 +258,7 @@ fn main {
             "wat" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
-                run_wat(positional[0])
+                @commands.run_wat(positional[0])
               } else {
                 println("Error: missing file argument")
               }
@@ -279,7 +284,7 @@ fn main {
                 }
                 let html_output = sub.flags.get("html") is Some(true)
                 let debug = sub.flags.get("debug") is Some(true)
-                run_explore(
+                @commands.run_explore(
                   positional[0],
                   func_idx,
                   opt_level,
@@ -291,7 +296,7 @@ fn main {
                 println("Error: missing file argument")
               }
             }
-            "settings" => run_settings()
+            "settings" => @commands.run_settings()
             "config" => {
               let positional = sub.positional_args
               let action = if positional.length() > 0 {
@@ -299,7 +304,7 @@ fn main {
               } else {
                 "show"
               }
-              run_config(action)
+              @commands.run_config(action)
             }
             "help" => println(help_msg)
             name => println("Unknown command: \{name}")

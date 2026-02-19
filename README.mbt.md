@@ -15,13 +15,36 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
 - **Component Model**: Component parser/validator/runtime with component-spec runner support
 
+## Requirements
+
+- Required:
+  - `moon`
+  - `python3`
+- Optional:
+  - `wasmtime` (useful for differential/performance comparison workflows)
+
 ## Installation
 
-### Install Binary with `moon install` (recommended)
+### Path A: Global install (recommended)
 
 ```bash
 moon install Milky2018/wasmoon/cmd/wasmoon
 moon install Milky2018/wasmoon/cmd/wasmoon-tools
+```
+
+If your registry release does not expose these main packages yet, install from
+the Git repository directly:
+
+```bash
+moon install https://github.com/Milky2018/wasmoon.git cmd/wasmoon
+moon install https://github.com/Milky2018/wasmoon.git cmd/wasmoon-tools
+```
+
+Verify binaries are on `PATH`:
+
+```bash
+wasmoon --help
+wasmoon-tools --help
 ```
 
 By default these commands install binaries to `~/.moon/bin/` as:
@@ -29,7 +52,7 @@ By default these commands install binaries to `~/.moon/bin/` as:
 - `wasmoon` (runtime CLI)
 - `wasmoon-tools` (utility CLI)
 
-### Build from Source (repo-local binaries)
+### Path B: Repo-local build (development)
 
 ```bash
 git clone https://github.com/Milky2018/wasmoon.git
@@ -40,8 +63,8 @@ cd wasmoon
 `./install.sh` uses `moon install --path ...` to install local binaries into
 `target/moon-install-bin/`, then creates/updates two symlinks in repo root:
 
-- `./wasmoon`: the runtime CLI
-- `./wasmoon-tools`: utility tooling (validate/convert/WIT inspection)
+- `./wasmoon`
+- `./wasmoon-tools`
 
 After code changes, re-run `./install.sh` to refresh both symlinks.
 
@@ -51,68 +74,136 @@ After code changes, re-run `./install.sh` to refresh both symlinks.
 moon add Milky2018/wasmoon
 ```
 
-## CLI Usage
+## Quick Start (60 seconds)
+
+```bash
+# 1) Run with default _start
+wasmoon run examples/add.wat
+
+# 2) Invoke an export with arguments
+wasmoon run examples/add.wat --invoke add --arg 5 --arg 3
+
+# 3) Interpreter mode
+wasmoon run examples/add.wat --invoke add --arg 5 --arg 3 --no-jit
+
+# 4) WASI dirs/env/options
+wasmoon run examples/hello_wasi.wat \
+  --dir . \
+  --env FOO=bar \
+  -S inherit-env
+```
+
+For detailed flags, run:
+
+```bash
+wasmoon run --help
+```
+
+## CLI Commands (concise)
+
+```bash
+# run
+wasmoon run examples/add.wat --invoke add --arg 1 --arg 2
+wasmoon run --help
+
+# test
+wasmoon test spec/i32.wast
+wasmoon test --help
+
+# explore
+wasmoon explore examples/add.wat --stage ir vcode mc
+wasmoon explore --help
+
+# component
+wasmoon component path/to/component.wasm --validate
+wasmoon component --help
+
+# component-test
+wasmoon component-test path/to/component-tests.json
+wasmoon component-test --help
+
+# wat
+wasmoon wat examples/add.wat
+wasmoon wat --help
+
+# disasm
+wasmoon disasm examples/stream.wasm
+wasmoon disasm --help
+```
 
 Quick differential testing vs Wasmtime (wasm-smith):
+
 ```bash
 python3 scripts/smith_diff/run.py run --count 1000
 ```
 
+## JIT Trap Debugging
+
+Use these options when diagnosing JIT failures:
+
+- `-D`: debug logging
+- `--dump-on-trap`: dump IR/VCode/MC for the trapping function
+- `-W`: generate DWARF debug info for JIT code (better stack traces in LLDB)
+
+Example:
+
 ```bash
-# Run with default _start function
-wasmoon run hello.wat
+wasmoon run examples/core_ed25519.wasm -D --dump-on-trap -W
+```
 
-# Call a specific function with arguments
-wasmoon run examples/add.wat --invoke add --arg 5 --arg 3
+LLDB quick recipe:
 
-# Run with interpreter (no JIT)
-wasmoon run examples/add.wat --invoke add --arg 5 --arg 3 --no-jit
-
-# Run WAST test scripts
-wasmoon test spec/i32.wast
-
-# Run component-model .wast tests (validation-only; requires wasm-tools)
-python3 scripts/run_component_wast.py --dir component-spec --rec
-
-# Explore compilation stages (IR, VCode, machine code)
-wasmoon explore examples/add.wat --stage ir vcode mc
+```bash
+lldb -- ./wasmoon run examples/core_ed25519.wasm
+(lldb) run
+(lldb) bt
 ```
 
 ## wasmoon-tools Usage
 
-`wasmoon-tools` is a small companion CLI for common inspection/conversion tasks:
+`wasmoon-tools` provides common validation/conversion/WIT workflows:
 
 ```bash
 # Validate a core Wasm module (WASM/WAT)
 wasmoon-tools validate examples/add.wat
 
 # Convert between WASM and WAT
-wasmoon-tools wasm2wat examples/add.wasm -o examples/add.wat
+wasmoon-tools wasm2wat examples/stream.wasm -o examples/stream.wat
 wasmoon-tools wat2wasm examples/add.wat -o examples/add.wasm
 
-# Parse WIT (text) and print a normalized representation
+# Parse WIT and print normalized text / JSON
 wasmoon-tools wit path/to/foo.wit
-
-# Parse a directory as a WIT package (all *.wit files, sorted by filename),
-# resolve it with `deps/`, and print a canonicalized output (toplevel-use removed,
-# include flattened, and transitive interface imports injected).
-wasmoon-tools wit path/to/pkgdir
-
-# Emit the resolved WIT graph to a directory (root + deps/*.wit)
-wasmoon-tools wit path/to/pkgdir --out-dir out
-
-# Emit a JSON AST (stable, for scripting/debugging)
 wasmoon-tools wit path/to/foo.wit --json
 
-# Encode a WIT package as a component (type-only) binary / text
+# Resolve a directory package (with deps/) and emit graph
+wasmoon-tools wit path/to/pkgdir
+wasmoon-tools wit path/to/pkgdir --out-dir out
+
+# Encode WIT package as component binary / text
 wasmoon-tools wit path/to/foo.wit --wasm -o foo.wasm
 wasmoon-tools wit path/to/foo.wit --wat > foo.wat
 
-# Alias for compatibility with wasm-tools' subcommand shape
+# Importize world flow
+wasmoon-tools wit foo.wasm --importize --wat
+wasmoon-tools wit path/to/pkgdir --importize-world my-world --wat
+
+# Compatibility alias (wasm-tools-like shape)
 wasmoon-tools component wit path/to/foo.wit --json
 ```
 
-WIT support is still evolving. `wasmoon-tools wit` implements directory + `deps/` resolution, and can emit a minimal component representation for simple WIT packages (currently functions with built-in scalar types).
+WIT support is still evolving. Current `wasmoon-tools wit` supports parse/resolve
+(`deps/`), JSON output, component encode/decode/importize workflows, and tested
+non-scalar/resource-related cases. Some spec corners may still be unsupported.
+
+## Validation / CI-equivalent Checks
+
+```bash
+moon check --target native
+moon test --target native
+./install.sh
+python3 scripts/run_all_wast.py --dir spec --rec
+python3 scripts/run_component_wast.py --dir component-spec --rec
+```
 
 ## Library Usage
 
@@ -254,6 +345,11 @@ test "host function" {
 - [x] GC proposal support (current implemented subset; experimental)
 - [x] Component Model support
 - [x] JIT optimizations (constant folding, dead code elimination, etc.)
+
+## Contributor Note
+
+- Edit `README.mbt.md` as the source of truth.
+- `README.md` is a symlink to `README.mbt.md`.
 
 ## License
 
