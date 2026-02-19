@@ -21,7 +21,6 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
   - `moon`
   - `python3`
 - Optional:
-  - `wasm-tools` (required by `scripts/run_component_wast.py`)
   - `wasmtime` (useful for differential/performance comparison workflows)
 
 ## Installation
@@ -205,8 +204,6 @@ moon test --target native
 python3 scripts/run_all_wast.py --dir spec --rec
 python3 scripts/run_component_wast.py --dir component-spec --rec
 ```
-
-Note: component runner requires `wasm-tools` on `PATH`.
 
 ## Library Usage
 

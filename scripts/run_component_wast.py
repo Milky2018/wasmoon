@@ -509,58 +509,21 @@ def compile_component(
     tmp: Path,
     idx: int,
     wasmoon_tools: Path,
-    prefer_wasmoon_tools: bool,
-    allow_wasm_tools_fallback: bool,
 ) -> Tuple[Optional[Path], Optional[str]]:
     src = tmp / f"component_{idx}.wat"
     out = tmp / f"component_{idx}.wasm"
     src.write_text(text, encoding="utf-8")
 
-    wasmoon_tools_err = ""
-    if prefer_wasmoon_tools:
-        result = subprocess.run(
-            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            return out, None
-
-        wasmoon_tools_err = (result.stderr or result.stdout or "").strip()
-
-    if not allow_wasm_tools_fallback:
-        if not prefer_wasmoon_tools:
-            return (
-                None,
-                "component text compile requires wasm-tools fallback, but strict mode is enabled",
-            )
-        return (
-            None,
-            "wasmoon-tools wat2wasm failed (strict mode): "
-            + (wasmoon_tools_err or "unknown error"),
-        )
-
-    wasm_tools = shutil.which("wasm-tools")
-    if not wasm_tools:
-        return (
-            None,
-            "wasmoon-tools wat2wasm failed and wasm-tools fallback is unavailable: "
-            + (wasmoon_tools_err or "unknown error"),
-        )
-
-    fallback = subprocess.run(
-        [wasm_tools, "parse", str(src), "-o", str(out)],
+    result = subprocess.run(
+        [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
         capture_output=True,
         text=True,
     )
-    if fallback.returncode != 0:
-        fallback_err = (fallback.stderr or fallback.stdout or "").strip()
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout or "").strip()
         return (
             None,
-            "wasmoon-tools wat2wasm failed: "
-            + (wasmoon_tools_err or "unknown error")
-            + " ; wasm-tools parse failed: "
-            + (fallback_err or "unknown error"),
+            "wasmoon-tools wat2wasm failed: " + (err or "unknown error"),
         )
 
     return out, None
@@ -650,8 +613,6 @@ def run_file(
     path: Path,
     wasmoon: Path,
     wasmoon_tools: Path,
-    prefer_wasmoon_tools: bool,
-    allow_wasm_tools_fallback: bool,
     *,
     keep_tmp_on_failure: bool = False,
 ) -> dict:
@@ -707,8 +668,6 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
-                    prefer_wasmoon_tools,
-                    allow_wasm_tools_fallback,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -760,8 +719,6 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
-                    prefer_wasmoon_tools,
-                    allow_wasm_tools_fallback,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -820,8 +777,6 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
-                    prefer_wasmoon_tools,
-                    allow_wasm_tools_fallback,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -851,8 +806,6 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
-                    prefer_wasmoon_tools,
-                    allow_wasm_tools_fallback,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -943,8 +896,6 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
-                    prefer_wasmoon_tools,
-                    allow_wasm_tools_fallback,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -1038,11 +989,6 @@ def main() -> int:
         default="./wasmoon-tools",
         help="Path to wasmoon-tools binary (default: ./wasmoon-tools)",
     )
-    parser.add_argument(
-        "--strict-wasmoon-tools",
-        action="store_true",
-        help="Disable wasm-tools fallback when component text compile fails",
-    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -1064,30 +1010,14 @@ def main() -> int:
         )
         return 1
 
-    allow_wasm_tools_fallback = not args.strict_wasmoon_tools
     supports_component_wat = probe_component_wat_support(wasmoon_tools)
-    prefer_wasmoon_tools = supports_component_wat
 
     if not supports_component_wat:
-        if args.strict_wasmoon_tools:
-            print(
-                "Error: wasmoon-tools wat2wasm does not support component text yet; "
-                "strict mode cannot run component-spec."
-            )
-            return 1
         print(
-            "Info: wasmoon-tools wat2wasm does not support component text yet; "
-            "runner will use wasm-tools parse fallback."
+            "Error: wasmoon-tools wat2wasm does not support component text yet; "
+            "component-spec runner requires native component text support."
         )
-
-    if allow_wasm_tools_fallback and not shutil.which("wasm-tools"):
-        print(
-            "Warning: wasm-tools not found; component text compile fallback is unavailable. "
-            "Runner will use wasmoon-tools only."
-        )
-        if not supports_component_wat:
-            return 1
-        prefer_wasmoon_tools = True
+        return 1
 
     test_dir = repo_root / args.dir
     if not test_dir.exists():
@@ -1112,8 +1042,6 @@ def main() -> int:
             wast_file,
             wasmoon,
             wasmoon_tools,
-            prefer_wasmoon_tools,
-            allow_wasm_tools_fallback,
             keep_tmp_on_failure=args.keep_tmp_on_failure,
         )
         total_passed += result["passed"]

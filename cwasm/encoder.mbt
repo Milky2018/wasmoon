@@ -336,17 +336,30 @@ fn encode_subtype(w : BinaryWriter, st : @types.SubType) -> Unit {
 }
 
 ///|
-/// Encode limits
-fn encode_limits(w : BinaryWriter, limits : @types.Limits) -> Unit {
-  match limits.max {
-    Some(max) => {
-      w.write_byte(0x01) // has max
-      w.write_u32(limits.min.to_int())
-      w.write_u32(max.to_int())
+/// Encode table limits (supports table64 via flag 0x04)
+fn encode_table_limits(
+  w : BinaryWriter,
+  limits : @types.Limits,
+  is_table64 : Bool,
+) -> Unit {
+  let has_max = limits.max is Some(_)
+  let mut flags = 0x00
+  if has_max {
+    flags = flags | 0x01
+  }
+  if is_table64 {
+    flags = flags | 0x04
+  }
+  w.write_byte(flags)
+  if is_table64 {
+    w.write_u64(limits.min)
+    if limits.max is Some(max) {
+      w.write_u64(max)
     }
-    None => {
-      w.write_byte(0x00) // no max
-      w.write_u32(limits.min.to_int())
+  } else {
+    w.write_u32(limits.min.to_int())
+    if limits.max is Some(max) {
+      w.write_u32(max.to_int())
     }
   }
 }
@@ -355,13 +368,45 @@ fn encode_limits(w : BinaryWriter, limits : @types.Limits) -> Unit {
 /// Encode a table type
 fn encode_table_type(w : BinaryWriter, tt : @types.TableType) -> Unit {
   encode_valtype(w, tt.elem_type)
-  encode_limits(w, tt.limits)
+  encode_table_limits(w, tt.limits, tt.is_table64)
+}
+
+///|
+/// Encode memory limits (supports memory64 and custom page sizes)
+fn encode_memory_limits(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
+  let has_max = mt.limits.max is Some(_)
+  let has_custom_page_size = mt.page_size_log2 != 16
+  let mut flags = 0x00
+  if has_max {
+    flags = flags | 0x01
+  }
+  if mt.is_memory64 {
+    flags = flags | 0x04
+  }
+  if has_custom_page_size {
+    flags = flags | 0x08
+  }
+  w.write_byte(flags)
+  if mt.is_memory64 {
+    w.write_u64(mt.limits.min)
+    if mt.limits.max is Some(max) {
+      w.write_u64(max)
+    }
+  } else {
+    w.write_u32(mt.limits.min.to_int())
+    if mt.limits.max is Some(max) {
+      w.write_u32(max.to_int())
+    }
+  }
+  if has_custom_page_size {
+    w.write_u32(mt.page_size_log2)
+  }
 }
 
 ///|
 /// Encode a memory type
 fn encode_memory_type(w : BinaryWriter, mt : @types.MemoryType) -> Unit {
-  encode_limits(w, mt.limits)
+  encode_memory_limits(w, mt)
 }
 
 ///|
@@ -395,7 +440,7 @@ fn encode_memarg(
   offset : Int64,
 ) -> Unit {
   w.write_u32(align)
-  w.write_u64(offset & 0xFFFFFFFFL)
+  w.write_u64(offset)
 }
 
 ///|
