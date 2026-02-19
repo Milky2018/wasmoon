@@ -45,7 +45,21 @@ pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
 ///|
 /// WAST-only JIT support check.
 pub fn has_unsupported_instructions_for_wast(mod_ : @types.Module) -> Bool {
-  has_unsupported_instructions(mod_)
+  if has_unsupported_instructions(mod_) {
+    return true
+  }
+  // TODO(amd64): remove this staged guard once amd64 reaches full WAST parity.
+  if @isa.ISA::current() is @isa.AMD64 {
+    if module_has_amd64_wast_risky_types(mod_) {
+      return true
+    }
+    for code in mod_.codes {
+      if contains_amd64_wast_risky_instruction(code.body) {
+        return true
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -67,6 +81,127 @@ fn contains_unsupported_instruction(instrs : Array[@types.Instruction]) -> Bool 
           return true
         }
       }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn is_amd64_wast_risky_value_type(ty : @types.ValueType) -> Bool {
+  match ty {
+    F32 | F64 | V128 => true
+    AnyRef
+    | StructRef
+    | ArrayRef
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefAny
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefStructAbs
+    | RefArrayAbs
+    | RefNone
+    | NullRef => true
+    _ => false
+  }
+}
+
+///|
+fn module_has_amd64_wast_risky_types(mod_ : @types.Module) -> Bool {
+  for subtype in mod_.types {
+    match subtype.composite {
+      Func(func_ty) => {
+        for ty in func_ty.params {
+          if is_amd64_wast_risky_value_type(ty) {
+            return true
+          }
+        }
+        for ty in func_ty.results {
+          if is_amd64_wast_risky_value_type(ty) {
+            return true
+          }
+        }
+      }
+      Struct(_) | Array(_) => return true
+    }
+  }
+  for code in mod_.codes {
+    for ty in code.locals {
+      if is_amd64_wast_risky_value_type(ty) {
+        return true
+      }
+    }
+  }
+  for global_ in mod_.globals {
+    if is_amd64_wast_risky_value_type(global_.type_.value_type) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn contains_amd64_wast_risky_instruction(
+  instrs : Array[@types.Instruction],
+) -> Bool {
+  for instr in instrs {
+    match instr {
+      Block(_, body) | Loop(_, body) =>
+        if contains_amd64_wast_risky_instruction(body) {
+          return true
+        }
+      If(_, then_body, else_body) => {
+        if contains_amd64_wast_risky_instruction(then_body) {
+          return true
+        }
+        if !else_body.is_empty() &&
+          contains_amd64_wast_risky_instruction(else_body) {
+          return true
+        }
+      }
+      CallIndirect(_, _)
+      | CallRef(_)
+      | ReturnCall(_)
+      | ReturnCallIndirect(_, _)
+      | ReturnCallRef(_)
+      | Select
+      | SelectTyped(_) => return true
+      StructNew(_)
+      | StructNewDefault(_)
+      | StructGet(_, _)
+      | StructGetS(_, _)
+      | StructGetU(_, _)
+      | StructSet(_, _)
+      | ArrayNew(_)
+      | ArrayNewDefault(_)
+      | ArrayNewFixed(_, _)
+      | ArrayNewData(_, _)
+      | ArrayNewElem(_, _)
+      | ArrayGet(_)
+      | ArrayGetS(_)
+      | ArrayGetU(_)
+      | ArraySet(_)
+      | ArrayLen
+      | ArrayFill(_)
+      | ArrayCopy(_, _)
+      | ArrayInitData(_, _)
+      | ArrayInitElem(_, _)
+      | RefTest(_)
+      | RefTestNull(_)
+      | RefCast(_)
+      | RefCastNull(_)
+      | BrOnCast(_, _, _)
+      | BrOnCastFail(_, _, _)
+      | RefI31
+      | I31GetS
+      | I31GetU
+      | AnyConvertExtern
+      | ExternConvertAny => return true
       _ => ()
     }
   }
