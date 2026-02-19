@@ -185,16 +185,21 @@ fn WastContext::try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
 ) -> JITModuleContext? {
+  if !self.use_jit {
+    return None
+  }
   // Check if module imports from any overridden built-in modules
   // JIT cannot use these since the built-in trampolines don't match the overridden implementation
   for imp in mod_.imports {
     if self.overridden_builtin_modules.contains(imp.mod_name) {
-      return None // Fall back to interpreter for overridden modules
+      abort(
+        "WAST JIT strict mode: import from overridden built-in module '\{imp.mod_name}' is not supported",
+      )
     }
   }
   match self.jit_compiler {
     Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
-    None => None
+    None => abort("WAST JIT strict mode: JIT compiler callback is missing")
   }
 }
 
@@ -290,7 +295,10 @@ pub fn run_wast_command(
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None => ctx.current_jit = None
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for module command",
+            )
         }
       } else {
         ctx.current_jit = None
@@ -329,9 +337,16 @@ pub fn run_wast_command(
       }
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
-      match ctx.try_compile_jit(mod_, instance) {
-        Some(jit_ctx) if ctx.use_jit => ctx.current_jit = Some(jit_ctx)
-        _ => ctx.current_jit = None
+      if ctx.use_jit {
+        match ctx.try_compile_jit(mod_, instance) {
+          Some(jit_ctx) => ctx.current_jit = Some(jit_ctx)
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for quoted module",
+            )
+        }
+      } else {
+        ctx.current_jit = None
       }
     }
     ModuleBinaryFailed(err) => {
@@ -392,7 +407,10 @@ pub fn run_wast_command(
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None => ctx.current_jit = None
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for module instance command",
+            )
         }
       } else {
         ctx.current_jit = None

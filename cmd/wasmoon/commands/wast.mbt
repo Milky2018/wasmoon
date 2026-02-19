@@ -88,17 +88,23 @@ fn try_compile_jit(
   wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
   if @wast.has_unsupported_instructions_for_wast(mod_) {
-    return None // Module contains instructions not supported by JIT
+    abort(
+      "WAST JIT strict mode: module contains instructions not supported by JIT",
+    )
   }
   // Check for cross-module imports that require state sharing
   // JIT can't properly share globals/memory/tables with other modules
   if @wast.has_cross_module_imports(mod_) {
-    return None // Fall back to interpreter for cross-module scenarios
+    abort(
+      "WAST JIT strict mode: cross-module imports requiring shared state are not supported",
+    )
   }
   // Check if module exports memory or tables that might be imported by others
   // JIT can't share its internal memory/table storage with the interpreter
   if @wast.exports_shared_resources(mod_) {
-    return None // Fall back to interpreter for potential cross-module sharing
+    abort(
+      "WAST JIT strict mode: exporting shared table resources is not supported",
+    )
   }
   // Check if all imports are supported by JIT
   let mut func_imp_idx = 0
@@ -113,13 +119,22 @@ fn try_compile_jit(
           -1
         }
         if func_addr < 0 {
-          return None
+          abort(
+            "WAST JIT strict mode: unresolved function import \{imp.mod_name}.\{imp.name}",
+          )
         }
-        let inst = store.get_func_inst(func_addr) catch { _ => return None }
+        let inst = store.get_func_inst(func_addr) catch {
+          _ =>
+            abort(
+              "WAST JIT strict mode: failed to read function import \{imp.mod_name}.\{imp.name}",
+            )
+        }
         if inst is @runtime.FuncInst::HostFunc(_) {
           ()
         } else {
-          return None // Unsupported import
+          abort(
+            "WAST JIT strict mode: non-host function import is not supported for \{imp.mod_name}.\{imp.name}",
+          )
         }
       }
       func_imp_idx = func_imp_idx + 1
@@ -146,7 +161,10 @@ fn try_compile_jit(
     false, // DWARF off for wast tests
   )
   match compiled {
-    None => None
+    None =>
+      abort(
+        "WAST JIT strict mode: compile_module_to_jit returned None (unsupported or failed compilation)",
+      )
     Some((pc, _)) => {
       // Build func_signatures array for JIT module
       let func_signatures = @wast.build_func_signatures(mod_)
@@ -174,7 +192,9 @@ fn try_compile_jit(
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {
-            return None
+            abort(
+              "WAST JIT strict mode: failed to initialize JIT memories from store",
+            )
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
