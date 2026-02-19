@@ -277,7 +277,93 @@ priv struct FuncTypeSig {
 ///|
 priv struct ImportEntry {
   name : String
-  type_idx : Int
+  desc : Bytes
+}
+
+///|
+priv struct TypeEntry {
+  bytes : Bytes
+  func_sig : FuncTypeSig?
+}
+
+///|
+priv struct ExportEntry {
+  name : String
+  sort_tag : Int
+  idx : Int
+  desc : Bytes?
+}
+
+///|
+priv struct NamedBinding {
+  name : String
+  idx : Int
+}
+
+///|
+priv struct CoreInstanceEntry {
+  module_idx : Int
+}
+
+///|
+priv struct AliasEntry {
+  kind : Int
+  instance_idx : Int
+  name : String
+}
+
+///|
+priv struct CoreAliasBinding {
+  kind : Int
+  instance_idx : Int
+  name : String
+  idx : Int
+}
+
+///|
+priv struct ComponentBuildState {
+  types : Array[TypeEntry]
+  imports : Array[ImportEntry]
+  exports : Array[ExportEntry]
+  nested_components : Array[Bytes]
+  core_modules : Array[Bytes]
+  core_instances : Array[CoreInstanceEntry]
+  aliases : Array[AliasEntry]
+  canons : Array[Bytes]
+  type_names : Array[NamedBinding]
+  core_module_names : Array[NamedBinding]
+  core_instance_names : Array[NamedBinding]
+  func_names : Array[NamedBinding]
+  core_alias_bindings : Array[CoreAliasBinding]
+  mut next_func_idx : Int
+  mut next_core_module_idx : Int
+  mut next_core_instance_idx : Int
+  mut next_core_func_idx : Int
+  mut next_core_memory_idx : Int
+}
+
+///|
+fn ComponentBuildState::new() -> ComponentBuildState {
+  {
+    types: [],
+    imports: [],
+    exports: [],
+    nested_components: [],
+    core_modules: [],
+    core_instances: [],
+    aliases: [],
+    canons: [],
+    type_names: [],
+    core_module_names: [],
+    core_instance_names: [],
+    func_names: [],
+    core_alias_bindings: [],
+    next_func_idx: 0,
+    next_core_module_idx: 0,
+    next_core_instance_idx: 0,
+    next_core_func_idx: 0,
+    next_core_memory_idx: 0,
+  }
 }
 
 ///|
@@ -318,7 +404,7 @@ fn ByteBuf::push_uleb_u32(self : ByteBuf, value : Int) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_ascii_name(
+fn ByteBuf::push_utf8_name(
   self : ByteBuf,
   name : String,
 ) -> Unit raise ComponentTextError {
@@ -351,6 +437,139 @@ fn expr_head_atom(expr : SExpr) -> String? {
     }
   }
   None
+}
+
+///|
+fn parse_decimal_index(atom : String) -> Int? {
+  if atom.length() == 0 {
+    return None
+  }
+  let mut value = 0
+  for ch in atom {
+    if ch < '0' || ch > '9' {
+      return None
+    }
+    value = value * 10 + (ch.to_int() - '0'.to_int())
+  }
+  Some(value)
+}
+
+///|
+fn lookup_named_index(bindings : Array[NamedBinding], name : String) -> Int? {
+  for binding in bindings {
+    if binding.name == name {
+      return Some(binding.idx)
+    }
+  }
+  None
+}
+
+///|
+fn bind_named_index(
+  bindings : Array[NamedBinding],
+  name_opt : String?,
+  idx : Int,
+) -> Unit {
+  if name_opt is Some(name) {
+    bindings.push({ name, idx })
+  }
+}
+
+///|
+fn parse_name_text(
+  expr : SExpr,
+  context : String,
+) -> String raise ComponentTextError {
+  if expr is Str(text) {
+    return text
+  }
+  if expr is Atom(text) {
+    return text
+  }
+  raise Unsupported("\{context} must be a string or atom")
+}
+
+///|
+fn parse_optional_identifier(field : Array[SExpr], at : Int) -> String? {
+  if at < field.length() {
+    if field[at] is Atom(name) && name.has_prefix("$") {
+      return Some(name)
+    }
+  }
+  None
+}
+
+///|
+fn resolve_reference(
+  expr : SExpr,
+  bindings : Array[NamedBinding],
+  context : String,
+) -> Int raise ComponentTextError {
+  if expr is Atom(text) {
+    if text.has_prefix("$") {
+      if lookup_named_index(bindings, text) is Some(idx) {
+        return idx
+      }
+      return 1_000_000
+    }
+    if parse_decimal_index(text) is Some(idx) {
+      return idx
+    }
+    raise Unsupported("unsupported \{context} reference '\{text}'")
+  }
+  raise Unsupported("unsupported \{context} reference")
+}
+
+///|
+fn int_array_to_bytes(values : Array[Int]) -> Bytes {
+  let bytes : Array[Byte] = []
+  for value in values {
+    bytes.push((value & 0xff).to_byte())
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn escape_wat_string(text : String) -> String {
+  let out = StringBuilder::new()
+  out.write_char('"')
+  for ch in text {
+    if ch == '"' {
+      out.write_string("\\\"")
+    } else if ch == '\\' {
+      out.write_string("\\\\")
+    } else if ch == '\n' {
+      out.write_string("\\n")
+    } else if ch == '\r' {
+      out.write_string("\\r")
+    } else if ch == '\t' {
+      out.write_string("\\t")
+    } else {
+      out.write_char(ch)
+    }
+  }
+  out.write_char('"')
+  out.to_string()
+}
+
+///|
+fn sexpr_to_wat(expr : SExpr) -> String {
+  match expr {
+    Atom(text) => text
+    Str(text) => escape_wat_string(text)
+    List(items) => {
+      let out = StringBuilder::new()
+      out.write_char('(')
+      for i in 0..<items.length() {
+        if i > 0 {
+          out.write_char(' ')
+        }
+        out.write_string(sexpr_to_wat(items[i]))
+      }
+      out.write_char(')')
+      out.to_string()
+    }
+  }
 }
 
 ///|
@@ -407,7 +626,14 @@ fn parse_func_sig(desc : Array[SExpr]) -> FuncTypeSig raise ComponentTextError {
           params.push({ label: "p\{params.length()}", type_opcode })
           continue
         }
-        if items.length() == 3 && items[1] is Str(label) {
+        if items.length() == 3 {
+          let label = if items[1] is Str(name) {
+            name
+          } else if items[1] is Atom(name) {
+            name
+          } else {
+            raise Unsupported("unsupported param label")
+          }
           let type_opcode = parse_valtype(items[2])
           params.push({ label, type_opcode })
           continue
@@ -432,30 +658,101 @@ fn parse_func_sig(desc : Array[SExpr]) -> FuncTypeSig raise ComponentTextError {
 }
 
 ///|
-fn ensure_func_type(types : Array[FuncTypeSig], sig : FuncTypeSig) -> Int {
-  for type_index in 0..<types.length() {
-    if types[type_index] == sig {
+fn encode_func_typedef(sig : FuncTypeSig) -> Bytes raise ComponentTextError {
+  let payload = ByteBuf::new()
+  payload.push_u8(0x40)
+  payload.push_uleb_u32(sig.params.length())
+  for param in sig.params {
+    payload.push_utf8_name(param.label)
+    payload.push_u8(param.type_opcode)
+  }
+  if sig.result_opcode is Some(opcode) {
+    payload.push_u8(0x00)
+    payload.push_u8(opcode)
+  } else {
+    payload.push_u8(0x01)
+    payload.push_u8(0x00)
+  }
+  payload.to_bytes()
+}
+
+///|
+fn add_type_entry(
+  state : ComponentBuildState,
+  type_bytes : Bytes,
+  func_sig : FuncTypeSig?,
+  name_opt : String?,
+) -> Int {
+  let idx = state.types.length()
+  state.types.push({ bytes: type_bytes, func_sig })
+  bind_named_index(state.type_names, name_opt, idx)
+  idx
+}
+
+///|
+fn ensure_func_type(
+  state : ComponentBuildState,
+  sig : FuncTypeSig,
+) -> Int raise ComponentTextError {
+  for type_index in 0..<state.types.length() {
+    let entry = state.types[type_index]
+    if entry.func_sig is Some(existing) && existing == sig {
       return type_index
     }
   }
-  types.push(sig)
-  types.length() - 1
+  add_type_entry(state, encode_func_typedef(sig), Some(sig), None)
+}
+
+///|
+fn parse_type_use(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Int raise ComponentTextError {
+  if field.length() != 2 {
+    raise Unsupported("type use must be `(type <index-or-id>)`")
+  }
+  resolve_reference(field[1], state.type_names, "type")
+}
+
+///|
+fn parse_import_func_desc(
+  desc : Array[SExpr],
+  state : ComponentBuildState,
+) -> (String?, Int) raise ComponentTextError {
+  let mut func_name : String? = None
+  let mut type_use : Int? = None
+  let filtered : Array[SExpr] = [Atom("func")]
+
+  let mut start = 1
+  if parse_optional_identifier(desc, 1) is Some(name) {
+    func_name = Some(name)
+    filtered.push(Atom(name))
+    start = 2
+  }
+  for i in start..<desc.length() {
+    let item = desc[i]
+    if item is List(items) && items.length() > 0 && items[0] is Atom("type") {
+      type_use = Some(parse_type_use(items, state))
+      continue
+    }
+    filtered.push(item)
+  }
+  if type_use is Some(idx) {
+    return (func_name, idx)
+  }
+  let sig = parse_func_sig(filtered)
+  (func_name, ensure_func_type(state, sig))
 }
 
 ///|
 fn parse_import(
   field : Array[SExpr],
-  types : Array[FuncTypeSig],
-  imports : Array[ImportEntry],
+  state : ComponentBuildState,
 ) -> Unit raise ComponentTextError {
   if field.length() != 3 {
     raise Unsupported("import form currently expects exactly one descriptor")
   }
-  let name = if field[1] is Str(value) {
-    value
-  } else {
-    raise Unsupported("import name must be a string literal")
-  }
+  let name = parse_name_text(field[1], "import name")
   let desc = if field[2] is List(items) {
     items
   } else {
@@ -465,34 +762,30 @@ fn parse_import(
     raise Unsupported("empty import descriptor")
   }
   if desc[0] is Atom("func") {
-    let sig = parse_func_sig(desc)
-    let type_idx = ensure_func_type(types, sig)
-    imports.push({ name, type_idx })
+    let (func_name, type_idx) = parse_import_func_desc(desc, state)
+    state.imports.push({
+      name,
+      desc: {
+        let b = ByteBuf::new()
+        b.push_u8(0x01)
+        b.push_uleb_u32(type_idx)
+        b.to_bytes()
+      },
+    })
+    let func_idx = state.next_func_idx
+    state.next_func_idx += 1
+    bind_named_index(state.func_names, func_name, func_idx)
     return
   }
   raise Unsupported("unsupported import descriptor")
 }
 
 ///|
-fn encode_type_section(
-  types : Array[FuncTypeSig],
-) -> Bytes raise ComponentTextError {
+fn encode_type_section(entries : Array[TypeEntry]) -> Bytes {
   let payload = ByteBuf::new()
-  payload.push_uleb_u32(types.length())
-  for sig in types {
-    payload.push_u8(0x40)
-    payload.push_uleb_u32(sig.params.length())
-    for param in sig.params {
-      payload.push_ascii_name(param.label)
-      payload.push_u8(param.type_opcode)
-    }
-    if sig.result_opcode is Some(opcode) {
-      payload.push_u8(0x00)
-      payload.push_u8(opcode)
-    } else {
-      payload.push_u8(0x01)
-      payload.push_u8(0x00)
-    }
+  payload.push_uleb_u32(entries.length())
+  for entry in entries {
+    payload.push_bytes(entry.bytes)
   }
   payload.to_bytes()
 }
@@ -505,11 +798,466 @@ fn encode_import_section(
   payload.push_uleb_u32(imports.length())
   for import_item in imports {
     payload.push_u8(0x00)
-    payload.push_ascii_name(import_item.name)
-    payload.push_u8(0x01)
-    payload.push_uleb_u32(import_item.type_idx)
+    payload.push_utf8_name(import_item.name)
+    payload.push_bytes(import_item.desc)
   }
   payload.to_bytes()
+}
+
+///|
+fn encode_export_section(
+  exports : Array[ExportEntry],
+) -> Bytes raise ComponentTextError {
+  let payload = ByteBuf::new()
+  payload.push_uleb_u32(exports.length())
+  for export_item in exports {
+    payload.push_u8(0x00)
+    payload.push_utf8_name(export_item.name)
+    payload.push_u8(export_item.sort_tag)
+    payload.push_uleb_u32(export_item.idx)
+    if export_item.desc is Some(desc) {
+      payload.push_u8(0x01)
+      payload.push_bytes(desc)
+    } else {
+      payload.push_u8(0x00)
+    }
+  }
+  payload.to_bytes()
+}
+
+///|
+fn encode_core_instance_section(instances : Array[CoreInstanceEntry]) -> Bytes {
+  let payload = ByteBuf::new()
+  payload.push_uleb_u32(instances.length())
+  for inst in instances {
+    payload.push_u8(0x00)
+    payload.push_uleb_u32(inst.module_idx)
+    payload.push_uleb_u32(0)
+  }
+  payload.to_bytes()
+}
+
+///|
+fn encode_alias_section(
+  aliases : Array[AliasEntry],
+) -> Bytes raise ComponentTextError {
+  let payload = ByteBuf::new()
+  payload.push_uleb_u32(aliases.length())
+  for alias_entry in aliases {
+    payload.push_u8(0x00)
+    payload.push_u8(alias_entry.kind)
+    payload.push_u8(0x01)
+    payload.push_uleb_u32(alias_entry.instance_idx)
+    payload.push_utf8_name(alias_entry.name)
+  }
+  payload.to_bytes()
+}
+
+///|
+fn encode_canon_section(canon_entries : Array[Bytes]) -> Bytes {
+  let payload = ByteBuf::new()
+  payload.push_uleb_u32(canon_entries.length())
+  for entry in canon_entries {
+    payload.push_bytes(entry)
+  }
+  payload.to_bytes()
+}
+
+///|
+fn parse_type_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  if field.length() < 2 {
+    raise Unsupported("type declaration is missing a body")
+  }
+  let name_opt = parse_optional_identifier(field, 1)
+  let body_index = if name_opt is Some(_) { 2 } else { 1 }
+  if body_index >= field.length() {
+    raise Unsupported("type declaration is missing a body")
+  }
+  let body = field[body_index]
+  if body is List(items) {
+    if items.length() > 0 && items[0] is Atom("func") {
+      let sig = parse_func_sig(items)
+      add_type_entry(state, encode_func_typedef(sig), Some(sig), name_opt)
+      |> ignore
+      return
+    }
+  }
+  if body is Atom(name) {
+    if prim_type_opcode(name) is Some(opcode) {
+      let payload = ByteBuf::new()
+      payload.push_u8(opcode)
+      add_type_entry(state, payload.to_bytes(), None, name_opt) |> ignore
+      return
+    }
+  }
+  raise Unsupported("unsupported type declaration")
+}
+
+///|
+fn parse_core_alias_binding(
+  state : ComponentBuildState,
+  kind : Int,
+  instance_idx : Int,
+  export_name : String,
+) -> Int raise ComponentTextError {
+  for binding in state.core_alias_bindings {
+    if binding.kind == kind &&
+      binding.instance_idx == instance_idx &&
+      binding.name == export_name {
+      return binding.idx
+    }
+  }
+  let idx = if kind == 0x00 {
+    let idx = state.next_core_func_idx
+    state.next_core_func_idx += 1
+    idx
+  } else if kind == 0x02 {
+    let idx = state.next_core_memory_idx
+    state.next_core_memory_idx += 1
+    idx
+  } else {
+    raise Unsupported("unsupported core alias kind \{kind}")
+  }
+  state.aliases.push({ kind, instance_idx, name: export_name })
+  state.core_alias_bindings.push({ kind, instance_idx, name: export_name, idx })
+  idx
+}
+
+///|
+fn parse_core_func_ref(
+  expr : SExpr,
+  state : ComponentBuildState,
+) -> Int raise ComponentTextError {
+  let items = if expr is List(items) {
+    items
+  } else {
+    raise Unsupported("expected `(core func <instance> <export>)`")
+  }
+  let mut start = 0
+  if items.length() >= 2 && items[0] is Atom("core") && items[1] is Atom("func") {
+    start = 2
+  } else if items.length() >= 1 && items[0] is Atom("func") {
+    start = 1
+  } else {
+    raise Unsupported("unsupported function reference")
+  }
+  if start + 2 != items.length() {
+    raise Unsupported("function reference must have instance and export name")
+  }
+  let instance_idx = resolve_reference(
+    items[start],
+    state.core_instance_names,
+    "core instance",
+  )
+  let export_name = parse_name_text(items[start + 1], "core export name")
+  parse_core_alias_binding(state, 0x00, instance_idx, export_name)
+}
+
+///|
+fn parse_memory_opt(
+  opt_items : Array[SExpr],
+  state : ComponentBuildState,
+) -> Int raise ComponentTextError {
+  if opt_items.length() != 3 {
+    raise Unsupported("memory option must be `(memory <instance> <export>)`")
+  }
+  let instance_idx = resolve_reference(
+    opt_items[1],
+    state.core_instance_names,
+    "core instance",
+  )
+  let export_name = parse_name_text(opt_items[2], "memory export name")
+  parse_core_alias_binding(state, 0x02, instance_idx, export_name)
+}
+
+///|
+fn parse_canon_lift(
+  canon_items : Array[SExpr],
+  state : ComponentBuildState,
+  type_idx : Int,
+) -> Bytes raise ComponentTextError {
+  if canon_items.length() < 3 {
+    raise Unsupported("`canon lift` requires a core function reference")
+  }
+  let core_func_idx = parse_core_func_ref(canon_items[2], state)
+  let opt_body = ByteBuf::new()
+  let mut opt_count = 0
+  for i in 3..<canon_items.length() {
+    let opt_items = if canon_items[i] is List(items) {
+      items
+    } else {
+      raise Unsupported("canonical options must be lists")
+    }
+    if opt_items.length() == 0 {
+      raise Unsupported("empty canonical option")
+    }
+    if opt_items[0] is Atom("memory") {
+      let mem_idx = parse_memory_opt(opt_items, state)
+      opt_body.push_u8(0x03)
+      opt_body.push_uleb_u32(mem_idx)
+      opt_count += 1
+      continue
+    }
+    if opt_items[0] is Atom("realloc") {
+      if opt_items.length() != 3 {
+        raise Unsupported(
+          "realloc option must be `(realloc <instance> <export>)`",
+        )
+      }
+      let instance_idx = resolve_reference(
+        opt_items[1],
+        state.core_instance_names,
+        "core instance",
+      )
+      let export_name = parse_name_text(opt_items[2], "realloc export name")
+      let func_idx = parse_core_alias_binding(
+        state, 0x00, instance_idx, export_name,
+      )
+      opt_body.push_u8(0x04)
+      opt_body.push_uleb_u32(func_idx)
+      opt_count += 1
+      continue
+    }
+    if opt_items[0] is Atom("post-return") {
+      let post_func_idx = if opt_items.length() == 2 && opt_items[1] is List(_) {
+        parse_core_func_ref(opt_items[1], state)
+      } else if opt_items.length() == 3 {
+        let instance_idx = resolve_reference(
+          opt_items[1],
+          state.core_instance_names,
+          "core instance",
+        )
+        let export_name = parse_name_text(
+          opt_items[2],
+          "post-return export name",
+        )
+        parse_core_alias_binding(state, 0x00, instance_idx, export_name)
+      } else {
+        raise Unsupported(
+          "post-return option must be `(post-return (func ...))` or `(post-return <instance> <export>)`",
+        )
+      }
+      opt_body.push_u8(0x05)
+      opt_body.push_uleb_u32(post_func_idx)
+      opt_count += 1
+      continue
+    }
+    if opt_items.length() == 1 && opt_items[0] is Atom(name) {
+      if name == "string-encoding=utf8" {
+        opt_body.push_u8(0x00)
+        opt_count += 1
+        continue
+      }
+      if name == "string-encoding=utf16" {
+        opt_body.push_u8(0x01)
+        opt_count += 1
+        continue
+      }
+      if name == "string-encoding=latin1+utf16" {
+        opt_body.push_u8(0x02)
+        opt_count += 1
+        continue
+      }
+    }
+    raise Unsupported("unsupported canonical option")
+  }
+
+  let out = ByteBuf::new()
+  out.push_u8(0x00)
+  out.push_u8(0x00)
+  out.push_uleb_u32(core_func_idx)
+  out.push_uleb_u32(opt_count)
+  out.push_bytes(opt_body.to_bytes())
+  out.push_uleb_u32(type_idx)
+  out.to_bytes()
+}
+
+///|
+fn parse_func_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  let name_opt = parse_optional_identifier(field, 1)
+  let mut index = if name_opt is Some(_) { 2 } else { 1 }
+  let exports : Array[String] = []
+  let sig_items : Array[SExpr] = [Atom("func")]
+  if name_opt is Some(name) {
+    sig_items.push(Atom(name))
+  }
+  let mut type_idx_opt : Int? = None
+  let mut canon_items_opt : Array[SExpr]? = None
+
+  while index < field.length() {
+    let item = field[index]
+    index += 1
+    let list = if item is List(items) {
+      items
+    } else {
+      raise Unsupported("unsupported function declaration item")
+    }
+    if list.length() == 0 {
+      raise Unsupported("empty function declaration item")
+    }
+    if list[0] is Atom("export") {
+      if list.length() != 2 {
+        raise Unsupported("function export must be `(export <name>)`")
+      }
+      exports.push(parse_name_text(list[1], "function export name"))
+      continue
+    }
+    if list[0] is Atom("type") {
+      type_idx_opt = Some(parse_type_use(list, state))
+      continue
+    }
+    if list[0] is Atom("canon") {
+      canon_items_opt = Some(list)
+      continue
+    }
+    sig_items.push(item)
+  }
+
+  let type_idx = if type_idx_opt is Some(type_idx) {
+    type_idx
+  } else {
+    let sig = parse_func_sig(sig_items)
+    ensure_func_type(state, sig)
+  }
+
+  let canon_items = match canon_items_opt {
+    Some(items) => items
+    None =>
+      raise Unsupported(
+        "function body currently requires a canonical declaration",
+      )
+  }
+  if canon_items.length() < 2 || !(canon_items[0] is Atom("canon")) {
+    raise Unsupported("unsupported canonical declaration")
+  }
+  if !(canon_items[1] is Atom("lift")) {
+    raise Unsupported("only `canon lift` is supported in function declarations")
+  }
+
+  let func_idx = state.next_func_idx
+  state.next_func_idx += 1
+  bind_named_index(state.func_names, name_opt, func_idx)
+
+  let canon_bytes = parse_canon_lift(canon_items, state, type_idx)
+  state.canons.push(canon_bytes)
+
+  for export_name in exports {
+    state.exports.push({
+      name: export_name,
+      sort_tag: 0x01,
+      idx: func_idx,
+      desc: None,
+    })
+  }
+}
+
+///|
+fn parse_export_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  if field.length() != 3 {
+    raise Unsupported("export form expects `(export <name> <desc>)`")
+  }
+  let name = parse_name_text(field[1], "export name")
+  let desc = if field[2] is List(items) {
+    items
+  } else {
+    raise Unsupported("export descriptor must be a list")
+  }
+  if desc.length() < 2 {
+    raise Unsupported("export descriptor is incomplete")
+  }
+  if desc[0] is Atom("func") {
+    let idx = resolve_reference(desc[1], state.func_names, "function")
+    state.exports.push({ name, sort_tag: 0x01, idx, desc: None })
+    return
+  }
+  raise Unsupported("unsupported export descriptor")
+}
+
+///|
+fn parse_core_module_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  let name_opt = parse_optional_identifier(field, 2)
+  let start = if name_opt is Some(_) { 3 } else { 2 }
+  let module_items : Array[SExpr] = [Atom("module")]
+  for i in start..<field.length() {
+    module_items.push(field[i])
+  }
+  let module_text = sexpr_to_wat(List(module_items))
+  let mod = @wat.parse(module_text) catch {
+    e => raise ParseError("failed to parse core module: \{e}")
+  }
+  let bytes = int_array_to_bytes(@cwasm.encode(mod))
+  state.core_modules.push(bytes)
+  let idx = state.next_core_module_idx
+  state.next_core_module_idx += 1
+  bind_named_index(state.core_module_names, name_opt, idx)
+}
+
+///|
+fn parse_core_instance_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  if field.length() < 3 {
+    raise Unsupported("core instance declaration is incomplete")
+  }
+  let name_opt = parse_optional_identifier(field, 2)
+  let expr_index = if name_opt is Some(_) { 3 } else { 2 }
+  if expr_index >= field.length() {
+    raise Unsupported("core instance declaration is missing an expression")
+  }
+  let expr = if field[expr_index] is List(items) {
+    items
+  } else {
+    raise Unsupported("core instance expression must be a list")
+  }
+  if expr.length() < 2 || !(expr[0] is Atom("instantiate")) {
+    raise Unsupported("only `(instantiate ...)` core instances are supported")
+  }
+  if expr.length() > 2 {
+    raise Unsupported(
+      "core instance instantiate arguments are not supported yet",
+    )
+  }
+  let module_idx = resolve_reference(
+    expr[1],
+    state.core_module_names,
+    "core module",
+  )
+  state.core_instances.push({ module_idx, })
+  let idx = state.next_core_instance_idx
+  state.next_core_instance_idx += 1
+  bind_named_index(state.core_instance_names, name_opt, idx)
+}
+
+///|
+fn parse_core_field(
+  field : Array[SExpr],
+  state : ComponentBuildState,
+) -> Unit raise ComponentTextError {
+  if field.length() < 2 {
+    raise Unsupported("empty core declaration")
+  }
+  if field[1] is Atom("module") {
+    parse_core_module_field(field, state)
+    return
+  }
+  if field[1] is Atom("instance") {
+    parse_core_instance_field(field, state)
+    return
+  }
+  raise Unsupported("unsupported core declaration")
 }
 
 ///|
@@ -537,9 +1285,7 @@ fn compile_component_expr(
     }
   }
 
-  let type_entries : Array[FuncTypeSig] = []
-  let import_entries : Array[ImportEntry] = []
-  let nested_components : Array[Bytes] = []
+  let state = ComponentBuildState::new()
 
   for index in field_index..<expr.length() {
     let field_expr = expr[index]
@@ -552,11 +1298,27 @@ fn compile_component_expr(
       raise Unsupported("empty component field")
     }
     if field[0] is Atom("import") {
-      parse_import(field, type_entries, import_entries)
+      parse_import(field, state)
       continue
     }
     if field[0] is Atom("component") {
-      nested_components.push(compile_component_expr(field))
+      state.nested_components.push(compile_component_expr(field))
+      continue
+    }
+    if field[0] is Atom("type") {
+      parse_type_field(field, state)
+      continue
+    }
+    if field[0] is Atom("core") {
+      parse_core_field(field, state)
+      continue
+    }
+    if field[0] is Atom("func") {
+      parse_func_field(field, state)
+      continue
+    }
+    if field[0] is Atom("export") {
+      parse_export_field(field, state)
       continue
     }
     let head_name = match expr_head_atom(field_expr) {
@@ -576,14 +1338,29 @@ fn compile_component_expr(
   out.push_u8(0x01)
   out.push_u8(0x00)
 
-  for nested in nested_components {
+  for core_module in state.core_modules {
+    append_section(out, 1, core_module)
+  }
+  if state.core_instances.length() > 0 {
+    append_section(out, 2, encode_core_instance_section(state.core_instances))
+  }
+  for nested in state.nested_components {
     append_section(out, 4, nested)
   }
-  if type_entries.length() > 0 {
-    append_section(out, 7, encode_type_section(type_entries))
+  if state.aliases.length() > 0 {
+    append_section(out, 6, encode_alias_section(state.aliases))
   }
-  if import_entries.length() > 0 {
-    append_section(out, 10, encode_import_section(import_entries))
+  if state.types.length() > 0 {
+    append_section(out, 7, encode_type_section(state.types))
+  }
+  if state.canons.length() > 0 {
+    append_section(out, 8, encode_canon_section(state.canons))
+  }
+  if state.imports.length() > 0 {
+    append_section(out, 10, encode_import_section(state.imports))
+  }
+  if state.exports.length() > 0 {
+    append_section(out, 11, encode_export_section(state.exports))
   }
 
   out.to_bytes()
