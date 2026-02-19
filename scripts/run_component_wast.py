@@ -505,20 +505,79 @@ def should_instantiate_component(node: object) -> bool:
 
 
 def compile_component(
-    text: str, tmp: Path, idx: int
+    text: str,
+    tmp: Path,
+    idx: int,
+    wasmoon_tools: Path,
+    prefer_wasmoon_tools: bool,
+    allow_wasm_tools_fallback: bool,
 ) -> Tuple[Optional[Path], Optional[str]]:
     src = tmp / f"component_{idx}.wat"
     out = tmp / f"component_{idx}.wasm"
     src.write_text(text, encoding="utf-8")
-    result = subprocess.run(
-        ["wasm-tools", "parse", str(src), "-o", str(out)],
+
+    wasmoon_tools_err = ""
+    if prefer_wasmoon_tools:
+        result = subprocess.run(
+            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return out, None
+
+        wasmoon_tools_err = (result.stderr or result.stdout or "").strip()
+
+    if not allow_wasm_tools_fallback:
+        if not prefer_wasmoon_tools:
+            return (
+                None,
+                "component text compile requires wasm-tools fallback, but strict mode is enabled",
+            )
+        return (
+            None,
+            "wasmoon-tools wat2wasm failed (strict mode): "
+            + (wasmoon_tools_err or "unknown error"),
+        )
+
+    wasm_tools = shutil.which("wasm-tools")
+    if not wasm_tools:
+        return (
+            None,
+            "wasmoon-tools wat2wasm failed and wasm-tools fallback is unavailable: "
+            + (wasmoon_tools_err or "unknown error"),
+        )
+
+    fallback = subprocess.run(
+        [wasm_tools, "parse", str(src), "-o", str(out)],
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        err = (result.stderr or result.stdout or "").strip()
-        return None, err or "wasm-tools parse failed"
+    if fallback.returncode != 0:
+        fallback_err = (fallback.stderr or fallback.stdout or "").strip()
+        return (
+            None,
+            "wasmoon-tools wat2wasm failed: "
+            + (wasmoon_tools_err or "unknown error")
+            + " ; wasm-tools parse failed: "
+            + (fallback_err or "unknown error"),
+        )
+
     return out, None
+
+
+def probe_component_wat_support(wasmoon_tools: Path) -> bool:
+    with tempfile.TemporaryDirectory(prefix="wasmoon_component_probe_") as tmp:
+        tmp_path = Path(tmp)
+        src = tmp_path / "probe_component.wat"
+        out = tmp_path / "probe_component.wasm"
+        src.write_text("(component)", encoding="utf-8")
+        result = subprocess.run(
+            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0 and out.exists()
 
 
 def validate_component(
@@ -587,7 +646,15 @@ def run_component_script(
     return passed, failed, skipped, failures, out.strip(), saw_result
 
 
-def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) -> dict:
+def run_file(
+    path: Path,
+    wasmoon: Path,
+    wasmoon_tools: Path,
+    prefer_wasmoon_tools: bool,
+    allow_wasm_tools_fallback: bool,
+    *,
+    keep_tmp_on_failure: bool = False,
+) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = 0
     failures: list[str] = []
@@ -635,7 +702,14 @@ def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) ->
                 if normalized is None:
                     fail(f"unsupported component form kind={kind}")
                     continue
-                comp_bin, err = compile_component(normalized, tmp_path, comp_idx)
+                comp_bin, err = compile_component(
+                    normalized,
+                    tmp_path,
+                    comp_idx,
+                    wasmoon_tools,
+                    prefer_wasmoon_tools,
+                    allow_wasm_tools_fallback,
+                )
                 comp_idx += 1
                 if comp_bin is None:
                     fail(f"component parse failed: {err}")
@@ -681,7 +755,14 @@ def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) ->
                 if kind == "instance" or normalized is None:
                     fail("assert_invalid uses unsupported component instance form")
                     continue
-                comp_bin, err = compile_component(normalized, tmp_path, comp_idx)
+                comp_bin, err = compile_component(
+                    normalized,
+                    tmp_path,
+                    comp_idx,
+                    wasmoon_tools,
+                    prefer_wasmoon_tools,
+                    allow_wasm_tools_fallback,
+                )
                 comp_idx += 1
                 if comp_bin is None:
                     if expected_msg:
@@ -734,7 +815,14 @@ def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) ->
                 if kind == "instance" or normalized is None:
                     fail("assert_malformed uses unsupported component instance form")
                     continue
-                comp_bin, _err = compile_component(normalized, tmp_path, comp_idx)
+                comp_bin, _err = compile_component(
+                    normalized,
+                    tmp_path,
+                    comp_idx,
+                    wasmoon_tools,
+                    prefer_wasmoon_tools,
+                    allow_wasm_tools_fallback,
+                )
                 comp_idx += 1
                 if comp_bin is None:
                     passed += 1
@@ -758,7 +846,14 @@ def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) ->
                 if kind == "instance" or normalized is None:
                     fail("assert_unlinkable uses unsupported component instance form")
                     continue
-                comp_bin, err = compile_component(normalized, tmp_path, comp_idx)
+                comp_bin, err = compile_component(
+                    normalized,
+                    tmp_path,
+                    comp_idx,
+                    wasmoon_tools,
+                    prefer_wasmoon_tools,
+                    allow_wasm_tools_fallback,
+                )
                 comp_idx += 1
                 if comp_bin is None:
                     fail(f"assert_unlinkable parse failed: {err}")
@@ -843,7 +938,14 @@ def run_file(path: Path, wasmoon: Path, *, keep_tmp_on_failure: bool = False) ->
                 if kind == "instance" or normalized is None:
                     fail("assert_trap uses unsupported component instance form")
                     continue
-                comp_bin, err = compile_component(normalized, tmp_path, comp_idx)
+                comp_bin, err = compile_component(
+                    normalized,
+                    tmp_path,
+                    comp_idx,
+                    wasmoon_tools,
+                    prefer_wasmoon_tools,
+                    allow_wasm_tools_fallback,
+                )
                 comp_idx += 1
                 if comp_bin is None:
                     fail(f"assert_trap component parse failed: {err}")
@@ -930,6 +1032,17 @@ def main() -> int:
         action="store_true",
         help="Keep per-file temporary directories when a file fails (debug)",
     )
+    parser.add_argument(
+        "--wasmoon-tools",
+        type=str,
+        default="./wasmoon-tools",
+        help="Path to wasmoon-tools binary (default: ./wasmoon-tools)",
+    )
+    parser.add_argument(
+        "--strict-wasmoon-tools",
+        action="store_true",
+        help="Disable wasm-tools fallback when component text compile fails",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -940,6 +1053,41 @@ def main() -> int:
             "Run moon build --target native --release && ./install.sh first."
         )
         return 1
+
+    wasmoon_tools = Path(args.wasmoon_tools)
+    if not wasmoon_tools.is_absolute():
+        wasmoon_tools = (repo_root / wasmoon_tools).resolve()
+    if not wasmoon_tools.exists():
+        print(
+            "Error: wasmoon-tools binary not found at "
+            f"'{wasmoon_tools}'. Run moon build --target native --release && ./install.sh first."
+        )
+        return 1
+
+    allow_wasm_tools_fallback = not args.strict_wasmoon_tools
+    supports_component_wat = probe_component_wat_support(wasmoon_tools)
+    prefer_wasmoon_tools = supports_component_wat
+
+    if not supports_component_wat:
+        if args.strict_wasmoon_tools:
+            print(
+                "Error: wasmoon-tools wat2wasm does not support component text yet; "
+                "strict mode cannot run component-spec."
+            )
+            return 1
+        print(
+            "Info: wasmoon-tools wat2wasm does not support component text yet; "
+            "runner will use wasm-tools parse fallback."
+        )
+
+    if allow_wasm_tools_fallback and not shutil.which("wasm-tools"):
+        print(
+            "Warning: wasm-tools not found; component text compile fallback is unavailable. "
+            "Runner will use wasmoon-tools only."
+        )
+        if not supports_component_wat:
+            return 1
+        prefer_wasmoon_tools = True
 
     test_dir = repo_root / args.dir
     if not test_dir.exists():
@@ -960,7 +1108,14 @@ def main() -> int:
     total_passed = total_failed = total_skipped = 0
     files_ok = files_failed = 0
     for wast_file in wast_files:
-        result = run_file(wast_file, wasmoon, keep_tmp_on_failure=args.keep_tmp_on_failure)
+        result = run_file(
+            wast_file,
+            wasmoon,
+            wasmoon_tools,
+            prefer_wasmoon_tools,
+            allow_wasm_tools_fallback,
+            keep_tmp_on_failure=args.keep_tmp_on_failure,
+        )
         total_passed += result["passed"]
         total_failed += result["failed"]
         total_skipped += result["skipped"]

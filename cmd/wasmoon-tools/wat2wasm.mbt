@@ -1,7 +1,49 @@
 ///|
+fn is_ascii_space(c : Char) -> Bool {
+  c == ' ' || c == '\n' || c == '\r' || c == '\t'
+}
+
+///|
+fn starts_with_component_form(text : String) -> Bool {
+  let mut i = 0
+  while i < text.length() {
+    let c = text.code_unit_at(i).unsafe_to_char()
+    if is_ascii_space(c) {
+      i += 1
+      continue
+    }
+    if c != '(' {
+      return false
+    }
+    i += 1
+    while i < text.length() &&
+          is_ascii_space(text.code_unit_at(i).unsafe_to_char()) {
+      i += 1
+    }
+    let keyword = StringBuilder::new()
+    while i < text.length() {
+      let k = text.code_unit_at(i).unsafe_to_char()
+      if is_ascii_space(k) || k == ')' || k == '(' {
+        break
+      }
+      keyword.write_char(k)
+      i += 1
+    }
+    return keyword.to_string() == "component"
+  }
+  false
+}
+
+///|
 fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   // Parse WAT text
   let text = read_text_file(file)
+  if starts_with_component_form(text) {
+    exit_error(
+      "component text parsing is not implemented in wasmoon-tools wat2wasm yet",
+    )
+    panic()
+  }
   let mod = @wat.parse(text) catch {
     e => {
       exit_error("parsing WAT: \{e}")
