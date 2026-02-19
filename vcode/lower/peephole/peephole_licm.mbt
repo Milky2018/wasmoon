@@ -437,6 +437,20 @@ fn same_reg_class(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
+/// Check if an immediate fits AArch64 add/sub encoding (12-bit or 12-bit<<12).
+///
+/// Kept local to avoid package cycles with `vcode/lower`.
+fn is_valid_add_imm(val : Int64) -> Bool {
+  if val >= 0L && val <= 4095L {
+    return true
+  }
+  if val >= 0L && (val & 0xFFFL) == 0L && val >> 12 <= 4095L {
+    return true
+  }
+  false
+}
+
+///|
 /// Convert a compare kind to a branch condition.
 fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
   match kind {
