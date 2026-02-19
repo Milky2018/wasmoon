@@ -21,6 +21,7 @@ import {
 
 import {
   "Milky2018/wasmoon/component",
+  "Milky2018/wasmoon/validator/component_model",
   "Milky2018/wasmoon/wit",
   "moonbitlang/core/double",
   "moonbitlang/core/float",

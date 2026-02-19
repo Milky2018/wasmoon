@@ -18,9 +18,9 @@ fn run_component_command(
     }
   }
   if validate {
-    @validator.validate_component_with_config(
+    @component_model.validate_component_with_config(
       parsed,
-      @validator.ComponentValidationConfig::new(wit_names),
+      @component_model.ComponentValidationConfig::new(wit_names),
     ) catch {
       e => {
         println("validate component error: \{e}")

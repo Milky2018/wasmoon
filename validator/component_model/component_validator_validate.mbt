@@ -228,7 +228,7 @@ fn validate_component_inner(
           }
           seen_imports.set(key, 1)
         }
-        validate_module(core_mod) catch {
+        @validator.validate_module(core_mod) catch {
           e => raise CoreModuleError("validate core module: \{e}")
         }
         let exports : Map[String, Int] = {}
