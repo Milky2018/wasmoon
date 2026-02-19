@@ -35,15 +35,41 @@ fn starts_with_component_form(text : String) -> Bool {
 }
 
 ///|
-fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
-  // Parse WAT text
-  let text = read_text_file(file)
-  if starts_with_component_form(text) {
-    exit_error(
-      "component text parsing is not implemented in wasmoon-tools wat2wasm yet",
-    )
-    panic()
+fn derive_wasm_output_path(file : String) -> String {
+  if file.has_suffix(".wat") {
+    let sb = StringBuilder::new()
+    for index in 0..<(file.length() - 4) {
+      sb.write_char(file.code_unit_at(index).unsafe_to_char())
+    }
+    sb.write_string(".wasm")
+    sb.to_string()
+  } else {
+    file + ".wasm"
   }
+}
+
+///|
+fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
+  let text = read_text_file(file)
+  let output_path = if output_opt is Some(path) {
+    path
+  } else {
+    derive_wasm_output_path(file)
+  }
+
+  if starts_with_component_form(text) {
+    let bytes = @text_parser.parse_component_wat(text) catch {
+      e => {
+        exit_error("parsing component WAT: \{e}")
+        panic()
+      }
+    }
+    write_bytes_file(output_path, bytes)
+    println("Wrote \{bytes.length()} bytes to \{output_path}")
+    return
+  }
+
+  // Parse WAT text
   let mod = @wat.parse(text) catch {
     e => {
       exit_error("parsing WAT: \{e}")
@@ -57,22 +83,6 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
       exit_error("validation: \{@validator.format_validation_error(e)}")
       panic()
     }
-  }
-
-  // Determine output path
-  let output_path = if output_opt is Some(path) {
-    path
-    // Replace .wat extension with .wasm
-  } else if file.has_suffix(".wat") {
-    // Remove .wat suffix and add .wasm
-    let sb = StringBuilder::new()
-    for i in 0..<(file.length() - 4) {
-      sb.write_char(file[i].to_int().unsafe_to_char())
-    }
-    sb.write_string(".wasm")
-    sb.to_string()
-  } else {
-    file + ".wasm"
   }
 
   // Encode module to binary format
