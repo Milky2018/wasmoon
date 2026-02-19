@@ -8,7 +8,7 @@ fn get_config_path() -> String {
 
 ///|
 /// Run config command
-fn run_config(action : String) -> Unit {
+pub fn run_config(action : String) -> Unit {
   match action {
     "show" => {
       println("Wasmoon Configuration")

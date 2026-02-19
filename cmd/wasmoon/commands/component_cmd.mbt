@@ -1,5 +1,5 @@
 ///|
-fn run_component_command(
+pub fn run_component_command(
   file_path : String,
   dump : Bool,
   validate : Bool,

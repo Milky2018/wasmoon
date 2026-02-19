@@ -1,6 +1,6 @@
 ///|
 /// Parse and display a WAT file
-fn run_wat(wat_path : String) -> Unit {
+pub fn run_wat(wat_path : String) -> Unit {
   let content = @fs.read_file_to_string(wat_path) catch {
     e => {
       println("Error reading file: \{e}")
@@ -21,7 +21,7 @@ fn run_wat(wat_path : String) -> Unit {
 
 ///|
 /// Run testsuite with a WAST file
-fn run_testsuite(
+pub fn run_testsuite(
   wast_path : String,
   use_jit : Bool,
   show_success : Bool,

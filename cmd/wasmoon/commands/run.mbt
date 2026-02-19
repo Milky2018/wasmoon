@@ -323,7 +323,7 @@ fn emit_compile_progress(
 /// Run a WASM module
 /// If invoke is specified, call that function with args
 /// Otherwise, run the start function or _start export
-fn run_wasm(
+pub fn run_wasm(
   wasm_path : String,
   invoke : String?,
   func_args : Array[String],

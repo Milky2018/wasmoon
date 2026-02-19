@@ -1,6 +1,6 @@
 ///|
 /// Display available compiler settings
-fn run_settings() -> Unit {
+pub fn run_settings() -> Unit {
   println("Wasmoon Compiler Settings")
   println("=".repeat(60))
   println("")

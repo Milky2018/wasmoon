@@ -1,6 +1,6 @@
 ///|
 /// Compiled function data for HTML report
-struct CompiledFunc {
+priv struct CompiledFunc {
   name : String
   type_str : String
   source : String // WAT source code
@@ -13,7 +13,7 @@ struct CompiledFunc {
 
 ///|
 /// Explore WASM compilation process
-fn run_explore(
+pub fn run_explore(
   wasm_path : String,
   func_index : Int?,
   opt_level : Int,
