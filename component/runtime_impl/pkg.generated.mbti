@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/component/runtime_impl"
 
 import {
-  "Milky2018/wasmoon/component",
+  "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/types",
 }
@@ -113,7 +113,7 @@ pub impl Eq for CanonSuspend
 pub impl Show for CanonSuspend
 
 pub(all) struct ComponentClosure {
-  component : @component.Component
+  component : @model.Component
   outer_stack : Array[ComponentInstance]
 }
 pub impl Show for ComponentClosure
@@ -121,7 +121,7 @@ pub impl Show for ComponentClosure
 pub(all) enum ComponentExtern {
   Func(ComponentFunc)
   Value(ComponentValue)
-  Type(@component.TypeDef?)
+  Type(@model.TypeDef?)
   Component(ComponentClosure)
   Instance(ComponentInstance)
   CoreModule(@types.Module)
@@ -136,14 +136,14 @@ pub(all) enum ComponentExtern {
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, @component.FuncType, CanonResources, Array[@component.TypeDef?], ResourceTable, Array[Bool], CoreFuncRef?, Bool)
-  Host(@component.FuncType, Array[@component.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
+  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, Array[Bool], CoreFuncRef?, Bool)
+  Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
 
 pub(all) struct ComponentInstance {
   name : String
-  types : Array[@component.TypeDef?]
+  types : Array[@model.TypeDef?]
   funcs : Array[ComponentFunc]
   values : Array[ComponentValue]
   components : Array[ComponentClosure]
@@ -167,16 +167,16 @@ pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
 
 type ComponentLinker
-pub fn ComponentLinker::add_component(Self, String, @component.Component) -> Unit
+pub fn ComponentLinker::add_component(Self, String, @model.Component) -> Unit
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
-pub fn ComponentLinker::add_func(Self, String, @component.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit
+pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit
 pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
 pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
-pub fn ComponentLinker::instantiate(Self, String, @component.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new() -> Self
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 
@@ -242,7 +242,7 @@ pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
-  kind : @component.ResourceKind
+  kind : @model.ResourceKind
 }
 pub impl Show for ResourceHandle
 
