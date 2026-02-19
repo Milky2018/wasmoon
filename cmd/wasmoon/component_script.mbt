@@ -168,12 +168,12 @@ fn parse_char_value(s : String) -> Char raise ComponentTestError {
 ///|
 fn parse_component_value(
   val : JsonValue,
-) -> @component.ComponentValue raise ComponentTestError {
+) -> @runtime_impl.ComponentValue raise ComponentTestError {
   let kind = val.type_
   let raw = val.value
   match kind {
     "list" => {
-      let out : Array[@component.ComponentValue] = []
+      let out : Array[@runtime_impl.ComponentValue] = []
       match val.items {
         Some(items) =>
           for item in items {
@@ -181,10 +181,10 @@ fn parse_component_value(
           }
         None => ()
       }
-      @component.ComponentValue::List(out)
+      @runtime_impl.ComponentValue::List(out)
     }
     "bool" =>
-      @component.ComponentValue::Bool(
+      @runtime_impl.ComponentValue::Bool(
         @strconv.parse_bool(
           match raw {
             Some(v) => v
@@ -195,7 +195,7 @@ fn parse_component_value(
         },
       )
     "u8" =>
-      @component.ComponentValue::U8(
+      @runtime_impl.ComponentValue::U8(
         parse_unsigned_int(
           match raw {
             Some(v) => v
@@ -204,7 +204,7 @@ fn parse_component_value(
         ).reinterpret_as_int(),
       )
     "s8" =>
-      @component.ComponentValue::S8(
+      @runtime_impl.ComponentValue::S8(
         parse_signed_int(
           match raw {
             Some(v) => v
@@ -213,7 +213,7 @@ fn parse_component_value(
         ),
       )
     "u16" =>
-      @component.ComponentValue::U16(
+      @runtime_impl.ComponentValue::U16(
         parse_unsigned_int(
           match raw {
             Some(v) => v
@@ -222,7 +222,7 @@ fn parse_component_value(
         ).reinterpret_as_int(),
       )
     "s16" =>
-      @component.ComponentValue::S16(
+      @runtime_impl.ComponentValue::S16(
         parse_signed_int(
           match raw {
             Some(v) => v
@@ -231,7 +231,7 @@ fn parse_component_value(
         ),
       )
     "u32" =>
-      @component.ComponentValue::U32(
+      @runtime_impl.ComponentValue::U32(
         parse_unsigned_int(
           match raw {
             Some(v) => v
@@ -240,7 +240,7 @@ fn parse_component_value(
         ).reinterpret_as_int(),
       )
     "s32" =>
-      @component.ComponentValue::S32(
+      @runtime_impl.ComponentValue::S32(
         parse_signed_int(
           match raw {
             Some(v) => v
@@ -249,7 +249,7 @@ fn parse_component_value(
         ),
       )
     "u64" =>
-      @component.ComponentValue::U64(
+      @runtime_impl.ComponentValue::U64(
         parse_unsigned_int64(
           match raw {
             Some(v) => v
@@ -258,7 +258,7 @@ fn parse_component_value(
         ).reinterpret_as_int64(),
       )
     "s64" =>
-      @component.ComponentValue::S64(
+      @runtime_impl.ComponentValue::S64(
         parse_signed_int64(
           match raw {
             Some(v) => v
@@ -267,7 +267,7 @@ fn parse_component_value(
         ),
       )
     "char" =>
-      @component.ComponentValue::Char(
+      @runtime_impl.ComponentValue::Char(
         parse_char_value(
           match raw {
             Some(v) => v
@@ -276,14 +276,14 @@ fn parse_component_value(
         ),
       )
     "str" =>
-      @component.ComponentValue::String(
+      @runtime_impl.ComponentValue::String(
         match raw {
           Some(v) => v
           None => raise ComponentTestError::ParseError("missing value")
         },
       )
     "string" =>
-      @component.ComponentValue::String(
+      @runtime_impl.ComponentValue::String(
         match raw {
           Some(v) => v
           None => raise ComponentTestError::ParseError("missing value")
@@ -296,8 +296,8 @@ fn parse_component_value(
 ///|
 fn parse_values(
   vals : Array[JsonValue]?,
-) -> Array[@component.ComponentValue] raise ComponentTestError {
-  let result : Array[@component.ComponentValue] = []
+) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
+  let result : Array[@runtime_impl.ComponentValue] = []
   if vals is Some(arr) {
     for v in arr {
       result.push(parse_component_value(v))
@@ -308,8 +308,8 @@ fn parse_values(
 
 ///|
 fn values_equal(
-  a : Array[@component.ComponentValue],
-  b : Array[@component.ComponentValue],
+  a : Array[@runtime_impl.ComponentValue],
+  b : Array[@runtime_impl.ComponentValue],
 ) -> Bool {
   if a.length() != b.length() {
     return false
@@ -336,41 +336,47 @@ fn load_component(
 
 ///|
 fn instantiate_component(
-  linker : @component.ComponentLinker,
+  linker : @runtime_impl.ComponentLinker,
   name : String,
   component : @component.Component,
-) -> Result[@component.ComponentInstance, @component.ComponentRuntimeError] {
+) -> Result[
+  @runtime_impl.ComponentInstance,
+  @runtime_impl.ComponentRuntimeError,
+] {
   try? linker.instantiate(name, component)
 }
 
 ///|
 fn run_invoke(
-  instance : @component.ComponentInstance,
+  instance : @runtime_impl.ComponentInstance,
   field : String,
-  args : Array[@component.ComponentValue],
-) -> Result[Array[@component.ComponentValue], @component.ComponentRuntimeError] {
+  args : Array[@runtime_impl.ComponentValue],
+) -> Result[
+  Array[@runtime_impl.ComponentValue],
+  @runtime_impl.ComponentRuntimeError,
+] {
   try? instance.call_exported_func(field, args)
 }
 
 ///|
-fn make_const_u32_func(value : Int) -> @component.ComponentFunc {
+fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
   let func_type : @component.FuncType = {
     is_async: false,
     params: [],
     result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
   }
   let func = fn(
-    _args : Array[@component.ComponentValue],
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+    _args : Array[@runtime_impl.ComponentValue],
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     if false {
-      raise @component.ComponentRuntimeError::HostCallError("unreachable")
+      raise @runtime_impl.ComponentRuntimeError::HostCallError("unreachable")
     }
-    [@component.ComponentValue::U32(value)]
+    [@runtime_impl.ComponentValue::U32(value)]
   }
-  @component.ComponentFunc::Host(func_type, [], fn(
-    args : Array[@component.ComponentValue],
-    _table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+  @runtime_impl.ComponentFunc::Host(func_type, [], fn(
+    args : Array[@runtime_impl.ComponentValue],
+    _table : @runtime_impl.ResourceTable,
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     func(args)
   })
 }
@@ -379,10 +385,10 @@ fn make_const_u32_func(value : Int) -> @component.ComponentFunc {
 fn make_instance(
   name : String,
   store : @runtime.Store,
-  exports : Map[String, @component.ComponentExtern],
-) -> @component.ComponentInstance {
-  let stream_table = @component.StreamTable::new()
-  let async_state = @component.AsyncState::new(stream_table)
+  exports : Map[String, @runtime_impl.ComponentExtern],
+) -> @runtime_impl.ComponentInstance {
+  let stream_table = @runtime_impl.StreamTable::new()
+  let async_state = @runtime_impl.AsyncState::new(stream_table)
   {
     name,
     types: [],
@@ -390,7 +396,7 @@ fn make_instance(
     values: [],
     components: [],
     instances: [],
-    resource_table: @component.ResourceTable::new(),
+    resource_table: @runtime_impl.ResourceTable::new(),
     stream_table,
     async_state,
     core_modules: [],
@@ -427,14 +433,14 @@ pub fn run_component_script(path : String) -> Unit {
     }
   }
   let result = ScriptResult::new()
-  let linker = @component.ComponentLinker::new()
+  let linker = @runtime_impl.ComponentLinker::new()
   let store = linker.get_store()
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)
   let return_four = make_const_u32_func(4)
   linker.add_import(
     "host-return-two",
-    @component.ComponentExtern::Func(return_two),
+    @runtime_impl.ComponentExtern::Func(return_two),
   )
   let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
   let simple_module = @wat.parse(simple_module_wat) catch {
@@ -443,25 +449,28 @@ pub fn run_component_script(path : String) -> Unit {
       return
     }
   }
-  let nested_exports : Map[String, @component.ComponentExtern] = {}
+  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = {}
   nested_exports.set(
     "return-four",
-    @component.ComponentExtern::Func(return_four),
+    @runtime_impl.ComponentExtern::Func(return_four),
   )
   let nested_instance = make_instance("host::nested", store, nested_exports)
-  let host_exports : Map[String, @component.ComponentExtern] = {}
-  host_exports.set("return-two", @component.ComponentExtern::Func(return_two))
+  let host_exports : Map[String, @runtime_impl.ComponentExtern] = {}
+  host_exports.set(
+    "return-two",
+    @runtime_impl.ComponentExtern::Func(return_two),
+  )
   host_exports.set(
     "return-three",
-    @component.ComponentExtern::Func(return_three),
+    @runtime_impl.ComponentExtern::Func(return_three),
   )
   host_exports.set(
     "simple-module",
-    @component.ComponentExtern::CoreModule(simple_module),
+    @runtime_impl.ComponentExtern::CoreModule(simple_module),
   )
   host_exports.set(
     "nested",
-    @component.ComponentExtern::Instance(nested_instance),
+    @runtime_impl.ComponentExtern::Instance(nested_instance),
   )
 
   // Host instance used by component-spec/wasmtime suites.
@@ -485,15 +494,15 @@ pub fn run_component_script(path : String) -> Unit {
   )
   host_exports.set(
     "resource1",
-    @component.ComponentExtern::Type(resource1_type),
+    @runtime_impl.ComponentExtern::Type(resource1_type),
   )
   host_exports.set(
     "resource2",
-    @component.ComponentExtern::Type(resource2_type),
+    @runtime_impl.ComponentExtern::Type(resource2_type),
   )
   host_exports.set(
     "resource1-again",
-    @component.ComponentExtern::Type(resource1_type),
+    @runtime_impl.ComponentExtern::Type(resource1_type),
   )
   let resource1_drops : Array[Int] = [0]
   let resource1_last_drop : Array[Int] = [0]
@@ -501,33 +510,37 @@ pub fn run_component_script(path : String) -> Unit {
     params: [@types.ValueType::I32],
     results: [],
   }
-  let resource1_dtor = @component.alloc_host_core_func(store, dtor_core_type, fn(
-    args : Array[@types.Value],
-  ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    match args {
-      [@types.Value::I32(rep)] => {
-        resource1_drops[0] = resource1_drops[0] + 1
-        resource1_last_drop[0] = rep
-        []
+  let resource1_dtor = @runtime_impl.alloc_host_core_func(
+    store,
+    dtor_core_type,
+    fn(
+      args : Array[@types.Value],
+    ) -> Array[@types.Value] raise @runtime.RuntimeError {
+      match args {
+        [@types.Value::I32(rep)] => {
+          resource1_drops[0] = resource1_drops[0] + 1
+          resource1_last_drop[0] = rep
+          []
+        }
+        _ => raise @runtime.RuntimeError::Unreachable
       }
-      _ => raise @runtime.RuntimeError::Unreachable
-    }
-  })
+    },
+  )
   fn resource1_expect_handle(
-    table : @component.ResourceTable,
+    table : @runtime_impl.ResourceTable,
     handle : Int,
-  ) -> @component.ResourceHandle raise @component.ComponentRuntimeError {
+  ) -> @runtime_impl.ResourceHandle raise @runtime_impl.ComponentRuntimeError {
     match table.get(handle) {
       Some(h) =>
         if h.type_id != resource1_id {
-          raise @component.ComponentRuntimeError::CanonCallError(
+          raise @runtime_impl.ComponentRuntimeError::CanonCallError(
             "handle index \{handle} used with the wrong type",
           )
         } else {
           h
         }
       None =>
-        raise @component.ComponentRuntimeError::CanonCallError(
+        raise @runtime_impl.ComponentRuntimeError::CanonCallError(
           "unknown handle index \{handle}",
         )
     }
@@ -544,64 +557,64 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: Some(@component.ValType::TypeIdx(1)),
   }
-  let ctor = @component.ComponentFunc::Host(ctor_func_type, ctor_types, fn(
-    args : Array[@component.ComponentValue],
-    table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+  let ctor = @runtime_impl.ComponentFunc::Host(ctor_func_type, ctor_types, fn(
+    args : Array[@runtime_impl.ComponentValue],
+    table : @runtime_impl.ResourceTable,
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     match args {
-      [@component.ComponentValue::U32(rep)] => {
+      [@runtime_impl.ComponentValue::U32(rep)] => {
         let handle = table.alloc({
           type_id: resource1_id,
           rep,
           dtor: Some(resource1_dtor),
           kind: @component.ResourceKind::HostDefined,
         })
-        [@component.ComponentValue::U32(handle)]
+        [@runtime_impl.ComponentValue::U32(handle)]
       }
       _ =>
-        raise @component.ComponentRuntimeError::HostCallError(
+        raise @runtime_impl.ComponentRuntimeError::HostCallError(
           "argument type mismatch",
         )
     }
   })
   host_exports.set(
     "[constructor]resource1",
-    @component.ComponentExtern::Func(ctor),
+    @runtime_impl.ComponentExtern::Func(ctor),
   )
   let drops_func_type : @component.FuncType = {
     is_async: false,
     params: [],
     result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
   }
-  let drops = @component.ComponentFunc::Host(drops_func_type, [], fn(
-    args : Array[@component.ComponentValue],
-    _table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+  let drops = @runtime_impl.ComponentFunc::Host(drops_func_type, [], fn(
+    args : Array[@runtime_impl.ComponentValue],
+    _table : @runtime_impl.ResourceTable,
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     if args.length() != 0 {
-      raise @component.ComponentRuntimeError::HostCallError(
+      raise @runtime_impl.ComponentRuntimeError::HostCallError(
         "argument count mismatch",
       )
     }
-    [@component.ComponentValue::U32(resource1_drops[0])]
+    [@runtime_impl.ComponentValue::U32(resource1_drops[0])]
   })
   host_exports.set(
     "[static]resource1.drops",
-    @component.ComponentExtern::Func(drops),
+    @runtime_impl.ComponentExtern::Func(drops),
   )
-  let last_drop = @component.ComponentFunc::Host(drops_func_type, [], fn(
-    args : Array[@component.ComponentValue],
-    _table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+  let last_drop = @runtime_impl.ComponentFunc::Host(drops_func_type, [], fn(
+    args : Array[@runtime_impl.ComponentValue],
+    _table : @runtime_impl.ResourceTable,
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     if args.length() != 0 {
-      raise @component.ComponentRuntimeError::HostCallError(
+      raise @runtime_impl.ComponentRuntimeError::HostCallError(
         "argument count mismatch",
       )
     }
-    [@component.ComponentValue::U32(resource1_last_drop[0])]
+    [@runtime_impl.ComponentValue::U32(resource1_last_drop[0])]
   })
   host_exports.set(
     "[static]resource1.last-drop",
-    @component.ComponentExtern::Func(last_drop),
+    @runtime_impl.ComponentExtern::Func(last_drop),
   )
   let assert_types : Array[@component.TypeDef?] = [
     resource1_type,
@@ -618,30 +631,30 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: None,
   }
-  let assert_func = @component.ComponentFunc::Host(
+  let assert_func = @runtime_impl.ComponentFunc::Host(
     assert_func_type,
     assert_types,
     fn(
-      args : Array[@component.ComponentValue],
-      table : @component.ResourceTable,
-    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      args : Array[@runtime_impl.ComponentValue],
+      table : @runtime_impl.ResourceTable,
+    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
       match args {
         [
-          @component.ComponentValue::U32(handle),
-          @component.ComponentValue::U32(expected),
+          @runtime_impl.ComponentValue::U32(handle),
+          @runtime_impl.ComponentValue::U32(expected),
         ] => {
           let actual = resource1_expect_handle(table, handle)
           // Consume the owned resource.
           table.free(handle) |> ignore
           if actual.rep != expected {
-            raise @component.ComponentRuntimeError::HostCallError(
+            raise @runtime_impl.ComponentRuntimeError::HostCallError(
               "rep mismatch",
             )
           }
           []
         }
         _ =>
-          raise @component.ComponentRuntimeError::HostCallError(
+          raise @runtime_impl.ComponentRuntimeError::HostCallError(
             "argument type mismatch",
           )
       }
@@ -649,7 +662,7 @@ pub fn run_component_script(path : String) -> Unit {
   )
   host_exports.set(
     "[static]resource1.assert",
-    @component.ComponentExtern::Func(assert_func),
+    @runtime_impl.ComponentExtern::Func(assert_func),
   )
   let borrow_ty = Some(@component.TypeDef::Borrow(0))
   let simple_types : Array[@component.TypeDef?] = [resource1_type, borrow_ty]
@@ -664,30 +677,36 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: None,
   }
-  let simple = @component.ComponentFunc::Host(simple_func_type, simple_types, fn(
-    args : Array[@component.ComponentValue],
-    table : @component.ResourceTable,
-  ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
-    match args {
-      [
-        @component.ComponentValue::U32(handle),
-        @component.ComponentValue::U32(expected),
-      ] => {
-        let actual = resource1_expect_handle(table, handle)
-        if actual.rep != expected {
-          raise @component.ComponentRuntimeError::HostCallError("rep mismatch")
+  let simple = @runtime_impl.ComponentFunc::Host(
+    simple_func_type,
+    simple_types,
+    fn(
+      args : Array[@runtime_impl.ComponentValue],
+      table : @runtime_impl.ResourceTable,
+    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
+      match args {
+        [
+          @runtime_impl.ComponentValue::U32(handle),
+          @runtime_impl.ComponentValue::U32(expected),
+        ] => {
+          let actual = resource1_expect_handle(table, handle)
+          if actual.rep != expected {
+            raise @runtime_impl.ComponentRuntimeError::HostCallError(
+              "rep mismatch",
+            )
+          }
+          []
         }
-        []
+        _ =>
+          raise @runtime_impl.ComponentRuntimeError::HostCallError(
+            "argument type mismatch",
+          )
       }
-      _ =>
-        raise @component.ComponentRuntimeError::HostCallError(
-          "argument type mismatch",
-        )
-    }
-  })
+    },
+  )
   host_exports.set(
     "[method]resource1.simple",
-    @component.ComponentExtern::Func(simple),
+    @runtime_impl.ComponentExtern::Func(simple),
   )
   let take_borrow_func_type : @component.FuncType = {
     is_async: false,
@@ -697,21 +716,24 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: None,
   }
-  let take_borrow = @component.ComponentFunc::Host(
+  let take_borrow = @runtime_impl.ComponentFunc::Host(
     take_borrow_func_type,
     simple_types,
     fn(
-      args : Array[@component.ComponentValue],
-      table : @component.ResourceTable,
-    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      args : Array[@runtime_impl.ComponentValue],
+      table : @runtime_impl.ResourceTable,
+    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
       match args {
-        [@component.ComponentValue::U32(a), @component.ComponentValue::U32(b)] => {
+        [
+          @runtime_impl.ComponentValue::U32(a),
+          @runtime_impl.ComponentValue::U32(b),
+        ] => {
           resource1_expect_handle(table, a) |> ignore
           resource1_expect_handle(table, b) |> ignore
           []
         }
         _ =>
-          raise @component.ComponentRuntimeError::HostCallError(
+          raise @runtime_impl.ComponentRuntimeError::HostCallError(
             "argument type mismatch",
           )
       }
@@ -719,7 +741,7 @@ pub fn run_component_script(path : String) -> Unit {
   )
   host_exports.set(
     "[method]resource1.take-borrow",
-    @component.ComponentExtern::Func(take_borrow),
+    @runtime_impl.ComponentExtern::Func(take_borrow),
   )
   let own_ty = Some(@component.TypeDef::Own(0))
   let take_own_types : Array[@component.TypeDef?] = [
@@ -733,21 +755,21 @@ pub fn run_component_script(path : String) -> Unit {
     ],
     result: None,
   }
-  let take_own = @component.ComponentFunc::Host(
+  let take_own = @runtime_impl.ComponentFunc::Host(
     take_own_func_type,
     take_own_types,
     fn(
-      args : Array[@component.ComponentValue],
-      table : @component.ResourceTable,
-    ) -> Array[@component.ComponentValue] raise @component.ComponentRuntimeError {
+      args : Array[@runtime_impl.ComponentValue],
+      table : @runtime_impl.ResourceTable,
+    ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
       match args {
         [
-          @component.ComponentValue::U32(self_handle),
-          @component.ComponentValue::U32(b_handle),
+          @runtime_impl.ComponentValue::U32(self_handle),
+          @runtime_impl.ComponentValue::U32(b_handle),
         ] => {
           resource1_expect_handle(table, self_handle) |> ignore
           if self_handle == b_handle {
-            raise @component.ComponentRuntimeError::CanonCallError(
+            raise @runtime_impl.ComponentRuntimeError::CanonCallError(
               "cannot remove owned resource while borrowed",
             )
           }
@@ -755,13 +777,13 @@ pub fn run_component_script(path : String) -> Unit {
           match table.free(b_handle) {
             Some(_) => []
             None =>
-              raise @component.ComponentRuntimeError::CanonCallError(
+              raise @runtime_impl.ComponentRuntimeError::CanonCallError(
                 "unknown handle index \{b_handle}",
               )
           }
         }
         _ =>
-          raise @component.ComponentRuntimeError::HostCallError(
+          raise @runtime_impl.ComponentRuntimeError::HostCallError(
             "argument type mismatch",
           )
       }
@@ -769,15 +791,15 @@ pub fn run_component_script(path : String) -> Unit {
   )
   host_exports.set(
     "[method]resource1.take-own",
-    @component.ComponentExtern::Func(take_own),
+    @runtime_impl.ComponentExtern::Func(take_own),
   )
   let host_instance = make_instance("host", store, host_exports)
   linker.add_instance("host", host_instance)
   let components : Map[String, @component.Component] = {}
-  let instances : Map[String, @component.ComponentInstance] = {}
+  let instances : Map[String, @runtime_impl.ComponentInstance] = {}
   let mut last_component : @component.Component? = None
   let mut last_component_name : String? = None
-  let mut last_instance : @component.ComponentInstance? = None
+  let mut last_instance : @runtime_impl.ComponentInstance? = None
   let mut anon_count = 0
   for cmd in script.commands {
     match cmd.type_ {

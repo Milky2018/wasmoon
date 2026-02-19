@@ -389,6 +389,15 @@ fn skip_core_typedef(reader : Reader) -> Unit raise ComponentParseError {
 }
 
 ///|
+fn bytes_sub(bytes : Bytes, start : Int, end : Int) -> Bytes {
+  let out : Array[Byte] = []
+  for i in start..<end {
+    out.push(bytes[i])
+  }
+  Bytes::from_array(out)
+}
+
+///|
 fn parse_instancedecl(
   reader : Reader,
 ) -> InstanceDecl raise ComponentParseError {
