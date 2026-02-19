@@ -19,7 +19,7 @@ fn run_inline_module(
   // Get the first command which should be a Module
   guard script.commands.length() > 0 else { return [] }
   let (cmd, _line) = script.commands[0]
-  guard cmd is @wat.Module(mod_, _) else {
+  guard cmd is @wat.WastCommand::Module(mod_, _) else {
     println("First command is not a module")
     return []
   }
