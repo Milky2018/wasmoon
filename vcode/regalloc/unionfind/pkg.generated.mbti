@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/vcode/regalloc/unionfind"
+
+// Values
+
+// Errors
+
+// Types and methods
+type UnionFind
+pub fn UnionFind::find(Self, Int) -> Int
+pub fn UnionFind::get_all_sets(Self) -> Array[Array[Int]]
+pub fn UnionFind::get_set(Self, Int) -> Array[Int]
+pub fn UnionFind::length(Self) -> Int
+pub fn UnionFind::new(Int) -> Self
+pub fn UnionFind::num_sets(Self) -> Int
+pub fn UnionFind::same_set(Self, Int, Int) -> Bool
+pub fn UnionFind::union(Self, Int, Int) -> Bool
+
+// Type aliases
+
+// Traits
+

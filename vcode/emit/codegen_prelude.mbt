@@ -67,7 +67,7 @@ fn collect_used_callee_saved(
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
   if has_calls && isa is @isa.AArch64 {
-    used.add(lr_index())
+    used.add(@isaregs.lr_index())
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -145,7 +145,7 @@ fn func_has_incoming_stack_args(func : @regalloc.VCodeFunction) -> Bool {
 /// - It uses X19 as a physical register in any instruction
 /// - It uses X19 in any terminator
 fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
-  let vmctx = vmctx_index()
+  let vmctx = @isaregs.vmctx_index()
   for block in func.get_blocks() {
     // Check instructions for X19 usage
     for inst in block.insts {
@@ -166,7 +166,7 @@ fn func_uses_vmctx(func : @regalloc.VCodeFunction) -> Bool {
 ///|
 /// Check if a terminator uses vmctx (x19)
 fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
-  let vmctx = vmctx_index()
+  let vmctx = @isaregs.vmctx_index()
   match term {
     Return(values) => {
       for v in values {
@@ -221,14 +221,14 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
-  if current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is @isa.AMD64 {
     let (abs_amount, is_sub) = if amount < 0 {
       (-amount, true)
     } else {
       (amount, false)
     }
     let step = 4096
-    let scratch = scratch1_index()
+    let scratch = @isaregs.scratch1_index()
     if is_sub {
       // Probe only when crossing at least one full page, matching Cranelift's
       // inline-probestack rule (probe_count = frame_size / guard_size).
@@ -315,8 +315,8 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if current_isa() is @isa.AMD64 {
-    let isa = current_isa()
+  if @isaregs.current_isa() is @isa.AMD64 {
+    let isa = @isaregs.current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
     // Setup area: push rbp so the stack is 16-byte aligned after the prologue
@@ -359,20 +359,20 @@ fn MachineCode::emit_prologue(
         abort("unpinned VMContext ABI not implemented yet")
       }
       let vmctx_src = isa.wasm_vmctx_arg_preg().index
-      let vmctx = vmctx_index()
+      let vmctx = @isaregs.vmctx_index()
       if vmctx != vmctx_src {
         self.x86_emit_mov_rr(vmctx, vmctx_src)
       }
       if stack_frame.cache_mem0_desc {
         self.x86_emit_mov_r64_m64(
-          mem0_desc_index(),
+          @isaregs.mem0_desc_index(),
           vmctx,
           @abi.VMCTX_MEMORY0_OFFSET,
         )
       }
       if stack_frame.cache_func_table {
         self.x86_emit_mov_r64_m64(
-          func_table_index(),
+          @isaregs.func_table_index(),
           vmctx,
           @abi.VMCTX_FUNC_TABLE_OFFSET,
         )
@@ -515,17 +515,29 @@ fn MachineCode::emit_prologue(
     if !abi_settings.enable_pinned_reg {
       abort("unpinned VMContext ABI not implemented yet")
     }
-    let vmctx = vmctx_index()
+    let vmctx = @isaregs.vmctx_index()
     self.emit_mov_reg(vmctx, 0)
     // Optionally cache memory0 base pointer in X20.
     // This allows `LoadMemBase(mem=0)` to become a register move.
     if stack_frame.cache_mem0_desc {
-      self.emit_ldr_imm(mem0_desc_index(), vmctx, @abi.VMCTX_MEMORY0_OFFSET)
-      self.emit_ldr_imm(mem0_desc_index(), mem0_desc_index(), 0)
+      self.emit_ldr_imm(
+        @isaregs.mem0_desc_index(),
+        vmctx,
+        @abi.VMCTX_MEMORY0_OFFSET,
+      )
+      self.emit_ldr_imm(
+        @isaregs.mem0_desc_index(),
+        @isaregs.mem0_desc_index(),
+        0,
+      )
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
-      self.emit_ldr_imm(func_table_index(), vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      self.emit_ldr_imm(
+        @isaregs.func_table_index(),
+        vmctx,
+        @abi.VMCTX_FUNC_TABLE_OFFSET,
+      )
     }
   }
 
@@ -628,11 +640,11 @@ pub fn emit_function(
   // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
   let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
   let clobbered_gprs = clobbered
-  let mem0_desc = mem0_desc_index()
+  let mem0_desc = @isaregs.mem0_desc_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
-  let func_table = func_table_index()
+  let func_table = @isaregs.func_table_index()
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
@@ -843,7 +855,7 @@ pub fn emit_function(
       }
     }
   }
-  let is_amd64 = current_isa() is @isa.AMD64
+  let is_amd64 = @isaregs.current_isa() is @isa.AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -1205,7 +1217,7 @@ fn collect_used_callee_saved_from_output(
     }
   }
   if func_has_calls(func) && isa is @isa.AArch64 {
-    used.add(lr_index())
+    used.add(@isaregs.lr_index())
   }
   let result : Array[Int] = []
   for reg in used {
@@ -1483,8 +1495,8 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if current_isa() is @isa.AMD64 {
-    let isa = current_isa()
+  if @isaregs.current_isa() is @isa.AMD64 {
+    let isa = @isaregs.current_isa()
     // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
     // then do a Cranelift-style "param moves + param spills" stage.
     //
@@ -1917,7 +1929,7 @@ fn MachineCode::emit_prologue_with_output(
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != x_src {
-                let vmctx_dst = vmctx_index()
+                let vmctx_dst = @isaregs.vmctx_index()
                 let is_redundant_vmctx_move = int_idx == 0 &&
                   stack_frame.needs_vmctx &&
                   dst.index == vmctx_dst
@@ -1959,7 +1971,7 @@ pub fn emit_function_with_regalloc(
   // Keep block layout optimization (targets are block IDs; ids stay stable).
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new()
-  let is_amd64 = current_isa() is @isa.AMD64
+  let is_amd64 = @isaregs.current_isa() is @isa.AMD64
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
@@ -1973,16 +1985,16 @@ pub fn emit_function_with_regalloc(
   let uses_mem0 = func.uses_mem0()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
-  let vmctx = vmctx_index()
+  let vmctx = @isaregs.vmctx_index()
   let needs_vmctx = has_calls ||
     output_uses_preg(func, output, vmctx) ||
     uses_mem0
   let clobbered_gprs = clobbered
-  let mem0_desc = mem0_desc_index()
+  let mem0_desc = @isaregs.mem0_desc_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
-  let func_table = func_table_index()
+  let func_table = @isaregs.func_table_index()
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }

@@ -1533,7 +1533,7 @@ pub fn build_bundles_with_merging(
   ranges : LiveRangeSet,
 ) -> BundleSet {
   let n = ranges.length()
-  let uf = UnionFind::new(n)
+  let uf = @unionfind.UnionFind::new(n)
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
       (@abi.Int, @abi.Int) => true
@@ -1684,7 +1684,7 @@ pub fn build_bundles_with_merging(
     root_spans_cache.set(i, spans)
   }
   fn root_members(
-    uf : UnionFind,
+    uf : @unionfind.UnionFind,
     root_members_cache : Map[Int, Array[Int]],
     root : Int,
   ) -> Array[Int] {
@@ -1699,7 +1699,7 @@ pub fn build_bundles_with_merging(
   }
 
   fn root_fixed_info(
-    uf : UnionFind,
+    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_members_cache : Map[Int, Array[Int]],
     root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
@@ -1717,7 +1717,7 @@ pub fn build_bundles_with_merging(
   }
 
   fn root_has_fixed_def(
-    uf : UnionFind,
+    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_members_cache : Map[Int, Array[Int]],
     root_has_fixed_def_cache : Map[Int, Bool],
@@ -1735,7 +1735,7 @@ pub fn build_bundles_with_merging(
   }
 
   fn root_spans(
-    uf : UnionFind,
+    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_members_cache : Map[Int, Array[Int]],
     root_spans_cache : Map[Int, Array[ProgPointRange]],
@@ -1754,7 +1754,7 @@ pub fn build_bundles_with_merging(
 
   // Helper to try merging two ranges
   fn try_merge(
-    uf : UnionFind,
+    uf : @unionfind.UnionFind,
     a : Int,
     b : Int,
     ranges : LiveRangeSet,

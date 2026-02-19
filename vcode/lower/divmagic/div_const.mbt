@@ -3,7 +3,7 @@
 
 ///|
 /// Magic numbers for unsigned 32-bit division
-priv struct MagicU32 {
+pub struct MagicU32 {
   mul_by : UInt
   do_add : Bool
   shift_by : Int
@@ -11,7 +11,7 @@ priv struct MagicU32 {
 
 ///|
 /// Magic numbers for unsigned 64-bit division
-priv struct MagicU64 {
+pub struct MagicU64 {
   mul_by : UInt64
   do_add : Bool
   shift_by : Int
@@ -19,14 +19,14 @@ priv struct MagicU64 {
 
 ///|
 /// Magic numbers for signed 32-bit division
-priv struct MagicS32 {
+pub struct MagicS32 {
   mul_by : Int
   shift_by : Int
 }
 
 ///|
 /// Magic numbers for signed 64-bit division
-priv struct MagicS64 {
+pub struct MagicS64 {
   mul_by : Int64
   shift_by : Int
 }
@@ -34,7 +34,7 @@ priv struct MagicS64 {
 ///|
 /// Compute magic numbers for unsigned 32-bit division by constant d
 /// Requires: d != 0 && d != 1
-fn magic_u32(d : UInt) -> MagicU32 {
+pub fn magic_u32(d : UInt) -> MagicU32 {
   let mut do_add = false
   let mut p = 31
   // nc = (2^32 - 1) - (2^32 - 1) % d = largest multiple of d <= 2^32 - 1
@@ -76,7 +76,7 @@ fn magic_u32(d : UInt) -> MagicU32 {
 ///|
 /// Compute magic numbers for unsigned 64-bit division by constant d
 /// Requires: d != 0 && d != 1
-fn magic_u64(d : UInt64) -> MagicU64 {
+pub fn magic_u64(d : UInt64) -> MagicU64 {
   let mut do_add = false
   let mut p = 63
   let nc = 0xFFFFFFFFFFFFFFFFUL - (0UL - d) % d
@@ -117,7 +117,7 @@ fn magic_u64(d : UInt64) -> MagicU64 {
 ///|
 /// Compute magic numbers for signed 32-bit division by constant d
 /// Requires: d != -1 && d != 0 && d != 1
-fn magic_s32(d : Int) -> MagicS32 {
+pub fn magic_s32(d : Int) -> MagicS32 {
   let two31 = 0x80000000U
   let mut p = 31
   let ad = if d < 0 {
@@ -161,7 +161,7 @@ fn magic_s32(d : Int) -> MagicS32 {
 ///|
 /// Compute magic numbers for signed 64-bit division by constant d
 /// Requires: d != -1 && d != 0 && d != 1
-fn magic_s64(d : Int64) -> MagicS64 {
+pub fn magic_s64(d : Int64) -> MagicS64 {
   let two63 = 0x8000000000000000UL
   let mut p = 63
   let ad = if d < 0L {

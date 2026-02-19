@@ -141,8 +141,8 @@ fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if current_isa() is @isa.AMD64 {
-    let isa = current_isa()
+  if @isaregs.current_isa() is @isa.AMD64 {
+    let isa = @isaregs.current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
     // Step 1: Deallocate remaining stack space (spill slots + outgoing args).
@@ -252,7 +252,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
-  if current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is @isa.AMD64 {
     self.emit_terminator_with_epilogue_x86_64(
       term, stack_frame, result_types, next_block, shared_exit_block,
     )

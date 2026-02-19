@@ -2208,7 +2208,7 @@ fn MachineCode::emit_instruction_x86_64(
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
         // Fast path: memory0 descriptor pointer is cached in Mem0Desc role.
-        self.x86_emit_mov_r64_m64(dst, mem0_desc_index(), 0)
+        self.x86_emit_mov_r64_m64(dst, @isaregs.mem0_desc_index(), 0)
       } else if memidx == 0 {
         self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
         self.x86_emit_mov_r64_m64(dst, dst, 0)
@@ -2223,9 +2223,9 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       if stack_frame.cache_func_table &&
         ty is @instr.MemType::I64 &&
-        rn == vmctx_index() &&
+        rn == @isaregs.vmctx_index() &&
         offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
-        let ft = func_table_index()
+        let ft = @isaregs.func_table_index()
         if rt != ft {
           self.x86_emit_mov_rr(rt, ft)
         }
@@ -2515,14 +2515,14 @@ fn MachineCode::emit_instruction_x86_64(
     @instr.LoadFuncAddr(func_idx) => {
       // Load function pointer from vmctx->func_table[func_idx].
       let rd = wreg_num(inst.defs[0])
-      let vmctx = vmctx_index()
+      let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
       self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
       self.x86_emit_mov_r64_m64(rd, table, func_idx * 8)
     }
     @instr.CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       // Call via vmctx->func_table[func_idx] to avoid rel32 patching.
-      let vmctx = vmctx_index()
+      let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
       self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)

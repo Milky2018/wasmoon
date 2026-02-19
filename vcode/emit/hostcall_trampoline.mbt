@@ -226,7 +226,7 @@ pub fn emit_hostcall_import_trampoline(
   let ctx_arg = func.new_vreg(@abi.Int)
   let mv_ctx = @instr.VCodeInst::new(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
-  mv_ctx.add_use(Physical({ index: vmctx_index(), class: @abi.Int }))
+  mv_ctx.add_use(Physical({ index: @isaregs.vmctx_index(), class: @abi.Int }))
   block.add_inst(mv_ctx)
   let host_addr_vreg = func.new_vreg(@abi.Int)
   let c_host = @instr.VCodeInst::new(LoadConst(host_func_addr.to_int64()))
@@ -253,7 +253,7 @@ pub fn emit_hostcall_import_trampoline(
   let arg_regs = c_arg_gpr_indices()
   // Call target in IP1.
   call.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: scratch2_index(),
+    index: @isaregs.scratch2_index(),
     class: @abi.Int,
   })
   call.add_use_fixed(Virtual(ctx_arg), { index: arg_regs[0], class: @abi.Int })
