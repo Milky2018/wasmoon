@@ -934,9 +934,9 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
 ///|
 /// Build `external_imports` for `JITModule::load_with_imports`.
 ///
-/// For function imports without built-in trampolines, if the resolved import is a
-/// runtime host function, we pass a special negative encoding `-(addr+1)` to
-/// instruct the JIT loader to generate a hostcall trampoline.
+/// For function imports without built-in trampolines, we pass a special
+/// negative encoding `-(addr+1)` (store function address) to instruct the JIT
+/// loader to generate a hostcall trampoline that dispatches host/wasm imports.
 pub fn build_external_imports_for_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
@@ -959,16 +959,16 @@ pub fn build_external_imports_for_jit(
       if @jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
         continue
       }
-      let inst = store.get_func_inst(func_addr) catch { _ => continue }
-      if inst is @runtime.FuncInst::HostFunc(_) {
-        let encoded = -(func_addr.to_int64() + 1L)
-        let m = match external.get(imp.mod_name) {
-          Some(mm) => mm
-          None => {}
-        }
-        m.set(imp.name, encoded)
-        external.set(imp.mod_name, m)
+      if store.get_func_inst_opt(func_addr) is None {
+        continue
       }
+      let encoded = -(func_addr.to_int64() + 1L)
+      let m = match external.get(imp.mod_name) {
+        Some(mm) => mm
+        None => {}
+      }
+      m.set(imp.name, encoded)
+      external.set(imp.mod_name, m)
     }
   }
   external
@@ -984,6 +984,38 @@ pub fn install_jit_hostcall_dispatcher(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Unit {
+  fn call_func_by_addr(
+    store : @runtime.Store,
+    caller_instance : @runtime.ModuleInstance,
+    func_addr : Int,
+    args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    let inst = store.get_func_inst(func_addr)
+    match inst {
+      @runtime.FuncInst::HostFunc(f) => {
+        let caller = @runtime.Caller::new(store, caller_instance)
+        f(caller, args)
+      }
+      @runtime.FuncInst::WasmFunc(_) => {
+        let owner = match store.get_func_owner(func_addr) {
+          Some(owner_instance) => owner_instance
+          None => raise @runtime.UndefinedElement
+        }
+        let mut func_idx = -1
+        for i, addr in owner.func_addrs {
+          if addr == func_addr {
+            func_idx = i
+            break
+          }
+        }
+        if func_idx < 0 {
+          raise @runtime.UndefinedElement
+        }
+        @executor.call_func_by_index(store, owner, func_idx, args)
+      }
+    }
+  }
+
   jit_module.set_hostcall_callback(fn() {
     let func_addr = @jit.get_hostcall_func_addr()
     let values_ptr = @jit.get_hostcall_values_ptr()
@@ -1007,18 +1039,11 @@ pub fn install_jit_hostcall_dispatcher(
       slot = slot + used
     }
 
-    // Invoke host function.
-    let caller = @runtime.Caller::new(store, instance)
-    let inst = match store.get_func_inst_opt(func_addr) {
-      Some(i) => i
-      None => return 3
-    }
-    let results : Array[@types.Value] = match inst {
-      @runtime.FuncInst::HostFunc(f) =>
-        f(caller, args) catch {
-          e => return runtime_error_to_trap_code(e)
-        }
-      _ => return 3
+    // Invoke imported function (host or wasm).
+    let results : Array[@types.Value] = call_func_by_addr(
+      store, instance, func_addr, args,
+    ) catch {
+      e => return runtime_error_to_trap_code(e)
     }
     if results.length() != ft.results.length() {
       return 3
