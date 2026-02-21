@@ -23,6 +23,8 @@ pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], A
 
 pub fn builtin_jit_modules() -> Array[String]
 
+pub fn clear_funcref_registry() -> Unit
+
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
@@ -50,6 +52,8 @@ pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.
 pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value] raise WastRunnerError
 
 pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
+
+pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> Unit
 
 pub fn run_wast_command(WastContext, @parser_impl.WastCommand, Int, WastResult, String, Bool) -> Unit
 

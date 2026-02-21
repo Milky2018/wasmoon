@@ -31,6 +31,55 @@ pub fn JITCompiler::new(
 }
 
 ///|
+/// Cross-module funcref registry for WAST JIT mode.
+///
+/// Maps runtime store function addresses to executable pointers and back.
+/// This is required when shared tables/globals carry funcrefs across module
+/// boundaries.
+let jit_funcref_store_to_ptr : Ref[Map[Int, Int64]] = { val: {} }
+
+///|
+let jit_funcref_ptr_to_store : Ref[Map[Int64, Int]] = { val: {} }
+
+///|
+fn register_funcref_mapping(store_addr : Int, func_ptr : Int64) -> Unit {
+  if store_addr >= 0 && func_ptr != 0L {
+    jit_funcref_store_to_ptr.val.set(store_addr, func_ptr)
+    jit_funcref_ptr_to_store.val.set(func_ptr, store_addr)
+  }
+}
+
+///|
+fn store_addr_to_module_func_idx(
+  store_addr : Int,
+  instance : @runtime.ModuleInstance,
+) -> Int? {
+  for i, addr in instance.func_addrs {
+    if addr == store_addr {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+pub fn clear_funcref_registry() -> Unit {
+  jit_funcref_store_to_ptr.val = {}
+  jit_funcref_ptr_to_store.val = {}
+}
+
+///|
+pub fn register_instance_funcrefs_for_jit(
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Unit {
+  for i, store_addr in instance.func_addrs {
+    let func_ptr = jit_module.get_func_ptr(i)
+    register_funcref_mapping(store_addr, func_ptr)
+  }
+}
+
+///|
 /// Check if a module contains JIT-unsupported instructions
 pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
   // Check all function bodies for unsupported instructions
@@ -156,9 +205,30 @@ pub fn sync_jit_globals_to_store(
             } else {
               @types.Value::Null
             }
+          } else if @jit.is_funcref_ptr(raw_value) {
+            let ptr = @jit.untag_funcref_ptr(raw_value)
+            let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
+              Some(addr) => Some(addr)
+              None => {
+                let mut found : Int? = None
+                for idx, addr in jit_ctx.func_addrs {
+                  if jit_ctx.jit_module.get_func_ptr(idx) == ptr {
+                    found = Some(addr)
+                    break
+                  }
+                }
+                found
+              }
+            }
+            match store_addr {
+              Some(addr) => {
+                register_funcref_mapping(addr, ptr)
+                @types.Value::FuncRef(addr)
+              }
+              None => @types.Value::Null
+            }
           } else {
-            // Tagged pointer funcref is not convertible here.
-            @types.Value::Null
+            @types.Value::FuncRef(raw_value.to_int())
           }
         ExternRef | RefExtern | NullExternRef =>
           if raw_value == 0L {
@@ -660,6 +730,57 @@ fn low_u32_bits(raw : Int64) -> Int {
 }
 
 ///|
+fn lookup_funcref_ptr_for_store_addr(
+  store_addr : Int,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Int64? {
+  match store_addr_to_module_func_idx(store_addr, instance) {
+    Some(func_idx) => {
+      let ptr = jit_module.get_func_ptr(func_idx)
+      if ptr != 0L {
+        register_funcref_mapping(store_addr, ptr)
+        return Some(ptr)
+      }
+    }
+    None => ()
+  }
+  jit_funcref_store_to_ptr.val.get(store_addr)
+}
+
+///|
+fn lookup_store_addr_for_funcref_ptr(
+  func_ptr : Int64,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Int? {
+  match jit_funcref_ptr_to_store.val.get(func_ptr) {
+    Some(addr) => return Some(addr)
+    None => ()
+  }
+  match jit_module.find_func_by_pc(func_ptr) {
+    Some((func_idx, _, _)) =>
+      if func_idx >= 0 && func_idx < instance.func_addrs.length() {
+        let addr = instance.func_addrs[func_idx]
+        register_funcref_mapping(addr, func_ptr)
+        return Some(addr)
+      }
+    None => ()
+  }
+  let func_count = jit_module.get_func_count()
+  for func_idx in 0..<func_count {
+    if func_idx >= 0 &&
+      func_idx < instance.func_addrs.length() &&
+      jit_module.get_func_ptr(func_idx) == func_ptr {
+      let addr = instance.func_addrs[func_idx]
+      register_funcref_mapping(addr, func_ptr)
+      return Some(addr)
+    }
+  }
+  None
+}
+
+///|
 fn decode_funcref_to_store_addr(
   raw : Int64,
   jit_module : @jit.JITModule,
@@ -677,14 +798,9 @@ fn decode_funcref_to_store_addr(
       }
     None =>
       if @jit.is_funcref_ptr(raw) {
-        let pc = @jit.untag_funcref_ptr(raw)
-        match jit_module.find_func_by_pc(pc) {
-          Some((func_idx, _, _)) =>
-            if func_idx >= 0 && func_idx < instance.func_addrs.length() {
-              @types.Value::FuncRef(instance.func_addrs[func_idx])
-            } else {
-              @types.Value::Null
-            }
+        let ptr = @jit.untag_funcref_ptr(raw)
+        match lookup_store_addr_for_funcref_ptr(ptr, jit_module, instance) {
+          Some(addr) => @types.Value::FuncRef(addr)
           None => @types.Value::Null
         }
       } else {
@@ -700,31 +816,12 @@ fn encode_store_funcref_for_jit(
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64 {
-  // Convert the store function address back to the module function index.
-  fn store_addr_to_module_func_idx(
-    store_addr : Int,
-    instance : @runtime.ModuleInstance,
-  ) -> Int? {
-    for i, addr in instance.func_addrs {
-      if addr == store_addr {
-        return Some(i)
-      }
-    }
-    None
-  }
-
   match value {
     Null => NULL_REF
     FuncRef(store_addr) =>
-      match store_addr_to_module_func_idx(store_addr, instance) {
-        Some(mod_func_idx) => {
-          let ptr = jit_module.get_func_ptr(mod_func_idx)
-          if ptr == 0L {
-            NULL_REF
-          } else {
-            @jit.tag_funcref_ptr(ptr)
-          }
-        }
+      match
+        lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
+        Some(ptr) => @jit.tag_funcref_ptr(ptr)
         None => NULL_REF
       }
     _ => NULL_REF

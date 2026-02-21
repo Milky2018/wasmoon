@@ -18,6 +18,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
+  @wast.clear_funcref_registry()
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -133,6 +134,7 @@ fn try_compile_jit(
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             mod_.codes.length()
+          @wast.register_instance_funcrefs_for_jit(jm, instance)
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page (1MB)

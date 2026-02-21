@@ -717,7 +717,15 @@ pub fn JITModule::get_func_by_name(
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
   match self.functions.get(func_idx) {
     Some(f) => f.exec_code.ptr()
-    None => 0L
+    None => {
+      let func_table_ptr = self.get_func_table_ptr()
+      let func_count = self.get_func_count()
+      if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
+        c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
+      } else {
+        0L
+      }
+    }
   }
 }
 
