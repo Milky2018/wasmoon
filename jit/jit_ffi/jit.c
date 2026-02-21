@@ -228,6 +228,28 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
     return ctx ? ctx->func_count : 0;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx->tables) {
+        return 0;
+    }
+    return (int64_t)ctx->tables[table_idx];
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_table_size(int64_t ctx_ptr, int table_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count) {
+        return 0;
+    }
+    if (table_idx == 0) {
+        return (int)ctx->table0_elements;
+    }
+    if (!ctx->table_sizes) {
+        return 0;
+    }
+    return (int)ctx->table_sizes[table_idx];
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;

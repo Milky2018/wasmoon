@@ -78,8 +78,16 @@ pub struct JITModuleContext {
   // For syncing globals back to store after JIT calls
   globals_ptr : Int64
   global_addrs : Array[Int]
+  // Tables owned/imported by this module instance
+  table_addrs : Array[Int]
   // For converting module function indices to store addresses
   func_addrs : Array[Int]
+  // Function type indices in module index space (imports + locals)
+  func_type_indices : Array[Int]
+  // Module canonical type indices
+  canonical_type_indices : Array[Int]
+  // Whether this module uses subtype helper for call_indirect checks
+  use_subtype_indirect_check : Bool
 }
 
 ///|
@@ -87,9 +95,22 @@ pub fn JITModuleContext::new(
   jit_module : @jit.JITModule,
   globals_ptr : Int64,
   global_addrs : Array[Int],
+  table_addrs : Array[Int],
   func_addrs : Array[Int],
+  func_type_indices : Array[Int],
+  canonical_type_indices : Array[Int],
+  use_subtype_indirect_check : Bool,
 ) -> JITModuleContext {
-  { jit_module, globals_ptr, global_addrs, func_addrs }
+  {
+    jit_module,
+    globals_ptr,
+    global_addrs,
+    table_addrs,
+    func_addrs,
+    func_type_indices,
+    canonical_type_indices,
+    use_subtype_indirect_check,
+  }
 }
 
 ///|
@@ -718,34 +739,78 @@ pub fn invoke_action(
                     type_rec_groups=ctx.store.module_rec_groups,
                   )
                   let jit_func_type_indices : Array[Int] = []
-                  for func_addr in jit.func_addrs {
-                    if func_addr >= 0 &&
+                  for i, func_addr in jit.func_addrs {
+                    if i >= 0 && i < jit.func_type_indices.length() {
+                      let raw_type_idx = jit.func_type_indices[i]
+                      if raw_type_idx >= 0 &&
+                        raw_type_idx < jit.canonical_type_indices.length() {
+                        jit_func_type_indices.push(
+                          jit.canonical_type_indices[raw_type_idx],
+                        )
+                      } else {
+                        jit_func_type_indices.push(raw_type_idx)
+                      }
+                    } else if func_addr >= 0 &&
                       func_addr < ctx.store.func_type_indices.length() {
-                      jit_func_type_indices.push(
-                        ctx.store.func_type_indices[func_addr],
+                      let fallback_canonical = ctx.store.get_func_canonical_type_idx(
+                        func_addr,
                       )
+                      if fallback_canonical >= 0 {
+                        jit_func_type_indices.push(fallback_canonical)
+                      } else {
+                        jit_func_type_indices.push(
+                          ctx.store.func_type_indices[func_addr],
+                        )
+                      }
                     } else {
                       jit_func_type_indices.push(-1) // Invalid/unknown type
                     }
                   }
                   let mut gc_func_table_ptr = jit.jit_module.get_func_table_ptr()
                   let mut gc_num_funcs = jit.jit_module.get_func_count()
-                  let gc_funcref_entries = collect_registered_funcref_entries(
+                  let gc_func_type_indices : Array[Int] = []
+                  for type_idx in jit_func_type_indices {
+                    gc_func_type_indices.push(type_idx)
+                  }
+                  let merged_funcref_types : Map[Int64, Int] = {}
+                  for func_idx, _func_addr in jit.func_addrs {
+                    let func_ptr = jit.jit_module.get_func_ptr(func_idx)
+                    if func_ptr == 0L {
+                      continue
+                    }
+                    if func_idx >= 0 && func_idx < gc_func_type_indices.length() {
+                      merged_funcref_types.set(
+                        func_ptr,
+                        gc_func_type_indices[func_idx],
+                      )
+                    }
+                  }
+                  let registered_funcref_entries = collect_registered_funcref_entries(
                     ctx.store,
                   )
+                  for entry in registered_funcref_entries {
+                    let (func_ptr, type_idx) = entry
+                    if merged_funcref_types.get(func_ptr) is None {
+                      merged_funcref_types.set(func_ptr, type_idx)
+                    }
+                  }
+                  let gc_funcref_entries : Array[(Int64, Int)] = []
+                  for func_ptr, type_idx in merged_funcref_types {
+                    gc_funcref_entries.push((func_ptr, type_idx))
+                  }
                   if gc_funcref_entries.length() > 0 {
                     let table_size = (gc_funcref_entries.length() * 8).to_int64()
                     let table_ptr = @jit.alloc_memory(table_size)
                     if table_ptr != 0L {
                       temp_gc_func_table_ptr = table_ptr
-                      jit_func_type_indices.clear()
+                      gc_func_type_indices.clear()
                       for i, entry in gc_funcref_entries {
                         let (func_ptr, type_idx) = entry
                         @jit.c_jit_write_i64(
                           table_ptr + (i * 8).to_int64(),
                           func_ptr,
                         )
-                        jit_func_type_indices.push(type_idx)
+                        gc_func_type_indices.push(type_idx)
                       }
                       gc_func_table_ptr = table_ptr
                       gc_num_funcs = gc_funcref_entries.length()
@@ -756,7 +821,7 @@ pub fn invoke_action(
                     ctx.store.module_types,
                     canonical,
                     ctx_ptr=jit.jit_module.get_context_ptr(),
-                    func_type_indices=jit_func_type_indices,
+                    func_type_indices=gc_func_type_indices,
                     func_table_ptr=gc_func_table_ptr,
                     num_funcs=gc_num_funcs,
                   ) catch {
@@ -773,10 +838,15 @@ pub fn invoke_action(
                 }
                 None => ()
               }
-              // Note: We don't sync interpreter tables to JIT tables here because:
-              // - If init was run via JIT, the JIT tables already have the correct values
-              // - Syncing from interpreter (which has nulls) would overwrite the JIT values
-              // TODO: Implement bidirectional sync when mixing interpreter/JIT execution
+              // Keep JIT shared tables coherent with interpreter-visible table state
+              // before each call. This is required for mixed interpreter/JIT flows
+              // (e.g. assertions that instantiate/trap between JIT invocations).
+              sync_tables_to_jit(
+                instance,
+                ctx.store,
+                jit.jit_module,
+                use_subtype_indirect_check=jit.use_subtype_indirect_check,
+              )
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITExit(code) => {
                   // Tear down GC context on exit
@@ -787,6 +857,7 @@ pub fn invoke_action(
                   }
                   // Sync globals even on exit
                   sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError("WASI exit: \{code}")
                 }
                 @jit.JITTrap(msg) => {
@@ -798,6 +869,7 @@ pub fn invoke_action(
                   }
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
               }
@@ -808,6 +880,7 @@ pub fn invoke_action(
               }
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
+              sync_jit_tables_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
               // V128 results take two slots (low then high 8 bytes)
               let values : Array[@types.Value] = []

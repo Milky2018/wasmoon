@@ -134,6 +134,10 @@ pub fn c_jit_ctx_get_memory_ptr(Int64, Int) -> Int64
 
 pub fn c_jit_ctx_get_memory_size(Int64, Int) -> Int64
 
+pub fn c_jit_ctx_get_table_ptr(Int64, Int) -> Int64
+
+pub fn c_jit_ctx_get_table_size(Int64, Int) -> Int
+
 pub fn c_jit_ctx_init_data_segments(Int64, Int) -> Unit
 
 pub fn c_jit_ctx_init_elem_segments(Int64, Int) -> Unit

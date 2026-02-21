@@ -647,8 +647,8 @@ pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
 /// Shared indirect table that can be used by multiple JIT modules
 /// This enables cross-module table sharing and runtime modifications
 struct JITTable {
-  table_ptr : Int64 // Pointer to the shared C-side table
-  size : Int
+  mut table_ptr : Int64 // Pointer to the shared C-side table
+  mut size : Int
   max : Int?
 } derive(Show)
 
@@ -680,6 +680,9 @@ pub fn JITTable::set(
   func_ptr : Int64,
   type_hash : Int,
 ) -> Unit {
+  if table_idx < 0 || table_idx >= self.size {
+    return
+  }
   @jit_ffi.c_jit_shared_table_set(
     self.table_ptr,
     table_idx,
@@ -689,9 +692,41 @@ pub fn JITTable::set(
 }
 
 ///|
+/// Read raw entry value bits from the shared table.
+pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
+  if table_idx < 0 || table_idx >= self.size {
+    return 0L
+  }
+  c_jit_read_i64(self.table_ptr + (table_idx * 16).to_int64())
+}
+
+///|
+/// Read raw entry type index from the shared table.
+pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
+  if table_idx < 0 || table_idx >= self.size {
+    return -1
+  }
+  c_jit_read_i64(self.table_ptr + (table_idx * 16 + 8).to_int64()).to_int()
+}
+
+///|
 /// Get the table size
 pub fn JITTable::get_size(self : JITTable) -> Int {
   self.size
+}
+
+///|
+/// Refresh table pointer and size from the active JIT context view.
+pub fn JITTable::refresh_layout(
+  self : JITTable,
+  table_ptr : Int64,
+  size : Int,
+) -> Unit {
+  if table_ptr == 0L || size < 0 {
+    return
+  }
+  self.table_ptr = table_ptr
+  self.size = size
 }
 
 ///|

@@ -93,7 +93,13 @@ pub fn collect_registered_funcref_entries(
     if store_addr < 0 || store_addr >= store.func_type_indices.length() {
       continue
     }
-    entries.push((func_ptr, store.func_type_indices[store_addr]))
+    let canonical_type_idx = store.get_func_canonical_type_idx(store_addr)
+    let type_idx = if canonical_type_idx >= 0 {
+      canonical_type_idx
+    } else {
+      store.func_type_indices[store_addr]
+    }
+    entries.push((func_ptr, type_idx))
   }
   entries
 }
@@ -301,6 +307,147 @@ pub fn sync_jit_globals_to_store(
       // We already checked mutability, so set should succeed
       global_inst.set(new_value) catch {
         _ => () // Should not happen since we checked mutability
+      }
+    }
+  }
+}
+
+///|
+fn decode_funcref_from_jit_ctx(
+  raw_value : Int64,
+  jit_ctx : JITModuleContext,
+) -> @types.Value {
+  if raw_value == NULL_REF {
+    return @types.Value::Null
+  }
+  match @jit.decode_funcref_idx(raw_value) {
+    Some(func_idx) =>
+      if func_idx >= 0 && func_idx < jit_ctx.func_addrs.length() {
+        @types.Value::FuncRef(jit_ctx.func_addrs[func_idx])
+      } else {
+        @types.Value::Null
+      }
+    None =>
+      if @jit.is_funcref_ptr(raw_value) {
+        let ptr = @jit.untag_funcref_ptr(raw_value)
+        let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
+          Some(addr) => Some(addr)
+          None => {
+            let mut found : Int? = None
+            for idx, addr in jit_ctx.func_addrs {
+              if jit_ctx.jit_module.get_func_ptr(idx) == ptr {
+                found = Some(addr)
+                break
+              }
+            }
+            found
+          }
+        }
+        match store_addr {
+          Some(addr) => {
+            register_funcref_mapping(addr, ptr)
+            @types.Value::FuncRef(addr)
+          }
+          None => @types.Value::Null
+        }
+      } else {
+        @types.Value::FuncRef(raw_value.to_int())
+      }
+  }
+}
+
+///|
+fn decode_table_entry_value(
+  elem_type : @types.ValueType,
+  raw_value : Int64,
+  jit_ctx : JITModuleContext,
+) -> @types.Value {
+  match elem_type {
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      decode_funcref_from_jit_ctx(raw_value, jit_ctx)
+    ExternRef | RefExtern | NullExternRef =>
+      if raw_value == NULL_REF {
+        @types.Value::Null
+      } else {
+        match @jit.decode_externref(raw_value) {
+          Some(idx) => @types.Value::ExternRef(idx)
+          None => @types.Value::ExternRef(raw_value.to_int())
+        }
+      }
+    AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
+      if raw_value == NULL_REF {
+        @types.Value::Null
+      } else if (raw_value & EXTERNREF_TAG) != 0L {
+        match @jit.decode_externref(raw_value) {
+          Some(idx) => @types.Value::ExternRef(idx)
+          None => @types.Value::ExternRef(raw_value.to_int())
+        }
+      } else if @jit.is_funcref_ptr(raw_value) || raw_value < 0L {
+        decode_funcref_from_jit_ctx(raw_value, jit_ctx)
+      } else {
+        decode_gc_value(raw_value)
+      }
+    RefI31 | RefNullI31 =>
+      if raw_value == NULL_REF {
+        @types.Value::Null
+      } else if (raw_value & 1L) == 1L {
+        @types.Value::I31((raw_value >> 1).to_int())
+      } else {
+        @types.Value::Null
+      }
+    RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
+      if raw_value == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::StructRef(@jit.decode_heap_ref(raw_value))
+      }
+    RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
+      if raw_value == NULL_REF {
+        @types.Value::Null
+      } else {
+        @types.Value::ArrayRef(@jit.decode_heap_ref(raw_value))
+      }
+    _ => @types.Value::Null
+  }
+}
+
+///|
+/// Sync JIT table contents back into interpreter tables.
+/// Required when JIT mutates imported/shared tables and later interpreter-based
+/// instantiation or evaluation needs to observe those updates.
+pub fn sync_jit_tables_to_store(
+  jit_ctx : JITModuleContext,
+  store : @runtime.Store,
+) -> Unit {
+  for table_idx, table_addr in jit_ctx.table_addrs {
+    let table = store.get_table(table_addr) catch { _ => continue }
+    let jit_table = match store.get_jit_table(table_addr) {
+      Some(t) => t
+      None => continue
+    }
+    let live_table_ptr = jit_ctx.jit_module.get_table_ptr(table_idx)
+    let live_jit_size = jit_ctx.jit_module.get_table_size(table_idx)
+    if live_table_ptr != 0L && live_jit_size >= 0 {
+      jit_table.refresh_layout(live_table_ptr, live_jit_size)
+    }
+    let mut runtime_size = table.size()
+    let jit_size = jit_table.get_size()
+    if jit_size > runtime_size {
+      let delta = jit_size - runtime_size
+      if delta > 0 {
+        if table.grow(delta, @types.Value::Null) < 0 {
+          continue
+        }
+        runtime_size = table.size()
+      }
+    }
+    let size = if runtime_size < jit_size { runtime_size } else { jit_size }
+    let elem_type = table.get_elem_type()
+    for i in 0..<size {
+      let raw_value = jit_table.get_entry_value(i)
+      let decoded = decode_table_entry_value(elem_type, raw_value, jit_ctx)
+      table.set(i, decoded) catch {
+        _ => ()
       }
     }
   }
@@ -679,7 +826,9 @@ pub fn sync_table_to_jit(
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
 ) -> Unit {
-  let size = table.size()
+  let runtime_size = table.size()
+  let jit_size = jit_table.get_size()
+  let size = if runtime_size < jit_size { runtime_size } else { jit_size }
   for i in 0..<size {
     let value = table.get(i) catch { _ => continue }
     let mut encoded : Int64 = NULL_REF
@@ -696,14 +845,33 @@ pub fn sync_table_to_jit(
       ExternRef(host_idx) => encoded = @jit.encode_externref(host_idx)
       FuncRef(store_addr) => {
         encoded = encode_store_funcref_for_jit(value, jit_module, instance)
-        if store_addr >= 0 && store_addr < store.func_type_indices.length() {
+        let mut resolved_type_idx = -1
+        match store_addr_to_module_func_idx(store_addr, instance) {
+          Some(func_idx) =>
+            if func_idx >= 0 && func_idx < instance.func_type_indices.length() {
+              let raw_type_idx = instance.func_type_indices[func_idx]
+              resolved_type_idx = if use_subtype_indirect_check {
+                raw_type_idx
+              } else if raw_type_idx >= 0 &&
+                raw_type_idx < instance.canonical_type_indices.length() {
+                instance.canonical_type_indices[raw_type_idx]
+              } else {
+                raw_type_idx
+              }
+            }
+          None => ()
+        }
+        if resolved_type_idx < 0 &&
+          store_addr >= 0 &&
+          store_addr < store.func_type_indices.length() {
           let raw_type_idx = store.func_type_indices[store_addr]
-          type_idx = if use_subtype_indirect_check {
+          resolved_type_idx = if use_subtype_indirect_check {
             raw_type_idx
           } else {
             store.get_func_canonical_type_idx(store_addr)
           }
         }
+        type_idx = resolved_type_idx
       }
       // Numeric types shouldn't be present in reference tables.
       _ => encoded = NULL_REF

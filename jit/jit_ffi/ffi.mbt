@@ -387,6 +387,20 @@ pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_
 pub extern "c" fn c_jit_ctx_get_func_count(ctx_ptr : Int64) -> Int = "wasmoon_jit_ctx_get_func_count"
 
 ///|
+/// Get table base pointer for table index in context
+pub extern "c" fn c_jit_ctx_get_table_ptr(
+  ctx_ptr : Int64,
+  table_idx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_table_ptr"
+
+///|
+/// Get table current size for table index in context
+pub extern "c" fn c_jit_ctx_get_table_size(
+  ctx_ptr : Int64,
+  table_idx : Int,
+) -> Int = "wasmoon_jit_ctx_get_table_size"
+
+///|
 /// Allocate indirect table for context
 pub extern "c" fn c_jit_ctx_alloc_indirect_table(
   ctx_ptr : Int64,

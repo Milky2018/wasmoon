@@ -1051,7 +1051,11 @@ fn run_with_jit(
             jm,
             globals_ptr,
             instance.global_addrs,
+            instance.table_addrs,
             instance.func_addrs,
+            instance.func_type_indices,
+            instance.canonical_type_indices,
+            use_subtype_indirect_check,
           )
 
           // Find and call the function

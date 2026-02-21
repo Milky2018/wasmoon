@@ -600,6 +600,26 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 }
 
 ///|
+/// Get current table base pointer from active JIT context.
+pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_table_ptr(self.context_ptr, table_idx)
+  } else {
+    0L
+  }
+}
+
+///|
+/// Get current table size from active JIT context.
+pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_table_size(self.context_ptr, table_idx)
+  } else {
+    0
+  }
+}
+
+///|
 /// Trampoline registry - maps (module, field) to function pointer getter
 let import_trampolines : Map[String, Map[String, () -> Int64]] = {
   let m : Map[String, Map[String, () -> Int64]] = {}

@@ -65,6 +65,8 @@ pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
+pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit
+
 pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
 pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit
@@ -91,9 +93,13 @@ pub struct JITModuleContext {
   jit_module : @jit.JITModule
   globals_ptr : Int64
   global_addrs : Array[Int]
+  table_addrs : Array[Int]
   func_addrs : Array[Int]
+  func_type_indices : Array[Int]
+  canonical_type_indices : Array[Int]
+  use_subtype_indirect_check : Bool
 }
-pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int]) -> Self
+pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Bool) -> Self
 
 pub struct WastContext {
   store : @runtime.Store
