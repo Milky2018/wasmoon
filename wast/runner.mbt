@@ -709,6 +709,7 @@ pub fn invoke_action(
                 }
               }
               // Set up GC heap for JIT execution if c_heap is available
+              let mut temp_gc_func_table_ptr = 0L
               match ctx.store.c_heap {
                 Some(heap) => {
                   // Compute canonical type indices for proper type equivalence checking
@@ -716,10 +717,6 @@ pub fn invoke_action(
                     ctx.store.module_types,
                     type_rec_groups=ctx.store.module_rec_groups,
                   )
-                  // Remap func_type_indices: JIT func_idx -> store func_addr -> type_idx
-                  // The JIT func_table has entries for this module's functions, but
-                  // the Store's func_type_indices has entries for ALL functions.
-                  // We need to create a mapping from JIT func_idx to type_idx.
                   let jit_func_type_indices : Array[Int] = []
                   for func_addr in jit.func_addrs {
                     if func_addr >= 0 &&
@@ -731,18 +728,45 @@ pub fn invoke_action(
                       jit_func_type_indices.push(-1) // Invalid/unknown type
                     }
                   }
-                  // Pass function type indices for funcref subtyping checks
-                  // Also pass func_table pointer for looking up func_idx from tagged pointer funcrefs
+                  let mut gc_func_table_ptr = jit.jit_module.get_func_table_ptr()
+                  let mut gc_num_funcs = jit.jit_module.get_func_count()
+                  let gc_funcref_entries = collect_registered_funcref_entries(
+                    ctx.store,
+                  )
+                  if gc_funcref_entries.length() > 0 {
+                    let table_size = (gc_funcref_entries.length() * 8).to_int64()
+                    let table_ptr = @jit.alloc_memory(table_size)
+                    if table_ptr != 0L {
+                      temp_gc_func_table_ptr = table_ptr
+                      jit_func_type_indices.clear()
+                      for i, entry in gc_funcref_entries {
+                        let (func_ptr, type_idx) = entry
+                        @jit.c_jit_write_i64(
+                          table_ptr + (i * 8).to_int64(),
+                          func_ptr,
+                        )
+                        jit_func_type_indices.push(type_idx)
+                      }
+                      gc_func_table_ptr = table_ptr
+                      gc_num_funcs = gc_funcref_entries.length()
+                    }
+                  }
                   @jit.gc_setup(
                     heap,
                     ctx.store.module_types,
                     canonical,
                     ctx_ptr=jit.jit_module.get_context_ptr(),
                     func_type_indices=jit_func_type_indices,
-                    func_table_ptr=jit.jit_module.get_func_table_ptr(),
-                    num_funcs=jit.jit_module.get_func_count(),
+                    func_table_ptr=gc_func_table_ptr,
+                    num_funcs=gc_num_funcs,
                   ) catch {
-                    err => raise RuntimeError("JIT GC setup failed: \{err}")
+                    err => {
+                      if temp_gc_func_table_ptr != 0L {
+                        @jit.free_memory(temp_gc_func_table_ptr)
+                        temp_gc_func_table_ptr = 0L
+                      }
+                      raise RuntimeError("JIT GC setup failed: \{err}")
+                    }
                   }
                   // Set GC heap in VMContext for inline allocation
                   jit.jit_module.set_gc_heap(heap.get_ptr())
@@ -757,6 +781,10 @@ pub fn invoke_action(
                 @jit.JITExit(code) => {
                   // Tear down GC context on exit
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  if temp_gc_func_table_ptr != 0L {
+                    @jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
                   // Sync globals even on exit
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError("WASI exit: \{code}")
@@ -764,6 +792,10 @@ pub fn invoke_action(
                 @jit.JITTrap(msg) => {
                   // Tear down GC context on trap
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  if temp_gc_func_table_ptr != 0L {
+                    @jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
@@ -771,6 +803,9 @@ pub fn invoke_action(
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown(jit.jit_module.get_context_ptr())
+              if temp_gc_func_table_ptr != 0L {
+                @jit.free_memory(temp_gc_func_table_ptr)
+              }
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types

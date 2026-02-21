@@ -25,6 +25,8 @@ pub fn builtin_jit_modules() -> Array[String]
 
 pub fn clear_funcref_registry() -> Unit
 
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
+
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance

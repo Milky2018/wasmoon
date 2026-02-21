@@ -80,6 +80,25 @@ pub fn register_instance_funcrefs_for_jit(
 }
 
 ///|
+/// Collect all known funcref executable pointers and their function type indices.
+/// Used to build a store-wide GC funcref/type view for cross-module indirect calls.
+pub fn collect_registered_funcref_entries(
+  store : @runtime.Store,
+) -> Array[(Int64, Int)] {
+  let entries : Array[(Int64, Int)] = []
+  for func_ptr, store_addr in jit_funcref_ptr_to_store.val {
+    if func_ptr == 0L {
+      continue
+    }
+    if store_addr < 0 || store_addr >= store.func_type_indices.length() {
+      continue
+    }
+    entries.push((func_ptr, store.func_type_indices[store_addr]))
+  }
+  entries
+}
+
+///|
 /// Check if a module contains JIT-unsupported instructions
 pub fn has_unsupported_instructions(mod_ : @types.Module) -> Bool {
   // Check all function bodies for unsupported instructions
