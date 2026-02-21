@@ -188,15 +188,6 @@ fn WastContext::try_compile_jit(
   if !self.use_jit {
     return None
   }
-  // Check if module imports from any overridden built-in modules
-  // JIT cannot use these since the built-in trampolines don't match the overridden implementation
-  for imp in mod_.imports {
-    if self.overridden_builtin_modules.contains(imp.mod_name) {
-      abort(
-        "WAST JIT strict mode: import from overridden built-in module '\{imp.mod_name}' is not supported",
-      )
-    }
-  }
   match self.jit_compiler {
     Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
     None => abort("WAST JIT strict mode: JIT compiler callback is missing")

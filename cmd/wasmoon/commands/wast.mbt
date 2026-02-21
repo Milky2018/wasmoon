@@ -92,54 +92,6 @@ fn try_compile_jit(
       "WAST JIT strict mode: module contains instructions not supported by JIT",
     )
   }
-  // Check for cross-module imports that require state sharing
-  // JIT can't properly share globals/memory/tables with other modules
-  if @wast.has_cross_module_imports(mod_) {
-    abort(
-      "WAST JIT strict mode: cross-module imports requiring shared state are not supported",
-    )
-  }
-  // Check if module exports memory or tables that might be imported by others
-  // JIT can't share its internal memory/table storage with the interpreter
-  if @wast.exports_shared_resources(mod_) {
-    abort(
-      "WAST JIT strict mode: exporting shared table resources is not supported",
-    )
-  }
-  // Check if all imports are supported by JIT
-  let mut func_imp_idx = 0
-  for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      let has_builtin = @jit.get_import_trampoline(imp.mod_name, imp.name)
-        is Some(_)
-      if not(has_builtin) {
-        let func_addr = if func_imp_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_imp_idx]
-        } else {
-          -1
-        }
-        if func_addr < 0 {
-          abort(
-            "WAST JIT strict mode: unresolved function import \{imp.mod_name}.\{imp.name}",
-          )
-        }
-        let inst = store.get_func_inst(func_addr) catch {
-          _ =>
-            abort(
-              "WAST JIT strict mode: failed to read function import \{imp.mod_name}.\{imp.name}",
-            )
-        }
-        if inst is @runtime.FuncInst::HostFunc(_) {
-          ()
-        } else {
-          abort(
-            "WAST JIT strict mode: non-host function import is not supported for \{imp.mod_name}.\{imp.name}",
-          )
-        }
-      }
-      func_imp_idx = func_imp_idx + 1
-    }
-  }
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
