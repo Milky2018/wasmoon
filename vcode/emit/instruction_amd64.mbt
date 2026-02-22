@@ -2245,37 +2245,6 @@ fn MachineCode::emit_instruction_x86_64(
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
-      let do_div = self.new_internal_label()
-      let overflow_done = self.new_internal_label()
-
-      // Checked div sequence (Cranelift-style): trap on divisor=0.
-      if is_64 {
-        self.x86_emit_test_rr(rhs, rhs)
-      } else {
-        self.x86_emit_test_rr32(rhs, rhs)
-      }
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_div)
-      self.x86_emit_trap_imm16(4)
-      self.define_label(do_div)
-
-      // Signed overflow guard: INT_MIN / -1 traps.
-      if is_64 {
-        self.x86_emit_mov_imm64(scratch, 0x8000000000000000L)
-        self.x86_emit_cmp_rr(lhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, overflow_done)
-        self.x86_emit_mov_imm64(scratch, -1L)
-        self.x86_emit_cmp_rr(rhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, overflow_done)
-      } else {
-        self.x86_emit_mov_imm64(scratch, 0x80000000L)
-        self.x86_emit_cmp_rr32(lhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, overflow_done)
-        self.x86_emit_mov_imm64(scratch, -1L)
-        self.x86_emit_cmp_rr32(rhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, overflow_done)
-      }
-      self.x86_emit_trap_imm16(5)
-      self.define_label(overflow_done)
 
       // Preserve divisor if it lives in rax/rdx, since those are overwritten.
       let mut divisor = rhs
@@ -2304,17 +2273,6 @@ fn MachineCode::emit_instruction_x86_64(
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
-
-      // Checked div sequence: trap on divisor=0.
-      let do_div = self.new_internal_label()
-      if is_64 {
-        self.x86_emit_test_rr(rhs, rhs)
-      } else {
-        self.x86_emit_test_rr32(rhs, rhs)
-      }
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_div)
-      self.x86_emit_trap_imm16(4)
-      self.define_label(do_div)
 
       let mut divisor = rhs
       if rhs == 0 || rhs == 2 {
@@ -2347,17 +2305,6 @@ fn MachineCode::emit_instruction_x86_64(
       if rd != 2 {
         abort("x86_64 SRem: expected dst in rdx")
       }
-
-      // Checked rem sequence: trap on divisor=0.
-      let nonzero = self.new_internal_label()
-      if is_64 {
-        self.x86_emit_test_rr(rhs, rhs)
-      } else {
-        self.x86_emit_test_rr32(rhs, rhs)
-      }
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
-      self.x86_emit_trap_imm16(4)
-      self.define_label(nonzero)
 
       // if rhs == -1: rdx = 0; goto done
       let do_idiv = self.new_internal_label()
@@ -2403,17 +2350,6 @@ fn MachineCode::emit_instruction_x86_64(
       if rd != 2 {
         abort("x86_64 URem: expected dst in rdx")
       }
-
-      // Checked rem sequence: trap on divisor=0.
-      let nonzero = self.new_internal_label()
-      if is_64 {
-        self.x86_emit_test_rr(rhs, rhs)
-      } else {
-        self.x86_emit_test_rr32(rhs, rhs)
-      }
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
-      self.x86_emit_trap_imm16(4)
-      self.define_label(nonzero)
 
       // Preserve divisor if it conflicts with rax/rdx.
       let mut divisor = rhs
