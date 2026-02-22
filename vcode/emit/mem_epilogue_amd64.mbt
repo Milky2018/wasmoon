@@ -40,10 +40,10 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       // Branch inversion: if then_b is next block, invert to branch to else_b.
       if next_block == Some(then_b) {
         // cond == 0 => else_b
-        self.x86_emit_test_rr(rt, rt)
+        self.x86_emit_test_rr32(rt, rt)
         self.x86_emit_jcc_rel32(@instr.Cond::Eq, else_b)
       } else {
-        self.x86_emit_test_rr(rt, rt)
+        self.x86_emit_test_rr32(rt, rt)
         self.x86_emit_jcc_rel32(@instr.Cond::Ne, then_b)
         if next_block != Some(else_b) {
           self.x86_emit_jmp_rel32(else_b)
@@ -171,6 +171,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       let int_rets = isa.wasm_ret_gprs()
       let fp_rets = isa.wasm_ret_fprs()
       let int_moves : Array[(Int, Int)] = []
+      let int_ret_regs_i32 : Array[Int] = []
       let fp_moves : Array[(Int, Int)] = []
       let mut int_idx = 0
       let mut fp_idx = 0
@@ -193,7 +194,11 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
             guard int_idx < int_rets.length() else {
               abort("x86_64 return: too many int returns")
             }
-            int_moves.push((src, int_rets[int_idx].index))
+            let dst = int_rets[int_idx].index
+            int_moves.push((src, dst))
+            if ty is @ir.Type::I32 {
+              int_ret_regs_i32.push(dst)
+            }
             int_idx += 1
           }
         }
@@ -320,6 +325,11 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
 
       emit_parallel_moves_gpr(self, isa.scratch_reg_2_index(), int_moves)
       emit_parallel_moves_xmm(self, 15, fp_moves)
+      // Canonicalize i32 returns to low-32-bit values.
+      // This prevents stale high 32 bits from affecting later i32 condition uses.
+      for reg in int_ret_regs_i32 {
+        self.x86_emit_mov_rr32(reg, reg)
+      }
 
       // Return sequence.
       self.emit_epilogue(stack_frame)

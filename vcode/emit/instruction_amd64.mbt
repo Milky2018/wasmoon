@@ -2124,18 +2124,18 @@ fn MachineCode::emit_instruction_x86_64(
       match class {
         // Match Cranelift x64: integer select uses cmov.
         @abi.Int => {
-          // dst = false
-          emit_reg_move(self, rd, false_reg, class)
           // Set flags based on cond != 0.
           self.x86_emit_test_rr32(cond_reg, cond_reg)
+          // dst = false
+          emit_reg_move(self, rd, false_reg, class)
           // dst = cond ? true : dst
           self.x86_emit_cmovcc_rr(@instr.Cond::Ne, rd, true_reg)
         }
         // Match Cranelift x64: XMM select uses a branch (no cmov for XMM).
         @abi.Float32 | @abi.Float64 | @abi.Vector => {
+          self.x86_emit_test_rr32(cond_reg, cond_reg)
           // dst = false
           emit_reg_move(self, rd, false_reg, class)
-          self.x86_emit_test_rr32(cond_reg, cond_reg)
           let next = self.new_internal_label()
           self.x86_emit_jcc_rel32(@instr.Cond::Eq, next)
           emit_reg_move(self, rd, true_reg, class)
@@ -4405,6 +4405,33 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movd_xmm_r32(dst_xmm, scratch)
         self.x86_emit_pshufd_xmm_xmm_imm8(dst_xmm, dst_xmm, 0)
       }
+      fn emit_i64x2_pcmpgt(
+        self : MachineCode,
+        rd : Int,
+        lhs : Int,
+        rhs : Int,
+        t0 : Int,
+        t1 : Int,
+      ) -> Unit {
+        // Match Cranelift x64 non-SSE4.2 i64x2 gt expansion from inst.isle.
+        //
+        // This sequence is written to be robust when `rd` aliases `lhs`/`rhs`:
+        // copy inputs to scratch XMMs first, then freely clobber `rd`.
+        self.x86_emit_movaps_xmm_xmm(t0, lhs) // t0 = lhs
+        self.x86_emit_movaps_xmm_xmm(t1, rhs) // t1 = rhs
+        emit_broadcast_dword_pattern(self, rd, 0x80000000) // rd = mask
+        self.x86_emit_pxor_xmm_xmm(t0, rd) // t0 = lhs_masked
+        self.x86_emit_pxor_xmm_xmm(t1, rd) // t1 = rhs_masked
+        self.x86_emit_movaps_xmm_xmm(rd, t0) // rd = lhs_masked
+        self.x86_emit_pcmpeqd_xmm_xmm(rd, t1) // rd = cmp_eq
+        self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, t0, t1) // t0 = cmp32
+        self.x86_emit_pshufd_xmm_xmm_imm8(t1, t0, 0xA0) // t1 = low_halves_gt
+        self.x86_emit_pshufd_xmm_xmm_imm8(t0, t0, 0xF5) // t0 = high_halves_gt
+        self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0xF5) // rd = high_halves_eq
+        self.x86_emit_pand_xmm_xmm(t1, rd)
+        self.x86_emit_por_xmm_xmm(t1, t0)
+        self.x86_emit_movaps_xmm_xmm(rd, t1)
+      }
 
       match kind {
         @instr.SIMDCmpKind::Eq =>
@@ -4424,33 +4451,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
         @instr.SIMDCmpKind::GtS =>
           if lane_size is @instr.D64 {
-            // Match Cranelift x64: emulate i64x2 gt via 32-bit compares.
-            //
-            // See: cranelift/codegen/src/isa/x64/inst.isle (x64_pcmpgt $I64X2)
-            //
-            // mask = [0x80000000, 0x0, 0x80000000, 0x0] in u32 lanes.
-            // x_masked = x ^ mask
-            // y_masked = y ^ mask
-            // cmp32 = pcmpgtd(x_masked, y_masked)
-            // low_halves_gt = pshufd(cmp32, 0xA0)
-            // high_halves_gt = pshufd(cmp32, 0xF5)
-            // cmp_eq = pcmpeqd(x, y)
-            // high_halves_eq = pshufd(cmp_eq, 0xF5)
-            // result = por(pand(low_halves_gt, high_halves_eq), high_halves_gt)
-            emit_broadcast_dword_pattern(self, rd, 0x80000000)
-            self.x86_emit_movaps_xmm_xmm(t0, x)
-            self.x86_emit_pxor_xmm_xmm(t0, rd)
-            self.x86_emit_movaps_xmm_xmm(t1, y)
-            self.x86_emit_pxor_xmm_xmm(t1, rd)
-            self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, t0, t1)
-            self.x86_emit_pshufd_xmm_xmm_imm8(t1, t0, 0xA0) // low_halves_gt
-            self.x86_emit_pshufd_xmm_xmm_imm8(rd, t0, 0xF5) // high_halves_gt
-            self.x86_emit_movaps_xmm_xmm(t0, x)
-            self.x86_emit_pcmpeqd_xmm_xmm(t0, y)
-            self.x86_emit_pshufd_xmm_xmm_imm8(t0, t0, 0xF5) // high_halves_eq
-            self.x86_emit_pand_xmm_xmm(t1, t0)
-            self.x86_emit_por_xmm_xmm(t1, rd)
-            self.x86_emit_movaps_xmm_xmm(rd, t1)
+            emit_i64x2_pcmpgt(self, rd, x, y, t0, t1)
           } else {
             self.x86_emit_movaps_xmm_xmm(rd, x)
             self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, y)
@@ -4458,29 +4459,9 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.SIMDCmpKind::GeS =>
           // a >= b  <=>  !(b > a)
           if lane_size is @instr.D64 {
-            // Use the i64x2 gt sequence on swapped operands, then invert.
-            // tmp = b > a
-            let tmp = t1
-            let ones = t0
-            // Compute tmp into `tmp` by temporarily using rd.
-            // Reuse the GtS sequence by swapping x/y.
-            emit_broadcast_dword_pattern(self, rd, 0x80000000)
-            self.x86_emit_movaps_xmm_xmm(ones, y)
-            self.x86_emit_pxor_xmm_xmm(ones, rd)
-            self.x86_emit_movaps_xmm_xmm(tmp, x)
-            self.x86_emit_pxor_xmm_xmm(tmp, rd)
-            self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, ones, tmp) // ones = cmp32
-            self.x86_emit_pshufd_xmm_xmm_imm8(tmp, ones, 0xA0) // low_halves_gt
-            self.x86_emit_pshufd_xmm_xmm_imm8(rd, ones, 0xF5) // high_halves_gt
-            self.x86_emit_movaps_xmm_xmm(ones, y)
-            self.x86_emit_pcmpeqd_xmm_xmm(ones, x)
-            self.x86_emit_pshufd_xmm_xmm_imm8(ones, ones, 0xF5) // high_halves_eq
-            self.x86_emit_pand_xmm_xmm(tmp, ones)
-            self.x86_emit_por_xmm_xmm(tmp, rd)
-            // Invert tmp.
-            self.x86_emit_pcmpeqd_xmm_xmm(ones, ones)
-            self.x86_emit_pxor_xmm_xmm(tmp, ones)
-            self.x86_emit_movaps_xmm_xmm(rd, tmp)
+            emit_i64x2_pcmpgt(self, rd, y, x, t0, t1)
+            self.x86_emit_pcmpeqd_xmm_xmm(t0, t0)
+            self.x86_emit_pxor_xmm_xmm(rd, t0)
           } else {
             self.x86_emit_movaps_xmm_xmm(rd, y)
             self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, x)
