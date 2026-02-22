@@ -1793,18 +1793,12 @@ pub fn build_bundles_with_merging(
     if conflict_a || conflict_b {
       return false
     }
-    // Be conservative around fixed-register-constrained ranges.
-    //
-    // regalloc2 can merge some of these safely because it tracks richer bundle
-    // metadata for fixed uses/defs. Our current model is less precise, and
-    // forcing merge in these cases can create cross-boundary allocation
-    // mistakes on amd64 (wrong argument/operand placement). Keep them split.
-    if set_a_has_fixed_def ||
-      set_b_has_fixed_def ||
-      fixed_a is Some(_) ||
-      fixed_b is Some(_) {
+    if fixed_a is Some(a_fixed) &&
+      fixed_b is Some(b_fixed) &&
+      (a_fixed.index != b_fixed.index || !same_fixed_bank(a_fixed, b_fixed)) {
       return false
     }
+
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
