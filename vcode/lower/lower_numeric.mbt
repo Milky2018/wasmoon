@@ -587,26 +587,6 @@ fn lower_div(
   // Only emit division if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if @isa.ISA::current() is @isa.AMD64 {
-      // Bootstrap via C helpers: avoid implementing idiv just to run spec tests.
-      let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-      let ptr = if is_64 {
-        if signed {
-          @jit_ffi.c_jit_get_i64_sdiv_ptr()
-        } else {
-          @jit_ffi.c_jit_get_i64_udiv_ptr()
-        }
-      } else if signed {
-        @jit_ffi.c_jit_get_i32_sdiv_ptr()
-      } else {
-        @jit_ffi.c_jit_get_i32_udiv_ptr()
-      }
-      let load_ptr = @instr.VCodeInst::new(LoadConst(ptr))
-      load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
-      block.add_inst(load_ptr)
-      lower_c_libcall(ctx, block, func_ptr_vreg, [lhs, rhs], Some(dst))
-      return
-    }
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
     } else {

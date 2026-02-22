@@ -44,6 +44,9 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   if moves.is_empty() {
     return moves
   }
+  let isa = @isa.ISA::current()
+  let machine_env = isa.machine_env()
+
   fn class_bank(cls : @abi.RegClass) -> Int {
     match cls {
       @abi.Int => 0
@@ -112,9 +115,35 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     if avoid_loc is Some(Reg(preg)) {
       avoid_idx = Some(preg.index)
     }
-    let idx = match avoid_idx {
-      Some(16) => 17
-      _ => 16
+
+    fn pick_two(a : Int, b : Int, avoid_idx : Int?) -> Int {
+      match avoid_idx {
+        Some(v) => if v == a { b } else { a }
+        None => a
+      }
+    }
+
+    let idx = match class {
+      @abi.Int => {
+        guard machine_env.scratch_int.length() >= 2 else {
+          abort("resolve_parallel_moves: missing integer scratch registers")
+        }
+        pick_two(
+          machine_env.scratch_int[0],
+          machine_env.scratch_int[1],
+          avoid_idx,
+        )
+      }
+      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        guard machine_env.scratch_float.length() >= 2 else {
+          abort("resolve_parallel_moves: missing float scratch registers")
+        }
+        pick_two(
+          machine_env.scratch_float[0],
+          machine_env.scratch_float[1],
+          avoid_idx,
+        )
+      }
     }
     Reg({ index: idx, class })
   }

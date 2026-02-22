@@ -1518,6 +1518,36 @@ test "constraint_reload_coalescing_logic" {
 }
 
 ///|
+test "resolve_parallel_moves uses ISA scratch for cycles" {
+  let env = @isa.ISA::current().machine_env()
+  guard env.scratch_int.length() >= 2 else {
+    abort("test requires two integer scratch registers")
+  }
+  let scratch0 = env.scratch_int[0]
+  let scratch1 = env.scratch_int[1]
+  let moves : Array[RegMove] = [
+    {
+      from: Reg(@abi.PReg::{ index: 6, class: @abi.Int }),
+      to: Reg(@abi.PReg::{ index: 7, class: @abi.Int }),
+      class: @abi.Int,
+    },
+    {
+      from: Reg(@abi.PReg::{ index: 7, class: @abi.Int }),
+      to: Reg(@abi.PReg::{ index: 6, class: @abi.Int }),
+      class: @abi.Int,
+    },
+  ]
+  let resolved = resolve_parallel_moves(moves)
+  let mut uses_scratch = false
+  for mv in resolved {
+    if mv.to is Reg(dst) && (dst.index == scratch0 || dst.index == scratch1) {
+      uses_scratch = true
+    }
+  }
+  inspect(uses_scratch, content="true")
+}
+
+///|
 test "reload coalescing: call with spilled arg used twice" {
   if @isa.ISA::current() is @isa.AMD64 {
     return
