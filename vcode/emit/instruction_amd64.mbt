@@ -2267,7 +2267,10 @@ fn MachineCode::emit_instruction_x86_64(
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
-      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      let mut use_amode = shift >= 0 &&
+        shift <= 3 &&
+        (index & 7) != 4 &&
+        (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
       if !(ext is @instr.IndexExtend::None) {
         use_amode = false
       }
@@ -2304,15 +2307,19 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
           @instr.MemType::I64 =>
             self.x86_emit_mov_r64_m64_base_index_scale_disp(rt, base, idx, 0, 0)
-          _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+          _ => ()
         }
-        return
+        if ty is @instr.MemType::I32 || ty is @instr.MemType::I64 {
+          return
+        }
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
         @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, 0)
         @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, 0)
-        _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, 0)
+        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, 0)
+        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, 0)
       }
     }
     @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
@@ -2375,7 +2382,10 @@ fn MachineCode::emit_instruction_x86_64(
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
-      let mut use_amode = shift >= 0 && shift <= 3 && (index & 7) != 4
+      let mut use_amode = shift >= 0 &&
+        shift <= 3 &&
+        (index & 7) != 4 &&
+        (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
       if !(ext is @instr.IndexExtend::None) {
         use_amode = false
       }
@@ -2416,15 +2426,19 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_mov_m64_r64_base_index_scale_disp(
               base, idx, 0, 0, value,
             )
-          _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+          _ => ()
         }
-        return
+        if ty is @instr.MemType::I32 || ty is @instr.MemType::I64 {
+          return
+        }
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
         @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, 0, value)
         @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, 0, value)
-        _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, 0, value)
+        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, 0, value)
+        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(idx, 0, value)
       }
     }
     @instr.StorePtrNarrowRegOffset(bits, ext, shift) => {
