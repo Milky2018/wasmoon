@@ -1380,6 +1380,17 @@ pub extern "c" fn c_jit_exception_throw_tag(
 ) -> Unit = "wasmoon_jit_exception_throw_tag"
 
 ///|
+/// Throw an exception with payload values from host-side bridge code.
+/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values: *i64, count: i32) -> noreturn
+#borrow(values)
+pub extern "c" fn c_jit_exception_throw_values(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values : FixedArray[Int64],
+  count : Int,
+) -> Unit = "wasmoon_jit_exception_throw_values"
+
+///|
 /// Get exception throw_ref function pointer for JIT
 /// Signature: throw_ref(ctx: *jit_context_t, exnref: i64) -> noreturn
 pub extern "c" fn c_jit_get_exception_throw_ref_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ref_ptr"

@@ -226,6 +226,8 @@ pub fn tag_funcref_ptr(Int64) -> Int64
 
 pub fn throw_exception_tag(Int64, Int) -> Unit
 
+pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
+
 pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64

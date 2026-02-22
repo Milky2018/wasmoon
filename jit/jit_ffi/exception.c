@@ -200,6 +200,16 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t
     exception_throw_impl(ctx, tag_addr, NULL, 0);
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values(
+    int64_t ctx_ptr,
+    int32_t tag_addr,
+    int64_t *values,
+    int32_t count
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_throw_impl(ctx, tag_addr, values, count);
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_ref_impl(ctx, exnref);

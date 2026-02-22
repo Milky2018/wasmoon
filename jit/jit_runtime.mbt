@@ -1225,6 +1225,23 @@ pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
 }
 
 ///|
+/// Throw a wasm exception with payload values into the active JIT exception
+/// chain (used by hostcall bridges).
+pub fn throw_exception_values(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values : Array[Int64],
+) -> Unit {
+  let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
+  @jit_ffi.c_jit_exception_throw_values(
+    ctx_ptr,
+    tag_addr,
+    payload,
+    values.length(),
+  )
+}
+
+///|
 /// Allocate guarded memory with mmap for bounds check elimination
 /// Memory is allocated with guard pages (PROT_NONE) after the accessible region
 /// Access to guard pages triggers SIGSEGV which is caught and converted to a trap

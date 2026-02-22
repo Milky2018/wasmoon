@@ -1052,6 +1052,29 @@ fn encode_store_funcref_for_jit(
 }
 
 ///|
+fn encode_exception_value_for_jit(
+  value : @types.Value,
+  jit_module : @jit.JITModule,
+  instance : @runtime.ModuleInstance,
+) -> Int64? {
+  match value {
+    I32(n) => Some(@types.ToInt64::to_int64_bits(n))
+    I64(n) => Some(@types.ToInt64::to_int64_bits(n))
+    F32(n) => Some(@types.ToInt64::to_int64_bits(n))
+    F64(n) => Some(@types.ToInt64::to_int64_bits(n))
+    Null => Some(NULL_REF)
+    FuncRef(_) =>
+      Some(encode_store_funcref_for_jit(value, jit_module, instance))
+    ExternRef(idx) => Some(@jit.encode_externref(idx))
+    StructRef(idx) => Some(@jit.encode_heap_ref(idx))
+    ArrayRef(idx) => Some(@jit.encode_heap_ref(idx))
+    I31(n) => Some(@jit.encode_i31(n))
+    ExnRef(idx) => Some(idx.to_int64())
+    V128(_) => None
+  }
+}
+
+///|
 fn decode_ref_value(
   ty : @types.ValueType,
   raw : Int64,
@@ -1396,12 +1419,21 @@ pub fn install_jit_hostcall_dispatcher(
         let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
         // Imported wasm callees can throw; route the exception into the active
         // JIT try_table chain instead of flattening it to a generic trap.
-        if values.is_empty() {
+        if values.length() == 0 {
           @jit.throw_exception_tag(jit_module.get_context_ptr(), local_tag_idx)
         } else {
-          // For now, we only bridge payload-less imported exceptions in the
-          // hostcall path. Keep a deterministic trap for unsupported payloads.
-          return 8
+          let encoded_values : Array[Int64] = []
+          for v in values {
+            match encode_exception_value_for_jit(v, jit_module, instance) {
+              Some(raw) => encoded_values.push(raw)
+              None => return 8
+            }
+          }
+          @jit.throw_exception_values(
+            jit_module.get_context_ptr(),
+            local_tag_idx,
+            encoded_values,
+          )
         }
         return 8
       }
