@@ -31,6 +31,11 @@ fn scratch2_index() -> Int {
 }
 
 ///|
+fn scratch1_index() -> Int {
+  current_isa().scratch_reg_1_index()
+}
+
+///|
 fn wasm_vmctx_arg_preg() -> @abi.PReg {
   current_isa().wasm_vmctx_arg_preg()
 }
