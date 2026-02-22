@@ -987,12 +987,6 @@ fn lower_c_libcall(
   let num_results = if result is Some(_) { 1 } else { 0 }
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, C))
 
-  // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
-    index: scratch2_index(),
-    class: @abi.Int,
-  })
-
   // Args constrained to C ABI arg regs (ISA-dependent).
   let reg_arg_count = if args.length() < arg_regs.length() {
     args.length()
@@ -1013,10 +1007,26 @@ fn lower_c_libcall(
     }
     let overflow_bytes = overflow * 8
     let temp_base = overflow_bytes
-    let total_bytes = overflow_bytes + reg_arg_count * 8
-    if total_bytes > 0 {
-      ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+    let arg_temp_bytes = overflow_bytes + reg_arg_count * 8
+    let target_slot = arg_temp_bytes
+    let total_bytes = arg_temp_bytes + 8
+    ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+
+    // Preserve call target in a dedicated outgoing slot, then reload to r11
+    // immediately before the call. This avoids fixed-reg move insertion after
+    // argument materialization, which can otherwise clobber argument registers.
+    let store_target = @instr.VCodeInst::new(StoreToStack(target_slot))
+    store_target.add_use(Virtual(func_ptr))
+    block.add_inst(store_target)
+
+    let call_target_preg = @abi.PReg::{
+      index: scratch2_index(),
+      class: @abi.Int,
     }
+    let load_target = @instr.VCodeInst::new(StackLoad(target_slot))
+    load_target.add_def({ reg: Physical(call_target_preg) })
+    block.add_inst(load_target)
+    call_inst.add_use(Physical(call_target_preg))
 
     // Place stack overflow args at the ABI-required outgoing offsets.
     for i in 0..<overflow {
@@ -1043,6 +1053,11 @@ fn lower_c_libcall(
       call_inst.add_use(Physical(preg))
     }
   } else {
+    // Call target is constrained to SCRATCH_REG_2 (IP1).
+    call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+      index: scratch2_index(),
+      class: @abi.Int,
+    })
     for i in 0..<reg_arg_count {
       let arg = args[i]
       call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
