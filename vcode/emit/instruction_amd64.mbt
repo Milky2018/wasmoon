@@ -431,6 +431,42 @@ fn MachineCode::emit_instruction_x86_64(
       let rhs = reg_num(inst.uses[1])
       emit_scalar_min_max_seq(self, is_f32, false, rd, lhs, rhs)
     }
+    @instr.FCeil(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundss_xmm_xmm_imm8(rd, src, 2)
+      } else {
+        self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 2)
+      }
+    }
+    @instr.FFloor(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundss_xmm_xmm_imm8(rd, src, 1)
+      } else {
+        self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 1)
+      }
+    }
+    @instr.FTrunc(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundss_xmm_xmm_imm8(rd, src, 3)
+      } else {
+        self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 3)
+      }
+    }
+    @instr.FNearest(is_f32) => {
+      let rd = wreg_num(inst.defs[0])
+      let src = reg_num(inst.uses[0])
+      if is_f32 {
+        self.x86_emit_roundss_xmm_xmm_imm8(rd, src, 0)
+      } else {
+        self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 0)
+      }
+    }
     @instr.Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -2550,6 +2586,15 @@ fn MachineCode::emit_instruction_x86_64(
         _ => reg_num(inst.uses[0])
       }
       self.x86_emit_call_r64(target)
+    }
+    @instr.ReturnCallIndirect(_, _) => {
+      // Tail-call: restore frame then jump to callee without pushing a return address.
+      self.emit_epilogue(stack_frame)
+      let target = match inst.use_constraints[0] {
+        @abi.FixedReg(preg) => preg.index
+        _ => reg_num(inst.uses[0])
+      }
+      self.x86_emit_jmp_r64(target)
     }
     @instr.AdjustSP(delta) =>
       if delta > 0 {

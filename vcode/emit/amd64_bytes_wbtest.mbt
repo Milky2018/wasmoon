@@ -492,9 +492,11 @@ test "x86_64 SIMD float rounding encodings" {
   mc.x86_emit_roundps_xmm_xmm_imm8(1, 2, 1) // roundps xmm1, xmm2, floor
   mc.x86_emit_roundpd_xmm_xmm_imm8(1, 2, 0) // roundpd xmm1, xmm2, nearest
   mc.x86_emit_roundpd_xmm_xmm_imm8(1, 2, 3) // roundpd xmm1, xmm2, trunc
+  mc.x86_emit_roundss_xmm_xmm_imm8(1, 2, 2) // roundss xmm1, xmm2, ceil
+  mc.x86_emit_roundsd_xmm_xmm_imm8(1, 2, 3) // roundsd xmm1, xmm2, trunc
   inspect(
     mc.get_bytes(),
-    content="[102, 15, 58, 8, 202, 2, 102, 15, 58, 8, 202, 1, 102, 15, 58, 9, 202, 0, 102, 15, 58, 9, 202, 3]",
+    content="[102, 15, 58, 8, 202, 2, 102, 15, 58, 8, 202, 1, 102, 15, 58, 9, 202, 0, 102, 15, 58, 9, 202, 3, 102, 15, 58, 10, 202, 2, 102, 15, 58, 11, 202, 3]",
   )
 }
 
