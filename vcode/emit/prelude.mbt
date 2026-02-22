@@ -1987,6 +1987,7 @@ pub fn emit_function_with_regalloc(
   let cache_func_table = func.should_cache_func_table()
   let vmctx = @isaregs.vmctx_index()
   let needs_vmctx = has_calls ||
+    func_uses_vmctx(func) ||
     output_uses_preg(func, output, vmctx) ||
     uses_mem0
   let clobbered_gprs = clobbered
