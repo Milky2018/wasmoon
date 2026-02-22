@@ -999,14 +999,59 @@ fn lower_c_libcall(
   } else {
     arg_regs.length()
   }
-  for i in 0..<reg_arg_count {
-    let arg = args[i]
-    call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
-      index: arg_regs[i],
-      class: @abi.Int,
-    })
+  if @isa.ISA::current() is @isa.AMD64 {
+    // AMD64: materialize C arguments through stack slots, then reload register
+    // arguments into ABI registers immediately before the call.
+    //
+    // This avoids relying on complex fixed-reg parallel-move resolution in
+    // cases with argument cycles/swaps and keeps C-call argument marshalling
+    // deterministic.
+    let overflow = if args.length() > arg_regs.length() {
+      args.length() - arg_regs.length()
+    } else {
+      0
+    }
+    let overflow_bytes = overflow * 8
+    let temp_base = overflow_bytes
+    let total_bytes = overflow_bytes + reg_arg_count * 8
+    if total_bytes > 0 {
+      ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+    }
+
+    // Place stack overflow args at the ABI-required outgoing offsets.
+    for i in 0..<overflow {
+      let arg = args[arg_regs.length() + i]
+      let store = @instr.VCodeInst::new(StoreToStack(i * 8))
+      store.add_use(Virtual(arg))
+      block.add_inst(store)
+    }
+
+    // Spill register args to temporary outgoing slots.
+    for i in 0..<reg_arg_count {
+      let arg = args[i]
+      let store = @instr.VCodeInst::new(StoreToStack(temp_base + i * 8))
+      store.add_use(Virtual(arg))
+      block.add_inst(store)
+    }
+
+    // Reload register args into ABI registers right before the call.
+    for i in 0..<reg_arg_count {
+      let preg = @abi.PReg::{ index: arg_regs[i], class: @abi.Int }
+      let load = @instr.VCodeInst::new(StackLoad(temp_base + i * 8))
+      load.add_def({ reg: Physical(preg) })
+      block.add_inst(load)
+      call_inst.add_use(Physical(preg))
+    }
+  } else {
+    for i in 0..<reg_arg_count {
+      let arg = args[i]
+      call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
+        index: arg_regs[i],
+        class: @abi.Int,
+      })
+    }
+    emit_c_overflow_arg_stores(ctx, block, args, arg_regs.length())
   }
-  emit_c_overflow_arg_stores(ctx, block, args, arg_regs.length())
 
   // Result constrained to the C ABI integer return register.
   if result is Some(dst) {
