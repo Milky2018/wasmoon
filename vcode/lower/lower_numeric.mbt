@@ -568,17 +568,11 @@ fn lower_div(
   // Fall back to regular division
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-  let use_fixed_divisor = @isa.ISA::current() is @isa.AMD64
-  let divisor_preg : @abi.PReg = { index: scratch1_index(), class: Int }
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
   let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
-  if use_fixed_divisor {
-    trap_zero.add_use_fixed(Virtual(rhs), divisor_preg)
-  } else {
-    trap_zero.add_use(Virtual(rhs))
-  }
+  trap_zero.add_use(Virtual(rhs))
   block.add_inst(trap_zero)
 
   // For signed division, also trap if INT_MIN / -1 (would overflow)
@@ -586,11 +580,7 @@ fn lower_div(
   if signed {
     let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 5))
     trap_overflow.add_use(Virtual(lhs))
-    if use_fixed_divisor {
-      trap_overflow.add_use_fixed(Virtual(rhs), divisor_preg)
-    } else {
-      trap_overflow.add_use(Virtual(rhs))
-    }
+    trap_overflow.add_use(Virtual(rhs))
     block.add_inst(trap_overflow)
   }
 
@@ -604,16 +594,8 @@ fn lower_div(
     }
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
-    if use_fixed_divisor {
-      vcode_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
-      vcode_inst.add_use_fixed(Virtual(rhs), divisor_preg)
-      // idiv/div clobber rax and rdx.
-      vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-      vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
-    } else {
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
-    }
+    vcode_inst.add_use(Virtual(lhs))
+    vcode_inst.add_use(Virtual(rhs))
     block.add_inst(vcode_inst)
   }
 }
@@ -1665,7 +1647,7 @@ fn lower_rem(
       // Note: the remainder value is produced in RDX/EDX by the hardware.
       let opcode = if signed { @instr.SRem(is_64) } else { @instr.URem(is_64) }
       let rem_inst = @instr.VCodeInst::new(opcode)
-      rem_inst.add_def({ reg: Virtual(dst) })
+      rem_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
       rem_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
       rem_inst.add_use_fixed(Virtual(rhs), divisor_preg)
       // Clobbers: rax/rdx are implicit in div/idiv.

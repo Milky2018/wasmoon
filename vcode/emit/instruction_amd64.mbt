@@ -2301,6 +2301,11 @@ fn MachineCode::emit_instruction_x86_64(
       let rhs = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
 
+      // rdx is the architectural remainder output.
+      if rd != 2 {
+        abort("x86_64 SRem: expected dst in rdx")
+      }
+
       // if rhs == -1: rdx = 0; goto done
       let do_idiv = self.new_internal_label()
       let done = self.new_internal_label()
@@ -2334,9 +2339,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_cdq()
         self.x86_emit_idiv_r32(divisor)
       }
-      if rd != 2 {
-        self.x86_emit_mov_rr(rd, 2)
-      }
+      // Remainder is in rdx already.
       self.define_label(done)
     }
     @instr.URem(is_64) => {
@@ -2344,6 +2347,9 @@ fn MachineCode::emit_instruction_x86_64(
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
+      if rd != 2 {
+        abort("x86_64 URem: expected dst in rdx")
+      }
 
       // Preserve divisor if it conflicts with rax/rdx.
       let mut divisor = rhs
@@ -2361,9 +2367,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr32(2, 2)
         self.x86_emit_div_r32(divisor)
       }
-      if rd != 2 {
-        self.x86_emit_mov_rr(rd, 2)
-      }
+      // Remainder is in rdx already.
     }
     @instr.LoadMemBase(memidx) => {
       // Load linear memory base pointer from VMContext.
