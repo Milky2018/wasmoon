@@ -638,7 +638,12 @@ pub fn emit_function(
   // 1. It directly uses x19 in instructions/terminators
   // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
   // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
-  let needs_vmctx = has_calls || func_uses_vmctx(func) || uses_mem0
+  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+    @isaregs.current_isa() is @isa.AMD64
+  let needs_vmctx = force_vmctx_cache ||
+    has_calls ||
+    func_uses_vmctx(func) ||
+    uses_mem0
   let clobbered_gprs = clobbered
   let mem0_desc = @isaregs.mem0_desc_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
@@ -1986,7 +1991,10 @@ pub fn emit_function_with_regalloc(
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
   let vmctx = @isaregs.vmctx_index()
-  let needs_vmctx = has_calls ||
+  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+    @isaregs.current_isa() is @isa.AMD64
+  let needs_vmctx = force_vmctx_cache ||
+    has_calls ||
     func_uses_vmctx(func) ||
     output_uses_preg(func, output, vmctx) ||
     uses_mem0
