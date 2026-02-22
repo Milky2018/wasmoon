@@ -3905,34 +3905,36 @@ fn MachineCode::emit_instruction_x86_64(
       }
     }
     @instr.SIMDFPMin(is_f32) => {
-      // Pseudo-min: match wasm pmin semantics on amd64 using native minp*
-      // instructions (SSE behavior selects the second operand on NaNs).
+      // Pseudo-min: match wasm pmin semantics (select-style, first operand
+      // preferred on equality/unordered) by swapping operands for SSE MINP*,
+      // which returns the second operand for equal/unordered cases.
       let rd = wreg_num(inst.defs[0])
       let x = reg_num(inst.uses[0])
       let y = reg_num(inst.uses[1])
       let tmp = 14 // reserved via MachineEnvData.scratch_float
-      self.x86_emit_movaps_xmm_xmm(tmp, x)
+      self.x86_emit_movaps_xmm_xmm(tmp, y)
       if is_f32 {
-        self.x86_emit_minps_xmm_xmm(tmp, y)
+        self.x86_emit_minps_xmm_xmm(tmp, x)
       } else {
-        self.x86_emit_minpd_xmm_xmm(tmp, y)
+        self.x86_emit_minpd_xmm_xmm(tmp, x)
       }
       if rd != tmp {
         self.x86_emit_movaps_xmm_xmm(rd, tmp)
       }
     }
     @instr.SIMDFPMax(is_f32) => {
-      // Pseudo-max: match wasm pmax semantics on amd64 using native maxp*
-      // instructions (SSE behavior selects the second operand on NaNs).
+      // Pseudo-max: match wasm pmax semantics (select-style, first operand
+      // preferred on equality/unordered) by swapping operands for SSE MAXP*,
+      // which returns the second operand for equal/unordered cases.
       let rd = wreg_num(inst.defs[0])
       let x = reg_num(inst.uses[0])
       let y = reg_num(inst.uses[1])
       let tmp = 14 // reserved via MachineEnvData.scratch_float
-      self.x86_emit_movaps_xmm_xmm(tmp, x)
+      self.x86_emit_movaps_xmm_xmm(tmp, y)
       if is_f32 {
-        self.x86_emit_maxps_xmm_xmm(tmp, y)
+        self.x86_emit_maxps_xmm_xmm(tmp, x)
       } else {
-        self.x86_emit_maxpd_xmm_xmm(tmp, y)
+        self.x86_emit_maxpd_xmm_xmm(tmp, x)
       }
       if rd != tmp {
         self.x86_emit_movaps_xmm_xmm(rd, tmp)
@@ -3942,11 +3944,48 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
-      let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.H16 => self.x86_emit_pmullw_xmm_xmm(rd, src)
-        @instr.S32 => self.x86_emit_pmulld_xmm_xmm(rd, src) // SSE4.1
-        _ => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
+        @instr.B8 => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
+        @instr.H16 => {
+          let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+          self.x86_emit_pmullw_xmm_xmm(rd, src)
+        }
+        @instr.S32 => {
+          let src = prepare_xmm_two_operand(self, rd, a, b, 14)
+          self.x86_emit_pmulld_xmm_xmm(rd, src) // SSE4.1
+        }
+        @instr.D64 => {
+          // Match Cranelift x64 lowering for i64x2.mul without AVX-512:
+          //
+          // a * b = (Al*Bl) + ((Ah*Bl + Al*Bh) << 32)
+          // where A = [Ah:Al], B = [Bh:Bl] per 64-bit lane.
+          let t0 = 14 // scratch
+          let t1 = 15 // scratch
+
+          // t0 = Ah * Bl
+          self.x86_emit_movaps_xmm_xmm(t0, a)
+          self.x86_emit_psrlq_xmm_imm8(t0, 32)
+          self.x86_emit_pmuludq_xmm_xmm(t0, b)
+
+          // t1 = Al * Bh
+          self.x86_emit_movaps_xmm_xmm(t1, b)
+          self.x86_emit_psrlq_xmm_imm8(t1, 32)
+          self.x86_emit_pmuludq_xmm_xmm(t1, a)
+
+          // t0 = (Ah*Bl + Al*Bh) << 32
+          self.x86_emit_padd_xmm_xmm(@instr.D64, t0, t1)
+          self.x86_emit_psllq_xmm_imm8(t0, 32)
+
+          // t1 = Al * Bl
+          self.x86_emit_movaps_xmm_xmm(t1, a)
+          self.x86_emit_pmuludq_xmm_xmm(t1, b)
+
+          // t1 += cross terms
+          self.x86_emit_padd_xmm_xmm(@instr.D64, t1, t0)
+          if rd != t1 {
+            self.x86_emit_movaps_xmm_xmm(rd, t1)
+          }
+        }
       }
     }
     @instr.SIMDCmp(lane_size, kind) => {
