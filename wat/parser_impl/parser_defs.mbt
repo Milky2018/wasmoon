@@ -1445,8 +1445,7 @@ fn Parser::parse_data_def(
           self.expect_rparen()
         } else {
           // Direct offset expression like (i32.const 0)
-          offset = self.parse_instructions()
-          self.expect_rparen()
+          offset = self.parse_folded_instructions()
         }
       }
       Keyword("offset") => {
@@ -1458,8 +1457,7 @@ fn Parser::parse_data_def(
       Keyword(_) => {
         // Any keyword instruction can be an offset expression (i32.const, i32.add, global.get, etc.)
         is_passive = false
-        offset = self.parse_instructions()
-        self.expect_rparen()
+        offset = self.parse_folded_instructions()
       }
       _ => {
         // Restore - this might be something else or passive data
@@ -1484,8 +1482,8 @@ fn Parser::parse_data_def(
     }
   }
   self.expect_rparen() // close data
-  ignore(is_passive)
-  { memory_idx, offset, init: Bytes::from_array(init_bytes) }
+  let final_memory_idx = if is_passive { -1 } else { memory_idx }
+  { memory_idx: final_memory_idx, offset, init: Bytes::from_array(init_bytes) }
 }
 
 ///|
@@ -1695,7 +1693,7 @@ fn Parser::parse_elem_type(
     }
     Keyword("func") => {
       self.advance()
-      (@types.ValueType::FuncRef, true) // use indices
+      (@types.ValueType::RefFunc, true) // use indices (non-null refs)
     }
     Keyword("extern") => {
       self.advance()
@@ -1729,7 +1727,7 @@ fn Parser::parse_elem_type(
     }
     Id(_) | Number(_) =>
       // Legacy syntax: direct function indices without type keyword
-      (@types.ValueType::FuncRef, true)
+      (@types.ValueType::RefFunc, true)
     _ =>
       // Default to funcref with expressions (empty elem)
       (@types.ValueType::FuncRef, false)

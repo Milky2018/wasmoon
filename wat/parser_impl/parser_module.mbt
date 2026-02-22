@@ -1060,7 +1060,11 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 // Add inline data segment at offset 0
                 mod_.datas.push({
                   memory_idx: mem_idx,
-                  offset: [@types.Instruction::I32Const(0)],
+                  offset: if mem.is_memory64 {
+                    [@types.Instruction::I64Const(0L)]
+                  } else {
+                    [@types.Instruction::I32Const(0)]
+                  },
                   init: data_bytes,
                 })
               }

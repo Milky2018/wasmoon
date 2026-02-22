@@ -380,6 +380,80 @@ fn Parser::parse_array_type(self : Parser) -> @types.ArrayType raise WatError {
 }
 
 ///|
+fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
+  match kind {
+    // struct
+    1 => @types.SubType::simple(Struct({ fields: [] }))
+    // array
+    2 =>
+      @types.SubType::simple(
+        Array({
+          element: {
+            storage_type: @types.StorageType::Val(@types.ValueType::I32),
+            mutable: false,
+          },
+        }),
+      )
+    // func (default)
+    _ => @types.SubType::simple(Func({ params: [], results: [] }))
+  }
+}
+
+///|
+/// Peek the composite kind for a single `(type ...)` body.
+/// Returns: 0=func, 1=struct, 2=array.
+fn Parser::peek_rec_type_kind(self : Parser) -> Int raise WatError {
+  // Save lexer state
+  let saved_pos = self.lexer.pos
+  let saved_line = self.lexer.line
+  let saved_column = self.lexer.column
+  let saved_token_start_line = self.lexer.token_start_line
+  let saved_token_start_column = self.lexer.token_start_column
+  let saved_current = self.current
+
+  let mut kind = 0
+  if self.current.token == LParen {
+    self.advance() // enter `( ... )`
+    match self.current.token {
+      Keyword("func") => kind = 0
+      Keyword("struct") => kind = 1
+      Keyword("array") => kind = 2
+      Keyword("sub") => {
+        self.advance()
+        if self.current.token == Keyword("final") {
+          self.advance()
+        }
+        while true {
+          match self.current.token {
+            Id(_) | Number(_) => self.advance()
+            _ => break
+          }
+        }
+        if self.current.token == LParen {
+          self.advance()
+          match self.current.token {
+            Keyword("func") => kind = 0
+            Keyword("struct") => kind = 1
+            Keyword("array") => kind = 2
+            _ => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
+
+  // Restore lexer state
+  self.lexer.pos = saved_pos
+  self.lexer.line = saved_line
+  self.lexer.column = saved_column
+  self.lexer.token_start_line = saved_token_start_line
+  self.lexer.token_start_column = saved_token_start_column
+  self.current = saved_current
+  kind
+}
+
+///|
 /// Parse a recursive type group: (rec (type ...) (type ...) ...)
 /// Recursive groups allow types to reference each other (forward references)
 fn Parser::parse_rec_group(
@@ -400,6 +474,7 @@ fn Parser::parse_rec_group(
   // Scan through all type definitions in this rec group to register names
   let start_type_idx = mod_.types.length()
   let mut type_count = 0
+  let rec_type_kinds : Array[Int] = []
   while self.current.token == LParen {
     self.advance()
     if self.current.token == Keyword("type") {
@@ -410,7 +485,10 @@ fn Parser::parse_rec_group(
         self.type_names.set(name, type_idx)
         // Also register numeric index
         self.type_names.set("\{type_idx}", type_idx)
+        self.advance()
       }
+      // Record composite kind to build forward-reference placeholders.
+      rec_type_kinds.push(self.peek_rec_type_kind())
       type_count = type_count + 1
     }
     self.skip_to_matching_rparen()
@@ -425,18 +503,28 @@ fn Parser::parse_rec_group(
   self.lexer.token_start_column = saved_token_start_column
   self.current = saved_current
 
-  // Second pass: actually parse all type definitions
-  // All types in this rec group get the same rec group ID (the start index)
+  // Pre-allocate same-kind placeholders so forward refs in this rec group
+  // resolve to the right heap kind while parsing.
   let rec_group_id = start_type_idx
+  for i in 0..<type_count {
+    mod_.types.push(placeholder_subtype_for_rec_kind(rec_type_kinds[i]))
+    mod_.type_rec_groups.push(rec_group_id)
+  }
+  self.types = mod_.types
+  self.type_rec_groups = mod_.type_rec_groups
+
+  // Second pass: parse and replace placeholders.
+  let mut parsed_type_count = 0
   while self.current.token == LParen {
     self.advance()
     if self.current.token == Keyword("type") {
-      let type_idx = mod_.types.length()
+      let type_idx = start_type_idx + parsed_type_count
       let subtype = self.parse_type_def(type_idx)
       // Name was already registered in first pass, just register numeric index
       self.type_names.set("\{type_idx}", type_idx)
-      mod_.types.push(subtype)
-      mod_.type_rec_groups.push(rec_group_id)
+      mod_.types[type_idx] = subtype
+      self.types[type_idx] = subtype
+      parsed_type_count = parsed_type_count + 1
     } else {
       self.skip_to_matching_rparen()
       self.advance() // Move past the closing )
