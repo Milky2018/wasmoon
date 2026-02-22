@@ -1374,6 +1374,31 @@ test "regalloc: move-merge rejects conflicting fixed requirements" {
 }
 
 ///|
+test "regalloc: move-merge rejects fixed-use constrained range" {
+  let func = VCodeFunction::new("merge_fixed_use")
+  let p = func.add_param(@abi.Int)
+  func.add_result(@abi.Int)
+  let block = func.new_block()
+  let t0 = func.new_vreg(@abi.Int)
+  let pin = @instr.VCodeInst::new(@instr.Move)
+  pin.add_def({ reg: @abi.Virtual(t0) })
+  pin.add_use_fixed(@abi.Virtual(p), { index: 8, class: @abi.Int })
+  block.add_inst(pin)
+  let t1 = func.new_vreg(@abi.Int)
+  let mov = @instr.VCodeInst::new(@instr.Move)
+  mov.add_def({ reg: @abi.Virtual(t1) })
+  mov.add_use(@abi.Virtual(p))
+  block.add_inst(mov)
+  block.set_terminator(@instr.Return([@abi.Virtual(t1)]))
+  let live = compute_liveness(func)
+  let ranges = build_live_ranges(func, live)
+  build_bundles_with_merging(func, ranges) |> ignore
+  let src = ranges.get_by_vreg(p.id).unwrap()
+  let dst = ranges.get_by_vreg(t1.id).unwrap()
+  inspect(src.bundle_id == dst.bundle_id, content="false")
+}
+
+///|
 /// Test LiveRange data structures
 test "liverange: basic operations" {
   let vreg : @abi.VReg = { id: 0, class: @abi.Int }
