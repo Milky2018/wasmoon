@@ -45,7 +45,7 @@ fn validate_function_with_offset(
     declared_funcs: ctx.declared_funcs,
     subtyping_ctx: ctx.subtyping_ctx,
   }
-  let stack = OperandStack::new()
+  let stack = OperandStack::new_with_subtyping(func_ctx.subtyping_ctx)
 
   // Validate function body with offset tracking
   validate_expr_with_offset(func_ctx, stack, code.body, func_idx)
@@ -139,7 +139,7 @@ fn validate_function(
     declared_funcs: ctx.declared_funcs,
     subtyping_ctx: ctx.subtyping_ctx,
   }
-  let stack = OperandStack::new()
+  let stack = OperandStack::new_with_subtyping(func_ctx.subtyping_ctx)
 
   // Validate function body
   validate_expr(func_ctx, stack, code.body)

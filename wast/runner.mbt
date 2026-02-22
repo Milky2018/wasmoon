@@ -263,6 +263,13 @@ pub fn run_wast_command(
   ignore(base_dir)
   match cmd {
     Module(mod_, name) => {
+      @validator.validate_module(mod_) catch {
+        e => {
+          result.failed = result.failed + 1
+          result.failures.push("line \{line}: module validation failed: \{e}")
+          return
+        }
+      }
       // Build imports from registered modules
       let imports = ctx.build_imports()
       // Instantiate the module with imports using shared store
@@ -308,6 +315,15 @@ pub fn run_wast_command(
         e => {
           result.failed = result.failed + 1
           result.failures.push("line \{line}: quoted module parse failed: \{e}")
+          return
+        }
+      }
+      @validator.validate_module(mod_) catch {
+        e => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: quoted module validation failed: \{e}",
+          )
           return
         }
       }
@@ -364,6 +380,15 @@ pub fn run_wast_command(
           "line \{line}: module definition '\{def_name}' not found",
         )
         return
+      }
+      @validator.validate_module(mod_) catch {
+        e => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: module instance validation failed: \{e}",
+          )
+          return
+        }
       }
       // Build imports from registered modules
       let imports = ctx.build_imports()
@@ -1123,6 +1148,7 @@ fn try_instantiate_source(
     Binary(bytes) =>
       (try? ({
         let mod_ = @parser.parse_module(bytes)
+        @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
           mod_,
@@ -1133,6 +1159,7 @@ fn try_instantiate_source(
       is Ok(_)
     Inline(mod_) =>
       (try? ({
+        @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
           mod_,
@@ -1158,13 +1185,17 @@ fn try_instantiate_source_traps(
     Binary(bytes) =>
       (try? ({
         let mod_ = @parser.parse_module(bytes)
+        @validator.validate_module(mod_)
         @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
         |> ignore
       }))
       is Err(_)
     Inline(mod_) =>
-      (try? (@executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-      |> ignore))
+      (try? ({
+        @validator.validate_module(mod_)
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
+      }))
       is Err(_)
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap

@@ -28,7 +28,15 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
 
   // Validate subtype declarations: supertypes must not be final, must have matching kind,
   // and must satisfy structural subtyping rules
-  let subtyping_ctx = @types.SubtypingContext::same_module(mod.types)
+  let canonical = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
+  let subtyping_ctx = @types.SubtypingContext::same_module(
+    mod.types,
+    rec_groups=mod.type_rec_groups,
+    canonical=canonical,
+  )
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
       if super_idx < 0 || super_idx >= num_types {
@@ -114,16 +122,29 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       global.init,
       global.type_.value_type,
       funcs=ctx.funcs,
+      types=ctx.types,
+      subtyping_ctx=Some(ctx.subtyping_ctx),
     )
   }
 
   // Validate data segments reference valid memory and have valid offset expressions
   for data in mod.datas {
-    if data.memory_idx >= ctx.mems.length() {
+    // Passive data segments have no offset expression to validate.
+    if data.memory_idx < 0 {
+      continue
+    }
+    if data.memory_idx < 0 || data.memory_idx >= ctx.mems.length() {
       raise InvalidMemoryIndex(data.memory_idx)
     }
-    // Validate offset expression is a constant expression producing i32
-    validate_const_expr(ctx.globals, data.offset, @types.ValueType::I32)
+    // Validate offset expression with the target memory's address type.
+    let offset_type = ctx.mems[data.memory_idx].addr_type()
+    validate_const_expr(
+      ctx.globals,
+      data.offset,
+      offset_type,
+      types=ctx.types,
+      subtyping_ctx=Some(ctx.subtyping_ctx),
+    )
   }
 
   // Validate elem segments
@@ -136,9 +157,9 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       }
       // Check element type matches table element type
       let table_elem_type = ctx.tables[table_idx].elem_type
-      if elem.type_ != table_elem_type {
+      if not(is_type_subtype(elem.type_, table_elem_type)) {
         raise TypeMismatch(
-          "element segment type \{elem.type_} does not match table element type \{table_elem_type}",
+          "element segment type \{elem.type_} is not subtype of table element type \{table_elem_type}",
         )
       }
       // Validate offset expression - i32 for table32, i64 for table64
@@ -147,11 +168,24 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       } else {
         @types.ValueType::I32
       }
-      validate_const_expr(ctx.globals, offset_expr, offset_type)
+      validate_const_expr(
+        ctx.globals,
+        offset_expr,
+        offset_type,
+        types=ctx.types,
+        subtyping_ctx=Some(ctx.subtyping_ctx),
+      )
     }
     // Validate each init expression is a constant expression producing the element type
     for init in elem.init {
-      validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs)
+      validate_const_expr(
+        ctx.globals,
+        init,
+        elem.type_,
+        funcs=ctx.funcs,
+        types=ctx.types,
+        subtyping_ctx=Some(ctx.subtyping_ctx),
+      )
     }
   }
 
@@ -240,7 +274,15 @@ pub fn validate_module_with_context(
   // Validate subtype declarations: supertypes must not be final, must have matching kind,
   // and must satisfy structural subtyping rules
   let num_types = ctx.types.length()
-  let subtyping_ctx = @types.SubtypingContext::same_module(mod.types)
+  let canonical = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
+  let subtyping_ctx = @types.SubtypingContext::same_module(
+    mod.types,
+    rec_groups=mod.type_rec_groups,
+    canonical=canonical,
+  )
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
       if super_idx < 0 || super_idx >= num_types {
@@ -308,13 +350,22 @@ pub fn validate_module_with_context(
 
   // Validate data segments reference valid memory and have valid offset expressions
   for data in mod.datas {
-    if data.memory_idx >= ctx.mems.length() {
+    if data.memory_idx < 0 {
+      continue
+    }
+    if data.memory_idx < 0 || data.memory_idx >= ctx.mems.length() {
       raise WithContext(
         ValidationErrorContext::from_error(InvalidMemoryIndex(data.memory_idx)),
       )
     }
-    // Validate offset expression is a constant expression producing i32
-    validate_const_expr(ctx.globals, data.offset, @types.ValueType::I32) catch {
+    let offset_type = ctx.mems[data.memory_idx].addr_type()
+    validate_const_expr(
+      ctx.globals,
+      data.offset,
+      offset_type,
+      types=ctx.types,
+      subtyping_ctx=Some(ctx.subtyping_ctx),
+    ) catch {
       e => raise WithContext(ValidationErrorContext::from_error(e))
     }
   }
@@ -331,11 +382,11 @@ pub fn validate_module_with_context(
       }
       // Check element type matches table element type
       let table_elem_type = ctx.tables[table_idx].elem_type
-      if elem.type_ != table_elem_type {
+      if not(is_type_subtype(elem.type_, table_elem_type)) {
         raise WithContext(
           ValidationErrorContext::from_error(
             TypeMismatch(
-              "element segment type \{elem.type_} does not match table element type \{table_elem_type}",
+              "element segment type \{elem.type_} is not subtype of table element type \{table_elem_type}",
             ),
           ),
         )
@@ -346,13 +397,26 @@ pub fn validate_module_with_context(
       } else {
         @types.ValueType::I32
       }
-      validate_const_expr(ctx.globals, offset_expr, offset_type) catch {
+      validate_const_expr(
+        ctx.globals,
+        offset_expr,
+        offset_type,
+        types=ctx.types,
+        subtyping_ctx=Some(ctx.subtyping_ctx),
+      ) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }
     }
     // Validate each init expression is a constant expression producing the element type
     for init in elem.init {
-      validate_const_expr(ctx.globals, init, elem.type_, funcs=ctx.funcs) catch {
+      validate_const_expr(
+        ctx.globals,
+        init,
+        elem.type_,
+        funcs=ctx.funcs,
+        types=ctx.types,
+        subtyping_ctx=Some(ctx.subtyping_ctx),
+      ) catch {
         e => raise WithContext(ValidationErrorContext::from_error(e))
       }
     }

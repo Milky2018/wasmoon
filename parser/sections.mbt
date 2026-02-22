@@ -201,7 +201,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             }
             1 =>
               // Passive segment (no memory, no offset)
-              (0, [])
+              (-1, [])
             2 => {
               // Active segment with explicit memory index
               let memory_idx = parser.read_u32()

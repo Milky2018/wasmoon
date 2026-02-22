@@ -7,6 +7,8 @@ fn validate_const_expr(
   expr : Array[@types.Instruction],
   expected_type : @types.ValueType,
   funcs? : Array[Int] = [],
+  types? : Array[@types.SubType] = [],
+  subtyping_ctx? : @types.SubtypingContext? = None,
 ) -> Unit raise ValidationError {
   if expr.is_empty() {
     raise TypeMismatch("empty constant expression")
@@ -14,12 +16,26 @@ fn validate_const_expr(
 
   // Use stack-based type checking for extended constant expressions
   let type_stack : Array[@types.ValueType] = []
+  fn pop_expected(expected : @types.ValueType, op : String) -> Unit raise ValidationError {
+    if type_stack.length() < 1 {
+      raise StackUnderflow("\{op} in constant expression")
+    }
+    let actual = type_stack.pop().unwrap()
+    if !is_const_expr_type_compatible(
+        actual,
+        expected,
+        subtyping_ctx=subtyping_ctx,
+      ) {
+      raise TypeMismatch("\{op}: expected \{expected}, got \{actual}")
+    }
+  }
   for instr in expr {
     match instr {
       I32Const(_) => type_stack.push(@types.ValueType::I32)
       I64Const(_) => type_stack.push(@types.ValueType::I64)
       F32Const(_) => type_stack.push(@types.ValueType::F32)
       F64Const(_) => type_stack.push(@types.ValueType::F64)
+      V128Const(_) => type_stack.push(@types.ValueType::V128)
       RefNull(t) => type_stack.push(t)
       RefFunc(func_idx) => {
         if func_idx >= funcs.length() {
@@ -38,6 +54,56 @@ fn validate_const_expr(
           raise MutableGlobalInConstExpr
         }
         type_stack.push(global.value_type)
+      }
+      RefI31 => {
+        pop_expected(@types.ValueType::I32, "ref.i31")
+        type_stack.push(@types.ValueType::RefI31)
+      }
+      AnyConvertExtern => {
+        pop_expected(@types.ValueType::ExternRef, "any.convert_extern")
+        type_stack.push(@types.ValueType::AnyRef)
+      }
+      ExternConvertAny => {
+        pop_expected(@types.ValueType::AnyRef, "extern.convert_any")
+        type_stack.push(@types.ValueType::ExternRef)
+      }
+      StructNew(type_idx) => {
+        let struct_type = get_const_expr_struct_type(types, type_idx)
+        for i = struct_type.fields.length() - 1; i >= 0; i = i - 1 {
+          let field_ty = const_expr_storage_type_to_value_type(
+            struct_type.fields[i].storage_type,
+          )
+          pop_expected(field_ty, "struct.new")
+        }
+        type_stack.push(@types.ValueType::RefStruct(type_idx))
+      }
+      StructNewDefault(type_idx) => {
+        ignore(get_const_expr_struct_type(types, type_idx))
+        type_stack.push(@types.ValueType::RefStruct(type_idx))
+      }
+      ArrayNew(type_idx) => {
+        let array_type = get_const_expr_array_type(types, type_idx)
+        pop_expected(@types.ValueType::I32, "array.new length")
+        let elem_ty = const_expr_storage_type_to_value_type(
+          array_type.element.storage_type,
+        )
+        pop_expected(elem_ty, "array.new value")
+        type_stack.push(@types.ValueType::RefArray(type_idx))
+      }
+      ArrayNewDefault(type_idx) => {
+        ignore(get_const_expr_array_type(types, type_idx))
+        pop_expected(@types.ValueType::I32, "array.new_default length")
+        type_stack.push(@types.ValueType::RefArray(type_idx))
+      }
+      ArrayNewFixed(type_idx, len) => {
+        let array_type = get_const_expr_array_type(types, type_idx)
+        let elem_ty = const_expr_storage_type_to_value_type(
+          array_type.element.storage_type,
+        )
+        for _ in 0..<len {
+          pop_expected(elem_ty, "array.new_fixed value")
+        }
+        type_stack.push(@types.ValueType::RefArray(type_idx))
       }
       // Extended-const: i32 arithmetic
       I32Add | I32Sub | I32Mul => {
@@ -78,7 +144,11 @@ fn validate_const_expr(
 
   // Check the result type matches expected (with subtyping for references)
   let result_type = type_stack[0]
-  if !is_const_expr_type_compatible(result_type, expected_type) {
+  if !is_const_expr_type_compatible(
+      result_type,
+      expected_type,
+      subtyping_ctx=subtyping_ctx,
+    ) {
     raise TypeMismatch(
       "constant expression: expected \{expected_type}, got \{result_type}",
     )
@@ -86,28 +156,60 @@ fn validate_const_expr(
 }
 
 ///|
+fn const_expr_storage_type_to_value_type(
+  storage_type : @types.StorageType,
+) -> @types.ValueType {
+  match storage_type {
+    Val(v) => v
+    Packed(_) => @types.ValueType::I32
+  }
+}
+
+///|
+fn get_const_expr_struct_type(
+  types : Array[@types.SubType],
+  type_idx : Int,
+) -> @types.StructType raise ValidationError {
+  if type_idx < 0 || type_idx >= types.length() {
+    raise InvalidTypeIndex(type_idx)
+  }
+  match types[type_idx].composite {
+    Struct(s) => s
+    _ =>
+      raise TypeMismatch(
+        "constant expression type \{type_idx} is not a struct type",
+      )
+  }
+}
+
+///|
+fn get_const_expr_array_type(
+  types : Array[@types.SubType],
+  type_idx : Int,
+) -> @types.ArrayType raise ValidationError {
+  if type_idx < 0 || type_idx >= types.length() {
+    raise InvalidTypeIndex(type_idx)
+  }
+  match types[type_idx].composite {
+    Array(a) => a
+    _ =>
+      raise TypeMismatch(
+        "constant expression type \{type_idx} is not an array type",
+      )
+  }
+}
+
+///|
 /// Check if a result type is compatible with an expected type in constant expressions
-/// Handles reference type subtyping:
-/// - RefFuncTyped(t) <: RefNullFuncTyped(t) <: FuncRef
-/// - RefFuncTyped(t) <: FuncRef
 fn is_const_expr_type_compatible(
   result : @types.ValueType,
   expected : @types.ValueType,
+  subtyping_ctx? : @types.SubtypingContext? = None,
 ) -> Bool {
-  if result == expected {
-    return true
+  if subtyping_ctx is Some(ctx) {
+    if ctx.value_type_subtype(result, expected) {
+      return true
+    }
   }
-  match (result, expected) {
-    // RefFuncTyped(t) is subtype of RefNullFuncTyped(t)
-    (RefFuncTyped(t1), RefNullFuncTyped(t2)) => t1 == t2
-    // RefFuncTyped(t) is subtype of FuncRef (nullable abstract)
-    (RefFuncTyped(_), FuncRef) => true
-    // RefNullFuncTyped(t) is subtype of FuncRef
-    (RefNullFuncTyped(_), FuncRef) => true
-    // RefFunc is subtype of FuncRef
-    (RefFunc, FuncRef) => true
-    // RefExtern is subtype of ExternRef
-    (RefExtern, ExternRef) => true
-    _ => false
-  }
+  is_type_subtype(result, expected)
 }

@@ -1876,6 +1876,11 @@ test "validator: table64 table.size returns i64" {
 }
 
 ///|
+test "validator: nullref is subtype of nullable typed funcref" {
+  inspect(is_type_subtype(NullRef, RefNullFuncTyped(0)), content="true")
+}
+
+///|
 test "validator: table32 table.size returns i32" {
   let mod = module_with_table([TableSize(0)], [I32], is_table64=false)
   validate_module(mod)
