@@ -3115,8 +3115,9 @@ pub fn MachineCode::x86_emit_pextrb_r32_xmm_imm8(
   imm8 : Int,
 ) -> Unit {
   // pextrb r32, xmm, imm8 (SSE4.1): 66 0F 3A 14 /r ib
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
+  // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
+  let r = (src_xmm >> 3) & 1
+  let b = (dst >> 3) & 1
   self.emit_byte(0x66)
   if r != 0 || b != 0 {
     emit_rex(self, r, b)
@@ -3124,7 +3125,7 @@ pub fn MachineCode::x86_emit_pextrb_r32_xmm_imm8(
   self.emit_byte(0x0F)
   self.emit_byte(0x3A)
   self.emit_byte(0x14)
-  emit_modrm(self, 3, dst, src_xmm)
+  emit_modrm(self, 3, src_xmm, dst)
   self.emit_byte(imm8 & 255)
 }
 
@@ -3136,8 +3137,9 @@ pub fn MachineCode::x86_emit_pextrd_r32_xmm_imm8(
   imm8 : Int,
 ) -> Unit {
   // pextrd r32, xmm, imm8 (SSE4.1): 66 0F 3A 16 /r ib
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
+  // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
+  let r = (src_xmm >> 3) & 1
+  let b = (dst >> 3) & 1
   self.emit_byte(0x66)
   if r != 0 || b != 0 {
     emit_rex(self, r, b)
@@ -3145,7 +3147,7 @@ pub fn MachineCode::x86_emit_pextrd_r32_xmm_imm8(
   self.emit_byte(0x0F)
   self.emit_byte(0x3A)
   self.emit_byte(0x16)
-  emit_modrm(self, 3, dst, src_xmm)
+  emit_modrm(self, 3, src_xmm, dst)
   self.emit_byte(imm8 & 255)
 }
 
@@ -3157,14 +3159,15 @@ pub fn MachineCode::x86_emit_pextrq_r64_xmm_imm8(
   imm8 : Int,
 ) -> Unit {
   // pextrq r64, xmm, imm8 (SSE4.1): 66 REX.W 0F 3A 16 /r ib
-  let r = (dst >> 3) & 1
-  let b = (src_xmm >> 3) & 1
+  // ModRM.reg encodes the XMM source; ModRM.r/m encodes the GPR destination.
+  let r = (src_xmm >> 3) & 1
+  let b = (dst >> 3) & 1
   self.emit_byte(0x66)
   emit_rex_w(self, r, b)
   self.emit_byte(0x0F)
   self.emit_byte(0x3A)
   self.emit_byte(0x16)
-  emit_modrm(self, 3, dst, src_xmm)
+  emit_modrm(self, 3, src_xmm, dst)
   self.emit_byte(imm8 & 255)
 }
 
