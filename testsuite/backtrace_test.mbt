@@ -56,7 +56,7 @@ fn run_jit_with_backtrace(
   let result_types = func_type.results
 
   // Compile with DWARF enabled
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
 
   // Compile each function in the module
   for i, _ in mod_.codes {

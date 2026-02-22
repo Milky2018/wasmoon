@@ -278,7 +278,7 @@ fn run_wasi_jit_quiet(
   try {
     let stdout_buf : Array[Byte] = []
     let _stderr_buf : Array[Byte] = []
-    let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+    let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
     let num_imports = @wast.count_func_imports(mod_.imports)
 
     // Build import function type indices

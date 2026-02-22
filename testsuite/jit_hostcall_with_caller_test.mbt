@@ -41,7 +41,7 @@ test "jit hostcall: imported host func receives Caller and can access exported m
   let instance = @executor.instantiate_with_linker(linker, "test", mod_)
 
   // Compile module to JIT.
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let func_signatures = @wast.build_func_signatures(mod_)
   let num_imports = @wast.count_func_imports(mod_.imports)
 

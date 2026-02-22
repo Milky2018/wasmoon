@@ -87,7 +87,7 @@ fn compile_module_to_jit(
   actual_memory_max? : Int? = None,
   opt_level : Int,
 ) -> @cwasm.PrecompiledModule? {
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let num_imports = @wast.count_func_imports(mod_.imports)
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {

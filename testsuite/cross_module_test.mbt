@@ -109,7 +109,7 @@ test "cross-module: shared memory export/import (jit + interp)" {
   inspect(b0, content="[I32(11)]")
 
   // Compile module B to JIT and point it at the store's shared memory descriptor.
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let func_signatures = @wast.build_func_signatures(mod_b)
   let num_imports = @wast.count_func_imports(mod_b.imports)
   for i, _ in mod_b.codes {
@@ -149,7 +149,7 @@ test "cross-module: shared memory export/import (jit + interp)" {
   inspect(a1, content="[I32(42)]")
 
   // JIT-only: compile module A as well and verify JIT↔JIT sharing.
-  let precompiled_a = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled_a = @cwasm.PrecompiledModule::new(current_target_arch())
   let func_signatures_a = @wast.build_func_signatures(mod_a)
   let num_imports_a = @wast.count_func_imports(mod_a.imports)
   for i, _ in mod_a.codes {
@@ -324,7 +324,7 @@ fn run_cross_module_jit(
   }
 
   // Build merged PrecompiledModule with all functions
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let all_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])] = Array::make(
     global_func_idx,
     ([], []),

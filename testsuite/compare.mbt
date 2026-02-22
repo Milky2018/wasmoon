@@ -353,10 +353,7 @@ pub fn run_jit(
   try {
     // Compile ALL functions in the module (not just the target function)
     // This is necessary because the target function may call other functions
-    let target_arch = match @isa.ISA::current() {
-      @isa.AArch64 => @cwasm.AArch64
-      @isa.AMD64 => @cwasm.X86_64
-    }
+    let target_arch = current_target_arch()
     let precompiled = @cwasm.PrecompiledModule::new(target_arch)
     let num_imports = @wast.count_func_imports(mod_.imports)
 
@@ -521,6 +518,14 @@ pub fn run_jit(
       }
       Err("JIT error: \{e}")
     }
+  }
+}
+
+///|
+pub fn current_target_arch() -> @cwasm.TargetArch {
+  match @isa.ISA::current() {
+    @isa.AArch64 => @cwasm.AArch64
+    @isa.AMD64 => @cwasm.X86_64
   }
 }
 
