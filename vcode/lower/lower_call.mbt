@@ -72,6 +72,35 @@ fn emit_wasm_overflow_arg_stores(
 }
 
 ///|
+/// Emit StoreToStack for overflow integer arguments in C ABI calls.
+///
+/// SysV AMD64 stack arguments are 8-byte slots laid out left-to-right after the
+/// register arguments.
+fn emit_c_overflow_arg_stores(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  args : Array[@abi.VReg],
+  max_reg_args : Int,
+) -> Unit {
+  let overflow = if args.length() > max_reg_args {
+    args.length() - max_reg_args
+  } else {
+    0
+  }
+  if overflow == 0 {
+    return
+  }
+  let total_bytes = overflow * 8
+  ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+  for i in 0..<overflow {
+    let arg = args[max_reg_args + i]
+    let store = @instr.VCodeInst::new(StoreToStack(i * 8))
+    store.add_use(Virtual(arg))
+    block.add_inst(store)
+  }
+}
+
+///|
 /// Lower a Wasm call with a prebuilt call instruction.
 fn lower_wasm_call_common(
   ctx : LoweringContext,
@@ -929,12 +958,12 @@ fn lower_call_ptr(
 // ============ C Libcall Lowering (Standard) ============
 
 ///|
-/// Lower a simple C libcall with up to 8 integer arguments.
+/// Lower a simple C libcall with integer arguments.
 /// This is for calling C runtime functions like GC helpers.
-/// Uses standard C calling convention: args go to X0-X7, result in X0.
+/// Uses ISA C calling convention (register args + stack overflow args).
 ///
 /// Unlike lower_call_ptr which handles Wasm calling convention with vmctx,
-/// this is for simple C functions where args go directly to X0-X7.
+/// this is for simple C functions where args follow the platform C ABI.
 fn lower_c_libcall(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
@@ -952,9 +981,6 @@ fn lower_c_libcall(
   }
 
   let arg_regs = c_arg_gpr_indices()
-  guard args.length() <= arg_regs.length() else {
-    abort("lower_c_libcall: too many arguments")
-  }
 
   // Create CallPtr instruction with C calling convention
   let num_args = args.length()
@@ -968,12 +994,19 @@ fn lower_c_libcall(
   })
 
   // Args constrained to C ABI arg regs (ISA-dependent).
-  for i, arg in args {
+  let reg_arg_count = if args.length() < arg_regs.length() {
+    args.length()
+  } else {
+    arg_regs.length()
+  }
+  for i in 0..<reg_arg_count {
+    let arg = args[i]
     call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
       index: arg_regs[i],
       class: @abi.Int,
     })
   }
+  emit_c_overflow_arg_stores(ctx, block, args, arg_regs.length())
 
   // Result constrained to the C ABI integer return register.
   if result is Some(dst) {

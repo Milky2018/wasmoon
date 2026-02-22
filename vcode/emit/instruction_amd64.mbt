@@ -2126,20 +2126,34 @@ fn MachineCode::emit_instruction_x86_64(
         @abi.Int => {
           // Set flags based on cond != 0.
           self.x86_emit_test_rr32(cond_reg, cond_reg)
-          // dst = false
-          emit_reg_move(self, rd, false_reg, class)
-          // dst = cond ? true : dst
-          self.x86_emit_cmovcc_rr(@instr.Cond::Ne, rd, true_reg)
+          // Avoid clobbering `true_reg` when `rd` aliases it.
+          if rd == true_reg {
+            // Keep `true` in place and overwrite with `false` only on cond == 0.
+            self.x86_emit_cmovcc_rr(@instr.Cond::Eq, rd, false_reg)
+          } else {
+            // dst = false
+            emit_reg_move(self, rd, false_reg, class)
+            // dst = cond ? true : dst
+            self.x86_emit_cmovcc_rr(@instr.Cond::Ne, rd, true_reg)
+          }
         }
         // Match Cranelift x64: XMM select uses a branch (no cmov for XMM).
         @abi.Float32 | @abi.Float64 | @abi.Vector => {
           self.x86_emit_test_rr32(cond_reg, cond_reg)
-          // dst = false
-          emit_reg_move(self, rd, false_reg, class)
-          let next = self.new_internal_label()
-          self.x86_emit_jcc_rel32(@instr.Cond::Eq, next)
-          emit_reg_move(self, rd, true_reg, class)
-          self.define_label(next)
+          if rd == true_reg {
+            // Keep `true` in place and overwrite with `false` only on cond == 0.
+            let next = self.new_internal_label()
+            self.x86_emit_jcc_rel32(@instr.Cond::Ne, next)
+            emit_reg_move(self, rd, false_reg, class)
+            self.define_label(next)
+          } else {
+            // dst = false
+            emit_reg_move(self, rd, false_reg, class)
+            let next = self.new_internal_label()
+            self.x86_emit_jcc_rel32(@instr.Cond::Eq, next)
+            emit_reg_move(self, rd, true_reg, class)
+            self.define_label(next)
+          }
         }
       }
     }
@@ -2158,22 +2172,36 @@ fn MachineCode::emit_instruction_x86_64(
       let cond = cmp_kind_to_cond(kind)
       match class {
         // Match Cranelift x64: integer selectcmp uses cmov.
-        @abi.Int => {
-          emit_reg_move(self, rd, false_reg, class)
-          if is_64 {
-            self.x86_emit_cmovcc_rr(cond, rd, true_reg)
+        @abi.Int =>
+          if rd == true_reg {
+            // Keep `true` in place and overwrite with `false` only when cond is false.
+            if is_64 {
+              self.x86_emit_cmovcc_rr(cond.invert(), rd, false_reg)
+            } else {
+              self.x86_emit_cmovcc_rr32(cond.invert(), rd, false_reg)
+            }
           } else {
-            self.x86_emit_cmovcc_rr32(cond, rd, true_reg)
+            emit_reg_move(self, rd, false_reg, class)
+            if is_64 {
+              self.x86_emit_cmovcc_rr(cond, rd, true_reg)
+            } else {
+              self.x86_emit_cmovcc_rr32(cond, rd, true_reg)
+            }
           }
-        }
         // XMM: branch-based move (no cmov).
-        @abi.Float32 | @abi.Float64 | @abi.Vector => {
-          emit_reg_move(self, rd, false_reg, class)
-          let next = self.new_internal_label()
-          self.x86_emit_jcc_rel32(cond.invert(), next)
-          emit_reg_move(self, rd, true_reg, class)
-          self.define_label(next)
-        }
+        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+          if rd == true_reg {
+            let next = self.new_internal_label()
+            self.x86_emit_jcc_rel32(cond, next)
+            emit_reg_move(self, rd, false_reg, class)
+            self.define_label(next)
+          } else {
+            emit_reg_move(self, rd, false_reg, class)
+            let next = self.new_internal_label()
+            self.x86_emit_jcc_rel32(cond.invert(), next)
+            emit_reg_move(self, rd, true_reg, class)
+            self.define_label(next)
+          }
       }
     }
     @instr.TrapIfZero(is_64, trap_code) => {
@@ -4419,7 +4447,15 @@ fn MachineCode::emit_instruction_x86_64(
         // copy inputs to scratch XMMs first, then freely clobber `rd`.
         self.x86_emit_movaps_xmm_xmm(t0, lhs) // t0 = lhs
         self.x86_emit_movaps_xmm_xmm(t1, rhs) // t1 = rhs
-        emit_broadcast_dword_pattern(self, rd, 0x80000000) // rd = mask
+        // mask = 0x00000000_80000000 in each 64-bit lane (flip sign bit of lo32).
+        // This must *not* broadcast to all dwords; match Cranelift exactly.
+        materialize_xmm_const(
+          self,
+          rd,
+          0x00000000_80000000L,
+          0x00000000_80000000L,
+          isa.scratch_reg_1_index(),
+        )
         self.x86_emit_pxor_xmm_xmm(t0, rd) // t0 = lhs_masked
         self.x86_emit_pxor_xmm_xmm(t1, rd) // t1 = rhs_masked
         self.x86_emit_movaps_xmm_xmm(rd, t0) // rd = lhs_masked
