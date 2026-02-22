@@ -66,6 +66,7 @@ pub(all) enum ExceptionLibcall {
   TryBegin // exception_try_begin - setup handler, returns jmp_buf ptr
   TryEnd // exception_try_end - pop handler
   Throw // exception_throw - throw exception (noreturn)
+  ThrowTag // exception_throw_tag - throw exception without payload (noreturn)
   ThrowRef // exception_throw_ref - re-throw from exnref (noreturn)
   Delegate // exception_delegate - delegate to outer handler (noreturn)
   GetTag // exception_get_tag - get exception tag

@@ -248,6 +248,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ptr(void) {
     return (int64_t)wasmoon_jit_exception_throw;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_tag_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_throw_tag;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ref_ptr(void) {
     return (int64_t)wasmoon_jit_exception_throw_ref;
 }

@@ -226,6 +226,8 @@ pub fn c_jit_get_exception_throw_ptr() -> Int64
 
 pub fn c_jit_get_exception_throw_ref_ptr() -> Int64
 
+pub fn c_jit_get_exception_throw_tag_ptr() -> Int64
+
 pub fn c_jit_get_exception_try_begin_ptr() -> Int64
 
 pub fn c_jit_get_exception_try_end_ptr() -> Int64

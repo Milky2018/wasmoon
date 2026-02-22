@@ -65,6 +65,7 @@ pub(all) enum ExceptionLibcall {
   TryBegin
   TryEnd
   Throw
+  ThrowTag
   ThrowRef
   Delegate
   GetTag

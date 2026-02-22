@@ -1362,6 +1362,11 @@ pub extern "c" fn c_jit_get_exception_try_end_ptr() -> Int64 = "wasmoon_jit_get_
 pub extern "c" fn c_jit_get_exception_throw_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ptr"
 
 ///|
+/// Get exception throw_tag function pointer for JIT
+/// Signature: throw_tag(ctx: *jit_context_t, tag_addr: i32) -> noreturn
+pub extern "c" fn c_jit_get_exception_throw_tag_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_tag_ptr"
+
+///|
 /// Throw an exception from host-side bridge code into JIT try_table handlers.
 /// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values_ptr: i64, count: i32) -> noreturn
 pub extern "c" fn c_jit_exception_throw(

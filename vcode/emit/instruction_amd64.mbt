@@ -1489,6 +1489,8 @@ fn MachineCode::emit_instruction_x86_64(
           @jit_ffi.c_jit_get_exception_try_end_ptr()
         @instr.ExceptionLibcall::Throw =>
           @jit_ffi.c_jit_get_exception_throw_ptr()
+        @instr.ExceptionLibcall::ThrowTag =>
+          @jit_ffi.c_jit_get_exception_throw_tag_ptr()
         @instr.ExceptionLibcall::ThrowRef =>
           @jit_ffi.c_jit_get_exception_throw_ref_ptr()
         @instr.ExceptionLibcall::Delegate =>
