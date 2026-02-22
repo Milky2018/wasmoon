@@ -470,16 +470,20 @@ pub fn run_wast_command(
     AssertException(action) => {
       // Invoke the action and expect an exception to be thrown
       let action_desc = format_action(action)
-      if (try? invoke_action(ctx, action)) is Err(_) {
-        result.passed = result.passed + 1
-        if show_success {
-          println("line \{line}: assert_exception \{action_desc}: PASSED")
+      try invoke_action(ctx, action) catch {
+        _ => {
+          result.passed = result.passed + 1
+          if show_success {
+            println("line \{line}: assert_exception \{action_desc}: PASSED")
+          }
         }
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push(
-          "line \{line}: assert_exception \{action_desc}: expected exception but none thrown",
-        )
+      } noraise {
+        values => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{values})",
+          )
+        }
       }
     }
     AssertExhaustion(action, expected_msg) => {
