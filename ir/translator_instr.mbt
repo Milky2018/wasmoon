@@ -746,14 +746,17 @@ fn Translator::translate_instruction(
     }
     ReturnCall(func_idx) => {
       self.spill_locals_if_in_try()
+      self.unwind_try_handlers_for_tail_call()
       self.translate_return_call(func_idx)
     }
     ReturnCallIndirect(type_idx, table_idx) => {
       self.spill_locals_if_in_try()
+      self.unwind_try_handlers_for_tail_call()
       self.translate_return_call_indirect(type_idx, table_idx)
     }
     ReturnCallRef(type_idx) => {
       self.spill_locals_if_in_try()
+      self.unwind_try_handlers_for_tail_call()
       self.translate_return_call_ref(type_idx)
     }
 
@@ -1177,14 +1180,12 @@ fn Translator::translate_instruction(
       // Get the tag's parameter types to know how many values to pop
       let tag_types = self.get_tag_param_types(tag_idx)
 
-      // Pop exception values from stack (in reverse order)
-      let values : Array[Value] = Array::make(
-        tag_types.length(),
-        self.builder.iconst_i32(0),
-      )
-      for i = tag_types.length() - 1; i >= 0; i = i - 1 {
-        values[i] = self.pop()
+      // Pop exception values from stack, then restore declaration order.
+      let values : Array[Value] = []
+      for _ in 0..<tag_types.length() {
+        values.push(self.pop())
       }
+      values.rev_in_place()
 
       // Spill all locals before throw so catch handlers see throw-time values
       self.spill_locals_if_in_try()
@@ -1244,6 +1245,7 @@ fn Translator::translate_instruction(
       // Note: decrement happens AFTER all catch handlers are translated,
       // so catch handlers can still spill for outer try_tables
       self.try_table_depth = self.try_table_depth + 1
+      self.try_handler_stack.push(handler_id)
 
       // Translate the body using normal block translation
       self.translate_block(block_type, body)
@@ -1345,6 +1347,7 @@ fn Translator::translate_instruction(
       // Decrement try_table_depth AFTER all catch handlers are translated
       // This ensures catch handlers can still spill for outer try_tables
       self.try_table_depth = self.try_table_depth - 1
+      self.try_handler_stack.pop() |> ignore
 
       // === Continuation block ===
       self.builder.switch_to_block(try_continuation)

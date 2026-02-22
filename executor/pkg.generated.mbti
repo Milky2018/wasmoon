@@ -13,6 +13,8 @@ pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, 
 
 pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
+
 pub fn eval_const_expr(Array[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
 
 pub fn get_exported_global(@runtime.Store, @runtime.ModuleInstance, String) -> @types.Value raise @runtime.RuntimeError
@@ -93,6 +95,11 @@ pub(all) enum InstantiateWithImportDiagnosticsResult {
   Ok(@runtime.ModuleInstance)
   ImportError(ImportDiagnosticsResult)
   RuntimeFailure(@runtime.RuntimeError)
+}
+
+pub(all) enum InvokeWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(Int, Array[@types.Value])
 }
 
 // Type aliases

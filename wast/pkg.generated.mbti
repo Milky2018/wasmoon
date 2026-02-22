@@ -43,9 +43,9 @@ pub fn has_unsupported_instructions(@types.Module) -> Bool
 
 pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
 
-pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
-pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@jit.MemoryInfo]?
 

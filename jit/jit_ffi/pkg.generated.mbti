@@ -158,6 +158,10 @@ pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], FixedArray[Int], F
 
 pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
 
+pub fn c_jit_exception_throw(Int64, Int, Int64, Int) -> Unit
+
+pub fn c_jit_exception_throw_tag(Int64, Int) -> Unit
+
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
 pub fn c_jit_free_memory(Int64) -> Unit

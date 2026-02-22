@@ -1268,6 +1268,7 @@ fn compile_module_to_jit(
   enable_dwarf : Bool,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
   compile_start? : @perf.PerfTick? = None,
+  force_subtype_indirect_check? : Bool? = None,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
@@ -1295,7 +1296,11 @@ fn compile_module_to_jit(
   // Cranelift-style behavior:
   // - no-GC tables: exact equality on canonicalized type IDs
   // - GC/subtyping tables: keep subtype helper slow path
-  let use_subtype_indirect_check = subtype_check_reason is Some(_)
+  let default_use_subtype_indirect_check = subtype_check_reason is Some(_)
+  let use_subtype_indirect_check = match force_subtype_indirect_check {
+    Some(v) => v
+    None => default_use_subtype_indirect_check
+  }
   if debug {
     if use_subtype_indirect_check {
       let reason = match subtype_check_reason {

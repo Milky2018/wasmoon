@@ -3,16 +3,24 @@
 ///|
 /// Decode JIT GC reference value to @types.Value
 /// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
-fn decode_gc_value(raw : Int64) -> @types.Value {
+fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
   if raw == 0L {
     @types.Value::Null
   } else if (raw & 1L) == 1L {
     // i31: (value << 1) | 1, decode by shifting right
     @types.Value::I31((raw >> 1).to_int())
   } else {
-    // Heap reference: gc_ref << 1, decode by shifting right
-    // Note: Could be struct or array, we use StructRef as default
-    @types.Value::StructRef((raw >> 1).to_int())
+    // Heap reference: encoded as (gc_ref << 1), where gc_ref is 1-based.
+    let heap_idx = @jit.decode_heap_ref(raw)
+    match store.c_heap {
+      Some(heap) =>
+        if heap.is_array(heap_idx) {
+          @types.Value::ArrayRef(heap_idx)
+        } else {
+          @types.Value::StructRef(heap_idx)
+        }
+      None => @types.Value::StructRef(heap_idx)
+    }
   }
 }
 
@@ -270,7 +278,7 @@ pub fn sync_jit_globals_to_store(
         // GC reference types - decode using JIT encoding:
         // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
         AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
-          decode_gc_value(raw_value)
+          decode_gc_value(raw_value, store)
         ExnRef | NullExnRef =>
           if raw_value == 0L {
             @types.Value::Null
@@ -360,6 +368,7 @@ fn decode_funcref_from_jit_ctx(
 fn decode_table_entry_value(
   elem_type : @types.ValueType,
   raw_value : Int64,
+  store : @runtime.Store,
   jit_ctx : JITModuleContext,
 ) -> @types.Value {
   match elem_type {
@@ -385,7 +394,7 @@ fn decode_table_entry_value(
       } else if @jit.is_funcref_ptr(raw_value) || raw_value < 0L {
         decode_funcref_from_jit_ctx(raw_value, jit_ctx)
       } else {
-        decode_gc_value(raw_value)
+        decode_gc_value(raw_value, store)
       }
     RefI31 | RefNullI31 =>
       if raw_value == NULL_REF {
@@ -445,7 +454,9 @@ pub fn sync_jit_tables_to_store(
     let elem_type = table.get_elem_type()
     for i in 0..<size {
       let raw_value = jit_table.get_entry_value(i)
-      let decoded = decode_table_entry_value(elem_type, raw_value, jit_ctx)
+      let decoded = decode_table_entry_value(
+        elem_type, raw_value, store, jit_ctx,
+      )
       table.set(i, decoded) catch {
         _ => ()
       }
@@ -556,6 +567,7 @@ pub fn init_elem_segments(
   jm : @jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  use_subtype_indirect_check? : Bool = false,
 ) -> Unit {
   // Get global instances for evaluating offset expressions
   let globals : Array[@runtime.GlobalInstance] = []
@@ -575,25 +587,31 @@ pub fn init_elem_segments(
     type_rec_groups=mod_.type_rec_groups,
   )
 
-  // Build function index to canonical type index mapping
-  let func_canonical_types : Array[Int] = []
+  // Build function index -> table entry type mapping.
+  // - subtype mode: keep raw type indices
+  // - exact mode: use canonical indices for structural equivalence
+  let func_table_types : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      let canonical_idx = if type_idx < canonical_types.length() {
+      let mapped_type = if use_subtype_indirect_check {
+        type_idx
+      } else if type_idx >= 0 && type_idx < canonical_types.length() {
         canonical_types[type_idx]
       } else {
-        0
+        type_idx
       }
-      func_canonical_types.push(canonical_idx)
+      func_table_types.push(mapped_type)
     }
   }
   for type_idx in mod_.funcs {
-    let canonical_idx = if type_idx < canonical_types.length() {
+    let mapped_type = if use_subtype_indirect_check {
+      type_idx
+    } else if type_idx >= 0 && type_idx < canonical_types.length() {
       canonical_types[type_idx]
     } else {
-      0
+      type_idx
     }
-    func_canonical_types.push(canonical_idx)
+    func_table_types.push(mapped_type)
   }
 
   // Get shared JIT tables from Store (one per runtime table)
@@ -617,12 +635,12 @@ pub fn init_elem_segments(
         }
         let canonical_type_idx = match func_idx {
           Some(idx) =>
-            if idx >= 0 && idx < func_canonical_types.length() {
-              func_canonical_types[idx]
+            if idx >= 0 && idx < func_table_types.length() {
+              func_table_types[idx]
             } else {
-              0
+              -1
             }
-          None => 0
+          None => -1
         }
         // No flattening: use actual table_idx and elem_idx
         let elem_idx = offset + i
@@ -650,6 +668,7 @@ pub fn init_bulk_segments(
   jm : @jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  use_subtype_indirect_check? : Bool = false,
 ) -> Unit {
   // Precompute canonical indices for type equivalence.
   let canonical = @types.compute_canonical_type_indices(
@@ -657,25 +676,31 @@ pub fn init_bulk_segments(
     type_rec_groups=mod_.type_rec_groups,
   )
 
-  // Build func_idx -> canonical type idx mapping in module index space.
-  let func_canonical_types : Array[Int] = []
+  // Build func_idx -> table entry type idx mapping in module index space.
+  // - subtype mode: raw indices
+  // - exact mode: canonical indices
+  let func_table_types : Array[Int] = []
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
-      let canon = if type_idx >= 0 && type_idx < canonical.length() {
+      let mapped = if use_subtype_indirect_check {
+        type_idx
+      } else if type_idx >= 0 && type_idx < canonical.length() {
         canonical[type_idx]
       } else {
         -1
       }
-      func_canonical_types.push(canon)
+      func_table_types.push(mapped)
     }
   }
   for type_idx in mod_.funcs {
-    let canon = if type_idx >= 0 && type_idx < canonical.length() {
+    let mapped = if use_subtype_indirect_check {
+      type_idx
+    } else if type_idx >= 0 && type_idx < canonical.length() {
       canonical[type_idx]
     } else {
       -1
     }
-    func_canonical_types.push(canon)
+    func_table_types.push(mapped)
   }
 
   // Build store func_addr -> module func_idx map (for GlobalGet funcref).
@@ -744,9 +769,8 @@ pub fn init_bulk_segments(
               let ptr = jm.get_func_ptr(func_idx)
               if ptr != 0L {
                 raw = @jit.tag_funcref_ptr(ptr)
-                let t = if func_idx >= 0 &&
-                  func_idx < func_canonical_types.length() {
-                  func_canonical_types[func_idx]
+                let t = if func_idx >= 0 && func_idx < func_table_types.length() {
+                  func_table_types[func_idx]
                 } else {
                   -1
                 }
@@ -1031,6 +1055,7 @@ fn encode_store_funcref_for_jit(
 fn decode_ref_value(
   ty : @types.ValueType,
   raw : Int64,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> @types.Value {
@@ -1070,8 +1095,16 @@ fn decode_ref_value(
       } else if (raw & 1L) == 1L {
         @types.Value::I31((raw >> 1).to_int())
       } else {
-        // Best-effort: we do not attempt to discriminate struct vs array here.
-        @types.Value::StructRef(@jit.decode_heap_ref(raw))
+        let heap_idx = @jit.decode_heap_ref(raw)
+        match store.c_heap {
+          Some(heap) =>
+            if heap.is_array(heap_idx) {
+              @types.Value::ArrayRef(heap_idx)
+            } else {
+              @types.Value::StructRef(heap_idx)
+            }
+          None => @types.Value::StructRef(heap_idx)
+        }
       }
     RefI31 | RefNullI31 =>
       if raw == NULL_REF {
@@ -1093,6 +1126,7 @@ fn decode_value(
   ty : @types.ValueType,
   values_ptr : Int64,
   slot_idx : Int,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> (@types.Value, Int) {
@@ -1118,6 +1152,7 @@ fn decode_value(
         decode_ref_value(
           ty,
           read_slot_i64(values_ptr, slot_idx),
+          store,
           jit_module,
           instance,
         ),
@@ -1280,17 +1315,29 @@ pub fn install_jit_hostcall_dispatcher(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Unit {
+  fn find_local_tag_idx(
+    caller_instance : @runtime.ModuleInstance,
+    tag_addr : Int,
+  ) -> Int? {
+    for i, addr in caller_instance.tag_addrs {
+      if addr == tag_addr {
+        return Some(i)
+      }
+    }
+    None
+  }
+
   fn call_func_by_addr(
     store : @runtime.Store,
     caller_instance : @runtime.ModuleInstance,
     func_addr : Int,
     args : Array[@types.Value],
-  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+  ) -> @executor.InvokeWithExceptionResult raise @runtime.RuntimeError {
     let inst = store.get_func_inst(func_addr)
     match inst {
       @runtime.FuncInst::HostFunc(f) => {
         let caller = @runtime.Caller::new(store, caller_instance)
-        f(caller, args)
+        @executor.InvokeWithExceptionResult::Returned(f(caller, args))
       }
       @runtime.FuncInst::WasmFunc(_) => {
         let owner = match store.get_func_owner(func_addr) {
@@ -1307,7 +1354,9 @@ pub fn install_jit_hostcall_dispatcher(
         if func_idx < 0 {
           raise @runtime.UndefinedElement
         }
-        @executor.call_func_by_index(store, owner, func_idx, args)
+        @executor.call_func_by_index_with_exception(
+          store, owner, func_idx, args,
+        )
       }
     }
   }
@@ -1330,16 +1379,32 @@ pub fn install_jit_hostcall_dispatcher(
     let args : Array[@types.Value] = []
     let mut slot = 0
     for ty in ft.params {
-      let (v, used) = decode_value(ty, values_ptr, slot, jit_module, instance)
+      let (v, used) = decode_value(
+        ty, values_ptr, slot, store, jit_module, instance,
+      )
       args.push(v)
       slot = slot + used
     }
 
     // Invoke imported function (host or wasm).
-    let results : Array[@types.Value] = call_func_by_addr(
-      store, instance, func_addr, args,
-    ) catch {
+    let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
       e => return runtime_error_to_trap_code(e)
+    }
+    let results : Array[@types.Value] = match invoke_result {
+      @executor.InvokeWithExceptionResult::Returned(values) => values
+      @executor.InvokeWithExceptionResult::Thrown(tag_addr, values) => {
+        let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
+        // Imported wasm callees can throw; route the exception into the active
+        // JIT try_table chain instead of flattening it to a generic trap.
+        if values.is_empty() {
+          @jit.throw_exception_tag(jit_module.get_context_ptr(), local_tag_idx)
+        } else {
+          // For now, we only bridge payload-less imported exceptions in the
+          // hostcall path. Keep a deterministic trap for unsupported payloads.
+          return 8
+        }
+        return 8
+      }
     }
     if results.length() != ft.results.length() {
       return 3

@@ -284,6 +284,7 @@ fn try_compile_jit(
     actual_memory_max~,
     0, // Keep WAST JIT compile latency aligned with timeout-limited harness runs.
     false, // DWARF off for wast tests
+    force_subtype_indirect_check=Some(true),
   )
   match compiled {
     None =>
@@ -327,14 +328,26 @@ fn try_compile_jit(
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }
-          // Initialize indirect table for call_indirect
-          @wast.init_elem_segments(lowered_mod, jm, instance, store)
-          // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(lowered_mod, jm, instance, store)
           // WAST drives heavy cross-module table/linking flows where table
           // entries can carry function refs from different type-index spaces.
           // Always use subtype-aware indirect checks to keep semantics correct.
           let use_subtype_indirect_check = true
+          // Initialize indirect table for call_indirect
+          @wast.init_elem_segments(
+            lowered_mod,
+            jm,
+            instance,
+            store,
+            use_subtype_indirect_check~,
+          )
+          // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
+          @wast.init_bulk_segments(
+            lowered_mod,
+            jm,
+            instance,
+            store,
+            use_subtype_indirect_check~,
+          )
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(

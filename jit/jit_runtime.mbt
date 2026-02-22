@@ -1218,6 +1218,13 @@ pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Throw a payload-less wasm exception into the active JIT exception chain.
+/// Used by hostcall bridges that need to surface imported-callee throws.
+pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
+  @jit_ffi.c_jit_exception_throw_tag(ctx_ptr, tag_addr)
+}
+
+///|
 /// Allocate guarded memory with mmap for bounds check elimination
 /// Memory is allocated with guard pages (PROT_NONE) after the accessible region
 /// Access to guard pages triggers SIGSEGV which is caught and converted to a trap

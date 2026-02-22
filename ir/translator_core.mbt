@@ -53,6 +53,9 @@ struct Translator {
   tags : Array[@types.TagType]
   // Depth of nested try_table blocks - when > 0, need to spill locals before calls
   mut try_table_depth : Int
+  // Active try_table handler IDs in lexical nesting order.
+  // Needed to unwind handlers before tail calls (`return_call*`).
+  try_handler_stack : Array[Int]
   // Table is 64-bit indexed (for table64 proposal)
   // table_is_64[i] = true if table i uses 64-bit indices
   table_is_64 : Array[Bool]
@@ -162,6 +165,7 @@ pub fn Translator::new(
     func_env,
     tags,
     try_table_depth: 0,
+    try_handler_stack: [],
   }
 }
 
@@ -258,6 +262,15 @@ pub fn Translator::from_module(
   let type_idx = mod_.funcs[func_local_idx]
   let func_type = mod_.get_func_type(type_idx)
   let code = mod_.codes[func_local_idx]
+  let all_tags : Array[@types.TagType] = []
+  for imp in mod_.imports {
+    if imp.desc is @types.ImportDesc::Tag(tag_type_idx) {
+      all_tags.push({ type_idx: tag_type_idx })
+    }
+  }
+  for tag in mod_.tags {
+    all_tags.push(tag)
+  }
 
   // Call the main constructor
   Translator::new(
@@ -275,7 +288,7 @@ pub fn Translator::from_module(
     global_types~,
     type_rec_groups=mod_.type_rec_groups,
     module_types=mod_.types,
-    tags=mod_.tags,
+    tags=all_tags,
     memory_mins~,
   )
 }
@@ -367,6 +380,17 @@ fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
       }
     }
     self.builder.spill_locals_for_throw(locals_words)
+  }
+}
+
+///|
+/// Tail calls leave the current function frame immediately, so active
+/// try_table handlers in this function must be popped first.
+fn Translator::unwind_try_handlers_for_tail_call(self : Translator) -> Unit {
+  let mut i = self.try_handler_stack.length()
+  while i > 0 {
+    i = i - 1
+    self.builder.try_table_end(self.try_handler_stack[i])
   }
 }
 
