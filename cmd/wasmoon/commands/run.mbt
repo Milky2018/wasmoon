@@ -1055,6 +1055,8 @@ fn run_with_jit(
             instance.func_addrs,
             instance.func_type_indices,
             instance.canonical_type_indices,
+            mod_.types,
+            mod_.type_rec_groups,
             use_subtype_indirect_check,
           )
 

@@ -779,11 +779,23 @@ pub fn build_func_signatures(
   for _ in 0..<total_funcs {
     signatures.push(([], []))
   }
-  // Fill in signatures for import functions
-  for i, imp in mod_.imports {
-    if imp.desc is Func(type_idx) && type_idx < mod_.types.length() {
-      let func_type = mod_.get_func_type(type_idx)
-      signatures[i] = (func_type.params.copy(), func_type.results.copy())
+  // Fill in signatures for import functions.
+  // NOTE: import list index is not function-index space; only Func imports
+  // consume function indices. Keep an explicit function-import cursor.
+  let mut func_import_idx = 0
+  for imp in mod_.imports {
+    if imp.desc is Func(type_idx) {
+      if func_import_idx >= 0 &&
+        func_import_idx < signatures.length() &&
+        type_idx >= 0 &&
+        type_idx < mod_.types.length() {
+        let func_type = mod_.get_func_type(type_idx)
+        signatures[func_import_idx] = (
+          func_type.params.copy(),
+          func_type.results.copy(),
+        )
+      }
+      func_import_idx = func_import_idx + 1
     }
   }
   // Fill in signatures for local functions

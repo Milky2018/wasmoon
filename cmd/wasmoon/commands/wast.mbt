@@ -331,10 +331,10 @@ fn try_compile_jit(
           @wast.init_elem_segments(lowered_mod, jm, instance, store)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
           @wast.init_bulk_segments(lowered_mod, jm, instance, store)
-          let use_subtype_indirect_check = module_indirect_subtype_check_reason(
-              lowered_mod,
-            )
-            is Some(_)
+          // WAST drives heavy cross-module table/linking flows where table
+          // entries can carry function refs from different type-index spaces.
+          // Always use subtype-aware indirect checks to keep semantics correct.
+          let use_subtype_indirect_check = true
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(
@@ -365,10 +365,19 @@ fn try_compile_jit(
           for canonical_idx in instance.canonical_type_indices {
             canonical_type_indices_copy.push(canonical_idx)
           }
+          let module_types_copy : Array[@types.SubType] = []
+          for subtype in lowered_mod.types {
+            module_types_copy.push(subtype)
+          }
+          let module_rec_groups_copy : Array[Int] = []
+          for group in lowered_mod.type_rec_groups {
+            module_rec_groups_copy.push(group)
+          }
           Some(
             @wast.JITModuleContext::new(
               jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
-              func_type_indices_copy, canonical_type_indices_copy, use_subtype_indirect_check,
+              func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
+              module_rec_groups_copy, use_subtype_indirect_check,
             ),
           )
         }

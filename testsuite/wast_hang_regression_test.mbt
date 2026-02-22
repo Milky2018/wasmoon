@@ -211,8 +211,16 @@ fn try_compile_jit(
       }
       Some(
         @wast.JITModuleContext::new(
-          jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
-          func_type_indices_copy, canonical_type_indices_copy, false,
+          jm,
+          globals_ptr,
+          global_addrs_copy,
+          table_addrs_copy,
+          func_addrs_copy,
+          func_type_indices_copy,
+          canonical_type_indices_copy,
+          mod_.types,
+          mod_.type_rec_groups,
+          false,
         ),
       )
     }

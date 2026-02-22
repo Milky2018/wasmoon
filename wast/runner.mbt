@@ -86,6 +86,9 @@ pub struct JITModuleContext {
   func_type_indices : Array[Int]
   // Module canonical type indices
   canonical_type_indices : Array[Int]
+  // Module-local type graph used by GC type checks
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
   // Whether this module uses subtype helper for call_indirect checks
   use_subtype_indirect_check : Bool
 }
@@ -99,6 +102,8 @@ pub fn JITModuleContext::new(
   func_addrs : Array[Int],
   func_type_indices : Array[Int],
   canonical_type_indices : Array[Int],
+  module_types : Array[@types.SubType],
+  module_rec_groups : Array[Int],
   use_subtype_indirect_check : Bool,
 ) -> JITModuleContext {
   {
@@ -109,6 +114,8 @@ pub fn JITModuleContext::new(
     func_addrs,
     func_type_indices,
     canonical_type_indices,
+    module_types,
+    module_rec_groups,
     use_subtype_indirect_check,
   }
 }
@@ -735,8 +742,8 @@ pub fn invoke_action(
                 Some(heap) => {
                   // Compute canonical type indices for proper type equivalence checking
                   let canonical = @types.compute_canonical_type_indices(
-                    ctx.store.module_types,
-                    type_rec_groups=ctx.store.module_rec_groups,
+                    jit.module_types,
+                    type_rec_groups=jit.module_rec_groups,
                   )
                   let jit_func_type_indices : Array[Int] = []
                   for i, func_addr in jit.func_addrs {
@@ -818,7 +825,7 @@ pub fn invoke_action(
                   }
                   @jit.gc_setup(
                     heap,
-                    ctx.store.module_types,
+                    jit.module_types,
                     canonical,
                     ctx_ptr=jit.jit_module.get_context_ptr(),
                     func_type_indices=gc_func_type_indices,
@@ -1264,6 +1271,131 @@ fn try_instantiate_source(
 }
 
 ///|
+fn build_partial_instance_for_trapped_module(
+  ctx : WastContext,
+  mod_ : @types.Module,
+  imports : @runtime.Imports,
+  before_funcs : Int,
+  before_tables : Int,
+  before_mems : Int,
+  before_globals : Int,
+  before_tags : Int,
+) -> @runtime.ModuleInstance? {
+  let after_funcs = ctx.store.funcs.length()
+  if after_funcs <= before_funcs {
+    return None
+  }
+
+  let func_addrs : Array[Int] = []
+  let func_type_indices : Array[Int] = []
+  let table_addrs : Array[Int] = []
+  let mem_addrs : Array[Int] = []
+  let global_addrs : Array[Int] = []
+  let tag_addrs : Array[Int] = []
+
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Func(addr)) => {
+            func_addrs.push(addr)
+            func_type_indices.push(type_idx)
+          }
+          _ => ()
+        }
+      Table(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Table(addr)) => table_addrs.push(addr)
+          _ => ()
+        }
+      Memory(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Memory(addr)) => mem_addrs.push(addr)
+          _ => ()
+        }
+      Global(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Global(addr)) => global_addrs.push(addr)
+          _ => ()
+        }
+      Tag(type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Tag(addr)) => {
+            tag_addrs.push(addr)
+            ignore(type_idx)
+          }
+          _ => ()
+        }
+    }
+  }
+
+  for i, type_idx in mod_.funcs {
+    let addr = before_funcs + i
+    if addr >= 0 && addr < after_funcs {
+      func_addrs.push(addr)
+      func_type_indices.push(type_idx)
+    }
+  }
+
+  let after_tables = ctx.store.tables.length()
+  for i in 0..<mod_.tables.length() {
+    let addr = before_tables + i
+    if addr >= 0 && addr < after_tables {
+      table_addrs.push(addr)
+    }
+  }
+
+  let after_mems = ctx.store.mems.length()
+  for i in 0..<mod_.memories.length() {
+    let addr = before_mems + i
+    if addr >= 0 && addr < after_mems {
+      mem_addrs.push(addr)
+    }
+  }
+
+  let after_globals = ctx.store.globals.length()
+  for i in 0..<mod_.globals.length() {
+    let addr = before_globals + i
+    if addr >= 0 && addr < after_globals {
+      global_addrs.push(addr)
+    }
+  }
+
+  let after_tags = ctx.store.tags.length()
+  for i in 0..<mod_.tags.length() {
+    let addr = before_tags + i
+    if addr >= 0 && addr < after_tags {
+      tag_addrs.push(addr)
+    }
+  }
+
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let dropped_elems = Array::make(mod_.elems.length(), false)
+  let dropped_datas = Array::make(mod_.datas.length(), false)
+
+  Some({
+    types: mod_.types,
+    type_rec_groups: mod_.type_rec_groups,
+    canonical_type_indices,
+    store_idx: -1,
+    func_addrs,
+    func_type_indices,
+    table_addrs,
+    mem_addrs,
+    global_addrs,
+    tag_addrs,
+    exports: mod_.exports,
+    elem_segments: mod_.elems,
+    data_segments: mod_.datas,
+    dropped_elems,
+    dropped_datas,
+  })
+}
+
+///|
 /// Try to instantiate a module source and check if it traps.
 /// Returns true if instantiation traps (for assert_trap with module).
 fn try_instantiate_source_traps(
@@ -1272,17 +1404,97 @@ fn try_instantiate_source_traps(
 ) -> Bool {
   let imports = ctx.build_imports()
   match source {
-    Binary(bytes) =>
-      (try? ({
-        let mod_ = @parser.parse_module(bytes)
-        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-        |> ignore
-      }))
-      is Err(_)
-    Inline(mod_) =>
-      (try? (@executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-      |> ignore))
-      is Err(_)
+    Binary(bytes) => {
+      let mod_ = @parser.parse_module(bytes) catch { _ => return false }
+      let before_instances = ctx.store.instances.length()
+      let before_funcs = ctx.store.funcs.length()
+      let before_tables = ctx.store.tables.length()
+      let before_mems = ctx.store.mems.length()
+      let before_globals = ctx.store.globals.length()
+      let before_tags = ctx.store.tags.length()
+      let trapped = (try? (@executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+        |> ignore))
+        is Err(_)
+      if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
+        if ctx.store.instances.length() > before_instances {
+          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
+            1]
+          match ctx.try_compile_jit(mod_, trapped_instance) {
+            Some(_) => ()
+            None =>
+              abort(
+                "WAST JIT strict mode: failed to compile trapped module for source(Binary)",
+              )
+          }
+        } else {
+          match
+            build_partial_instance_for_trapped_module(
+              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
+              before_tags,
+            ) {
+            Some(partial_instance) =>
+              match ctx.try_compile_jit(mod_, partial_instance) {
+                Some(_) => ()
+                None =>
+                  abort(
+                    "WAST JIT strict mode: failed to compile trapped partial module for source(Binary)",
+                  )
+              }
+            None => ()
+          }
+        }
+      }
+      trapped
+    }
+    Inline(mod_) => {
+      let before_instances = ctx.store.instances.length()
+      let before_funcs = ctx.store.funcs.length()
+      let before_tables = ctx.store.tables.length()
+      let before_mems = ctx.store.mems.length()
+      let before_globals = ctx.store.globals.length()
+      let before_tags = ctx.store.tags.length()
+      let trapped = (try? (@executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+        |> ignore))
+        is Err(_)
+      if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
+        if ctx.store.instances.length() > before_instances {
+          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
+            1]
+          match ctx.try_compile_jit(mod_, trapped_instance) {
+            Some(_) => ()
+            None =>
+              abort(
+                "WAST JIT strict mode: failed to compile trapped module for source(Inline)",
+              )
+          }
+        } else {
+          match
+            build_partial_instance_for_trapped_module(
+              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
+              before_tags,
+            ) {
+            Some(partial_instance) =>
+              match ctx.try_compile_jit(mod_, partial_instance) {
+                Some(_) => ()
+                None =>
+                  abort(
+                    "WAST JIT strict mode: failed to compile trapped partial module for source(Inline)",
+                  )
+              }
+            None => ()
+          }
+        }
+      }
+      trapped
+    }
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap
   }

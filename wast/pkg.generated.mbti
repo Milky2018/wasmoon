@@ -97,9 +97,11 @@ pub struct JITModuleContext {
   func_addrs : Array[Int]
   func_type_indices : Array[Int]
   canonical_type_indices : Array[Int]
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
   use_subtype_indirect_check : Bool
 }
-pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Bool) -> Self
+pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
 
 pub struct WastContext {
   store : @runtime.Store
