@@ -1166,7 +1166,8 @@ fn validate_instr(
       // Validate results match current function's return type
       // (For tail calls, we return the called function's results)
       for i = 0; i < func_type.results.length(); i = i + 1 {
-        if i >= ctx.returns.length() || not(
+        if i >= ctx.returns.length() ||
+          not(
             ctx.subtyping_ctx.value_type_subtype(
               func_type.results[i],
               ctx.returns[i],
@@ -1213,7 +1214,8 @@ fn validate_instr(
       }
       // Validate results match current function's return type
       for i = 0; i < func_type.results.length(); i = i + 1 {
-        if i >= ctx.returns.length() || not(
+        if i >= ctx.returns.length() ||
+          not(
             ctx.subtyping_ctx.value_type_subtype(
               func_type.results[i],
               ctx.returns[i],
@@ -1243,7 +1245,8 @@ fn validate_instr(
       }
       // Validate results match current function's return type
       for i = 0; i < func_type.results.length(); i = i + 1 {
-        if i >= ctx.returns.length() || not(
+        if i >= ctx.returns.length() ||
+          not(
             ctx.subtyping_ctx.value_type_subtype(
               func_type.results[i],
               ctx.returns[i],
@@ -1886,7 +1889,9 @@ fn validate_instr(
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
         get_label_types(ctx, label)
       }
-      let diff_type = compute_br_on_cast_fail_diff_type(source_type, target_type)
+      let diff_type = compute_br_on_cast_fail_diff_type(
+        source_type, target_type,
+      )
       if branch_types.length() >= 1 {
         let expected = branch_types[branch_types.length() - 1]
         if !ctx.subtyping_ctx.value_type_subtype(target_type, expected) {
@@ -1930,7 +1935,9 @@ fn validate_instr(
         let label = ctx.labels[ctx.labels.length() - 1 - label_idx]
         get_label_types(ctx, label)
       }
-      let diff_type = compute_br_on_cast_fail_diff_type(source_type, target_type)
+      let diff_type = compute_br_on_cast_fail_diff_type(
+        source_type, target_type,
+      )
       if branch_types.length() >= 1 {
         let expected = branch_types[branch_types.length() - 1]
         if !ctx.subtyping_ctx.value_type_subtype(diff_type, expected) {
@@ -2038,7 +2045,6 @@ fn to_non_nullable_ref_type(
     | RefStructAbs
     | RefArrayAbs
     | RefNone => ty
-
     _ => raise TypeMismatch("Expected reference type, got \{ty}")
   }
 }
@@ -2077,7 +2083,6 @@ fn to_nullable_ref_type(
     | NullFuncRef
     | NullExnRef
     | NullExternRef => ty
-
     _ => raise TypeMismatch("Expected reference type, got \{ty}")
   }
 }

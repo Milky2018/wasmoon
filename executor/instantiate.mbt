@@ -740,7 +740,8 @@ pub fn instantiate_module_with_init(
   // Get global instances for evaluating offset expressions
   let globals_for_data = get_global_instances(store, instance.global_addrs)
   for data in mod.datas {
-    if data.memory_idx >= 0 && data.offset.length() > 0 &&
+    if data.memory_idx >= 0 &&
+      data.offset.length() > 0 &&
       instance.mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
 
@@ -1747,7 +1748,8 @@ pub fn instantiate_module_with_imports(
   let globals_for_data_init = get_global_instances(store, global_addrs)
   for data in mod.datas {
     // Active data segments have a non-empty offset expression
-    if data.memory_idx >= 0 && data.offset.length() > 0 &&
+    if data.memory_idx >= 0 &&
+      data.offset.length() > 0 &&
       mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(mem_addrs[data.memory_idx])
       // Evaluate offset expression using extended const expr evaluator
@@ -2031,7 +2033,8 @@ pub fn instantiate_with_linker(
     instance.global_addrs,
   )
   for data in mod.datas {
-    if data.memory_idx >= 0 && data.offset.length() > 0 &&
+    if data.memory_idx >= 0 &&
+      data.offset.length() > 0 &&
       instance.mem_addrs.length() > data.memory_idx {
       let mem = store.get_mem(instance.mem_addrs[data.memory_idx])
       let offset = eval_extended_const_expr(

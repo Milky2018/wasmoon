@@ -65,9 +65,7 @@ fn OperandStack::pop(
 ///   externref: (ref extern)
 
 ///|
-fn to_non_nullable_cast_diff_type(
-  ty : @types.ValueType,
-) -> @types.ValueType {
+fn to_non_nullable_cast_diff_type(ty : @types.ValueType) -> @types.ValueType {
   match ty {
     FuncRef => @types.ValueType::RefFunc
     ExternRef => @types.ValueType::RefExtern
@@ -89,7 +87,8 @@ fn to_non_nullable_cast_diff_type(
       }
     RefNullEq => @types.ValueType::RefEq
     RefNullI31 => @types.ValueType::RefI31
-    NullRef | NullFuncRef | NullExternRef | NullExnRef => @types.ValueType::RefNone
+    NullRef | NullFuncRef | NullExternRef | NullExnRef =>
+      @types.ValueType::RefNone
     _ => ty
   }
 }

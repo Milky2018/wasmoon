@@ -16,16 +16,15 @@ fn validate_const_expr(
 
   // Use stack-based type checking for extended constant expressions
   let type_stack : Array[@types.ValueType] = []
-  fn pop_expected(expected : @types.ValueType, op : String) -> Unit raise ValidationError {
+  fn pop_expected(
+    expected : @types.ValueType,
+    op : String,
+  ) -> Unit raise ValidationError {
     if type_stack.length() < 1 {
       raise StackUnderflow("\{op} in constant expression")
     }
     let actual = type_stack.pop().unwrap()
-    if !is_const_expr_type_compatible(
-        actual,
-        expected,
-        subtyping_ctx=subtyping_ctx,
-      ) {
+    if !is_const_expr_type_compatible(actual, expected, subtyping_ctx~) {
       raise TypeMismatch("\{op}: expected \{expected}, got \{actual}")
     }
   }
@@ -144,11 +143,7 @@ fn validate_const_expr(
 
   // Check the result type matches expected (with subtyping for references)
   let result_type = type_stack[0]
-  if !is_const_expr_type_compatible(
-      result_type,
-      expected_type,
-      subtyping_ctx=subtyping_ctx,
-    ) {
+  if !is_const_expr_type_compatible(result_type, expected_type, subtyping_ctx~) {
     raise TypeMismatch(
       "constant expression: expected \{expected_type}, got \{result_type}",
     )

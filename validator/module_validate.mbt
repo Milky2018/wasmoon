@@ -35,7 +35,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   let subtyping_ctx = @types.SubtypingContext::same_module(
     mod.types,
     rec_groups=mod.type_rec_groups,
-    canonical=canonical,
+    canonical~,
   )
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
@@ -281,7 +281,7 @@ pub fn validate_module_with_context(
   let subtyping_ctx = @types.SubtypingContext::same_module(
     mod.types,
     rec_groups=mod.type_rec_groups,
-    canonical=canonical,
+    canonical~,
   )
   for type_idx, subtype in mod.types {
     for super_idx in subtype.supertypes {
