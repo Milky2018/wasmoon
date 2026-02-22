@@ -56,6 +56,35 @@ void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
     ctx->spilled_locals_count = 0;
 }
 
+void exception_reset_context_state(jit_context_t *ctx) {
+    if (!ctx) {
+        return;
+    }
+
+    // Unwind and free any stale handler chain. This can happen when control
+    // exits a function via trap longjmp before try_end executes.
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+    while (handler) {
+        exception_handler_t *prev = handler->prev;
+        free(handler);
+        handler = prev;
+    }
+    ctx->exception_handler = NULL;
+
+    if (ctx->exception_values) {
+        free(ctx->exception_values);
+        ctx->exception_values = NULL;
+    }
+    ctx->exception_value_count = 0;
+    ctx->exception_tag = 0;
+
+    if (ctx->spilled_locals) {
+        free(ctx->spilled_locals);
+        ctx->spilled_locals = NULL;
+    }
+    ctx->spilled_locals_count = 0;
+}
+
 // ============ Exception Throwing ============
 
 void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,

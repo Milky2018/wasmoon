@@ -182,6 +182,7 @@ int64_t exception_get_value_impl(jit_context_t *ctx, int32_t idx);
 int32_t exception_get_value_count_impl(jit_context_t *ctx);
 void exception_spill_locals_impl(jit_context_t *ctx, int64_t *locals, int32_t count);
 int64_t exception_get_spilled_local_impl(jit_context_t *ctx, int32_t idx);
+void exception_reset_context_state(jit_context_t *ctx);
 
 // ============ WASM Stack (wasm_stack.c) ============
 
