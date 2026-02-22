@@ -201,6 +201,13 @@ test "x86_64 movss/movsd/movlhps xmm-xmm encodings" {
 }
 
 ///|
+test "x86_64 unpcklps encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_unpcklps_xmm_xmm(1, 2) // unpcklps xmm1, xmm2
+  inspect(mc.get_bytes(), content="[15, 20, 202]")
+}
+
+///|
 test "x86_64 movsx/movzx encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_movsx_r64_m8(0, 4, 0)
@@ -268,6 +275,21 @@ test "x86_64 scalar float arith encodings" {
   inspect(
     mc.get_bytes(),
     content="[242, 15, 89, 202, 243, 15, 94, 220, 242, 15, 81, 238]",
+  )
+}
+
+///|
+test "x86_64 packed conversion encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cvtdq2ps_xmm_xmm(1, 2) // cvtdq2ps xmm1, xmm2
+  mc.x86_emit_cvttps2dq_xmm_xmm(1, 2) // cvttps2dq xmm1, xmm2
+  mc.x86_emit_cvttpd2dq_xmm_xmm(11, 12) // cvttpd2dq xmm11, xmm12
+  mc.x86_emit_cvtdq2pd_xmm_xmm(11, 12) // cvtdq2pd xmm11, xmm12
+  mc.x86_emit_cvtps2pd_xmm_xmm(11, 12) // cvtps2pd xmm11, xmm12
+  mc.x86_emit_cvtpd2ps_xmm_xmm(11, 12) // cvtpd2ps xmm11, xmm12
+  inspect(
+    mc.get_bytes(),
+    content="[15, 91, 202, 243, 15, 91, 202, 102, 69, 15, 230, 220, 243, 69, 15, 230, 220, 69, 15, 90, 220, 102, 69, 15, 90, 220]",
   )
 }
 
