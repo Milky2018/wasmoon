@@ -226,6 +226,19 @@ test "x86_64 movsx/movzx encodings" {
 }
 
 ///|
+test "x86_64 indexed narrow movsx/movzx and stores encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movzx_r32_m8_base_index_scale_disp(8, 10, 9, 2, 0x1234)
+  mc.x86_emit_movsx_r64_m16_base_index_scale_disp(11, 10, 9, 1, 8)
+  mc.x86_emit_mov_m8_r8_base_index_scale_disp(10, 9, 0, 16, 8)
+  mc.x86_emit_mov_m16_r16_base_index_scale_disp(10, 9, 3, 0x20, 11)
+  inspect(
+    mc.get_bytes(),
+    content="[71, 15, 182, 132, 138, 52, 18, 0, 0, 79, 15, 191, 156, 74, 8, 0, 0, 0, 71, 136, 132, 10, 16, 0, 0, 0, 102, 71, 137, 156, 202, 32, 0, 0, 0]",
+  )
+}
+
+///|
 test "x86_64 movsd/movdqu stores to [rsp+disp]" {
   let mc = MachineCode::new()
   mc.x86_emit_movsd_m64_xmm(4, 0, 15)

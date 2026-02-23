@@ -336,8 +336,25 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      // Cranelift-style iadd preference: use LEA for pure address/add trees.
-      //
+      // Cranelift x64 emit_lea alignment:
+      // - prefer add when dst aliases one operand (equivalent to lea disp=0, scale=1),
+      // - otherwise keep lea form.
+      if rd == rn {
+        if is_64 {
+          self.x86_emit_add_rr(rd, rm)
+        } else {
+          self.x86_emit_add_rr32(rd, rm)
+        }
+        return
+      }
+      if rd == rm {
+        if is_64 {
+          self.x86_emit_add_rr(rd, rn)
+        } else {
+          self.x86_emit_add_rr32(rd, rn)
+        }
+        return
+      }
       // x86 SIB requires index != rsp/r12, so try both operand orders.
       if (rm & 7) != 4 {
         if is_64 {
@@ -971,6 +988,17 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        // Cranelift emit_lea does add-conversion for scale=1, disp=0 when dst aliases base/index.
+        if amount == 0 {
+          if rd == rn {
+            self.x86_emit_add_rr(rd, rm)
+            return
+          }
+          if rd == rm {
+            self.x86_emit_add_rr(rd, rn)
+            return
+          }
+        }
         // Cranelift x64 iadd-shift style: lea rd, [base + index * scale].
         if (rm & 7) != 4 {
           self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
@@ -1005,6 +1033,16 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        if amount == 0 {
+          if rd == rn {
+            self.x86_emit_add_rr32(rd, rm)
+            return
+          }
+          if rd == rm {
+            self.x86_emit_add_rr32(rd, rn)
+            return
+          }
+        }
         if (rm & 7) != 4 {
           self.x86_emit_lea_r32_base_index_scale_disp(rd, rn, rm, amount, 0)
           return
@@ -2642,6 +2680,41 @@ fn MachineCode::emit_instruction_x86_64(
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        (index & 7) != 4 {
+        match (bits, signed) {
+          (8, true) =>
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (8, false) =>
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (16, true) =>
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (16, false) =>
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (32, true) => {
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+            self.x86_emit_movsxd_r64_r32(rt, rt)
+          }
+          (32, false) =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == rt {
         idx = isa.scratch_reg_2_index()
@@ -2652,12 +2725,35 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
-      if bits == 32 && shift >= 0 && shift <= 3 && (idx & 7) != 4 {
-        self.x86_emit_mov_r32_m32_base_index_scale_disp(
-          rt, base, idx, shift, offset,
-        )
-        if signed {
-          self.x86_emit_movsxd_r64_r32(rt, rt)
+      if can_use_scaled_amode && (idx & 7) != 4 {
+        match (bits, signed) {
+          (8, true) =>
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (8, false) =>
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (16, true) =>
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (16, false) =>
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (32, true) => {
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+            self.x86_emit_movsxd_r64_r32(rt, rt)
+          }
+          (32, false) =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
         }
         return
       }
@@ -2666,6 +2762,30 @@ fn MachineCode::emit_instruction_x86_64(
       }
       if (idx & 7) != 4 {
         match (bits, signed) {
+          (8, true) => {
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (8, false) => {
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (16, true) => {
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (16, false) => {
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
           (32, true) => {
             self.x86_emit_mov_r32_m32_base_index_scale_disp(
               rt, base, idx, 0, offset,
@@ -2796,6 +2916,27 @@ fn MachineCode::emit_instruction_x86_64(
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        (index & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == value {
         idx = isa.scratch_reg_2_index()
@@ -2806,13 +2947,43 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
+      if can_use_scaled_amode && (idx & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
-      if (idx & 7) != 4 && bits == 32 {
-        self.x86_emit_mov_m32_r32_base_index_scale_disp(
-          base, idx, 0, offset, value,
-        )
+      if (idx & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
         return
       }
       self.x86_emit_add_rr(idx, base)
