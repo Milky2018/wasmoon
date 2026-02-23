@@ -790,8 +790,8 @@ fn lower_iadd(
     return
   }
 
-  // Match Cranelift iadd_imm12_neg_{right,left}:
-  // add(x, -C) -> sub #C, x when C fits add/sub imm12 encoding.
+  // Match Cranelift immediate-negation canonicalization:
+  // add(x, -C) -> sub #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
@@ -810,7 +810,7 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(x, const) -> AddImm where const is valid 12-bit immediate
+  // Pattern: add(x, const) -> AddImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
@@ -1013,8 +1013,8 @@ fn lower_isub(
     return
   }
 
-  // Match Cranelift isub_imm12_neg:
-  // sub(x, -C) -> add #C, x when C fits add/sub imm12 encoding.
+  // Match Cranelift immediate-negation canonicalization:
+  // sub(x, -C) -> add #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1023,7 +1023,7 @@ fn lower_isub(
     return
   }
 
-  // Pattern: sub(x, const) -> SubImm where const is valid 12-bit immediate
+  // Pattern: sub(x, const) -> SubImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })

@@ -951,10 +951,26 @@ fn resolve_iconst_value(ctx : LoweringContext, value0 : @ir.Value) -> Int64? {
 }
 
 ///|
+fn fits_i32_int64(value : Int64) -> Bool {
+  value >= -2147483648L && value <= 2147483647L
+}
+
+///|
+/// Check whether an ADD/SUB immediate is encodable for the selected ISA.
+fn is_valid_add_sub_imm_for_isa(isa : @isa.ISA, value : Int64) -> Bool {
+  match isa {
+    @isa.AArch64 => is_valid_add_imm(value)
+    @isa.AMD64 => fits_i32_int64(value)
+  }
+}
+
+///|
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
-/// Returns Some(val) if the value is a constant in valid 12-bit immediate range
+/// Returns Some(val) if the value is a constant in current ISA immediate range.
 fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if resolve_iconst_value(ctx, value) is Some(val) && is_valid_add_imm(val) {
+  let isa = @isa.ISA::current()
+  if resolve_iconst_value(ctx, value) is Some(val) &&
+    is_valid_add_sub_imm_for_isa(isa, val) {
     return Some(val)
   }
   None
@@ -962,14 +978,15 @@ fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
 
 ///|
 /// Check if a value is a constant whose negation is a valid ADD/SUB immediate.
-/// Returns Some(-val) when val is a constant and -val fits AArch64 add/sub imm12.
+/// Returns Some(-val) when val is a constant and -val is encodable for current ISA.
 fn match_negated_add_imm_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> Int64? {
+  let isa = @isa.ISA::current()
   if resolve_iconst_value(ctx, value) is Some(val) {
     let neg = -val
-    if val < 0L && is_valid_add_imm(neg) {
+    if val < 0L && is_valid_add_sub_imm_for_isa(isa, neg) {
       return Some(neg)
     }
   }
@@ -1136,19 +1153,33 @@ fn match_addr_reg_offset(
 }
 
 ///|
-/// Check if an offset is valid for AArch64 LDR/STR unsigned immediate
-/// offset must be non-negative, aligned to access_size, and fit in 12-bit scaled
+/// Check if an offset is encodable in selected ISA addressing mode immediate.
+fn is_valid_load_store_offset_for_isa(
+  isa : @isa.ISA,
+  offset : Int64,
+  access_size : Int,
+) -> Bool {
+  match isa {
+    @isa.AArch64 => {
+      if offset < 0L {
+        return false
+      }
+      // Check alignment
+      if offset % access_size.to_int64() != 0L {
+        return false
+      }
+      // Check scaled offset fits in 12 bits (max 4095 * access_size)
+      let max_offset = 4095L * access_size.to_int64()
+      offset <= max_offset
+    }
+    @isa.AMD64 => fits_i32_int64(offset)
+  }
+}
+
+///|
+/// Check if an offset is encodable in current ISA addressing mode immediate.
 fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
-  if offset < 0L {
-    return false
-  }
-  // Check alignment
-  if offset % access_size.to_int64() != 0L {
-    return false
-  }
-  // Check scaled offset fits in 12 bits (max 4095 * access_size)
-  let max_offset = 4095L * access_size.to_int64()
-  offset <= max_offset
+  is_valid_load_store_offset_for_isa(@isa.ISA::current(), offset, access_size)
 }
 
 ///|
@@ -2558,18 +2589,19 @@ fn lower_load_ptr(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2680,18 +2712,19 @@ fn lower_store_ptr(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2800,18 +2833,19 @@ fn lower_load_ptr_narrow(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2914,18 +2948,19 @@ fn lower_store_ptr_narrow(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))

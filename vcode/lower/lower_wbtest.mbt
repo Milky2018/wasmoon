@@ -964,6 +964,50 @@ test "lower i32 sub(x, -imm) to add32 #imm" {
 }
 
 ///|
+test "isa add/sub immediate encoding helpers" {
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 0L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4095L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4097L), content="false")
+  inspect(
+    is_valid_add_sub_imm_for_isa(@isa.AMD64, -2147483648L),
+    content="true",
+  )
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483647L), content="true")
+  inspect(
+    is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483648L),
+    content="false",
+  )
+}
+
+///|
+test "isa load/store offset encoding helpers" {
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 0L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L + 8L, 8),
+    content="false",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, -1L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483647L, 1),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483648L, 1),
+    content="false",
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")
