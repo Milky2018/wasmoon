@@ -160,6 +160,26 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  fn pick_scratch_gpr(
+    isa : @isa.ISA,
+    avoid0 : Int,
+    avoid1 : Int,
+    avoid2 : Int,
+    avoid3 : Int,
+  ) -> Int {
+    let s1 = isa.scratch_reg_1_index()
+    if s1 != avoid0 && s1 != avoid1 && s1 != avoid2 && s1 != avoid3 {
+      return s1
+    }
+    let s2 = isa.scratch_reg_2_index()
+    if s2 != avoid0 && s2 != avoid1 && s2 != avoid2 && s2 != avoid3 {
+      return s2
+    }
+    abort(
+      "x86_64 emit: no scratch register available (avoid=\{avoid0},\{avoid1},\{avoid2},\{avoid3})",
+    )
+  }
+
   fn emit_amd64_abort(msg : String) -> Unit {
     println("wasmoon amd64 emit: \{msg}")
     abort(msg)
@@ -2222,21 +2242,20 @@ fn MachineCode::emit_instruction_x86_64(
       // Trap if lhs == INT_MIN && rhs == -1.
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
-      let scratch = isa.scratch_reg_1_index()
       let done_l = self.new_internal_label()
       if is_64 {
+        // Cranelift-aligned guard shape for checked sdiv:
+        // only overflow candidate is divisor == -1 and dividend == INT_MIN.
+        self.x86_emit_cmp_r_imm32(rhs, -1)
+        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        let scratch = pick_scratch_gpr(isa, lhs, rhs, -1, -1)
         self.x86_emit_mov_imm64(scratch, 0x8000000000000000L)
         self.x86_emit_cmp_rr(lhs, scratch)
         self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
-        self.x86_emit_mov_imm64(scratch, -1L)
-        self.x86_emit_cmp_rr(rhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
       } else {
-        self.x86_emit_mov_imm64(scratch, 0x80000000L)
-        self.x86_emit_cmp_rr32(lhs, scratch)
+        self.x86_emit_cmp_r32_imm32(rhs, -1)
         self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
-        self.x86_emit_mov_imm64(scratch, -1L)
-        self.x86_emit_cmp_rr32(rhs, scratch)
+        self.x86_emit_cmp_r32_imm32(lhs, -2147483648)
         self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
       }
       self.x86_emit_trap_imm16(trap_code)
@@ -2246,18 +2265,26 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
-      let scratch = isa.scratch_reg_1_index()
 
       // Preserve divisor if it lives in rax/rdx, since those are overwritten.
       let mut divisor = rhs
       if rhs == 0 || rhs == 2 {
-        self.x86_emit_mov_rr(scratch, rhs)
+        let scratch = pick_scratch_gpr(isa, lhs, rhs, rd, -1)
+        if is_64 {
+          self.x86_emit_mov_rr(scratch, rhs)
+        } else {
+          self.x86_emit_mov_rr32(scratch, rhs)
+        }
         divisor = scratch
       }
 
       // Move dividend into rax and sign-extend into rdx.
       if lhs != 0 {
-        self.x86_emit_mov_rr(0, lhs)
+        if is_64 {
+          self.x86_emit_mov_rr(0, lhs)
+        } else {
+          self.x86_emit_mov_rr32(0, lhs)
+        }
       }
       if is_64 {
         self.x86_emit_cqo()
@@ -2267,22 +2294,34 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_idiv_r32(divisor)
       }
       if rd != 0 {
-        self.x86_emit_mov_rr(rd, 0)
+        if is_64 {
+          self.x86_emit_mov_rr(rd, 0)
+        } else {
+          self.x86_emit_mov_rr32(rd, 0)
+        }
       }
     }
     @instr.UDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
-      let scratch = isa.scratch_reg_1_index()
 
       let mut divisor = rhs
       if rhs == 0 || rhs == 2 {
-        self.x86_emit_mov_rr(scratch, rhs)
+        let scratch = pick_scratch_gpr(isa, lhs, rhs, rd, -1)
+        if is_64 {
+          self.x86_emit_mov_rr(scratch, rhs)
+        } else {
+          self.x86_emit_mov_rr32(scratch, rhs)
+        }
         divisor = scratch
       }
       if lhs != 0 {
-        self.x86_emit_mov_rr(0, lhs)
+        if is_64 {
+          self.x86_emit_mov_rr(0, lhs)
+        } else {
+          self.x86_emit_mov_rr32(0, lhs)
+        }
       }
       if is_64 {
         self.x86_emit_xor_rr(2, 2) // rdx = 0
@@ -2301,7 +2340,6 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
-      let scratch = isa.scratch_reg_1_index()
 
       // rdx is the architectural remainder output.
       if rd != 2 {
@@ -2328,11 +2366,20 @@ fn MachineCode::emit_instruction_x86_64(
       // Preserve divisor if it conflicts with rax/rdx.
       let mut divisor = rhs
       if rhs == 0 || rhs == 2 {
-        self.x86_emit_mov_rr(scratch, rhs)
+        let scratch = pick_scratch_gpr(isa, lhs, rhs, rd, -1)
+        if is_64 {
+          self.x86_emit_mov_rr(scratch, rhs)
+        } else {
+          self.x86_emit_mov_rr32(scratch, rhs)
+        }
         divisor = scratch
       }
       if lhs != 0 {
-        self.x86_emit_mov_rr(0, lhs)
+        if is_64 {
+          self.x86_emit_mov_rr(0, lhs)
+        } else {
+          self.x86_emit_mov_rr32(0, lhs)
+        }
       }
       if is_64 {
         self.x86_emit_cqo()
@@ -2348,7 +2395,6 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
-      let scratch = isa.scratch_reg_1_index()
       if rd != 2 {
         abort("x86_64 URem: expected dst in rdx")
       }
@@ -2356,11 +2402,20 @@ fn MachineCode::emit_instruction_x86_64(
       // Preserve divisor if it conflicts with rax/rdx.
       let mut divisor = rhs
       if rhs == 0 || rhs == 2 {
-        self.x86_emit_mov_rr(scratch, rhs)
+        let scratch = pick_scratch_gpr(isa, lhs, rhs, rd, -1)
+        if is_64 {
+          self.x86_emit_mov_rr(scratch, rhs)
+        } else {
+          self.x86_emit_mov_rr32(scratch, rhs)
+        }
         divisor = scratch
       }
       if lhs != 0 {
-        self.x86_emit_mov_rr(0, lhs)
+        if is_64 {
+          self.x86_emit_mov_rr(0, lhs)
+        } else {
+          self.x86_emit_mov_rr32(0, lhs)
+        }
       }
       if is_64 {
         self.x86_emit_xor_rr(2, 2)
