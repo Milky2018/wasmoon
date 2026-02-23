@@ -313,6 +313,28 @@ test "amd64 lower regoff with explicit offset" {
 }
 
 ///|
+test "amd64 lower narrow regoff with explicit offset" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_narrow_regoff_explicit_offset")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let addr = builder.iadd(base, idx64)
+  let off = builder.iconst_i64(8L)
+  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off)
+  builder.store_ptr_narrow(8, addr, loaded, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr8_u_regoff (uxtw,0)"), content="true")
+  inspect(output.contains("store_ptr8_regoff (uxtw,0)"), content="true")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)

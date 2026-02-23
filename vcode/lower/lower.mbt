@@ -253,11 +253,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             0L
           }
           let mut matched = false
-          if is_aarch64 &&
+          if (is_aarch64 || is_amd64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -291,11 +292,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             0L
           }
           let mut matched = false
-          if is_aarch64 &&
+          if (is_aarch64 || is_amd64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -2847,12 +2849,17 @@ fn lower_load_ptr_narrow(
     result
   }
 
-  // AArch64-specific narrow register-offset addressing (Cranelift-style):
+  // Cranelift-style narrow register-offset addressing:
   //   load{8,16,32} [base + index{,extend}{,scale}]
-  if @isa.ISA::current() is @isa.AArch64 &&
+  let isa = @isa.ISA::current()
+  let is_aarch64 = isa is @isa.AArch64
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
+  if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (!is_amd64 || (shift >= 0 && shift <= 3)) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
@@ -2962,12 +2969,17 @@ fn lower_store_ptr_narrow(
     result
   }
 
-  // AArch64-specific narrow register-offset addressing (Cranelift-style):
+  // Cranelift-style narrow register-offset addressing:
   //   store{8,16,32} [base + index{,extend}{,scale}]
-  if @isa.ISA::current() is @isa.AArch64 &&
+  let isa = @isa.ISA::current()
+  let is_aarch64 = isa is @isa.AArch64
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
+  if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (!is_amd64 || (shift >= 0 && shift <= 3)) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
