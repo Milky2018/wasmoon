@@ -1476,14 +1476,14 @@ fn encode_data_section(mod : @types.Module) -> Array[Int] {
   let w = BinaryWriter::new()
   w.write_u32(mod.datas.length())
   for data in mod.datas {
-    if data.memory_idx == 0 && not(data.offset.is_empty()) {
+    if data.memory_idx < 0 {
+      // Passive data segment
+      w.write_byte(0x01)
+    } else if data.memory_idx == 0 && not(data.offset.is_empty()) {
       // Active data segment with memory 0
       w.write_byte(0x00)
       encode_instructions(w, data.offset)
       w.write_byte(0x0B) // end
-    } else if data.offset.is_empty() {
-      // Passive data segment
-      w.write_byte(0x01)
     } else {
       // Active with explicit memory index
       w.write_byte(0x02)

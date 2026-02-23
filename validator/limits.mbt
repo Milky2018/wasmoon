@@ -102,6 +102,8 @@ fn validate_table_type(
       init_expr,
       table.type_.elem_type,
       funcs=func_addrs,
+      types=ctx.types,
+      subtyping_ctx=Some(ctx.subtyping_ctx),
     )
   } else if is_non_nullable_ref_type(table.type_.elem_type) {
     // If no init expression and element type is non-nullable, this is always an error

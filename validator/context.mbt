@@ -192,6 +192,16 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   for global in mod.globals {
     collect_declared_funcs(global.init, declared_funcs)
   }
+  // Exported functions are declared and can be referenced by ref.func.
+  for exp in mod.exports {
+    if exp.desc is Func(func_idx) {
+      declared_funcs.add(func_idx)
+    }
+  }
+  let canonical = @types.compute_canonical_type_indices(
+    mod.types,
+    type_rec_groups=mod.type_rec_groups,
+  )
   {
     types: mod.types,
     funcs,
@@ -206,7 +216,11 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
     returns: [],
     local_init: [],
     declared_funcs,
-    subtyping_ctx: @types.SubtypingContext::same_module(mod.types),
+    subtyping_ctx: @types.SubtypingContext::same_module(
+      mod.types,
+      rec_groups=mod.type_rec_groups,
+      canonical~,
+    ),
   }
 }
 
@@ -241,8 +255,10 @@ fn validate_value_type(
 ) -> Unit raise ValidationError {
   let idx : Int? = match ty {
     RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
-    RefStruct(i) | RefNullStruct(i) => Some(i)
-    RefArray(i) | RefNullArray(i) => Some(i)
+    // Ref(Null)Struct/Array(-1) encode abstract heap types (struct/array),
+    // which do not refer to a concrete type index.
+    RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
+    RefArray(i) | RefNullArray(i) => if i < 0 { None } else { Some(i) }
     _ => None
   }
   if idx is Some(i) && (i < 0 || i >= num_types) {
@@ -261,8 +277,9 @@ fn validate_type_forward_refs(
 ) -> Unit raise ValidationError {
   let ref_idx : Int? = match ty {
     RefFuncTyped(i) | RefNullFuncTyped(i) => Some(i)
-    RefStruct(i) | RefNullStruct(i) => Some(i)
-    RefArray(i) | RefNullArray(i) => Some(i)
+    // Ref(Null)Struct/Array(-1) are abstract heap types, not forward refs.
+    RefStruct(i) | RefNullStruct(i) => if i < 0 { None } else { Some(i) }
+    RefArray(i) | RefNullArray(i) => if i < 0 { None } else { Some(i) }
     _ => None
   }
   guard ref_idx is Some(ref_idx) else { return }

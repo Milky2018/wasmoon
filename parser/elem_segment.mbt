@@ -74,5 +74,12 @@ fn Parser::read_elem_segment(
       init.push([@types.Instruction::RefFunc(func_idx)])
     }
   }
-  (mode, elem_type, init)
+  let normalized_elem_type = if not(uses_expressions) &&
+    elem_type == @types.ValueType::FuncRef {
+    // Index-based element segments contain only ref.func values (non-null).
+    @types.ValueType::RefFunc
+  } else {
+    elem_type
+  }
+  (mode, normalized_elem_type, init)
 }
