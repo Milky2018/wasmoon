@@ -173,7 +173,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
             (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -219,7 +219,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
             (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -2611,10 +2611,11 @@ fn lower_load_ptr(
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
   // On amd64, we support scales 0..3 and lower extends through regoffset as well.
+  let allow_nonzero_regoff = @isa.ISA::current() is @isa.AMD64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
@@ -2728,10 +2729,11 @@ fn lower_store_ptr(
   }
 
   // Try Cranelift-style register-offset addressing for stores.
+  let allow_nonzero_regoff = @isa.ISA::current() is @isa.AMD64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&

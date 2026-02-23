@@ -292,6 +292,27 @@ test "amd64 lower load/store regoff with uxtw index" {
 }
 
 ///|
+test "amd64 lower regoff with explicit offset" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_regoff_explicit_offset")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iadd(base, idx)
+  let off = builder.iconst_i64(8L)
+  let loaded = builder.load_ptr(@ir.Type::I64, addr, off)
+  builder.store_ptr(@ir.Type::I64, addr, loaded, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i64 (none,0)"), content="true")
+  inspect(output.contains("store_ptr_regoff.i64 (none,0)"), content="true")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)
