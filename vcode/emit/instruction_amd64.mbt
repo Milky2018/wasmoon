@@ -336,9 +336,23 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if is_64 && (rm & 7) != 4 {
-        // Cranelift-style iadd preference: use LEA for pure address/add trees.
-        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+      // Cranelift-style iadd preference: use LEA for pure address/add trees.
+      //
+      // x86 SIB requires index != rsp/r12, so try both operand orders.
+      if (rm & 7) != 4 {
+        if is_64 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+        } else {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rn, rm, 0, 0)
+        }
+        return
+      }
+      if (rn & 7) != 4 {
+        if is_64 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rm, rn, 0, 0)
+        } else {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rm, rn, 0, 0)
+        }
         return
       }
       let mut tmp = isa.scratch_reg_1_index()
@@ -956,13 +970,17 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if shift is @instr.ShiftType::Lsl &&
-        amount >= 0 &&
-        amount <= 3 &&
-        (rm & 7) != 4 {
-        // Cranelift x64 iadd-shift style: lea rd, [rn + rm * scale].
-        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
-        return
+      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        // Cranelift x64 iadd-shift style: lea rd, [base + index * scale].
+        if (rm & 7) != 4 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
+          return
+        }
+        // For scale=1, addition is commutative; swap operands to avoid rsp/r12 index.
+        if amount == 0 && (rn & 7) != 4 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rm, rn, 0, 0)
+          return
+        }
       }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
@@ -986,6 +1004,16 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        if (rm & 7) != 4 {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rn, rm, amount, 0)
+          return
+        }
+        if amount == 0 && (rn & 7) != 4 {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rm, rn, 0, 0)
+          return
+        }
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
         tmp = isa.scratch_reg_2_index()

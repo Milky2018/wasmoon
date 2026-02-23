@@ -130,6 +130,13 @@ test "x86_64 lea base+index*scale+disp encoding" {
 }
 
 ///|
+test "x86_64 lea32 base+index*scale+disp encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_lea_r32_base_index_scale_disp(10, 11, 9, 2, 0x20)
+  inspect(mc.get_bytes(), content="[71, 141, 148, 139, 32, 0, 0, 0]")
+}
+
+///|
 test "x86_64 indexed mov load/store encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_mov_r32_m32_base_index_scale_disp(8, 10, 9, 3, 0x1234)

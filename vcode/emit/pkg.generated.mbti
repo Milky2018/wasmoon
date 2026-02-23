@@ -407,6 +407,7 @@ pub fn MachineCode::x86_emit_insertps_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_jcc_rel32(Self, @instr.Cond, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_r64(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_jmp_rel32(Self, Int) -> Unit
+pub fn MachineCode::x86_emit_lea_r32_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_lea_r64_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_lea_r64_riprel32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_maxpd_xmm_xmm(Self, Int, Int) -> Unit
