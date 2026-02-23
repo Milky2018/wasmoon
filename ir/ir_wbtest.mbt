@@ -382,6 +382,56 @@ test "validate translated function" {
   assert_true(result.valid)
 }
 
+///|
+test "validate SIMD binary requires v128 operands" {
+  let builder = IRBuilder::new("simd_invalid_binary")
+  let a = builder.add_param(Type::I32)
+  let b = builder.add_param(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Add8, [a, b]) |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_false(result.valid)
+  assert_true(result.errors.length() > 0)
+}
+
+///|
+test "validate SIMD lane load accepts integer address and v128 lane source" {
+  let builder = IRBuilder::new("simd_valid_lane_load")
+  let addr = builder.add_param(Type::I32)
+  let vector = builder.add_param(Type::V128)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Load8Lane(0, 0, 0L, 0), [
+    addr, vector,
+  ])
+  |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_true(result.valid)
+}
+
+///|
+test "validate SIMD lane store must not produce a result" {
+  let builder = IRBuilder::new("simd_invalid_lane_store")
+  let addr = builder.add_param(Type::I32)
+  let vector = builder.add_param(Type::V128)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Store8Lane(0, 0, 0L, 0), [
+    addr, vector,
+  ])
+  |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_false(result.valid)
+  assert_true(result.errors.length() > 0)
+}
+
 // ============ CFG Tests ============
 
 ///|
