@@ -424,7 +424,7 @@ fn component_args_to_core(
                 let elem_flat = core_types_for_valtype(
                   elem_ty, types, mem_is_64,
                 )
-                let (_offs, elem_size, elem_align) = layout_of_flat_types(
+                let (offsets, elem_size, elem_align) = layout_of_flat_types(
                   elem_flat,
                 )
                 let stride = align_to(elem_size, elem_align)
@@ -432,9 +432,15 @@ fn component_args_to_core(
                 let ptr = alloc_realloc_area(
                   store, m, realloc, mem_is_64, total_size, elem_align,
                 )
-                // TODO: store list elements for non-empty lists.
-                if items.length() > 0 {
-                  raise HostCallError("unsupported param type")
+                for i in 0..<items.length() {
+                  let elem_vals = lower_value(items[i], elem_ty)
+                  if elem_vals.length() != elem_flat.length() {
+                    raise HostCallError("argument type mismatch")
+                  }
+                  let base = ptr + stride * i
+                  for j in 0..<elem_vals.length() {
+                    store_flat_value(m, base + offsets[j], elem_vals[j])
+                  }
                 }
                 let len = items.length()
                 if mem_is_64 {
