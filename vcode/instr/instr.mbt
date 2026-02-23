@@ -401,25 +401,28 @@ pub(all) enum VCodeOpcode {
   // LoadPtr(type, offset): Load from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtr(MemType, Int)
-  // LoadPtrRegOffset(type, extend, shift): Load from [base + index{, extend}{, scale}]
+  // LoadPtrRegOffset(type, extend, shift, offset):
+  // Load from [base + index{, extend}{, scale} + offset]
   // Uses: [base, index], Defs: [result]
   // - extend: None uses X index; Uxtw/Sxtw use W index extended to X
   // - shift: 0 (no scale) or log2(access_size) (scaled register offset)
-  LoadPtrRegOffset(MemType, IndexExtend, Int)
-  // LoadPtrNarrowRegOffset(bits, signed, extend, shift): narrow load from
-  // [base + index{, extend}{, scale}] where bits is 8/16/32.
+  // - offset: signed displacement in bytes
+  LoadPtrRegOffset(MemType, IndexExtend, Int, Int)
+  // LoadPtrNarrowRegOffset(bits, signed, extend, shift, offset): narrow load from
+  // [base + index{, extend}{, scale} + offset] where bits is 8/16/32.
   // Uses: [base, index], Defs: [result]
-  LoadPtrNarrowRegOffset(Int, Bool, IndexExtend, Int)
+  LoadPtrNarrowRegOffset(Int, Bool, IndexExtend, Int, Int)
   // StorePtr(type, offset): Store to [base + offset]
   // Uses: [base, value], Defs: []
   StorePtr(MemType, Int)
-  // StorePtrRegOffset(type, extend, shift): Store to [base + index{, extend}{, scale}]
+  // StorePtrRegOffset(type, extend, shift, offset):
+  // Store to [base + index{, extend}{, scale} + offset]
   // Uses: [base, index, value], Defs: []
-  StorePtrRegOffset(MemType, IndexExtend, Int)
-  // StorePtrNarrowRegOffset(bits, extend, shift): narrow store to
-  // [base + index{, extend}{, scale}] where bits is 8/16/32.
+  StorePtrRegOffset(MemType, IndexExtend, Int, Int)
+  // StorePtrNarrowRegOffset(bits, extend, shift, offset): narrow store to
+  // [base + index{, extend}{, scale} + offset] where bits is 8/16/32.
   // Uses: [base, index, value], Defs: []
-  StorePtrNarrowRegOffset(Int, IndexExtend, Int)
+  StorePtrNarrowRegOffset(Int, IndexExtend, Int, Int)
   // LoadPtrNarrow(bits, signed, offset): Load narrow value from [base + offset]
   // Uses: [base], Defs: [result]
   LoadPtrNarrow(Int, Bool, Int) // (bits, signed, offset)
@@ -1063,17 +1066,24 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
-    LoadPtrRegOffset(ty, ext, shift) =>
-      "load_ptr_regoff.\{ty} (\{ext},\{shift})"
-    LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+    LoadPtrRegOffset(ty, ext, shift, offset) => {
+      let offset_str = if offset == 0 { "" } else { " +\{offset}" }
+      "load_ptr_regoff.\{ty} (\{ext},\{shift})\{offset_str}"
+    }
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
       let sign_str = if signed { "s" } else { "u" }
-      "load_ptr\{bits}_\{sign_str}_regoff (\{ext},\{shift})"
+      let offset_str = if offset == 0 { "" } else { " +\{offset}" }
+      "load_ptr\{bits}_\{sign_str}_regoff (\{ext},\{shift})\{offset_str}"
     }
     StorePtr(ty, offset) => "store_ptr.\{ty} +\{offset}"
-    StorePtrRegOffset(ty, ext, shift) =>
-      "store_ptr_regoff.\{ty} (\{ext},\{shift})"
-    StorePtrNarrowRegOffset(bits, ext, shift) =>
-      "store_ptr\{bits}_regoff (\{ext},\{shift})"
+    StorePtrRegOffset(ty, ext, shift, offset) => {
+      let offset_str = if offset == 0 { "" } else { " +\{offset}" }
+      "store_ptr_regoff.\{ty} (\{ext},\{shift})\{offset_str}"
+    }
+    StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
+      let offset_str = if offset == 0 { "" } else { " +\{offset}" }
+      "store_ptr\{bits}_regoff (\{ext},\{shift})\{offset_str}"
+    }
     LoadPtrNarrow(bits, signed, offset) => {
       let sign_str = if signed { "s" } else { "u" }
       "load_ptr\{bits}_\{sign_str} +\{offset}"

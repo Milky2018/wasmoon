@@ -1308,19 +1308,27 @@ fn MachineCode::emit_instruction(
       let base_reg = reg_num(inst.uses[0])
       self.emit_load(ty, result_reg, base_reg, offset)
     }
-    LoadPtrRegOffset(ty, ext, shift) => {
+    LoadPtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer load with register offset (no bounds checking)
       // Uses: [base, index], Defs: [result]
       let result_reg = wreg_num(inst.defs[0])
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
+      if offset != 0 {
+        abort("LoadPtrRegOffset: non-zero offset not supported on AArch64")
+      }
       self.emit_load_reg_offset(ty, result_reg, base_reg, index_reg, ext, shift)
     }
-    LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
       // Raw pointer narrow load with register offset (no bounds checking).
       let result_reg = wreg_num(inst.defs[0])
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
+      if offset != 0 {
+        abort(
+          "LoadPtrNarrowRegOffset: non-zero offset not supported on AArch64",
+        )
+      }
       let option = index_extend_to_option(ext)
       match (bits, signed) {
         (8, false) =>
@@ -1363,19 +1371,27 @@ fn MachineCode::emit_instruction(
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
     }
-    StorePtrRegOffset(ty, ext, shift) => {
+    StorePtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer store with register offset (no bounds checking)
       // Uses: [base, index, value], Defs: []
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
       let value_reg = reg_num(inst.uses[2])
+      if offset != 0 {
+        abort("StorePtrRegOffset: non-zero offset not supported on AArch64")
+      }
       self.emit_store_reg_offset(ty, value_reg, base_reg, index_reg, ext, shift)
     }
-    StorePtrNarrowRegOffset(bits, ext, shift) => {
+    StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
       // Raw pointer narrow store with register offset (no bounds checking).
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
       let value_reg = reg_num(inst.uses[2])
+      if offset != 0 {
+        abort(
+          "StorePtrNarrowRegOffset: non-zero offset not supported on AArch64",
+        )
+      }
       let option = index_extend_to_option(ext)
       match bits {
         8 =>

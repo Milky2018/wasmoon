@@ -2552,7 +2552,7 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
-    @instr.LoadPtrRegOffset(ty, ext, shift) => {
+    @instr.LoadPtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer load with scaled index addressing (Cranelift-style sinkable load).
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
@@ -2565,11 +2565,11 @@ fn MachineCode::emit_instruction_x86_64(
           match ty {
             @instr.MemType::I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
-                rt, base, index, shift, 0,
+                rt, base, index, shift, offset,
               )
             @instr.MemType::I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
-                rt, base, index, shift, 0,
+                rt, base, index, shift, offset,
               )
             _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
           }
@@ -2588,11 +2588,11 @@ fn MachineCode::emit_instruction_x86_64(
           match ty {
             @instr.MemType::I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
-                rt, base, idx, shift, 0,
+                rt, base, idx, shift, offset,
               )
             @instr.MemType::I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
-                rt, base, idx, shift, 0,
+                rt, base, idx, shift, offset,
               )
             _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
           }
@@ -2615,9 +2615,13 @@ fn MachineCode::emit_instruction_x86_64(
       if (idx & 7) != 4 {
         match ty {
           @instr.MemType::I32 =>
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
           @instr.MemType::I64 =>
-            self.x86_emit_mov_r64_m64_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r64_m64_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
           _ => ()
         }
         if ty is @instr.MemType::I32 || ty is @instr.MemType::I64 {
@@ -2626,14 +2630,14 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, 0)
-        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, 0)
-        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, 0)
-        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, 0)
-        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, 0)
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, offset)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, offset)
+        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, offset)
+        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, offset)
+        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, offset)
       }
     }
-    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
       // Raw pointer narrow load with register-offset addressing.
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
@@ -2649,7 +2653,9 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if bits == 32 && shift >= 0 && shift <= 3 && (idx & 7) != 4 {
-        self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, shift, 0)
+        self.x86_emit_mov_r32_m32_base_index_scale_disp(
+          rt, base, idx, shift, offset,
+        )
         if signed {
           self.x86_emit_movsxd_r64_r32(rt, rt)
         }
@@ -2661,12 +2667,16 @@ fn MachineCode::emit_instruction_x86_64(
       if (idx & 7) != 4 {
         match (bits, signed) {
           (32, true) => {
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
             self.x86_emit_movsxd_r64_r32(rt, rt)
             return
           }
           (32, false) => {
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
             return
           }
           _ => ()
@@ -2674,12 +2684,12 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match (bits, signed) {
-        (8, true) => self.x86_emit_movsx_r64_m8(rt, idx, 0)
-        (8, false) => self.x86_emit_movzx_r32_m8(rt, idx, 0)
-        (16, true) => self.x86_emit_movsx_r64_m16(rt, idx, 0)
-        (16, false) => self.x86_emit_movzx_r32_m16(rt, idx, 0)
-        (32, true) => self.x86_emit_movsxd_r64_m32(rt, idx, 0)
-        (32, false) => self.x86_emit_mov_r32_m32(rt, idx, 0)
+        (8, true) => self.x86_emit_movsx_r64_m8(rt, idx, offset)
+        (8, false) => self.x86_emit_movzx_r32_m8(rt, idx, offset)
+        (16, true) => self.x86_emit_movsx_r64_m16(rt, idx, offset)
+        (16, false) => self.x86_emit_movzx_r32_m16(rt, idx, offset)
+        (32, true) => self.x86_emit_movsxd_r64_m32(rt, idx, offset)
+        (32, false) => self.x86_emit_mov_r32_m32(rt, idx, offset)
         _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
@@ -2695,7 +2705,7 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
       }
     }
-    @instr.StorePtrRegOffset(ty, ext, shift) => {
+    @instr.StorePtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer store with scaled index addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
@@ -2708,11 +2718,11 @@ fn MachineCode::emit_instruction_x86_64(
           match ty {
             @instr.MemType::I32 =>
               self.x86_emit_mov_m32_r32_base_index_scale_disp(
-                base, index, shift, 0, value,
+                base, index, shift, offset, value,
               )
             @instr.MemType::I64 =>
               self.x86_emit_mov_m64_r64_base_index_scale_disp(
-                base, index, shift, 0, value,
+                base, index, shift, offset, value,
               )
             _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
           }
@@ -2731,11 +2741,11 @@ fn MachineCode::emit_instruction_x86_64(
           match ty {
             @instr.MemType::I32 =>
               self.x86_emit_mov_m32_r32_base_index_scale_disp(
-                base, idx, shift, 0, value,
+                base, idx, shift, offset, value,
               )
             @instr.MemType::I64 =>
               self.x86_emit_mov_m64_r64_base_index_scale_disp(
-                base, idx, shift, 0, value,
+                base, idx, shift, offset, value,
               )
             _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
           }
@@ -2759,11 +2769,11 @@ fn MachineCode::emit_instruction_x86_64(
         match ty {
           @instr.MemType::I32 =>
             self.x86_emit_mov_m32_r32_base_index_scale_disp(
-              base, idx, 0, 0, value,
+              base, idx, 0, offset, value,
             )
           @instr.MemType::I64 =>
             self.x86_emit_mov_m64_r64_base_index_scale_disp(
-              base, idx, 0, 0, value,
+              base, idx, 0, offset, value,
             )
           _ => ()
         }
@@ -2773,14 +2783,15 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, 0, value)
-        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, 0, value)
-        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, 0, value)
-        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, 0, value)
-        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(idx, 0, value)
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, offset, value)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, offset, value)
+        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, offset, value)
+        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, offset, value)
+        @instr.MemType::V128 =>
+          self.x86_emit_movdqu_m128_xmm(idx, offset, value)
       }
     }
-    @instr.StorePtrNarrowRegOffset(bits, ext, shift) => {
+    @instr.StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
       // Raw pointer narrow store with register-offset addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
@@ -2799,14 +2810,16 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shl_r_imm8(idx, shift)
       }
       if (idx & 7) != 4 && bits == 32 {
-        self.x86_emit_mov_m32_r32_base_index_scale_disp(base, idx, 0, 0, value)
+        self.x86_emit_mov_m32_r32_base_index_scale_disp(
+          base, idx, 0, offset, value,
+        )
         return
       }
       self.x86_emit_add_rr(idx, base)
       match bits {
-        8 => self.x86_emit_mov_m8_r8(idx, 0, value)
-        16 => self.x86_emit_mov_m16_r16(idx, 0, value)
-        32 => self.x86_emit_mov_m32_r32(idx, 0, value)
+        8 => self.x86_emit_mov_m8_r8(idx, offset, value)
+        16 => self.x86_emit_mov_m16_r16(idx, offset, value)
+        32 => self.x86_emit_mov_m32_r32(idx, offset, value)
         _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }

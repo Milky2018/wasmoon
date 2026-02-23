@@ -308,8 +308,9 @@ test "amd64 lower regoff with explicit offset" {
   builder.store_ptr(@ir.Type::I64, addr, loaded, off)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
-  inspect(output.contains("load_ptr_regoff.i64 (none,0)"), content="true")
-  inspect(output.contains("store_ptr_regoff.i64 (none,0)"), content="true")
+  inspect(output.contains("load_ptr_regoff.i64 (none,0) +8"), content="true")
+  inspect(output.contains("store_ptr_regoff.i64 (none,0) +8"), content="true")
+  inspect(output.contains("add #8"), content="false")
 }
 
 ///|
@@ -330,8 +331,32 @@ test "amd64 lower narrow regoff with explicit offset" {
   builder.store_ptr_narrow(8, addr, loaded, off)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
-  inspect(output.contains("load_ptr8_u_regoff (uxtw,0)"), content="true")
-  inspect(output.contains("store_ptr8_regoff (uxtw,0)"), content="true")
+  inspect(output.contains("load_ptr8_u_regoff (uxtw,0) +8"), content="true")
+  inspect(output.contains("store_ptr8_regoff (uxtw,0) +8"), content="true")
+  inspect(output.contains("add #8"), content="false")
+}
+
+///|
+test "amd64 lower regoff folds base displacement" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_regoff_base_displacement")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let addr0 = builder.iadd(base, idx64)
+  let one = builder.iconst_i64(1L)
+  let addr = builder.iadd(addr0, one)
+  let off0 = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off0)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr8_u_regoff (uxtw,0) +1"), content="true")
+  inspect(output.contains("add #1"), content="false")
 }
 
 ///|

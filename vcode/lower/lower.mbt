@@ -1023,9 +1023,9 @@ fn prefer_reg_offset_for_index(
   access_size : Int,
   explicit_offset : Int64,
   extra_offset : Int64,
-  has_extra : Bool,
+  _has_extra : Bool,
 ) -> Bool {
-  if iconst_value(ctx, index) is Some(iconst) && !has_extra {
+  if iconst_value(ctx, index) is Some(iconst) {
     let combined = explicit_offset + extra_offset + iconst
     return !is_valid_load_store_offset(combined, access_size)
   }
@@ -1094,6 +1094,7 @@ fn match_addr_reg_offset(
     index0 : @ir.Value,
     scale : Int,
   ) -> (@ir.Value, @ir.Value, @instr.IndexExtend, Int, Array[Int], Int64, Int) {
+    let mut base = base
     let mut index = index0
     let mut ext = @instr.IndexExtend::None
     let mut shift = 0
@@ -1105,6 +1106,14 @@ fn match_addr_reg_offset(
     if match_iadd_const(ctx, index) is Some((inner, off)) {
       subsumed.push(index.id)
       index = inner
+      extra_offset = extra_offset + off
+      score = score + 1
+    }
+
+    // Match base displacement: iadd(base, iconst C).
+    if match_iadd_const(ctx, base) is Some((inner, off)) {
+      subsumed.push(base.id)
+      base = inner
       extra_offset = extra_offset + off
       score = score + 1
     }
@@ -1122,6 +1131,11 @@ fn match_addr_reg_offset(
       subsumed.push(index.id)
       index = inner
       ext = e
+      score = score + 1
+    }
+    // Prefer shapes where the base is a known memory-base pointer.
+    if find_defining_inst(ctx, base) is Some(base_inst) &&
+      base_inst.opcode is @ir.Opcode::LoadMemBase(_) {
       score = score + 1
     }
     (base, index, ext, shift, subsumed, extra_offset, score)
@@ -2613,7 +2627,9 @@ fn lower_load_ptr(
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
   // On amd64, we support scales 0..3 and lower extends through regoffset as well.
-  let allow_nonzero_regoff = @isa.ISA::current() is @isa.AMD64
+  let isa = @isa.ISA::current()
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
@@ -2621,16 +2637,20 @@ fn lower_load_ptr(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (!(@isa.ISA::current() is @isa.AMD64) || (shift >= 0 && shift <= 3)) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    (!is_amd64 || (shift >= 0 && shift <= 3)) {
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
-    let load_inst = @instr.VCodeInst::new(LoadPtrRegOffset(mem_ty, ext, shift))
+    let load_inst = @instr.VCodeInst::new(
+      LoadPtrRegOffset(mem_ty, ext, shift, regoff_offset),
+    )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
     load_inst.add_use(Virtual(index))
@@ -2731,7 +2751,9 @@ fn lower_store_ptr(
   }
 
   // Try Cranelift-style register-offset addressing for stores.
-  let allow_nonzero_regoff = @isa.ISA::current() is @isa.AMD64
+  let isa = @isa.ISA::current()
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
@@ -2739,18 +2761,20 @@ fn lower_store_ptr(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (!(@isa.ISA::current() is @isa.AMD64) || (shift >= 0 && shift <= 3)) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    (!is_amd64 || (shift >= 0 && shift <= 3)) {
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrRegOffset(mem_ty, ext, shift),
+      StorePtrRegOffset(mem_ty, ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))
@@ -2863,16 +2887,18 @@ fn lower_load_ptr_narrow(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let load_inst = @instr.VCodeInst::new(
-      LoadPtrNarrowRegOffset(bits, signed, ext, shift),
+      LoadPtrNarrowRegOffset(bits, signed, ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
@@ -2983,17 +3009,19 @@ fn lower_store_ptr_narrow(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrNarrowRegOffset(bits, ext, shift),
+      StorePtrNarrowRegOffset(bits, ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))

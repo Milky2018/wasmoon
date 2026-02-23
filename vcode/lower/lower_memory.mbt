@@ -70,7 +70,7 @@ fn lower_get_func_ref(
     // Large func-table indices exceed AArch64 LDR unsigned-imm range.
     let offset_vreg = materialize_imm(ctx, block, offset.to_int64())
     let load_ptr = @instr.VCodeInst::new(
-      LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0),
+      LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0, 0),
     )
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
