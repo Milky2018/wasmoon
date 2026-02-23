@@ -347,6 +347,9 @@ pub fn MachineCode::new() -> Self
 pub fn MachineCode::new_internal_label(Self) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit
 pub fn MachineCode::size(Self) -> Int
+pub fn MachineCode::x86_emit_add_r32_imm32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_add_r32_imm8(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_add_r_imm32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_r_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_rr32(Self, Int, Int) -> Unit
@@ -579,6 +582,10 @@ pub fn MachineCode::x86_emit_sqrtpd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtsd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sqrtss_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sub_r32_imm32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sub_r32_imm8(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sub_r_imm32(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_sub_r_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sub_rsp_imm32(Self, Int) -> Unit

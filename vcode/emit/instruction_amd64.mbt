@@ -160,6 +160,14 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  fn fits_i8(value : Int) -> Bool {
+    value >= -128 && value <= 127
+  }
+
+  fn fits_i32(value : Int) -> Bool {
+    value >= -2147483648 && value <= 2147483647
+  }
+
   fn pick_scratch_gpr(
     isa : @isa.ISA,
     avoid0 : Int,
@@ -360,7 +368,8 @@ fn MachineCode::emit_instruction_x86_64(
       }
     }
     @instr.AddImm(imm, is_64) => {
-      // Fallback: materialize imm into scratch and use add/sub.
+      // Cranelift-style: prefer direct reg-imm ALU forms (imm8/imm32) and
+      // only fall back to scratch materialization for out-of-range immediates.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -370,12 +379,26 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, imm.to_int64())
-      if is_64 {
-        self.x86_emit_add_rr(rd, scratch)
+      if fits_i32(imm) {
+        if is_64 {
+          if fits_i8(imm) {
+            self.x86_emit_add_r_imm8(rd, imm)
+          } else {
+            self.x86_emit_add_r_imm32(rd, imm)
+          }
+        } else if fits_i8(imm) {
+          self.x86_emit_add_r32_imm8(rd, imm)
+        } else {
+          self.x86_emit_add_r32_imm32(rd, imm)
+        }
       } else {
-        self.x86_emit_add_rr32(rd, scratch)
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, imm.to_int64())
+        if is_64 {
+          self.x86_emit_add_rr(rd, scratch)
+        } else {
+          self.x86_emit_add_rr32(rd, scratch)
+        }
       }
     }
     @instr.SubImm(imm, is_64) => {
@@ -388,12 +411,26 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, imm.to_int64())
-      if is_64 {
-        self.x86_emit_sub_rr(rd, scratch)
+      if fits_i32(imm) {
+        if is_64 {
+          if fits_i8(imm) {
+            self.x86_emit_sub_r_imm8(rd, imm)
+          } else {
+            self.x86_emit_sub_r_imm32(rd, imm)
+          }
+        } else if fits_i8(imm) {
+          self.x86_emit_sub_r32_imm8(rd, imm)
+        } else {
+          self.x86_emit_sub_r32_imm32(rd, imm)
+        }
       } else {
-        self.x86_emit_sub_rr32(rd, scratch)
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, imm.to_int64())
+        if is_64 {
+          self.x86_emit_sub_rr(rd, scratch)
+        } else {
+          self.x86_emit_sub_rr32(rd, scratch)
+        }
       }
     }
     @instr.FAdd(is_f32) => {

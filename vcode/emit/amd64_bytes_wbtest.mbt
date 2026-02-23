@@ -632,6 +632,19 @@ test "x86_64 cmp reg, imm32 encodings" {
 }
 
 ///|
+test "x86_64 add/sub reg, imm encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_add_r_imm32(8, -1) // add r8, -1
+  mc.x86_emit_sub_r_imm8(9, 5) // sub r9, 5
+  mc.x86_emit_add_r32_imm8(10, -8) // add r10d, -8
+  mc.x86_emit_sub_r32_imm32(11, 0x12345678) // sub r11d, imm32
+  inspect(
+    mc.get_bytes(),
+    content="[73, 129, 192, 255, 255, 255, 255, 73, 131, 233, 5, 65, 131, 194, 248, 65, 129, 235, 120, 86, 52, 18]",
+  )
+}
+
+///|
 test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
   let mc = MachineCode::new()
   // cl-count

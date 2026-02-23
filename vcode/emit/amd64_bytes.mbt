@@ -128,6 +128,20 @@ pub fn MachineCode::x86_emit_add_r_imm8(
 }
 
 ///|
+pub fn MachineCode::x86_emit_add_r_imm32(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // add r/m64, imm32: REX.W + 81 /0 id (imm32 sign-extended to 64-bit).
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 0, dst)
+  emit_u32_le(self, imm)
+}
+
+///|
 pub fn MachineCode::x86_emit_add_rr32(
   self : MachineCode,
   dst : Int,
@@ -141,6 +155,38 @@ pub fn MachineCode::x86_emit_add_rr32(
   }
   self.emit_byte(0x01)
   emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_add_r32_imm8(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // add r/m32, imm8: 83 /0 ib (imm8 sign-extended to 32-bit).
+  let b = (dst >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x83)
+  emit_modrm(self, 3, 0, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_add_r32_imm32(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // add r/m32, imm32: 81 /0 id.
+  let b = (dst >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 0, dst)
+  emit_u32_le(self, imm)
 }
 
 ///|
@@ -158,6 +204,34 @@ pub fn MachineCode::x86_emit_sub_rr(
 }
 
 ///|
+pub fn MachineCode::x86_emit_sub_r_imm8(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // sub r/m64, imm8: REX.W + 83 /5 ib (imm8 sign-extended to 64-bit).
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0x83)
+  emit_modrm(self, 3, 5, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_sub_r_imm32(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // sub r/m64, imm32: REX.W + 81 /5 id (imm32 sign-extended to 64-bit).
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, 0, b)
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 5, dst)
+  emit_u32_le(self, imm)
+}
+
+///|
 pub fn MachineCode::x86_emit_sub_rr32(
   self : MachineCode,
   dst : Int,
@@ -171,6 +245,38 @@ pub fn MachineCode::x86_emit_sub_rr32(
   }
   self.emit_byte(0x29)
   emit_modrm(self, 3, src, dst)
+}
+
+///|
+pub fn MachineCode::x86_emit_sub_r32_imm8(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // sub r/m32, imm8: 83 /5 ib (imm8 sign-extended to 32-bit).
+  let b = (dst >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x83)
+  emit_modrm(self, 3, 5, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_sub_r32_imm32(
+  self : MachineCode,
+  dst : Int,
+  imm : Int,
+) -> Unit {
+  // sub r/m32, imm32: 81 /5 id.
+  let b = (dst >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0x81)
+  emit_modrm(self, 3, 5, dst)
+  emit_u32_le(self, imm)
 }
 
 ///|
