@@ -481,7 +481,7 @@ pub(all) enum VCodeOpcode {
   // Used for passing stack addresses to C functions
   LoadSP
 
-  // GC inline allocation helpers (AArch64 fast path + C slow-path fallback)
+  // GC inline allocation helpers (fast path + C slow-path fallback)
   //
   // GCAllocStructInline(type_idx, num_fields):
   //   Uses: [vmctx], Defs: [result_ref]

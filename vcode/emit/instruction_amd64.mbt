@@ -2811,64 +2811,176 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
     }
     @instr.GCAllocStructInline(type_idx, num_fields) => {
-      // Use slow-path helper on amd64 for now:
-      // gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields)
+      // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
-      let scratch = isa.scratch_reg_1_index()
+      let obj = isa.scratch_reg_1_index()
+      let end = isa.scratch_reg_2_index()
+      let tmp = 0 // rax
+      let gc_header_size = 16
+      let gc_align = 16
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(gc_header_size + num_fields * 8, gc_align)
+      let kind = 1 // GC_KIND_STRUCT
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow = self.new_internal_label()
+      let done = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_rr(end, obj)
+      emit_add_imm_to_reg_in_chunks(self, end, total_size)
+      // if end > vmctx->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_cmp_rr(end, tmp)
+      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+
+      // Fast path: header + fields copy from outgoing-args stack area.
+      self.x86_emit_mov_imm64(tmp, header_low)
+      self.x86_emit_mov_m64_r64(obj, 0, tmp)
+      self.x86_emit_mov_imm64(tmp, num_fields.to_int64())
+      self.x86_emit_mov_m64_r64(obj, 8, tmp)
+      for i in 0..<num_fields {
+        let off = i * 8
+        self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
+        self.x86_emit_mov_m64_r64(obj, gc_header_size + off, tmp)
+      }
+      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+
+      // register_struct_inline(vmctx, obj_ptr, total_size)
+      if vmctx != arg0 {
+        self.x86_emit_mov_rr(arg0, vmctx)
+      }
+      if obj != arg1 {
+        self.x86_emit_mov_rr(arg1, obj)
+      }
+      self.x86_emit_mov_imm64(arg2, total_size.to_int64())
+      self.x86_emit_mov_imm64(
+        end,
+        @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+      )
+      self.x86_emit_call_r64(end)
+      if dst != 0 {
+        self.x86_emit_mov_rr(dst, 0)
+      }
+      self.x86_emit_jmp_rel32(done)
+
+      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields)
+      self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp
-      emit_add_imm_to_reg_in_chunks(
-        self,
-        arg2,
-        stack_frame.outgoing_args_offset,
-      )
+      emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
       self.x86_emit_mov_imm64(
-        scratch,
+        end,
         @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
       )
-      self.x86_emit_call_r64(scratch)
+      self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
+      self.define_label(done)
     }
     @instr.GCAllocArrayFixedInline(type_idx, len) => {
-      // Use slow-path helper on amd64 for now:
-      // gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len)
+      // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
-      let scratch = isa.scratch_reg_1_index()
+      let obj = isa.scratch_reg_1_index()
+      let end = isa.scratch_reg_2_index()
+      let tmp = 0 // rax
+      let gc_header_size = 16
+      let gc_align = 16
+      let array_meta_size = 8
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(
+        gc_header_size + array_meta_size + len * 8,
+        gc_align,
+      )
+      let kind = 2 // GC_KIND_ARRAY
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow = self.new_internal_label()
+      let done = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_rr(end, obj)
+      emit_add_imm_to_reg_in_chunks(self, end, total_size)
+      // if end > vmctx->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_cmp_rr(end, tmp)
+      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+
+      // Fast path: header + len + elements copy.
+      self.x86_emit_mov_imm64(tmp, header_low)
+      self.x86_emit_mov_m64_r64(obj, 0, tmp)
+      self.x86_emit_mov_imm64(tmp, 0L)
+      self.x86_emit_mov_m64_r64(obj, 8, tmp)
+      self.x86_emit_mov_imm64(tmp, len.to_int64())
+      self.x86_emit_mov_m64_r64(obj, gc_header_size, tmp)
+      for i in 0..<len {
+        let off = i * 8
+        self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
+        self.x86_emit_mov_m64_r64(
+          obj,
+          gc_header_size + array_meta_size + off,
+          tmp,
+        )
+      }
+      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+
+      // register_array_inline(vmctx, obj_ptr, total_size)
+      if vmctx != arg0 {
+        self.x86_emit_mov_rr(arg0, vmctx)
+      }
+      if obj != arg1 {
+        self.x86_emit_mov_rr(arg1, obj)
+      }
+      self.x86_emit_mov_imm64(arg2, total_size.to_int64())
+      self.x86_emit_mov_imm64(
+        end,
+        @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+      )
+      self.x86_emit_call_r64(end)
+      if dst != 0 {
+        self.x86_emit_mov_rr(dst, 0)
+      }
+      self.x86_emit_jmp_rel32(done)
+
+      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len)
+      self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp
-      emit_add_imm_to_reg_in_chunks(
-        self,
-        arg2,
-        stack_frame.outgoing_args_offset,
-      )
+      emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, len.to_int64())
       self.x86_emit_mov_imm64(
-        scratch,
+        end,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
       )
-      self.x86_emit_call_r64(scratch)
+      self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
+      self.define_label(done)
     }
     @instr.LoadConstV128(bytes) => {
       // Materialize a 128-bit constant via constant pool (Cranelift-style).
