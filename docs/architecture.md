@@ -61,7 +61,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 |---------|-------------|
 | `wasi/` | WASI (WebAssembly System Interface) implementation |
 | `disasm/` | Disassembler for debugging |
-| `main/` | CLI entry point |
+| `cmd/wasmoon/` | `wasmoon` CLI entry point |
 | `testsuite/` | Test suite |
 
 ## Execution Flow

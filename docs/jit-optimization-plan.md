@@ -6,7 +6,7 @@
 
 1. **IR Optimization (Complete)** ✅
    - `ir/optimize.mbt` implements O0/O1/O2/O3 with CF/CP/CSE/DCE/branch simplification
-   - JIT path calls `@ir.optimize_with_level(..., O2)` in `main/run.mbt:775`
+   - JIT path calls `@ir.optimize_with_level(..., O2)` in `cmd/wasmoon/commands/run.mbt:1366`
 
 2. **Pattern Matcher System (Exists but NOT Integrated)**
    - `vcode/lower/patterns.mbt`: Table-driven rule matcher with priority system
@@ -37,7 +37,7 @@
 
 **Status**: Already implemented
 
-**Location**: `main/run.mbt:775`
+**Location**: `cmd/wasmoon/commands/run.mbt:1366`
 ```moonbit
 @ir.optimize_with_level(ir_func, @ir.OptLevel::from_int(2)) |> ignore
 ```

@@ -52,7 +52,8 @@ moon build && ./install.sh
 
 ```
 wasmoon/
-├── main/           # CLI entry point
+├── cmd/wasmoon/    # wasmoon CLI entry point
+├── cmd/wasmoon-tools/ # wasmoon-tools CLI entry point
 ├── wat/            # WAT parser
 ├── wast/           # WAST parser
 ├── cwasm/          # Binary parser

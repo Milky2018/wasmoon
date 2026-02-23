@@ -5,7 +5,7 @@
 Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `moon.mod.json`; each package directory has a `moon.pkg.json`.
 
 - Pipeline: parsers (`wat/`, `wast/`, `cwasm/`, `parser/`) → `validator/` → `runtime/` → `executor/` or JIT (`ir/` → `vcode/` → `jit/`).
-- CLI entry point: `main/` (builds the `wasmoon` binary).
+- CLI entry point: `cmd/wasmoon/` (builds the `wasmoon` binary).
 - WASI Preview 1 support: `wasi/`.
 - Tests: `testsuite/` (MoonBit tests) and `spec/` (upstream WAST scripts used by the CLI runner).
 - Build artifacts: `target/`; `install.sh` creates/updates symlinks in repo root (`./wasmoon`, `./wasmoon-tools`) that point at the built executables.
