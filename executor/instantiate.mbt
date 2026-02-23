@@ -1991,6 +1991,31 @@ pub fn call_func_by_index(
 }
 
 ///|
+/// Interpreter call result for host/JIT bridges that need to preserve
+/// `ThrowException(tag_addr, values)` instead of normalizing it to runtime traps.
+pub(all) enum InvokeWithExceptionResult {
+  Returned(Array[@types.Value])
+  Thrown(Int, Array[@types.Value]) // (tag_addr, payload values)
+}
+
+///|
+/// Call a function by module function index and preserve wasm exceptions.
+pub fn call_func_by_index_with_exception(
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+) -> InvokeWithExceptionResult raise @runtime.RuntimeError {
+  let ctx = ExecContext::new(store, instance)
+  let results = ctx.call_func(func_idx, args) catch {
+    ThrowException(tag_addr, values) => return Thrown(tag_addr, values)
+    BranchWith(_, _) | Return => raise @runtime.Unreachable
+    e => raise normalize_runtime_error(e)
+  }
+  Returned(results)
+}
+
+///|
 /// Get the value of an exported global variable
 pub fn get_exported_global(
   store : @runtime.Store,

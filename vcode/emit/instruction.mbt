@@ -1480,6 +1480,7 @@ fn MachineCode::emit_instruction(
         TryBegin => @jit_ffi.c_jit_get_exception_try_begin_ptr()
         TryEnd => @jit_ffi.c_jit_get_exception_try_end_ptr()
         Throw => @jit_ffi.c_jit_get_exception_throw_ptr()
+        ThrowTag => @jit_ffi.c_jit_get_exception_throw_tag_ptr()
         ThrowRef => @jit_ffi.c_jit_get_exception_throw_ref_ptr()
         Delegate => @jit_ffi.c_jit_get_exception_delegate_ptr()
         GetTag => @jit_ffi.c_jit_get_exception_get_tag_ptr()

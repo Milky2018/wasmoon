@@ -596,7 +596,9 @@ MOONBIT_FFI_EXPORT void wasmoon_dwarf_register(void *dwarf, int verbose) {
     // Debug output only when verbose flag is set
     if (verbose) {
         fprintf(stderr, "[DWARF] Registered %d functions with debugger (low_pc=0x%llx, high_pc=0x%llx)\n",
-                builder->num_functions, builder->low_pc, builder->high_pc);
+                builder->num_functions,
+                (unsigned long long)builder->low_pc,
+                (unsigned long long)builder->high_pc);
     }
 
     // Debug: dump object file for inspection (still uses env var)

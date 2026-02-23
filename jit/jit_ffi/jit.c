@@ -228,6 +228,28 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_func_count(int64_t ctx_ptr) {
     return ctx ? ctx->func_count : 0;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_table_ptr(int64_t ctx_ptr, int table_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count || !ctx->tables) {
+        return 0;
+    }
+    return (int64_t)ctx->tables[table_idx];
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_get_table_size(int64_t ctx_ptr, int table_idx) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || table_idx < 0 || table_idx >= ctx->table_count) {
+        return 0;
+    }
+    if (table_idx == 0) {
+        return (int)ctx->table0_elements;
+    }
+    if (!ctx->table_sizes) {
+        return 0;
+    }
+    return (int)ctx->table_sizes[table_idx];
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_jit_ctx_alloc_indirect_table(int64_t ctx_ptr, int count) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     if (!ctx || count <= 0) return 0;
@@ -669,12 +691,14 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_reset_context_state(ctx);
     g_current_jit_context = ctx;  // Set for guard page detection
     g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
     g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
+        exception_reset_context_state(ctx);
         g_current_jit_context = NULL;
         g_trap_wasm_stack_base = 0;
         g_trap_wasm_stack_top = 0;
@@ -685,6 +709,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     int result = trampoline(ctx, values_vec, (void *)func_ptr);
 
     g_trap_active = 0;
+    exception_reset_context_state(ctx);
     g_current_jit_context = NULL;
     g_trap_wasm_stack_base = 0;
     g_trap_wasm_stack_top = 0;
@@ -752,11 +777,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     g_trap_func_idx = -1;
     g_trap_active = 1;
     g_current_jit_context = ctx;  // Set for guard page detection
+    exception_reset_context_state(ctx);
     g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
     g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
 
     if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
         g_trap_active = 0;
+        exception_reset_context_state(ctx);
         g_current_jit_context = NULL;
         g_trap_wasm_stack_base = 0;
         g_trap_wasm_stack_top = 0;
@@ -773,6 +800,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     );
 
     g_trap_active = 0;
+    exception_reset_context_state(ctx);
     g_current_jit_context = NULL;
     g_trap_wasm_stack_base = 0;
     g_trap_wasm_stack_top = 0;

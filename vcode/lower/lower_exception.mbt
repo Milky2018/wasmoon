@@ -64,21 +64,32 @@ fn lower_throw(
     (materialize_imm(ctx, block, 0L), materialize_imm(ctx, block, 0L))
   }
 
+  // Select throw helper.
+  let throw_libcall = if num_operands == 0 {
+    @instr.ExceptionLibcall::ThrowTag
+  } else {
+    @instr.ExceptionLibcall::Throw
+  }
+
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExceptionFuncPtr(Throw))
+  let load_fp = @instr.VCodeInst::new(LoadExceptionFuncPtr(throw_libcall))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
-  // Call: exception_throw(ctx, tag_idx, values_ptr, count)
+  // Call throw helper.
   // This is noreturn, but we still emit the call
-  lower_c_libcall(
-    ctx,
-    block,
-    func_ptr_vreg,
-    [vmctx_vreg, tag_idx_vreg, values_ptr_vreg, count_vreg],
-    None,
-  )
+  if num_operands == 0 {
+    lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, tag_idx_vreg], None)
+  } else {
+    lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, tag_idx_vreg, values_ptr_vreg, count_vreg],
+      None,
+    )
+  }
 
   // Note: Stack cleanup not needed - throw is noreturn
 }

@@ -78,8 +78,19 @@ pub struct JITModuleContext {
   // For syncing globals back to store after JIT calls
   globals_ptr : Int64
   global_addrs : Array[Int]
+  // Tables owned/imported by this module instance
+  table_addrs : Array[Int]
   // For converting module function indices to store addresses
   func_addrs : Array[Int]
+  // Function type indices in module index space (imports + locals)
+  func_type_indices : Array[Int]
+  // Module canonical type indices
+  canonical_type_indices : Array[Int]
+  // Module-local type graph used by GC type checks
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
+  // Whether this module uses subtype helper for call_indirect checks
+  use_subtype_indirect_check : Bool
 }
 
 ///|
@@ -87,9 +98,26 @@ pub fn JITModuleContext::new(
   jit_module : @jit.JITModule,
   globals_ptr : Int64,
   global_addrs : Array[Int],
+  table_addrs : Array[Int],
   func_addrs : Array[Int],
+  func_type_indices : Array[Int],
+  canonical_type_indices : Array[Int],
+  module_types : Array[@types.SubType],
+  module_rec_groups : Array[Int],
+  use_subtype_indirect_check : Bool,
 ) -> JITModuleContext {
-  { jit_module, globals_ptr, global_addrs, func_addrs }
+  {
+    jit_module,
+    globals_ptr,
+    global_addrs,
+    table_addrs,
+    func_addrs,
+    func_type_indices,
+    canonical_type_indices,
+    module_types,
+    module_rec_groups,
+    use_subtype_indirect_check,
+  }
 }
 
 ///|
@@ -185,16 +213,12 @@ fn WastContext::try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
 ) -> JITModuleContext? {
-  // Check if module imports from any overridden built-in modules
-  // JIT cannot use these since the built-in trampolines don't match the overridden implementation
-  for imp in mod_.imports {
-    if self.overridden_builtin_modules.contains(imp.mod_name) {
-      return None // Fall back to interpreter for overridden modules
-    }
+  if !self.use_jit {
+    return None
   }
   match self.jit_compiler {
     Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
-    None => None
+    None => abort("WAST JIT strict mode: JIT compiler callback is missing")
   }
 }
 
@@ -297,7 +321,10 @@ pub fn run_wast_command(
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None => ctx.current_jit = None
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for module command",
+            )
         }
       } else {
         ctx.current_jit = None
@@ -345,9 +372,16 @@ pub fn run_wast_command(
       }
       ctx.current_module = Some(instance)
       // Try to compile JIT version (only if JIT is enabled)
-      match ctx.try_compile_jit(mod_, instance) {
-        Some(jit_ctx) if ctx.use_jit => ctx.current_jit = Some(jit_ctx)
-        _ => ctx.current_jit = None
+      if ctx.use_jit {
+        match ctx.try_compile_jit(mod_, instance) {
+          Some(jit_ctx) => ctx.current_jit = Some(jit_ctx)
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for quoted module",
+            )
+        }
+      } else {
+        ctx.current_jit = None
       }
     }
     ModuleBinaryFailed(err) => {
@@ -417,7 +451,10 @@ pub fn run_wast_command(
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None => ctx.current_jit = None
+          None =>
+            abort(
+              "WAST JIT strict mode: try_compile_jit returned None for module instance command",
+            )
         }
       } else {
         ctx.current_jit = None
@@ -458,16 +495,20 @@ pub fn run_wast_command(
     AssertException(action) => {
       // Invoke the action and expect an exception to be thrown
       let action_desc = format_action(action)
-      if (try? invoke_action(ctx, action)) is Err(_) {
-        result.passed = result.passed + 1
-        if show_success {
-          println("line \{line}: assert_exception \{action_desc}: PASSED")
+      try invoke_action(ctx, action) catch {
+        _ => {
+          result.passed = result.passed + 1
+          if show_success {
+            println("line \{line}: assert_exception \{action_desc}: PASSED")
+          }
         }
-      } else {
-        result.failed = result.failed + 1
-        result.failures.push(
-          "line \{line}: assert_exception \{action_desc}: expected exception but none thrown",
-        )
+      } noraise {
+        values => {
+          result.failed = result.failed + 1
+          result.failures.push(
+            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{values})",
+          )
+        }
       }
     }
     AssertExhaustion(action, expected_msg) => {
@@ -725,70 +766,157 @@ pub fn invoke_action(
                 }
               }
               // Set up GC heap for JIT execution if c_heap is available
+              let mut temp_gc_func_table_ptr = 0L
               match ctx.store.c_heap {
                 Some(heap) => {
                   // Compute canonical type indices for proper type equivalence checking
                   let canonical = @types.compute_canonical_type_indices(
-                    ctx.store.module_types,
-                    type_rec_groups=ctx.store.module_rec_groups,
+                    jit.module_types,
+                    type_rec_groups=jit.module_rec_groups,
                   )
-                  // Remap func_type_indices: JIT func_idx -> store func_addr -> type_idx
-                  // The JIT func_table has entries for this module's functions, but
-                  // the Store's func_type_indices has entries for ALL functions.
-                  // We need to create a mapping from JIT func_idx to type_idx.
                   let jit_func_type_indices : Array[Int] = []
-                  for func_addr in jit.func_addrs {
-                    if func_addr >= 0 &&
+                  for i, func_addr in jit.func_addrs {
+                    if i >= 0 && i < jit.func_type_indices.length() {
+                      let raw_type_idx = jit.func_type_indices[i]
+                      if raw_type_idx >= 0 &&
+                        raw_type_idx < jit.canonical_type_indices.length() {
+                        jit_func_type_indices.push(
+                          jit.canonical_type_indices[raw_type_idx],
+                        )
+                      } else {
+                        jit_func_type_indices.push(raw_type_idx)
+                      }
+                    } else if func_addr >= 0 &&
                       func_addr < ctx.store.func_type_indices.length() {
-                      jit_func_type_indices.push(
-                        ctx.store.func_type_indices[func_addr],
+                      let fallback_canonical = ctx.store.get_func_canonical_type_idx(
+                        func_addr,
                       )
+                      if fallback_canonical >= 0 {
+                        jit_func_type_indices.push(fallback_canonical)
+                      } else {
+                        jit_func_type_indices.push(
+                          ctx.store.func_type_indices[func_addr],
+                        )
+                      }
                     } else {
                       jit_func_type_indices.push(-1) // Invalid/unknown type
                     }
                   }
-                  // Pass function type indices for funcref subtyping checks
-                  // Also pass func_table pointer for looking up func_idx from tagged pointer funcrefs
+                  let mut gc_func_table_ptr = jit.jit_module.get_func_table_ptr()
+                  let mut gc_num_funcs = jit.jit_module.get_func_count()
+                  let gc_func_type_indices : Array[Int] = []
+                  for type_idx in jit_func_type_indices {
+                    gc_func_type_indices.push(type_idx)
+                  }
+                  let merged_funcref_types : Map[Int64, Int] = {}
+                  for func_idx, _func_addr in jit.func_addrs {
+                    let func_ptr = jit.jit_module.get_func_ptr(func_idx)
+                    if func_ptr == 0L {
+                      continue
+                    }
+                    if func_idx >= 0 && func_idx < gc_func_type_indices.length() {
+                      merged_funcref_types.set(
+                        func_ptr,
+                        gc_func_type_indices[func_idx],
+                      )
+                    }
+                  }
+                  let registered_funcref_entries = collect_registered_funcref_entries(
+                    ctx.store,
+                  )
+                  for entry in registered_funcref_entries {
+                    let (func_ptr, type_idx) = entry
+                    if merged_funcref_types.get(func_ptr) is None {
+                      merged_funcref_types.set(func_ptr, type_idx)
+                    }
+                  }
+                  let gc_funcref_entries : Array[(Int64, Int)] = []
+                  for func_ptr, type_idx in merged_funcref_types {
+                    gc_funcref_entries.push((func_ptr, type_idx))
+                  }
+                  if gc_funcref_entries.length() > 0 {
+                    let table_size = (gc_funcref_entries.length() * 8).to_int64()
+                    let table_ptr = @jit.alloc_memory(table_size)
+                    if table_ptr != 0L {
+                      temp_gc_func_table_ptr = table_ptr
+                      gc_func_type_indices.clear()
+                      for i, entry in gc_funcref_entries {
+                        let (func_ptr, type_idx) = entry
+                        @jit.c_jit_write_i64(
+                          table_ptr + (i * 8).to_int64(),
+                          func_ptr,
+                        )
+                        gc_func_type_indices.push(type_idx)
+                      }
+                      gc_func_table_ptr = table_ptr
+                      gc_num_funcs = gc_funcref_entries.length()
+                    }
+                  }
                   @jit.gc_setup(
                     heap,
-                    ctx.store.module_types,
+                    jit.module_types,
                     canonical,
                     ctx_ptr=jit.jit_module.get_context_ptr(),
-                    func_type_indices=jit_func_type_indices,
-                    func_table_ptr=jit.jit_module.get_func_table_ptr(),
-                    num_funcs=jit.jit_module.get_func_count(),
+                    func_type_indices=gc_func_type_indices,
+                    func_table_ptr=gc_func_table_ptr,
+                    num_funcs=gc_num_funcs,
                   ) catch {
-                    err => raise RuntimeError("JIT GC setup failed: \{err}")
+                    err => {
+                      if temp_gc_func_table_ptr != 0L {
+                        @jit.free_memory(temp_gc_func_table_ptr)
+                        temp_gc_func_table_ptr = 0L
+                      }
+                      raise RuntimeError("JIT GC setup failed: \{err}")
+                    }
                   }
                   // Set GC heap in VMContext for inline allocation
                   jit.jit_module.set_gc_heap(heap.get_ptr())
                 }
                 None => ()
               }
-              // Note: We don't sync interpreter tables to JIT tables here because:
-              // - If init was run via JIT, the JIT tables already have the correct values
-              // - Syncing from interpreter (which has nulls) would overwrite the JIT values
-              // TODO: Implement bidirectional sync when mixing interpreter/JIT execution
+              // Keep JIT shared tables coherent with interpreter-visible table state
+              // before each call. This is required for mixed interpreter/JIT flows
+              // (e.g. assertions that instantiate/trap between JIT invocations).
+              sync_tables_to_jit(
+                instance,
+                ctx.store,
+                jit.jit_module,
+                use_subtype_indirect_check=jit.use_subtype_indirect_check,
+              )
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 @jit.JITExit(code) => {
                   // Tear down GC context on exit
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  if temp_gc_func_table_ptr != 0L {
+                    @jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
                   // Sync globals even on exit
                   sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError("WASI exit: \{code}")
                 }
                 @jit.JITTrap(msg) => {
                   // Tear down GC context on trap
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  if temp_gc_func_table_ptr != 0L {
+                    @jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
                   // Sync globals even on trap (in case globals were modified before trap)
                   sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
               }
               // Tear down GC context after JIT call
               @jit.gc_teardown(jit.jit_module.get_context_ptr())
+              if temp_gc_func_table_ptr != 0L {
+                @jit.free_memory(temp_gc_func_table_ptr)
+              }
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)
+              sync_jit_tables_to_store(jit, ctx.store)
               // Convert results back to Values based on function return types
               // V128 results take two slots (low then high 8 bytes)
               let values : Array[@types.Value] = []
@@ -1174,6 +1302,131 @@ fn try_instantiate_source(
 }
 
 ///|
+fn build_partial_instance_for_trapped_module(
+  ctx : WastContext,
+  mod_ : @types.Module,
+  imports : @runtime.Imports,
+  before_funcs : Int,
+  before_tables : Int,
+  before_mems : Int,
+  before_globals : Int,
+  before_tags : Int,
+) -> @runtime.ModuleInstance? {
+  let after_funcs = ctx.store.funcs.length()
+  if after_funcs <= before_funcs {
+    return None
+  }
+
+  let func_addrs : Array[Int] = []
+  let func_type_indices : Array[Int] = []
+  let table_addrs : Array[Int] = []
+  let mem_addrs : Array[Int] = []
+  let global_addrs : Array[Int] = []
+  let tag_addrs : Array[Int] = []
+
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Func(addr)) => {
+            func_addrs.push(addr)
+            func_type_indices.push(type_idx)
+          }
+          _ => ()
+        }
+      Table(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Table(addr)) => table_addrs.push(addr)
+          _ => ()
+        }
+      Memory(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Memory(addr)) => mem_addrs.push(addr)
+          _ => ()
+        }
+      Global(_) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Global(addr)) => global_addrs.push(addr)
+          _ => ()
+        }
+      Tag(type_idx) =>
+        match imports.resolve(imp.mod_name, imp.name) {
+          Some(Tag(addr)) => {
+            tag_addrs.push(addr)
+            ignore(type_idx)
+          }
+          _ => ()
+        }
+    }
+  }
+
+  for i, type_idx in mod_.funcs {
+    let addr = before_funcs + i
+    if addr >= 0 && addr < after_funcs {
+      func_addrs.push(addr)
+      func_type_indices.push(type_idx)
+    }
+  }
+
+  let after_tables = ctx.store.tables.length()
+  for i in 0..<mod_.tables.length() {
+    let addr = before_tables + i
+    if addr >= 0 && addr < after_tables {
+      table_addrs.push(addr)
+    }
+  }
+
+  let after_mems = ctx.store.mems.length()
+  for i in 0..<mod_.memories.length() {
+    let addr = before_mems + i
+    if addr >= 0 && addr < after_mems {
+      mem_addrs.push(addr)
+    }
+  }
+
+  let after_globals = ctx.store.globals.length()
+  for i in 0..<mod_.globals.length() {
+    let addr = before_globals + i
+    if addr >= 0 && addr < after_globals {
+      global_addrs.push(addr)
+    }
+  }
+
+  let after_tags = ctx.store.tags.length()
+  for i in 0..<mod_.tags.length() {
+    let addr = before_tags + i
+    if addr >= 0 && addr < after_tags {
+      tag_addrs.push(addr)
+    }
+  }
+
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let dropped_elems = Array::make(mod_.elems.length(), false)
+  let dropped_datas = Array::make(mod_.datas.length(), false)
+
+  Some({
+    types: mod_.types,
+    type_rec_groups: mod_.type_rec_groups,
+    canonical_type_indices,
+    store_idx: -1,
+    func_addrs,
+    func_type_indices,
+    table_addrs,
+    mem_addrs,
+    global_addrs,
+    tag_addrs,
+    exports: mod_.exports,
+    elem_segments: mod_.elems,
+    data_segments: mod_.datas,
+    dropped_elems,
+    dropped_datas,
+  })
+}
+
+///|
 /// Try to instantiate a module source and check if it traps.
 /// Returns true if instantiation traps (for assert_trap with module).
 fn try_instantiate_source_traps(
@@ -1182,21 +1435,103 @@ fn try_instantiate_source_traps(
 ) -> Bool {
   let imports = ctx.build_imports()
   match source {
-    Binary(bytes) =>
-      (try? ({
-        let mod_ = @parser.parse_module(bytes)
-        @validator.validate_module(mod_)
-        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-        |> ignore
-      }))
-      is Err(_)
-    Inline(mod_) =>
-      (try? ({
-        @validator.validate_module(mod_)
-        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
-        |> ignore
-      }))
-      is Err(_)
+    Binary(bytes) => {
+      let mod_ = @parser.parse_module(bytes) catch { _ => return false }
+      @validator.validate_module(mod_) catch {
+        _ => return false
+      }
+      let before_instances = ctx.store.instances.length()
+      let before_funcs = ctx.store.funcs.length()
+      let before_tables = ctx.store.tables.length()
+      let before_mems = ctx.store.mems.length()
+      let before_globals = ctx.store.globals.length()
+      let before_tags = ctx.store.tags.length()
+      let trapped = (try? (@executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+        |> ignore))
+        is Err(_)
+      if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
+        if ctx.store.instances.length() > before_instances {
+          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
+            1]
+          match ctx.try_compile_jit(mod_, trapped_instance) {
+            Some(_) => ()
+            None =>
+              abort(
+                "WAST JIT strict mode: failed to compile trapped module for source(Binary)",
+              )
+          }
+        } else {
+          match
+            build_partial_instance_for_trapped_module(
+              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
+              before_tags,
+            ) {
+            Some(partial_instance) =>
+              match ctx.try_compile_jit(mod_, partial_instance) {
+                Some(_) => ()
+                None =>
+                  abort(
+                    "WAST JIT strict mode: failed to compile trapped partial module for source(Binary)",
+                  )
+              }
+            None => ()
+          }
+        }
+      }
+      trapped
+    }
+    Inline(mod_) => {
+      @validator.validate_module(mod_) catch {
+        _ => return false
+      }
+      let before_instances = ctx.store.instances.length()
+      let before_funcs = ctx.store.funcs.length()
+      let before_tables = ctx.store.tables.length()
+      let before_mems = ctx.store.mems.length()
+      let before_globals = ctx.store.globals.length()
+      let before_tags = ctx.store.tags.length()
+      let trapped = (try? (@executor.instantiate_module_with_imports(
+          ctx.store,
+          mod_,
+          imports,
+        )
+        |> ignore))
+        is Err(_)
+      if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
+        if ctx.store.instances.length() > before_instances {
+          let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
+            1]
+          match ctx.try_compile_jit(mod_, trapped_instance) {
+            Some(_) => ()
+            None =>
+              abort(
+                "WAST JIT strict mode: failed to compile trapped module for source(Inline)",
+              )
+          }
+        } else {
+          match
+            build_partial_instance_for_trapped_module(
+              ctx, mod_, imports, before_funcs, before_tables, before_mems, before_globals,
+              before_tags,
+            ) {
+            Some(partial_instance) =>
+              match ctx.try_compile_jit(mod_, partial_instance) {
+                Some(_) => ()
+                None =>
+                  abort(
+                    "WAST JIT strict mode: failed to compile trapped partial module for source(Inline)",
+                  )
+              }
+            None => ()
+          }
+        }
+      }
+      trapped
+    }
     Quote(_) => false // Quoted source - can't test
     FailedToParse(_) => false // Module failed to parse, doesn't count as trap
   }

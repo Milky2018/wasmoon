@@ -387,6 +387,20 @@ pub extern "c" fn c_jit_ctx_get_func_table(ctx_ptr : Int64) -> Int64 = "wasmoon_
 pub extern "c" fn c_jit_ctx_get_func_count(ctx_ptr : Int64) -> Int = "wasmoon_jit_ctx_get_func_count"
 
 ///|
+/// Get table base pointer for table index in context
+pub extern "c" fn c_jit_ctx_get_table_ptr(
+  ctx_ptr : Int64,
+  table_idx : Int,
+) -> Int64 = "wasmoon_jit_ctx_get_table_ptr"
+
+///|
+/// Get table current size for table index in context
+pub extern "c" fn c_jit_ctx_get_table_size(
+  ctx_ptr : Int64,
+  table_idx : Int,
+) -> Int = "wasmoon_jit_ctx_get_table_size"
+
+///|
 /// Allocate indirect table for context
 pub extern "c" fn c_jit_ctx_alloc_indirect_table(
   ctx_ptr : Int64,
@@ -1346,6 +1360,40 @@ pub extern "c" fn c_jit_get_exception_try_end_ptr() -> Int64 = "wasmoon_jit_get_
 /// Get exception throw function pointer for JIT
 /// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values_ptr: i64, count: i32) -> noreturn
 pub extern "c" fn c_jit_get_exception_throw_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_ptr"
+
+///|
+/// Get exception throw_tag function pointer for JIT
+/// Signature: throw_tag(ctx: *jit_context_t, tag_addr: i32) -> noreturn
+pub extern "c" fn c_jit_get_exception_throw_tag_ptr() -> Int64 = "wasmoon_jit_get_exception_throw_tag_ptr"
+
+///|
+/// Throw an exception from host-side bridge code into JIT try_table handlers.
+/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values_ptr: i64, count: i32) -> noreturn
+pub extern "c" fn c_jit_exception_throw(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values_ptr : Int64,
+  count : Int,
+) -> Unit = "wasmoon_jit_exception_throw"
+
+///|
+/// Throw an exception with empty payload from host-side bridge code.
+/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, 0, 0) -> noreturn
+pub extern "c" fn c_jit_exception_throw_tag(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+) -> Unit = "wasmoon_jit_exception_throw_tag"
+
+///|
+/// Throw an exception with payload values from host-side bridge code.
+/// Signature: throw(ctx: *jit_context_t, tag_addr: i32, values: *i64, count: i32) -> noreturn
+#borrow(values)
+pub extern "c" fn c_jit_exception_throw_values(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values : FixedArray[Int64],
+  count : Int,
+) -> Unit = "wasmoon_jit_exception_throw_values"
 
 ///|
 /// Get exception throw_ref function pointer for JIT

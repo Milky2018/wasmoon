@@ -134,6 +134,10 @@ pub fn c_jit_ctx_get_memory_ptr(Int64, Int) -> Int64
 
 pub fn c_jit_ctx_get_memory_size(Int64, Int) -> Int64
 
+pub fn c_jit_ctx_get_table_ptr(Int64, Int) -> Int64
+
+pub fn c_jit_ctx_get_table_size(Int64, Int) -> Int
+
 pub fn c_jit_ctx_init_data_segments(Int64, Int) -> Unit
 
 pub fn c_jit_ctx_init_elem_segments(Int64, Int) -> Unit
@@ -153,6 +157,12 @@ pub fn c_jit_ctx_set_memory_pointers(Int64, FixedArray[Int64], Int) -> Unit
 pub fn c_jit_ctx_set_table_pointers(Int64, FixedArray[Int64], FixedArray[Int], FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_ctx_use_shared_table(Int64, Int64, Int) -> Unit
+
+pub fn c_jit_exception_throw(Int64, Int, Int64, Int) -> Unit
+
+pub fn c_jit_exception_throw_tag(Int64, Int) -> Unit
+
+pub fn c_jit_exception_throw_values(Int64, Int, FixedArray[Int64], Int) -> Unit
 
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
@@ -215,6 +225,8 @@ pub fn c_jit_get_exception_spill_locals_ptr() -> Int64
 pub fn c_jit_get_exception_throw_ptr() -> Int64
 
 pub fn c_jit_get_exception_throw_ref_ptr() -> Int64
+
+pub fn c_jit_get_exception_throw_tag_ptr() -> Int64
 
 pub fn c_jit_get_exception_try_begin_ptr() -> Int64
 

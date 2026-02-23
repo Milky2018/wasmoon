@@ -201,6 +201,13 @@ test "x86_64 movss/movsd/movlhps xmm-xmm encodings" {
 }
 
 ///|
+test "x86_64 unpcklps encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_unpcklps_xmm_xmm(1, 2) // unpcklps xmm1, xmm2
+  inspect(mc.get_bytes(), content="[15, 20, 202]")
+}
+
+///|
 test "x86_64 movsx/movzx encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_movsx_r64_m8(0, 4, 0)
@@ -268,6 +275,21 @@ test "x86_64 scalar float arith encodings" {
   inspect(
     mc.get_bytes(),
     content="[242, 15, 89, 202, 243, 15, 94, 220, 242, 15, 81, 238]",
+  )
+}
+
+///|
+test "x86_64 packed conversion encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_cvtdq2ps_xmm_xmm(1, 2) // cvtdq2ps xmm1, xmm2
+  mc.x86_emit_cvttps2dq_xmm_xmm(1, 2) // cvttps2dq xmm1, xmm2
+  mc.x86_emit_cvttpd2dq_xmm_xmm(11, 12) // cvttpd2dq xmm11, xmm12
+  mc.x86_emit_cvtdq2pd_xmm_xmm(11, 12) // cvtdq2pd xmm11, xmm12
+  mc.x86_emit_cvtps2pd_xmm_xmm(11, 12) // cvtps2pd xmm11, xmm12
+  mc.x86_emit_cvtpd2ps_xmm_xmm(11, 12) // cvtpd2ps xmm11, xmm12
+  inspect(
+    mc.get_bytes(),
+    content="[15, 91, 202, 243, 15, 91, 202, 102, 69, 15, 230, 220, 243, 69, 15, 230, 220, 69, 15, 90, 220, 102, 69, 15, 90, 220]",
   )
 }
 
@@ -364,7 +386,7 @@ test "x86_64 SIMD widen + lane insert/extract encodings" {
   mc.x86_emit_pextrq_r64_xmm_imm8(0, 1, 1) // pextrq rax, xmm1, 1
   inspect(
     mc.get_bytes(),
-    content="[102, 15, 56, 32, 202, 102, 15, 56, 48, 202, 102, 15, 56, 35, 202, 102, 15, 56, 51, 202, 102, 15, 56, 37, 202, 102, 15, 56, 53, 202, 102, 15, 58, 32, 200, 5, 102, 15, 196, 200, 2, 102, 15, 58, 34, 200, 3, 102, 72, 15, 58, 34, 200, 1, 102, 15, 58, 20, 193, 7, 102, 15, 197, 193, 2, 102, 15, 58, 22, 193, 1, 102, 72, 15, 58, 22, 193, 1]",
+    content="[102, 15, 56, 32, 202, 102, 15, 56, 48, 202, 102, 15, 56, 35, 202, 102, 15, 56, 51, 202, 102, 15, 56, 37, 202, 102, 15, 56, 53, 202, 102, 15, 58, 32, 200, 5, 102, 15, 196, 200, 2, 102, 15, 58, 34, 200, 3, 102, 72, 15, 58, 34, 200, 1, 102, 15, 58, 20, 200, 7, 102, 15, 197, 193, 2, 102, 15, 58, 22, 200, 1, 102, 72, 15, 58, 22, 200, 1]",
   )
 }
 
@@ -492,9 +514,11 @@ test "x86_64 SIMD float rounding encodings" {
   mc.x86_emit_roundps_xmm_xmm_imm8(1, 2, 1) // roundps xmm1, xmm2, floor
   mc.x86_emit_roundpd_xmm_xmm_imm8(1, 2, 0) // roundpd xmm1, xmm2, nearest
   mc.x86_emit_roundpd_xmm_xmm_imm8(1, 2, 3) // roundpd xmm1, xmm2, trunc
+  mc.x86_emit_roundss_xmm_xmm_imm8(1, 2, 2) // roundss xmm1, xmm2, ceil
+  mc.x86_emit_roundsd_xmm_xmm_imm8(1, 2, 3) // roundsd xmm1, xmm2, trunc
   inspect(
     mc.get_bytes(),
-    content="[102, 15, 58, 8, 202, 2, 102, 15, 58, 8, 202, 1, 102, 15, 58, 9, 202, 0, 102, 15, 58, 9, 202, 3]",
+    content="[102, 15, 58, 8, 202, 2, 102, 15, 58, 8, 202, 1, 102, 15, 58, 9, 202, 0, 102, 15, 58, 9, 202, 3, 102, 15, 58, 10, 202, 2, 102, 15, 58, 11, 202, 3]",
   )
 }
 

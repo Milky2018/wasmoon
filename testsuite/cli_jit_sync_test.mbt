@@ -17,7 +17,7 @@ test "cli jit sync: memory.grow visible after jit" {
   let instance = @executor.instantiate_with_linker(linker, "test", mod_)
 
   // Compile module to JIT
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let func_signatures = @wast.build_func_signatures(mod_)
 
   // Compile all funcs

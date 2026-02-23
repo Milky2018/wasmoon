@@ -600,6 +600,26 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 }
 
 ///|
+/// Get current table base pointer from active JIT context.
+pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_table_ptr(self.context_ptr, table_idx)
+  } else {
+    0L
+  }
+}
+
+///|
+/// Get current table size from active JIT context.
+pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_ctx_get_table_size(self.context_ptr, table_idx)
+  } else {
+    0
+  }
+}
+
+///|
 /// Trampoline registry - maps (module, field) to function pointer getter
 let import_trampolines : Map[String, Map[String, () -> Int64]] = {
   let m : Map[String, Map[String, () -> Int64]] = {}
@@ -717,7 +737,15 @@ pub fn JITModule::get_func_by_name(
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
   match self.functions.get(func_idx) {
     Some(f) => f.exec_code.ptr()
-    None => 0L
+    None => {
+      let func_table_ptr = self.get_func_table_ptr()
+      let func_count = self.get_func_count()
+      if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
+        c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
+      } else {
+        0L
+      }
+    }
   }
 }
 
@@ -1187,6 +1215,30 @@ pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
   if self.context_ptr != 0L {
     @jit_ffi.c_jit_ctx_set_gc_heap(self.context_ptr, heap_ptr)
   }
+}
+
+///|
+/// Throw a payload-less wasm exception into the active JIT exception chain.
+/// Used by hostcall bridges that need to surface imported-callee throws.
+pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
+  @jit_ffi.c_jit_exception_throw_tag(ctx_ptr, tag_addr)
+}
+
+///|
+/// Throw a wasm exception with payload values into the active JIT exception
+/// chain (used by hostcall bridges).
+pub fn throw_exception_values(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values : Array[Int64],
+) -> Unit {
+  let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
+  @jit_ffi.c_jit_exception_throw_values(
+    ctx_ptr,
+    tag_addr,
+    payload,
+    values.length(),
+  )
 }
 
 ///|

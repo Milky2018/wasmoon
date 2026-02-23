@@ -87,7 +87,7 @@ fn compile_module_to_jit(
   actual_memory_max? : Int? = None,
   opt_level : Int,
 ) -> @cwasm.PrecompiledModule? {
-  let precompiled = @cwasm.PrecompiledModule::new(@cwasm.AArch64)
+  let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
   let num_imports = @wast.count_func_imports(mod_.imports)
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -193,13 +193,34 @@ fn try_compile_jit(
       for addr in instance.global_addrs {
         global_addrs_copy.push(addr)
       }
+      let table_addrs_copy : Array[Int] = []
+      for addr in instance.table_addrs {
+        table_addrs_copy.push(addr)
+      }
       let func_addrs_copy : Array[Int] = []
       for addr in instance.func_addrs {
         func_addrs_copy.push(addr)
       }
+      let func_type_indices_copy : Array[Int] = []
+      for type_idx in instance.func_type_indices {
+        func_type_indices_copy.push(type_idx)
+      }
+      let canonical_type_indices_copy : Array[Int] = []
+      for canonical_idx in instance.canonical_type_indices {
+        canonical_type_indices_copy.push(canonical_idx)
+      }
       Some(
         @wast.JITModuleContext::new(
-          jm, globals_ptr, global_addrs_copy, func_addrs_copy,
+          jm,
+          globals_ptr,
+          global_addrs_copy,
+          table_addrs_copy,
+          func_addrs_copy,
+          func_type_indices_copy,
+          canonical_type_indices_copy,
+          mod_.types,
+          mod_.type_rec_groups,
+          false,
         ),
       )
     }

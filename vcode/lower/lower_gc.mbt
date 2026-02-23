@@ -17,23 +17,17 @@ fn lower_i31_new(
   extend_inst.add_use(Virtual(src))
   block.add_inst(extend_inst)
 
-  // Step 2: Shift left by 1
+  // Step 2: Shift left by immediate 1
   let shifted_vreg = ctx.vcode_func.new_vreg(Int)
-  let one_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_one = @instr.VCodeInst::new(LoadConst(1L))
-  load_one.add_def({ reg: Virtual(one_vreg) })
-  block.add_inst(load_one)
-  let shift_inst = @instr.VCodeInst::new(Shl(true))
+  let shift_inst = @instr.VCodeInst::new(ShlImm(1, true))
   shift_inst.add_def({ reg: Virtual(shifted_vreg) })
   shift_inst.add_use(Virtual(ext_vreg))
-  shift_inst.add_use(Virtual(one_vreg))
   block.add_inst(shift_inst)
 
-  // Step 3: OR with 1 to set low bit
-  let or_inst = @instr.VCodeInst::new(Or(true))
+  // Step 3: OR with immediate 1 to set low bit
+  let or_inst = @instr.VCodeInst::new(OrImm(1L, true))
   or_inst.add_def({ reg: Virtual(dst) })
   or_inst.add_use(Virtual(shifted_vreg))
-  or_inst.add_use(Virtual(one_vreg))
   block.add_inst(or_inst)
 }
 
@@ -57,16 +51,11 @@ fn lower_i31_get_s(
   trap_inst.add_use(Virtual(src))
   block.add_inst(trap_inst)
 
-  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
-  let shift_amount = ctx.new_vreg(@abi.Int)
-  let load_1 = @instr.VCodeInst::new(LoadConst(1L))
-  load_1.add_def({ reg: Virtual(shift_amount) })
-  block.add_inst(load_1)
+  // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
   let decoded = ctx.new_vreg(@abi.Int)
-  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
-  lsr_inst.add_use(Virtual(shift_amount))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits
@@ -78,15 +67,13 @@ fn lower_i31_get_s(
 
   // Step 3: Sign-extend from 31 bits by shifting left then arithmetic right
   let tmp2 = ctx.new_vreg(@abi.Int)
-  let shl_inst = @instr.VCodeInst::new(Shl(false))
+  let shl_inst = @instr.VCodeInst::new(ShlImm(1, false))
   shl_inst.add_def({ reg: Virtual(tmp2) })
   shl_inst.add_use(Virtual(tmp))
-  shl_inst.add_use(Virtual(shift_amount))
   block.add_inst(shl_inst)
-  let asr_inst = @instr.VCodeInst::new(AShr(false))
+  let asr_inst = @instr.VCodeInst::new(AShrImm(1, false))
   asr_inst.add_def({ reg: Virtual(dst) })
   asr_inst.add_use(Virtual(tmp2))
-  asr_inst.add_use(Virtual(shift_amount))
   block.add_inst(asr_inst)
 }
 
@@ -110,16 +97,11 @@ fn lower_i31_get_u(
   trap_inst.add_use(Virtual(src))
   block.add_inst(trap_inst)
 
-  // Step 1: Shift right by 1 to decode the i31 value (64-bit)
-  let shift_amount = ctx.new_vreg(@abi.Int)
-  let load_1 = @instr.VCodeInst::new(LoadConst(1L))
-  load_1.add_def({ reg: Virtual(shift_amount) })
-  block.add_inst(load_1)
+  // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
   let decoded = ctx.new_vreg(@abi.Int)
-  let lsr_inst = @instr.VCodeInst::new(LShr(true))
+  let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
-  lsr_inst.add_use(Virtual(shift_amount))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits

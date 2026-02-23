@@ -31,12 +31,10 @@ def run_test(
 
         # Check for crash (non-zero exit code without proper output)
         if result.returncode != 0 and "Passed:" not in output:
-            last_line = ""
-            for line in output.split("\n"):
-                if line.strip():
-                    last_line = line.strip()
-            if last_line:
-                return None, None, f"Crash (exit {result.returncode}): {last_line}"
+            lines = [line.strip() for line in output.split("\n") if line.strip()]
+            if lines:
+                tail = " | ".join(lines[-3:])
+                return None, None, f"Crash (exit {result.returncode}): {tail}"
             return None, None, f"Crash (exit {result.returncode})"
 
         if "Error" in output and "Passed:" not in output:

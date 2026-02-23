@@ -224,6 +224,10 @@ pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> 
 
 pub fn tag_funcref_ptr(Int64) -> Int64
 
+pub fn throw_exception_tag(Int64, Int) -> Unit
+
+pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
+
 pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64
@@ -487,6 +491,8 @@ pub fn JITModule::get_func_table_ptr(Self) -> Int64
 pub fn JITModule::get_last_trap_report(Self) -> TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
+pub fn JITModule::get_table_ptr(Self, Int) -> Int64
+pub fn JITModule::get_table_size(Self, Int) -> Int
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
 pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
@@ -505,9 +511,12 @@ pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 
 type JITTable
+pub fn JITTable::get_entry_type(Self, Int) -> Int
+pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::new(Int, Int?) -> Self?
+pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 pub impl Show for JITTable
 

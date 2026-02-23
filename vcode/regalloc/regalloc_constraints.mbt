@@ -44,6 +44,9 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   if moves.is_empty() {
     return moves
   }
+  let isa = @isa.ISA::current()
+  let machine_env = isa.machine_env()
+
   fn class_bank(cls : @abi.RegClass) -> Int {
     match cls {
       @abi.Int => 0
@@ -112,9 +115,35 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     if avoid_loc is Some(Reg(preg)) {
       avoid_idx = Some(preg.index)
     }
-    let idx = match avoid_idx {
-      Some(16) => 17
-      _ => 16
+
+    fn pick_two(a : Int, b : Int, avoid_idx : Int?) -> Int {
+      match avoid_idx {
+        Some(v) => if v == a { b } else { a }
+        None => a
+      }
+    }
+
+    let idx = match class {
+      @abi.Int => {
+        guard machine_env.scratch_int.length() >= 2 else {
+          abort("resolve_parallel_moves: missing integer scratch registers")
+        }
+        pick_two(
+          machine_env.scratch_int[0],
+          machine_env.scratch_int[1],
+          avoid_idx,
+        )
+      }
+      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        guard machine_env.scratch_float.length() >= 2 else {
+          abort("resolve_parallel_moves: missing float scratch registers")
+        }
+        pick_two(
+          machine_env.scratch_float[0],
+          machine_env.scratch_float[1],
+          avoid_idx,
+        )
+      }
     }
     Reg({ index: idx, class })
   }
@@ -186,6 +215,31 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     srcs
   }
 
+  fn pick_cycle_scratch_loc(
+    class : @abi.RegClass,
+    src_set : Set[Int],
+    avoid_a : Loc,
+    avoid_b : Loc,
+  ) -> Loc {
+    let candidates = match class {
+      @abi.Int => machine_env.scratch_int
+      @abi.Float32 | @abi.Float64 | @abi.Vector => machine_env.scratch_float
+    }
+    for idx in candidates {
+      let candidate = Loc::Reg({ index: idx, class })
+      let key = loc_key(candidate, class)
+      if src_set.contains(key) {
+        continue
+      }
+      if aliases(candidate, class, avoid_a, class) ||
+        aliases(candidate, class, avoid_b, class) {
+        continue
+      }
+      return candidate
+    }
+    abort("resolve_parallel_moves: no safe scratch register for cycle")
+  }
+
   // Iterate until all moves are resolved
   while pending.length() > 0 {
     let src_set = rebuild_src_set(pending)
@@ -213,8 +267,9 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
         // All remaining moves form cycles. Break the cycle by saving one
         // destination register to a reserved scratch register, then continue.
         let mv = pending.remove(0)
-        // Select a scratch register in the right bank that doesn't alias mv.to.
-        let temp_loc : Loc = pick_scratch_loc(mv.class, Some(mv.to))
+        // Select a scratch register in the right bank that doesn't alias mv.to
+        // and doesn't clobber any pending source.
+        let temp_loc = pick_cycle_scratch_loc(mv.class, src_set, mv.from, mv.to)
 
         // Save the destination's original value: temp <- dst
         result.push({ from: mv.to, to: temp_loc, class: mv.class })

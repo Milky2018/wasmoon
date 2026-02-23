@@ -56,6 +56,35 @@ void exception_try_end_impl(jit_context_t *ctx, int32_t handler_id) {
     ctx->spilled_locals_count = 0;
 }
 
+void exception_reset_context_state(jit_context_t *ctx) {
+    if (!ctx) {
+        return;
+    }
+
+    // Unwind and free any stale handler chain. This can happen when control
+    // exits a function via trap longjmp before try_end executes.
+    exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
+    while (handler) {
+        exception_handler_t *prev = handler->prev;
+        free(handler);
+        handler = prev;
+    }
+    ctx->exception_handler = NULL;
+
+    if (ctx->exception_values) {
+        free(ctx->exception_values);
+        ctx->exception_values = NULL;
+    }
+    ctx->exception_value_count = 0;
+    ctx->exception_tag = 0;
+
+    if (ctx->spilled_locals) {
+        free(ctx->spilled_locals);
+        ctx->spilled_locals = NULL;
+    }
+    ctx->spilled_locals_count = 0;
+}
+
 // ============ Exception Throwing ============
 
 void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
@@ -195,6 +224,21 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw(int64_t ctx_ptr, int32_t tag
     exception_throw_impl(ctx, tag_addr, values, count);
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_tag(int64_t ctx_ptr, int32_t tag_addr) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_throw_impl(ctx, tag_addr, NULL, 0);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_values(
+    int64_t ctx_ptr,
+    int32_t tag_addr,
+    int64_t *values,
+    int32_t count
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    exception_throw_impl(ctx, tag_addr, values, count);
+}
+
 MOONBIT_FFI_EXPORT void wasmoon_jit_exception_throw_ref(int64_t ctx_ptr, int64_t exnref) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     exception_throw_ref_impl(ctx, exnref);
@@ -231,6 +275,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_try_end_ptr(void) {
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ptr(void) {
     return (int64_t)wasmoon_jit_exception_throw;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_tag_ptr(void) {
+    return (int64_t)wasmoon_jit_exception_throw_tag;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_exception_throw_ref_ptr(void) {

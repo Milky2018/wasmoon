@@ -147,6 +147,33 @@ jobs:
           ./install.sh
 
       - name: run wast spec tests (amd64)
+        id: wast_amd64
         timeout-minutes: 10
+        continue-on-error: true
         run: |
           python3 scripts/run_all_wast.py --dir spec --rec
+
+      - name: dump amd64 JIT regressions
+        if: steps.wast_amd64.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          python3 scripts/run_all_wast.py --dir spec --rec --dump-failures || true
+          for f in \
+            call.wast \
+            call_indirect.wast \
+            exceptions/try_table.wast \
+            gc/array.wast \
+            gc/array_init_data.wast \
+            gc/array_init_elem.wast \
+            gc/array_new_elem.wast \
+            gc/i31.wast \
+            left-to-right.wast \
+            simd/simd_i64x2_cmp.wast
+          do
+            echo "===== amd64 debug: $f ====="
+            ./wasmoon test "spec/$f" -D || true
+          done
+
+      - name: fail fast if wast spec tests failed (amd64)
+        if: steps.wast_amd64.outcome != 'success'
+        run: exit 1

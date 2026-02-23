@@ -373,12 +373,18 @@ pub fn MachineCode::x86_emit_cmp_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmppd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cmpps_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cqo(Self) -> Unit
+pub fn MachineCode::x86_emit_cvtdq2pd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cvtdq2ps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cvtpd2ps_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cvtps2pd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtsd2ss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtsi2sd_xmm_r32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtsi2sd_xmm_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtsi2ss_xmm_r32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtsi2ss_xmm_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvtss2sd_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cvttpd2dq_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_cvttps2dq_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvttsd2si_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvttsd2si_r64_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_cvttss2si_r32_xmm(Self, Int, Int) -> Unit
@@ -552,6 +558,8 @@ pub fn MachineCode::x86_emit_ror_r_cl(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_ror_r_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_roundpd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_roundps_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_roundsd_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_roundss_xmm_xmm_imm8(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sar_r32_cl(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_sar_r32_imm8(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_sar_r_cl(Self, Int) -> Unit
@@ -583,6 +591,7 @@ pub fn MachineCode::x86_emit_test_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_trap_imm16(Self, Int) -> Unit
 pub fn MachineCode::x86_emit_ucomisd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_ucomiss_xmm_xmm(Self, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_unpcklps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xor_rr32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_xorpd_xmm_xmm(Self, Int, Int) -> Unit

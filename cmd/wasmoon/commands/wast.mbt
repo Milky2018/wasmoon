@@ -18,6 +18,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
+  @wast.clear_funcref_registry()
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -79,51 +80,190 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
 }
 
 ///|
+fn remap_index(idx : Int, alias_map : Map[Int, Int]) -> Int {
+  match alias_map.get(idx) {
+    Some(mapped) => mapped
+    None => idx
+  }
+}
+
+///|
+fn build_alias_map(addrs : Array[Int]) -> Map[Int, Int] {
+  let first_idx_by_addr : Map[Int, Int] = {}
+  let alias_map : Map[Int, Int] = {}
+  for idx, addr in addrs {
+    match first_idx_by_addr.get(addr) {
+      Some(first_idx) => if first_idx != idx { alias_map.set(idx, first_idx) }
+      None => first_idx_by_addr.set(addr, idx)
+    }
+  }
+  alias_map
+}
+
+///|
+fn rewrite_instr_indices(
+  instrs : Array[@types.Instruction],
+  global_alias_map : Map[Int, Int],
+  tag_alias_map : Map[Int, Int],
+) -> Array[@types.Instruction] {
+  let rewritten : Array[@types.Instruction] = []
+  for instr in instrs {
+    match instr {
+      GlobalGet(idx) =>
+        rewritten.push(GlobalGet(remap_index(idx, global_alias_map)))
+      GlobalSet(idx) =>
+        rewritten.push(GlobalSet(remap_index(idx, global_alias_map)))
+      Throw(tag_idx) =>
+        rewritten.push(Throw(remap_index(tag_idx, tag_alias_map)))
+      TryTable(block_type, handlers, body) => {
+        let rewritten_handlers : Array[@types.CatchHandler] = []
+        for handler in handlers {
+          match handler {
+            Catch(tag_idx, label_idx) =>
+              rewritten_handlers.push(
+                Catch(remap_index(tag_idx, tag_alias_map), label_idx),
+              )
+            CatchRef(tag_idx, label_idx) =>
+              rewritten_handlers.push(
+                CatchRef(remap_index(tag_idx, tag_alias_map), label_idx),
+              )
+            CatchAll(label_idx) => rewritten_handlers.push(CatchAll(label_idx))
+            CatchAllRef(label_idx) =>
+              rewritten_handlers.push(CatchAllRef(label_idx))
+          }
+        }
+        rewritten.push(
+          TryTable(
+            block_type,
+            rewritten_handlers,
+            rewrite_instr_indices(body, global_alias_map, tag_alias_map),
+          ),
+        )
+      }
+      Block(block_type, body) =>
+        rewritten.push(
+          Block(
+            block_type,
+            rewrite_instr_indices(body, global_alias_map, tag_alias_map),
+          ),
+        )
+      Loop(block_type, body) =>
+        rewritten.push(
+          Loop(
+            block_type,
+            rewrite_instr_indices(body, global_alias_map, tag_alias_map),
+          ),
+        )
+      If(block_type, then_body, else_body) =>
+        rewritten.push(
+          If(
+            block_type,
+            rewrite_instr_indices(then_body, global_alias_map, tag_alias_map),
+            rewrite_instr_indices(else_body, global_alias_map, tag_alias_map),
+          ),
+        )
+      _ => rewritten.push(instr)
+    }
+  }
+  rewritten
+}
+
+///|
+fn rewrite_module_alias_indices_for_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+) -> @types.Module {
+  let global_alias_map = build_alias_map(instance.global_addrs)
+  let tag_alias_map = build_alias_map(instance.tag_addrs)
+  if global_alias_map.is_empty() && tag_alias_map.is_empty() {
+    return mod_
+  }
+
+  let rewritten_codes : Array[@types.FunctionCode] = []
+  for code in mod_.codes {
+    rewritten_codes.push({
+      locals: code.locals,
+      body: rewrite_instr_indices(code.body, global_alias_map, tag_alias_map),
+    })
+  }
+
+  let rewritten_globals : Array[@types.Global] = []
+  for global in mod_.globals {
+    rewritten_globals.push({
+      type_: global.type_,
+      init: rewrite_instr_indices(global.init, global_alias_map, tag_alias_map),
+    })
+  }
+
+  let rewritten_elems : Array[@types.Element] = []
+  for elem in mod_.elems {
+    let rewritten_mode = match elem.mode {
+      @types.ElemMode::Active(table_idx, offset_expr) =>
+        @types.ElemMode::Active(
+          table_idx,
+          rewrite_instr_indices(offset_expr, global_alias_map, tag_alias_map),
+        )
+      @types.ElemMode::Passive => @types.ElemMode::Passive
+      @types.ElemMode::Declarative => @types.ElemMode::Declarative
+    }
+    let rewritten_init : Array[Array[@types.Instruction]] = []
+    for expr in elem.init {
+      rewritten_init.push(
+        rewrite_instr_indices(expr, global_alias_map, tag_alias_map),
+      )
+    }
+    rewritten_elems.push({
+      mode: rewritten_mode,
+      type_: elem.type_,
+      init: rewritten_init,
+    })
+  }
+
+  let rewritten_datas : Array[@types.Data] = []
+  for data in mod_.datas {
+    rewritten_datas.push({
+      memory_idx: data.memory_idx,
+      offset: rewrite_instr_indices(
+        data.offset,
+        global_alias_map,
+        tag_alias_map,
+      ),
+      init: data.init,
+    })
+  }
+
+  {
+    types: mod_.types,
+    type_rec_groups: mod_.type_rec_groups,
+    imports: mod_.imports,
+    funcs: mod_.funcs,
+    tables: mod_.tables,
+    memories: mod_.memories,
+    globals: rewritten_globals,
+    exports: mod_.exports,
+    start: mod_.start,
+    elems: rewritten_elems,
+    codes: rewritten_codes,
+    datas: rewritten_datas,
+    tags: mod_.tags,
+    func_names: mod_.func_names,
+  }
+}
+
+///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> @wast.JITModuleContext? {
+  let lowered_mod = rewrite_module_alias_indices_for_jit(mod_, instance)
   wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
-  if @wast.has_unsupported_instructions_for_wast(mod_) {
-    return None // Module contains instructions not supported by JIT
-  }
-  // Check for cross-module imports that require state sharing
-  // JIT can't properly share globals/memory/tables with other modules
-  if @wast.has_cross_module_imports(mod_) {
-    return None // Fall back to interpreter for cross-module scenarios
-  }
-  // Check if module exports memory or tables that might be imported by others
-  // JIT can't share its internal memory/table storage with the interpreter
-  if @wast.exports_shared_resources(mod_) {
-    return None // Fall back to interpreter for potential cross-module sharing
-  }
-  // Check if all imports are supported by JIT
-  let mut func_imp_idx = 0
-  for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      let has_builtin = @jit.get_import_trampoline(imp.mod_name, imp.name)
-        is Some(_)
-      if not(has_builtin) {
-        let func_addr = if func_imp_idx < instance.func_addrs.length() {
-          instance.func_addrs[func_imp_idx]
-        } else {
-          -1
-        }
-        if func_addr < 0 {
-          return None
-        }
-        let inst = store.get_func_inst(func_addr) catch { _ => return None }
-        if inst is @runtime.FuncInst::HostFunc(_) {
-          ()
-        } else {
-          return None // Unsupported import
-        }
-      }
-      func_imp_idx = func_imp_idx + 1
-    }
+  if @wast.has_unsupported_instructions_for_wast(lowered_mod) {
+    abort(
+      "WAST JIT strict mode: module contains instructions not supported by JIT",
+    )
   }
   // Get actual memory max from the store (for imported memories)
   // This is crucial for memory.grow to enforce the correct max limit
@@ -138,20 +278,24 @@ fn try_compile_jit(
   }
   // Compile module to JIT
   let compiled = compile_module_to_jit(
-    mod_,
+    lowered_mod,
     false, // debug mode off for wast tests
     false, // dump-on-trap off for wast tests
     actual_memory_max~,
     0, // Keep WAST JIT compile latency aligned with timeout-limited harness runs.
     false, // DWARF off for wast tests
+    force_subtype_indirect_check=Some(true),
   )
   match compiled {
-    None => None
+    None =>
+      abort(
+        "WAST JIT strict mode: compile_module_to_jit returned None (unsupported or failed compilation)",
+      )
     Some((pc, _)) => {
       // Build func_signatures array for JIT module
-      let func_signatures = @wast.build_func_signatures(mod_)
+      let func_signatures = @wast.build_func_signatures(lowered_mod)
       let external_imports = @wast.build_external_imports_for_jit(
-        mod_, instance, store,
+        lowered_mod, instance, store,
       )
       // Load JIT module
       let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
@@ -163,6 +307,7 @@ fn try_compile_jit(
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             mod_.codes.length()
+          @wast.register_instance_funcrefs_for_jit(jm, instance)
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page (1MB)
@@ -174,21 +319,35 @@ fn try_compile_jit(
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {
-            return None
+            abort(
+              "WAST JIT strict mode: failed to initialize JIT memories from store",
+            )
           }
           // Initialize globals (pass jm for tagged funcref pointers)
           let globals_ptr = init_jit_globals(instance, store, jm)
           if globals_ptr != 0L {
             jm.set_globals(globals_ptr)
           }
+          // WAST drives heavy cross-module table/linking flows where table
+          // entries can carry function refs from different type-index spaces.
+          // Always use subtype-aware indirect checks to keep semantics correct.
+          let use_subtype_indirect_check = true
           // Initialize indirect table for call_indirect
-          @wast.init_elem_segments(mod_, jm, instance, store)
+          @wast.init_elem_segments(
+            lowered_mod,
+            jm,
+            instance,
+            store,
+            use_subtype_indirect_check~,
+          )
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(mod_, jm, instance, store)
-          let use_subtype_indirect_check = module_indirect_subtype_check_reason(
-              mod_,
-            )
-            is Some(_)
+          @wast.init_bulk_segments(
+            lowered_mod,
+            jm,
+            instance,
+            store,
+            use_subtype_indirect_check~,
+          )
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(
@@ -203,13 +362,35 @@ fn try_compile_jit(
           for addr in instance.global_addrs {
             global_addrs_copy.push(addr)
           }
+          let table_addrs_copy : Array[Int] = []
+          for addr in instance.table_addrs {
+            table_addrs_copy.push(addr)
+          }
           let func_addrs_copy : Array[Int] = []
           for addr in instance.func_addrs {
             func_addrs_copy.push(addr)
           }
+          let func_type_indices_copy : Array[Int] = []
+          for type_idx in instance.func_type_indices {
+            func_type_indices_copy.push(type_idx)
+          }
+          let canonical_type_indices_copy : Array[Int] = []
+          for canonical_idx in instance.canonical_type_indices {
+            canonical_type_indices_copy.push(canonical_idx)
+          }
+          let module_types_copy : Array[@types.SubType] = []
+          for subtype in lowered_mod.types {
+            module_types_copy.push(subtype)
+          }
+          let module_rec_groups_copy : Array[Int] = []
+          for group in lowered_mod.type_rec_groups {
+            module_rec_groups_copy.push(group)
+          }
           Some(
             @wast.JITModuleContext::new(
-              jm, globals_ptr, global_addrs_copy, func_addrs_copy,
+              jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
+              func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
+              module_rec_groups_copy, use_subtype_indirect_check,
             ),
           )
         }

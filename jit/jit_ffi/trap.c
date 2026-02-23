@@ -2,6 +2,10 @@
 // Trap handling for JIT runtime
 // Handles signals from BRK instructions and stack overflow
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "jit_internal.h"
 
 #if defined(__linux__)

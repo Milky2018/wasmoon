@@ -23,6 +23,10 @@ pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], A
 
 pub fn builtin_jit_modules() -> Array[String]
 
+pub fn clear_funcref_registry() -> Unit
+
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
+
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
 pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
@@ -39,9 +43,9 @@ pub fn has_unsupported_instructions(@types.Module) -> Bool
 
 pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
 
-pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
-pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store) -> Unit
+pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@jit.MemoryInfo]?
 
@@ -51,6 +55,8 @@ pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value
 
 pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
 
+pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> Unit
+
 pub fn run_wast_command(WastContext, @parser_impl.WastCommand, Int, WastResult, String, Bool) -> Unit
 
 pub fn run_wast_commands(@parser_impl.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?) -> WastResult
@@ -58,6 +64,8 @@ pub fn run_wast_commands(@parser_impl.WastScript, String, Bool, Bool, jit_compil
 pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
+
+pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_table_to_jit(@runtime.Table, @jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
@@ -85,9 +93,15 @@ pub struct JITModuleContext {
   jit_module : @jit.JITModule
   globals_ptr : Int64
   global_addrs : Array[Int]
+  table_addrs : Array[Int]
   func_addrs : Array[Int]
+  func_type_indices : Array[Int]
+  canonical_type_indices : Array[Int]
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
+  use_subtype_indirect_check : Bool
 }
-pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int]) -> Self
+pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
 
 pub struct WastContext {
   store : @runtime.Store

@@ -587,26 +587,6 @@ fn lower_div(
   // Only emit division if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if @isa.ISA::current() is @isa.AMD64 {
-      // Bootstrap via C helpers: avoid implementing idiv just to run spec tests.
-      let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-      let ptr = if is_64 {
-        if signed {
-          @jit_ffi.c_jit_get_i64_sdiv_ptr()
-        } else {
-          @jit_ffi.c_jit_get_i64_udiv_ptr()
-        }
-      } else if signed {
-        @jit_ffi.c_jit_get_i32_sdiv_ptr()
-      } else {
-        @jit_ffi.c_jit_get_i32_udiv_ptr()
-      }
-      let load_ptr = @instr.VCodeInst::new(LoadConst(ptr))
-      load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
-      block.add_inst(load_ptr)
-      lower_c_libcall(ctx, block, func_ptr_vreg, [lhs, rhs], Some(dst))
-      return
-    }
     let opcode : @instr.VCodeOpcode = if signed {
       @instr.VCodeOpcode::SDiv(is_64)
     } else {
@@ -1645,11 +1625,17 @@ fn lower_rem(
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
   let is_64 = inst.operands[0].ty is @ir.Type::I64
+  let use_fixed_divisor = @isa.ISA::current() is @isa.AMD64
+  let divisor_preg : @abi.PReg = { index: scratch1_index(), class: Int }
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
   let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
-  trap_zero.add_use(Virtual(rhs))
+  if use_fixed_divisor {
+    trap_zero.add_use_fixed(Virtual(rhs), divisor_preg)
+  } else {
+    trap_zero.add_use(Virtual(rhs))
+  }
   block.add_inst(trap_zero)
 
   // Only emit remainder computation if result is used
@@ -1663,7 +1649,7 @@ fn lower_rem(
       let rem_inst = @instr.VCodeInst::new(opcode)
       rem_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
       rem_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
-      rem_inst.add_use(Virtual(rhs))
+      rem_inst.add_use_fixed(Virtual(rhs), divisor_preg)
       // Clobbers: rax/rdx are implicit in div/idiv.
       rem_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
       rem_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
