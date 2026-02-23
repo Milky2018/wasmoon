@@ -102,6 +102,12 @@ pub fn verify_allocation(
       param_ids.add(p.id) |> ignore
     }
   }
+  let wasm_int_arg_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  wasm_int_arg_regs.add(isa.wasm_vmctx_arg_preg().index) |> ignore
+  for preg in isa.wasm_user_arg_gprs() {
+    wasm_int_arg_regs.add(preg.index) |> ignore
+  }
+  let wasm_float_arg_regs = build_index_set(isa.wasm_arg_fprs())
 
   // Call-clobbered sets.
   let call_clobbered_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
@@ -171,7 +177,7 @@ pub fn verify_allocation(
         @abi.Int =>
           if !allowed_int.contains(preg.index) {
             // Allow parameters in ABI argument registers.
-            let is_arg_gpr = preg.index >= 0 && preg.index < @abi.MAX_REG_PARAMS
+            let is_arg_gpr = wasm_int_arg_regs.contains(preg.index)
             if !(param_ids.contains(vreg_id) && is_arg_gpr) &&
               !(is_arg_gpr && !lr.crosses_call) &&
               !(fixed_reg is Some(fr) && fr.index == preg.index) &&
@@ -184,8 +190,7 @@ pub fn verify_allocation(
         @abi.Float32 | @abi.Float64 =>
           if !allowed_float.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
-            preg.index >= 0 &&
-            preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+            wasm_float_arg_regs.contains(preg.index)) &&
             !(fixed_reg is Some(fr) && fr.index == preg.index) {
             abort(
               "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
@@ -194,8 +199,7 @@ pub fn verify_allocation(
         @abi.Vector =>
           if !allowed_vector.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
-            preg.index >= 0 &&
-            preg.index < @abi.MAX_FLOAT_REG_PARAMS) &&
+            wasm_float_arg_regs.contains(preg.index)) &&
             !(fixed_reg is Some(fr) && fr.index == preg.index) {
             abort(
               "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",

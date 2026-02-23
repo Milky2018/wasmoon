@@ -445,12 +445,9 @@ fn MachineCode::emit_prologue(
 
   // Best-effort: record current wasm func_idx for trap diagnostics.
   if debug_func_idx is Some(idx) {
+    let vmctx_arg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
     self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(
-      16,
-      @abi.REG_CALLEE_VMCTX,
-      @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
-    )
+    self.emit_str_w_imm(16, vmctx_arg, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
   }
 
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
@@ -542,10 +539,9 @@ fn MachineCode::emit_prologue(
   }
 
   // Step 6: Move arguments from ABI registers to allocated registers
-  // Note: all params use X0-X7 (int) or V0-V7 (float)
-  // vmctx is params[0] and comes in X0, already cached to X19 above
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let isa = @isaregs.current_isa()
+  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
+  let float_arg_regs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -556,9 +552,8 @@ fn MachineCode::emit_prologue(
     }
     match param.class {
       Float32 | Float64 =>
-        // Float params come in V0-V7 directly
-        if float_idx < max_float_params {
-          let v_src = float_idx // V0, V1, V2, ...
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != v_src {
@@ -572,9 +567,8 @@ fn MachineCode::emit_prologue(
           float_idx = float_idx + 1
         }
       Vector =>
-        // Vector params come in V0-V7 (same as floats)
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != v_src {
@@ -585,9 +579,8 @@ fn MachineCode::emit_prologue(
           float_idx = float_idx + 1
         }
       Int =>
-        // Integer params come in X0-X7
-        if int_idx < max_int_params {
-          let x_src = int_idx // X0, X1, X2, ...
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != x_src {
@@ -1755,16 +1748,17 @@ fn MachineCode::emit_prologue_with_output(
   )
 
   // Store spilled params from incoming ABI regs to spill slots.
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let isa = @isaregs.current_isa()
+  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
+  let float_arg_regs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
     let loc = output.get_param_loc(param_idx)
     match param.class {
       @abi.Int =>
-        if int_idx < max_int_params {
-          let x_src = int_idx
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_imm(x_src, 31, stack_frame.spill_offset + slot * 8)
@@ -1773,8 +1767,8 @@ fn MachineCode::emit_prologue_with_output(
           int_idx += 1
         }
       @abi.Float32 | @abi.Float64 =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_d_imm(
@@ -1787,8 +1781,8 @@ fn MachineCode::emit_prologue_with_output(
           float_idx += 1
         }
       @abi.Vector =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_q_imm(
@@ -1929,8 +1923,8 @@ fn MachineCode::emit_prologue_with_output(
     let loc = output.get_param_loc(param_idx)
     match param.class {
       @abi.Int =>
-        if int_idx < max_int_params {
-          let x_src = int_idx
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != x_src {
@@ -1947,8 +1941,8 @@ fn MachineCode::emit_prologue_with_output(
           int_idx += 1
         }
       @abi.Float32 | @abi.Float64 | @abi.Vector =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != v_src {
