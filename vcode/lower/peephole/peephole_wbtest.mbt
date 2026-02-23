@@ -337,3 +337,85 @@ test "mem_base_cse_keeps_barrier_for_wasm_indirect_call" {
   inspect(load_mem_base_count, content="2")
   inspect(move_count, content="0")
 }
+
+///|
+test "peephole: add with constant lhs folds to AddImm" {
+  let func = @regalloc.VCodeFunction::new("test_add_lhs_const_to_addimm")
+  let x = func.new_vreg(Int)
+  func.push_param(x)
+  let block = func.new_block()
+
+  let c = func.new_vreg(Int)
+  let load = @instr.VCodeInst::new(LoadConst(4096L))
+  load.add_def({ reg: Virtual(c) })
+  block.add_inst(load)
+
+  let out = func.new_vreg(Int)
+  let add = @instr.VCodeInst::new(Add(true))
+  add.add_def({ reg: Virtual(out) })
+  add.add_use(Virtual(c))
+  add.add_use(Virtual(x))
+  block.add_inst(add)
+  block.set_terminator(Return([Virtual(out)]))
+
+  optimize_vcode(func)
+
+  let mut has_add = false
+  let mut has_add_imm = false
+  for inst in block.insts {
+    match inst.opcode {
+      Add(true) => has_add = true
+      AddImm(4096, true) => has_add_imm = true
+      _ => ()
+    }
+  }
+  inspect(has_add, content="false")
+  inspect(has_add_imm, content="true")
+}
+
+///|
+test "peephole: add/sub with negative constants fold to opposite imm op" {
+  let func = @regalloc.VCodeFunction::new("test_add_sub_neg_const_to_imm")
+  let x = func.new_vreg(Int)
+  func.push_param(x)
+  let block = func.new_block()
+
+  let c_neg7 = func.new_vreg(Int)
+  let load_neg7 = @instr.VCodeInst::new(LoadConst(-7L))
+  load_neg7.add_def({ reg: Virtual(c_neg7) })
+  block.add_inst(load_neg7)
+
+  let add_out = func.new_vreg(Int)
+  let add = @instr.VCodeInst::new(Add(true))
+  add.add_def({ reg: Virtual(add_out) })
+  add.add_use(Virtual(x))
+  add.add_use(Virtual(c_neg7))
+  block.add_inst(add)
+
+  let c_neg9 = func.new_vreg(Int)
+  let load_neg9 = @instr.VCodeInst::new(LoadConst(-9L))
+  load_neg9.add_def({ reg: Virtual(c_neg9) })
+  block.add_inst(load_neg9)
+
+  let sub_out = func.new_vreg(Int)
+  let sub = @instr.VCodeInst::new(Sub(true))
+  sub.add_def({ reg: Virtual(sub_out) })
+  sub.add_use(Virtual(x))
+  sub.add_use(Virtual(c_neg9))
+  block.add_inst(sub)
+  block.set_terminator(Return([Virtual(add_out), Virtual(sub_out)]))
+
+  optimize_vcode(func)
+
+  let mut has_sub_imm7 = false
+  let mut has_add_imm9 = false
+  for inst in block.insts {
+    match inst.opcode {
+      SubImm(7, true) => has_sub_imm7 = true
+      AddImm(9, true) => has_add_imm9 = true
+      _ => ()
+    }
+  }
+  inspect(has_sub_imm7, content="true")
+  inspect(has_add_imm9, content="true")
+}

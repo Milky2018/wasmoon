@@ -39,13 +39,13 @@ python3 scripts/check_wasmtime_parity.py \
 ```
 
 - `examples/algorithms/aead_aegis128l.wasm`
-  - Wasmoon median: `5.6219s`
-  - Wasmtime median: `0.7656s`
-  - Ratio: `7.3435x`
+  - Wasmoon median: `5.5972s`
+  - Wasmtime median: `0.7749s`
+  - Ratio: `7.2232x`
 - `examples/benchmark.wasm`
-  - Wasmoon median: `0.2535s`
-  - Wasmtime median: `0.3086s`
-  - Ratio: `0.8214x`
+  - Wasmoon median: `0.2625s`
+  - Wasmtime median: `0.3099s`
+  - Ratio: `0.8470x`
 
 ## Artifacts
 
