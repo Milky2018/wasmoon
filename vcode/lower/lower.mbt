@@ -170,13 +170,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some(
-              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
-            ) &&
-            (
-              !is_amd64 ||
-              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-            ) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
             if (effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
@@ -221,13 +216,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some(
-              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
-            ) &&
-            (
-              !is_amd64 ||
-              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-            ) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
             if (effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
@@ -2620,7 +2610,7 @@ fn lower_load_ptr(
   // Try Cranelift-style register-offset addressing:
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
-  // On amd64 Step 1, we currently support IndexExtend::None with scales 0..3.
+  // On amd64, we support scales 0..3 and lower extends through regoffset as well.
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
@@ -2628,10 +2618,7 @@ fn lower_load_ptr(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (
-      !(@isa.ISA::current() is @isa.AMD64) ||
-      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-    ) {
+    (!(@isa.ISA::current() is @isa.AMD64) || (shift >= 0 && shift <= 3)) {
     let base0 = ctx.get_vreg_for_use(am_base, block)
     let base = adjust_base_with_offset(
       ctx,
@@ -2748,10 +2735,7 @@ fn lower_store_ptr(
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (
-      !(@isa.ISA::current() is @isa.AMD64) ||
-      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-    ) {
+    (!(@isa.ISA::current() is @isa.AMD64) || (shift >= 0 && shift <= 3)) {
     let base0 = ctx.get_vreg_for_use(am_base, block)
     let base = adjust_base_with_offset(
       ctx,

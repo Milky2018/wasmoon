@@ -2529,26 +2529,47 @@ fn MachineCode::emit_instruction_x86_64(
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
-      let mut use_amode = shift >= 0 &&
+      let can_use_scaled_amode = shift >= 0 &&
         shift <= 3 &&
-        (index & 7) != 4 &&
         (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
-      if !(ext is @instr.IndexExtend::None) {
-        use_amode = false
-      }
-      if use_amode {
-        match ty {
-          @instr.MemType::I32 =>
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(
-              rt, base, index, shift, 0,
-            )
-          @instr.MemType::I64 =>
-            self.x86_emit_mov_r64_m64_base_index_scale_disp(
-              rt, base, index, shift, 0,
-            )
-          _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+      if can_use_scaled_amode {
+        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, index, shift, 0,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, index, shift, 0,
+              )
+            _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+          }
+          return
         }
-        return
+        let mut idx = isa.scratch_reg_1_index()
+        if idx == base || idx == rt {
+          idx = isa.scratch_reg_2_index()
+        }
+        match ext {
+          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
+          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
+          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+        }
+        if (idx & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, idx, shift, 0,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, idx, shift, 0,
+              )
+            _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+          }
+          return
+        }
       }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == rt {
@@ -2599,6 +2620,13 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
+      if bits == 32 && shift >= 0 && shift <= 3 && (idx & 7) != 4 {
+        self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, shift, 0)
+        if signed {
+          self.x86_emit_movsxd_r64_r32(rt, rt)
+        }
+        return
+      }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
@@ -2644,26 +2672,47 @@ fn MachineCode::emit_instruction_x86_64(
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
-      let mut use_amode = shift >= 0 &&
+      let can_use_scaled_amode = shift >= 0 &&
         shift <= 3 &&
-        (index & 7) != 4 &&
         (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
-      if !(ext is @instr.IndexExtend::None) {
-        use_amode = false
-      }
-      if use_amode {
-        match ty {
-          @instr.MemType::I32 =>
-            self.x86_emit_mov_m32_r32_base_index_scale_disp(
-              base, index, shift, 0, value,
-            )
-          @instr.MemType::I64 =>
-            self.x86_emit_mov_m64_r64_base_index_scale_disp(
-              base, index, shift, 0, value,
-            )
-          _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+      if can_use_scaled_amode {
+        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_m32_r32_base_index_scale_disp(
+                base, index, shift, 0, value,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_m64_r64_base_index_scale_disp(
+                base, index, shift, 0, value,
+              )
+            _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+          }
+          return
         }
-        return
+        let mut idx = isa.scratch_reg_1_index()
+        if idx == base || idx == value {
+          idx = isa.scratch_reg_2_index()
+        }
+        match ext {
+          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
+          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
+          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+        }
+        if (idx & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_m32_r32_base_index_scale_disp(
+                base, idx, shift, 0, value,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_m64_r64_base_index_scale_disp(
+                base, idx, shift, 0, value,
+              )
+            _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+          }
+          return
+        }
       }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == value {

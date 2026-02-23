@@ -268,6 +268,30 @@ test "lower memory operations" {
 }
 
 ///|
+test "amd64 lower load/store regoff with uxtw index" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_load_store_regoff_uxtw")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let sh3 = builder.iconst_i64(3L)
+  let scaled = builder.ishl(idx64, sh3)
+  let addr = builder.iadd(base, scaled)
+  let offset0 = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(@ir.Type::I64, addr, offset0)
+  builder.store_ptr(@ir.Type::I64, addr, loaded, offset0)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i64 (uxtw,3)"), content="true")
+  inspect(output.contains("store_ptr_regoff.i64 (uxtw,3)"), content="true")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)
