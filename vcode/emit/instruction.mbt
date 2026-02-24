@@ -1288,13 +1288,16 @@ fn MachineCode::emit_instruction(
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 base pointer is cached in X20.
-        if dst != @isaregs.mem0_desc_index() {
-          self.emit_mov_reg(dst, @isaregs.mem0_desc_index())
+        // Fast path: memory0 descriptor pointer is cached; load base from it.
+        let mem0_desc = @isaregs.mem0_desc_index()
+        if dst == mem0_desc {
+          self.emit_mov_reg(16, mem0_desc)
+          self.emit_ldr_imm(dst, 16, 0)
+        } else {
+          self.emit_ldr_imm(dst, mem0_desc, 0)
         }
       } else if memidx == 0 {
-        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
-        self.emit_ldr_imm(dst, dst, 0)
+        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_BASE_OFFSET)
       } else {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
         self.emit_ldr_imm(dst, dst, memidx * 8)

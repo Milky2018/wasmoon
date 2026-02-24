@@ -189,6 +189,7 @@ int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_
         if (grow_guarded_memory(mem, current_size, new_size) != 0) {
             return -1;
         }
+        ctx_refresh_memory0_fast_fields(ctx);
         return (int32_t)current_pages;
     }
 
@@ -199,6 +200,7 @@ int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_
 
     mem->base = new_base;
     atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
+    ctx_refresh_memory0_fast_fields(ctx);
 
     return (int32_t)current_pages;
 }
@@ -286,11 +288,17 @@ static wasmoon_memory_t *get_memory(jit_context_t *ctx, int32_t memidx) {
 }
 
 static uint8_t *get_memory_base(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx) return NULL;
+    if (memidx == 0) return ctx->memory0_base;
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     return mem ? mem->base : NULL;
 }
 
 static size_t get_memory_size(jit_context_t *ctx, int32_t memidx) {
+    if (!ctx) return 0;
+    if (memidx == 0) {
+        return atomic_load_explicit(&ctx->memory0_size, memory_order_relaxed);
+    }
     wasmoon_memory_t *mem = get_memory(ctx, memidx);
     return mem ? atomic_load_explicit(&mem->current_length, memory_order_relaxed) : 0;
 }
@@ -324,6 +332,9 @@ static void set_memory(jit_context_t *ctx, int32_t memidx, uint8_t *base, size_t
     atomic_store_explicit(&mem->current_length, size, memory_order_relaxed);
     if (mem->is_guarded) {
         mem->guard_start = size;
+    }
+    if (memidx == 0) {
+        ctx_refresh_memory0_fast_fields(ctx);
     }
 }
 
@@ -390,6 +401,9 @@ int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t
     if (mem->is_guarded) {
         if (grow_guarded_memory(mem, current_size, new_size) != 0) {
             return -1;
+        }
+        if (memidx == 0) {
+            ctx_refresh_memory0_fast_fields(ctx);
         }
         return (int32_t)current_pages;
     }

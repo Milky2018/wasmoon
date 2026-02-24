@@ -2538,8 +2538,11 @@ fn MachineCode::emit_instruction_x86_64(
         // Fast path: memory0 descriptor pointer is cached in Mem0Desc role.
         self.x86_emit_mov_r64_m64(dst, @isaregs.mem0_desc_index(), 0)
       } else if memidx == 0 {
-        self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
-        self.x86_emit_mov_r64_m64(dst, dst, 0)
+        self.x86_emit_mov_r64_m64(
+          dst,
+          vmctx_reg,
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
       } else {
         self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
         self.x86_emit_mov_r64_m64(dst, dst, memidx * 8)

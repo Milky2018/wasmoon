@@ -15,36 +15,42 @@
 pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
 ///|
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
+pub const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
 
 ///|
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
+pub const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
 
 ///|
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 24
 
 ///|
-pub const VMCTX_GLOBALS_OFFSET : Int = 32
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 32
 
 ///|
-pub const VMCTX_TABLES_OFFSET : Int = 40
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
 
 ///|
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
+pub const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
+pub const VMCTX_TABLES_OFFSET : Int = 56
 
 ///|
-pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 64
+
+///|
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 72
+
+///|
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 80
 
 // Multi-memory support offsets
 
 ///|
-pub const VMCTX_MEMORIES_OFFSET : Int = 72
+pub const VMCTX_MEMORIES_OFFSET : Int = 88
 
 ///|
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 96
 
 // Offsets within `wasmoon_memory_t` (see jit_ffi.h)
 
@@ -315,10 +321,14 @@ pub fn FuncEnvironment::translate_table_set(
 /// For memidx 0: use fast path (direct vmctx field)
 /// For memidx > 0: load from memories array
 fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
-  let mem_ptr = if memidx == 0 {
-    let mem0_off = builder.iconst(Type::I64, VMCTX_MEMORY0_OFFSET.to_int64())
-    builder.load_ptr(Type::I64, vmctx, mem0_off)
-  } else {
+  if memidx == 0 {
+    let mem0_size_off = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY0_SIZE_OFFSET.to_int64(),
+    )
+    return builder.load_ptr(Type::I64, vmctx, mem0_size_off)
+  }
+  let mem_ptr = {
     let memories_off = builder.iconst(
       Type::I64,
       VMCTX_MEMORIES_OFFSET.to_int64(),
