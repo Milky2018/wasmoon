@@ -30,7 +30,6 @@ fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     @instr.LoadConst(_)
     | @instr.LoadConstF32(_)
     | @instr.LoadConstF64(_)
-    | @instr.LoadMemBase(0)
     | @instr.AddImm(_, _)
     | @instr.SubImm(_, _)
     | @instr.Extend(_)
@@ -87,6 +86,20 @@ fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.VCodeInst {
 pub fn rematerialize_long_distance_constants(
   func : VCodeFunction,
 ) -> VCodeFunction {
+  fn has_call_between(
+    block_insts : Array[@instr.VCodeInst],
+    start_idx : Int,
+    end_idx : Int,
+  ) -> Bool {
+    for idx in (start_idx + 1)..<end_idx {
+      match block_insts[idx].opcode.call_type() {
+        @instr.None => ()
+        _ => return true
+      }
+    }
+    false
+  }
+
   let remat_defs : Map[Int, RematDef] = {}
   for block in func.blocks {
     for inst_idx, inst in block.insts {
@@ -110,7 +123,7 @@ pub fn rematerialize_long_distance_constants(
   if remat_defs.is_empty() {
     return func
   }
-  let min_distance = 16
+  let min_distance = 4
   let per_vreg_clone_cap = 16
   for i in 0..<func.blocks.length() {
     let block = func.blocks[i]
@@ -122,6 +135,7 @@ pub fn rematerialize_long_distance_constants(
     fn maybe_remat_use(
       func : VCodeFunction,
       reg : @abi.Reg,
+      block_insts : Array[@instr.VCodeInst],
       block_id : Int,
       use_inst_idx : Int,
       remat_defs : Map[Int, RematDef],
@@ -138,6 +152,9 @@ pub fn rematerialize_long_distance_constants(
                 return reg
               }
               if use_inst_idx - def.def_inst_idx < min_distance {
+                return reg
+              }
+              if !has_call_between(block_insts, def.def_inst_idx, use_inst_idx) {
                 return reg
               }
               let cloned = clone_count.get(v.id).unwrap_or(0)
@@ -161,6 +178,7 @@ pub fn rematerialize_long_distance_constants(
         inst.uses[u_idx] = maybe_remat_use(
           func,
           u,
+          block.insts,
           block.id,
           inst_idx,
           remat_defs,
@@ -182,6 +200,7 @@ pub fn rematerialize_long_distance_constants(
               maybe_remat_use(
                 func,
                 a,
+                block.insts,
                 block.id,
                 term_idx,
                 remat_defs,
@@ -199,6 +218,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               cond,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -215,6 +235,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               lhs,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -226,6 +247,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               rhs,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -244,6 +266,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               lhs,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -263,6 +286,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               reg,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -281,6 +305,7 @@ pub fn rematerialize_long_distance_constants(
             maybe_remat_use(
               func,
               index,
+              block.insts,
               block.id,
               term_idx,
               remat_defs,
@@ -299,6 +324,7 @@ pub fn rematerialize_long_distance_constants(
               maybe_remat_use(
                 func,
                 v,
+                block.insts,
                 block.id,
                 term_idx,
                 remat_defs,

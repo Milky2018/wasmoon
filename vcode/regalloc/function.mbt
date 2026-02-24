@@ -239,11 +239,11 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
 
 ///|
 /// Returns true if memory0 descriptor caching should be enabled for this function.
-pub fn VCodeFunction::should_cache_mem0_desc(_self : VCodeFunction) -> Bool {
-  // Cranelift AArch64 keeps all allocatable GPRs available to regalloc and
-  // does not reserve a dedicated memory0-base register in the machine env.
-  // Keep the same policy here.
-  false
+pub fn VCodeFunction::should_cache_mem0_desc(self : VCodeFunction) -> Bool {
+  // Keep memory0 hot in a dedicated role register when it is used.
+  // This matches the Cranelift/wasmtime code shape where heap-base
+  // materialization is hoisted out of hot memory loops.
+  self.uses_mem0()
 }
 
 ///|

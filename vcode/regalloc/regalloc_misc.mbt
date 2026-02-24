@@ -298,6 +298,8 @@ pub fn allocate_registers_backtracking_with_isa(
   let func = eliminate_dead_code(func)
   // Cranelift-style remat for cross-block constants to reduce reg pressure.
   let func = rematerialize_cross_block_constants(func)
+  // Also shorten long same-block live ranges around call-heavy regions.
+  let func = rematerialize_long_distance_constants(func)
   // Remat may make original const-defs dead in their original blocks.
   let func = eliminate_dead_code(func)
 
@@ -357,6 +359,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
+  let func = rematerialize_long_distance_constants(func)
   let func = eliminate_dead_code(func)
 
   // Build register pools.
