@@ -1808,6 +1808,40 @@ pub fn MachineCode::x86_emit_movss_xmm_m32(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movss_xmm_m32_base_index_scale_disp(
+  self : MachineCode,
+  dst_xmm : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // movss xmm, [base + index * (1<<scale) + disp32]: F3 0F 10 /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movss_xmm_m32_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movss_xmm_m32_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x10)
+  emit_modrm(self, 2, dst_xmm, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movss_xmm_xmm(
   self : MachineCode,
   dst_xmm : Int,
@@ -1849,6 +1883,40 @@ pub fn MachineCode::x86_emit_movss_m32_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movss_m32_xmm_base_index_scale_disp(
+  self : MachineCode,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movss [base + index * (1<<scale) + disp32], xmm: F3 0F 11 /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movss_m32_xmm_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movss_m32_xmm_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (src_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x11)
+  emit_modrm(self, 2, src_xmm, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movsd_m64_xmm(
   self : MachineCode,
   base : Int,
@@ -1872,6 +1940,40 @@ pub fn MachineCode::x86_emit_movsd_m64_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movsd_m64_xmm_base_index_scale_disp(
+  self : MachineCode,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movsd [base + index * (1<<scale) + disp32], xmm: F2 0F 11 /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movsd_m64_xmm_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movsd_m64_xmm_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (src_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF2)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x11)
+  emit_modrm(self, 2, src_xmm, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movsd_xmm_m64(
   self : MachineCode,
   dst_xmm : Int,
@@ -1891,6 +1993,40 @@ pub fn MachineCode::x86_emit_movsd_xmm_m64(
   if (base & 7) == 4 {
     emit_sib(self, 0, 4, base)
   }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_movsd_xmm_m64_base_index_scale_disp(
+  self : MachineCode,
+  dst_xmm : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // movsd xmm, [base + index * (1<<scale) + disp32]: F2 0F 10 /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movsd_xmm_m64_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movsd_xmm_m64_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF2)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x10)
+  emit_modrm(self, 2, dst_xmm, 4)
+  emit_sib(self, scale, index, base)
   emit_disp32(self, disp)
 }
 
@@ -4120,6 +4256,40 @@ pub fn MachineCode::x86_emit_movdqu_m128_xmm(
 }
 
 ///|
+pub fn MachineCode::x86_emit_movdqu_m128_xmm_base_index_scale_disp(
+  self : MachineCode,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+  src_xmm : Int,
+) -> Unit {
+  // movdqu [base + index * (1<<scale) + disp32], xmm: F3 0F 7F /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movdqu_m128_xmm_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movdqu_m128_xmm_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (src_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x7F)
+  emit_modrm(self, 2, src_xmm, 4)
+  emit_sib(self, scale, index, base)
+  emit_disp32(self, disp)
+}
+
+///|
 pub fn MachineCode::x86_emit_movdqu_xmm_m128(
   self : MachineCode,
   dst_xmm : Int,
@@ -4139,6 +4309,40 @@ pub fn MachineCode::x86_emit_movdqu_xmm_m128(
   if (base & 7) == 4 {
     emit_sib(self, 0, 4, base)
   }
+  emit_disp32(self, disp)
+}
+
+///|
+pub fn MachineCode::x86_emit_movdqu_xmm_m128_base_index_scale_disp(
+  self : MachineCode,
+  dst_xmm : Int,
+  base : Int,
+  index : Int,
+  scale : Int,
+  disp : Int,
+) -> Unit {
+  // movdqu xmm, [base + index * (1<<scale) + disp32]: F3 0F 6F /r
+  guard scale >= 0 && scale <= 3 else {
+    abort(
+      "x86_emit_movdqu_xmm_m128_base_index_scale_disp: invalid scale \{scale}",
+    )
+  }
+  guard (index & 7) != 4 else {
+    abort(
+      "x86_emit_movdqu_xmm_m128_base_index_scale_disp: rsp/r12 cannot be index register",
+    )
+  }
+  let r = (dst_xmm >> 3) & 1
+  let x = (index >> 3) & 1
+  let b = (base >> 3) & 1
+  self.emit_byte(0xF3)
+  if r != 0 || x != 0 || b != 0 {
+    emit_rex_x(self, r, x, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0x6F)
+  emit_modrm(self, 2, dst_xmm, 4)
+  emit_sib(self, scale, index, base)
   emit_disp32(self, disp)
 }
 

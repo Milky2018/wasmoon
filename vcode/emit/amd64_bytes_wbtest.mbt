@@ -239,6 +239,21 @@ test "x86_64 indexed narrow movsx/movzx and stores encodings" {
 }
 
 ///|
+test "x86_64 indexed scalar/vector mem encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movss_xmm_m32_base_index_scale_disp(15, 10, 9, 2, 0x1234)
+  mc.x86_emit_movss_m32_xmm_base_index_scale_disp(10, 9, 1, 8, 15)
+  mc.x86_emit_movsd_xmm_m64_base_index_scale_disp(15, 10, 9, 3, 0x20)
+  mc.x86_emit_movsd_m64_xmm_base_index_scale_disp(10, 9, 0, 16, 15)
+  mc.x86_emit_movdqu_xmm_m128_base_index_scale_disp(15, 10, 9, 2, 0)
+  mc.x86_emit_movdqu_m128_xmm_base_index_scale_disp(10, 9, 1, 32, 15)
+  inspect(
+    mc.get_bytes(),
+    content="[243, 71, 15, 16, 188, 138, 52, 18, 0, 0, 243, 71, 15, 17, 188, 74, 8, 0, 0, 0, 242, 71, 15, 16, 188, 202, 32, 0, 0, 0, 242, 71, 15, 17, 188, 10, 16, 0, 0, 0, 243, 71, 15, 111, 188, 138, 0, 0, 0, 0, 243, 71, 15, 127, 188, 74, 32, 0, 0, 0]",
+  )
+}
+
+///|
 test "x86_64 movsd/movdqu stores to [rsp+disp]" {
   let mc = MachineCode::new()
   mc.x86_emit_movsd_m64_xmm(4, 0, 15)

@@ -437,17 +437,23 @@ pub fn MachineCode::x86_emit_movaps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movd_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movd_xmm_r32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movdqu_m128_xmm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movdqu_m128_xmm_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movdqu_xmm_m128(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movdqu_xmm_m128_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movlhps_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movmskpd_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movmskps_r32_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movq_r64_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movq_xmm_r64(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsd_m64_xmm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movsd_m64_xmm_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsd_xmm_m64(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movsd_xmm_m64_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsd_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movss_m32_xmm(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movss_m32_xmm_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movss_xmm_m32(Self, Int, Int, Int) -> Unit
+pub fn MachineCode::x86_emit_movss_xmm_m32_base_index_scale_disp(Self, Int, Int, Int, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movss_xmm_xmm(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsx_r32_r16(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_movsx_r32_r8(Self, Int, Int) -> Unit
