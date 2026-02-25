@@ -63,13 +63,28 @@ fn run_opt_pass(
 }
 
 ///|
+fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
+  let insts = instruction_count(func)
+  if insts >= 2500 {
+    // Keep very large functions in the same "small hard caps" spirit as
+    // Cranelift's bounded egraph exploration.
+    @egraph.SaturationLimits::new(1, 2)
+  } else if insts >= 1500 {
+    @egraph.SaturationLimits::new(2, 3)
+  } else {
+    @egraph.SaturationLimits::cranelift_default()
+  }
+}
+
+///|
 fn run_egraph_pass(func : Function) -> Bool {
+  let limits = egraph_limits_for_function(func)
   if !@perf.enabled() {
-    return optimize_function(func)
+    return optimize_function_with_limits(func, limits)
   }
   let before = instruction_count(func)
   let tick = @perf.tick_now()
-  let stats = optimize_function_with_stats(func)
+  let stats = optimize_function_with_stats_with_limits(func, limits)
   let duration_us = @perf.elapsed_us(tick)
   let after = instruction_count(func)
   @perf.record_ir_pass(
@@ -173,23 +188,26 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Cranelift-style alias/copy canonicalization before global opts.
-    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-    if alias_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let mb_result = run_opt_pass(
-      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-    )
-    if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
-    if gvn_result.changed {
-      changed = true
-      result.mark_changed()
+    // Keep large-function pipelines compact, closer to Cranelift's
+    // bounded optimize path (egraph + lightweight cleanup).
+    if !is_large_func {
+      let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+      if alias_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let mb_result = run_opt_pass(
+        func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+      )
+      if mb_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
+      if gvn_result.changed {
+        changed = true
+        result.mark_changed()
+      }
     }
     let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
     if dce_result.changed {
@@ -281,23 +299,26 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Cranelift-style alias/copy canonicalization before global opts.
-    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-    if alias_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let mb_result = run_opt_pass(
-      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-    )
-    if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
-    if gvn_result.changed {
-      changed = true
-      result.mark_changed()
+    // Keep large-function pipelines compact, closer to Cranelift's
+    // bounded optimize path (egraph + lightweight cleanup).
+    if !is_large_func {
+      let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+      if alias_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let mb_result = run_opt_pass(
+        func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+      )
+      if mb_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
+      if gvn_result.changed {
+        changed = true
+        result.mark_changed()
+      }
     }
     let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
     if dce_result.changed {

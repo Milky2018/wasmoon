@@ -103,49 +103,77 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   if !has_params {
     return result
   }
-  let mut changed = true
-  let mut iterations = 0
-  let max_iterations = 512
-  while changed && iterations < max_iterations {
-    changed = false
-    iterations = iterations + 1
-    for block_id in rpo {
-      let block = match block_idx.get(block_id) {
+  // Precompute jump-argument -> target-formal propagation pairs once.
+  // This mirrors Cranelift's block-summary approach and avoids repeated
+  // block/edge lookup work in each solver iteration.
+  let propagation_pairs : Array[(Int, Int)] = []
+  for block in func.blocks {
+    if block.terminator is Some(Jump(target, args)) {
+      if args.length() == 0 {
+        continue
+      }
+      let target_block = match block_idx.get(target) {
         Some(idx) => func.blocks[idx]
         None => continue
       }
-      if block.terminator is Some(Jump(target, args)) {
-        if args.length() == 0 {
-          continue
+      let param_count = target_block.params.length()
+      let arg_count = args.length()
+      let count = if param_count < arg_count { param_count } else { arg_count }
+      for i in 0..<count {
+        let (formal, _) = target_block.params[i]
+        if state.get(formal.id) is Some(_) {
+          propagation_pairs.push((formal.id, args[i].id))
         }
-        let target_block = match block_idx.get(target) {
-          Some(idx) => func.blocks[idx]
-          None => continue
-        }
-        let param_count = target_block.params.length()
-        let arg_count = args.length()
-        let count = if param_count < arg_count {
-          param_count
-        } else {
-          arg_count
-        }
-        for i in 0..<count {
-          let (formal, _) = target_block.params[i]
-          if state.get(formal.id) is None {
-            continue
-          }
-          let actual = args[i]
-          let actual_absval = match state.get(actual.id) {
-            Some(absval) => absval
-            None => PhiAbstractValue::One(actual.id)
-          }
-          let old_absval = state
-            .get(formal.id)
-            .unwrap_or(PhiAbstractValue::None)
-          let new_absval = old_absval.join(actual_absval)
-          if new_absval != old_absval {
-            state.set(formal.id, new_absval)
-            changed = true
+      }
+    }
+  }
+  if propagation_pairs.length() == 0 {
+    return result
+  }
+  // Event-driven solver:
+  // - process each propagation pair once
+  // - when a formal changes, only reprocess pairs that depend on it
+  // This avoids repeatedly scanning all edges until fixed-point.
+  let dependent_pairs : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  for pair_idx, pair in propagation_pairs {
+    let (_, actual_id) = pair
+    if state.get(actual_id) is Some(_) {
+      let deps = dependent_pairs.get(actual_id).unwrap_or([])
+      deps.push(pair_idx)
+      dependent_pairs.set(actual_id, deps)
+    }
+  }
+  let queue : Array[Int] = []
+  let in_queue : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  for pair_idx, _ in propagation_pairs {
+    queue.push(pair_idx)
+    in_queue.set(pair_idx, true)
+  }
+  let mut queue_head = 0
+  let mut steps = 0
+  let max_steps = propagation_pairs.length() * 16 + 1024
+  while queue_head < queue.length() && steps < max_steps {
+    let pair_idx = queue[queue_head]
+    queue_head = queue_head + 1
+    in_queue.remove(pair_idx)
+    steps = steps + 1
+    let (formal_id, actual_id) = propagation_pairs[pair_idx]
+    let old_absval = state.get(formal_id).unwrap_or(PhiAbstractValue::None)
+    if old_absval is PhiAbstractValue::Many {
+      continue
+    }
+    let actual_absval = match state.get(actual_id) {
+      Some(absval) => absval
+      None => PhiAbstractValue::One(actual_id)
+    }
+    let new_absval = old_absval.join(actual_absval)
+    if new_absval != old_absval {
+      state.set(formal_id, new_absval)
+      if dependent_pairs.get(formal_id) is Some(deps) {
+        for dep_idx in deps {
+          if in_queue.get(dep_idx) is None {
+            queue.push(dep_idx)
+            in_queue.set(dep_idx, true)
           }
         }
       }

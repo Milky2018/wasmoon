@@ -10,6 +10,7 @@ struct Bundle {
   mut spillset_id : Int // Original bundle ID before splitting (Cranelift-style spillset)
   range_ids : Array[Int] // Indices into LiveRangeSet
   mut spill_weight : Double // Priority for allocation (higher = more important)
+  mut prio : Int // Cached queue priority (total covered length)
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
   mut allocation : Allocation // Current allocation
   reg_class : @abi.RegClass // Register class for this bundle
@@ -27,6 +28,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     spillset_id: id,
     range_ids: [],
     spill_weight: 0.0,
+    prio: 1,
     spill_bundle_id: -1,
     allocation: Unallocated,
     reg_class,

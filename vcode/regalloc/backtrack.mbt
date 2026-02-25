@@ -223,7 +223,8 @@ fn BacktrackingAllocator::bundle_queue_prio(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> Int {
-  bundle.total_length(self.ranges)
+  ignore(self)
+  bundle.prio
 }
 
 ///|
@@ -301,6 +302,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   // Recompute spill weights, enqueue by bundle priority.
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
+    bundle.prio = bundle.total_length(self.ranges)
     bundle.spill_weight = self.recompute_bundle_spill_weight(bundle)
     self.queue_push(
       i,
@@ -1008,6 +1010,7 @@ fn BacktrackingAllocator::split_bundle(
         before_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = before_bundle.id
       }
+      before_bundle.prio = before_bundle.total_length(self.ranges)
       before_bundle.spill_weight = self.recompute_bundle_spill_weight(
         before_bundle,
       )
@@ -1030,6 +1033,7 @@ fn BacktrackingAllocator::split_bundle(
         after_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = after_bundle.id
       }
+      after_bundle.prio = after_bundle.total_length(self.ranges)
       after_bundle.spill_weight = self.recompute_bundle_spill_weight(
         after_bundle,
       )

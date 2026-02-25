@@ -53,15 +53,6 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
-fn count_total_insts(func : VCodeFunction) -> Int {
-  let mut total = 0
-  for block in func.blocks {
-    total += block.insts.length()
-  }
-  total
-}
-
-///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
@@ -305,12 +296,9 @@ pub fn allocate_registers_backtracking_with_isa(
 ) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
-  // Keep remat bounded on very large functions to avoid compile-time blowups.
-  let func = if count_total_insts(func) >= 2000 {
-    func
-  } else {
-    rematerialize_cross_block_constants(func)
-  }
+  // Keep rematerialization behavior aligned with Cranelift's "cheap expr
+  // cloning" model on hot paths: do not size-gate this pass.
+  let func = rematerialize_cross_block_constants(func)
   // Remat may make original const-defs dead in their original blocks.
   let func = eliminate_dead_code(func)
 
@@ -369,11 +357,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
-  let func = if count_total_insts(func) >= 2000 {
-    func
-  } else {
-    rematerialize_cross_block_constants(func)
-  }
+  let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
 
   // Build register pools.
@@ -397,7 +381,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    param_precolor_strict=false,
+    param_precolor_strict=true,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
