@@ -728,6 +728,26 @@ test "egraph purity boundary: pure arithmetic remains admitted" {
 }
 
 ///|
+test "egraph purity boundary: multi-result instruction is excluded" {
+  let builder = IRBuilder::new("egraph_purity_multi_result")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let add_inst = func.blocks[0].instructions[2]
+
+  // Cranelift parity: e-graph purity only admits one-result instructions.
+  let extra_result = func.new_value(Type::I32)
+  add_inst.results.push(extra_result)
+  assert_true(add_inst.all_results().length() == 2)
+  assert_false(opcode_to_eopcode(add_inst) is Some(_))
+}
+
+///|
 test "egraph limits: matches_limit=0 disables rewrites" {
   let builder = IRBuilder::new("egraph_matches_limit_zero")
   builder.add_result(Type::I32)

@@ -86,12 +86,13 @@ fn type_bits(ty : Type) -> Int {
 }
 
 ///|
-/// Cranelift-style purity boundary for e-graph rewrites:
-/// only admit operations that are pure and non-trapping.
+
+///|
+/// Whether an opcode currently has an e-graph encoding in `@egraph.EOpcode`.
 ///
-/// Excluded (trap-sensitive) examples:
-/// - `sdiv`, `udiv`, `srem`, `urem` (division by zero / overflow trap semantics)
-fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
+/// This is intentionally narrower than generic IR purity: admission also needs
+/// an explicit encoding in the e-graph node language.
+fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
   match opcode {
     Iconst(_) => true
     Iadd | Isub | Imul => true
@@ -106,10 +107,21 @@ fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
 }
 
 ///|
+/// Cranelift-aligned e-graph purity boundary:
+/// - exactly one result
+/// - no side effects / trapping semantics (per IR side-effect model)
+/// - opcode has a representable e-graph encoding
+fn inst_is_egraph_pure(inst : Inst) -> Bool {
+  inst.all_results().length() == 1 &&
+  !has_side_effects(inst) &&
+  opcode_has_egraph_encoding(inst.opcode)
+}
+
+///|
 /// Convert an IR Opcode to an EOpcode (if optimizable and purity-safe).
 /// Takes the instruction to extract type information for extend/reduce ops.
 fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
-  if !opcode_is_egraph_pure_nontrapping(inst.opcode) {
+  if !inst_is_egraph_pure(inst) {
     return None
   }
   match inst.opcode {
