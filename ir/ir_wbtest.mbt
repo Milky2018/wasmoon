@@ -2219,6 +2219,43 @@ test "GVN: store-to-load forwarding exact address" {
 }
 
 ///|
+test "GVN: join path-local store blocks forwarding" {
+  let builder = IRBuilder::new("gvn_join_path_local_store")
+  let vmctx = builder.add_param(Type::I64)
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  let join_block = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let offset = builder.iconst_i64(0L)
+  let initial = builder.iconst_i32(1)
+  builder.store_ptr(Type::I32, mem0_base, initial, offset)
+  builder.brnz(cond, then_block, else_block)
+
+  builder.switch_to_block(then_block)
+  let updated = builder.iconst_i32(2)
+  builder.store_ptr(Type::I32, mem0_base, updated, offset)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(else_block)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(join_block)
+  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  builder.return_([loaded])
+
+  let func = builder.get_function()
+  let gvn_result = gvn_global(func)
+  assert_false(gvn_result.changed)
+  let load_inst = func.blocks[3].instructions[0]
+  assert_true(load_inst.opcode is Opcode::LoadPtr(_))
+}
+
+///|
 test "GVN: disjoint memories keep forwarding state" {
   let builder = IRBuilder::new("gvn_disjoint_memory_forward")
   let vmctx = builder.add_param(Type::I64)
