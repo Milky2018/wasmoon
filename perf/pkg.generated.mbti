@@ -18,6 +18,8 @@ pub fn instant_now() -> Instant
 
 pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?) -> Unit
 
+pub fn record_regalloc_phase_us(String, Int64) -> Unit
+
 pub fn record_regalloc_stats(Int, Int, Int, Int, Int) -> Unit
 
 pub fn record_stage_us(String, Int64) -> Unit
@@ -48,6 +50,7 @@ pub struct FunctionMetrics {
   mut reg_moves : Int
   mut spill_to_spill : Int
   ir_passes : Array[IRPassMetric]
+  regalloc_phases : Array[RegallocPhaseMetric]
 }
 pub impl ToJson for FunctionMetrics
 
@@ -73,6 +76,12 @@ pub struct ModuleMetricsReport {
   functions : Array[FunctionMetrics]
 }
 pub impl ToJson for ModuleMetricsReport
+
+pub struct RegallocPhaseMetric {
+  name : String
+  duration_us : Int64
+}
+pub impl ToJson for RegallocPhaseMetric
 
 // Type aliases
 

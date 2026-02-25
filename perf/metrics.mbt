@@ -49,6 +49,12 @@ pub struct IRPassMetric {
 } derive(ToJson)
 
 ///|
+pub struct RegallocPhaseMetric {
+  name : String
+  duration_us : Int64
+} derive(ToJson)
+
+///|
 pub struct FunctionMetrics {
   func_idx : Int
   func_name : String
@@ -66,6 +72,7 @@ pub struct FunctionMetrics {
   mut reg_moves : Int
   mut spill_to_spill : Int
   ir_passes : Array[IRPassMetric]
+  regalloc_phases : Array[RegallocPhaseMetric]
 } derive(ToJson)
 
 ///|
@@ -151,6 +158,7 @@ pub fn begin_function(
     reg_moves: 0,
     spill_to_spill: 0,
     ir_passes: [],
+    regalloc_phases: [],
   })
 }
 
@@ -191,6 +199,17 @@ pub fn record_stage_us(stage_name : String, duration_us : Int64) -> Unit {
       "emit" => m.emit_us = duration_us
       _ => ()
     }
+  }
+}
+
+///|
+pub fn record_regalloc_phase_us(
+  phase_name : String,
+  duration_us : Int64,
+) -> Unit {
+  guard enabled() else { return }
+  if current_function_state.val is Some(m) {
+    m.regalloc_phases.push({ name: phase_name, duration_us })
   }
 }
 

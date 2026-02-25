@@ -464,6 +464,32 @@ pub fn build_live_ranges(
     out
   }
 
+  fn add_live_block(
+    block_map : Map[Int, Array[Int]],
+    vreg_id : Int,
+    block_idx : Int,
+  ) -> Unit {
+    match block_map.get(vreg_id) {
+      Some(blocks) => blocks.push(block_idx)
+      None => block_map.set(vreg_id, [block_idx])
+    }
+  }
+
+  // Precompute vreg -> live block mapping once.
+  // This avoids O(vregs × blocks × contains) scans when forming spans.
+  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
+  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+  for block_idx, live_in_set in liveness.live_in {
+    for vreg_id in live_in_set {
+      add_live_block(vreg_live_in_blocks, vreg_id, block_idx)
+    }
+  }
+  for block_idx, live_out_set in liveness.live_out {
+    for vreg_id in live_out_set {
+      add_live_block(vreg_live_out_blocks, vreg_id, block_idx)
+    }
+  }
+
   // Process each vreg from use-def info
   for entry in liveness.use_def {
     let (vreg_id, info) = entry
@@ -495,16 +521,40 @@ pub fn build_live_ranges(
         None => uses_in_block.set(p.block, (p, p))
       }
     }
-    let mut spans : Array[ProgPointRange] = []
-    for block_idx, block in func.blocks {
+    let covered_blocks : Map[Int, Bool] = {}
+    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
+        covered_blocks[block_idx] = true
+      }
+    }
+    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
+      for block_idx in blocks {
+        covered_blocks[block_idx] = true
+      }
+    }
+    for entry in uses_in_block {
+      let (block_idx, _) = entry
+      covered_blocks[block_idx] = true
+    }
+    if info.def_point is Some(def) {
+      covered_blocks[def.block] = true
+    }
+
+    let covered_blocks_ordered : Array[Int] = []
+    for entry in covered_blocks {
+      let (block_idx, _) = entry
+      covered_blocks_ordered.push(block_idx)
+    }
+    covered_blocks_ordered.sort_by(fn(a, b) { block_order[a] - block_order[b] })
+
+    let spans_unmerged : Array[ProgPointRange] = []
+    for block_idx in covered_blocks_ordered {
+      let block = func.blocks[block_idx]
       let live_in = liveness.live_in[block_idx].contains(vreg_id)
       let live_out = liveness.live_out[block_idx].contains(vreg_id)
       let has_def_in_block = info.def_point is Some(def) &&
         def.block == block_idx
       let use_bounds = uses_in_block.get(block_idx)
-      if !live_in && !live_out && !has_def_in_block && use_bounds is None {
-        continue
-      }
       let block_len = block.insts.length()
       let entry_point : ProgPoint = { block: block_idx, inst: -1, pos: Before }
       let exit_point : ProgPoint = {
@@ -539,29 +589,20 @@ pub fn build_live_ranges(
       } else {
         (start, end)
       }
-      spans.push(ProgPointRange::new(start, end))
+      spans_unmerged.push(ProgPointRange::new(start, end))
     }
-    spans = normalize_ranges(spans, block_order)
+    let spans = normalize_ranges(spans_unmerged, block_order)
     for span in spans {
       range.add_range(span)
     }
 
-    // Recompute crosses_call precisely from the refined spans.
-    // A value crosses a call if it is live *across* the call point:
-    // span.start < call_point < span.end
-    for entry in liveness.call_points {
-      let (call_point, call_conv) = entry
-      for span in range.ranges {
-        if pp_lt(span.start, call_point, block_order) &&
-          pp_lt(call_point, span.end, block_order) {
-          range.crosses_call = true
-          match call_conv {
-            @instr.Wasm => range.crosses_wasm_call = true
-            @instr.C => range.crosses_c_call = true
-          }
-          break
-        }
-      }
+    // Reuse call-crossing flags computed in liveness intervals.
+    // This avoids scanning all call points for every vreg again.
+    if liveness.intervals.get(vreg_id) is Some(interval) {
+      range.crosses_call = interval.crosses_call
+      range.crosses_c_call = interval.crosses_c_call
+      range.crosses_wasm_call = interval.crosses_call &&
+        !interval.crosses_c_call
     }
     result.add_range(range)
   }

@@ -2105,21 +2105,60 @@ pub fn allocate_backtracking(
   callee_saved_float : Array[@abi.PReg],
   param_precolor_strict? : Bool = true,
 ) -> RegAllocResult {
+  let perf_on = @perf.enabled()
+
   // Phase 2: Build LiveRanges
+  let tick_live_ranges = if perf_on { Some(@perf.tick_now()) } else { None }
   let ranges = build_live_ranges(func, liveness)
+  if tick_live_ranges is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_live_ranges", @perf.elapsed_us(tick))
+  }
 
   // Phase 3: Build Bundles with merging
+  let tick_bundles = if perf_on { Some(@perf.tick_now()) } else { None }
   let bundles = build_bundles_with_merging(func, ranges)
+  if tick_bundles is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_bundle_merge", @perf.elapsed_us(tick))
+  }
 
   // Phase 4: Allocate
+  let tick_alloc_new = if perf_on { Some(@perf.tick_now()) } else { None }
   let allocator = BacktrackingAllocator::new(
     func, ranges, bundles, int_regs, float_regs, vector_regs, callee_saved_int, callee_saved_float,
   )
+  if tick_alloc_new is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_allocator_new",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Pre-assign function parameters to ABI registers (before main allocation)
+  let tick_preassign = if perf_on { Some(@perf.tick_now()) } else { None }
   allocator.preassign_params(param_precolor_strict)
+  if tick_preassign is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_preassign_params",
+      @perf.elapsed_us(tick),
+    )
+  }
+  let tick_allocate = if perf_on { Some(@perf.tick_now()) } else { None }
   allocator.allocate()
+  if tick_allocate is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_allocate_main",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Generate result
-  allocator.generate_result()
+  let tick_result = if perf_on { Some(@perf.tick_now()) } else { None }
+  let result = allocator.generate_result()
+  if tick_result is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_generate_result",
+      @perf.elapsed_us(tick),
+    )
+  }
+  result
 }
