@@ -748,6 +748,56 @@ test "egraph purity boundary: multi-result instruction is excluded" {
 }
 
 ///|
+test "egraph function-scope reps: child duplicate maps to dominator value" {
+  let builder = IRBuilder::new("egraph_function_scope_representatives")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let child = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let parent_sum = builder.iadd(c1, c2)
+  builder.jump(child, [])
+
+  builder.switch_to_block(child)
+  let child_sum = builder.iadd(c1, c2)
+  builder.return_([child_sum])
+  let func = builder.get_function()
+
+  let egraph_builder = EGraphBuilder::new_with_limits(
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+  for block in func.blocks {
+    for inst in block.instructions {
+      egraph_builder.register_def(inst)
+    }
+  }
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+        egraph_builder.add_value(v) |> ignore
+      }
+    }
+  }
+  egraph_builder.optimize()
+
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let block_idx : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  egraph_builder.recompute_representatives_for_block(
+    func, child, idom, block_idx,
+  )
+  match egraph_builder.get_simplified_operand(child_sum) {
+    Some(v) => assert_true(v.id == parent_sum.id)
+    None => assert_true(false)
+  }
+}
+
+///|
 test "egraph limits: matches_limit=0 disables rewrites" {
   let builder = IRBuilder::new("egraph_matches_limit_zero")
   builder.add_result(Type::I32)

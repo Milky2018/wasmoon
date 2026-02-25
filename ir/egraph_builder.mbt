@@ -373,7 +373,10 @@ pub fn EGraphBuilder::get_simplified_operand(
 /// - is defined early enough in the block (dominates subsequent uses in the block)
 fn EGraphBuilder::recompute_representatives_for_block(
   self : EGraphBuilder,
+  func : Function,
   block : Block,
+  idom : Array[Int],
+  block_idx : Map[Int, Int],
 ) -> Unit {
   self.class_to_value.clear()
   fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
@@ -386,21 +389,54 @@ fn EGraphBuilder::recompute_representatives_for_block(
     }
   }
 
-  // Block params dominate all instructions in the block.
-  for pair in block.params {
-    let (v, _) = pair
-    try_add_rep(self, v)
+  // Dominance-aware representatives:
+  // process dominator chain from root to current block so every chosen value
+  // dominates uses in `block`, while preferring earlier dominating forms.
+  let dom_chain : Array[Int] = []
+  if block.id >= 0 && block.id < idom.length() {
+    let mut current = block.id
+    dom_chain.push(current)
+    while current != 0 {
+      let parent = idom[current]
+      if parent < 0 || parent == current {
+        break
+      }
+      dom_chain.push(parent)
+      current = parent
+    }
+  } else {
+    dom_chain.push(block.id)
   }
+  dom_chain.rev_in_place()
 
-  // Instruction order within the block defines dominance.
-  for inst in block.instructions {
-    for op in inst.operands {
-      try_add_rep(self, op)
-    }
-    if inst.first_result() is Some(v) {
-      try_add_rep(self, v)
+  for block_id in dom_chain {
+    if block_idx.get(block_id) is Some(idx) {
+      let dom_block = func.blocks[idx]
+      // Block params dominate instructions in their block.
+      for pair in dom_block.params {
+        let (v, _) = pair
+        try_add_rep(self, v)
+      }
+      // Instruction order defines in-block dominance.
+      for inst in dom_block.instructions {
+        for op in inst.operands {
+          try_add_rep(self, op)
+        }
+        if inst.first_result() is Some(v) {
+          try_add_rep(self, v)
+        }
+      }
     }
   }
+}
+
+///|
+fn build_block_index(func : Function) -> Map[Int, Int] {
+  let index : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    index.set(block.id, i)
+  }
+  index
 }
 
 ///|
@@ -458,8 +494,11 @@ pub fn optimize_function_with_stats_with_limits(
   // Rewrite each block using the optimized function-wide e-graph. We still use
   // block-local representative mapping for operand rewrites to preserve
   // in-block dominance safety.
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let block_idx = build_block_index(func)
   for block in func.blocks {
-    builder.recompute_representatives_for_block(block)
+    builder.recompute_representatives_for_block(func, block, idom, block_idx)
 
     // Apply optimizations: constant folding and operand rewriting
     for inst in block.instructions {
