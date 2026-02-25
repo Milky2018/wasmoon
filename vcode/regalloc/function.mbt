@@ -239,11 +239,15 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
 
 ///|
 /// Returns true if memory0 descriptor caching should be enabled for this function.
-pub fn VCodeFunction::should_cache_mem0_desc(_self : VCodeFunction) -> Bool {
-  // Cranelift AArch64 keeps all allocatable GPRs available to regalloc and
-  // does not reserve a dedicated memory0-base register in the machine env.
-  // Keep the same policy here.
-  false
+pub fn VCodeFunction::should_cache_mem0_desc(self : VCodeFunction) -> Bool {
+  // AArch64-only: cache memory0 base in a dedicated role register to avoid
+  // repeated vmctx loads on hot memory paths. This follows Wasmtime/Cranelift's
+  // effective code shape where heap base is kept in a reusable register value.
+  if @isa.ISA::current() is @isa.AArch64 {
+    self.uses_mem0()
+  } else {
+    false
+  }
 }
 
 ///|

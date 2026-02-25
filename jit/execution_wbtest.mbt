@@ -433,17 +433,20 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d4
       #|block2(v5:int, f6:float, f7:float):
-      #|    x5 = load_mem_base mem=0 x21
+      #|    x20 = load_mem_base mem=0 x21
+      #|    x5 = mov x20
       #|    store_ptr.f32 +0 x5, d2
       #|    d4 = load_ptr.f32 +0 x5
       #|    jump block1
       #|block3(v8:int, f9:float, f10:float):
-      #|    x7 = load_mem_base mem=0 x21
+      #|    x20 = load_mem_base mem=0 x21
+      #|    x7 = mov x20
       #|    store_ptr.f32 +0 x7, d2
       #|    d4 = load_ptr.f32 +0 x7
       #|    jump block1
       #|block4(v11:int, f12:float, f13:float):
-      #|    x9 = load_mem_base mem=0 x21
+      #|    x20 = load_mem_base mem=0 x21
+      #|    x9 = mov x20
       #|    store_ptr.f32 +0 x9, d2
       #|    d4 = load_ptr.f32 +0 x9
       #|    jump block1
@@ -475,57 +478,63 @@ test "end-to-end: f32_br_2locals.wast from source" {
   inspect(
     mc.dump_disasm(),
     content=(
-      #|  0000: f50300aa  mov x21, x0
+      #|  0000: fd7bbfa9  stp x29, x30, [sp, #-16]!
+      #|  0004: fd030091  add x29, sp, #0
+      #|  0008: f40f1ff8  str x20, [sp, #-16]!
+      #|  000c: f50300aa  mov x21, x0
+      #|  0010: b40640f9  ldr x20, [x21, #8]
       #|block0:
-      #|  0004: a1030034  cbz w1, block6
+      #|  0014: a1030034  cbz w1, block6
       #|block9:
-      #|  0008: 3f040071  cmp w1, #1
-      #|  000c: 40020054  b.eq block7
+      #|  0018: 3f040071  cmp w1, #1
+      #|  001c: 40020054  b.eq block7
       #|block10:
-      #|  0010: 3f080071  cmp w1, #2
-      #|  0014: e0000054  b.eq block8
+      #|  0020: 3f080071  cmp w1, #2
+      #|  0024: e0000054  b.eq block8
       #|block5:
-      #|  0018: 100080d2  movz x16, #0, lsl #0
-      #|  001c: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0020: 0202271e  fmov s2, w16
-      #|  0024: 100080d2  movz x16, #0, lsl #0
-      #|  0028: 0402271e  fmov s4, w16
-      #|  002c: 1b000014  b block1
+      #|  0028: 100080d2  movz x16, #0, lsl #0
+      #|  002c: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0030: 0202271e  fmov s2, w16
+      #|  0034: 100080d2  movz x16, #0, lsl #0
+      #|  0038: 0402271e  fmov s4, w16
+      #|  003c: 1b000014  b block1
       #|block8:
-      #|  0030: 100080d2  movz x16, #0, lsl #0
-      #|  0034: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0038: 0202271e  fmov s2, w16
-      #|  003c: 100080d2  movz x16, #0, lsl #0
-      #|  0040: 0502271e  fmov s5, w16
+      #|  0040: 100080d2  movz x16, #0, lsl #0
+      #|  0044: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0048: 0202271e  fmov s2, w16
+      #|  004c: 100080d2  movz x16, #0, lsl #0
+      #|  0050: 0502271e  fmov s5, w16
       #|block2:
-      #|  0044: a50640f9  ldr x5, [x21, #8]
-      #|  0048: a20000bd  str s2, [x5, #0]
-      #|  004c: a40040bd  ldr s4, [x5, #0]
-      #|  0050: 12000014  b block1
+      #|  0054: e50314aa  mov x5, x20
+      #|  0058: a20000bd  str s2, [x5, #0]
+      #|  005c: a40040bd  ldr s4, [x5, #0]
+      #|  0060: 12000014  b block1
       #|block7:
-      #|  0054: 100080d2  movz x16, #0, lsl #0
-      #|  0058: 1024a8f2  movk x16, #16672, lsl #16
-      #|  005c: 0202271e  fmov s2, w16
-      #|  0060: 100080d2  movz x16, #0, lsl #0
-      #|  0064: 0702271e  fmov s7, w16
+      #|  0064: 100080d2  movz x16, #0, lsl #0
+      #|  0068: 1024a8f2  movk x16, #16672, lsl #16
+      #|  006c: 0202271e  fmov s2, w16
+      #|  0070: 100080d2  movz x16, #0, lsl #0
+      #|  0074: 0702271e  fmov s7, w16
       #|block3:
-      #|  0068: a70640f9  ldr x7, [x21, #8]
-      #|  006c: e20000bd  str s2, [x7, #0]
-      #|  0070: e40040bd  ldr s4, [x7, #0]
-      #|  0074: 09000014  b block1
+      #|  0078: e70314aa  mov x7, x20
+      #|  007c: e20000bd  str s2, [x7, #0]
+      #|  0080: e40040bd  ldr s4, [x7, #0]
+      #|  0084: 09000014  b block1
       #|block6:
-      #|  0078: 100080d2  movz x16, #0, lsl #0
-      #|  007c: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0080: 0202271e  fmov s2, w16
-      #|  0084: 100080d2  movz x16, #0, lsl #0
-      #|  0088: 1302271e  fmov s19, w16
+      #|  0088: 100080d2  movz x16, #0, lsl #0
+      #|  008c: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0090: 0202271e  fmov s2, w16
+      #|  0094: 100080d2  movz x16, #0, lsl #0
+      #|  0098: 1302271e  fmov s19, w16
       #|block4:
-      #|  008c: a90640f9  ldr x9, [x21, #8]
-      #|  0090: 220100bd  str s2, [x9, #0]
-      #|  0094: 240140bd  ldr s4, [x9, #0]
+      #|  009c: e90314aa  mov x9, x20
+      #|  00a0: 220100bd  str s2, [x9, #0]
+      #|  00a4: 240140bd  ldr s4, [x9, #0]
       #|block1:
-      #|  0098: 801ca44e  orr v0.16b, v4.16b, v4.16b
-      #|  009c: c0035fd6  ret
+      #|  00a8: 801ca44e  orr v0.16b, v4.16b, v4.16b
+      #|  00ac: f40741f8  ldr x20, [sp], #16
+      #|  00b0: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  00b4: c0035fd6  ret
       #|
     ),
   )

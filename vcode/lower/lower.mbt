@@ -1361,8 +1361,7 @@ pub fn lower_function(
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //
-  // AArch64 target-specific role fixups (currently disabled under the
-  // Cranelift-aligned policy where no dedicated mem0 cache register is used).
+  // AArch64 target-specific role fixups for memory0-base caching.
   fixup_aarch64_mem0_desc_constraints(ctx.vcode_func, abi_settings)
 
   // Phase 7: Target-specific fixups (Cranelift-style).

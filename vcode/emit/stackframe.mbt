@@ -72,7 +72,7 @@ pub struct JITStackFrame {
   // Flags
   has_setup_area : Bool // Whether FP/LR are saved
   needs_vmctx : Bool // Whether function uses vmctx (X19)
-  cache_mem0_desc : Bool // Whether to cache memory0 descriptor in X20
+  cache_mem0_desc : Bool // Whether to cache memory0 base in X20
   cache_func_table : Bool // Whether to cache func_table pointer in X21
 }
 

@@ -1286,13 +1286,10 @@ fn MachineCode::emit_instruction(
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 descriptor pointer is cached; load base from it.
-        let mem0_desc = @isaregs.mem0_desc_index()
-        if dst == mem0_desc {
-          self.emit_mov_reg(16, mem0_desc)
-          self.emit_ldr_imm(dst, 16, 0)
-        } else {
-          self.emit_ldr_imm(dst, mem0_desc, 0)
+        // Fast path: memory0 base pointer is cached in the fixed register.
+        let mem0_base = @isaregs.mem0_desc_index()
+        if dst != mem0_base {
+          self.emit_mov_reg(dst, mem0_base)
         }
       } else if memidx == 0 {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_BASE_OFFSET)
@@ -1516,10 +1513,18 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64_fixed(result_reg, 0L)
       self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
     }
-    CallDirect(func_idx, _num_args, _num_results, _call_conv) =>
-      // Emit BL with runtime fixup. A local veneer fallback is appended later
-      // (during function finalization) for out-of-range targets.
+    // Emit BL with runtime fixup. A local veneer fallback is appended later
+    // (during function finalization) for out-of-range targets.
+    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       self.emit_bl_func(func_idx)
+      if stack_frame.cache_mem0_desc {
+        self.emit_ldr_imm(
+          @isaregs.mem0_desc_index(),
+          @isaregs.vmctx_index(),
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
+      }
+    }
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.
@@ -1528,6 +1533,13 @@ fn MachineCode::emit_instruction(
         _ => reg_num(inst.uses[0])
       }
       self.emit_blr(target)
+      if stack_frame.cache_mem0_desc {
+        self.emit_ldr_imm(
+          @isaregs.mem0_desc_index(),
+          @isaregs.vmctx_index(),
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
+      }
     }
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes
