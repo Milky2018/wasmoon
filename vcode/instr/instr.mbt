@@ -359,7 +359,9 @@ pub(all) enum VCodeOpcode {
   // Function calls
   // ReturnCallIndirect: tail call through a function pointer
   // Uses: [func_ptr, arg0, arg1, ...]
-  // Parameters: num_args, num_results
+  // Parameters:
+  // - stack_arg_bytes: bytes of overflow stack args for this tail call
+  // - num_results: reserved metadata (currently informational)
   // This is a terminator - it does not return to the caller
   ReturnCallIndirect(Int, Int)
   // TypeCheckIndirect: check if actual_type == expected_type, trap if not
@@ -1055,8 +1057,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Smulh => "smulh"
     Umull => "umull"
     Smull => "smull"
-    ReturnCallIndirect(num_args, num_results) =>
-      "return_call_indirect(\{num_args}) -> \{num_results} results"
+    ReturnCallIndirect(stack_arg_bytes, num_results) =>
+      "return_call_indirect(stack=\{stack_arg_bytes}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     TypeCheckSubtypeIndirect(expected_type) =>
       "type_check_subtype_indirect \{expected_type}"

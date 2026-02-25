@@ -1141,29 +1141,27 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_smull(rd, rn, rm)
     }
-    ReturnCallIndirect(_num_args, _num_results) => {
-      // Tail call optimization
-      // Parameters are already set up by lowering phase via:
-      // - StoreToStack for overflow arguments
-      // - add_use_fixed constraints for register arguments (X0=vmctx, X1-X7/V0-V7=args)
-      // Emit only needs to:
-      // 1. Restore callee-saved registers (epilogue)
-      // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
-
-      // Epilogue - restore callee-saved registers and frame pointer
-      // Tail call common sequence
-      self.emit_epilogue(stack_frame)
-
-      // BR (not BLR) - jump to function without saving return address
-      // The call target is the first use operand.
-      // This is the KEY tail call semantic: callee returns directly to our caller.
+    ReturnCallIndirect(stack_arg_bytes, _num_results) => {
+      // Tail call optimization.
+      //
+      // When no overflow stack args are involved we can emit a true tail jump:
+      // epilogue + BR.
+      //
+      // With overflow stack args, the current ABI frame layout cannot guarantee
+      // safe in-place tail stack forwarding for all cases, so lower to
+      // call+return to preserve correctness.
       let target = match inst.use_constraints[0] {
         @abi.FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
-      self.emit_br(target)
-
-      // Note: No code after BR - control never returns here
+      if stack_arg_bytes > 0 {
+        self.emit_blr(target)
+        self.emit_epilogue(stack_frame)
+        self.emit_ret(30)
+      } else {
+        self.emit_epilogue(stack_frame)
+        self.emit_br(target)
+      }
     }
     TypeCheckIndirect(expected_type) => {
       // Check if actual_type == expected_type, trap if not

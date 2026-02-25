@@ -3251,14 +3251,22 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_call_r64(target)
     }
-    @instr.ReturnCallIndirect(_, _) => {
-      // Tail-call: restore frame then jump to callee without pushing a return address.
-      self.emit_epilogue(stack_frame)
+    @instr.ReturnCallIndirect(stack_arg_bytes, _) => {
+      // Tail-call:
+      // - fast path (no stack overflow args): epilogue + jmp
+      // - overflow args: call + return for correctness with current ABI
       let target = match inst.use_constraints[0] {
         @abi.FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
-      self.x86_emit_jmp_r64(target)
+      if stack_arg_bytes > 0 {
+        self.x86_emit_call_r64(target)
+        self.emit_epilogue(stack_frame)
+        self.x86_emit_ret()
+      } else {
+        self.emit_epilogue(stack_frame)
+        self.x86_emit_jmp_r64(target)
+      }
     }
     @instr.AdjustSP(delta) =>
       if delta > 0 {
