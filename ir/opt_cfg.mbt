@@ -365,6 +365,27 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 /// Uses iterative dataflow analysis
 fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   let used : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  let propagation_pairs : Array[(Int, Int)] = []
+  for block in func.blocks {
+    if block.terminator is Some(Jump(target, args)) {
+      if block_idx.get(target) is Some(target_idx) {
+        let target_block = func.blocks[target_idx]
+        let count = if target_block.params.length() < args.length() {
+          target_block.params.length()
+        } else {
+          args.length()
+        }
+        for i in 0..<count {
+          let (param_v, _) = target_block.params[i]
+          propagation_pairs.push((param_v.id, args[i].id))
+        }
+      }
+    }
+  }
 
   // Initialize: all function parameters are used (they come from caller)
   for param in func.params {
@@ -399,27 +420,12 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   let mut changed = true
   while changed {
     changed = false
-    for block in func.blocks {
-      if block.terminator is Some(Jump(target, args)) {
-        // Find target block and its parameters
-        for target_block in func.blocks {
-          if target_block.id == target {
-            // For each parameter-argument pair
-            for i, param in target_block.params {
-              let (param_v, _) = param
-              if i < args.length() {
-                let arg = args[i]
-                // If target param is used, mark the argument as used
-                if used.get(param_v.id).unwrap_or(false) &&
-                  !used.get(arg.id).unwrap_or(false) {
-                  used.set(arg.id, true)
-                  changed = true
-                }
-              }
-            }
-            break
-          }
-        }
+    for pair in propagation_pairs {
+      let (param_id, arg_id) = pair
+      if used.get(param_id).unwrap_or(false) &&
+        !used.get(arg_id).unwrap_or(false) {
+        used.set(arg_id, true)
+        changed = true
       }
     }
   }
