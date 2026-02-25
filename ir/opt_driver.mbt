@@ -130,6 +130,8 @@ fn optimize_o1(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
+  let large_func_threshold = 1500
+  let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   let max_iterations = 32
   let max_stalled_rounds = 3
@@ -174,20 +176,24 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cbpe_result = run_opt_pass(
-      func, "const_block_param_elim", eliminate_constant_block_params,
-    )
-    if cbpe_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // Dead block parameter elimination (crucial for unused locals)
-    let dbpe_result = run_opt_pass(
-      func, "dead_block_param_elim", eliminate_dead_block_params,
-    )
-    if dbpe_result.changed {
-      changed = true
-      result.mark_changed()
+    // Block-param cleanup is relatively expensive on large CFGs; run it once
+    // up-front and let later rounds focus on cheaper canonicalization.
+    if !is_large_func || iterations == 1 {
+      let cbpe_result = run_opt_pass(
+        func, "const_block_param_elim", eliminate_constant_block_params,
+      )
+      if cbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      // Dead block parameter elimination (crucial for unused locals)
+      let dbpe_result = run_opt_pass(
+        func, "dead_block_param_elim", eliminate_dead_block_params,
+      )
+      if dbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
     }
     if changed {
       let after_insts = instruction_count(func)
@@ -213,6 +219,8 @@ pub fn optimize(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
+  let large_func_threshold = 1500
+  let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   let max_iterations = 32
   let max_stalled_rounds = 3
@@ -257,20 +265,24 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    let cbpe_result = run_opt_pass(
-      func, "const_block_param_elim", eliminate_constant_block_params,
-    )
-    if cbpe_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // Dead block parameter elimination (crucial for unused locals)
-    let dbpe_result = run_opt_pass(
-      func, "dead_block_param_elim", eliminate_dead_block_params,
-    )
-    if dbpe_result.changed {
-      changed = true
-      result.mark_changed()
+    // Block-param cleanup is relatively expensive on large CFGs; run it once
+    // up-front and let later rounds focus on cheaper canonicalization.
+    if !is_large_func || iterations == 1 {
+      let cbpe_result = run_opt_pass(
+        func, "const_block_param_elim", eliminate_constant_block_params,
+      )
+      if cbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      // Dead block parameter elimination (crucial for unused locals)
+      let dbpe_result = run_opt_pass(
+        func, "dead_block_param_elim", eliminate_dead_block_params,
+      )
+      if dbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
     }
     // Control flow optimizations
     let bs_result = run_opt_pass(func, "simplify_branches", simplify_branches)

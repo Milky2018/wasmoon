@@ -383,7 +383,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    param_precolor_strict=false,
+    param_precolor_strict=true,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.

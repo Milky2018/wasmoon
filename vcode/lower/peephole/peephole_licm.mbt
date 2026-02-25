@@ -1480,12 +1480,18 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
   }
-  let enable_licm = true
-  let enable_immutable_load_cse = true
+  // Cranelift-aligned compile-time guardrail:
+  // avoid expensive ad-hoc peephole sweeps on very large functions.
+  // Large kernels already get most wins from IR/VCode canonicalization and
+  // regalloc; extra local sweeps tend to add substantial compile latency.
+  let large_func_threshold = 1200
+  let is_large_func = inst_count >= large_func_threshold
+
+  let enable_licm = !is_large_func
+  let enable_immutable_load_cse = !is_large_func
   let enable_mem_base_cse = true
-  // Keep memory peepholes enabled for all functions.
-  // Runtime code quality is prioritized over compile-time savings here.
-  let enable_mem_peepholes = true
+  let enable_mem_peepholes = !is_large_func
+  let enable_inplace_updates = !is_large_func
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
@@ -1526,8 +1532,10 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   dce_trivially_dead(func)
 
   // Pass 2: In-place update optimization
-  for block in func.blocks {
-    optimize_inplace_updates(block) |> ignore
+  if enable_inplace_updates {
+    for block in func.blocks {
+      optimize_inplace_updates(block) |> ignore
+    }
   }
 
   if enable_mem_peepholes {
