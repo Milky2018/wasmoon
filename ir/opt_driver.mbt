@@ -133,8 +133,10 @@ fn optimize_o1(func : Function) -> OptResult {
   let large_func_threshold = 1500
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
-  let max_iterations = 32
-  let max_stalled_rounds = 3
+  // Cranelift runs a bounded non-iterative pipeline; for very large IR we
+  // keep only a couple of fixpoint rounds.
+  let max_iterations = if is_large_func { 2 } else { 32 }
+  let max_stalled_rounds = if is_large_func { 1 } else { 3 }
   let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
@@ -222,8 +224,10 @@ pub fn optimize(func : Function) -> OptResult {
   let large_func_threshold = 1500
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
-  let max_iterations = 32
-  let max_stalled_rounds = 3
+  // Cranelift runs a bounded non-iterative pipeline; for very large IR we
+  // keep only a couple of fixpoint rounds.
+  let max_iterations = if is_large_func { 2 } else { 32 }
+  let max_stalled_rounds = if is_large_func { 1 } else { 3 }
   let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
