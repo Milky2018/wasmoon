@@ -369,7 +369,7 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
-  let propagation_pairs : Array[(Int, Int)] = []
+  let propagation_edges : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
   for block in func.blocks {
     if block.terminator is Some(Jump(target, args)) {
       if block_idx.get(target) is Some(target_idx) {
@@ -381,7 +381,10 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
         }
         for i in 0..<count {
           let (param_v, _) = target_block.params[i]
-          propagation_pairs.push((param_v.id, args[i].id))
+          match propagation_edges.get(param_v.id) {
+            Some(edges) => edges.push(args[i].id)
+            None => propagation_edges.set(param_v.id, [args[i].id])
+          }
         }
       }
     }
@@ -415,17 +418,21 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
     }
   }
 
-  // Iterative dataflow: propagate "used" backwards through jump arguments
-  // If a block parameter is used, the corresponding jump argument is also used
-  let mut changed = true
-  while changed {
-    changed = false
-    for pair in propagation_pairs {
-      let (param_id, arg_id) = pair
-      if used.get(param_id).unwrap_or(false) &&
-        !used.get(arg_id).unwrap_or(false) {
-        used.set(arg_id, true)
-        changed = true
+  // Worklist propagation: if a block parameter is used, propagate that mark to
+  // incoming jump arguments for the corresponding edge position.
+  let worklist : Array[Int] = []
+  for entry in used {
+    let (value_id, _) = entry
+    worklist.push(value_id)
+  }
+  while worklist.length() > 0 {
+    let value_id = worklist.pop().unwrap()
+    if propagation_edges.get(value_id) is Some(edges) {
+      for arg_id in edges {
+        if !used.get(arg_id).unwrap_or(false) {
+          used.set(arg_id, true)
+          worklist.push(arg_id)
+        }
       }
     }
   }

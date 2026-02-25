@@ -383,8 +383,26 @@ pub fn JITModule::load_with_imports(
   let jit_module = JITModule::new()
   let num_imports = precompiled.imports.length()
 
-  // Calculate total function count: imports + compiled functions
-  let total_funcs = num_imports + precompiled.functions.length()
+  // Calculate total function slots in func_table.
+  //
+  // `precompiled.functions` may be sparse (subset eager precompile with
+  // original func_idx preserved), so we must size the context by global
+  // function-index space, not by compiled-entry count.
+  let total_funcs = {
+    let mut max_idx_plus_one = num_imports
+    for entry in precompiled.functions {
+      let candidate = entry.func_idx + 1
+      if candidate > max_idx_plus_one {
+        max_idx_plus_one = candidate
+      }
+    }
+    let by_signatures = func_signatures.length()
+    if by_signatures > max_idx_plus_one {
+      by_signatures
+    } else {
+      max_idx_plus_one
+    }
+  }
 
   // Create JIT context with function table
   let context = JITContext::new(total_funcs)
@@ -1510,7 +1528,15 @@ pub fn JITModule::init_shared_tables(
       None => continue
     }
     let funcref_value = match func_idx {
-      Some(idx) => tag_funcref_ptr(self.get_func_ptr(idx))
+      Some(idx) => {
+        let ptr = self.get_func_ptr(idx)
+        if ptr == 0L {
+          abort(
+            "missing func ptr for table init (table=\{table_idx}, elem=\{elem_idx}, func_idx=\{idx})",
+          )
+        }
+        tag_funcref_ptr(ptr)
+      }
       None => @types.NULL_REF
     }
 

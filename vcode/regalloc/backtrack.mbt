@@ -194,7 +194,7 @@ pub fn BacktrackingAllocator::new(
   // Keep split probing budgeted on very large functions; regalloc2's Rust
   // implementation can afford broader scans, but in MoonBit this keeps wall
   // compile time predictable with minimal quality impact.
-  let split_probe_limit = if total_insts >= 2000 { 10 } else { 1 << 30 }
+  let split_probe_limit = if total_insts >= 2000 { 4 } else { 1 << 30 }
   {
     ranges,
     bundles,
@@ -1297,6 +1297,9 @@ pub fn BacktrackingAllocator::generate_result(
   //
   // This mirrors regalloc2's concept of assigning spillsets to spillslots
   // (see regalloc2 doc/ION.md), but adapted to Wasmoon’s existing BundleSet.
+  if self.ranges.length() >= 2000 || self.bundles.next_spill_slot >= 256 {
+    return result
+  }
   let compacted_spillslots = self.compact_spill_slots(result)
   {
     assignments: result.assignments,

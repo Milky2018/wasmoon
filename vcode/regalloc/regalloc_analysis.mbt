@@ -639,18 +639,22 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   }
   while worklist.pop() is Some(block_idx) {
     let old_live_in_size = result.live_in[block_idx].length()
+    let added_live_out : Array[Int] = []
 
     // live_out[B] = ∪ live_in[S] for S in succs[B]
     // Monotone: only adds, never removes
     for succ in cfg.succs[block_idx] {
       for vreg_id in result.live_in[succ] {
-        result.live_out[block_idx].add(vreg_id)
+        if !result.live_out[block_idx].contains(vreg_id) {
+          result.live_out[block_idx].add(vreg_id)
+          added_live_out.push(vreg_id)
+        }
       }
     }
 
     // live_in[B] = use[B] ∪ (live_out[B] - def[B])
-    // Incrementally add from live_out (use already added in init)
-    for vreg_id in result.live_out[block_idx] {
+    // Incrementally add only newly-grown live_out values (use was added in init).
+    for vreg_id in added_live_out {
       if !block_def[block_idx].contains(vreg_id) {
         result.live_in[block_idx].add(vreg_id)
       }
@@ -670,24 +674,80 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
+  let sorted_call_points = result.call_points.copy()
+  sorted_call_points.sort_by(fn(a, b) {
+    a.0.compare_with_order(b.0, block_order)
+  })
+  let call_prog_points : Array[ProgPoint] = []
+  let c_call_prefix : Array[Int] = [0]
+  for entry in sorted_call_points {
+    let (call_point, call_conv) = entry
+    call_prog_points.push(call_point)
+    let prev = c_call_prefix[c_call_prefix.length() - 1]
+    let add = if call_conv is @instr.C { 1 } else { 0 }
+    c_call_prefix.push(prev + add)
+  }
 
-  // Pre-compute vreg -> blocks mappings to avoid O(vregs × blocks) containment checks
-  // This changes from O(V × B × contains) to O(total_live_in_entries + total_live_out_entries)
-  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
-  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+  fn upper_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) <= 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
+
+  fn lower_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) < 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
+
+  // Summarize liveness boundaries once:
+  // - earliest live-in block per vreg
+  // - latest live-out block per vreg
+  let vreg_first_live_in_block : Map[Int, Int] = {}
+  let vreg_last_live_out_block : Map[Int, Int] = {}
   for block_idx, live_in_set in result.live_in {
     for vreg_id in live_in_set {
-      match vreg_live_in_blocks.get(vreg_id) {
-        Some(blocks) => blocks.push(block_idx)
-        None => vreg_live_in_blocks.set(vreg_id, [block_idx])
+      match vreg_first_live_in_block.get(vreg_id) {
+        Some(old_block_idx) =>
+          if block_order[block_idx] < block_order[old_block_idx] {
+            vreg_first_live_in_block.set(vreg_id, block_idx)
+          }
+        None => vreg_first_live_in_block.set(vreg_id, block_idx)
       }
     }
   }
   for block_idx, live_out_set in result.live_out {
     for vreg_id in live_out_set {
-      match vreg_live_out_blocks.get(vreg_id) {
-        Some(blocks) => blocks.push(block_idx)
-        None => vreg_live_out_blocks.set(vreg_id, [block_idx])
+      match vreg_last_live_out_block.get(vreg_id) {
+        Some(old_block_idx) =>
+          if block_order[block_idx] > block_order[old_block_idx] {
+            vreg_last_live_out_block.set(vreg_id, block_idx)
+          }
+        None => vreg_last_live_out_block.set(vreg_id, block_idx)
       }
     }
   }
@@ -710,44 +770,41 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
       interval.extend_with_order(use_point, block_order)
     }
 
-    // Extend to cover live-in blocks - use pre-computed mapping
-    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        let entry_point = { block: block_idx, inst: -1, pos: Before }
-        interval.extend_with_order(entry_point, block_order)
+    // Extend interval using summarized live-in/live-out boundaries.
+    if vreg_first_live_in_block.get(vreg_id) is Some(block_idx) {
+      let entry_point = { block: block_idx, inst: -1, pos: Before }
+      interval.extend_with_order(entry_point, block_order)
+    }
+    if vreg_last_live_out_block.get(vreg_id) is Some(block_idx) {
+      let block = func.blocks[block_idx]
+      let end_point = {
+        block: block_idx,
+        inst: block.insts.length(),
+        pos: After,
       }
+      interval.extend_with_order(end_point, block_order)
     }
 
-    // Extend to cover live-out blocks - use pre-computed mapping
-    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        let block = func.blocks[block_idx]
-        let end_point = {
-          block: block_idx,
-          inst: block.insts.length(),
-          pos: After,
-        }
-        interval.extend_with_order(end_point, block_order)
-      }
-    }
-
-    // Check if this interval crosses any call point
-    // If so, it cannot be assigned to a caller-saved register
-    for entry in result.call_points {
-      let (call_point, call_conv) = entry
-      // An interval crosses a call if:
-      // - The call is strictly after the interval's start AND before the interval's end
-      //   (Values defined by the call itself start at the same progpoint and do not
-      //    need to survive across the call.)
-      let start_cmp = interval.start.compare_with_order(call_point, block_order)
-      let end_cmp = interval.end.compare_with_order(call_point, block_order)
-      // start < call_point < end (interval is live across the call)
-      if start_cmp < 0 && end_cmp > 0 {
+    // Check if this interval crosses any call point.
+    // start < call_point < end (strict bounds).
+    if !call_prog_points.is_empty() {
+      let first_after_start = upper_bound_call_points(
+        call_prog_points,
+        interval.start,
+        block_order,
+      )
+      let first_at_or_after_end = lower_bound_call_points(
+        call_prog_points,
+        interval.end,
+        block_order,
+      )
+      if first_after_start < first_at_or_after_end {
         interval.crosses_call = true
-        if call_conv is @instr.C {
+        let c_calls = c_call_prefix[first_at_or_after_end] -
+          c_call_prefix[first_after_start]
+        if c_calls > 0 {
           interval.crosses_c_call = true
         }
-        break
       }
     }
     result.intervals.set(vreg_id, interval)
