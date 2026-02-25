@@ -206,7 +206,7 @@ test "remat: clones LoadFuncAddr across blocks" {
 }
 
 ///|
-test "remat: clones AndImm across blocks" {
+test "remat: keeps AndImm defs across blocks" {
   let func = VCodeFunction::new("test_remat_andimm")
   func.add_result(@abi.Int)
   let src = func.add_param(@abi.Int)
@@ -225,20 +225,16 @@ test "remat: clones AndImm across blocks" {
   use_block.add_inst(mv)
   use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
   let rewritten = rematerialize_cross_block_constants(func)
-  inspect(rewritten.blocks[1].insts.length(), content="2")
-  match rewritten.blocks[1].insts[0].opcode {
-    @instr.AndImm(255L, true) => inspect(true, content="true")
-    _ => inspect(false, content="true")
-  }
-  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
-    inspect(v.id != masked.id, content="true")
+  inspect(rewritten.blocks[1].insts.length(), content="1")
+  if rewritten.blocks[1].insts[0].uses[0] is @abi.Virtual(v) {
+    inspect(v.id == masked.id, content="true")
   } else {
     inspect(false, content="true")
   }
 }
 
 ///|
-test "remat: clones Not across blocks" {
+test "remat: keeps Not defs across blocks" {
   let func = VCodeFunction::new("test_remat_not")
   func.add_result(@abi.Int)
   let src = func.add_param(@abi.Int)
@@ -257,13 +253,9 @@ test "remat: clones Not across blocks" {
   use_block.add_inst(mv)
   use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
   let rewritten = rematerialize_cross_block_constants(func)
-  inspect(rewritten.blocks[1].insts.length(), content="2")
-  match rewritten.blocks[1].insts[0].opcode {
-    @instr.Not(true) => inspect(true, content="true")
-    _ => inspect(false, content="true")
-  }
-  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
-    inspect(v.id != inverted.id, content="true")
+  inspect(rewritten.blocks[1].insts.length(), content="1")
+  if rewritten.blocks[1].insts[0].uses[0] is @abi.Virtual(v) {
+    inspect(v.id == inverted.id, content="true")
   } else {
     inspect(false, content="true")
   }

@@ -419,3 +419,106 @@ test "peephole: add/sub with negative constants fold to opposite imm op" {
   inspect(has_sub_imm7, content="true")
   inspect(has_add_imm9, content="true")
 }
+
+///|
+test "fuse_cmp_branch folds cmp-result br_cmp_imm to direct compare" {
+  let func = @regalloc.VCodeFunction::new("test_fuse_cmp_branch_cmpimm")
+  let lhs = func.new_vreg(Int)
+  let rhs = func.new_vreg(Int)
+  func.push_param(lhs)
+  func.push_param(rhs)
+
+  let block0 = func.new_block()
+  let block_true = func.new_block()
+  let block_false = func.new_block()
+
+  let cmp_res = func.new_vreg(Int)
+  let cmp = @instr.VCodeInst::new(Cmp(Eq, true))
+  cmp.add_def({ reg: Virtual(cmp_res) })
+  cmp.add_use(Virtual(lhs))
+  cmp.add_use(Virtual(rhs))
+  block0.add_inst(cmp)
+  block0.set_terminator(
+    BranchCmpImm(
+      Virtual(cmp_res),
+      0,
+      @instr.Cond::Eq,
+      true,
+      block_true.id,
+      block_false.id,
+    ),
+  )
+  block_true.set_terminator(Return([]))
+  block_false.set_terminator(Return([]))
+
+  optimize_vcode(func)
+
+  let mut has_cmp_inst = false
+  for inst in block0.insts {
+    if inst.opcode is Cmp(_, _) {
+      has_cmp_inst = true
+    }
+  }
+  inspect(has_cmp_inst, content="false")
+  if block0.terminator
+    is Some(BranchCmp(new_lhs, new_rhs, cond, _, then_b, else_b)) {
+    inspect(cond is @instr.Cond::Ne, content="true")
+    inspect(then_b == block_true.id, content="true")
+    inspect(else_b == block_false.id, content="true")
+    if new_lhs is Virtual(lhs_vreg) {
+      inspect(lhs_vreg.id == lhs.id, content="true")
+    } else {
+      inspect(false, content="true")
+    }
+    if new_rhs is Virtual(rhs_vreg) {
+      inspect(rhs_vreg.id == rhs.id, content="true")
+    } else {
+      inspect(false, content="true")
+    }
+  } else {
+    inspect(false, content="true")
+  }
+}
+
+///|
+test "fuse_cmp_branch folds cmp-result cbz to inverted compare" {
+  let func = @regalloc.VCodeFunction::new("test_fuse_cmp_branch_cbz")
+  let lhs = func.new_vreg(Int)
+  let rhs = func.new_vreg(Int)
+  func.push_param(lhs)
+  func.push_param(rhs)
+
+  let block0 = func.new_block()
+  let block_true = func.new_block()
+  let block_false = func.new_block()
+
+  let cmp_res = func.new_vreg(Int)
+  let cmp = @instr.VCodeInst::new(Cmp(Slt, true))
+  cmp.add_def({ reg: Virtual(cmp_res) })
+  cmp.add_use(Virtual(lhs))
+  cmp.add_use(Virtual(rhs))
+  block0.add_inst(cmp)
+  block0.set_terminator(
+    BranchZero(Virtual(cmp_res), false, true, block_true.id, block_false.id),
+  )
+  block_true.set_terminator(Return([]))
+  block_false.set_terminator(Return([]))
+
+  optimize_vcode(func)
+
+  if block0.terminator is Some(BranchCmp(new_lhs, new_rhs, cond, _, _, _)) {
+    inspect(cond is @instr.Cond::Ge, content="true")
+    if new_lhs is Virtual(lhs_vreg) {
+      inspect(lhs_vreg.id == lhs.id, content="true")
+    } else {
+      inspect(false, content="true")
+    }
+    if new_rhs is Virtual(rhs_vreg) {
+      inspect(rhs_vreg.id == rhs.id, content="true")
+    } else {
+      inspect(false, content="true")
+    }
+  } else {
+    inspect(false, content="true")
+  }
+}

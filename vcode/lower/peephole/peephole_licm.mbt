@@ -468,6 +468,89 @@ fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
 }
 
 ///|
+fn invert_cond(cond : @instr.Cond) -> @instr.Cond {
+  match cond {
+    @instr.Cond::Eq => @instr.Cond::Ne
+    @instr.Cond::Ne => @instr.Cond::Eq
+    @instr.Cond::Hs => @instr.Cond::Lo
+    @instr.Cond::Lo => @instr.Cond::Hs
+    @instr.Cond::Mi => @instr.Cond::Pl
+    @instr.Cond::Pl => @instr.Cond::Mi
+    @instr.Cond::Vs => @instr.Cond::Vc
+    @instr.Cond::Vc => @instr.Cond::Vs
+    @instr.Cond::Ps => @instr.Cond::Pc
+    @instr.Cond::Pc => @instr.Cond::Ps
+    @instr.Cond::Hi => @instr.Cond::Ls
+    @instr.Cond::Ls => @instr.Cond::Hi
+    @instr.Cond::Ge => @instr.Cond::Lt
+    @instr.Cond::Lt => @instr.Cond::Ge
+    @instr.Cond::Gt => @instr.Cond::Le
+    @instr.Cond::Le => @instr.Cond::Gt
+    @instr.Cond::Al => @instr.Cond::Al
+  }
+}
+
+///|
+fn eval_cmp_imm_cond(lhs : Int, rhs : Int, cond : @instr.Cond) -> Bool {
+  match cond {
+    @instr.Cond::Eq => lhs == rhs
+    @instr.Cond::Ne => lhs != rhs
+    @instr.Cond::Hs | @instr.Cond::Ge => lhs >= rhs
+    @instr.Cond::Lo | @instr.Cond::Lt => lhs < rhs
+    @instr.Cond::Hi | @instr.Cond::Gt => lhs > rhs
+    @instr.Cond::Ls | @instr.Cond::Le => lhs <= rhs
+    @instr.Cond::Al => true
+    _ => false
+  }
+}
+
+///|
+fn classify_cmp_result_branching(imm : Int, cond : @instr.Cond) -> Bool? {
+  let when_cmp_true = eval_cmp_imm_cond(1, imm, cond)
+  let when_cmp_false = eval_cmp_imm_cond(0, imm, cond)
+  if when_cmp_true && !when_cmp_false {
+    return Some(true)
+  }
+  if !when_cmp_true && when_cmp_false {
+    return Some(false)
+  }
+  None
+}
+
+///|
+fn build_cmp_branch_terminator(
+  lhs : @abi.Reg,
+  rhs : @abi.Reg,
+  cmp_kind : @instr.CmpKind,
+  cmp_is_64 : Bool,
+  branch_when_cmp_true : Bool,
+  then_id : Int,
+  else_id : Int,
+  const_defs : Map[Int, Int64],
+) -> @instr.VCodeTerminator {
+  let mut cond = cmp_kind_to_cond(cmp_kind)
+  if !branch_when_cmp_true {
+    cond = invert_cond(cond)
+  }
+  if rhs is Virtual(rhs_vreg) &&
+    const_defs.get(rhs_vreg.id) is Some(val) &&
+    is_valid_add_imm(val) {
+    @instr.VCodeTerminator::BranchCmpImm(
+      lhs,
+      val.to_int(),
+      cond,
+      cmp_is_64,
+      then_id,
+      else_id,
+    )
+  } else {
+    @instr.VCodeTerminator::BranchCmp(
+      lhs, rhs, cond, cmp_is_64, then_id, else_id,
+    )
+  }
+}
+
+///|
 /// Check whether an opcode is trivially dead when its defs are unused.
 fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
   match op {
@@ -1065,10 +1148,53 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   for blk in func.blocks {
-    if blk.terminator
-      is Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) &&
-      cond is Virtual(cond_vreg) &&
-      blk.insts.length() > 0 {
+    let mut cond_vreg_opt : @abi.VReg? = None
+    let mut then_id = -1
+    let mut else_id = -1
+    let mut branch_when_cmp_true = true
+    match blk.terminator {
+      Some(@instr.VCodeTerminator::Branch(cond, then_b, else_b)) =>
+        if cond is Virtual(cond_vreg) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = true
+        }
+      Some(
+        @instr.VCodeTerminator::BranchZero(
+          cond,
+          is_nonzero,
+          _is_64,
+          then_b,
+          else_b
+        )
+      ) =>
+        if cond is Virtual(cond_vreg) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = is_nonzero
+        }
+      Some(
+        @instr.VCodeTerminator::BranchCmpImm(
+          lhs,
+          imm,
+          cond,
+          _is_64,
+          then_b,
+          else_b
+        )
+      ) =>
+        if lhs is Virtual(cond_vreg) &&
+          classify_cmp_result_branching(imm, cond) is Some(should_branch) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = should_branch
+        }
+      _ => ()
+    }
+    if cond_vreg_opt is Some(cond_vreg) && blk.insts.length() > 0 {
       let mut cond_uses = 0
       for inst in blk.insts {
         for use_ in inst.uses {
@@ -1095,23 +1221,9 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
           cmp.uses.length() == 2 {
           let lhs = cmp.uses[0]
           let rhs = cmp.uses[1]
-          let cond = cmp_kind_to_cond(kind)
-          let new_term = if rhs is Virtual(rhs_vreg) &&
-            const_defs.get(rhs_vreg.id) is Some(val) &&
-            is_valid_add_imm(val) {
-            @instr.VCodeTerminator::BranchCmpImm(
-              lhs,
-              val.to_int(),
-              cond,
-              is_64,
-              then_id,
-              else_id,
-            )
-          } else {
-            @instr.VCodeTerminator::BranchCmp(
-              lhs, rhs, cond, is_64, then_id, else_id,
-            )
-          }
+          let new_term = build_cmp_branch_terminator(
+            lhs, rhs, kind, is_64, branch_when_cmp_true, then_id, else_id, const_defs,
+          )
           let new_insts : Array[@instr.VCodeInst] = []
           for i, inst in blk.insts {
             if i != idx {

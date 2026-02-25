@@ -8,11 +8,10 @@
 // subset that clones cheap, side-effect-free defs into each use block when the
 // value is used across blocks.
 //
-// Current remat candidates:
+// Current remat candidates (kept conservative, Cranelift-style):
 // - integer/float constants (LoadConst*)
 // - runtime function pointers and direct function addresses (Load*FuncPtr/LoadFuncAddr)
-// - cheap ALU defs that are profitable to re-create near uses (AddImm/SubImm/Extend)
-// - Cranelift remat.isle-aligned bitwise-imm and bnot for cross-block remat
+// - memory base for memory0 (LoadMemBase(0)) in cross-block remat only
 
 ///|
 priv struct RematDef {
@@ -30,9 +29,6 @@ fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     @instr.LoadConst(_)
     | @instr.LoadConstF32(_)
     | @instr.LoadConstF64(_)
-    | @instr.AddImm(_, _)
-    | @instr.SubImm(_, _)
-    | @instr.Extend(_)
     | @instr.LoadGCFuncPtr(_)
     | @instr.LoadJITFuncPtr(_)
     | @instr.LoadExceptionFuncPtr(_)
@@ -48,13 +44,6 @@ fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     | @instr.LoadConstF32(_)
     | @instr.LoadConstF64(_)
     | @instr.LoadMemBase(0)
-    | @instr.AddImm(_, _)
-    | @instr.SubImm(_, _)
-    | @instr.AndImm(_, _)
-    | @instr.OrImm(_, _)
-    | @instr.XorImm(_, _)
-    | @instr.Not(_)
-    | @instr.Extend(_)
     | @instr.LoadGCFuncPtr(_)
     | @instr.LoadJITFuncPtr(_)
     | @instr.LoadExceptionFuncPtr(_)
