@@ -2017,6 +2017,83 @@ test "bounds check elimination: combined addr and offset" {
 }
 
 ///|
+test "bounds check elimination: redundant dynamic check in same block" {
+  // Cranelift-aligned behavior: if we already proved
+  //   addr + large_offset + large_size <= bound
+  // then a later access using the same addr and a smaller end range can reuse
+  // that proof in the same block.
+  let builder = IRBuilder::new("bounds_redundant_dynamic")
+  let vmctx = builder.add_param(Type::I64)
+  let addr = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
+
+  // First check end-range: offset 16 + size 8 => 24 bytes from `addr`.
+  func_env.translate_memory_load(builder, vmctx, 1, Type::I64, addr, 16L)
+  |> ignore
+  // Second check end-range: offset 4 + size 1 => 5 bytes from `addr`.
+  // Should reuse first check and avoid emitting another bounds-check split.
+  let loaded = func_env.translate_memory_load_narrow(
+    builder,
+    vmctx,
+    1,
+    Type::I32,
+    8,
+    true,
+    addr,
+    4L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Entry + shared trap + first continue = 3 blocks.
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: wider later access still checks" {
+  // Later access requires a larger end-range than the previous proof, so we
+  // must keep the second dynamic bounds check.
+  let builder = IRBuilder::new("bounds_redundant_dynamic_wider")
+  let vmctx = builder.add_param(Type::I64)
+  let addr = builder.add_param(Type::I32)
+  builder.add_result(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
+
+  // First check end-range: offset 4 + size 1 => 5 bytes from `addr`.
+  func_env.translate_memory_load_narrow(
+    builder,
+    vmctx,
+    1,
+    Type::I32,
+    8,
+    true,
+    addr,
+    4L,
+  )
+  |> ignore
+  // Second check end-range: offset 16 + size 8 => 24 bytes from `addr`.
+  // Must emit another split/check.
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    1,
+    Type::I64,
+    addr,
+    16L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Entry + shared trap + two continue blocks = 4 blocks.
+  inspect(func.blocks.length(), content="4")
+}
+
+///|
 test "GVN: loads are not CSE'd (can trap)" {
   // LoadPtr has side effects (can trap on null pointer), so they are not CSE'd
   // This is by design - a more sophisticated analysis would be needed to safely CSE loads
