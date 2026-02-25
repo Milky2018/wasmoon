@@ -73,6 +73,30 @@ fn resolve_replacement(
 }
 
 ///|
+fn compress_replace_map(replace_map : @hashmap.HashMap[Int, Int]) -> Unit {
+  let keys : Array[Int] = []
+  for k, _ in replace_map {
+    keys.push(k)
+  }
+  for key in keys {
+    let mut current = key
+    let path : Array[Int] = []
+    let mut steps = 0
+    while steps < 1024 {
+      path.push(current)
+      match replace_map.get(current) {
+        Some(next) => if next == current { break } else { current = next }
+        None => break
+      }
+      steps = steps + 1
+    }
+    for visited in path {
+      replace_map.set(visited, current)
+    }
+  }
+}
+
+///|
 /// Constant Block Parameter Elimination
 /// Removes block parameters that always take the same value across all incoming edges.
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
@@ -179,7 +203,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       }
     }
   }
-  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let params_to_keep : Array[Array[Int]] = []
   let replace_map : @hashmap.HashMap[Int, Int] = @hashmap.new()
   let mut will_change = false
   for block in func.blocks {
@@ -194,13 +218,15 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
         _ => keep.push(i)
       }
     }
-    params_to_keep.set(block.id, keep)
+    params_to_keep.push(keep)
   }
   if !will_change {
     return result
   }
+  compress_replace_map(replace_map)
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = block_idx.get(block.id).unwrap_or(0)
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       let old_params = block.params.copy()
       block.params.clear()
@@ -212,7 +238,10 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   }
   for block in func.blocks {
     if block.terminator is Some(Jump(target, args)) {
-      let keep = params_to_keep.get(target).unwrap_or([])
+      let keep = match block_idx.get(target) {
+        Some(target_i) => params_to_keep[target_i]
+        None => []
+      }
       if keep.length() != args.length() {
         let new_args : Array[Value] = []
         for idx in keep {
@@ -323,9 +352,13 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
   // Build use counts for values in each block
   // A block parameter is "used" if it's referenced in instructions or passed to another used param
   let used_params = compute_used_block_params(func)
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
 
   // Track which parameter indices to keep for each block
-  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let params_to_keep : Array[Array[Int]] = []
   for block in func.blocks {
     let keep : Array[Int] = []
     for i, param in block.params {
@@ -334,13 +367,14 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
         keep.push(i)
       }
     }
-    params_to_keep.set(block.id, keep)
+    params_to_keep.push(keep)
   }
 
   // Check if any parameters will be removed
   let mut will_change = false
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = block_idx.get(block.id).unwrap_or(0)
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       will_change = true
       break
@@ -352,7 +386,8 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 
   // Update block parameters - remove unused ones
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = block_idx.get(block.id).unwrap_or(0)
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       let old_params = block.params.copy()
       block.params.clear()
@@ -367,7 +402,10 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
-        let keep = params_to_keep.get(target).unwrap_or([])
+        let keep = match block_idx.get(target) {
+          Some(target_i) => params_to_keep[target_i]
+          None => []
+        }
         if keep.length() != args.length() {
           let new_args : Array[Value] = []
           for idx in keep {
