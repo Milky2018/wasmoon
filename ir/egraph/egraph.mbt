@@ -1607,7 +1607,11 @@ const EXTRACT_INFINITY_DEPTH : Int = 255
 
 ///|
 fn extract_cost_finite(op_cost : Int, depth : Int) -> ExtractCost {
-  { op_cost, depth, infinite: false }
+  if op_cost >= extract_cost_max_finite() {
+    extract_cost_infinity()
+  } else {
+    { op_cost, depth, infinite: false }
+  }
 }
 
 ///|
@@ -1656,12 +1660,37 @@ fn extract_cost_add(lhs : ExtractCost, rhs : ExtractCost) -> ExtractCost {
   }
   let max_finite = extract_cost_max_finite()
   let op_cost = if lhs.op_cost > max_finite - rhs.op_cost {
-    max_finite
+    return extract_cost_infinity()
   } else {
     lhs.op_cost + rhs.op_cost
   }
   let depth = if lhs.depth >= rhs.depth { lhs.depth } else { rhs.depth }
   extract_cost_finite(op_cost, depth)
+}
+
+///|
+fn extract_cost_increment_depth(cost : ExtractCost) -> ExtractCost {
+  if cost.infinite {
+    return cost
+  }
+  let depth = if cost.depth >= EXTRACT_INFINITY_DEPTH {
+    EXTRACT_INFINITY_DEPTH
+  } else {
+    cost.depth + 1
+  }
+  extract_cost_finite(cost.op_cost, depth)
+}
+
+///|
+fn extract_cost_equal(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
+  lhs.infinite == rhs.infinite &&
+  lhs.op_cost == rhs.op_cost &&
+  lhs.depth == rhs.depth
+}
+
+///|
+fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
+  "\{lhs.op}:\{lhs.children}" < "\{rhs.op}:\{rhs.children}"
 }
 
 ///|
@@ -1757,7 +1786,7 @@ fn EGraph::extract_impl(
 
     // Compute cost with Cranelift-style tie-breaking:
     // op_cost first, then expression depth.
-    let mut total_cost = extract_cost_finite(node_cost(node), 1)
+    let mut total_cost = extract_cost_finite(node_cost(node), 0)
     for child in node.children {
       let (child_cost, _) = self.extract_impl(child, memo, in_progress)
       total_cost = extract_cost_add(total_cost, child_cost)
@@ -1769,7 +1798,12 @@ fn EGraph::extract_impl(
       total_cost,
       self.remat_cost_bonus(canonical),
     )
-    if extract_cost_is_better(total_cost, best_cost) {
+    total_cost = extract_cost_increment_depth(total_cost)
+    if extract_cost_is_better(total_cost, best_cost) ||
+      (
+        extract_cost_equal(total_cost, best_cost) &&
+        extract_node_tiebreak_less(node, best_node)
+      ) {
       best_cost = total_cost
       best_node = node
     }
