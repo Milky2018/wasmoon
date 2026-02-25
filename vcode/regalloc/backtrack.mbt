@@ -601,73 +601,6 @@ fn BacktrackingAllocator::try_allocate(
 }
 
 ///|
-/// Collect conflicting bundles for `bundle` on `preg` using ordered
-/// span traversal (regalloc2-style).
-fn BacktrackingAllocator::find_conflicts_and_first_point(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-) -> (Array[Int], ProgPoint?) {
-  let conflicts : Array[Int] = []
-  let seen : Set[Int] = Set::new()
-  let mut first_conflict_point : ProgPoint? = None
-  let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else {
-    return (conflicts, first_conflict_point)
-  }
-  if occupied.is_empty() {
-    return (conflicts, first_conflict_point)
-  }
-  let spans = self.bundle_sorted_spans(bundle)
-  if spans.is_empty() {
-    return (conflicts, first_conflict_point)
-  }
-  let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
-      i = i + 1
-      continue
-    }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
-      j = j + 1
-      continue
-    }
-    let other_id = occupied[j].0
-    if !seen.contains(other_id) {
-      seen.add(other_id) |> ignore
-      conflicts.push(other_id)
-    }
-    let overlap_start = if span.start.compare_with_order(
-        occ.start,
-        self.block_order,
-      ) >=
-      0 {
-      span.start
-    } else {
-      occ.start
-    }
-    match first_conflict_point {
-      None => first_conflict_point = Some(overlap_start)
-      Some(existing) =>
-        if overlap_start.compare_with_order(existing, self.block_order) < 0 {
-          first_conflict_point = Some(overlap_start)
-        }
-    }
-    // Both lists are sorted and preg allocations are non-overlapping; advance
-    // whichever interval ends first.
-    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
-      i = i + 1
-    } else {
-      j = j + 1
-    }
-  }
-  (conflicts, first_conflict_point)
-}
-
-///|
 /// Collect conflicting bundles for `bundle` on `preg` using ordered span
 /// traversal, but stop early when we already know this candidate cannot win.
 ///
@@ -734,6 +667,77 @@ fn BacktrackingAllocator::find_conflicts_with_cutoff(
     }
   }
   (conflicts, max_conflict_weight, false)
+}
+
+///|
+/// Evaluate split candidate cost on `preg` without materializing full conflict
+/// sets. Mirrors regalloc2 `ConflictHighCost` early-cutoff behavior:
+/// - cost = max spill-weight among conflicting bundles
+/// - pinned conflicts use an effectively-infinite cost
+/// - stop early when cost already exceeds current best candidate
+fn BacktrackingAllocator::split_conflict_cost_and_point(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  preg : @abi.PReg,
+  max_allowable_cost : Double?,
+) -> (Double, ProgPoint?, Bool) {
+  let mut max_conflict_weight = 0.0
+  let mut first_conflict_point : ProgPoint? = None
+  let allocs = self.get_reg_allocs(preg.class)
+  guard allocs.get(preg.index) is Some(occupied) else {
+    return (max_conflict_weight, first_conflict_point, false)
+  }
+  if occupied.is_empty() {
+    return (max_conflict_weight, first_conflict_point, false)
+  }
+  let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return (max_conflict_weight, first_conflict_point, false)
+  }
+  let mut i = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+      i = i + 1
+      continue
+    }
+    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+      j = j + 1
+      continue
+    }
+    let other = self.bundles.get(occupied[j].0)
+    let weight = if other.is_pinned { 1.0e100 } else { other.spill_weight }
+    if weight > max_conflict_weight {
+      max_conflict_weight = weight
+      if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
+        return (0.0, None, true)
+      }
+    }
+    let overlap_start = if span.start.compare_with_order(
+        occ.start,
+        self.block_order,
+      ) >=
+      0 {
+      span.start
+    } else {
+      occ.start
+    }
+    match first_conflict_point {
+      None => first_conflict_point = Some(overlap_start)
+      Some(existing) =>
+        if overlap_start.compare_with_order(existing, self.block_order) < 0 {
+          first_conflict_point = Some(overlap_start)
+        }
+    }
+    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+      i = i + 1
+    } else {
+      j = j + 1
+    }
+  }
+  (max_conflict_weight, first_conflict_point, false)
 }
 
 ///|
@@ -848,26 +852,16 @@ fn BacktrackingAllocator::choose_split_option(
     best : (ProgPoint, @abi.PReg)?,
     best_cost : Double?,
   ) -> ((ProgPoint, @abi.PReg)?, Double?) {
-    let (conflicts, point) = self.find_conflicts_and_first_point(bundle, preg)
-    if conflicts.is_empty() {
+    let (cost, point, rejected) = self.split_conflict_cost_and_point(
+      bundle, preg, best_cost,
+    )
+    if rejected {
       return (best, best_cost)
     }
     if point is None {
       return (best, best_cost)
     }
     let split_point = point.unwrap()
-    let mut cost = 0.0
-    for conflict_id in conflicts {
-      let b = self.bundles.get(conflict_id)
-      // Treat pinned bundles as extremely expensive to conflict with.
-      if b.is_pinned {
-        cost = 1.0e100
-        break
-      }
-      if b.spill_weight > cost {
-        cost = b.spill_weight
-      }
-    }
     match (best, best_cost) {
       (None, None) => (Some((split_point, preg)), Some(cost))
       (Some((best_point, best_preg)), Some(best_cost_v)) =>
