@@ -360,6 +360,29 @@ fn BacktrackingAllocator::insert_occupied_span_sorted(
 }
 
 ///|
+/// Find first occupied index whose span.end is strictly after `point`.
+/// Occupied spans for one preg are non-overlapping and sorted by start, so end
+/// order is also monotonic.
+fn BacktrackingAllocator::occupied_lower_bound_by_end(
+  self : BacktrackingAllocator,
+  occupied : Array[(Int, ProgPointRange)],
+  point : ProgPoint,
+) -> Int {
+  let mut lo = 0
+  let mut hi = occupied.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    let end = occupied[mid].1.end
+    if end.compare_with_order(point, self.block_order) <= 0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+///|
 /// Fast conflict probe: return true as soon as one overlap is found.
 fn BacktrackingAllocator::has_conflict_on_preg(
   self : BacktrackingAllocator,
@@ -372,8 +395,11 @@ fn BacktrackingAllocator::has_conflict_on_preg(
     return false
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return false
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
@@ -577,21 +603,27 @@ fn BacktrackingAllocator::try_allocate(
 ///|
 /// Collect conflicting bundles for `bundle` on `preg` using ordered
 /// span traversal (regalloc2-style).
-fn BacktrackingAllocator::find_conflicts(
+fn BacktrackingAllocator::find_conflicts_and_first_point(
   self : BacktrackingAllocator,
   bundle : Bundle,
   preg : @abi.PReg,
-) -> Array[Int] {
+) -> (Array[Int], ProgPoint?) {
   let conflicts : Array[Int] = []
   let seen : Set[Int] = Set::new()
+  let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return conflicts }
+  guard allocs.get(preg.index) is Some(occupied) else {
+    return (conflicts, first_conflict_point)
+  }
   if occupied.is_empty() {
-    return conflicts
+    return (conflicts, first_conflict_point)
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return (conflicts, first_conflict_point)
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
@@ -608,6 +640,22 @@ fn BacktrackingAllocator::find_conflicts(
       seen.add(other_id) |> ignore
       conflicts.push(other_id)
     }
+    let overlap_start = if span.start.compare_with_order(
+        occ.start,
+        self.block_order,
+      ) >=
+      0 {
+      span.start
+    } else {
+      occ.start
+    }
+    match first_conflict_point {
+      None => first_conflict_point = Some(overlap_start)
+      Some(existing) =>
+        if overlap_start.compare_with_order(existing, self.block_order) < 0 {
+          first_conflict_point = Some(overlap_start)
+        }
+    }
     // Both lists are sorted and preg allocations are non-overlapping; advance
     // whichever interval ends first.
     if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
@@ -616,7 +664,7 @@ fn BacktrackingAllocator::find_conflicts(
       j = j + 1
     }
   }
-  conflicts
+  (conflicts, first_conflict_point)
 }
 
 ///|
@@ -645,8 +693,11 @@ fn BacktrackingAllocator::find_conflicts_with_cutoff(
     return (conflicts, max_conflict_weight, false)
   }
   let spans = self.bundle_sorted_spans(bundle)
+  if spans.is_empty() {
+    return (conflicts, max_conflict_weight, false)
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
@@ -775,40 +826,6 @@ fn BacktrackingAllocator::try_evict(
 }
 
 ///|
-/// Find the first conflict point for a bundle on a specific physical register.
-fn BacktrackingAllocator::find_first_conflict_point_for_preg(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-) -> ProgPoint? {
-  let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return None }
-  if occupied.is_empty() {
-    return None
-  }
-  let spans = self.bundle_sorted_spans(bundle)
-  let mut i = 0
-  let mut j = 0
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
-      i = i + 1
-      continue
-    }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
-      j = j + 1
-      continue
-    }
-    if span.start.compare_with_order(occ.start, self.block_order) >= 0 {
-      return Some(span.start)
-    }
-    return Some(occ.start)
-  }
-  None
-}
-
-///|
 /// Choose a split point and a reg hint (Cranelift-like):
 /// - Try all available regs (hint-first if provided).
 /// - Prefer lower maximum-conflict weight.
@@ -831,11 +848,10 @@ fn BacktrackingAllocator::choose_split_option(
     best : (ProgPoint, @abi.PReg)?,
     best_cost : Double?,
   ) -> ((ProgPoint, @abi.PReg)?, Double?) {
-    let conflicts = self.find_conflicts(bundle, preg)
+    let (conflicts, point) = self.find_conflicts_and_first_point(bundle, preg)
     if conflicts.is_empty() {
       return (best, best_cost)
     }
-    let point = self.find_first_conflict_point_for_preg(bundle, preg)
     if point is None {
       return (best, best_cost)
     }
