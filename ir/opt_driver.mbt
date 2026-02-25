@@ -133,16 +133,34 @@ fn optimize_o1(func : Function) -> OptResult {
   let large_func_threshold = 1500
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
-  // Cranelift runs a bounded non-iterative pipeline; for very large IR we
-  // keep only a couple of fixpoint rounds.
-  let max_iterations = if is_large_func { 2 } else { 32 }
-  let max_stalled_rounds = if is_large_func { 1 } else { 3 }
+  // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
+  // this loop to a single round.
+  let max_iterations = if is_large_func { 1 } else { 1 }
+  let max_stalled_rounds = if is_large_func { 1 } else { 1 }
   let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
     let before_insts = instruction_count(func)
     let before_blocks = func.blocks.length()
+    // Cranelift runs remove_constant_phis before egraph. For large functions,
+    // run our block-param cleanup once up-front to shrink egraph input.
+    if is_large_func && iterations == 1 {
+      let cbpe_result = run_opt_pass(
+        func, "const_block_param_elim", eliminate_constant_block_params,
+      )
+      if cbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let dbpe_result = run_opt_pass(
+        func, "dead_block_param_elim", eliminate_dead_block_params,
+      )
+      if dbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
     // Cranelift-style aegraph scheduling: run once up-front, then let
     // canonical passes drive the fixed point.
     if iterations == 1 && run_egraph_pass(func) {
@@ -178,9 +196,8 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Block-param cleanup is relatively expensive on large CFGs; run it once
-    // up-front and let later rounds focus on cheaper canonicalization.
-    if !is_large_func || iterations == 1 {
+    // For smaller functions keep running block-param cleanup in the loop.
+    if !is_large_func {
       let cbpe_result = run_opt_pass(
         func, "const_block_param_elim", eliminate_constant_block_params,
       )
@@ -224,16 +241,34 @@ pub fn optimize(func : Function) -> OptResult {
   let large_func_threshold = 1500
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
-  // Cranelift runs a bounded non-iterative pipeline; for very large IR we
-  // keep only a couple of fixpoint rounds.
-  let max_iterations = if is_large_func { 2 } else { 32 }
-  let max_stalled_rounds = if is_large_func { 1 } else { 3 }
+  // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
+  // this loop to a single round.
+  let max_iterations = if is_large_func { 1 } else { 1 }
+  let max_stalled_rounds = if is_large_func { 1 } else { 1 }
   let mut stalled_rounds = 0
   while changed && iterations < max_iterations {
     changed = false
     iterations = iterations + 1
     let before_insts = instruction_count(func)
     let before_blocks = func.blocks.length()
+    // Cranelift runs remove_constant_phis before egraph. For large functions,
+    // run our block-param cleanup once up-front to shrink egraph input.
+    if is_large_func && iterations == 1 {
+      let cbpe_result = run_opt_pass(
+        func, "const_block_param_elim", eliminate_constant_block_params,
+      )
+      if cbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+      let dbpe_result = run_opt_pass(
+        func, "dead_block_param_elim", eliminate_dead_block_params,
+      )
+      if dbpe_result.changed {
+        changed = true
+        result.mark_changed()
+      }
+    }
     // Cranelift-style aegraph scheduling: run once up-front, then let
     // canonical passes drive the fixed point.
     if iterations == 1 && run_egraph_pass(func) {
@@ -269,9 +304,8 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Block-param cleanup is relatively expensive on large CFGs; run it once
-    // up-front and let later rounds focus on cheaper canonicalization.
-    if !is_large_func || iterations == 1 {
+    // For smaller functions keep running block-param cleanup in the loop.
+    if !is_large_func {
       let cbpe_result = run_opt_pass(
         func, "const_block_param_elim", eliminate_constant_block_params,
       )

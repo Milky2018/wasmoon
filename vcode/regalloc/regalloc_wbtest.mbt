@@ -1134,11 +1134,11 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
     content=(
       #|vcode test_f32_across_call() -> (float, double) {
       #|block0:
-      #|    d0 = ldf 3.14
-      #|    x2 = ldi 8192
-      #|    d4 = call_ptr[Wasm](1) -> 1 results x2
-      #|    d6 = ldf 42
-      #|    ret d6, d4
+      #|    d8 = ldf 42
+      #|    d2 = ldf 3.14
+      #|    x4 = ldi 8192
+      #|    d6 = call_ptr[Wasm](1) -> 1 results x4
+      #|    ret d8, d6
       #|}
       #|
     ),

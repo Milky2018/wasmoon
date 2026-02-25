@@ -89,6 +89,7 @@ struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
+  split_probe_limit : Int
 
   // Block order for comparison (O(1) lookup)
   block_order : FixedArray[Int]
@@ -186,6 +187,14 @@ pub fn BacktrackingAllocator::new(
   callee_saved_float : Array[@abi.PReg],
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
+  let mut total_insts = 0
+  for block in func.blocks {
+    total_insts = total_insts + block.insts.length()
+  }
+  // Keep split probing budgeted on very large functions; regalloc2's Rust
+  // implementation can afford broader scans, but in MoonBit this keeps wall
+  // compile time predictable with minimal quality impact.
+  let split_probe_limit = if total_insts >= 2000 { 10 } else { 1 << 30 }
   {
     ranges,
     bundles,
@@ -200,6 +209,7 @@ pub fn BacktrackingAllocator::new(
     vector_regs,
     callee_saved_int,
     callee_saved_float,
+    split_probe_limit,
     block_order: ranges.block_order,
     loop_depths,
     func,
@@ -581,9 +591,18 @@ fn BacktrackingAllocator::try_allocate(
       bundle.reg_class is @abi.Float64
     )
   let phase_count = if do_preferred_pass { 2 } else { 1 }
+  let scan_limit = if self.split_probe_limit < n {
+    self.split_probe_limit
+  } else {
+    n
+  }
   for phase in 0..<phase_count {
     let want_nonpreferred = phase == 1
+    let mut scanned = 0
     for i in 0..<n {
+      if scanned >= scan_limit {
+        break
+      }
       let preg = avail_regs[(offset + i) % n]
       if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
         continue
@@ -592,6 +611,7 @@ fn BacktrackingAllocator::try_allocate(
         self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
         continue
       }
+      scanned = scanned + 1
       if self.is_reg_free(preg, bundle) {
         return Some(preg)
       }
@@ -761,17 +781,27 @@ fn BacktrackingAllocator::try_evict(
       bundle.reg_class is @abi.Float64
     )
   let phase_count = if do_preferred_pass { 2 } else { 1 }
+  let scan_limit = if self.split_probe_limit < n {
+    self.split_probe_limit
+  } else {
+    n
+  }
   let mut best_preg : @abi.PReg? = None
   let mut best_conflict_cost : Double? = None
   let best_conflicts : Array[Int] = []
   for phase in 0..<phase_count {
     let want_nonpreferred = phase == 1
+    let mut scanned = 0
     for i in 0..<n {
+      if scanned >= scan_limit {
+        break
+      }
       let preg = avail_regs[(offset + i) % n]
       if do_preferred_pass &&
         self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
         continue
       }
+      scanned = scanned + 1
       // regalloc2-style high-cost cutoff: when we already have a best candidate,
       // stop scanning early once this candidate's max-conflict cost exceeds it.
       let cutoff = best_conflict_cost
@@ -891,14 +921,24 @@ fn BacktrackingAllocator::choose_split_option(
 
   // Offset scan through the remaining regs.
   let n = avail_regs.length()
+  let scan_limit = if self.split_probe_limit < n {
+    self.split_probe_limit
+  } else {
+    n
+  }
   let offset = bundle.id % n
+  let mut scanned = 0
   for i in 0..<n {
+    if scanned >= scan_limit {
+      break
+    }
     let preg = avail_regs[(offset + i) % n]
     if hint_preg is Some(hint) &&
       preg.class == hint.class &&
       preg.index == hint.index {
       continue
     }
+    scanned = scanned + 1
     let (b, c) = consider(self, bundle, preg, best, best_cost)
     best = b
     best_cost = c
