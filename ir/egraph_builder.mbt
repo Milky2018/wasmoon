@@ -371,6 +371,7 @@ pub fn EGraphBuilder::get_simplified_operand(
 /// This ensures the representative:
 /// - has the correct IR type for the use site
 /// - is defined early enough in the block (dominates subsequent uses in the block)
+#warnings("-unused_value")
 fn EGraphBuilder::recompute_representatives_for_block(
   self : EGraphBuilder,
   func : Function,
@@ -491,56 +492,101 @@ pub fn optimize_function_with_stats_with_limits(
   let total_nodes = egraph.num_nodes()
   let total_rule_applications = egraph.last_rule_applications()
 
-  // Rewrite each block using the optimized function-wide e-graph. We still use
-  // block-local representative mapping for operand rewrites to preserve
-  // in-block dominance safety.
+  // Rewrite blocks with scoped representatives along the dominator tree.
+  // This mirrors Cranelift's ScopedHashMap elaboration direction: each block
+  // sees dominating representatives, can refine them locally, and restores on
+  // scope exit.
   let cfg = CFG::build(func)
   let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
   let block_idx = build_block_index(func)
-  for block in func.blocks {
-    builder.recompute_representatives_for_block(func, block, idom, block_idx)
 
-    // Apply optimizations: constant folding and operand rewriting
-    for inst in block.instructions {
-      // First, try to simplify operands (e.g., x + 0 -> x means operand can be simplified)
-      for i in 0..<inst.operands.length() {
-        let operand = inst.operands[i]
-        if builder.get_simplified_operand(operand) is Some(simplified) {
-          inst.operands[i] = simplified
-          changed = true
+  fn rewrite_block(block_id : Int) -> Unit {
+    if block_idx.get(block_id) is Some(idx) {
+      let block = func.blocks[idx]
+      let scoped_entries : Array[(RepKey, Value?)] = []
+
+      fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
+        if builder.value_map.get(value.id) is Some(class_id) {
+          let canonical = builder.egraph.find(class_id)
+          let key : RepKey = { class_id: canonical.0, ty: value.ty }
+          let previous = builder.class_to_value.get(key)
+          let should_bind = previous is None
+          if should_bind {
+            scoped_entries.push((key, previous))
+            builder.class_to_value.set(key, value)
+          }
         }
       }
 
-      // Then, try to simplify the result value
-      if inst.first_result() is Some(v) &&
-        builder.get_simplified_opcode(v) is Some(op) {
-        if op is Iconst(c) {
-          // Replace with constant only when it materially changes the IR.
-          // Otherwise we can report spurious "changed" forever.
-          let mut inst_changed = false
-          match inst.opcode {
-            Iconst(old_c) =>
-              if old_c != c || inst.operands.length() > 0 {
+      for pair in block.params {
+        let (param, _) = pair
+        bind_rep(builder, param)
+      }
+
+      // Apply optimizations: constant folding and operand rewriting.
+      for inst in block.instructions {
+        for operand in inst.operands {
+          bind_rep(builder, operand)
+        }
+        for i in 0..<inst.operands.length() {
+          let operand = inst.operands[i]
+          if builder.get_simplified_operand(operand) is Some(simplified) {
+            inst.operands[i] = simplified
+            changed = true
+          }
+        }
+
+        if inst.first_result() is Some(v) &&
+          builder.get_simplified_opcode(v) is Some(op) {
+          if op is Iconst(c) {
+            let mut inst_changed = false
+            match inst.opcode {
+              Iconst(old_c) =>
+                if old_c != c || inst.operands.length() > 0 {
+                  inst.opcode = Iconst(c)
+                  inst.operands.clear()
+                  inst_changed = true
+                }
+              _ => {
                 inst.opcode = Iconst(c)
                 inst.operands.clear()
                 inst_changed = true
               }
-            _ => {
-              inst.opcode = Iconst(c)
-              inst.operands.clear()
-              inst_changed = true
             }
-          }
-          if inst_changed {
+            if inst_changed {
+              changed = true
+            }
+          } else if inst.opcode != op {
+            inst.opcode = op
             changed = true
           }
-        } else if inst.opcode != op {
-          // Opcode changed - update it only when different.
-          inst.opcode = op
-          changed = true
+        }
+
+        if inst.first_result() is Some(v) {
+          bind_rep(builder, v)
+        }
+      }
+
+      if block_id < domtree.length() {
+        for child in domtree[block_id] {
+          rewrite_block(child)
+        }
+      }
+
+      for entry in scoped_entries.rev_iter() {
+        let (key, previous) = entry
+        match previous {
+          Some(value) => builder.class_to_value.set(key, value)
+          None => builder.class_to_value.remove(key)
         }
       }
     }
+  }
+
+  if cfg.is_valid(0) {
+    builder.class_to_value.clear()
+    rewrite_block(0)
   }
   { changed, total_classes, total_nodes, total_rule_applications }
 }
