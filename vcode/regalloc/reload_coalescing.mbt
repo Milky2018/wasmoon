@@ -128,9 +128,10 @@ fn allocate_reload_registers(
       for idx in [19, 20, 22, 23, 24, 25, 26, 27, 28] {
         reload_int_regs.push(idx)
       }
-      // In blocks without calls, allow a small caller-saved fallback set.
-      // Keep x0-x7 out to avoid competing with common argument/result traffic.
-      for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
+      // In call-free blocks, allow the full caller-saved allocatable set.
+      // This matches Cranelift/regalloc2's ability to use arg/result regs when
+      // liveness allows and helps reduce stack reload churn in tight loops.
+      for idx in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] {
         reload_int_regs_callfree_extra.push(idx)
       }
       for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
