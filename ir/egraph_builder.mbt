@@ -428,31 +428,37 @@ pub fn optimize_function_with_stats_with_limits(
   limits : @egraph.SaturationLimits,
 ) -> EGraphOptimizeStats {
   let mut changed = false
-  let mut total_classes = 0
-  let mut total_nodes = 0
-  let mut total_rule_applications = 0
-  for block in func.blocks {
-    let builder = EGraphBuilder::new_with_limits(limits)
+  let builder = EGraphBuilder::new_with_limits(limits)
 
-    // Register all definitions in this block
+  // Function-scoped e-graph construction (Cranelift-directional alignment):
+  // build one e-graph for the whole function instead of isolated per-block
+  // e-graphs.
+  for block in func.blocks {
     for inst in block.instructions {
       builder.register_def(inst)
     }
+  }
 
-    // Add all values to e-graph
+  for block in func.blocks {
+    // Add all e-graph-admitted values from all blocks.
     for inst in block.instructions {
       if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
         builder.add_value(v) |> ignore
       }
     }
+  }
 
-    // Run saturation
-    builder.optimize()
-    let egraph = builder.get_egraph()
-    total_classes = total_classes + egraph.num_classes()
-    total_nodes = total_nodes + egraph.num_nodes()
-    total_rule_applications = total_rule_applications +
-      egraph.last_rule_applications()
+  // Run one saturation pass on the function-wide e-graph.
+  builder.optimize()
+  let egraph = builder.get_egraph()
+  let total_classes = egraph.num_classes()
+  let total_nodes = egraph.num_nodes()
+  let total_rule_applications = egraph.last_rule_applications()
+
+  // Rewrite each block using the optimized function-wide e-graph. We still use
+  // block-local representative mapping for operand rewrites to preserve
+  // in-block dominance safety.
+  for block in func.blocks {
     builder.recompute_representatives_for_block(block)
 
     // Apply optimizations: constant folding and operand rewriting
