@@ -11,7 +11,6 @@
 // Current remat candidates (kept conservative, Cranelift-style):
 // - integer/float constants (LoadConst*)
 // - runtime function pointers and direct function addresses (Load*FuncPtr/LoadFuncAddr)
-// - memory base for memory0 (LoadMemBase(0)) in cross-block remat only
 
 ///|
 priv struct RematDef {
@@ -43,7 +42,6 @@ fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     @instr.LoadConst(_)
     | @instr.LoadConstF32(_)
     | @instr.LoadConstF64(_)
-    | @instr.LoadMemBase(0)
     | @instr.LoadGCFuncPtr(_)
     | @instr.LoadJITFuncPtr(_)
     | @instr.LoadExceptionFuncPtr(_)
