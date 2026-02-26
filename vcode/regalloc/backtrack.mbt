@@ -62,9 +62,10 @@ struct BacktrackingAllocator {
   int_reg_allocs : Array[Array[(Int, ProgPointRange)]]
   float_reg_allocs : Array[Array[(Int, ProgPointRange)]]
 
-  // Per-bundle flattened/sorted span cache. This mirrors regalloc2's use of
-  // ordered per-bundle ranges for conflict scans.
-  bundle_span_cache : Map[Int, Array[ProgPointRange]]
+  // Per-bundle flattened/sorted span cache (bundle-id indexed).
+  // This mirrors regalloc2's use of ordered per-bundle ranges for conflict
+  // scans while avoiding hash lookups in hot allocation loops.
+  bundle_span_cache : Array[Array[ProgPointRange]?]
 
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
@@ -274,7 +275,7 @@ pub fn BacktrackingAllocator::new(
     bundles,
     int_reg_allocs: make_reg_alloc_table(int_max + 1),
     float_reg_allocs: make_reg_alloc_table(float_max + 1),
-    bundle_span_cache: {},
+    bundle_span_cache: Array::make(bundles.length(), None),
     queue: [],
     queue_next_seq: 0,
     queue_in_heap: Array::make(bundles.length(), false),
@@ -421,7 +422,9 @@ fn BacktrackingAllocator::bundle_sorted_spans(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> Array[ProgPointRange] {
-  if self.bundle_span_cache.get(bundle.id) is Some(spans) {
+  if bundle.id >= 0 &&
+    bundle.id < self.bundle_span_cache.length() &&
+    self.bundle_span_cache[bundle.id] is Some(spans) {
     return spans
   }
   let spans : Array[ProgPointRange] = []
@@ -434,7 +437,9 @@ fn BacktrackingAllocator::bundle_sorted_spans(
   spans.sort_by(fn(a, b) {
     a.start.compare_with_order(b.start, self.block_order)
   })
-  self.bundle_span_cache.set(bundle.id, spans)
+  if bundle.id >= 0 && bundle.id < self.bundle_span_cache.length() {
+    self.bundle_span_cache[bundle.id] = Some(spans)
+  }
   spans
 }
 
@@ -1094,6 +1099,7 @@ fn BacktrackingAllocator::split_bundle(
       self.conflict_seen_epoch.push(0)
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
+      self.bundle_span_cache.push(None)
       spill_bundle.add_bundle(before_bundle.id)
       self.queue_push(
         before_bundle.id,
@@ -1120,6 +1126,7 @@ fn BacktrackingAllocator::split_bundle(
       self.conflict_seen_epoch.push(0)
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
+      self.bundle_span_cache.push(None)
       spill_bundle.add_bundle(after_bundle.id)
       self.queue_push(
         after_bundle.id,
