@@ -138,8 +138,8 @@ pub impl Show for LiveInterval with output(self, logger) {
 /// Use-def information for a single vreg
 struct UseDefInfo {
   vreg : @abi.VReg
-  mut def_point : ProgPoint? // Where this vreg is defined
-  use_points : Array[ProgPoint] // Where this vreg is used
+  mut def_point : (ProgPoint, @abi.PReg?)? // Where this vreg is defined
+  use_points : Array[(ProgPoint, @abi.PReg?)] // Where this vreg is used
 }
 
 ///|
@@ -257,11 +257,11 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
   for entry in liveness.use_def {
     let (vreg_id, info) = entry
     result = result + "  v\{vreg_id}: def=\{info.def_point}, uses=["
-    for i, use_point in info.use_points {
+    for i, use_entry in info.use_points {
       if i > 0 {
         result = result + ", "
       }
-      result = result + "\{use_point}"
+      result = result + "\{use_entry.0}"
     }
     result = result + "]\n"
   }
@@ -406,7 +406,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Record function parameters as definitions at the start
   for param in func.params {
     let info = UseDefInfo::new(param)
-    info.def_point = Some({ block: 0, inst: -1, pos: After })
+    info.def_point = Some(({ block: 0, inst: -1, pos: After }, None))
     result.use_def.set(param.id, info)
   }
 
@@ -426,9 +426,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       if info.def_point is Some(_) {
         abort("block param defined twice")
       }
-      info.def_point = Some(def_point)
+      info.def_point = Some((def_point, None))
       // Also add a use point at block entry to keep it live through the block.
-      info.use_points.push({ block: block_idx, inst: 0, pos: Before })
+      info.use_points.push(({ block: block_idx, inst: 0, pos: Before }, None))
     }
 
     // Process instructions
@@ -452,7 +452,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       }
 
       // Record uses (before the instruction)
-      for use_reg in inst.uses {
+      for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
           let info = if result.use_def.get(vreg.id) is Some(existing) {
             existing
@@ -461,12 +461,20 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
             result.use_def.set(vreg.id, new_info)
             new_info
           }
-          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
+          let fixed = if i < inst.use_constraints.length() &&
+            inst.use_constraints[i] is @abi.FixedReg(preg) {
+            Some(preg)
+          } else {
+            None
+          }
+          info.use_points.push(
+            ({ block: block_idx, inst: inst_idx, pos: Before }, fixed),
+          )
         }
       }
 
       // Record definitions (after the instruction)
-      for def in inst.defs {
+      for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) {
           let info = match result.use_def.get(vreg.id) {
             Some(existing) => existing
@@ -484,7 +492,13 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           if info.def_point is Some(_) {
             abort("vreg defined multiple times (SSA violation)")
           }
-          info.def_point = Some(new_def)
+          let fixed = if i < inst.def_constraints.length() &&
+            inst.def_constraints[i] is @abi.FixedReg(preg) {
+            Some(preg)
+          } else {
+            None
+          }
+          info.def_point = Some((new_def, fixed))
         }
       }
     }
@@ -506,7 +520,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
             result.use_def.set(vreg.id, new_info)
             new_info
           }
-          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
+          info.use_points.push(
+            ({ block: block_idx, inst: inst_idx, pos: Before }, None),
+          )
         }
       }
 
@@ -727,27 +743,35 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Summarize liveness boundaries once:
   // - earliest live-in block per vreg
   // - latest live-out block per vreg
-  let vreg_first_live_in_block : Map[Int, Int] = {}
-  let vreg_last_live_out_block : Map[Int, Int] = {}
+  //
+  // Use fixed arrays keyed by vreg id (like Cranelift SecondaryMap style)
+  // to avoid repeated hashmap lookups in large functions.
+  let max_vreg_id = func.next_vreg_id
+  let vreg_first_live_in_block : FixedArray[Int] = FixedArray::make(
+    max_vreg_id, -1,
+  )
+  let vreg_last_live_out_block : FixedArray[Int] = FixedArray::make(
+    max_vreg_id, -1,
+  )
   for block_idx, live_in_set in result.live_in {
     for vreg_id in live_in_set {
-      match vreg_first_live_in_block.get(vreg_id) {
-        Some(old_block_idx) =>
-          if block_order[block_idx] < block_order[old_block_idx] {
-            vreg_first_live_in_block.set(vreg_id, block_idx)
-          }
-        None => vreg_first_live_in_block.set(vreg_id, block_idx)
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        let old_block_idx = vreg_first_live_in_block[vreg_id]
+        if old_block_idx < 0 ||
+          block_order[block_idx] < block_order[old_block_idx] {
+          vreg_first_live_in_block[vreg_id] = block_idx
+        }
       }
     }
   }
   for block_idx, live_out_set in result.live_out {
     for vreg_id in live_out_set {
-      match vreg_last_live_out_block.get(vreg_id) {
-        Some(old_block_idx) =>
-          if block_order[block_idx] > block_order[old_block_idx] {
-            vreg_last_live_out_block.set(vreg_id, block_idx)
-          }
-        None => vreg_last_live_out_block.set(vreg_id, block_idx)
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        let old_block_idx = vreg_last_live_out_block[vreg_id]
+        if old_block_idx < 0 ||
+          block_order[block_idx] > block_order[old_block_idx] {
+          vreg_last_live_out_block[vreg_id] = block_idx
+        }
       }
     }
   }
@@ -755,27 +779,34 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
-    let start = if info.def_point is Some(def) {
+    let start = if info.def_point is Some((def, _)) {
       def
       // If no def point, use the first use (shouldn't happen in valid code)
     } else if info.use_points.length() > 0 {
-      info.use_points[0]
+      info.use_points[0].0
     } else {
       continue // No uses or defs, skip
     }
     let interval = LiveInterval::new(info.vreg, start)
 
     // Extend to cover all uses (using block order for correct comparison)
-    for use_point in info.use_points {
+    for use_entry in info.use_points {
+      let use_point = use_entry.0
       interval.extend_with_order(use_point, block_order)
     }
 
     // Extend interval using summarized live-in/live-out boundaries.
-    if vreg_first_live_in_block.get(vreg_id) is Some(block_idx) {
+    if vreg_id >= 0 &&
+      vreg_id < max_vreg_id &&
+      vreg_first_live_in_block[vreg_id] >= 0 {
+      let block_idx = vreg_first_live_in_block[vreg_id]
       let entry_point = { block: block_idx, inst: -1, pos: Before }
       interval.extend_with_order(entry_point, block_order)
     }
-    if vreg_last_live_out_block.get(vreg_id) is Some(block_idx) {
+    if vreg_id >= 0 &&
+      vreg_id < max_vreg_id &&
+      vreg_last_live_out_block[vreg_id] >= 0 {
+      let block_idx = vreg_last_live_out_block[vreg_id]
       let block = func.blocks[block_idx]
       let end_point = {
         block: block_idx,

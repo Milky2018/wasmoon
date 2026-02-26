@@ -489,20 +489,37 @@ pub fn build_live_ranges(
       add_live_block(vreg_live_out_blocks, vreg_id, block_idx)
     }
   }
+  let num_blocks = func.blocks.length()
+  // Scratch structures reused across vregs (epoch-tagged) to avoid per-vreg
+  // HashMap churn in hot live-range construction paths.
+  let use_first_points : Array[ProgPoint?] = Array::make(num_blocks, None)
+  let use_last_points : Array[ProgPoint?] = Array::make(num_blocks, None)
+  let use_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
+  let covered_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
+  let mut scratch_epoch = 1
 
   // Process each vreg from use-def info
   for entry in liveness.use_def {
     let (vreg_id, info) = entry
+    scratch_epoch = scratch_epoch + 1
+    let epoch = scratch_epoch
     let range = LiveRange::new(next_id, info.vreg)
     next_id += 1
 
     // Add use positions (for constraints / heuristics)
-    if info.def_point is Some(def) {
-      let constraint = find_constraint_at_for_vreg(func, def, vreg_id)
+    if info.def_point is Some((def, fixed)) {
+      let constraint = match fixed {
+        Some(preg) => FixedReg(preg)
+        None => AnyReg
+      }
       range.add_use(UsePosition::new(def, Def, constraint))
     }
-    for use_point in info.use_points {
-      let constraint = find_constraint_at_for_vreg(func, use_point, vreg_id)
+    for use_entry in info.use_points {
+      let (use_point, fixed) = use_entry
+      let constraint = match fixed {
+        Some(preg) => FixedReg(preg)
+        None => AnyReg
+      }
       range.add_use(UsePosition::new(use_point, Use, constraint))
     }
 
@@ -510,40 +527,62 @@ pub fn build_live_ranges(
     // This is a conservative refinement over the previous single [start, end] span:
     // it never drops blocks where the value is live-in/out, but it avoids spanning
     // across blocks where the value is not live, reducing register pressure.
-    let uses_in_block : Map[Int, (ProgPoint, ProgPoint)] = {}
-    for p in info.use_points {
-      match uses_in_block.get(p.block) {
-        Some((first, last)) =>
-          uses_in_block.set(
-            p.block,
-            (pp_min(first, p, block_order), pp_max(last, p, block_order)),
-          )
-        None => uses_in_block.set(p.block, (p, p))
+    let use_blocks : Array[Int] = []
+    for use_entry in info.use_points {
+      let p = use_entry.0
+      let block_idx = p.block
+      if use_block_epoch[block_idx] != epoch {
+        use_block_epoch[block_idx] = epoch
+        use_first_points[block_idx] = Some(p)
+        use_last_points[block_idx] = Some(p)
+        use_blocks.push(block_idx)
+      } else {
+        let first = use_first_points[block_idx].unwrap()
+        let last = use_last_points[block_idx].unwrap()
+        use_first_points[block_idx] = Some(pp_min(first, p, block_order))
+        use_last_points[block_idx] = Some(pp_max(last, p, block_order))
       }
     }
-    let covered_blocks : Map[Int, Bool] = {}
+
+    let covered_blocks_ordered : Array[Int] = []
+    fn push_covered_once(
+      block_idx : Int,
+      epoch : Int,
+      covered_block_epoch : FixedArray[Int],
+      covered_blocks_ordered : Array[Int],
+    ) -> Unit {
+      if covered_block_epoch[block_idx] != epoch {
+        covered_block_epoch[block_idx] = epoch
+        covered_blocks_ordered.push(block_idx)
+      }
+    }
+
     if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
       for block_idx in blocks {
-        covered_blocks[block_idx] = true
+        push_covered_once(
+          block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
+        )
       }
     }
     if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
       for block_idx in blocks {
-        covered_blocks[block_idx] = true
+        push_covered_once(
+          block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
+        )
       }
     }
-    for entry in uses_in_block {
-      let (block_idx, _) = entry
-      covered_blocks[block_idx] = true
+    for block_idx in use_blocks {
+      push_covered_once(
+        block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
+      )
     }
-    if info.def_point is Some(def) {
-      covered_blocks[def.block] = true
-    }
-
-    let covered_blocks_ordered : Array[Int] = []
-    for entry in covered_blocks {
-      let (block_idx, _) = entry
-      covered_blocks_ordered.push(block_idx)
+    if info.def_point is Some((def, _)) {
+      push_covered_once(
+        def.block,
+        epoch,
+        covered_block_epoch,
+        covered_blocks_ordered,
+      )
     }
     covered_blocks_ordered.sort_by(fn(a, b) { block_order[a] - block_order[b] })
 
@@ -552,9 +591,18 @@ pub fn build_live_ranges(
       let block = func.blocks[block_idx]
       let live_in = liveness.live_in[block_idx].contains(vreg_id)
       let live_out = liveness.live_out[block_idx].contains(vreg_id)
-      let has_def_in_block = info.def_point is Some(def) &&
+      let has_def_in_block = info.def_point is Some((def, _)) &&
         def.block == block_idx
-      let use_bounds = uses_in_block.get(block_idx)
+      let use_bounds = if use_block_epoch[block_idx] == epoch {
+        Some(
+          (
+            use_first_points[block_idx].unwrap(),
+            use_last_points[block_idx].unwrap(),
+          ),
+        )
+      } else {
+        None
+      }
       let block_len = block.insts.length()
       let entry_point : ProgPoint = { block: block_idx, inst: -1, pos: Before }
       let exit_point : ProgPoint = {
@@ -563,7 +611,7 @@ pub fn build_live_ranges(
         pos: After,
       }
       let start = if has_def_in_block {
-        info.def_point.unwrap()
+        info.def_point.unwrap().0
       } else if live_in {
         entry_point
       } else if use_bounds is Some((first_use, _)) {
@@ -580,7 +628,7 @@ pub fn build_live_ranges(
       } else if has_def_in_block {
         // Defined in this block and dead here: keep a minimal span to avoid
         // surprising empty ranges in allocator internals.
-        point_after(info.def_point.unwrap(), block_len)
+        point_after(info.def_point.unwrap().0, block_len)
       } else {
         point_after(start, block_len)
       }
@@ -607,53 +655,4 @@ pub fn build_live_ranges(
     result.add_range(range)
   }
   result
-}
-
-///|
-/// Find operand constraint at a program point for a specific vreg
-/// We need the vreg to match against the correct operand position
-fn find_constraint_at_for_vreg(
-  func : VCodeFunction,
-  point : ProgPoint,
-  vreg_id : Int,
-) -> OperandConstraint {
-  if point.block >= func.blocks.length() {
-    return AnyReg
-  }
-  let block = func.blocks[point.block]
-  if point.inst < 0 || point.inst >= block.insts.length() {
-    return AnyReg
-  }
-  let inst = block.insts[point.inst]
-
-  // Check use constraints - find the constraint that matches our vreg
-  if point.pos is Before {
-    for i, use_reg in inst.uses {
-      if use_reg is @abi.Virtual(vreg) && vreg.id == vreg_id {
-        if i < inst.use_constraints.length() {
-          let constraint = inst.use_constraints[i]
-          if constraint is @abi.FixedReg(preg) {
-            return FixedReg(preg)
-          }
-        }
-        break
-      }
-    }
-  }
-
-  // Check def constraints - find the constraint that matches our vreg
-  if point.pos is After {
-    for i, def in inst.defs {
-      if def.reg is @abi.Virtual(vreg) && vreg.id == vreg_id {
-        if i < inst.def_constraints.length() {
-          let constraint = inst.def_constraints[i]
-          if constraint is @abi.FixedReg(preg) {
-            return FixedReg(preg)
-          }
-        }
-        break
-      }
-    }
-  }
-  AnyReg
 }

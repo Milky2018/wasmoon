@@ -141,10 +141,10 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
   }
   let queue : Array[Int] = []
-  let in_queue : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let in_queue : Array[Bool] = Array::make(propagation_pairs.length(), false)
   for pair_idx, _ in propagation_pairs {
     queue.push(pair_idx)
-    in_queue.set(pair_idx, true)
+    in_queue[pair_idx] = true
   }
   let mut queue_head = 0
   let mut steps = 0
@@ -152,7 +152,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   while queue_head < queue.length() && steps < max_steps {
     let pair_idx = queue[queue_head]
     queue_head = queue_head + 1
-    in_queue.remove(pair_idx)
+    in_queue[pair_idx] = false
     steps = steps + 1
     let (formal_id, actual_id) = propagation_pairs[pair_idx]
     let old_absval = state.get(formal_id).unwrap_or(PhiAbstractValue::None)
@@ -168,9 +168,9 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       state.set(formal_id, new_absval)
       if dependent_pairs.get(formal_id) is Some(deps) {
         for dep_idx in deps {
-          if in_queue.get(dep_idx) is None {
+          if dep_idx >= 0 && dep_idx < in_queue.length() && !in_queue[dep_idx] {
             queue.push(dep_idx)
-            in_queue.set(dep_idx, true)
+            in_queue[dep_idx] = true
           }
         }
       }

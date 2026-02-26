@@ -53,6 +53,15 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
+fn vcode_instruction_count(func : VCodeFunction) -> Int {
+  let mut count = 0
+  for block in func.blocks {
+    count = count + block.insts.length()
+  }
+  count
+}
+
+///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
@@ -296,11 +305,13 @@ pub fn allocate_registers_backtracking_with_isa(
 ) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
-  // Keep rematerialization behavior aligned with Cranelift's "cheap expr
-  // cloning" model on hot paths: do not size-gate this pass.
-  let func = rematerialize_cross_block_constants(func)
-  // Remat may make original const-defs dead in their original blocks.
-  let func = eliminate_dead_code(func)
+  let func = if vcode_instruction_count(func) < 1200 {
+    let func = rematerialize_cross_block_constants(func)
+    // Remat may make original const-defs dead in their original blocks.
+    eliminate_dead_code(func)
+  } else {
+    func
+  }
 
   // Build register pools
   let (
@@ -357,8 +368,12 @@ pub fn allocate_registers_backtracking_output_with_isa(
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
-  let func = rematerialize_cross_block_constants(func)
-  let func = eliminate_dead_code(func)
+  let func = if vcode_instruction_count(func) < 1200 {
+    let func = rematerialize_cross_block_constants(func)
+    eliminate_dead_code(func)
+  } else {
+    func
+  }
 
   // Build register pools.
   let (

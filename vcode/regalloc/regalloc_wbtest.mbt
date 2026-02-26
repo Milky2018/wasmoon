@@ -547,11 +547,11 @@ test "liveness: complete output for linear function" {
     content=(
       #|=== Liveness Debug ===
       #|Use-Def Chains:
-      #|  v0: def=Some((0:-1a)), uses=[(0:0b)]
-      #|  v1: def=Some((0:-1a)), uses=[(0:0b)]
-      #|  v2: def=Some((0:0a)), uses=[(0:2b)]
-      #|  v3: def=Some((0:1a)), uses=[(0:2b)]
-      #|  v4: def=Some((0:2a)), uses=[(0:3b)]
+      #|  v0: def=Some(((0:-1a), None)), uses=[(0:0b)]
+      #|  v1: def=Some(((0:-1a), None)), uses=[(0:0b)]
+      #|  v2: def=Some(((0:0a), None)), uses=[(0:2b)]
+      #|  v3: def=Some(((0:1a), None)), uses=[(0:2b)]
+      #|  v4: def=Some(((0:2a), None)), uses=[(0:3b)]
       #|
       #|Live-in/out:
       #|  block0: in=[0, 1], out=[]
@@ -747,8 +747,8 @@ test "regalloc: interval extension across blocks" {
     content=(
       #|=== Liveness Debug ===
       #|Use-Def Chains:
-      #|  v0: def=Some((0:0a)), uses=[(1:0b), (1:0b)]
-      #|  v1: def=Some((1:0a)), uses=[(1:1b)]
+      #|  v0: def=Some(((0:0a), None)), uses=[(1:0b), (1:0b)]
+      #|  v1: def=Some(((1:0a), None)), uses=[(1:1b)]
       #|
       #|Live-in/out:
       #|  block0: in=[], out=[0]

@@ -65,11 +65,13 @@ fn run_opt_pass(
 ///|
 fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
   let insts = instruction_count(func)
-  if insts >= 2500 {
+  if insts >= 2000 {
+    @egraph.SaturationLimits::new(1, 1)
+  } else if insts >= 1200 {
     // Keep very large functions in the same "small hard caps" spirit as
     // Cranelift's bounded egraph exploration.
     @egraph.SaturationLimits::new(1, 2)
-  } else if insts >= 1500 {
+  } else if insts >= 600 {
     @egraph.SaturationLimits::new(2, 3)
   } else {
     @egraph.SaturationLimits::cranelift_default()
@@ -79,8 +81,12 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
   let insts = instruction_count(func)
+  if insts >= 2200 {
+    // Keep compile wall bounded on mega-functions; rely on lightweight passes.
+    return false
+  }
   let limits = egraph_limits_for_function(func)
-  let ruleset = if insts >= 800 {
+  let ruleset = if insts >= 300 {
     @egraph.get_compact_ruleset()
   } else {
     @egraph.get_global_ruleset()
@@ -155,7 +161,7 @@ fn optimize_o1(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 1500
+  let large_func_threshold = 600
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
@@ -266,7 +272,7 @@ pub fn optimize(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 1500
+  let large_func_threshold = 600
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
@@ -389,9 +395,11 @@ pub fn optimize(func : Function) -> OptResult {
     }
   }
   // Run jump-threading once after fixed-point (Cranelift-like late CFG cleanup).
-  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-  if jt_result.changed {
-    result.mark_changed()
+  if !is_large_func {
+    let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+    if jt_result.changed {
+      result.mark_changed()
+    }
   }
   result
 }
