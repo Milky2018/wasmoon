@@ -550,7 +550,25 @@ fn compute_use_counts(ir_func : @ir.Function) -> Array[Int] {
 fn compute_fused_icmps(
   ir_func : @ir.Function,
   use_counts : Array[Int],
+  def_inst_table : Array[@ir.Inst?],
 ) -> @hashset.HashSet[Int] {
+  fn is_single_use_icmp_result(
+    use_counts : Array[Int],
+    def_inst_table : Array[@ir.Inst?],
+    value : @ir.Value,
+  ) -> Bool {
+    if use_count(use_counts, value.id) != 1 {
+      return false
+    }
+    if value.id < 0 || value.id >= def_inst_table.length() {
+      return false
+    }
+    match def_inst_table[value.id] {
+      Some(def_inst) => def_inst.opcode is @ir.Opcode::Icmp(_)
+      None => false
+    }
+  }
+
   // Find Icmp results that have exactly one use in a Select or branch
   let fused : @hashset.HashSet[Int] = @hashset.new()
   for block in ir_func.blocks {
@@ -558,38 +576,16 @@ fn compute_fused_icmps(
       // Check if this is a Select instruction
       if inst.opcode is @ir.Opcode::Select {
         let cond = inst.operands[0]
-        // Check if the condition is an Icmp result with exactly one use
-        if use_count(use_counts, cond.id) == 1 {
-          // Find the defining instruction of the condition
-          for b in ir_func.blocks {
-            for i in b.instructions {
-              if i.first_result() is Some(r) && r.id == cond.id {
-                // Check if it's an Icmp
-                if i.opcode is @ir.Opcode::Icmp(_) {
-                  fused.add(cond.id)
-                }
-              }
-            }
-          }
+        if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
+          fused.add(cond.id)
         }
       }
     }
     match block.terminator {
       Some(@ir.Terminator::Brz(cond, _, _))
       | Some(@ir.Terminator::Brnz(cond, _, _)) =>
-        // Check if the condition is an Icmp result with exactly one use
-        if use_count(use_counts, cond.id) == 1 {
-          // Find the defining instruction of the condition
-          for b in ir_func.blocks {
-            for i in b.instructions {
-              if i.first_result() is Some(r) && r.id == cond.id {
-                // Check if it's an Icmp
-                if i.opcode is @ir.Opcode::Icmp(_) {
-                  fused.add(cond.id)
-                }
-              }
-            }
-          }
+        if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
+          fused.add(cond.id)
         }
       _ => ()
     }
@@ -1273,7 +1269,7 @@ pub fn lower_function(
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
-  let fused = compute_fused_icmps(ir_func, ctx.use_counts)
+  let fused = compute_fused_icmps(ir_func, ctx.use_counts, ctx.def_inst_table)
   for id in fused {
     ctx.fused_icmps.add(id)
   }
