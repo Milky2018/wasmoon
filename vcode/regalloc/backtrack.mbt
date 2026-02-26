@@ -1781,14 +1781,9 @@ pub fn build_bundles_with_merging(
 ) -> BundleSet {
   let n = ranges.length()
   let uf = @unionfind.UnionFind::new(n)
-  let mut inst_count = 0
-  for block in func.blocks {
-    inst_count = inst_count + block.insts.length()
-  }
   // regalloc2/ion always performs bundle coalescing, bounded by overlap and
   // complexity guards inside merge checks.
   let block_param_merge_enabled = true
-  let move_merge_enabled = true
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
       (@abi.Int, @abi.Int) => true
@@ -2115,34 +2110,6 @@ pub fn build_bundles_with_merging(
     root_spans_cache.set(new_root, merged_spans)
     root_spans_cache.remove(old_root) |> ignore
     true
-  }
-
-  // Merge across Move instructions.
-  //
-  // Keep this close to regalloc2's coalescing shape: merge decisions are
-  // controlled by overlap and requirement compatibility checks in `try_merge`.
-  if move_merge_enabled {
-    for block in func.blocks {
-      for inst in block.insts {
-        if inst.opcode is @instr.Move &&
-          inst.defs.length() == 1 &&
-          inst.uses.length() == 1 {
-          let src_vreg_id = match inst.uses[0] {
-            @abi.Virtual(vreg) => Some(vreg.id)
-            _ => None
-          }
-          let dst_vreg_id = match inst.defs[0].reg {
-            @abi.Virtual(vreg) => Some(vreg.id)
-            _ => None
-          }
-          if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) &&
-            ranges.vreg_to_range.get(src_id) is Some(src_idx) &&
-            ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-            try_merge(uf, src_idx, dst_idx, ranges) |> ignore
-          }
-        }
-      }
-    }
   }
 
   // Merge across block arguments (SSA phi-like connections).

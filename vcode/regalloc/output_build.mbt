@@ -475,6 +475,68 @@ fn build_output(
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
+      // Fast path: if this instruction has no non-fixed spilled uses/defs, we
+      // do not need per-inst temp-reg selection or used-reg marking.
+      let mut needs_spill_temps = false
+      for i, use_reg in inst.uses {
+        if use_reg is @abi.Virtual(vreg) &&
+          assigned_preg_of(vreg.id, assigned_pregs) is None &&
+          fixed_use_preg(inst, i) is None {
+          needs_spill_temps = true
+          break
+        }
+      }
+      if !needs_spill_temps {
+        for i, def in inst.defs {
+          if def.reg is @abi.Virtual(vreg) &&
+            assigned_preg_of(vreg.id, assigned_pregs) is None &&
+            fixed_def_preg(inst, i) is None {
+            needs_spill_temps = true
+            break
+          }
+        }
+      }
+      if !needs_spill_temps {
+        let locs : Array[Loc] = []
+        for i, def in inst.defs {
+          match fixed_def_preg(inst, i) {
+            Some(preg) => locs.push(Reg(preg))
+            None =>
+              match def.reg {
+                @abi.Physical(preg) => locs.push(Reg(preg))
+                @abi.Virtual(vreg) =>
+                  match assigned_preg_of(vreg.id, assigned_pregs) {
+                    Some(preg) => locs.push(Reg(preg))
+                    None => abort("missing def allocation for vreg \{vreg.id}")
+                  }
+              }
+          }
+        }
+        for i, use_reg in inst.uses {
+          match fixed_use_preg(inst, i) {
+            Some(preg) => locs.push(Reg(preg))
+            None =>
+              match use_reg {
+                @abi.Physical(preg) => locs.push(Reg(preg))
+                @abi.Virtual(vreg) =>
+                  match assigned_preg_of(vreg.id, assigned_pregs) {
+                    Some(preg) => locs.push(Reg(preg))
+                    None => abort("missing use allocation for vreg \{vreg.id}")
+                  }
+              }
+          }
+        }
+        out.push_inst_allocs(
+          block_id,
+          inst_idx,
+          false,
+          inst.defs.length(),
+          inst.uses.length(),
+          locs,
+        )
+        continue
+      }
+
       used_epoch = used_epoch + 1
       let epoch = used_epoch
 

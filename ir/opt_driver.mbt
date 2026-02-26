@@ -35,16 +35,6 @@ pub fn instruction_count(func : Function) -> Int {
 }
 
 ///|
-fn has_material_progress(
-  before_insts : Int,
-  before_blocks : Int,
-  after_insts : Int,
-  after_blocks : Int,
-) -> Bool {
-  before_insts != after_insts || before_blocks != after_blocks
-}
-
-///|
 fn run_opt_pass(
   func : Function,
   pass_name : String,
@@ -117,6 +107,76 @@ fn run_egraph_pass(func : Function) -> Bool {
 }
 
 ///|
+fn optimize_cranelift_style(
+  func : Function,
+  run_egraph? : Bool = true,
+) -> OptResult {
+  let result = OptResult::new()
+  // Keep this order aligned with Cranelift's `Context::optimize` pipeline:
+  // remove-constant-phis style cleanup before aegraph.
+  let cbpe_result = run_opt_pass(
+    func, "const_block_param_elim", eliminate_constant_block_params,
+  )
+  if cbpe_result.changed {
+    result.mark_changed()
+  }
+  let dbpe_result = run_opt_pass(
+    func, "dead_block_param_elim", eliminate_dead_block_params,
+  )
+  if dbpe_result.changed {
+    result.mark_changed()
+  }
+  if run_egraph && run_egraph_pass(func) {
+    result.mark_changed()
+  }
+  // Keep Cranelift-like core ordering above. For smaller functions only, run
+  // legacy local cleanups that existing Wasmoon tests/codegen rely on.
+  if instruction_count(func) < 1200 {
+    let cf_result = run_opt_pass(func, "const_fold", fold_constants)
+    if cf_result.changed {
+      result.mark_changed()
+    }
+    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+    if alias_result.changed {
+      result.mark_changed()
+    }
+    let mb_result = run_opt_pass(
+      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+    )
+    if mb_result.changed {
+      result.mark_changed()
+    }
+    let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
+    if gvn_result.changed {
+      result.mark_changed()
+    }
+    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
+    if dce_result.changed {
+      result.mark_changed()
+    }
+    let bs_result = run_opt_pass(func, "simplify_branches", simplify_branches)
+    if bs_result.changed {
+      result.mark_changed()
+    }
+    let uce_result = run_opt_pass(
+      func, "eliminate_unreachable", eliminate_unreachable_code,
+    )
+    if uce_result.changed {
+      result.mark_changed()
+    }
+    let bm_result = run_opt_pass(func, "merge_blocks", merge_blocks)
+    if bm_result.changed {
+      result.mark_changed()
+    }
+    let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+    if jt_result.changed {
+      result.mark_changed()
+    }
+  }
+  result
+}
+
+///|
 /// Run optimizations based on level
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   // NOTE: Even at O0 we still need a small set of IR cleanups to keep the
@@ -158,244 +218,13 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
 ///|
 /// O1: Basic optimizations only
 fn optimize_o1(func : Function) -> OptResult {
-  let result = OptResult::new()
-  let mut changed = true
-  let mut iterations = 0
-  let large_func_threshold = 600
-  let is_large_func = instruction_count(func) >= large_func_threshold
-  // Keep compile time predictable (Cranelift-style bounded optimization work).
-  // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
-  // this loop to a single round.
-  let max_iterations = if is_large_func { 1 } else { 1 }
-  let max_stalled_rounds = if is_large_func { 1 } else { 1 }
-  let mut stalled_rounds = 0
-  while changed && iterations < max_iterations {
-    changed = false
-    iterations = iterations + 1
-    let before_insts = instruction_count(func)
-    let before_blocks = func.blocks.length()
-    // Cranelift runs remove_constant_phis before egraph. For large functions,
-    // run our block-param cleanup once up-front to shrink egraph input.
-    if is_large_func && iterations == 1 {
-      let cbpe_result = run_opt_pass(
-        func, "const_block_param_elim", eliminate_constant_block_params,
-      )
-      if cbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      let dbpe_result = run_opt_pass(
-        func, "dead_block_param_elim", eliminate_dead_block_params,
-      )
-      if dbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    // Cranelift-style aegraph scheduling: run once up-front, then let
-    // canonical passes drive the fixed point.
-    if iterations == 1 && run_egraph_pass(func) {
-      changed = true
-      result.mark_changed()
-    }
-    // Basic optimizations only
-    let cf_result = run_opt_pass(func, "const_fold", fold_constants)
-    if cf_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-    if alias_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let mb_result = run_opt_pass(
-      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-    )
-    if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    if !is_large_func {
-      let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
-      if gvn_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
-    if dce_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // For smaller functions keep running block-param cleanup in the loop.
-    if !is_large_func {
-      let cbpe_result = run_opt_pass(
-        func, "const_block_param_elim", eliminate_constant_block_params,
-      )
-      if cbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      // Dead block parameter elimination (crucial for unused locals)
-      let dbpe_result = run_opt_pass(
-        func, "dead_block_param_elim", eliminate_dead_block_params,
-      )
-      if dbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    if changed {
-      let after_insts = instruction_count(func)
-      let after_blocks = func.blocks.length()
-      if has_material_progress(
-          before_insts, before_blocks, after_insts, after_blocks,
-        ) {
-        stalled_rounds = 0
-      } else {
-        stalled_rounds = stalled_rounds + 1
-        if stalled_rounds >= max_stalled_rounds {
-          break
-        }
-      }
-    }
-  }
-  result
+  optimize_cranelift_style(func, run_egraph=true)
 }
 
 ///|
-/// Run all basic optimizations until fixed point
+/// Run default optimizations (Cranelift-aligned O2 path).
 pub fn optimize(func : Function) -> OptResult {
-  let result = OptResult::new()
-  let mut changed = true
-  let mut iterations = 0
-  let large_func_threshold = 600
-  let is_large_func = instruction_count(func) >= large_func_threshold
-  // Keep compile time predictable (Cranelift-style bounded optimization work).
-  // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
-  // this loop to a single round.
-  let max_iterations = if is_large_func { 1 } else { 1 }
-  let max_stalled_rounds = if is_large_func { 1 } else { 1 }
-  let mut stalled_rounds = 0
-  while changed && iterations < max_iterations {
-    changed = false
-    iterations = iterations + 1
-    let before_insts = instruction_count(func)
-    let before_blocks = func.blocks.length()
-    // Cranelift runs remove_constant_phis before egraph. For large functions,
-    // run our block-param cleanup once up-front to shrink egraph input.
-    if is_large_func && iterations == 1 {
-      let cbpe_result = run_opt_pass(
-        func, "const_block_param_elim", eliminate_constant_block_params,
-      )
-      if cbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      let dbpe_result = run_opt_pass(
-        func, "dead_block_param_elim", eliminate_dead_block_params,
-      )
-      if dbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    // Cranelift-style aegraph scheduling: run once up-front, then let
-    // canonical passes drive the fixed point.
-    if iterations == 1 && run_egraph_pass(func) {
-      changed = true
-      result.mark_changed()
-    }
-    // Run each optimization pass
-    let cf_result = run_opt_pass(func, "const_fold", fold_constants)
-    if cf_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-    if alias_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let mb_result = run_opt_pass(
-      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-    )
-    if mb_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    if !is_large_func {
-      let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
-      if gvn_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    let dce_result = run_opt_pass(func, "dce", eliminate_dead_code)
-    if dce_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // For smaller functions keep running block-param cleanup in the loop.
-    if !is_large_func {
-      let cbpe_result = run_opt_pass(
-        func, "const_block_param_elim", eliminate_constant_block_params,
-      )
-      if cbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      // Dead block parameter elimination (crucial for unused locals)
-      let dbpe_result = run_opt_pass(
-        func, "dead_block_param_elim", eliminate_dead_block_params,
-      )
-      if dbpe_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-    }
-    // Control flow optimizations
-    let bs_result = run_opt_pass(func, "simplify_branches", simplify_branches)
-    if bs_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let uce_result = run_opt_pass(
-      func, "eliminate_unreachable", eliminate_unreachable_code,
-    )
-    if uce_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    let bm_result = run_opt_pass(func, "merge_blocks", merge_blocks)
-    if bm_result.changed {
-      changed = true
-      result.mark_changed()
-    }
-    // Keep branch threading out of the O2 fixed-point loop.
-    // We run it once after convergence to avoid repeated CFG churn.
-    if changed {
-      let after_insts = instruction_count(func)
-      let after_blocks = func.blocks.length()
-      if has_material_progress(
-          before_insts, before_blocks, after_insts, after_blocks,
-        ) {
-        stalled_rounds = 0
-      } else {
-        stalled_rounds = stalled_rounds + 1
-        if stalled_rounds >= max_stalled_rounds {
-          break
-        }
-      }
-    }
-  }
-  // Run jump-threading once after fixed-point (Cranelift-like late CFG cleanup).
-  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-  if jt_result.changed {
-    result.mark_changed()
-  }
-  result
+  optimize_cranelift_style(func, run_egraph=true)
 }
 
 ///|
