@@ -338,12 +338,13 @@ pub impl Show for LiveRange with output(self, logger) {
 struct LiveRangeSet {
   ranges : Array[LiveRange]
   vreg_to_range : Map[Int, Int] // vreg.id -> range index
+  vreg_to_range_dense : Array[Int] // vreg.id -> range index (-1 if absent)
   block_order : FixedArray[Int] // Block execution order (O(1) lookup)
 }
 
 ///|
 fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
-  { ranges: [], vreg_to_range: {}, block_order }
+  { ranges: [], vreg_to_range: {}, vreg_to_range_dense: [], block_order }
 }
 
 ///|
@@ -351,6 +352,13 @@ fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
 fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
   let idx = self.ranges.length()
   self.vreg_to_range.set(range.vreg.id, idx)
+  if range.vreg.id >= self.vreg_to_range_dense.length() {
+    let grow_to = range.vreg.id + 1
+    while self.vreg_to_range_dense.length() < grow_to {
+      self.vreg_to_range_dense.push(-1)
+    }
+  }
+  self.vreg_to_range_dense[range.vreg.id] = idx
   self.ranges.push(range)
 }
 
@@ -360,10 +368,31 @@ pub fn LiveRangeSet::get_by_vreg(
   self : LiveRangeSet,
   vreg_id : Int,
 ) -> LiveRange? {
+  if vreg_id >= 0 && vreg_id < self.vreg_to_range_dense.length() {
+    let idx = self.vreg_to_range_dense[vreg_id]
+    if idx >= 0 {
+      return Some(self.ranges[idx])
+    }
+  }
   match self.vreg_to_range.get(vreg_id) {
     Some(idx) => Some(self.ranges[idx])
     None => None
   }
+}
+
+///|
+/// Get LiveRange index by vreg id
+fn LiveRangeSet::get_range_index_by_vreg(
+  self : LiveRangeSet,
+  vreg_id : Int,
+) -> Int? {
+  if vreg_id >= 0 && vreg_id < self.vreg_to_range_dense.length() {
+    let idx = self.vreg_to_range_dense[vreg_id]
+    if idx >= 0 {
+      return Some(idx)
+    }
+  }
+  self.vreg_to_range.get(vreg_id)
 }
 
 ///|

@@ -1936,55 +1936,47 @@ pub fn build_bundles_with_merging(
     merged
   }
 
-  let root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)] = {}
-  let root_has_fixed_def_cache : Map[Int, Bool] = {}
-  let root_spans_cache : Map[Int, Array[ProgPointRange]] = {}
+  let root_fixed_reg_cache : Array[@abi.PReg?] = []
+  let root_fixed_conflict_cache : Array[Bool] = []
+  let root_has_fixed_def_cache : Array[Bool] = []
+  let root_spans_cache : Array[Array[ProgPointRange]?] = Array::make(n, None)
 
   // Initialize per-root fixed-info metadata so merges stay incremental.
   // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
   // roots that never participate in merges.
   for i in 0..<n {
     let range = ranges.get(i)
-    root_fixed_info_cache.set(i, range_fixed_reg_conflict(range))
-    root_has_fixed_def_cache.set(i, range_has_fixed_def(range))
+    let (fixed_reg, fixed_conflict) = range_fixed_reg_conflict(range)
+    root_fixed_reg_cache.push(fixed_reg)
+    root_fixed_conflict_cache.push(fixed_conflict)
+    root_has_fixed_def_cache.push(range_has_fixed_def(range))
   }
 
   fn root_fixed_info(
     ranges : LiveRangeSet,
-    root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
+    root_fixed_reg_cache : Array[@abi.PReg?],
+    root_fixed_conflict_cache : Array[Bool],
     root : Int,
   ) -> (@abi.PReg?, Bool) {
-    match root_fixed_info_cache.get(root) {
-      Some(info) => info
-      None => {
-        let info = range_fixed_reg_conflict(ranges.get(root))
-        root_fixed_info_cache.set(root, info)
-        info
-      }
-    }
+    ignore(ranges)
+    (root_fixed_reg_cache[root], root_fixed_conflict_cache[root])
   }
 
   fn root_has_fixed_def(
     ranges : LiveRangeSet,
-    root_has_fixed_def_cache : Map[Int, Bool],
+    root_has_fixed_def_cache : Array[Bool],
     root : Int,
   ) -> Bool {
-    match root_has_fixed_def_cache.get(root) {
-      Some(has_fixed_def) => has_fixed_def
-      None => {
-        let has_fixed_def = range_has_fixed_def(ranges.get(root))
-        root_has_fixed_def_cache.set(root, has_fixed_def)
-        has_fixed_def
-      }
-    }
+    ignore(ranges)
+    root_has_fixed_def_cache[root]
   }
 
   fn root_spans(
     ranges : LiveRangeSet,
-    root_spans_cache : Map[Int, Array[ProgPointRange]],
+    root_spans_cache : Array[Array[ProgPointRange]?],
     root : Int,
   ) -> Array[ProgPointRange] {
-    match root_spans_cache.get(root) {
+    match root_spans_cache[root] {
       Some(spans) => spans
       None => {
         let range = ranges.get(root)
@@ -1992,7 +1984,7 @@ pub fn build_bundles_with_merging(
         for span in range.ranges {
           spans.push(span)
         }
-        root_spans_cache.set(root, spans)
+        root_spans_cache[root] = Some(spans)
         spans
       }
     }
@@ -2017,18 +2009,20 @@ pub fn build_bundles_with_merging(
     let new_root = uf.find(root_a)
     let old_root = if new_root == root_a { root_b } else { root_a }
     let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
-    root_has_fixed_def_cache.set(new_root, merged_fixed_def)
-    root_has_fixed_def_cache.remove(old_root) |> ignore
+    root_has_fixed_def_cache[new_root] = merged_fixed_def
+    root_has_fixed_def_cache[old_root] = merged_fixed_def
     let merged_fixed = match (fixed_a, fixed_b) {
       (Some(preg), _) => Some(preg)
       (_, Some(preg)) => Some(preg)
       _ => None
     }
-    root_fixed_info_cache.set(new_root, (merged_fixed, false))
-    root_fixed_info_cache.remove(old_root) |> ignore
+    root_fixed_reg_cache[new_root] = merged_fixed
+    root_fixed_conflict_cache[new_root] = false
+    root_fixed_reg_cache[old_root] = merged_fixed
+    root_fixed_conflict_cache[old_root] = false
     let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
-    root_spans_cache.set(new_root, merged_spans)
-    root_spans_cache.remove(old_root) |> ignore
+    root_spans_cache[new_root] = Some(merged_spans)
+    root_spans_cache[old_root] = None
     true
   }
 
@@ -2065,10 +2059,10 @@ pub fn build_bundles_with_merging(
     // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
     // incompatible fixed uses.
     let (fixed_a, conflict_a) = root_fixed_info(
-      ranges, root_fixed_info_cache, root_a,
+      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_a,
     )
     let (fixed_b, conflict_b) = root_fixed_info(
-      ranges, root_fixed_info_cache, root_b,
+      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_b,
     )
     if conflict_a || conflict_b {
       return false
@@ -2145,8 +2139,8 @@ pub fn build_bundles_with_merging(
             break
           }
           if args[i] is @abi.Virtual(arg_vreg) &&
-            ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
-            ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
+            ranges.get_range_index_by_vreg(param.id) is Some(param_idx) &&
+            ranges.get_range_index_by_vreg(arg_vreg.id) is Some(arg_idx) {
             try_merge(uf, param_idx, arg_idx, ranges) |> ignore
           }
         }
