@@ -148,7 +148,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
       #|    d2 = ldf 10
-      #|    d4 = ldf 0
+      #|    d3 = ldf 0
       #|    br_cmp_imm.eq x1, #0, block5, block6
       #|block1:
       #|    jump block5
@@ -157,7 +157,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
       #|block3:
       #|    jump block5
       #|block4:
-      #|    d2 = mov d4
+      #|    d2 = mov d3
       #|    jump block5
       #|block5(f2:float):
       #|    ret d2
@@ -429,23 +429,23 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
       #|    d2 = ldf 0
-      #|    d4 = ldf 10
+      #|    d3 = ldf 10
       #|    br_cmp_imm.eq x1, #0, block6, block9
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d2
       #|block2(v5:int, f6:float, f7:float):
       #|    x4 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x4, d4
+      #|    store_ptr.f32 +0 x4, d3
       #|    d2 = load_ptr.f32 +0 x4
       #|    jump block1
       #|block3(v8:int, f9:float, f10:float):
       #|    x5 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x5, d4
+      #|    store_ptr.f32 +0 x5, d3
       #|    d2 = load_ptr.f32 +0 x5
       #|    jump block1
       #|block4(v11:int, f12:float, f13:float):
       #|    x6 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x6, d4
+      #|    store_ptr.f32 +0 x6, d3
       #|    d2 = load_ptr.f32 +0 x6
       #|    jump block1
       #|block5:
@@ -474,7 +474,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0008: 0202271e  fmov s2, w16
       #|  000c: 100080d2  movz x16, #0, lsl #0
       #|  0010: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0014: 0402271e  fmov s4, w16
+      #|  0014: 0302271e  fmov s3, w16
       #|  0018: a1010034  cbz w1, block4
       #|block9:
       #|  001c: 3f040071  cmp w1, #1
@@ -484,17 +484,17 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|  0028: 81010054  b.ne block1
       #|block2:
       #|  002c: a40640f9  ldr x4, [x21, #8]
-      #|  0030: 840000bd  str s4, [x4, #0]
+      #|  0030: 830000bd  str s3, [x4, #0]
       #|  0034: 820040bd  ldr s2, [x4, #0]
       #|  0038: 08000014  b block1
       #|block3:
       #|  003c: a50640f9  ldr x5, [x21, #8]
-      #|  0040: a40000bd  str s4, [x5, #0]
+      #|  0040: a30000bd  str s3, [x5, #0]
       #|  0044: a20040bd  ldr s2, [x5, #0]
       #|  0048: 04000014  b block1
       #|block4:
       #|  004c: a60640f9  ldr x6, [x21, #8]
-      #|  0050: c40000bd  str s4, [x6, #0]
+      #|  0050: c30000bd  str s3, [x6, #0]
       #|  0054: c20040bd  ldr s2, [x6, #0]
       #|block1:
       #|  0058: 401ca24e  orr v0.16b, v2.16b, v2.16b

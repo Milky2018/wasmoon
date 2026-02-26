@@ -1639,22 +1639,22 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       #|vcode test(v0:int) -> float {
       #|block0:
       #|    d1 = ldf 10
-      #|    x3 = ldi 0
+      #|    x2 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x3, d1
-      #|    d4 = load_ptr.f32 +0 x3
+      #|    store_ptr.f32 +0 x2, d1
+      #|    d3 = load_ptr.f32 +0 x2
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x3, d1
-      #|    d4 = load_ptr.f32 +0 x3
+      #|    store_ptr.f32 +0 x2, d1
+      #|    d3 = load_ptr.f32 +0 x2
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x3, d1
-      #|    d4 = load_ptr.f32 +0 x3
+      #|    store_ptr.f32 +0 x2, d1
+      #|    d3 = load_ptr.f32 +0 x2
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d4
+      #|    ret d3
       #|block5:
       #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
@@ -1687,21 +1687,39 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
   inspect(block1_last.opcode, content="load_ptr.f32 +0")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d4")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d3
+        ),
+      )
     Virtual(_) => fail("block1_last is virtual")
   }
 
   // Check block2's last instruction defines the same register.
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d4")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d3
+        ),
+      )
     Virtual(_) => fail("block2_last is virtual")
   }
 
   // Check block3's last instruction defines the same register.
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d4")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d3
+        ),
+      )
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1758,9 +1776,9 @@ test "minimal: dead float constant should not affect live values" {
       #|vcode dead_fconst_test() -> float {
       #|block0:
       #|    d0 = ldf 2
-      #|    d2 = ldf 10
-      #|    x4 = ldi 0
-      #|    store_ptr.f32 +0 x4, d2
+      #|    d1 = ldf 10
+      #|    x2 = ldi 0
+      #|    store_ptr.f32 +0 x2, d1
       #|    ret d0
       #|}
       #|

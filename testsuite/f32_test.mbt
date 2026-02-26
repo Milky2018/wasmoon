@@ -63,8 +63,8 @@ test "f32 add" {
       #|vcode test(v0:int, f1:float) -> float {
       #|block0:
       #|    d2 = ldf 15.5
-      #|    d4 = fadd.s d0, d2
-      #|    ret d4
+      #|    d3 = fadd.s d0, d2
+      #|    ret d3
       #|}
       #|
     ),
@@ -165,8 +165,8 @@ test "f64 add" {
       #|vcode test(v0:int, f1:double) -> double {
       #|block0:
       #|    d2 = ldf 15.5
-      #|    d4 = fadd.d d0, d2
-      #|    ret d4
+      #|    d3 = fadd.d d0, d2
+      #|    ret d3
       #|}
       #|
     ),
@@ -265,8 +265,8 @@ test "f32 sub" {
       #|vcode test(v0:int, f1:float) -> float {
       #|block0:
       #|    d2 = ldf 3.5
-      #|    d4 = fsub.s d0, d2
-      #|    ret d4
+      #|    d3 = fsub.s d0, d2
+      #|    ret d3
       #|}
       #|
     ),
@@ -371,8 +371,8 @@ test "f32 mul" {
       #|vcode test(v0:int, f1:float) -> float {
       #|block0:
       #|    d2 = ldf 2.5
-      #|    d4 = fmul.s d0, d2
-      #|    ret d4
+      #|    d3 = fmul.s d0, d2
+      #|    ret d3
       #|}
       #|
     ),
@@ -385,8 +385,8 @@ test "f32 mul" {
       #|  0000: 100080d2  movz x16, #0, lsl #0
       #|  0004: 1004a8f2  movk x16, #16416, lsl #16
       #|  0008: 0202271e  fmov s2, w16
-      #|  000c: 0408221e  fmul s4, s0, s2
-      #|  0010: 801ca44e  orr v0.16b, v4.16b, v4.16b
+      #|  000c: 0308221e  fmul s3, s0, s2
+      #|  0010: 601ca34e  orr v0.16b, v3.16b, v3.16b
       #|  0014: c0035fd6  ret
       #|
     ),

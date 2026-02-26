@@ -19,6 +19,8 @@ struct Bundle {
   mut crosses_call_cached : Bool
   mut crosses_wasm_call_cached : Bool
   mut crosses_c_call_cached : Bool
+  mut requirement_flags_ready : Bool // Lazy cache for fixed-constraint queries
+  mut has_fixed_constraint_cached : Bool
 }
 
 ///|
@@ -37,6 +39,8 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     crosses_call_cached: false,
     crosses_wasm_call_cached: false,
     crosses_c_call_cached: false,
+    requirement_flags_ready: false,
+    has_fixed_constraint_cached: false,
   }
 }
 
@@ -45,6 +49,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
 fn Bundle::add_range(self : Bundle, range_id : Int) -> Unit {
   self.range_ids.push(range_id)
   self.call_flags_ready = false
+  self.requirement_flags_ready = false
 }
 
 ///|
@@ -93,16 +98,31 @@ pub fn Bundle::total_length(self : Bundle, ranges : LiveRangeSet) -> Int {
 
 ///|
 /// Check if this bundle has any fixed register constraint
+fn Bundle::ensure_requirement_flags(
+  self : Bundle,
+  ranges : LiveRangeSet,
+) -> Unit {
+  if self.requirement_flags_ready {
+    return
+  }
+  let mut has_fixed = false
+  for range_id in self.range_ids {
+    if ranges.get(range_id).has_fixed_constraint() {
+      has_fixed = true
+      break
+    }
+  }
+  self.has_fixed_constraint_cached = has_fixed
+  self.requirement_flags_ready = true
+}
+
+///|
 pub fn Bundle::has_fixed_constraint(
   self : Bundle,
   ranges : LiveRangeSet,
 ) -> Bool {
-  for range_id in self.range_ids {
-    if ranges.get(range_id).has_fixed_constraint() {
-      return true
-    }
-  }
-  false
+  self.ensure_requirement_flags(ranges)
+  self.has_fixed_constraint_cached
 }
 
 ///|

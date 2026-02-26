@@ -83,6 +83,13 @@ struct BacktrackingAllocator {
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
   spillset_hints : Array[@abi.PReg?]
+  // Track split count per original spillset (regalloc2 MAX_SPLITS_PER_SPILLSET).
+  spillset_split_counts : Array[Int]
+  max_splits_per_spillset : Int
+  // Cache fixed-constraint-derived hints per bundle to avoid rescanning
+  // all bundle uses on every queue pop.
+  bundle_hint_cache : Array[@abi.PReg?]
+  bundle_hint_ready : Array[Bool]
 
   // Configuration
   int_regs : Array[@abi.PReg]
@@ -305,6 +312,10 @@ pub fn BacktrackingAllocator::new(
     queue_next_seq: 0,
     queue_in_heap: Array::make(bundles.length(), false),
     spillset_hints: Array::make(bundles.length(), None),
+    spillset_split_counts: Array::make(bundles.length(), 0),
+    max_splits_per_spillset: 2,
+    bundle_hint_cache: Array::make(bundles.length(), None),
+    bundle_hint_ready: Array::make(bundles.length(), false),
     int_regs,
     float_regs,
     vector_regs,
@@ -426,6 +437,24 @@ fn BacktrackingAllocator::constraint_hint_preg(
 }
 
 ///|
+fn BacktrackingAllocator::constraint_hint_preg_cached(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> @abi.PReg? {
+  if bundle.id >= 0 &&
+    bundle.id < self.bundle_hint_ready.length() &&
+    self.bundle_hint_ready[bundle.id] {
+    return self.bundle_hint_cache[bundle.id]
+  }
+  let hint = self.constraint_hint_preg(bundle)
+  if bundle.id >= 0 && bundle.id < self.bundle_hint_ready.length() {
+    self.bundle_hint_ready[bundle.id] = true
+    self.bundle_hint_cache[bundle.id] = hint
+  }
+  hint
+}
+
+///|
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   self.queue = []
@@ -436,7 +465,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
     bundle.prio = bundle.total_length(self.ranges)
     bundle.spill_weight = self.recompute_bundle_spill_weight(bundle)
     let hint_preg = if self.enable_backtracking {
-      self.constraint_hint_preg(bundle)
+      self.constraint_hint_preg_cached(bundle)
     } else {
       None
     }
@@ -884,8 +913,10 @@ fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
 }
 
 ///|
-/// Try to evict lower-weight bundles to make room
-/// Returns the register if eviction was successful
+/// Try to find a register for a bundle in one scan:
+/// - If a register is conflict-free, allocate directly.
+/// - Otherwise, pick the cheapest legal eviction candidate.
+/// Returns the chosen register when allocation/eviction is possible.
 fn BacktrackingAllocator::try_evict(
   self : BacktrackingAllocator,
   bundle : Bundle,
@@ -898,7 +929,8 @@ fn BacktrackingAllocator::try_evict(
   }
   let spans = self.bundle_sorted_spans(bundle)
   let offset = bundle.id % n
-  let do_preferred_pass = !bundle.crosses_call(self.ranges) &&
+  let do_preferred_pass = self.enable_backtracking &&
+    !bundle.crosses_call(self.ranges) &&
     (
       bundle.reg_class is @abi.Int ||
       bundle.reg_class is @abi.Float32 ||
@@ -937,7 +969,7 @@ fn BacktrackingAllocator::try_evict(
         continue
       }
       if scratch_conflicts.is_empty() {
-        continue // Should have been caught by try_allocate
+        return Some(preg)
       }
 
       // Keep only legal eviction candidates.
@@ -1079,10 +1111,24 @@ fn BacktrackingAllocator::split_bundle(
   bundle : Bundle,
   hint_preg : @abi.PReg?,
 ) -> Unit {
+  // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
+  // Once a spillset exceeds this cap, fall back to direct spilling.
+  let spillset_id = bundle.spillset_id
+  if spillset_id >= 0 &&
+    spillset_id < self.spillset_split_counts.length() &&
+    self.spillset_split_counts[spillset_id] >= self.max_splits_per_spillset {
+    self.force_spill_bundle(bundle)
+    return
+  }
+
   // Try to find a split point (and a reg hint) to split at.
   let split_opt = self.choose_split_option(bundle, hint_preg)
   match split_opt {
     Some((split_point, split_hint_reg)) => {
+      if spillset_id >= 0 && spillset_id < self.spillset_split_counts.length() {
+        self.spillset_split_counts[spillset_id] = self.spillset_split_counts[spillset_id] +
+          1
+      }
       // Split the bundle at this point
       // Create two new bundles: before and after the split point
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
@@ -1143,6 +1189,8 @@ fn BacktrackingAllocator::split_bundle(
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
       self.bundle_span_cache.push(None)
+      self.bundle_hint_cache.push(None)
+      self.bundle_hint_ready.push(false)
       spill_bundle.add_bundle(before_bundle.id)
       self.queue_push(
         before_bundle.id,
@@ -1170,6 +1218,8 @@ fn BacktrackingAllocator::split_bundle(
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
       self.bundle_span_cache.push(None)
+      self.bundle_hint_cache.push(None)
+      self.bundle_hint_ready.push(false)
       spill_bundle.add_bundle(after_bundle.id)
       self.queue_push(
         after_bundle.id,
@@ -1224,7 +1274,7 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       Some(p) => Some(p)
       None =>
         if self.enable_backtracking {
-          self.constraint_hint_preg(bundle)
+          self.constraint_hint_preg_cached(bundle)
         } else {
           None
         }
@@ -1251,27 +1301,23 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       continue
     }
 
-    // Try to allocate a register
-    if self.try_allocate(bundle, hint_preg) is Some(preg) {
-      self.record_allocation(bundle, preg)
-      continue
-    }
-
-    // try_allocate may have decided to spill
-    if bundle.allocation is Spill(_) {
-      continue
-    }
-    if !self.enable_backtracking &&
-      !bundle.is_pinned &&
-      !bundle.has_fixed_constraint(self.ranges) {
-      self.force_spill_bundle(bundle)
-      continue
-    }
-
-    // Try to evict lower-weight bundles
-    if self.try_evict(bundle, hint_preg) is Some(preg) {
-      self.record_allocation(bundle, preg)
-      continue
+    if self.enable_backtracking {
+      // Cranelift/regalloc2-like single register scan: free-reg allocation and
+      // eviction candidate selection share one conflict walk.
+      if self.try_evict(bundle, hint_preg) is Some(preg) {
+        self.record_allocation(bundle, preg)
+        continue
+      }
+    } else {
+      // Non-backtracking fallback keeps simple first-fit behavior.
+      if self.try_allocate(bundle, hint_preg) is Some(preg) {
+        self.record_allocation(bundle, preg)
+        continue
+      }
+      if !bundle.is_pinned && !bundle.has_fixed_constraint(self.ranges) {
+        self.force_spill_bundle(bundle)
+        continue
+      }
     }
 
     // Split (spill) the bundle

@@ -109,7 +109,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
       #|    d2 = ldf 0
-      #|    d4 = ldf 0
+      #|    d3 = ldf 0
       #|    br_cmp_imm.eq x1, #0, block5, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d2

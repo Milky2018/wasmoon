@@ -825,9 +825,9 @@ test "regalloc: f64 registers" {
       #|vcode f64_test() -> double {
       #|block0:
       #|    d0 = ldf 1.5
-      #|    d2 = ldf 2.5
-      #|    d4 = fadd.d d0, d2
-      #|    ret d4
+      #|    d1 = ldf 2.5
+      #|    d2 = fadd.d d0, d1
+      #|    ret d2
       #|}
       #|
     ),
@@ -938,13 +938,13 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|vcode mixed_types() -> double {
       #|block0:
       #|    x0 = ldi 10
-      #|    d2 = ldf 3.140000104904175
-      #|    d4 = ldf 2.718
-      #|    x6 = add x0, x0
-      #|    d18 = fadd.d d2, d4
-      #|    d20 = fadd.d d18, d18
-      #|    store.i32 +0 x6, x6
-      #|    ret d20
+      #|    d1 = ldf 3.140000104904175
+      #|    d2 = ldf 2.718
+      #|    x3 = add x0, x0
+      #|    d4 = fadd.d d1, d2
+      #|    d5 = fadd.d d4, d4
+      #|    store.i32 +0 x3, x3
+      #|    ret d5
       #|}
       #|
     ),
@@ -1034,16 +1034,16 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
       #|vcode test_many_f64_args() -> double {
       #|block0:
       #|    d0 = ldf 1
-      #|    d2 = ldf 2
-      #|    d4 = ldf 3
-      #|    d6 = ldf 4
-      #|    d18 = ldf 5
-      #|    d20 = ldf 6
-      #|    d22 = ldf 7
-      #|    d24 = ldf 8
-      #|    x0 = ldi 4096
-      #|    d28 = call_ptr[Wasm](8) -> 1 results x0
-      #|    ret d28
+      #|    d1 = ldf 2
+      #|    d2 = ldf 3
+      #|    d3 = ldf 4
+      #|    d4 = ldf 5
+      #|    d5 = ldf 6
+      #|    d6 = ldf 7
+      #|    d7 = ldf 8
+      #|    x8 = ldi 4096
+      #|    d19 = call_ptr[Wasm](8) -> 1 results x8
+      #|    ret d19
       #|}
       #|
     ),
@@ -1135,10 +1135,10 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|vcode test_f32_across_call() -> (float, double) {
       #|block0:
       #|    d8 = ldf 42
-      #|    d2 = ldf 3.14
-      #|    x4 = ldi 8192
-      #|    d6 = call_ptr[Wasm](1) -> 1 results x4
-      #|    ret d8, d6
+      #|    d1 = ldf 3.14
+      #|    x2 = ldi 8192
+      #|    d3 = call_ptr[Wasm](1) -> 1 results x2
+      #|    ret d8, d3
       #|}
       #|
     ),
