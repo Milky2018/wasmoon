@@ -65,13 +65,13 @@ fn run_opt_pass(
 ///|
 fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
   let insts = instruction_count(func)
-  if insts >= 2000 {
+  if insts >= 1200 {
     @egraph.SaturationLimits::new(1, 1)
-  } else if insts >= 1200 {
+  } else if insts >= 600 {
     // Keep very large functions in the same "small hard caps" spirit as
     // Cranelift's bounded egraph exploration.
     @egraph.SaturationLimits::new(1, 2)
-  } else if insts >= 600 {
+  } else if insts >= 300 {
     @egraph.SaturationLimits::new(2, 3)
   } else {
     @egraph.SaturationLimits::cranelift_default()
@@ -81,12 +81,12 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
   let insts = instruction_count(func)
-  if insts >= 1800 {
+  if insts >= 1200 {
     // Keep compile wall bounded on mega-functions; rely on lightweight passes.
     return false
   }
   let limits = egraph_limits_for_function(func)
-  let ruleset = if insts >= 300 {
+  let ruleset = if insts >= 200 {
     @egraph.get_compact_ruleset()
   } else {
     @egraph.get_global_ruleset()
@@ -161,7 +161,7 @@ fn optimize_o1(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 600
+  let large_func_threshold = 300
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
@@ -272,7 +272,7 @@ pub fn optimize(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 600
+  let large_func_threshold = 300
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep

@@ -361,10 +361,10 @@ pub fn allocate_registers_backtracking_output_with_isa(
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
-  // Keep rematerialization bounded on very large vcode functions. This matches
-  // Cranelift/regalloc2's compile-time prioritization: avoid broad pre-RA IR
-  // rewriting when allocator pressure is already high.
-  let func = if vcode_instruction_count(func) >= 1200 {
+  // Keep rematerialization bounded on medium/large vcode functions. This
+  // matches Cranelift/regalloc2's compile-time prioritization: avoid broad
+  // pre-RA IR rewriting when allocator pressure is already high.
+  let func = if vcode_instruction_count(func) >= 600 {
     func
   } else {
     let func = rematerialize_cross_block_constants(func)
