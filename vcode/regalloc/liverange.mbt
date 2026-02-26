@@ -561,17 +561,24 @@ pub fn build_live_ranges(
   let max_vreg_id = func.next_vreg_id
   let vreg_live_in_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
   let vreg_live_out_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
-  for block_idx, live_in_set in liveness.live_in {
+  let num_blocks = func.blocks.length()
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[block_order[block_idx]] = block_idx
+  }
+  // Build per-vreg live-in/live-out block lists in block-order sequence, so we
+  // can merge them later without per-vreg full sort.
+  for order_idx in 0..<num_blocks {
+    let block_idx = block_idx_by_order[order_idx]
+    let live_in_set = liveness.live_in[block_idx]
     for vreg_id in live_in_set {
       add_live_block_dense(vreg_live_in_blocks, vreg_id, block_idx)
     }
-  }
-  for block_idx, live_out_set in liveness.live_out {
+    let live_out_set = liveness.live_out[block_idx]
     for vreg_id in live_out_set {
       add_live_block_dense(vreg_live_out_blocks, vreg_id, block_idx)
     }
   }
-  let num_blocks = func.blocks.length()
   // Scratch structures reused across vregs (epoch-tagged) to avoid per-vreg
   // HashMap churn in hot live-range construction paths.
   let use_first_points : Array[ProgPoint?] = Array::make(num_blocks, None)
@@ -627,46 +634,8 @@ pub fn build_live_ranges(
           use_last_points[block_idx] = Some(pp_max(last, p, block_order))
         }
       }
-
-      fn push_covered_once(
-        block_idx : Int,
-        epoch : Int,
-        covered_block_epoch : FixedArray[Int],
-        covered_blocks : Array[Int],
-      ) -> Unit {
-        if covered_block_epoch[block_idx] != epoch {
-          covered_block_epoch[block_idx] = epoch
-          covered_blocks.push(block_idx)
-        }
-      }
-
-      let covered_blocks : Array[Int] = []
-      if vreg_id >= 0 && vreg_id < max_vreg_id {
-        if vreg_live_in_blocks[vreg_id] is Some(blocks) {
-          for block_idx in blocks {
-            live_in_epoch[block_idx] = epoch
-            push_covered_once(
-              block_idx, epoch, covered_block_epoch, covered_blocks,
-            )
-          }
-        }
-        if vreg_live_out_blocks[vreg_id] is Some(blocks) {
-          for block_idx in blocks {
-            live_out_epoch[block_idx] = epoch
-            push_covered_once(
-              block_idx, epoch, covered_block_epoch, covered_blocks,
-            )
-          }
-        }
-      }
-      for block_idx in use_blocks {
-        push_covered_once(block_idx, epoch, covered_block_epoch, covered_blocks)
-      }
-      if info.def_point is Some((def, _)) {
-        push_covered_once(def.block, epoch, covered_block_epoch, covered_blocks)
-      }
-      if covered_blocks.length() > 1 {
-        covered_blocks.sort_by(fn(a, b) {
+      if use_blocks.length() > 1 {
+        use_blocks.sort_by(fn(a, b) {
           let ord_a = block_order[a]
           let ord_b = block_order[b]
           if ord_a != ord_b {
@@ -675,6 +644,97 @@ pub fn build_live_ranges(
             a - b
           }
         })
+      }
+
+      fn block_less(a : Int, b : Int, block_order : FixedArray[Int]) -> Bool {
+        let ord_a = block_order[a]
+        let ord_b = block_order[b]
+        ord_a < ord_b || (ord_a == ord_b && a < b)
+      }
+
+      let covered_blocks : Array[Int] = []
+      let live_in_blocks = if vreg_id >= 0 &&
+        vreg_id < max_vreg_id &&
+        vreg_live_in_blocks[vreg_id] is Some(blocks) {
+        blocks
+      } else {
+        []
+      }
+      let live_out_blocks = if vreg_id >= 0 &&
+        vreg_id < max_vreg_id &&
+        vreg_live_out_blocks[vreg_id] is Some(blocks) {
+        blocks
+      } else {
+        []
+      }
+      for block_idx in live_in_blocks {
+        live_in_epoch[block_idx] = epoch
+      }
+      for block_idx in live_out_blocks {
+        live_out_epoch[block_idx] = epoch
+      }
+      let def_blocks : Array[Int] = []
+      if info.def_point is Some((def, _)) {
+        def_blocks.push(def.block)
+      }
+
+      // Merge live-in/live-out/use/def block lists in block-order without
+      // sorting the union every iteration (regalloc2-style list walk).
+      let mut i_in = 0
+      let mut i_out = 0
+      let mut i_use = 0
+      let mut i_def = 0
+      while i_in < live_in_blocks.length() ||
+            i_out < live_out_blocks.length() ||
+            i_use < use_blocks.length() ||
+            i_def < def_blocks.length() {
+        let mut next_block = -1
+        if i_in < live_in_blocks.length() {
+          next_block = live_in_blocks[i_in]
+        }
+        if i_out < live_out_blocks.length() {
+          let candidate = live_out_blocks[i_out]
+          if next_block < 0 || block_less(candidate, next_block, block_order) {
+            next_block = candidate
+          }
+        }
+        if i_use < use_blocks.length() {
+          let candidate = use_blocks[i_use]
+          if next_block < 0 || block_less(candidate, next_block, block_order) {
+            next_block = candidate
+          }
+        }
+        if i_def < def_blocks.length() {
+          let candidate = def_blocks[i_def]
+          if next_block < 0 || block_less(candidate, next_block, block_order) {
+            next_block = candidate
+          }
+        }
+        if next_block < 0 {
+          break
+        }
+        while i_in < live_in_blocks.length() &&
+              live_in_blocks[i_in] == next_block {
+          i_in = i_in + 1
+        }
+        while i_out < live_out_blocks.length() &&
+              live_out_blocks[i_out] == next_block {
+          i_out = i_out + 1
+        }
+        while i_use < use_blocks.length() && use_blocks[i_use] == next_block {
+          i_use = i_use + 1
+        }
+        while i_def < def_blocks.length() && def_blocks[i_def] == next_block {
+          i_def = i_def + 1
+        }
+        if covered_block_epoch[next_block] != epoch {
+          covered_block_epoch[next_block] = epoch
+          covered_blocks.push(next_block)
+        }
+      }
+
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        ignore(vreg_id)
       }
 
       let spans_unmerged : Array[ProgPointRange] = []
