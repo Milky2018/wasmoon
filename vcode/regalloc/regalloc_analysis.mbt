@@ -296,6 +296,8 @@ pub struct LivenessResult {
   intervals : Map[Int, LiveInterval]
   // Use-def chains
   use_def : Map[Int, UseDefInfo]
+  // Dense UseDef side table (vreg_id -> info) for regalloc hot path.
+  use_def_dense : Array[UseDefInfo?]
   // Block live-in sets (vregs live at block entry)
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
@@ -386,6 +388,7 @@ fn compute_liveness_with_options(
   let result : LivenessResult = {
     intervals: {},
     use_def: {},
+    use_def_dense: Array::make(func.next_vreg_id, None),
     live_in,
     live_out,
     block_order,
@@ -418,13 +421,36 @@ pub fn compute_liveness_for_regalloc(func : VCodeFunction) -> LivenessResult {
 }
 
 ///|
+fn ensure_use_def_info(result : LivenessResult, vreg : @abi.VReg) -> UseDefInfo {
+  if vreg.id >= 0 && vreg.id < result.use_def_dense.length() {
+    match result.use_def_dense[vreg.id] {
+      Some(info) => info
+      None => {
+        let info = UseDefInfo::new(vreg)
+        result.use_def_dense[vreg.id] = Some(info)
+        result.use_def.set(vreg.id, info)
+        info
+      }
+    }
+  } else {
+    match result.use_def.get(vreg.id) {
+      Some(existing) => existing
+      None => {
+        let info = UseDefInfo::new(vreg)
+        result.use_def.set(vreg.id, info)
+        info
+      }
+    }
+  }
+}
+
+///|
 /// Phase 1: Collect all definitions and uses
 fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Record function parameters as definitions at the start
   for param in func.params {
-    let info = UseDefInfo::new(param)
+    let info = ensure_use_def_info(result, param)
     info.def_point = Some(({ block: 0, inst: -1, pos: After }, None))
-    result.use_def.set(param.id, info)
   }
 
   // Process each block
@@ -432,13 +458,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Block parameters are SSA definitions at block entry.
     // Their incoming values are passed via Jump(target, args) on CFG edges.
     for param in block.params {
-      let info = if result.use_def.get(param.id) is Some(existing) {
-        existing
-      } else {
-        let new_info = UseDefInfo::new(param)
-        result.use_def.set(param.id, new_info)
-        new_info
-      }
+      let info = ensure_use_def_info(result, param)
       let def_point : ProgPoint = { block: block_idx, inst: -1, pos: After }
       if info.def_point is Some(_) {
         abort("block param defined twice")
@@ -471,13 +491,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Record uses (before the instruction)
       for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
-          let info = if result.use_def.get(vreg.id) is Some(existing) {
-            existing
-          } else {
-            let new_info = UseDefInfo::new(vreg)
-            result.use_def.set(vreg.id, new_info)
-            new_info
-          }
+          let info = ensure_use_def_info(result, vreg)
           let fixed = if i < inst.use_constraints.length() &&
             inst.use_constraints[i] is @abi.FixedReg(preg) {
             Some(preg)
@@ -493,14 +507,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Record definitions (after the instruction)
       for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) {
-          let info = match result.use_def.get(vreg.id) {
-            Some(existing) => existing
-            None => {
-              let new_info = UseDefInfo::new(vreg)
-              result.use_def.set(vreg.id, new_info)
-              new_info
-            }
-          }
+          let info = ensure_use_def_info(result, vreg)
           let new_def : ProgPoint = {
             block: block_idx,
             inst: inst_idx,
@@ -530,13 +537,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
         inst_idx : Int,
       ) -> Unit {
         if reg is @abi.Virtual(vreg) {
-          let info = if result.use_def.get(vreg.id) is Some(existing) {
-            existing
-          } else {
-            let new_info = UseDefInfo::new(vreg)
-            result.use_def.set(vreg.id, new_info)
-            new_info
-          }
+          let info = ensure_use_def_info(result, vreg)
           info.use_points.push(
             ({ block: block_idx, inst: inst_idx, pos: Before }, None),
           )

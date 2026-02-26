@@ -139,6 +139,7 @@ pub fn LiveRangeSet::length(Self) -> Int
 pub struct LivenessResult {
   intervals : Map[Int, LiveInterval]
   use_def : Map[Int, UseDefInfo]
+  use_def_dense : Array[UseDefInfo?]
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
   block_order : FixedArray[Int]
