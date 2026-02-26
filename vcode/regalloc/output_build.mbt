@@ -6,22 +6,53 @@
 //   interleaves with instructions.
 
 ///|
-fn vreg_home_loc(vreg : @abi.VReg, alloc : RegAllocResult) -> Loc {
-  match alloc.assignments.get(vreg.id) {
-    Some(preg) => Reg(preg)
-    None =>
-      match alloc.spill_slots.get(vreg.id) {
-        Some(slot) => Spill(slot)
-        None => abort("missing allocation for vreg \{vreg.id}")
-      }
+fn assigned_preg_of(
+  vreg_id : Int,
+  assigned_pregs : Array[@abi.PReg?],
+) -> @abi.PReg? {
+  if vreg_id >= 0 && vreg_id < assigned_pregs.length() {
+    assigned_pregs[vreg_id]
+  } else {
+    None
   }
 }
 
 ///|
-fn reg_home_loc(reg : @abi.Reg, alloc : RegAllocResult) -> Loc {
+fn spill_slot_of(vreg_id : Int, spill_slots : Array[Int]) -> Int {
+  if vreg_id >= 0 && vreg_id < spill_slots.length() {
+    spill_slots[vreg_id]
+  } else {
+    -1
+  }
+}
+
+///|
+fn vreg_home_loc_dense(
+  vreg : @abi.VReg,
+  assigned_pregs : Array[@abi.PReg?],
+  spill_slots : Array[Int],
+) -> Loc {
+  if assigned_preg_of(vreg.id, assigned_pregs) is Some(preg) {
+    Reg(preg)
+  } else {
+    let slot = spill_slot_of(vreg.id, spill_slots)
+    if slot >= 0 {
+      Spill(slot)
+    } else {
+      abort("missing allocation for vreg \{vreg.id}")
+    }
+  }
+}
+
+///|
+fn reg_home_loc_dense(
+  reg : @abi.Reg,
+  assigned_pregs : Array[@abi.PReg?],
+  spill_slots : Array[Int],
+) -> Loc {
   match reg {
     @abi.Physical(preg) => Reg(preg)
-    @abi.Virtual(vreg) => vreg_home_loc(vreg, alloc)
+    @abi.Virtual(vreg) => vreg_home_loc_dense(vreg, assigned_pregs, spill_slots)
   }
 }
 
@@ -257,10 +288,23 @@ fn build_output(
 ) -> Output {
   let out = Output::new()
   out.num_spillslots = alloc.num_spill_slots
+  let max_vreg_id = func.next_vreg_id
+  let assigned_pregs : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
+  let spill_slots : Array[Int] = Array::make(max_vreg_id, -1)
+  for vreg_id, preg in alloc.assignments {
+    if vreg_id >= 0 && vreg_id < max_vreg_id {
+      assigned_pregs[vreg_id] = Some(preg)
+    }
+  }
+  for vreg_id, slot in alloc.spill_slots {
+    if vreg_id >= 0 && vreg_id < max_vreg_id {
+      spill_slots[vreg_id] = slot
+    }
+  }
 
   // Param allocations (used by the prologue).
   for p in func.params {
-    out.param_locs.push(vreg_home_loc(p, alloc))
+    out.param_locs.push(vreg_home_loc_dense(p, assigned_pregs, spill_slots))
   }
 
   // Coalesced reload intervals.
@@ -421,6 +465,11 @@ fn build_output(
   let used_int_marks = Array::make(USED_REG_MARK_CAP, 0)
   let used_fp_marks = Array::make(USED_REG_MARK_CAP, 0)
   let mut used_epoch = 1
+  let spill_use_tmp_idx = Array::make(max_vreg_id, -1)
+  let spill_use_tmp_epoch = Array::make(max_vreg_id, 0)
+  let spill_def_tmp_idx = Array::make(max_vreg_id, -1)
+  let spill_def_tmp_epoch = Array::make(max_vreg_id, 0)
+  let mut spill_tmp_epoch = 1
   for block_id, block in func.blocks {
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
@@ -439,7 +488,7 @@ fn build_output(
               @abi.Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
                       used_int_marks, used_fp_marks, epoch, preg,
@@ -458,7 +507,7 @@ fn build_output(
               @abi.Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
                       used_int_marks, used_fp_marks, epoch, preg,
@@ -490,22 +539,30 @@ fn build_output(
       }
 
       // Reload spilled uses into temps as needed.
-      let spill_regs : Map[Int, @abi.PReg] = {}
+      spill_tmp_epoch = spill_tmp_epoch + 1
+      let spill_epoch = spill_tmp_epoch
       for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) &&
-          alloc.assignments.get(vreg.id) is None &&
-          alloc.spill_slots.get(vreg.id) is Some(slot) {
+          assigned_preg_of(vreg.id, assigned_pregs) is None {
+          let slot = spill_slot_of(vreg.id, spill_slots)
+          if slot < 0 {
+            continue
+          }
           // Fixed-reg constraints are handled by constraint edits.
           if fixed_use_preg(inst, i) is Some(_) {
             continue
           }
+          guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+            abort("vreg id out of range in output build: \{vreg.id}")
+          }
           // If already assigned a temp within this instruction, reuse it.
-          if spill_regs.get(vreg.id) is Some(_) {
+          if spill_use_tmp_epoch[vreg.id] == spill_epoch {
             continue
           }
           // If the slot is currently active in a coalesced reload reg, reuse it.
           if active_reloads.get(slot) is Some(rp) {
-            spill_regs.set(vreg.id, rp)
+            spill_use_tmp_epoch[vreg.id] = spill_epoch
+            spill_use_tmp_idx[vreg.id] = rp.index
             continue
           }
           // If this slot has a coalesced interval reg, load once and keep active.
@@ -518,7 +575,8 @@ fn build_output(
               Edit::Move(Spill(slot), Reg(rp), vreg.class),
             )
             active_reloads.set(slot, rp)
-            spill_regs.set(vreg.id, rp)
+            spill_use_tmp_epoch[vreg.id] = spill_epoch
+            spill_use_tmp_idx[vreg.id] = rp.index
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, rp)
             continue
           }
@@ -559,20 +617,26 @@ fn build_output(
             Before,
             Edit::Move(Spill(slot), Reg(tmp), vreg.class),
           )
-          spill_regs.set(vreg.id, tmp)
+          spill_use_tmp_epoch[vreg.id] = spill_epoch
+          spill_use_tmp_idx[vreg.id] = tmp.index
           add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
         }
       }
 
       // Allocate spilled defs to temps and store after the instruction.
-      let spill_def_regs : Map[Int, @abi.PReg] = {}
       for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) &&
-          alloc.assignments.get(vreg.id) is None &&
-          alloc.spill_slots.get(vreg.id) is Some(slot) {
+          assigned_preg_of(vreg.id, assigned_pregs) is None {
+          let slot = spill_slot_of(vreg.id, spill_slots)
+          if slot < 0 {
+            continue
+          }
           // Fixed-reg constraints are handled by constraint edits.
           if fixed_def_preg(inst, i) is Some(_) {
             continue
+          }
+          guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+            abort("vreg id out of range in output build: \{vreg.id}")
           }
           let (tmp, new_cursor, save_slot) = pick_temp_preg(
             out,
@@ -589,7 +653,8 @@ fn build_output(
             temp_cursor,
           )
           temp_cursor = new_cursor
-          spill_def_regs.set(vreg.id, tmp)
+          spill_def_tmp_epoch[vreg.id] = spill_epoch
+          spill_def_tmp_idx[vreg.id] = tmp.index
           add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
           if save_slot is Some(s) {
             out.push_edit(
@@ -628,14 +693,22 @@ fn build_output(
             match def.reg {
               @abi.Physical(preg) => locs.push(Reg(preg))
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => locs.push(Reg(preg))
-                  None =>
-                    match spill_def_regs.get(vreg.id) {
-                      Some(tmp) => locs.push(Reg(tmp))
-                      None =>
-                        abort("missing spilled def temp for vreg \{vreg.id}")
+                  None => {
+                    guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+                      abort("vreg id out of range in output build: \{vreg.id}")
                     }
+                    if spill_def_tmp_epoch[vreg.id] == spill_epoch {
+                      let tmp = @abi.PReg::{
+                        index: spill_def_tmp_idx[vreg.id],
+                        class: vreg.class,
+                      }
+                      locs.push(Reg(tmp))
+                    } else {
+                      abort("missing spilled def temp for vreg \{vreg.id}")
+                    }
+                  }
                 }
             }
         }
@@ -648,14 +721,22 @@ fn build_output(
             match use_reg {
               @abi.Physical(preg) => locs.push(Reg(preg))
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => locs.push(Reg(preg))
-                  None =>
-                    match spill_regs.get(vreg.id) {
-                      Some(tmp) => locs.push(Reg(tmp))
-                      None =>
-                        abort("missing spilled use temp for vreg \{vreg.id}")
+                  None => {
+                    guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+                      abort("vreg id out of range in output build: \{vreg.id}")
                     }
+                    if spill_use_tmp_epoch[vreg.id] == spill_epoch {
+                      let tmp = @abi.PReg::{
+                        index: spill_use_tmp_idx[vreg.id],
+                        class: vreg.class,
+                      }
+                      locs.push(Reg(tmp))
+                    } else {
+                      abort("missing spilled use temp for vreg \{vreg.id}")
+                    }
+                  }
                 }
             }
         }
@@ -683,8 +764,12 @@ fn build_output(
             if i >= args.length() {
               break
             }
-            let from_loc = reg_home_loc(args[i], alloc)
-            let to_loc = vreg_home_loc(param, alloc)
+            let from_loc = reg_home_loc_dense(
+              args[i],
+              assigned_pregs,
+              spill_slots,
+            )
+            let to_loc = vreg_home_loc_dense(param, assigned_pregs, spill_slots)
             moves.push({ from: from_loc, to: to_loc, class: param.class })
           }
           if !moves.is_empty() {
@@ -712,7 +797,7 @@ fn build_output(
               @abi.Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
                       used_int_marks, used_fp_marks, epoch, preg,
@@ -721,16 +806,24 @@ fn build_output(
                 }
             }
           }
-          let spill_regs : Map[Int, @abi.PReg] = {}
+          spill_tmp_epoch = spill_tmp_epoch + 1
+          let spill_epoch = spill_tmp_epoch
           for r in use_regs {
             if r is @abi.Virtual(vreg) &&
-              alloc.assignments.get(vreg.id) is None &&
-              alloc.spill_slots.get(vreg.id) is Some(slot) {
-              if spill_regs.get(vreg.id) is Some(_) {
+              assigned_preg_of(vreg.id, assigned_pregs) is None {
+              let slot = spill_slot_of(vreg.id, spill_slots)
+              if slot < 0 {
+                continue
+              }
+              guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+                abort("vreg id out of range in output build: \{vreg.id}")
+              }
+              if spill_use_tmp_epoch[vreg.id] == spill_epoch {
                 continue
               }
               if active_reloads.get(slot) is Some(rp) {
-                spill_regs.set(vreg.id, rp)
+                spill_use_tmp_epoch[vreg.id] = spill_epoch
+                spill_use_tmp_idx[vreg.id] = rp.index
                 continue
               }
               let (tmp, new_cursor, _save_slot) = pick_temp_preg(
@@ -754,7 +847,8 @@ fn build_output(
                 Before,
                 Edit::Move(Spill(slot), Reg(tmp), vreg.class),
               )
-              spill_regs.set(vreg.id, tmp)
+              spill_use_tmp_epoch[vreg.id] = spill_epoch
+              spill_use_tmp_idx[vreg.id] = tmp.index
               add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
             }
           }
@@ -763,16 +857,24 @@ fn build_output(
             match r {
               @abi.Physical(preg) => locs.push(Reg(preg))
               @abi.Virtual(vreg) =>
-                match alloc.assignments.get(vreg.id) {
+                match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => locs.push(Reg(preg))
-                  None =>
-                    match spill_regs.get(vreg.id) {
-                      Some(tmp) => locs.push(Reg(tmp))
-                      None =>
-                        abort(
-                          "missing spilled terminator use temp for vreg \{vreg.id}",
-                        )
+                  None => {
+                    guard vreg.id >= 0 && vreg.id < max_vreg_id else {
+                      abort("vreg id out of range in output build: \{vreg.id}")
                     }
+                    if spill_use_tmp_epoch[vreg.id] == spill_epoch {
+                      let tmp = @abi.PReg::{
+                        index: spill_use_tmp_idx[vreg.id],
+                        class: vreg.class,
+                      }
+                      locs.push(Reg(tmp))
+                    } else {
+                      abort(
+                        "missing spilled terminator use temp for vreg \{vreg.id}",
+                      )
+                    }
+                  }
                 }
             }
           }
