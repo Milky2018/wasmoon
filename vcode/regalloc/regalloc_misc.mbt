@@ -305,9 +305,9 @@ pub fn allocate_registers_backtracking_with_isa(
 ) -> VCodeFunction {
   // Step 0: Eliminate dead code first
   let func = eliminate_dead_code(func)
-  let func = rematerialize_cross_block_constants(func)
-  // Remat may make original const-defs dead in their original blocks.
-  let func = eliminate_dead_code(func)
+  // Cranelift/regalloc2 performs rematerialization decisions inside regalloc,
+  // not as a whole-function pre-pass over lowered VCode. Keeping this path
+  // single-pass reduces compile-time overhead on large kernels.
 
   // Build register pools
   let (
