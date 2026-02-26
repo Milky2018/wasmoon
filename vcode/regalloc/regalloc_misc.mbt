@@ -385,7 +385,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   }
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
-  let output = build_output(func, alloc_result, isa, settings)
+  let output = build_output(func, liveness, alloc_result, isa, settings)
   output.validate_for_isa(isa)
   (func, output)
 }

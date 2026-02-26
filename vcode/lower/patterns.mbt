@@ -308,7 +308,11 @@ fn pattern_opcode_eq(a : PatternOpcode, b : PatternOpcode) -> Bool {
 ///|
 /// Find the instruction that defines a given value
 fn find_defining_inst(ctx : LoweringContext, value : @ir.Value) -> @ir.Inst? {
-  ctx.def_inst_map.get(value.id)
+  if value.id >= 0 && value.id < ctx.def_inst_table.length() {
+    ctx.def_inst_table[value.id]
+  } else {
+    None
+  }
 }
 
 // ============ Rewrite Rules ============

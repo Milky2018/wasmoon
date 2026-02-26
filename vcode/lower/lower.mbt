@@ -38,10 +38,10 @@ struct LoweringContext {
   // Values that should not be lowered because they are subsumed by a fused instruction
   // (Cranelift-style ISel fusion; e.g. imul/ishl used only by madd/add_shift).
   skipped_values : @hashset.HashSet[Int]
-  // Use counts for IR values (used to skip unused call results)
-  use_counts : Map[Int, Int]
-  // Value id -> defining IR instruction for O(1) lookup during pattern matching.
-  def_inst_map : Map[Int, @ir.Inst]
+  // Use counts for IR values (dense table, Cranelift SecondaryMap-style).
+  use_counts : Array[Int]
+  // Value-id keyed defining instruction table (dense, Cranelift-style).
+  def_inst_table : Array[@ir.Inst?]
 }
 
 ///|
@@ -53,11 +53,20 @@ pub fn LoweringContext::new(
   canonical_type_indices : Array[Int],
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
-  let def_inst_map : Map[Int, @ir.Inst] = {}
+  let def_inst_table : Array[@ir.Inst?] = []
+  fn ensure_def_slot(table : Array[@ir.Inst?], value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    while table.length() <= value_id {
+      table.push(None)
+    }
+  }
   for block in ir_func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(result) {
-        def_inst_map.set(result.id, inst)
+        ensure_def_slot(def_inst_table, result.id)
+        def_inst_table[result.id] = Some(inst)
       }
     }
   }
@@ -77,7 +86,7 @@ pub fn LoweringContext::new(
     fused_icmps: @hashset.new(),
     skipped_values: @hashset.new(),
     use_counts,
-    def_inst_map,
+    def_inst_table,
   }
 }
 
@@ -309,7 +318,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
     }
   }
   for value_id, subsumed_count in addrmode_subsumed_uses {
-    if ctx.use_counts.get(value_id).unwrap_or(0) == subsumed_count {
+    if use_count(ctx.use_counts, value_id) == subsumed_count {
       addrmode_skipped.add(value_id)
     }
   }
@@ -335,35 +344,35 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // multiply can be fused into a single MADD; the other must be materialized.
           let lhs = inst.operands[0]
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_mul_value(ctx, lhs) is Some(_) {
             skipped.add(lhs.id)
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
             skipped.add(lhs.id)
             continue
           }
           if is_i64 &&
-            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
             skipped.add(rhs.id)
             continue
           }
           if is_i64 &&
-            ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, lhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
             skipped.add(lhs.id)
@@ -378,17 +387,17 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             continue
           }
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
           }
           if enable_subextend_fusion &&
             is_i64 &&
-            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
             skipped.add(rhs.id)
@@ -421,14 +430,14 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
           if inst.opcode is @ir.Opcode::Bor &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
-            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
               skipped.add(lhs.id)
             }
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
@@ -439,14 +448,14 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
           if inst.opcode is @ir.Opcode::Bor &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
-            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
               skipped.add(lhs.id)
             }
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
@@ -455,22 +464,22 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             }
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_bnot_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_bnot_value(ctx, lhs) is Some(_) {
             skipped.add(lhs.id)
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
             skipped.add(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
             skipped.add(lhs.id)
             continue
@@ -488,13 +497,33 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
 
 ///|
 /// Compute use counts for each IR value.
-fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
-  let use_counts : Map[Int, Int] = {}
+fn ensure_use_count_slot(use_counts : Array[Int], value_id : Int) -> Unit {
+  if value_id < 0 {
+    return
+  }
+  while use_counts.length() <= value_id {
+    use_counts.push(0)
+  }
+}
+
+///|
+fn use_count(use_counts : Array[Int], value_id : Int) -> Int {
+  if value_id >= 0 && value_id < use_counts.length() {
+    use_counts[value_id]
+  } else {
+    0
+  }
+}
+
+///|
+/// Compute use counts for each IR value.
+fn compute_use_counts(ir_func : @ir.Function) -> Array[Int] {
+  let use_counts : Array[Int] = []
   for block in ir_func.blocks {
     for inst in block.instructions {
       for op in inst.operands {
-        let count = use_counts.get(op.id).unwrap_or(0)
-        use_counts.set(op.id, count + 1)
+        ensure_use_count_slot(use_counts, op.id)
+        use_counts[op.id] = use_counts[op.id] + 1
       }
     }
     // Also count uses in terminators
@@ -507,8 +536,8 @@ fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
         @ir.Terminator::Trap(_) => []
       }
       for v in term_uses {
-        let count = use_counts.get(v.id).unwrap_or(0)
-        use_counts.set(v.id, count + 1)
+        ensure_use_count_slot(use_counts, v.id)
+        use_counts[v.id] = use_counts[v.id] + 1
       }
     }
   }
@@ -520,7 +549,7 @@ fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
 /// This allows lower_icmp to skip emitting redundant Cmp instructions.
 fn compute_fused_icmps(
   ir_func : @ir.Function,
-  use_counts : Map[Int, Int],
+  use_counts : Array[Int],
 ) -> @hashset.HashSet[Int] {
   // Find Icmp results that have exactly one use in a Select or branch
   let fused : @hashset.HashSet[Int] = @hashset.new()
@@ -530,7 +559,7 @@ fn compute_fused_icmps(
       if inst.opcode is @ir.Opcode::Select {
         let cond = inst.operands[0]
         // Check if the condition is an Icmp result with exactly one use
-        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+        if use_count(use_counts, cond.id) == 1 {
           // Find the defining instruction of the condition
           for b in ir_func.blocks {
             for i in b.instructions {
@@ -549,7 +578,7 @@ fn compute_fused_icmps(
       Some(@ir.Terminator::Brz(cond, _, _))
       | Some(@ir.Terminator::Brnz(cond, _, _)) =>
         // Check if the condition is an Icmp result with exactly one use
-        if use_counts.get(cond.id).unwrap_or(0) == 1 {
+        if use_count(use_counts, cond.id) == 1 {
           // Find the defining instruction of the condition
           for b in ir_func.blocks {
             for i in b.instructions {
@@ -576,7 +605,7 @@ fn collect_call_result_vregs(
 ) -> Array[@abi.VReg] {
   let mut any_used = false
   for result in inst.all_results() {
-    if ctx.use_counts.get(result.id).unwrap_or(0) > 0 {
+    if use_count(ctx.use_counts, result.id) > 0 {
       any_used = true
       break
     }
@@ -597,7 +626,7 @@ fn try_collect_call_arg_const(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> CallConstArg? {
-  if ctx.use_counts.get(value.id).unwrap_or(0) != 1 {
+  if use_count(ctx.use_counts, value.id) != 1 {
     return None
   }
   if find_defining_inst(ctx, value) is Some(inst) {

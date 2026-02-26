@@ -282,6 +282,7 @@ fn pick_temp_preg(
 ///   `Loc::Reg`.
 fn build_output(
   func : VCodeFunction,
+  liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
@@ -309,7 +310,7 @@ fn build_output(
 
   // Coalesced reload intervals.
   let reload_intervals = compute_reload_intervals(func, alloc)
-  allocate_reload_registers(func, alloc, reload_intervals)
+  allocate_reload_registers(func, alloc, reload_intervals, liveness)
 
   // Temp-reg pools for local reloads when no coalescing is available.
   let used_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
