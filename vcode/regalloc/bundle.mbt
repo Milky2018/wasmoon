@@ -9,6 +9,7 @@ struct Bundle {
   id : Int
   mut spillset_id : Int // Original bundle ID before splitting (Cranelift-style spillset)
   range_ids : Array[Int] // Indices into LiveRangeSet
+  mut merged_ranges : Array[ProgPointRange]? // Sorted merged ranges for fast regalloc span setup
   mut spill_weight : Double // Priority for allocation (higher = more important)
   mut prio : Int // Cached queue priority (total covered length)
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
@@ -29,6 +30,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     id,
     spillset_id: id,
     range_ids: [],
+    merged_ranges: None,
     spill_weight: 0.0,
     prio: 1,
     spill_bundle_id: -1,
@@ -48,6 +50,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
 /// Add a LiveRange to this bundle
 fn Bundle::add_range(self : Bundle, range_id : Int) -> Unit {
   self.range_ids.push(range_id)
+  self.merged_ranges = None
   self.call_flags_ready = false
   self.requirement_flags_ready = false
 }

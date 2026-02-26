@@ -13,6 +13,8 @@ struct EGraphBuilder {
   class_to_value : Map[RepKey, Value]
   // Dense map from IR Value id to its defining instruction.
   def_map : Array[Inst?]
+  // Dense map from IR Value id to its e-graph-encodable opcode (if pure/admitted).
+  def_eop_map : Array[@egraph.EOpcode?]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
   // Rewrite limits (Cranelift-style hard caps).
@@ -56,6 +58,7 @@ pub fn EGraphBuilder::new_with_limits_and_ruleset(
     value_map: [],
     class_to_value: {},
     def_map: [],
+    def_eop_map: [],
     ruleset,
     saturation_limits,
   }
@@ -75,6 +78,9 @@ fn EGraphBuilder::ensure_value_slot(
   while self.def_map.length() <= value_id {
     self.def_map.push(None)
   }
+  while self.def_eop_map.length() <= value_id {
+    self.def_eop_map.push(None)
+  }
 }
 
 ///|
@@ -91,6 +97,9 @@ fn EGraphBuilder::reserve_value_slots(
   while self.def_map.length() < count {
     self.def_map.push(None)
   }
+  while self.def_eop_map.length() < count {
+    self.def_eop_map.push(None)
+  }
 }
 
 ///|
@@ -99,6 +108,7 @@ pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
     self.ensure_value_slot(v.id)
     self.def_map[v.id] = Some(inst)
+    self.def_eop_map[v.id] = opcode_to_eopcode(inst)
   }
 }
 
@@ -254,8 +264,7 @@ pub fn EGraphBuilder::add_value(
   let class_id = if value.id >= 0 &&
     value.id < self.def_map.length() &&
     self.def_map[value.id] is Some(inst) {
-    // Try to convert the opcode (pass full instruction for type info)
-    match opcode_to_eopcode(inst) {
+    match self.def_eop_map[value.id] {
       None => {
         // Not an optimizable opcode - treat as variable
         let id = self.egraph.add_var(value.id)
@@ -263,6 +272,7 @@ pub fn EGraphBuilder::add_value(
         id
       }
       Some(eop) =>
+        // Optimizable opcode: recursively add operands, then add node.
         match eop {
           Const(c) => {
             let id = self.egraph.add_const(c)
@@ -350,8 +360,10 @@ pub fn optimize_block_with_limits(
 
   // Second pass: add all arithmetic values to e-graph
   for inst in block.instructions {
-    if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
-      // Only add if it's an optimizable operation
+    if inst.first_result() is Some(v) &&
+      v.id >= 0 &&
+      v.id < builder.def_eop_map.length() &&
+      builder.def_eop_map[v.id] is Some(_) {
       builder.add_value(v) |> ignore
     }
   }
@@ -552,7 +564,10 @@ pub fn optimize_function_with_stats_with_limits_and_ruleset(
   for block in func.blocks {
     // Add all e-graph-admitted values from all blocks.
     for inst in block.instructions {
-      if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+      if inst.first_result() is Some(v) &&
+        v.id >= 0 &&
+        v.id < builder.def_eop_map.length() &&
+        builder.def_eop_map[v.id] is Some(_) {
         builder.add_value(v) |> ignore
       }
     }

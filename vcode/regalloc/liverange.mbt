@@ -258,16 +258,11 @@ pub fn LiveRange::start(
   self : LiveRange,
   block_order : FixedArray[Int],
 ) -> ProgPoint? {
+  ignore(block_order)
   if self.ranges.is_empty() {
     return None
   }
-  let mut earliest = self.ranges[0].start
-  for range in self.ranges {
-    if range.start.compare_with_order(earliest, block_order) < 0 {
-      earliest = range.start
-    }
-  }
-  Some(earliest)
+  Some(self.ranges[0].start)
 }
 
 ///|
@@ -276,16 +271,11 @@ pub fn LiveRange::end(
   self : LiveRange,
   block_order : FixedArray[Int],
 ) -> ProgPoint? {
+  ignore(block_order)
   if self.ranges.is_empty() {
     return None
   }
-  let mut latest = self.ranges[0].end
-  for range in self.ranges {
-    if range.end.compare_with_order(latest, block_order) > 0 {
-      latest = range.end
-    }
-  }
-  Some(latest)
+  Some(self.ranges[self.ranges.length() - 1].end)
 }
 
 ///|

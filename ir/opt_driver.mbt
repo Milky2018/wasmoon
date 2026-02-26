@@ -76,11 +76,9 @@ fn run_egraph_pass(func : Function) -> Bool {
     return false
   }
   let limits = egraph_limits_for_function(func)
-  let ruleset = if insts >= 200 {
-    @egraph.get_compact_ruleset()
-  } else {
-    @egraph.get_global_ruleset()
-  }
+  // Keep to a compact Cranelift-like core rewrite set for predictable compile
+  // time on all non-mega functions.
+  let ruleset = @egraph.get_compact_ruleset()
   if !@perf.enabled() {
     return optimize_function_with_stats_with_limits_and_ruleset(
         func, limits, ruleset,

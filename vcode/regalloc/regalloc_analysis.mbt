@@ -159,59 +159,90 @@ priv struct CFGEdges {
 }
 
 ///|
+fn build_block_id_to_index_dense(func : VCodeFunction) -> Array[Int] {
+  let mut max_block_id = -1
+  for block in func.blocks {
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
+  }
+  if max_block_id < 0 {
+    return []
+  }
+  let block_id_to_index = Array::make(max_block_id + 1, -1)
+  for i, block in func.blocks {
+    if block.id >= 0 && block.id < block_id_to_index.length() {
+      block_id_to_index[block.id] = i
+    }
+  }
+  block_id_to_index
+}
+
+///|
 /// Build CFG edges once (O(B + E))
 fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
   let blocks = func.blocks
   let n = func.blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index = build_block_id_to_index_dense(func)
 
   // Initialize arrays
   for _ in 0..<n {
     preds.push([])
     succs.push([])
   }
-  for i, block in blocks {
-    block_id_to_index.set(block.id, i)
-  }
 
   // Build edges from terminators
   for block_idx, block in blocks {
     if block.terminator is Some(term) {
-      let block_succ_ids = get_terminator_succ_ids(term)
       let block_succs : Array[Int] = []
-      for succ_id in block_succ_ids {
-        if block_id_to_index.get(succ_id) is Some(succ_idx) {
-          block_succs.push(succ_idx)
-          preds[succ_idx].push(block_idx)
+      fn push_succ(
+        block_id_to_index : Array[Int],
+        block_succs : Array[Int],
+        preds : Array[Array[Int]],
+        block_idx : Int,
+        succ_id : Int,
+      ) -> Unit {
+        if succ_id >= 0 && succ_id < block_id_to_index.length() {
+          let succ_idx = block_id_to_index[succ_id]
+          if succ_idx >= 0 {
+            block_succs.push(succ_idx)
+            preds[succ_idx].push(block_idx)
+          }
         }
+      }
+      match term {
+        Jump(target, _) =>
+          push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+        Branch(_, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BrTable(_, targets, default) => {
+          for target in targets {
+            push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+          }
+          push_succ(block_id_to_index, block_succs, preds, block_idx, default)
+        }
+        Return(_) | Trap(_) => ()
       }
       succs[block_idx] = block_succs
     }
   }
   { preds, succs }
-}
-
-///|
-/// Extract successor block IDs from terminator
-fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
-  match term {
-    Jump(target, _) => [target]
-    Branch(_, then_b, else_b) => [then_b, else_b]
-    BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
-    BrTable(_, targets, default) => {
-      let result : Array[Int] = []
-      for t in targets {
-        result.push(t)
-      }
-      result.push(default)
-      result
-    }
-    Return(_) | Trap(_) => []
-  }
 }
 
 // ============ Worklist ============
@@ -316,19 +347,15 @@ pub struct LivenessResult {
 /// Compute reverse postorder of blocks (for linearizing the CFG)
 /// Returns a FixedArray where order[block_idx] = position in reverse postorder
 fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
-  let blocks = func.blocks
   let n = func.blocks.length()
   let visited : Array[Bool] = Array::make(n, false)
   let postorder : Array[Int] = []
-  let block_id_to_index : Map[Int, Int] = {}
-  for i, block in blocks {
-    block_id_to_index.set(block.id, i)
-  }
+  let block_id_to_index = build_block_id_to_index_dense(func)
 
   // DFS to compute postorder
   fn dfs(
     func : VCodeFunction,
-    block_id_to_index : Map[Int, Int],
+    block_id_to_index : Array[Int],
     block_idx : Int,
     visited : Array[Bool],
     postorder : Array[Int],
@@ -341,11 +368,46 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
     // Visit successors first
     let block = func.blocks[block_idx]
     if block.terminator is Some(term) {
-      let succ_ids = get_terminator_succ_ids(term)
-      for succ_id in succ_ids {
-        if block_id_to_index.get(succ_id) is Some(succ_idx) {
-          dfs(func, block_id_to_index, succ_idx, visited, postorder)
+      fn visit_succ(
+        func : VCodeFunction,
+        block_id_to_index : Array[Int],
+        succ_id : Int,
+        visited : Array[Bool],
+        postorder : Array[Int],
+      ) -> Unit {
+        if succ_id >= 0 && succ_id < block_id_to_index.length() {
+          let succ_idx = block_id_to_index[succ_id]
+          if succ_idx >= 0 {
+            dfs(func, block_id_to_index, succ_idx, visited, postorder)
+          }
         }
+      }
+      match term {
+        Jump(target, _) =>
+          visit_succ(func, block_id_to_index, target, visited, postorder)
+        Branch(_, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BrTable(_, targets, default) => {
+          for target in targets {
+            visit_succ(func, block_id_to_index, target, visited, postorder)
+          }
+          visit_succ(func, block_id_to_index, default, visited, postorder)
+        }
+        Return(_) | Trap(_) => ()
       }
     }
 

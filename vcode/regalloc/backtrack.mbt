@@ -486,18 +486,30 @@ fn BacktrackingAllocator::bundle_sorted_spans(
     self.bundle_span_cache[bundle.id] is Some(spans) {
     return spans
   }
-  let spans : Array[OrderedSpan] = []
-  for range_id in bundle.range_ids {
-    let range = self.ranges.get(range_id)
-    for raw_span in range.ranges {
-      spans.push({
-        start: raw_span.start,
-        start_ord: self.point_order(raw_span.start),
-        end_ord: self.point_order(raw_span.end),
+  let raw_spans = match bundle.merged_ranges {
+    Some(spans) => spans
+    None => {
+      let spans : Array[ProgPointRange] = []
+      for range_id in bundle.range_ids {
+        let range = self.ranges.get(range_id)
+        for raw_span in range.ranges {
+          spans.push(raw_span)
+        }
+      }
+      spans.sort_by(fn(a, b) {
+        a.start.compare_with_order(b.start, self.block_order)
       })
+      spans
     }
   }
-  spans.sort_by(fn(a, b) { a.start_ord - b.start_ord })
+  let spans : Array[OrderedSpan] = []
+  for raw_span in raw_spans {
+    spans.push({
+      start: raw_span.start,
+      start_ord: self.point_order(raw_span.start),
+      end_ord: self.point_order(raw_span.end),
+    })
+  }
   if bundle.id >= 0 && bundle.id < self.bundle_span_cache.length() {
     self.bundle_span_cache[bundle.id] = Some(spans)
   }
@@ -1401,6 +1413,9 @@ pub fn BacktrackingAllocator::generate_result(
     num_spill_slots: self.bundles.next_spill_slot,
     inst_edits: {},
   }
+  let max_vreg_id = self.func.next_vreg_id
+  let assignment_dense : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
+  let spill_slot_dense : Array[Int] = Array::make(max_vreg_id, -1)
 
   // Collect assignments from LiveRanges
   for i in 0..<self.ranges.length() {
@@ -1415,8 +1430,16 @@ pub fn BacktrackingAllocator::generate_result(
           class: range.vreg.class,
         }
         result.assignments.set(range.vreg.id, corrected_preg)
+        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
+          assignment_dense[range.vreg.id] = Some(corrected_preg)
+        }
       }
-      Spill(slot) => result.spill_slots.set(range.vreg.id, slot)
+      Spill(slot) => {
+        result.spill_slots.set(range.vreg.id, slot)
+        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
+          spill_slot_dense[range.vreg.id] = slot
+        }
+      }
       Unallocated => () // Should not happen after allocation
     }
   }
@@ -1438,7 +1461,20 @@ pub fn BacktrackingAllocator::generate_result(
           let use_reg = inst.uses[i]
           if use_reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              assignment_dense[vreg.id]
+            } else {
+              result.assignments.get(vreg.id)
+            }
+            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              spill_slot_dense[vreg.id]
+            } else {
+              match result.spill_slots.get(vreg.id) {
+                Some(slot) => slot
+                None => -1
+              }
+            }
+            if assigned_opt is Some(assigned_preg) {
               if assigned_preg.index != required_preg.index {
                 // Need to move from assigned to required
                 edits.before.push({
@@ -1447,10 +1483,10 @@ pub fn BacktrackingAllocator::generate_result(
                   class: vreg.class,
                 })
               }
-            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+            } else if spill_slot >= 0 {
               // Spilled: need to reload to the required register
               edits.before.push({
-                from: Spill(slot),
+                from: Spill(spill_slot),
                 to: Reg(required_preg),
                 class: vreg.class,
               })
@@ -1473,7 +1509,20 @@ pub fn BacktrackingAllocator::generate_result(
           let def = inst.defs[i]
           if def.reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              assignment_dense[vreg.id]
+            } else {
+              result.assignments.get(vreg.id)
+            }
+            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              spill_slot_dense[vreg.id]
+            } else {
+              match result.spill_slots.get(vreg.id) {
+                Some(slot) => slot
+                None => -1
+              }
+            }
+            if assigned_opt is Some(assigned_preg) {
               if assigned_preg.index != required_preg.index {
                 // Need to move from required to assigned
                 // (the instruction produces in required_preg, we need to move to assigned)
@@ -1483,11 +1532,11 @@ pub fn BacktrackingAllocator::generate_result(
                   class: vreg.class,
                 })
               }
-            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+            } else if spill_slot >= 0 {
               // Spilled: need to store from required register to spill slot
               edits.after.push({
                 from: Reg(required_preg),
-                to: Spill(slot),
+                to: Spill(spill_slot),
                 class: vreg.class,
               })
             }
@@ -2120,16 +2169,42 @@ pub fn build_bundles_with_merging(
 
   // Merge across block arguments (SSA phi-like connections).
   if block_param_merge_enabled {
-    let block_idx : Map[Int, Int] = {}
+    let mut max_block_id = -1
+    for block in func.blocks {
+      if block.id > max_block_id {
+        max_block_id = block.id
+      }
+    }
+    let block_idx_dense : Array[Int] = Array::make(max_block_id + 1, -1)
     for i, block in func.blocks {
-      block_idx.set(block.id, i)
+      if block.id >= 0 && block.id < block_idx_dense.length() {
+        block_idx_dense[block.id] = i
+      }
+    }
+    let range_idx_dense = ranges.vreg_to_range_dense
+    fn range_idx_of_vreg(
+      ranges : LiveRangeSet,
+      dense : Array[Int],
+      vreg_id : Int,
+    ) -> Int? {
+      if vreg_id >= 0 && vreg_id < dense.length() {
+        let idx = dense[vreg_id]
+        if idx >= 0 {
+          return Some(idx)
+        }
+      }
+      ranges.get_range_index_by_vreg(vreg_id)
     }
     for pred_block in func.blocks {
       if pred_block.terminator is Some(Jump(target, args)) {
-        let target_block = match block_idx.get(target) {
-          Some(idx) => func.blocks[idx]
-          None => continue
+        if target < 0 || target >= block_idx_dense.length() {
+          continue
         }
+        let target_idx = block_idx_dense[target]
+        if target_idx < 0 {
+          continue
+        }
+        let target_block = func.blocks[target_idx]
         if target_block.params.is_empty() {
           continue
         }
@@ -2139,8 +2214,10 @@ pub fn build_bundles_with_merging(
             break
           }
           if args[i] is @abi.Virtual(arg_vreg) &&
-            ranges.get_range_index_by_vreg(param.id) is Some(param_idx) &&
-            ranges.get_range_index_by_vreg(arg_vreg.id) is Some(arg_idx) {
+            range_idx_of_vreg(ranges, range_idx_dense, param.id)
+            is Some(param_idx) &&
+            range_idx_of_vreg(ranges, range_idx_dense, arg_vreg.id)
+            is Some(arg_idx) {
             try_merge(uf, param_idx, arg_idx, ranges) |> ignore
           }
         }
@@ -2151,6 +2228,7 @@ pub fn build_bundles_with_merging(
   // Build final bundles from union-find roots (dense-indexed, regalloc2-style).
   let result = BundleSet::new()
   let root_to_bundle : Array[Int] = Array::make(n, -1)
+  let bundle_to_root : Array[Int] = []
   for range_idx in 0..<n {
     let root = uf.find(range_idx)
     let bundle_id = root_to_bundle[root]
@@ -2162,10 +2240,16 @@ pub fn build_bundles_with_merging(
       result.add_bundle(created)
       let new_id = created.id
       root_to_bundle[root] = new_id
+      bundle_to_root.push(root)
       created
     }
     bundle.add_range(range_idx)
     ranges.get(range_idx).bundle_id = bundle.id
+  }
+  for bundle_id in 0..<result.bundles.length() {
+    let root = bundle_to_root[bundle_id]
+    let bundle = result.get(bundle_id)
+    bundle.merged_ranges = Some(root_spans(ranges, root_spans_cache, root))
   }
   result
 }
