@@ -254,20 +254,10 @@ pub fn BacktrackingAllocator::new(
       max_block_insts = block_len
     }
   }
-  // Keep split probing budgeted on large functions; regalloc2's Rust
-  // implementation can afford broader scans, but in MoonBit this keeps wall
-  // compile time predictable with minimal quality impact.
-  let large_func_threshold = 900
-  let split_probe_limit = if total_insts >= large_func_threshold {
-    2
-  } else {
-    1 << 30
-  }
-  let bundle_retry_limit = if total_insts >= large_func_threshold {
-    2
-  } else {
-    8
-  }
+  // Keep register probing/regalloc retries aligned with regalloc2 behavior:
+  // no large-function downscaling on the main allocation search.
+  let split_probe_limit = 1 << 30
+  let bundle_retry_limit = 1 << 30
   let enable_backtracking = true
   let point_block_stride = (max_block_insts + 4) * 2
   let int_max = {
@@ -1795,13 +1785,10 @@ pub fn build_bundles_with_merging(
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
   }
-  // Keep merge work bounded for very large functions (Cranelift/regalloc2-style
-  // compile-time predictability over aggressive coalescing of huge phi webs).
-  let block_param_merge_enabled = inst_count < 600
-  let move_merge_enabled = inst_count < 600
-  // Keep large-function coalescing conservative (regalloc2/Ion style):
-  // avoid growing broad copy-web bundles that inflate call-crossing pressure.
-  let merge_member_limit = if inst_count >= 600 { 8 } else { 1 << 30 }
+  // regalloc2/ion always performs bundle coalescing, bounded by overlap and
+  // complexity guards inside merge checks.
+  let block_param_merge_enabled = true
+  let move_merge_enabled = true
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
       (@abi.Int, @abi.Int) => true
@@ -2035,11 +2022,6 @@ pub fn build_bundles_with_merging(
     if root_a == root_b {
       return true
     }
-    let members_a = root_members(uf, root_members_cache, root_a)
-    let members_b = root_members(uf, root_members_cache, root_b)
-    if members_a.length() + members_b.length() > merge_member_limit {
-      return false
-    }
     let range_a = ranges.get(a)
     let range_b = ranges.get(b)
 
@@ -2135,11 +2117,10 @@ pub fn build_bundles_with_merging(
     true
   }
 
-  // Merge across Move instructions when call profiles are compatible.
+  // Merge across Move instructions.
   //
-  // Cranelift/regalloc2 does not blindly coalesce arbitrary copies: merge is
-  // constrained by live-range overlap and bundle requirements. Keep that shape
-  // here by requiring matching call-crossing profile in addition to `try_merge`.
+  // Keep this close to regalloc2's coalescing shape: merge decisions are
+  // controlled by overlap and requirement compatibility checks in `try_merge`.
   if move_merge_enabled {
     for block in func.blocks {
       for inst in block.insts {
@@ -2157,21 +2138,14 @@ pub fn build_bundles_with_merging(
           if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) &&
             ranges.vreg_to_range.get(src_id) is Some(src_idx) &&
             ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-            let src_range = ranges.get(src_idx)
-            let dst_range = ranges.get(dst_idx)
-            if src_range.crosses_wasm_call == dst_range.crosses_wasm_call &&
-              src_range.crosses_c_call == dst_range.crosses_c_call {
-              try_merge(uf, src_idx, dst_idx, ranges) |> ignore
-            }
+            try_merge(uf, src_idx, dst_idx, ranges) |> ignore
           }
         }
       }
     }
   }
 
-  // Merge across block arguments (SSA phi-like connections) when profitable.
-  // On very large functions this is intentionally disabled to avoid creating
-  // oversized bundles that increase regalloc search/split pressure.
+  // Merge across block arguments (SSA phi-like connections).
   if block_param_merge_enabled {
     let block_idx : Map[Int, Int] = {}
     for i, block in func.blocks {

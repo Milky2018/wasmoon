@@ -1260,7 +1260,7 @@ test "regalloc: backtracking allocator with register pressure" {
 }
 
 ///|
-test "regalloc: direct move does not force bundle merge" {
+test "regalloc: direct move merges regardless of call profile" {
   let func = VCodeFunction::new("merge_call_profile")
   let a = func.add_param(@abi.Int)
   func.add_result(@abi.Int)
@@ -1282,9 +1282,9 @@ test "regalloc: direct move does not force bundle merge" {
   dst.crosses_wasm_call = false
   dst.crosses_c_call = false
   let bundles = build_bundles_with_merging(func, ranges)
-  // Cranelift/regalloc2-style merge policy does not blindly merge all
-  // move-related ranges; keep these as separate bundles.
-  inspect(bundles.length(), content="2")
+  // Cranelift/regalloc2-style merge follows overlap/requirement checks rather
+  // than call-profile heuristics.
+  inspect(bundles.length(), content="1")
 }
 
 ///|
