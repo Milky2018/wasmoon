@@ -338,41 +338,50 @@ fn BacktrackingAllocator::constraint_hint_preg(
   if avail_regs.is_empty() {
     return None
   }
-  let avail_idx : Set[Int] = Set::new()
-  for r in avail_regs {
-    avail_idx.add(r.index) |> ignore
+  let mut max_idx = -1
+  for preg in avail_regs {
+    if preg.index > max_idx {
+      max_idx = preg.index
+    }
+  }
+  if max_idx < 0 {
+    return None
+  }
+  let avail_idx = Array::make(max_idx + 1, false)
+  let counts = Array::make(max_idx + 1, 0)
+  for preg in avail_regs {
+    avail_idx[preg.index] = true
   }
 
   // Count how often each fixed preg appears in uses.
-  let counts : Map[Int, Int] = {}
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for use_pos in range.uses {
-      if use_pos.constraint is FixedReg(preg) &&
-        preg.class == bundle.reg_class &&
-        avail_idx.contains(preg.index) {
-        let cur = match counts.get(preg.index) {
-          Some(v) => v
-          None => 0
+      if use_pos.constraint is FixedReg(preg) && preg.class == bundle.reg_class {
+        if preg.index >= 0 &&
+          preg.index < avail_idx.length() &&
+          avail_idx[preg.index] {
+          counts[preg.index] = counts[preg.index] + 1
         }
-        counts.set(preg.index, cur + 1)
       }
     }
   }
-  let mut best : (@abi.PReg, Int)? = None
-  for idx, cnt in counts {
-    let preg : @abi.PReg = { index: idx, class: bundle.reg_class }
-    match best {
-      None => best = Some((preg, cnt))
-      Some((bp, bc)) =>
-        if cnt > bc || (cnt == bc && idx < bp.index) {
-          best = Some((preg, cnt))
-        }
+
+  let mut best_idx = -1
+  let mut best_cnt = 0
+  for preg in avail_regs {
+    let idx = preg.index
+    let cnt = counts[idx]
+    if cnt > best_cnt ||
+      (cnt == best_cnt && cnt > 0 && (best_idx < 0 || idx < best_idx)) {
+      best_idx = idx
+      best_cnt = cnt
     }
   }
-  match best {
-    Some((preg, _)) => Some(preg)
-    None => None
+  if best_idx >= 0 && best_cnt > 0 {
+    Some({ index: best_idx, class: bundle.reg_class })
+  } else {
+    None
   }
 }
 
