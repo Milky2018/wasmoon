@@ -733,10 +733,6 @@ pub fn build_live_ranges(
         }
       }
 
-      if vreg_id >= 0 && vreg_id < max_vreg_id {
-        ignore(vreg_id)
-      }
-
       let spans_unmerged : Array[ProgPointRange] = []
       for block_idx in covered_blocks {
         if covered_block_epoch[block_idx] != epoch {
