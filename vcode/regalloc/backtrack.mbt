@@ -1096,8 +1096,6 @@ fn BacktrackingAllocator::split_bundle(
 pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
   self.init_queue()
 
-  // Track processed bundles to avoid infinite loops
-  let processed : Set[Int] = Set::new()
   let max_iterations = self.bundles.length() * 10 // Safety limit
   let mut iterations = 0
   while self.queue.length() > 0 && iterations < max_iterations {
@@ -1136,7 +1134,6 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
         !bundle.is_pinned &&
         !bundle.has_fixed_constraint(self.ranges) {
         self.force_spill_bundle(bundle)
-        processed.add(entry.bundle_id)
         continue
       }
     }
@@ -1144,40 +1141,34 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     // Vector values live across calls must spill.
     if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
       self.force_spill_bundle(bundle)
-      processed.add(entry.bundle_id)
       continue
     }
 
     // Try to allocate a register
     if self.try_allocate(bundle, hint_preg) is Some(preg) {
       self.record_allocation(bundle, preg)
-      processed.add(entry.bundle_id)
       continue
     }
 
     // try_allocate may have decided to spill
     if bundle.allocation is Spill(_) {
-      processed.add(entry.bundle_id)
       continue
     }
     if !self.enable_backtracking &&
       !bundle.is_pinned &&
       !bundle.has_fixed_constraint(self.ranges) {
       self.force_spill_bundle(bundle)
-      processed.add(entry.bundle_id)
       continue
     }
 
     // Try to evict lower-weight bundles
     if self.try_evict(bundle, hint_preg) is Some(preg) {
       self.record_allocation(bundle, preg)
-      processed.add(entry.bundle_id)
       continue
     }
 
     // Split (spill) the bundle
     self.split_bundle(bundle, hint_preg)
-    processed.add(entry.bundle_id)
   }
 }
 
