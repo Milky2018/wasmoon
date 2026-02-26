@@ -78,13 +78,23 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
+  let insts = instruction_count(func)
   let limits = egraph_limits_for_function(func)
+  let ruleset = if insts >= 800 {
+    @egraph.get_compact_ruleset()
+  } else {
+    @egraph.get_global_ruleset()
+  }
   if !@perf.enabled() {
-    return optimize_function_with_limits(func, limits)
+    return optimize_function_with_stats_with_limits_and_ruleset(
+        func, limits, ruleset,
+      ).changed
   }
   let before = instruction_count(func)
   let tick = @perf.tick_now()
-  let stats = optimize_function_with_stats_with_limits(func, limits)
+  let stats = optimize_function_with_stats_with_limits_and_ruleset(
+    func, limits, ruleset,
+  )
   let duration_us = @perf.elapsed_us(tick)
   let after = instruction_count(func)
   @perf.record_ir_pass(

@@ -46,33 +46,6 @@ fn build_value_map(func : Function) -> @hashmap.HashMap[Int, Value] {
 }
 
 ///|
-fn resolve_replacement(
-  v : Value,
-  replace_map : @hashmap.HashMap[Int, Int],
-  value_map : @hashmap.HashMap[Int, Value],
-) -> Value {
-  let mut current_id = v.id
-  let mut steps = 0
-  while steps < 1024 {
-    match replace_map.get(current_id) {
-      Some(next_id) => {
-        if next_id == current_id {
-          break
-        }
-        current_id = next_id
-        steps = steps + 1
-      }
-      None => break
-    }
-  }
-  if current_id == v.id {
-    v
-  } else {
-    value_map.get(current_id).unwrap_or(v)
-  }
-}
-
-///|
 fn compress_replace_map(replace_map : @hashmap.HashMap[Int, Int]) -> Unit {
   let keys : Array[Int] = []
   for k, _ in replace_map {
@@ -255,84 +228,76 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
   }
   let value_map = build_value_map(func)
+  let replace_values : @hashmap.HashMap[Int, Value] = @hashmap.new()
+  for from_id, to_id in replace_map {
+    if value_map.get(to_id) is Some(replacement) {
+      replace_values.set(from_id, replacement)
+    }
+  }
   for block in func.blocks {
     for inst in block.instructions {
-      let mut needs_update = false
-      let new_operands : Array[Value] = []
       for op in inst.operands {
-        let resolved = resolve_replacement(op, replace_map, value_map)
-        if resolved.id != op.id {
-          needs_update = true
+        if replace_values.get(op.id) is Some(_) {
+          let new_operands : Array[Value] = []
+          for value in inst.operands {
+            new_operands.push(replace_values.get(value.id).unwrap_or(value))
+          }
+          inst.operands.clear()
+          for value in new_operands {
+            inst.operands.push(value)
+          }
+          result.mark_changed()
+          break
         }
-        new_operands.push(resolved)
-      }
-      if needs_update {
-        inst.operands.clear()
-        for op in new_operands {
-          inst.operands.push(op)
-        }
-        result.mark_changed()
       }
     }
     if block.terminator is Some(term) {
       match term {
-        Jump(target, args) => {
-          let mut needs_update = false
-          let new_args : Array[Value] = []
+        Jump(target, args) =>
           for arg in args {
-            let resolved = resolve_replacement(arg, replace_map, value_map)
-            if resolved.id != arg.id {
-              needs_update = true
+            if replace_values.get(arg.id) is Some(_) {
+              let new_args : Array[Value] = []
+              for value in args {
+                new_args.push(replace_values.get(value.id).unwrap_or(value))
+              }
+              block.terminator = Some(Terminator::Jump(target, new_args))
+              result.mark_changed()
+              break
             }
-            new_args.push(resolved)
           }
-          if needs_update {
-            block.terminator = Some(Terminator::Jump(target, new_args))
-            result.mark_changed()
-          }
-        }
-        Brz(cond, then_target, else_target) => {
-          let resolved = resolve_replacement(cond, replace_map, value_map)
-          if resolved.id != cond.id {
+        Brz(cond, then_target, else_target) =>
+          if replace_values.get(cond.id) is Some(resolved) {
             block.terminator = Some(
               Terminator::Brz(resolved, then_target, else_target),
             )
             result.mark_changed()
           }
-        }
-        Brnz(cond, then_target, else_target) => {
-          let resolved = resolve_replacement(cond, replace_map, value_map)
-          if resolved.id != cond.id {
+        Brnz(cond, then_target, else_target) =>
+          if replace_values.get(cond.id) is Some(resolved) {
             block.terminator = Some(
               Terminator::Brnz(resolved, then_target, else_target),
             )
             result.mark_changed()
           }
-        }
-        BrTable(index, targets, default_target) => {
-          let resolved = resolve_replacement(index, replace_map, value_map)
-          if resolved.id != index.id {
+        BrTable(index, targets, default_target) =>
+          if replace_values.get(index.id) is Some(resolved) {
             block.terminator = Some(
               Terminator::BrTable(resolved, targets, default_target),
             )
             result.mark_changed()
           }
-        }
-        Return(values) => {
-          let mut needs_update = false
-          let new_values : Array[Value] = []
+        Return(values) =>
           for value in values {
-            let resolved = resolve_replacement(value, replace_map, value_map)
-            if resolved.id != value.id {
-              needs_update = true
+            if replace_values.get(value.id) is Some(_) {
+              let new_values : Array[Value] = []
+              for ret in values {
+                new_values.push(replace_values.get(ret.id).unwrap_or(ret))
+              }
+              block.terminator = Some(Terminator::Return(new_values))
+              result.mark_changed()
+              break
             }
-            new_values.push(resolved)
           }
-          if needs_update {
-            block.terminator = Some(Terminator::Return(new_values))
-            result.mark_changed()
-          }
-        }
         Trap(_) => ()
       }
     }

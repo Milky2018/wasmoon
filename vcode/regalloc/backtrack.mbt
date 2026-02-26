@@ -78,6 +78,7 @@ struct BacktrackingAllocator {
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
   mut queue_next_seq : Int
+  queue_in_heap : Array[Bool]
 
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
@@ -98,6 +99,9 @@ struct BacktrackingAllocator {
 
   // Reference to function for constraint lookups
   func : VCodeFunction
+  // Per-allocation-query seen markers for conflict dedup (bundle-id indexed).
+  conflict_seen_epoch : Array[Int]
+  mut conflict_epoch : Int
 }
 
 ///|
@@ -108,6 +112,11 @@ fn BacktrackingAllocator::queue_push(
   prio : Int,
   hint_preg : @abi.PReg?,
 ) -> Unit {
+  if bundle_id >= 0 &&
+    bundle_id < self.queue_in_heap.length() &&
+    self.queue_in_heap[bundle_id] {
+    return
+  }
   let entry : QueueEntry = {
     bundle_id,
     prio,
@@ -116,6 +125,9 @@ fn BacktrackingAllocator::queue_push(
   }
   self.queue_next_seq = self.queue_next_seq + 1
   self.queue.push(entry)
+  if bundle_id >= 0 && bundle_id < self.queue_in_heap.length() {
+    self.queue_in_heap[bundle_id] = true
+  }
   // Sift up.
   let mut i = self.queue.length() - 1
   while i > 0 {
@@ -141,6 +153,9 @@ fn BacktrackingAllocator::queue_pop(
   }
   // Remove root.
   let top = self.queue[0]
+  if top.bundle_id >= 0 && top.bundle_id < self.queue_in_heap.length() {
+    self.queue_in_heap[top.bundle_id] = false
+  }
   let last = self.queue.pop()
   match last {
     None => None
@@ -203,6 +218,7 @@ pub fn BacktrackingAllocator::new(
     bundle_span_cache: {},
     queue: [],
     queue_next_seq: 0,
+    queue_in_heap: Array::make(bundles.length(), false),
     spillset_hints: Array::make(bundles.length(), None),
     int_regs,
     float_regs,
@@ -213,6 +229,8 @@ pub fn BacktrackingAllocator::new(
     block_order: ranges.block_order,
     loop_depths,
     func,
+    conflict_seen_epoch: Array::make(bundles.length(), 0),
+    conflict_epoch: 0,
   }
 }
 
@@ -638,7 +656,8 @@ fn BacktrackingAllocator::find_conflicts_with_cutoff(
   max_allowable_cost : Double?,
 ) -> (Array[Int], Double, Bool) {
   let conflicts : Array[Int] = []
-  let seen : Set[Int] = Set::new()
+  self.conflict_epoch = self.conflict_epoch + 1
+  let seen_epoch = self.conflict_epoch
   let mut max_conflict_weight = 0.0
   let allocs = self.get_reg_allocs(preg.class)
   guard allocs.get(preg.index) is Some(occupied) else {
@@ -665,8 +684,9 @@ fn BacktrackingAllocator::find_conflicts_with_cutoff(
       continue
     }
     let other_id = occupied[j].0
-    if !seen.contains(other_id) {
-      seen.add(other_id) |> ignore
+    if other_id < self.conflict_seen_epoch.length() &&
+      self.conflict_seen_epoch[other_id] != seen_epoch {
+      self.conflict_seen_epoch[other_id] = seen_epoch
       let other = self.bundles.get(other_id)
       // Non-evictable conflicts: reject this candidate immediately.
       if other.is_pinned || other.spill_weight >= bundle.spill_weight {
@@ -1015,6 +1035,8 @@ fn BacktrackingAllocator::split_bundle(
         before_bundle,
       )
       self.bundles.add_bundle(before_bundle)
+      self.conflict_seen_epoch.push(0)
+      self.queue_in_heap.push(false)
       spill_bundle.add_bundle(before_bundle.id)
       self.queue_push(
         before_bundle.id,
@@ -1038,6 +1060,8 @@ fn BacktrackingAllocator::split_bundle(
         after_bundle,
       )
       self.bundles.add_bundle(after_bundle)
+      self.conflict_seen_epoch.push(0)
+      self.queue_in_heap.push(false)
       spill_bundle.add_bundle(after_bundle.id)
       self.queue_push(
         after_bundle.id,

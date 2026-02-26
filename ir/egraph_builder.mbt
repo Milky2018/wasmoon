@@ -30,19 +30,33 @@ struct RepKey {
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
-  EGraphBuilder::new_with_limits(@egraph.SaturationLimits::cranelift_default())
+  EGraphBuilder::new_with_limits_and_ruleset(
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+  )
 }
 
 ///|
 pub fn EGraphBuilder::new_with_limits(
   saturation_limits : @egraph.SaturationLimits,
 ) -> EGraphBuilder {
+  EGraphBuilder::new_with_limits_and_ruleset(
+    saturation_limits,
+    @egraph.get_global_ruleset(),
+  )
+}
+
+///|
+pub fn EGraphBuilder::new_with_limits_and_ruleset(
+  saturation_limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+) -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
     value_map: {},
     class_to_value: {},
     def_map: {},
-    ruleset: @egraph.get_global_ruleset(),
+    ruleset,
     saturation_limits,
   }
 }
@@ -464,8 +478,21 @@ pub fn optimize_function_with_stats_with_limits(
   func : Function,
   limits : @egraph.SaturationLimits,
 ) -> EGraphOptimizeStats {
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    limits,
+    @egraph.get_global_ruleset(),
+  )
+}
+
+///|
+pub fn optimize_function_with_stats_with_limits_and_ruleset(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+) -> EGraphOptimizeStats {
   let mut changed = false
-  let builder = EGraphBuilder::new_with_limits(limits)
+  let builder = EGraphBuilder::new_with_limits_and_ruleset(limits, ruleset)
 
   // Function-scoped e-graph construction (Cranelift-directional alignment):
   // build one e-graph for the whole function instead of isolated per-block

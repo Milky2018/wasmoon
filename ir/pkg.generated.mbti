@@ -89,6 +89,8 @@ pub fn optimize_function_with_stats(Function) -> EGraphOptimizeStats
 
 pub fn optimize_function_with_stats_with_limits(Function, @egraph.SaturationLimits) -> EGraphOptimizeStats
 
+pub fn optimize_function_with_stats_with_limits_and_ruleset(Function, @egraph.SaturationLimits, @egraph.IndexedRuleSet) -> EGraphOptimizeStats
+
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
 pub fn propagate_copies(Function) -> OptResult
@@ -153,6 +155,7 @@ pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
 pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
 pub fn EGraphBuilder::new() -> Self
 pub fn EGraphBuilder::new_with_limits(@egraph.SaturationLimits) -> Self
+pub fn EGraphBuilder::new_with_limits_and_ruleset(@egraph.SaturationLimits, @egraph.IndexedRuleSet) -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
 
