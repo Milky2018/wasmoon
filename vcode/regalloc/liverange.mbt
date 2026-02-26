@@ -388,6 +388,55 @@ pub fn build_live_ranges(
   let result = LiveRangeSet::new(liveness.block_order)
   let mut next_id = 0
   let block_order = liveness.block_order
+  let sorted_call_points = liveness.call_points.copy()
+  sorted_call_points.sort_by(fn(a, b) {
+    a.0.compare_with_order(b.0, block_order)
+  })
+  let call_prog_points : Array[ProgPoint] = []
+  let c_call_prefix : Array[Int] = [0]
+  for entry in sorted_call_points {
+    let (call_point, call_conv) = entry
+    call_prog_points.push(call_point)
+    let prev = c_call_prefix[c_call_prefix.length() - 1]
+    let add = if call_conv is @instr.C { 1 } else { 0 }
+    c_call_prefix.push(prev + add)
+  }
+
+  fn upper_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) <= 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
+
+  fn lower_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) < 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
   fn point_after(point : ProgPoint, block_len : Int) -> ProgPoint {
     match point.pos {
       Before => { block: point.block, inst: point.inst, pos: After }
@@ -654,13 +703,34 @@ pub fn build_live_ranges(
       range.add_range(span)
     }
 
-    // Reuse call-crossing flags computed in liveness intervals.
-    // This avoids scanning all call points for every vreg again.
-    if liveness.intervals.get(vreg_id) is Some(interval) {
-      range.crosses_call = interval.crosses_call
-      range.crosses_c_call = interval.crosses_c_call
-      range.crosses_wasm_call = interval.crosses_call &&
-        !interval.crosses_c_call
+    // Compute call-crossing from normalized spans.
+    // This is more precise than coarse def..end intervals (which can over-mark
+    // values as call-crossing across dead holes between live spans).
+    if !call_prog_points.is_empty() {
+      for span in range.ranges {
+        let first_after_start = upper_bound_call_points(
+          call_prog_points,
+          span.start,
+          block_order,
+        )
+        let first_at_or_after_end = lower_bound_call_points(
+          call_prog_points,
+          span.end,
+          block_order,
+        )
+        if first_after_start < first_at_or_after_end {
+          range.crosses_call = true
+          let c_calls = c_call_prefix[first_at_or_after_end] -
+            c_call_prefix[first_after_start]
+          if c_calls > 0 {
+            range.crosses_c_call = true
+          }
+          if range.crosses_c_call {
+            break
+          }
+        }
+      }
+      range.crosses_wasm_call = range.crosses_call && !range.crosses_c_call
     }
     result.add_range(range)
   }

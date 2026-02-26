@@ -1752,7 +1752,7 @@ pub fn build_bundles_with_merging(
   // Keep merge work bounded for very large functions (Cranelift/regalloc2-style
   // compile-time predictability over aggressive coalescing of huge phi webs).
   let block_param_merge_enabled = inst_count < 1200
-  let move_merge_enabled = true
+  let move_merge_enabled = inst_count < 1200
   // Keep large-function coalescing conservative (regalloc2/Ion style):
   // avoid growing broad copy-web bundles that inflate call-crossing pressure.
   let merge_member_limit = if inst_count >= 1200 { 8 } else { 1 << 30 }
