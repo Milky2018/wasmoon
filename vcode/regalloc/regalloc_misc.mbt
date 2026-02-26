@@ -366,7 +366,15 @@ pub fn allocate_registers_backtracking_output_with_isa(
   ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1).
+  let perf_on = @perf.enabled()
+  let tick_liveness = if perf_on { Some(@perf.tick_now()) } else { None }
   let liveness = compute_liveness_for_regalloc(func)
+  if tick_liveness is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_compute_liveness",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Use backtracking allocator (Phases 2-4).
   let alloc_result = allocate_backtracking(
@@ -386,7 +394,11 @@ pub fn allocate_registers_backtracking_output_with_isa(
   }
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
+  let tick_output = if perf_on { Some(@perf.tick_now()) } else { None }
   let output = build_output(func, liveness, alloc_result, isa, settings)
+  if tick_output is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_build_output", @perf.elapsed_us(tick))
+  }
   if regalloc_validation_enabled() {
     output.validate_for_isa(isa)
   }

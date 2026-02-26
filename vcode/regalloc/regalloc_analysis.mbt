@@ -577,31 +577,59 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Fixed-point iteration for dataflow analysis
   // live_in[B] = use[B] ∪ (live_out[B] - def[B])
   // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
+  let num_blocks = func.blocks.length()
+  let num_vregs = func.next_vreg_id
 
-  // First, compute use and def sets for each block
-  let block_use : Array[Set[Int]] = []
-  let block_def : Array[Set[Int]] = []
-  for block in func.blocks {
-    let use_set : Set[Int] = Set::new()
-    let def_set : Set[Int] = Set::new()
+  fn make_bool_rows(num_rows : Int, num_cols : Int) -> Array[FixedArray[Bool]] {
+    let rows : Array[FixedArray[Bool]] = []
+    for _ in 0..<num_rows {
+      rows.push(FixedArray::make(num_cols, false))
+    }
+    rows
+  }
+
+  fn add_once(
+    mask : FixedArray[Bool],
+    dense : Array[Int],
+    vreg_id : Int,
+  ) -> Unit {
+    if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
+      mask[vreg_id] = true
+      dense.push(vreg_id)
+    }
+  }
+
+  fn mark_once(mask : FixedArray[Bool], vreg_id : Int) -> Unit {
+    if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
+      mask[vreg_id] = true
+    }
+  }
+
+  // First, compute use/def sets for each block in dense form.
+  let block_use_list : Array[Array[Int]] = []
+  let block_def_mask = make_bool_rows(num_blocks, num_vregs)
+  for block_idx, block in func.blocks {
+    let use_list : Array[Int] = []
+    let use_mask = FixedArray::make(num_vregs, false)
+    let def_mask = block_def_mask[block_idx]
 
     // Block parameters are SSA definitions at block entry.
     for param in block.params {
-      def_set.add(param.id)
+      mark_once(def_mask, param.id)
     }
 
     // Process instructions
     for inst in block.insts {
       // Uses that are not already defined locally
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-          use_set.add(vreg.id)
+        if use_reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+          add_once(use_mask, use_list, vreg.id)
         }
       }
       // Definitions
       for def in inst.defs {
         if def.reg is @abi.Virtual(vreg) {
-          def_set.add(vreg.id)
+          mark_once(def_mask, vreg.id)
         }
       }
     }
@@ -611,76 +639,84 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       match term {
         Jump(_, args) =>
           for a in args {
-            if a is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-              use_set.add(vreg.id)
+            if a is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+              add_once(use_mask, use_list, vreg.id)
             }
           }
         Branch(cond, _, _) =>
-          if cond is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if cond is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
         BranchCmp(lhs, rhs, _, _, _, _) => {
-          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
-          if rhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if rhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
         }
         BranchCmpImm(lhs, _, _, _, _, _) =>
-          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
         BranchZero(reg, _, _, _, _) =>
-          if reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
         BrTable(index, _, _) =>
-          if index is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          if index is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+            add_once(use_mask, use_list, vreg.id)
           }
         Return(values) =>
           for value in values {
-            if value is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-              use_set.add(vreg.id)
+            if value is @abi.Virtual(vreg) && !def_mask[vreg.id] {
+              add_once(use_mask, use_list, vreg.id)
             }
           }
         _ => ()
       }
     }
-    block_use.push(use_set)
-    block_def.push(def_set)
+    block_use_list.push(use_list)
   }
 
   // Pre-compute CFG edges (O(B + E), only once)
   let cfg = build_cfg_edges(func)
 
-  // Initialize live_in with use sets
-  for block_idx in 0..<func.blocks.length() {
-    for vreg_id in block_use[block_idx] {
-      result.live_in[block_idx].add(vreg_id)
+  let live_in_mask = make_bool_rows(num_blocks, num_vregs)
+  let live_out_mask = make_bool_rows(num_blocks, num_vregs)
+  let live_in_list : Array[Array[Int]] = []
+  let live_out_list : Array[Array[Int]] = []
+
+  // Initialize live_in with use sets.
+  for block_idx in 0..<num_blocks {
+    let initial_in : Array[Int] = []
+    for vreg_id in block_use_list[block_idx] {
+      add_once(live_in_mask[block_idx], initial_in, vreg_id)
     }
+    live_in_list.push(initial_in)
+    live_out_list.push([])
   }
 
   // Worklist-based dataflow with incremental update
-  let worklist = LivenessWorklist::new(func.blocks.length())
+  let worklist = LivenessWorklist::new(num_blocks)
 
   // Initialize worklist - push in forward order so pop() gives reverse order
   // (pop removes from end, so queue [0,1,..,n-1] pops n-1, n-2, .., 0)
   // For backward dataflow, we want to process successors before predecessors
-  for i in 0..<func.blocks.length() {
+  for i in 0..<num_blocks {
     worklist.push(i)
   }
   while worklist.pop() is Some(block_idx) {
-    let old_live_in_size = result.live_in[block_idx].length()
+    let old_live_in_size = live_in_list[block_idx].length()
     let added_live_out : Array[Int] = []
 
     // live_out[B] = ∪ live_in[S] for S in succs[B]
     // Monotone: only adds, never removes
     for succ in cfg.succs[block_idx] {
-      for vreg_id in result.live_in[succ] {
-        if !result.live_out[block_idx].contains(vreg_id) {
-          result.live_out[block_idx].add(vreg_id)
+      for vreg_id in live_in_list[succ] {
+        if !live_out_mask[block_idx][vreg_id] {
+          live_out_mask[block_idx][vreg_id] = true
+          live_out_list[block_idx].push(vreg_id)
           added_live_out.push(vreg_id)
         }
       }
@@ -689,16 +725,28 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     // live_in[B] = use[B] ∪ (live_out[B] - def[B])
     // Incrementally add only newly-grown live_out values (use was added in init).
     for vreg_id in added_live_out {
-      if !block_def[block_idx].contains(vreg_id) {
-        result.live_in[block_idx].add(vreg_id)
+      if !block_def_mask[block_idx][vreg_id] &&
+        !live_in_mask[block_idx][vreg_id] {
+        live_in_mask[block_idx][vreg_id] = true
+        live_in_list[block_idx].push(vreg_id)
       }
     }
 
     // If live_in grew, propagate to predecessors
-    if result.live_in[block_idx].length() > old_live_in_size {
+    if live_in_list[block_idx].length() > old_live_in_size {
       for pred in cfg.preds[block_idx] {
         worklist.push(pred)
       }
+    }
+  }
+
+  // Materialize to result.set-backed API for existing callers.
+  for block_idx in 0..<num_blocks {
+    for vreg_id in live_in_list[block_idx] {
+      result.live_in[block_idx].add(vreg_id)
+    }
+    for vreg_id in live_out_list[block_idx] {
+      result.live_out[block_idx].add(vreg_id)
     }
   }
 }
