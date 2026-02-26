@@ -142,6 +142,8 @@ pub struct LivenessResult {
   use_def_dense : Array[UseDefInfo?]
   live_in : Array[@set.Set[Int]]
   live_out : Array[@set.Set[Int]]
+  mut live_in_dense : Array[Array[Int]]?
+  mut live_out_dense : Array[Array[Int]]?
   block_order : FixedArray[Int]
   call_points : Array[(ProgPoint, @instr.CallConv)]
 }

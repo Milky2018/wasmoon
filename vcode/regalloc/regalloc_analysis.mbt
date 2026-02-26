@@ -302,6 +302,10 @@ pub struct LivenessResult {
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
+  // Dense live-in rows per block (regalloc hot path).
+  mut live_in_dense : Array[Array[Int]]?
+  // Dense live-out rows per block (regalloc hot path).
+  mut live_out_dense : Array[Array[Int]]?
   // Block order: block_order[block_id] = linear position (O(1) lookup)
   block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
@@ -391,6 +395,8 @@ fn compute_liveness_with_options(
     use_def_dense: Array::make(func.next_vreg_id, None),
     live_in,
     live_out,
+    live_in_dense: None,
+    live_out_dense: None,
     block_order,
     call_points: [],
   }
@@ -399,7 +405,7 @@ fn compute_liveness_with_options(
   collect_defs_uses(func, result)
 
   // Phase 2: Compute live-in and live-out sets using dataflow analysis
-  compute_live_sets(func, result)
+  compute_live_sets(func, result, build_live_intervals)
 
   // Phase 3: Build live intervals from the live sets (debug/stats path).
   if build_live_intervals {
@@ -573,7 +579,11 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
 ///|
 /// Phase 2: Compute live-in and live-out sets
-fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
+fn compute_live_sets(
+  func : VCodeFunction,
+  result : LivenessResult,
+  materialize_sets : Bool,
+) -> Unit {
   // Fixed-point iteration for dataflow analysis
   // live_in[B] = use[B] ∪ (live_out[B] - def[B])
   // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
@@ -599,6 +609,20 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
   }
 
+  fn add_once_epoch(
+    epoch_map : FixedArray[Int],
+    epoch : Int,
+    dense : Array[Int],
+    vreg_id : Int,
+  ) -> Unit {
+    if vreg_id >= 0 &&
+      vreg_id < epoch_map.length() &&
+      epoch_map[vreg_id] != epoch {
+      epoch_map[vreg_id] = epoch
+      dense.push(vreg_id)
+    }
+  }
+
   fn mark_once(mask : FixedArray[Bool], vreg_id : Int) -> Unit {
     if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
       mask[vreg_id] = true
@@ -608,9 +632,12 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
   // First, compute use/def sets for each block in dense form.
   let block_use_list : Array[Array[Int]] = []
   let block_def_mask = make_bool_rows(num_blocks, num_vregs)
+  let use_seen_epoch : FixedArray[Int] = FixedArray::make(num_vregs, 0)
+  let mut use_epoch = 1
   for block_idx, block in func.blocks {
+    use_epoch = use_epoch + 1
+    let cur_use_epoch = use_epoch
     let use_list : Array[Int] = []
-    let use_mask = FixedArray::make(num_vregs, false)
     let def_mask = block_def_mask[block_idx]
 
     // Block parameters are SSA definitions at block entry.
@@ -623,7 +650,7 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Uses that are not already defined locally
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-          add_once(use_mask, use_list, vreg.id)
+          add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
         }
       }
       // Definitions
@@ -640,37 +667,37 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
         Jump(_, args) =>
           for a in args {
             if a is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-              add_once(use_mask, use_list, vreg.id)
+              add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
             }
           }
         Branch(cond, _, _) =>
           if cond is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
         BranchCmp(lhs, rhs, _, _, _, _) => {
           if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
           if rhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
         }
         BranchCmpImm(lhs, _, _, _, _, _) =>
           if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
         BranchZero(reg, _, _, _, _) =>
           if reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
         BrTable(index, _, _) =>
           if index is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once(use_mask, use_list, vreg.id)
+            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
           }
         Return(values) =>
           for value in values {
             if value is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-              add_once(use_mask, use_list, vreg.id)
+              add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
             }
           }
         _ => ()
@@ -740,13 +767,18 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
     }
   }
 
-  // Materialize to result.set-backed API for existing callers.
-  for block_idx in 0..<num_blocks {
-    for vreg_id in live_in_list[block_idx] {
-      result.live_in[block_idx].add(vreg_id)
-    }
-    for vreg_id in live_out_list[block_idx] {
-      result.live_out[block_idx].add(vreg_id)
+  result.live_in_dense = Some(live_in_list)
+  result.live_out_dense = Some(live_out_list)
+
+  // Materialize to set-backed API only for full/debug liveness mode.
+  if materialize_sets {
+    for block_idx in 0..<num_blocks {
+      for vreg_id in live_in_list[block_idx] {
+        result.live_in[block_idx].add(vreg_id)
+      }
+      for vreg_id in live_out_list[block_idx] {
+        result.live_out[block_idx].add(vreg_id)
+      }
     }
   }
 }

@@ -129,9 +129,10 @@ fn optimize_cranelift_style(
   if run_egraph && run_egraph_pass(func) {
     result.mark_changed()
   }
-  // Keep Cranelift-like core ordering above. For smaller functions only, run
-  // legacy local cleanups that existing Wasmoon tests/codegen rely on.
-  if instruction_count(func) < 1200 {
+  // Compatibility cleanups: keep small-function local rewrites that current
+  // tests/codegen still rely on, but cap them to tiny functions to keep
+  // compile-time bounded on larger workloads.
+  if instruction_count(func) < 300 {
     let cf_result = run_opt_pass(func, "const_fold", fold_constants)
     if cf_result.changed {
       result.mark_changed()

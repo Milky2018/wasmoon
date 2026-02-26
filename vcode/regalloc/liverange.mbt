@@ -566,16 +566,42 @@ pub fn build_live_ranges(
   for block_idx in 0..<num_blocks {
     block_idx_by_order[block_order[block_idx]] = block_idx
   }
+  let live_in_rows : Array[Array[Int]] = match liveness.live_in_dense {
+    Some(rows) => rows
+    None => {
+      let rows : Array[Array[Int]] = []
+      for block_idx in 0..<num_blocks {
+        let row : Array[Int] = []
+        for vreg_id in liveness.live_in[block_idx] {
+          row.push(vreg_id)
+        }
+        rows.push(row)
+      }
+      rows
+    }
+  }
+  let live_out_rows : Array[Array[Int]] = match liveness.live_out_dense {
+    Some(rows) => rows
+    None => {
+      let rows : Array[Array[Int]] = []
+      for block_idx in 0..<num_blocks {
+        let row : Array[Int] = []
+        for vreg_id in liveness.live_out[block_idx] {
+          row.push(vreg_id)
+        }
+        rows.push(row)
+      }
+      rows
+    }
+  }
   // Build per-vreg live-in/live-out block lists in block-order sequence, so we
   // can merge them later without per-vreg full sort.
   for order_idx in 0..<num_blocks {
     let block_idx = block_idx_by_order[order_idx]
-    let live_in_set = liveness.live_in[block_idx]
-    for vreg_id in live_in_set {
+    for vreg_id in live_in_rows[block_idx] {
       add_live_block_dense(vreg_live_in_blocks, vreg_id, block_idx)
     }
-    let live_out_set = liveness.live_out[block_idx]
-    for vreg_id in live_out_set {
+    for vreg_id in live_out_rows[block_idx] {
       add_live_block_dense(vreg_live_out_blocks, vreg_id, block_idx)
     }
   }
