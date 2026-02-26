@@ -261,7 +261,7 @@ pub fn BacktrackingAllocator::new(
   } else {
     8
   }
-  let enable_backtracking = total_insts < large_func_threshold
+  let enable_backtracking = true
   let point_block_stride = (max_block_insts + 4) * 2
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)

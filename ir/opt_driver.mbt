@@ -161,7 +161,7 @@ fn optimize_o1(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 300
+  let large_func_threshold = 600
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
@@ -204,21 +204,19 @@ fn optimize_o1(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Keep large-function pipelines compact, closer to Cranelift's
-    // bounded optimize path (egraph + lightweight cleanup).
+    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+    if alias_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let mb_result = run_opt_pass(
+      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+    )
+    if mb_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     if !is_large_func {
-      let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-      if alias_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      let mb_result = run_opt_pass(
-        func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-      )
-      if mb_result.changed {
-        changed = true
-        result.mark_changed()
-      }
       let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
       if gvn_result.changed {
         changed = true
@@ -272,7 +270,7 @@ pub fn optimize(func : Function) -> OptResult {
   let result = OptResult::new()
   let mut changed = true
   let mut iterations = 0
-  let large_func_threshold = 300
+  let large_func_threshold = 600
   let is_large_func = instruction_count(func) >= large_func_threshold
   // Keep compile time predictable (Cranelift-style bounded optimization work).
   // Cranelift runs a mostly non-iterative pipeline; for very large IR we keep
@@ -315,21 +313,19 @@ pub fn optimize(func : Function) -> OptResult {
       changed = true
       result.mark_changed()
     }
-    // Keep large-function pipelines compact, closer to Cranelift's
-    // bounded optimize path (egraph + lightweight cleanup).
+    let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
+    if alias_result.changed {
+      changed = true
+      result.mark_changed()
+    }
+    let mb_result = run_opt_pass(
+      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
+    )
+    if mb_result.changed {
+      changed = true
+      result.mark_changed()
+    }
     if !is_large_func {
-      let alias_result = run_opt_pass(func, "alias_canon", canonicalize_aliases)
-      if alias_result.changed {
-        changed = true
-        result.mark_changed()
-      }
-      let mb_result = run_opt_pass(
-        func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-      )
-      if mb_result.changed {
-        changed = true
-        result.mark_changed()
-      }
       let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
       if gvn_result.changed {
         changed = true
@@ -395,11 +391,9 @@ pub fn optimize(func : Function) -> OptResult {
     }
   }
   // Run jump-threading once after fixed-point (Cranelift-like late CFG cleanup).
-  if !is_large_func {
-    let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
-    if jt_result.changed {
-      result.mark_changed()
-    }
+  let jt_result = run_opt_pass(func, "thread_jumps", thread_jumps)
+  if jt_result.changed {
+    result.mark_changed()
   }
   result
 }
