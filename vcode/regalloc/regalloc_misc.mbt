@@ -322,9 +322,6 @@ pub fn allocate_registers_backtracking_with_isa(
     verify_allocation(func, liveness, alloc_result, isa, settings~)
   }
 
-  // Process constraints and generate RegMove edits
-  process_constraints(func, alloc_result)
-
   // Apply allocation
   apply_allocation(func, alloc_result)
 }
@@ -386,9 +383,6 @@ pub fn allocate_registers_backtracking_output_with_isa(
   if regalloc_validation_enabled() {
     verify_allocation(func, liveness, alloc_result, isa, settings~)
   }
-
-  // Process constraints and generate RegMove edits.
-  process_constraints(func, alloc_result)
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
   let output = build_output(func, alloc_result, isa, settings)

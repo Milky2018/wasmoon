@@ -62,13 +62,43 @@ fn add_used_reg(
 }
 
 ///|
+const USED_REG_MARK_CAP : Int = 128
+
+///|
+fn mark_used(used_marks : Array[Int], idx : Int, epoch : Int) -> Unit {
+  guard idx >= 0 && idx < used_marks.length() else {
+    abort("preg index out of range for used-mark table: \{idx}")
+  }
+  used_marks[idx] = epoch
+}
+
+///|
+fn is_used(used_marks : Array[Int], idx : Int, epoch : Int) -> Bool {
+  idx >= 0 && idx < used_marks.length() && used_marks[idx] == epoch
+}
+
+///|
+fn add_used_reg_marks(
+  used_int_marks : Array[Int],
+  used_fp_marks : Array[Int],
+  epoch : Int,
+  preg : @abi.PReg,
+) -> Unit {
+  match preg.class {
+    @abi.Int => mark_used(used_int_marks, preg.index, epoch)
+    _ => mark_used(used_fp_marks, preg.index, epoch)
+  }
+}
+
+///|
 fn pick_temp_preg(
   out : Output,
   isa : @isa.ISA,
   env : @isa.MachineEnv,
   cls : @abi.RegClass,
-  used_int : @hashset.HashSet[Int],
-  used_fp : @hashset.HashSet[Int],
+  used_int_marks : Array[Int],
+  used_fp_marks : Array[Int],
+  used_epoch : Int,
   temp_int_pool : Array[Int],
   temp_fp_pool : Array[Int],
   temp_vec_pool : Array[Int],
@@ -105,9 +135,9 @@ fn pick_temp_preg(
     @abi.Int => {
       for i in 0..<temp_int_pool.length() {
         let idx = temp_int_pool[(cursor + i) % temp_int_pool.length()]
-        if !used_int.contains(idx) {
+        if !is_used(used_int_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: @abi.Int }
-          used_int.add(idx) |> ignore
+          mark_used(used_int_marks, idx, used_epoch)
           return (preg, cursor + 1, None)
         }
       }
@@ -131,9 +161,9 @@ fn pick_temp_preg(
           idx == extra_results_ptr {
           continue
         }
-        if !used_int.contains(idx) {
+        if !is_used(used_int_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: @abi.Int }
-          used_int.add(idx) |> ignore
+          mark_used(used_int_marks, idx, used_epoch)
           if need_preserve {
             let save_slot = alloc_temp_spill_slot(out, @abi.Int)
             return (preg, cursor + 1, Some(save_slot))
@@ -147,9 +177,9 @@ fn pick_temp_preg(
     @abi.Vector => {
       for i in 0..<temp_vec_pool.length() {
         let idx = temp_vec_pool[(cursor + i) % temp_vec_pool.length()]
-        if !used_fp.contains(idx) {
+        if !is_used(used_fp_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: @abi.Vector }
-          used_fp.add(idx) |> ignore
+          mark_used(used_fp_marks, idx, used_epoch)
           return (preg, cursor + 1, None)
         }
       }
@@ -163,9 +193,9 @@ fn pick_temp_preg(
       }
       for p in candidates {
         let idx = p.index
-        if !used_fp.contains(idx) {
+        if !is_used(used_fp_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: @abi.Vector }
-          used_fp.add(idx) |> ignore
+          mark_used(used_fp_marks, idx, used_epoch)
           if need_preserve {
             let save_slot = alloc_temp_spill_slot(out, @abi.Vector)
             return (preg, cursor + 1, Some(save_slot))
@@ -179,9 +209,9 @@ fn pick_temp_preg(
     _ => {
       for i in 0..<temp_fp_pool.length() {
         let idx = temp_fp_pool[(cursor + i) % temp_fp_pool.length()]
-        if !used_fp.contains(idx) {
+        if !is_used(used_fp_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: cls }
-          used_fp.add(idx) |> ignore
+          mark_used(used_fp_marks, idx, used_epoch)
           return (preg, cursor + 1, None)
         }
       }
@@ -195,9 +225,9 @@ fn pick_temp_preg(
       }
       for p in candidates {
         let idx = p.index
-        if !used_fp.contains(idx) {
+        if !is_used(used_fp_marks, idx, used_epoch) {
           let preg = @abi.PReg::{ index: idx, class: cls }
-          used_fp.add(idx) |> ignore
+          mark_used(used_fp_marks, idx, used_epoch)
           if need_preserve {
             let save_slot = alloc_temp_spill_slot(out, cls)
             return (preg, cursor + 1, Some(save_slot))
@@ -388,24 +418,32 @@ fn build_output(
 
   // Walk blocks and create per-operand allocations. Emit extra edits for spills
   // (reloads before uses, stores after defs) as needed.
+  let used_int_marks = Array::make(USED_REG_MARK_CAP, 0)
+  let used_fp_marks = Array::make(USED_REG_MARK_CAP, 0)
+  let mut used_epoch = 1
   for block_id, block in func.blocks {
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
-      let used_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
-      let used_fp : @hashset.HashSet[Int] = @hashset.HashSet::new()
+      used_epoch = used_epoch + 1
+      let epoch = used_epoch
 
       // First, mark all registers that will be used by non-spilled operands at
       // this instruction (including fixed-reg constraints).
       for i, def in inst.defs {
         match fixed_def_preg(inst, i) {
-          Some(preg) => add_used_reg(used_int, used_fp, preg)
+          Some(preg) =>
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
           None =>
             match def.reg {
-              @abi.Physical(preg) => add_used_reg(used_int, used_fp, preg)
+              @abi.Physical(preg) =>
+                add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
                 match alloc.assignments.get(vreg.id) {
-                  Some(preg) => add_used_reg(used_int, used_fp, preg)
+                  Some(preg) =>
+                    add_used_reg_marks(
+                      used_int_marks, used_fp_marks, epoch, preg,
+                    )
                   None => ()
                 }
             }
@@ -413,13 +451,18 @@ fn build_output(
       }
       for i, use_reg in inst.uses {
         match fixed_use_preg(inst, i) {
-          Some(preg) => add_used_reg(used_int, used_fp, preg)
+          Some(preg) =>
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
           None =>
             match use_reg {
-              @abi.Physical(preg) => add_used_reg(used_int, used_fp, preg)
+              @abi.Physical(preg) =>
+                add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
                 match alloc.assignments.get(vreg.id) {
-                  Some(preg) => add_used_reg(used_int, used_fp, preg)
+                  Some(preg) =>
+                    add_used_reg_marks(
+                      used_int_marks, used_fp_marks, epoch, preg,
+                    )
                   None => ()
                 }
             }
@@ -430,18 +473,18 @@ fn build_output(
       if alloc.inst_edits.get((block_id, inst_idx)) is Some(edits) {
         for mv in edits.before {
           if mv.from is Reg(p) {
-            add_used_reg(used_int, used_fp, p)
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, p)
           }
           if mv.to is Reg(p) {
-            add_used_reg(used_int, used_fp, p)
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, p)
           }
         }
         for mv in edits.after {
           if mv.from is Reg(p) {
-            add_used_reg(used_int, used_fp, p)
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, p)
           }
           if mv.to is Reg(p) {
-            add_used_reg(used_int, used_fp, p)
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, p)
           }
         }
       }
@@ -476,7 +519,7 @@ fn build_output(
             )
             active_reloads.set(slot, rp)
             spill_regs.set(vreg.id, rp)
-            add_used_reg(used_int, used_fp, rp)
+            add_used_reg_marks(used_int_marks, used_fp_marks, epoch, rp)
             continue
           }
           // Otherwise, load into a scratch/temporary register local to this instruction.
@@ -485,8 +528,9 @@ fn build_output(
             isa,
             env,
             vreg.class,
-            used_int,
-            used_fp,
+            used_int_marks,
+            used_fp_marks,
+            epoch,
             temp_int_pool,
             temp_fp_pool,
             temp_vec_pool,
@@ -516,7 +560,7 @@ fn build_output(
             Edit::Move(Spill(slot), Reg(tmp), vreg.class),
           )
           spill_regs.set(vreg.id, tmp)
-          add_used_reg(used_int, used_fp, tmp)
+          add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
         }
       }
 
@@ -535,8 +579,9 @@ fn build_output(
             isa,
             env,
             vreg.class,
-            used_int,
-            used_fp,
+            used_int_marks,
+            used_fp_marks,
+            epoch,
             temp_int_pool,
             temp_fp_pool,
             temp_vec_pool,
@@ -545,7 +590,7 @@ fn build_output(
           )
           temp_cursor = new_cursor
           spill_def_regs.set(vreg.id, tmp)
-          add_used_reg(used_int, used_fp, tmp)
+          add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
           if save_slot is Some(s) {
             out.push_edit(
               block_id,
@@ -650,8 +695,8 @@ fn build_output(
         }
         _ => {
           // For other terminators, treat their operands like uses.
-          let used_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
-          let used_fp : @hashset.HashSet[Int] = @hashset.HashSet::new()
+          used_epoch = used_epoch + 1
+          let epoch = used_epoch
           let use_regs : Array[@abi.Reg] = match term {
             @instr.Branch(cond, _, _) => [cond]
             @instr.BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
@@ -664,10 +709,14 @@ fn build_output(
           }
           for r in use_regs {
             match r {
-              @abi.Physical(preg) => add_used_reg(used_int, used_fp, preg)
+              @abi.Physical(preg) =>
+                add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
               @abi.Virtual(vreg) =>
                 match alloc.assignments.get(vreg.id) {
-                  Some(preg) => add_used_reg(used_int, used_fp, preg)
+                  Some(preg) =>
+                    add_used_reg_marks(
+                      used_int_marks, used_fp_marks, epoch, preg,
+                    )
                   None => ()
                 }
             }
@@ -689,8 +738,9 @@ fn build_output(
                 isa,
                 env,
                 vreg.class,
-                used_int,
-                used_fp,
+                used_int_marks,
+                used_fp_marks,
+                epoch,
                 temp_int_pool,
                 temp_fp_pool,
                 temp_vec_pool,
@@ -705,7 +755,7 @@ fn build_output(
                 Edit::Move(Spill(slot), Reg(tmp), vreg.class),
               )
               spill_regs.set(vreg.id, tmp)
-              add_used_reg(used_int, used_fp, tmp)
+              add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
             }
           }
           let locs : Array[Loc] = []

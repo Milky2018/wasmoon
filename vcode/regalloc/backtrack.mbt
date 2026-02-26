@@ -1343,6 +1343,14 @@ pub fn BacktrackingAllocator::generate_result(
                 class: vreg.class,
               })
             }
+          } else if use_reg is @abi.Physical(preg) {
+            if preg.index != required_preg.index {
+              edits.before.push({
+                from: Reg(preg),
+                to: Reg(required_preg),
+                class: preg.class,
+              })
+            }
           }
         }
       }
