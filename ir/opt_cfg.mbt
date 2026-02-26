@@ -395,11 +395,8 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 
   // Build use counts for values in each block
   // A block parameter is "used" if it's referenced in instructions or passed to another used param
-  let used_params = compute_used_block_params(func)
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
-  }
+  let block_idx = build_block_index_array(func)
+  let used_params = compute_used_block_params(func, block_idx)
 
   // Track which parameter indices to keep for each block
   let params_to_keep : Array[Array[Int]] = []
@@ -407,7 +404,7 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
     let keep : Array[Int] = []
     for i, param in block.params {
       let (v, _) = param
-      if used_params.get(v.id).unwrap_or(false) {
+      if v.id >= 0 && v.id < used_params.length() && used_params[v.id] {
         keep.push(i)
       }
     }
@@ -417,7 +414,14 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
   // Check if any parameters will be removed
   let mut will_change = false
   for block in func.blocks {
-    let block_i = block_idx.get(block.id).unwrap_or(0)
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
     let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       will_change = true
@@ -430,7 +434,14 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 
   // Update block parameters - remove unused ones
   for block in func.blocks {
-    let block_i = block_idx.get(block.id).unwrap_or(0)
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
     let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       let old_params = block.params.copy()
@@ -446,9 +457,13 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
-        let keep = match block_idx.get(target) {
-          Some(target_i) => params_to_keep[target_i]
-          None => []
+        let keep = if target >= 0 &&
+          target < block_idx.length() &&
+          block_idx[target] >= 0 &&
+          block_idx[target] < params_to_keep.length() {
+          params_to_keep[block_idx[target]]
+        } else {
+          []
         }
         if keep.length() != args.length() {
           let new_args : Array[Value] = []
@@ -473,16 +488,23 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 ///|
 /// Compute which block parameters are actually used
 /// Uses iterative dataflow analysis
-fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
-  let used : @hashmap.HashMap[Int, Bool] = @hashmap.new()
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
+fn compute_used_block_params(
+  func : Function,
+  block_idx : Array[Int],
+) -> Array[Bool] {
+  let value_count = func.next_value_id
+  if value_count <= 0 {
+    return []
   }
-  let propagation_edges : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let used = Array::make(value_count, false)
+  let propagation_edges : Array[Array[Int]?] = Array::make(value_count, None)
   for block in func.blocks {
     if block.terminator is Some(Jump(target, args)) {
-      if block_idx.get(target) is Some(target_idx) {
+      if target >= 0 && target < block_idx.length() {
+        let target_idx = block_idx[target]
+        if target_idx < 0 {
+          continue
+        }
         let target_block = func.blocks[target_idx]
         let count = if target_block.params.length() < args.length() {
           target_block.params.length()
@@ -491,9 +513,12 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
         }
         for i in 0..<count {
           let (param_v, _) = target_block.params[i]
-          match propagation_edges.get(param_v.id) {
+          if param_v.id < 0 || param_v.id >= value_count {
+            continue
+          }
+          match propagation_edges[param_v.id] {
             Some(edges) => edges.push(args[i].id)
-            None => propagation_edges.set(param_v.id, [args[i].id])
+            None => propagation_edges[param_v.id] = Some([args[i].id])
           }
         }
       }
@@ -503,25 +528,37 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   // Initialize: all function parameters are used (they come from caller)
   for param in func.params {
     let (v, _) = param
-    used.set(v.id, true)
+    if v.id >= 0 && v.id < value_count {
+      used[v.id] = true
+    }
   }
 
   // First pass: mark values used directly in instructions
   for block in func.blocks {
     for inst in block.instructions {
       for op in inst.operands {
-        used.set(op.id, true)
+        if op.id >= 0 && op.id < value_count {
+          used[op.id] = true
+        }
       }
     }
     // Also count uses in terminators (excluding jump args; handled by dataflow)
     if block.terminator is Some(term) {
       match term {
         Jump(_, _) => ()
-        Brz(cond, _, _) | Brnz(cond, _, _) => used.set(cond.id, true)
-        BrTable(index, _, _) => used.set(index.id, true)
+        Brz(cond, _, _) | Brnz(cond, _, _) =>
+          if cond.id >= 0 && cond.id < value_count {
+            used[cond.id] = true
+          }
+        BrTable(index, _, _) =>
+          if index.id >= 0 && index.id < value_count {
+            used[index.id] = true
+          }
         Return(args) =>
           for v in args {
-            used.set(v.id, true)
+            if v.id >= 0 && v.id < value_count {
+              used[v.id] = true
+            }
           }
         Trap(_) => ()
       }
@@ -531,16 +568,20 @@ fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
   // Worklist propagation: if a block parameter is used, propagate that mark to
   // incoming jump arguments for the corresponding edge position.
   let worklist : Array[Int] = []
-  for entry in used {
-    let (value_id, _) = entry
-    worklist.push(value_id)
+  for value_id in 0..<value_count {
+    if used[value_id] {
+      worklist.push(value_id)
+    }
   }
   while worklist.length() > 0 {
     let value_id = worklist.pop().unwrap()
-    if propagation_edges.get(value_id) is Some(edges) {
+    if value_id < 0 || value_id >= value_count {
+      continue
+    }
+    if propagation_edges[value_id] is Some(edges) {
       for arg_id in edges {
-        if !used.get(arg_id).unwrap_or(false) {
-          used.set(arg_id, true)
+        if arg_id >= 0 && arg_id < value_count && !used[arg_id] {
+          used[arg_id] = true
           worklist.push(arg_id)
         }
       }

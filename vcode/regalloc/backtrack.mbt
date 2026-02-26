@@ -247,12 +247,21 @@ pub fn BacktrackingAllocator::new(
       max_block_insts = block_len
     }
   }
-  // Keep split probing budgeted on very large functions; regalloc2's Rust
+  // Keep split probing budgeted on large functions; regalloc2's Rust
   // implementation can afford broader scans, but in MoonBit this keeps wall
   // compile time predictable with minimal quality impact.
-  let split_probe_limit = if total_insts >= 1200 { 2 } else { 1 << 30 }
-  let bundle_retry_limit = if total_insts >= 1200 { 2 } else { 8 }
-  let enable_backtracking = total_insts < 1200
+  let large_func_threshold = 900
+  let split_probe_limit = if total_insts >= large_func_threshold {
+    2
+  } else {
+    1 << 30
+  }
+  let bundle_retry_limit = if total_insts >= large_func_threshold {
+    2
+  } else {
+    8
+  }
+  let enable_backtracking = total_insts < large_func_threshold
   let point_block_stride = (max_block_insts + 4) * 2
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)
@@ -426,11 +435,12 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
     let bundle = self.bundles.get(i)
     bundle.prio = bundle.total_length(self.ranges)
     bundle.spill_weight = self.recompute_bundle_spill_weight(bundle)
-    self.queue_push(
-      i,
-      self.bundle_queue_prio(bundle),
-      self.constraint_hint_preg(bundle),
-    )
+    let hint_preg = if self.enable_backtracking {
+      self.constraint_hint_preg(bundle)
+    } else {
+      None
+    }
+    self.queue_push(i, self.bundle_queue_prio(bundle), hint_preg)
   }
 }
 
@@ -1212,7 +1222,12 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
     let hint_preg = match hint_preg {
       Some(p) => Some(p)
-      None => self.constraint_hint_preg(bundle)
+      None =>
+        if self.enable_backtracking {
+          self.constraint_hint_preg(bundle)
+        } else {
+          None
+        }
     }
 
     // Skip if already allocated
