@@ -1169,28 +1169,17 @@ fn collect_used_callee_saved_from_output(
   }
 
   // Edits (moves) define their destination reg.
+  for edit_entry in output.iter_edits() {
+    let ((_block_id, _inst_idx, _pos), edit) = edit_entry
+    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+      p.class is @abi.Int &&
+      callee_saved_int.contains(p.index) {
+      used.add(p.index)
+    }
+  }
+
+  // Instruction defs.
   for block in func.get_blocks() {
-    let term_inst = block.insts.length()
-    fn record_edits_at(inst_idx : Int) -> Unit {
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.class is @abi.Int &&
-              callee_saved_int.contains(p.index) {
-              used.add(p.index)
-            }
-          }
-        }
-      }
-    }
-
-    for inst_idx in 0..<term_inst {
-      record_edits_at(inst_idx)
-    }
-    record_edits_at(term_inst)
-
-    // Instruction defs.
     //
     // Ignore *physical* defs here. Calls model clobbers as physical defs so
     // regalloc can treat them as kills. However, prologue saves must be driven
@@ -1243,29 +1232,18 @@ fn collect_used_callee_saved_fprs_from_output(
   }
 
   // Edits define their destination reg.
+  for edit_entry in output.iter_edits() {
+    let ((_block_id, _inst_idx, _pos), edit) = edit_entry
+    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+      (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+      callee_saved_fprs.contains(p.index) {
+      used.add(p.index)
+    }
+  }
+
+  // Instruction defs: only count allocations of virtual values (see comment
+  // above in collect_used_callee_saved_from_output).
   for block in func.get_blocks() {
-    let term_inst = block.insts.length()
-    fn record_edits_at(inst_idx : Int) -> Unit {
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-              callee_saved_fprs.contains(p.index) {
-              used.add(p.index)
-            }
-          }
-        }
-      }
-    }
-
-    for inst_idx in 0..<term_inst {
-      record_edits_at(inst_idx)
-    }
-    record_edits_at(term_inst)
-
-    // Instruction defs: only count allocations of virtual values (see comment
-    // above in collect_used_callee_saved_from_output).
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
         if inst.defs[di].reg is @abi.Virtual(_) &&
@@ -2035,39 +2013,52 @@ pub fn emit_function_with_regalloc(
   } else {
     None
   }
+  let edits_by_block : Map[Int, Array[(Int, @regalloc.ProgPos, @regalloc.Edit)]] = {}
+  for entry in output.iter_edits() {
+    let ((block_id, inst_idx, pos), edit) = entry
+    let bucket = match edits_by_block.get(block_id) {
+      Some(arr) => arr
+      None => {
+        let arr : Array[(Int, @regalloc.ProgPos, @regalloc.Edit)] = []
+        edits_by_block.set(block_id, arr)
+        arr
+      }
+    }
+    bucket.push((inst_idx, pos, edit))
+  }
   let edit_slot_cache : Map[Int, @abi.PReg] = {}
   for i, block in blocks {
     edit_slot_cache.clear()
+    let block_edits = match edits_by_block.get(block.id) {
+      Some(arr) => arr
+      None => []
+    }
+    let mut block_edit_cursor = 0
+    fn emit_point_edits(inst_idx : Int, pos : @regalloc.ProgPos) -> Unit {
+      while block_edit_cursor < block_edits.length() {
+        let (edit_inst_idx, edit_pos, edit) = block_edits[block_edit_cursor]
+        if edit_inst_idx != inst_idx || edit_pos != pos {
+          break
+        }
+        emit_edit_move_with_cache(mc, edit, stack_frame, edit_slot_cache)
+        block_edit_cursor = block_edit_cursor + 1
+      }
+    }
     mc.define_label(block.id)
     for inst_idx, inst in block.insts {
       // Edits before instruction.
-      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(inst_idx, @regalloc.ProgPos::Before)
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
       mc.emit_instruction(mapped, stack_frame)
       invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
-      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(inst_idx, @regalloc.ProgPos::After)
     }
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
       // Edits before terminator (block-arg moves, terminator reloads, etc).
-      if output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(term_inst, @regalloc.ProgPos::Before)
       let next_block = if i + 1 < blocks.length() {
         Some(blocks[i + 1].id)
       } else {

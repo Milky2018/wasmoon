@@ -1984,6 +1984,40 @@ pub fn build_bundles_with_merging(
   }
 
   // Helper to try merging two ranges
+  fn commit_union(
+    uf : @unionfind.UnionFind,
+    root_a : Int,
+    root_b : Int,
+    fixed_a : @abi.PReg?,
+    fixed_b : @abi.PReg?,
+    set_a_has_fixed_def : Bool,
+    set_b_has_fixed_def : Bool,
+    spans_a : Array[ProgPointRange],
+    spans_b : Array[ProgPointRange],
+    ranges : LiveRangeSet,
+  ) -> Bool {
+    if !uf.union(root_a, root_b) {
+      return true
+    }
+    let new_root = uf.find(root_a)
+    let old_root = if new_root == root_a { root_b } else { root_a }
+    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
+    root_has_fixed_def_cache.set(new_root, merged_fixed_def)
+    root_has_fixed_def_cache.remove(old_root) |> ignore
+    let merged_fixed = match (fixed_a, fixed_b) {
+      (Some(preg), _) => Some(preg)
+      (_, Some(preg)) => Some(preg)
+      _ => None
+    }
+    root_fixed_info_cache.set(new_root, (merged_fixed, false))
+    root_fixed_info_cache.remove(old_root) |> ignore
+    let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
+    root_spans_cache.set(new_root, merged_spans)
+    root_spans_cache.remove(old_root) |> ignore
+    true
+  }
+
+  // Helper to try merging two ranges
   fn try_merge(
     uf : @unionfind.UnionFind,
     a : Int,
@@ -2035,6 +2069,20 @@ pub fn build_bundles_with_merging(
     // two cursors and stop early when one side advances past the other.
     let spans_a = root_spans(uf, ranges, root_spans_cache, root_a)
     let spans_b = root_spans(uf, ranges, root_spans_cache, root_b)
+    if !spans_a.is_empty() && !spans_b.is_empty() {
+      let start_a = adjusted_start_for_overlap(spans_a[0], set_a_has_fixed_def)
+      let end_a = spans_a[spans_a.length() - 1].end
+      let start_b = adjusted_start_for_overlap(spans_b[0], set_b_has_fixed_def)
+      let end_b = spans_b[spans_b.length() - 1].end
+      let disjoint = start_a.compare_with_order(end_b, ranges.block_order) >= 0 ||
+        start_b.compare_with_order(end_a, ranges.block_order) >= 0
+      if disjoint {
+        return commit_union(
+          uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
+          spans_a, spans_b, ranges,
+        )
+      }
+    }
     let mut ia = 0
     let mut ib = 0
     let mut range_checks = 0
@@ -2055,27 +2103,10 @@ pub fn build_bundles_with_merging(
         return false
       }
     }
-    if !uf.union(root_a, root_b) {
-      return true
-    }
-    let new_root = uf.find(root_a)
-    let old_root = if new_root == root_a { root_b } else { root_a }
-
-    // Keep root metadata incremental (mirrors regalloc2's merge behavior).
-    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
-    root_has_fixed_def_cache.set(new_root, merged_fixed_def)
-    root_has_fixed_def_cache.remove(old_root) |> ignore
-    let merged_fixed = match (fixed_a, fixed_b) {
-      (Some(preg), _) => Some(preg)
-      (_, Some(preg)) => Some(preg)
-      _ => None
-    }
-    root_fixed_info_cache.set(new_root, (merged_fixed, false))
-    root_fixed_info_cache.remove(old_root) |> ignore
-    let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
-    root_spans_cache.set(new_root, merged_spans)
-    root_spans_cache.remove(old_root) |> ignore
-    true
+    commit_union(
+      uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
+      spans_a, spans_b, ranges,
+    )
   }
 
   // Merge across block arguments (SSA phi-like connections).

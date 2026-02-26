@@ -462,13 +462,6 @@ fn build_output(
     }
   }
 
-  // Convert fixed-reg constraint edits to output edits.
-  for key, edits in alloc.inst_edits {
-    let (block_id, inst_idx) = key
-    push_resolved_moves(out, block_id, inst_idx, Before, edits.before)
-    push_resolved_moves(out, block_id, inst_idx, After, edits.after)
-  }
-
   // Walk blocks and create per-operand allocations. Emit extra edits for spills
   // (reloads before uses, stores after defs) as needed.
   let used_int_marks = Array::make(USED_REG_MARK_CAP, 0)
@@ -483,6 +476,12 @@ fn build_output(
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
+      // Fixed-reg constraint edits at this point.
+      if alloc.inst_edits.get((block_id, inst_idx)) is Some(edits) {
+        push_resolved_moves(out, block_id, inst_idx, Before, edits.before)
+        push_resolved_moves(out, block_id, inst_idx, After, edits.after)
+      }
+
       // Fast path: if this instruction has no non-fixed spilled uses/defs, we
       // do not need per-inst temp-reg selection or used-reg marking.
       let mut needs_spill_temps = false
@@ -823,6 +822,10 @@ fn build_output(
     // Terminator allocations/edits.
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
+      if alloc.inst_edits.get((block_id, term_inst)) is Some(edits) {
+        push_resolved_moves(out, block_id, term_inst, Before, edits.before)
+        push_resolved_moves(out, block_id, term_inst, After, edits.after)
+      }
 
       // Jump args: materialize block params at predecessor end.
       match term {
