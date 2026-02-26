@@ -1638,23 +1638,23 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d1 = ldf 10
-      #|    x2 = ldi 0
+      #|    d2 = ldf 10
+      #|    x3 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x2, d1
-      #|    d3 = load_ptr.f32 +0 x2
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x2, d1
-      #|    d3 = load_ptr.f32 +0 x2
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x2, d1
-      #|    d3 = load_ptr.f32 +0 x2
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d3
+      #|    ret d1
       #|block5:
       #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
@@ -1691,7 +1691,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       inspect(
         preg.to_string(),
         content=(
-          #|d3
+          #|d1
         ),
       )
     Virtual(_) => fail("block1_last is virtual")
@@ -1704,7 +1704,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       inspect(
         preg.to_string(),
         content=(
-          #|d3
+          #|d1
         ),
       )
     Virtual(_) => fail("block2_last is virtual")
@@ -1717,7 +1717,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
       inspect(
         preg.to_string(),
         content=(
-          #|d3
+          #|d1
         ),
       )
     Virtual(_) => fail("block3_last is virtual")

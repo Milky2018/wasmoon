@@ -582,192 +582,197 @@ pub fn build_live_ranges(
   let live_out_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let mut scratch_epoch = 1
 
-  // Process each vreg from use-def info
-  for entry in liveness.use_def {
-    let (vreg_id, info) = entry
-    scratch_epoch = scratch_epoch + 1
-    let epoch = scratch_epoch
-    let range = LiveRange::new(next_id, info.vreg)
-    next_id += 1
+  // Process each vreg from use-def info (dense walk; regalloc2-style).
+  for vreg_id in 0..<liveness.use_def_dense.length() {
+    if liveness.use_def_dense[vreg_id] is Some(info) {
+      scratch_epoch = scratch_epoch + 1
+      let epoch = scratch_epoch
+      let range = LiveRange::new(next_id, info.vreg)
+      next_id += 1
 
-    // Add use positions (for constraints / heuristics)
-    if info.def_point is Some((def, fixed)) {
-      let constraint = match fixed {
-        Some(preg) => FixedReg(preg)
-        None => AnyReg
-      }
-      range.add_use(UsePosition::new(def, Def, constraint))
-    }
-    for use_entry in info.use_points {
-      let (use_point, fixed) = use_entry
-      let constraint = match fixed {
-        Some(preg) => FixedReg(preg)
-        None => AnyReg
-      }
-      range.add_use(UsePosition::new(use_point, Use, constraint))
-    }
-
-    // Build multi-span ranges (with holes) from per-block liveness plus use/def.
-    // This is a conservative refinement over the previous single [start, end] span:
-    // it never drops blocks where the value is live-in/out, but it avoids spanning
-    // across blocks where the value is not live, reducing register pressure.
-    let use_blocks : Array[Int] = []
-    for use_entry in info.use_points {
-      let p = use_entry.0
-      let block_idx = p.block
-      if use_block_epoch[block_idx] != epoch {
-        use_block_epoch[block_idx] = epoch
-        use_first_points[block_idx] = Some(p)
-        use_last_points[block_idx] = Some(p)
-        use_blocks.push(block_idx)
-      } else {
-        let first = use_first_points[block_idx].unwrap()
-        let last = use_last_points[block_idx].unwrap()
-        use_first_points[block_idx] = Some(pp_min(first, p, block_order))
-        use_last_points[block_idx] = Some(pp_max(last, p, block_order))
-      }
-    }
-
-    fn push_covered_once(
-      block_idx : Int,
-      epoch : Int,
-      covered_block_epoch : FixedArray[Int],
-      covered_blocks : Array[Int],
-    ) -> Unit {
-      if covered_block_epoch[block_idx] != epoch {
-        covered_block_epoch[block_idx] = epoch
-        covered_blocks.push(block_idx)
-      }
-    }
-
-    let covered_blocks : Array[Int] = []
-    if vreg_id >= 0 && vreg_id < max_vreg_id {
-      if vreg_live_in_blocks[vreg_id] is Some(blocks) {
-        for block_idx in blocks {
-          live_in_epoch[block_idx] = epoch
-          push_covered_once(
-            block_idx, epoch, covered_block_epoch, covered_blocks,
-          )
+      // Add use positions (for constraints / heuristics)
+      if info.def_point is Some((def, fixed)) {
+        let constraint = match fixed {
+          Some(preg) => FixedReg(preg)
+          None => AnyReg
         }
+        range.add_use(UsePosition::new(def, Def, constraint))
       }
-      if vreg_live_out_blocks[vreg_id] is Some(blocks) {
-        for block_idx in blocks {
-          live_out_epoch[block_idx] = epoch
-          push_covered_once(
-            block_idx, epoch, covered_block_epoch, covered_blocks,
-          )
+      for use_entry in info.use_points {
+        let (use_point, fixed) = use_entry
+        let constraint = match fixed {
+          Some(preg) => FixedReg(preg)
+          None => AnyReg
         }
+        range.add_use(UsePosition::new(use_point, Use, constraint))
       }
-    }
-    for block_idx in use_blocks {
-      push_covered_once(block_idx, epoch, covered_block_epoch, covered_blocks)
-    }
-    if info.def_point is Some((def, _)) {
-      push_covered_once(def.block, epoch, covered_block_epoch, covered_blocks)
-    }
-    if covered_blocks.length() > 1 {
-      covered_blocks.sort_by(fn(a, b) {
-        let ord_a = block_order[a]
-        let ord_b = block_order[b]
-        if ord_a != ord_b {
-          ord_a - ord_b
+
+      // Build multi-span ranges (with holes) from per-block liveness plus use/def.
+      // This is a conservative refinement over the previous single [start, end] span:
+      // it never drops blocks where the value is live-in/out, but it avoids spanning
+      // across blocks where the value is not live, reducing register pressure.
+      let use_blocks : Array[Int] = []
+      for use_entry in info.use_points {
+        let p = use_entry.0
+        let block_idx = p.block
+        if use_block_epoch[block_idx] != epoch {
+          use_block_epoch[block_idx] = epoch
+          use_first_points[block_idx] = Some(p)
+          use_last_points[block_idx] = Some(p)
+          use_blocks.push(block_idx)
         } else {
-          a - b
+          let first = use_first_points[block_idx].unwrap()
+          let last = use_last_points[block_idx].unwrap()
+          use_first_points[block_idx] = Some(pp_min(first, p, block_order))
+          use_last_points[block_idx] = Some(pp_max(last, p, block_order))
         }
-      })
-    }
+      }
 
-    let spans_unmerged : Array[ProgPointRange] = []
-    for block_idx in covered_blocks {
-      if covered_block_epoch[block_idx] != epoch {
-        continue
+      fn push_covered_once(
+        block_idx : Int,
+        epoch : Int,
+        covered_block_epoch : FixedArray[Int],
+        covered_blocks : Array[Int],
+      ) -> Unit {
+        if covered_block_epoch[block_idx] != epoch {
+          covered_block_epoch[block_idx] = epoch
+          covered_blocks.push(block_idx)
+        }
       }
-      let block = func.blocks[block_idx]
-      let live_in = live_in_epoch[block_idx] == epoch
-      let live_out = live_out_epoch[block_idx] == epoch
-      let has_def_in_block = info.def_point is Some((def, _)) &&
-        def.block == block_idx
-      let use_bounds = if use_block_epoch[block_idx] == epoch {
-        Some(
-          (
-            use_first_points[block_idx].unwrap(),
-            use_last_points[block_idx].unwrap(),
-          ),
-        )
-      } else {
-        None
-      }
-      let block_len = block.insts.length()
-      let entry_point : ProgPoint = { block: block_idx, inst: -1, pos: Before }
-      let exit_point : ProgPoint = {
-        block: block_idx,
-        inst: block_len,
-        pos: After,
-      }
-      let start = if has_def_in_block {
-        info.def_point.unwrap().0
-      } else if live_in {
-        entry_point
-      } else if use_bounds is Some((first_use, _)) {
-        // Should not normally happen (use implies live_in or local def),
-        // but be conservative.
-        pp_min(entry_point, first_use, block_order)
-      } else {
-        entry_point
-      }
-      let end = if live_out {
-        exit_point
-      } else if use_bounds is Some((_, last_use)) {
-        point_after(last_use, block_len)
-      } else if has_def_in_block {
-        // Defined in this block and dead here: keep a minimal span to avoid
-        // surprising empty ranges in allocator internals.
-        point_after(info.def_point.unwrap().0, block_len)
-      } else {
-        point_after(start, block_len)
-      }
-      let (start, end) = if end.compare_with_order(start, block_order) <= 0 {
-        (start, point_after(start, block_len))
-      } else {
-        (start, end)
-      }
-      spans_unmerged.push(ProgPointRange::new(start, end))
-    }
-    let spans = normalize_ranges(spans_unmerged, block_order)
-    for span in spans {
-      range.add_range(span)
-    }
 
-    // Compute call-crossing from normalized spans.
-    // This is more precise than coarse def..end intervals (which can over-mark
-    // values as call-crossing across dead holes between live spans).
-    if !call_prog_points.is_empty() {
-      for span in range.ranges {
-        let first_after_start = upper_bound_call_points(
-          call_prog_points,
-          span.start,
-          block_order,
-        )
-        let first_at_or_after_end = lower_bound_call_points(
-          call_prog_points,
-          span.end,
-          block_order,
-        )
-        if first_after_start < first_at_or_after_end {
-          range.crosses_call = true
-          let c_calls = c_call_prefix[first_at_or_after_end] -
-            c_call_prefix[first_after_start]
-          if c_calls > 0 {
-            range.crosses_c_call = true
+      let covered_blocks : Array[Int] = []
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        if vreg_live_in_blocks[vreg_id] is Some(blocks) {
+          for block_idx in blocks {
+            live_in_epoch[block_idx] = epoch
+            push_covered_once(
+              block_idx, epoch, covered_block_epoch, covered_blocks,
+            )
           }
-          if range.crosses_c_call {
-            break
+        }
+        if vreg_live_out_blocks[vreg_id] is Some(blocks) {
+          for block_idx in blocks {
+            live_out_epoch[block_idx] = epoch
+            push_covered_once(
+              block_idx, epoch, covered_block_epoch, covered_blocks,
+            )
           }
         }
       }
-      range.crosses_wasm_call = range.crosses_call && !range.crosses_c_call
+      for block_idx in use_blocks {
+        push_covered_once(block_idx, epoch, covered_block_epoch, covered_blocks)
+      }
+      if info.def_point is Some((def, _)) {
+        push_covered_once(def.block, epoch, covered_block_epoch, covered_blocks)
+      }
+      if covered_blocks.length() > 1 {
+        covered_blocks.sort_by(fn(a, b) {
+          let ord_a = block_order[a]
+          let ord_b = block_order[b]
+          if ord_a != ord_b {
+            ord_a - ord_b
+          } else {
+            a - b
+          }
+        })
+      }
+
+      let spans_unmerged : Array[ProgPointRange] = []
+      for block_idx in covered_blocks {
+        if covered_block_epoch[block_idx] != epoch {
+          continue
+        }
+        let block = func.blocks[block_idx]
+        let live_in = live_in_epoch[block_idx] == epoch
+        let live_out = live_out_epoch[block_idx] == epoch
+        let has_def_in_block = info.def_point is Some((def, _)) &&
+          def.block == block_idx
+        let use_bounds = if use_block_epoch[block_idx] == epoch {
+          Some(
+            (
+              use_first_points[block_idx].unwrap(),
+              use_last_points[block_idx].unwrap(),
+            ),
+          )
+        } else {
+          None
+        }
+        let block_len = block.insts.length()
+        let entry_point : ProgPoint = {
+          block: block_idx,
+          inst: -1,
+          pos: Before,
+        }
+        let exit_point : ProgPoint = {
+          block: block_idx,
+          inst: block_len,
+          pos: After,
+        }
+        let start = if has_def_in_block {
+          info.def_point.unwrap().0
+        } else if live_in {
+          entry_point
+        } else if use_bounds is Some((first_use, _)) {
+          // Should not normally happen (use implies live_in or local def),
+          // but be conservative.
+          pp_min(entry_point, first_use, block_order)
+        } else {
+          entry_point
+        }
+        let end = if live_out {
+          exit_point
+        } else if use_bounds is Some((_, last_use)) {
+          point_after(last_use, block_len)
+        } else if has_def_in_block {
+          // Defined in this block and dead here: keep a minimal span to avoid
+          // surprising empty ranges in allocator internals.
+          point_after(info.def_point.unwrap().0, block_len)
+        } else {
+          point_after(start, block_len)
+        }
+        let (start, end) = if end.compare_with_order(start, block_order) <= 0 {
+          (start, point_after(start, block_len))
+        } else {
+          (start, end)
+        }
+        spans_unmerged.push(ProgPointRange::new(start, end))
+      }
+      let spans = normalize_ranges(spans_unmerged, block_order)
+      for span in spans {
+        range.add_range(span)
+      }
+
+      // Compute call-crossing from normalized spans.
+      // This is more precise than coarse def..end intervals (which can over-mark
+      // values as call-crossing across dead holes between live spans).
+      if !call_prog_points.is_empty() {
+        for span in range.ranges {
+          let first_after_start = upper_bound_call_points(
+            call_prog_points,
+            span.start,
+            block_order,
+          )
+          let first_at_or_after_end = lower_bound_call_points(
+            call_prog_points,
+            span.end,
+            block_order,
+          )
+          if first_after_start < first_at_or_after_end {
+            range.crosses_call = true
+            let c_calls = c_call_prefix[first_at_or_after_end] -
+              c_call_prefix[first_after_start]
+            if c_calls > 0 {
+              range.crosses_c_call = true
+            }
+            if range.crosses_c_call {
+              break
+            }
+          }
+        }
+        range.crosses_wasm_call = range.crosses_call && !range.crosses_c_call
+      }
+      result.add_range(range)
     }
-    result.add_range(range)
   }
   result
 }
