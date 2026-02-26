@@ -10,6 +10,8 @@ daemon.lock
 daemon.log
 daemon.pid
 bd.sock
+bd.sock.startlock
+dolt-access.lock
 sync-state.json
 last-touched
 
@@ -19,6 +21,7 @@ last-touched
 # Legacy database files
 db.sqlite
 bd.db
+ephemeral.sqlite3
 
 # Worktree redirect file (contains relative path to main repo's .beads/)
 # Must not be committed as paths would be wrong in other clones
@@ -31,6 +34,9 @@ beads.left.jsonl
 beads.left.meta.json
 beads.right.jsonl
 beads.right.meta.json
+.jsonl.lock
+export-state/
+dolt/
 
 # Sync state (local-only, per-machine)
 # These files are machine-specific and should not be shared across clones
