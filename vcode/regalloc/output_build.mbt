@@ -308,9 +308,17 @@ fn build_output(
     out.param_locs.push(vreg_home_loc_dense(p, assigned_pregs, spill_slots))
   }
 
-  // Coalesced reload intervals.
-  let reload_intervals = compute_reload_intervals(func, alloc)
-  allocate_reload_registers(func, alloc, reload_intervals, liveness)
+  // Cranelift/regalloc2 does not run an extra per-block reload-coalescing pass
+  // during output construction; keep this disabled on the hot path for closer
+  // alignment and lower compile-time overhead.
+  let enable_reload_coalescing = false
+  let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
+    let intervals = compute_reload_intervals(func, alloc)
+    allocate_reload_registers(func, alloc, intervals, liveness)
+    intervals
+  } else {
+    {}
+  }
 
   // Temp-reg pools for local reloads when no coalescing is available.
   let used_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()

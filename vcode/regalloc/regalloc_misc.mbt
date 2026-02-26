@@ -53,15 +53,6 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
-fn vcode_instruction_count(func : VCodeFunction) -> Int {
-  let mut n = 0
-  for block in func.blocks {
-    n = n + block.insts.length()
-  }
-  n
-}
-
-///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
@@ -319,7 +310,7 @@ pub fn allocate_registers_backtracking_with_isa(
   ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1)
-  let liveness = compute_liveness(func)
+  let liveness = compute_liveness_for_regalloc(func)
 
   // Use backtracking allocator (Phases 2-4)
   let alloc_result = allocate_backtracking(
@@ -361,15 +352,9 @@ pub fn allocate_registers_backtracking_output_with_isa(
 ) -> (VCodeFunction, Output) {
   // Step 0: Eliminate dead code first.
   let func = eliminate_dead_code(func)
-  // Keep rematerialization bounded on medium/large vcode functions. This
-  // matches Cranelift/regalloc2's compile-time prioritization: avoid broad
-  // pre-RA IR rewriting when allocator pressure is already high.
-  let func = if vcode_instruction_count(func) >= 600 {
-    func
-  } else {
-    let func = rematerialize_cross_block_constants(func)
-    eliminate_dead_code(func)
-  }
+  // Cranelift/regalloc2 does not run a whole-function pre-RA rematerialization
+  // pass in this stage; keep output allocator input unchanged here.
+  let func = func
 
   // Build register pools.
   let (
@@ -381,7 +366,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1).
-  let liveness = compute_liveness(func)
+  let liveness = compute_liveness_for_regalloc(func)
 
   // Use backtracking allocator (Phases 2-4).
   let alloc_result = allocate_backtracking(

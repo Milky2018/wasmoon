@@ -369,8 +369,11 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
 }
 
 ///|
-/// Compute liveness information for a VCode function
-pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
+/// Compute liveness information for a VCode function.
+fn compute_liveness_with_options(
+  func : VCodeFunction,
+  build_live_intervals : Bool,
+) -> LivenessResult {
   let num_blocks = func.blocks.length()
   let live_in : Array[Set[Int]] = []
   let live_out : Array[Set[Int]] = []
@@ -395,9 +398,23 @@ pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
   // Phase 2: Compute live-in and live-out sets using dataflow analysis
   compute_live_sets(func, result)
 
-  // Phase 3: Build live intervals from the live sets
-  build_intervals(func, result)
+  // Phase 3: Build live intervals from the live sets (debug/stats path).
+  if build_live_intervals {
+    build_intervals(func, result)
+  }
   result
+}
+
+///|
+/// Compute full liveness information including interval maps.
+pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
+  compute_liveness_with_options(func, true)
+}
+
+///|
+/// Compute liveness for regalloc hot path (no interval map construction).
+pub fn compute_liveness_for_regalloc(func : VCodeFunction) -> LivenessResult {
+  compute_liveness_with_options(func, false)
 }
 
 ///|

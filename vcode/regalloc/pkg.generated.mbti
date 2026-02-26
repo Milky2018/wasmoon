@@ -33,6 +33,8 @@ pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64Stack
 
 pub fn compute_liveness(VCodeFunction) -> LivenessResult
 
+pub fn compute_liveness_for_regalloc(VCodeFunction) -> LivenessResult
+
 pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
 
 pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Double

@@ -169,10 +169,16 @@ pub fn apply_allocation(
     }
   }
 
-  // Compute reload intervals for spill coalescing
-  let liveness = compute_liveness(func)
-  let reload_intervals = compute_reload_intervals(func, alloc)
-  allocate_reload_registers(func, alloc, reload_intervals, liveness)
+  // Keep reload-coalescing pass disabled by default for Cranelift alignment.
+  let liveness = compute_liveness_for_regalloc(func)
+  let enable_reload_coalescing = false
+  let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
+    let intervals = compute_reload_intervals(func, alloc)
+    allocate_reload_registers(func, alloc, intervals, liveness)
+    intervals
+  } else {
+    {}
+  }
 
   // Convert function parameters
   // Parameters use Wasmoon's internal Wasm ABI (ISA-dependent).
