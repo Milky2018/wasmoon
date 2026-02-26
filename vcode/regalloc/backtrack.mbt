@@ -642,27 +642,48 @@ fn BacktrackingAllocator::record_allocation(
   }
   let occupied = allocs[preg.index]
   let spans = self.bundle_sorted_spans(bundle)
-  let new_occupied : Array[(Int, OrderedSpan)] = []
-  let mut i = 0
-  let mut j = 0
-  while i < occupied.length() && j < spans.length() {
-    if occupied[i].1.start_ord <= spans[j].start_ord {
+  if spans.length() == 1 {
+    let span = spans[0]
+    let mut lo = 0
+    let mut hi = occupied.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if occupied[mid].1.start_ord <= span.start_ord {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    occupied.insert(lo, (bundle.id, span))
+  } else if occupied.is_empty() {
+    let new_occupied : Array[(Int, OrderedSpan)] = []
+    for span in spans {
+      new_occupied.push((bundle.id, span))
+    }
+    allocs[preg.index] = new_occupied
+  } else {
+    let new_occupied : Array[(Int, OrderedSpan)] = []
+    let mut i = 0
+    let mut j = 0
+    while i < occupied.length() && j < spans.length() {
+      if occupied[i].1.start_ord <= spans[j].start_ord {
+        new_occupied.push(occupied[i])
+        i = i + 1
+      } else {
+        new_occupied.push((bundle.id, spans[j]))
+        j = j + 1
+      }
+    }
+    while i < occupied.length() {
       new_occupied.push(occupied[i])
       i = i + 1
-    } else {
+    }
+    while j < spans.length() {
       new_occupied.push((bundle.id, spans[j]))
       j = j + 1
     }
+    allocs[preg.index] = new_occupied
   }
-  while i < occupied.length() {
-    new_occupied.push(occupied[i])
-    i = i + 1
-  }
-  while j < spans.length() {
-    new_occupied.push((bundle.id, spans[j]))
-    j = j + 1
-  }
-  allocs[preg.index] = new_occupied
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     range.allocation = Reg(preg)
@@ -1815,42 +1836,9 @@ pub fn build_bundles_with_merging(
     (fixed, false)
   }
 
-  fn set_fixed_reg(
-    ranges : LiveRangeSet,
-    members : Array[Int],
-  ) -> (@abi.PReg?, Bool) {
-    let mut fixed : @abi.PReg? = None
-    for idx in members {
-      let range = ranges.get(idx)
-      let (range_fixed, has_conflict) = range_fixed_reg_conflict(range)
-      if has_conflict {
-        return (None, true)
-      }
-      if range_fixed is Some(preg) {
-        match fixed {
-          None => fixed = Some(preg)
-          Some(existing) =>
-            if existing.index != preg.index || !same_fixed_bank(existing, preg) {
-              return (None, true)
-            }
-        }
-      }
-    }
-    (fixed, false)
-  }
-
   fn range_has_fixed_def(range : LiveRange) -> Bool {
     for use_pos in range.uses {
       if use_pos.kind is Def && use_pos.constraint is FixedReg(_) {
-        return true
-      }
-    }
-    false
-  }
-
-  fn set_has_fixed_def(ranges : LiveRangeSet, members : Array[Int]) -> Bool {
-    for idx in members {
-      if range_has_fixed_def(ranges.get(idx)) {
         return true
       }
     }
@@ -1868,28 +1856,63 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  fn collect_root_spans(
-    ranges : LiveRangeSet,
-    members : Array[Int],
-  ) -> Array[ProgPointRange] {
-    let spans : Array[ProgPointRange] = []
-    for idx in members {
-      let range = ranges.get(idx)
-      for span in range.ranges {
-        spans.push(span)
-      }
-    }
-    spans.sort_by(fn(a, b) {
-      a.start.compare_with_order(b.start, ranges.block_order)
-    })
-    spans
-  }
-
   fn merge_sorted_spans(
     a : Array[ProgPointRange],
     b : Array[ProgPointRange],
     ranges : LiveRangeSet,
   ) -> Array[ProgPointRange] {
+    if a.is_empty() {
+      return b
+    }
+    if b.is_empty() {
+      return a
+    }
+    if a.length() == 1 {
+      let merged : Array[ProgPointRange] = []
+      for span in b {
+        merged.push(span)
+      }
+      let insert = a[0]
+      let mut lo = 0
+      let mut hi = merged.length()
+      while lo < hi {
+        let mid = lo + (hi - lo) / 2
+        if merged[mid].start.compare_with_order(
+            insert.start,
+            ranges.block_order,
+          ) <=
+          0 {
+          lo = mid + 1
+        } else {
+          hi = mid
+        }
+      }
+      merged.insert(lo, insert)
+      return merged
+    }
+    if b.length() == 1 {
+      let merged : Array[ProgPointRange] = []
+      for span in a {
+        merged.push(span)
+      }
+      let insert = b[0]
+      let mut lo = 0
+      let mut hi = merged.length()
+      while lo < hi {
+        let mid = lo + (hi - lo) / 2
+        if merged[mid].start.compare_with_order(
+            insert.start,
+            ranges.block_order,
+          ) <=
+          0 {
+          lo = mid + 1
+        } else {
+          hi = mid
+        }
+      }
+      merged.insert(lo, insert)
+      return merged
+    }
     let merged : Array[ProgPointRange] = []
     let mut ia = 0
     let mut ib = 0
@@ -1917,23 +1940,16 @@ pub fn build_bundles_with_merging(
   let root_has_fixed_def_cache : Map[Int, Bool] = {}
   let root_spans_cache : Map[Int, Array[ProgPointRange]] = {}
 
-  // Initialize per-root metadata so merges stay incremental.
+  // Initialize per-root fixed-info metadata so merges stay incremental.
+  // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
+  // roots that never participate in merges.
   for i in 0..<n {
     let range = ranges.get(i)
     root_fixed_info_cache.set(i, range_fixed_reg_conflict(range))
     root_has_fixed_def_cache.set(i, range_has_fixed_def(range))
-    let spans : Array[ProgPointRange] = []
-    for span in range.ranges {
-      spans.push(span)
-    }
-    spans.sort_by(fn(a, b) {
-      a.start.compare_with_order(b.start, ranges.block_order)
-    })
-    root_spans_cache.set(i, spans)
   }
 
   fn root_fixed_info(
-    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
     root : Int,
@@ -1941,8 +1957,7 @@ pub fn build_bundles_with_merging(
     match root_fixed_info_cache.get(root) {
       Some(info) => info
       None => {
-        let members = uf.get_set(root)
-        let info = set_fixed_reg(ranges, members)
+        let info = range_fixed_reg_conflict(ranges.get(root))
         root_fixed_info_cache.set(root, info)
         info
       }
@@ -1950,7 +1965,6 @@ pub fn build_bundles_with_merging(
   }
 
   fn root_has_fixed_def(
-    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_has_fixed_def_cache : Map[Int, Bool],
     root : Int,
@@ -1958,8 +1972,7 @@ pub fn build_bundles_with_merging(
     match root_has_fixed_def_cache.get(root) {
       Some(has_fixed_def) => has_fixed_def
       None => {
-        let members = uf.get_set(root)
-        let has_fixed_def = set_has_fixed_def(ranges, members)
+        let has_fixed_def = range_has_fixed_def(ranges.get(root))
         root_has_fixed_def_cache.set(root, has_fixed_def)
         has_fixed_def
       }
@@ -1967,7 +1980,6 @@ pub fn build_bundles_with_merging(
   }
 
   fn root_spans(
-    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
     root_spans_cache : Map[Int, Array[ProgPointRange]],
     root : Int,
@@ -1975,8 +1987,11 @@ pub fn build_bundles_with_merging(
     match root_spans_cache.get(root) {
       Some(spans) => spans
       None => {
-        let members = uf.get_set(root)
-        let spans = collect_root_spans(ranges, members)
+        let range = ranges.get(root)
+        let spans : Array[ProgPointRange] = []
+        for span in range.ranges {
+          spans.push(span)
+        }
         root_spans_cache.set(root, spans)
         spans
       }
@@ -2040,20 +2055,20 @@ pub fn build_bundles_with_merging(
       return false
     }
     let set_a_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_has_fixed_def_cache, root_a,
+      ranges, root_has_fixed_def_cache, root_a,
     )
     let set_b_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_has_fixed_def_cache, root_b,
+      ranges, root_has_fixed_def_cache, root_b,
     )
 
     // Keep merged bundles compatible with fixed-register constraints.
     // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
     // incompatible fixed uses.
     let (fixed_a, conflict_a) = root_fixed_info(
-      uf, ranges, root_fixed_info_cache, root_a,
+      ranges, root_fixed_info_cache, root_a,
     )
     let (fixed_b, conflict_b) = root_fixed_info(
-      uf, ranges, root_fixed_info_cache, root_b,
+      ranges, root_fixed_info_cache, root_b,
     )
     if conflict_a || conflict_b {
       return false
@@ -2067,8 +2082,8 @@ pub fn build_bundles_with_merging(
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
-    let spans_a = root_spans(uf, ranges, root_spans_cache, root_a)
-    let spans_b = root_spans(uf, ranges, root_spans_cache, root_b)
+    let spans_a = root_spans(ranges, root_spans_cache, root_a)
+    let spans_b = root_spans(ranges, root_spans_cache, root_b)
     if !spans_a.is_empty() && !spans_b.is_empty() {
       let start_a = adjusted_start_for_overlap(spans_a[0], set_a_has_fixed_def)
       let end_a = spans_a[spans_a.length() - 1].end
