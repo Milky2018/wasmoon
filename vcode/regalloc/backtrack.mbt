@@ -47,29 +47,20 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 }
 
 ///|
-/// Check whether a preg is contained in a register list (bank/index match).
-fn preg_in_list(preg : @abi.PReg, regs : Array[@abi.PReg]) -> Bool {
-  for reg in regs {
-    if preg_same_bank_and_index(preg, reg) {
-      return true
-    }
-  }
-  false
-}
-
-///|
 /// The backtracking register allocator
 struct BacktrackingAllocator {
   // Core data
   ranges : LiveRangeSet
   bundles : BundleSet
 
-  // Physical register occupancy: preg.index -> list of occupied ranges
+  // Physical register occupancy: preg.index -> list of occupied ranges.
   //
+  // Kept as direct-index arrays (instead of maps) to avoid hash lookups in the
+  // hot conflict-scan path.
   // Each entry stores (bundle_id, span) so eviction/removal cannot accidentally
   // remove spans that belong to a different bundle with identical boundaries.
-  int_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
-  float_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
+  int_reg_allocs : Array[Array[(Int, ProgPointRange)]]
+  float_reg_allocs : Array[Array[(Int, ProgPointRange)]]
 
   // Per-bundle flattened/sorted span cache. This mirrors regalloc2's use of
   // ordered per-bundle ranges for conflict scans.
@@ -90,6 +81,8 @@ struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
+  int_is_callee_saved : Array[Bool]
+  float_is_callee_saved : Array[Bool]
   split_probe_limit : Int
   bundle_retry_limit : Int
   enable_backtracking : Bool
@@ -194,6 +187,35 @@ fn BacktrackingAllocator::queue_pop(
 }
 
 ///|
+fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
+  let mut max_idx = -1
+  for preg in regs {
+    if preg.index > max_idx {
+      max_idx = preg.index
+    }
+  }
+  max_idx
+}
+
+///|
+fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, ProgPointRange)]] {
+  let table : Array[Array[(Int, ProgPointRange)]] = []
+  for _ in 0..<cap {
+    table.push([])
+  }
+  table
+}
+
+///|
+fn make_bool_table(cap : Int) -> Array[Bool] {
+  let table : Array[Bool] = []
+  for _ in 0..<cap {
+    table.push(false)
+  }
+  table
+}
+
+///|
 pub fn BacktrackingAllocator::new(
   func : VCodeFunction,
   ranges : LiveRangeSet,
@@ -215,11 +237,43 @@ pub fn BacktrackingAllocator::new(
   let split_probe_limit = if total_insts >= 1200 { 2 } else { 1 << 30 }
   let bundle_retry_limit = if total_insts >= 1200 { 2 } else { 8 }
   let enable_backtracking = total_insts < 1200
+  let int_max = {
+    let mut max_idx = max_preg_index(int_regs)
+    let callee_max = max_preg_index(callee_saved_int)
+    if callee_max > max_idx {
+      max_idx = callee_max
+    }
+    max_idx
+  }
+  let float_max = {
+    let mut max_idx = max_preg_index(float_regs)
+    let vector_max = max_preg_index(vector_regs)
+    if vector_max > max_idx {
+      max_idx = vector_max
+    }
+    let callee_max = max_preg_index(callee_saved_float)
+    if callee_max > max_idx {
+      max_idx = callee_max
+    }
+    max_idx
+  }
+  let int_is_callee_saved = make_bool_table(int_max + 1)
+  for preg in callee_saved_int {
+    if preg.index >= 0 && preg.index < int_is_callee_saved.length() {
+      int_is_callee_saved[preg.index] = true
+    }
+  }
+  let float_is_callee_saved = make_bool_table(float_max + 1)
+  for preg in callee_saved_float {
+    if preg.index >= 0 && preg.index < float_is_callee_saved.length() {
+      float_is_callee_saved[preg.index] = true
+    }
+  }
   {
     ranges,
     bundles,
-    int_reg_allocs: {},
-    float_reg_allocs: {},
+    int_reg_allocs: make_reg_alloc_table(int_max + 1),
+    float_reg_allocs: make_reg_alloc_table(float_max + 1),
     bundle_span_cache: {},
     queue: [],
     queue_next_seq: 0,
@@ -230,6 +284,8 @@ pub fn BacktrackingAllocator::new(
     vector_regs,
     callee_saved_int,
     callee_saved_float,
+    int_is_callee_saved,
+    float_is_callee_saved,
     split_probe_limit,
     bundle_retry_limit,
     enable_backtracking,
@@ -343,7 +399,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
 fn BacktrackingAllocator::get_reg_allocs(
   self : BacktrackingAllocator,
   class : @abi.RegClass,
-) -> Map[Int, Array[(Int, ProgPointRange)]] {
+) -> Array[Array[(Int, ProgPointRange)]] {
   match class {
     @abi.Int => self.int_reg_allocs
     @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
@@ -403,7 +459,10 @@ fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
   preg : @abi.PReg,
 ) -> Bool {
   let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return false }
+  if preg.index < 0 || preg.index >= allocs.length() {
+    return false
+  }
+  let occupied = allocs[preg.index]
   if occupied.is_empty() || spans.is_empty() {
     return false
   }
@@ -472,8 +531,14 @@ fn BacktrackingAllocator::is_nonpreferred_for_bundle(
     return false
   }
   match bundle.reg_class {
-    @abi.Int => preg_in_list(preg, self.callee_saved_int)
-    @abi.Float32 | @abi.Float64 => preg_in_list(preg, self.callee_saved_float)
+    @abi.Int =>
+      preg.index >= 0 &&
+      preg.index < self.int_is_callee_saved.length() &&
+      self.int_is_callee_saved[preg.index]
+    @abi.Float32 | @abi.Float64 =>
+      preg.index >= 0 &&
+      preg.index < self.float_is_callee_saved.length() &&
+      self.float_is_callee_saved[preg.index]
     @abi.Vector => false
   }
 }
@@ -496,10 +561,10 @@ fn BacktrackingAllocator::record_allocation(
   preg : @abi.PReg,
 ) -> Unit {
   let allocs = self.get_reg_allocs(preg.class)
-  let occupied = match allocs.get(preg.index) {
-    Some(list) => list
-    None => []
+  while allocs.length() <= preg.index {
+    allocs.push([])
   }
+  let occupied = allocs[preg.index]
   let spans = self.bundle_sorted_spans(bundle)
   let new_occupied : Array[(Int, ProgPointRange)] = []
   let mut i = 0
@@ -522,7 +587,7 @@ fn BacktrackingAllocator::record_allocation(
     new_occupied.push((bundle.id, spans[j]))
     j = j + 1
   }
-  allocs.set(preg.index, new_occupied)
+  allocs[preg.index] = new_occupied
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     range.allocation = Reg(preg)
@@ -545,7 +610,8 @@ fn BacktrackingAllocator::remove_allocation(
 ) -> Unit {
   if bundle.allocation is Reg(preg) {
     let allocs = self.get_reg_allocs(preg.class)
-    if allocs.get(preg.index) is Some(occupied) {
+    if preg.index >= 0 && preg.index < allocs.length() {
+      let occupied = allocs[preg.index]
       // Remove ranges belonging to this bundle.
       let new_occupied : Array[(Int, ProgPointRange)] = []
       for occ in occupied {
@@ -553,7 +619,7 @@ fn BacktrackingAllocator::remove_allocation(
           new_occupied.push(occ)
         }
       }
-      allocs.set(preg.index, new_occupied)
+      allocs[preg.index] = new_occupied
     }
 
     // Clear allocation
@@ -650,9 +716,10 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   let seen_epoch = self.conflict_epoch
   let mut max_conflict_weight = 0.0
   let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else {
+  if preg.index < 0 || preg.index >= allocs.length() {
     return (max_conflict_weight, false)
   }
+  let occupied = allocs[preg.index]
   if occupied.is_empty() || spans.is_empty() {
     return (max_conflict_weight, false)
   }
@@ -706,9 +773,10 @@ fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
   let mut max_conflict_weight = 0.0
   let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else {
+  if preg.index < 0 || preg.index >= allocs.length() {
     return (max_conflict_weight, first_conflict_point, false)
   }
+  let occupied = allocs[preg.index]
   if occupied.is_empty() || spans.is_empty() {
     return (max_conflict_weight, first_conflict_point, false)
   }
