@@ -464,29 +464,33 @@ pub fn build_live_ranges(
     out
   }
 
-  fn add_live_block(
-    block_map : Map[Int, Array[Int]],
+  fn add_live_block_dense(
+    block_map : Array[Array[Int]?],
     vreg_id : Int,
     block_idx : Int,
   ) -> Unit {
-    match block_map.get(vreg_id) {
+    if vreg_id < 0 || vreg_id >= block_map.length() {
+      return
+    }
+    match block_map[vreg_id] {
       Some(blocks) => blocks.push(block_idx)
-      None => block_map.set(vreg_id, [block_idx])
+      None => block_map[vreg_id] = Some([block_idx])
     }
   }
 
-  // Precompute vreg -> live block mapping once.
+  // Precompute vreg -> live block mapping once (dense by vreg id).
   // This avoids O(vregs × blocks × contains) scans when forming spans.
-  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
-  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+  let max_vreg_id = func.next_vreg_id
+  let vreg_live_in_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
+  let vreg_live_out_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
   for block_idx, live_in_set in liveness.live_in {
     for vreg_id in live_in_set {
-      add_live_block(vreg_live_in_blocks, vreg_id, block_idx)
+      add_live_block_dense(vreg_live_in_blocks, vreg_id, block_idx)
     }
   }
   for block_idx, live_out_set in liveness.live_out {
     for vreg_id in live_out_set {
-      add_live_block(vreg_live_out_blocks, vreg_id, block_idx)
+      add_live_block_dense(vreg_live_out_blocks, vreg_id, block_idx)
     }
   }
   let num_blocks = func.blocks.length()
@@ -496,6 +500,8 @@ pub fn build_live_ranges(
   let use_last_points : Array[ProgPoint?] = Array::make(num_blocks, None)
   let use_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let covered_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
+  let live_in_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
+  let live_out_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let mut scratch_epoch = 1
 
   // Process each vreg from use-def info
@@ -557,18 +563,22 @@ pub fn build_live_ranges(
       }
     }
 
-    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        push_covered_once(
-          block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
-        )
+    if vreg_id >= 0 && vreg_id < max_vreg_id {
+      if vreg_live_in_blocks[vreg_id] is Some(blocks) {
+        for block_idx in blocks {
+          live_in_epoch[block_idx] = epoch
+          push_covered_once(
+            block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
+          )
+        }
       }
-    }
-    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        push_covered_once(
-          block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
-        )
+      if vreg_live_out_blocks[vreg_id] is Some(blocks) {
+        for block_idx in blocks {
+          live_out_epoch[block_idx] = epoch
+          push_covered_once(
+            block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
+          )
+        }
       }
     }
     for block_idx in use_blocks {
@@ -589,8 +599,8 @@ pub fn build_live_ranges(
     let spans_unmerged : Array[ProgPointRange] = []
     for block_idx in covered_blocks_ordered {
       let block = func.blocks[block_idx]
-      let live_in = liveness.live_in[block_idx].contains(vreg_id)
-      let live_out = liveness.live_out[block_idx].contains(vreg_id)
+      let live_in = live_in_epoch[block_idx] == epoch
+      let live_out = live_out_epoch[block_idx] == epoch
       let has_def_in_block = info.def_point is Some((def, _)) &&
         def.block == block_idx
       let use_bounds = if use_block_epoch[block_idx] == epoch {
