@@ -2148,23 +2148,24 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  // Build final bundles from union-find sets
+  // Build final bundles from union-find roots (dense-indexed, regalloc2-style).
   let result = BundleSet::new()
-  let sets = uf.get_all_sets()
-  for set_idx, members in sets {
-    ignore(set_idx)
-    if members.is_empty() {
-      continue
+  let root_to_bundle : Array[Int] = Array::make(n, -1)
+  for range_idx in 0..<n {
+    let root = uf.find(range_idx)
+    let bundle_id = root_to_bundle[root]
+    let bundle = if bundle_id >= 0 {
+      result.get(bundle_id)
+    } else {
+      let first_range = ranges.get(range_idx)
+      let created = Bundle::new(result.bundles.length(), first_range.vreg.class)
+      result.add_bundle(created)
+      let new_id = created.id
+      root_to_bundle[root] = new_id
+      created
     }
-
-    // Get register class from first member
-    let first_range = ranges.get(members[0])
-    let bundle = Bundle::new(result.bundles.length(), first_range.vreg.class)
-    for range_idx in members {
-      bundle.add_range(range_idx)
-      ranges.get(range_idx).bundle_id = bundle.id
-    }
-    result.add_bundle(bundle)
+    bundle.add_range(range_idx)
+    ranges.get(range_idx).bundle_id = bundle.id
   }
   result
 }
