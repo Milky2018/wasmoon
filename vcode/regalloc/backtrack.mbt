@@ -586,24 +586,10 @@ fn BacktrackingAllocator::try_allocate(
   if n == 0 {
     return None
   }
-  let mut start_inst = 0
-  let mut start_point : ProgPoint? = None
-  for range_id in bundle.range_ids {
-    let range = self.ranges.get(range_id)
-    for span in range.ranges {
-      let p = span.start
-      match start_point {
-        None => start_point = Some(p)
-        Some(existing) =>
-          if p.compare_with_order(existing, self.block_order) < 0 {
-            start_point = Some(p)
-          }
-      }
-    }
-  }
-  if start_point is Some(p) {
-    start_inst = p.inst
-  }
+  // Use cached sorted bundle spans to derive deterministic probe offset.
+  // This avoids repeated per-attempt scans over bundle ranges.
+  let spans = self.bundle_sorted_spans(bundle)
+  let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
   // `ProgPoint.inst` may be -1 (block params). Ensure non-negative offset.
   let raw = bundle.id + start_inst
   let offset = (raw % n + n) % n

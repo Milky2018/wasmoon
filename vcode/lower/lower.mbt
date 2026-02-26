@@ -100,25 +100,13 @@ fn LoweringContext::canonicalize_indirect_type_idx(
 ///|
 /// Invalidate cached memory bases in lowering context.
 fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
-  let keys : Array[Int] = []
-  for k, _ in ctx.mem_base_cache {
-    keys.push(k)
-  }
-  for k in keys {
-    ctx.mem_base_cache.remove(k)
-  }
+  ctx.mem_base_cache.clear()
 }
 
 ///|
 /// Invalidate cached table0 base pointers in lowering context.
 fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
-  let keys : Array[Int] = []
-  for k, _ in ctx.table0_base_cache {
-    keys.push(k)
-  }
-  for k in keys {
-    ctx.table0_base_cache.remove(k)
-  }
+  ctx.table0_base_cache.clear()
 }
 
 ///|
