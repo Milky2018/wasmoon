@@ -47,6 +47,14 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 }
 
 ///|
+/// A span with precomputed total-order keys for faster overlap tests.
+priv struct OrderedSpan {
+  start : ProgPoint
+  start_ord : Int
+  end_ord : Int
+}
+
+///|
 /// The backtracking register allocator
 struct BacktrackingAllocator {
   // Core data
@@ -59,13 +67,13 @@ struct BacktrackingAllocator {
   // hot conflict-scan path.
   // Each entry stores (bundle_id, span) so eviction/removal cannot accidentally
   // remove spans that belong to a different bundle with identical boundaries.
-  int_reg_allocs : Array[Array[(Int, ProgPointRange)]]
-  float_reg_allocs : Array[Array[(Int, ProgPointRange)]]
+  int_reg_allocs : Array[Array[(Int, OrderedSpan)]]
+  float_reg_allocs : Array[Array[(Int, OrderedSpan)]]
 
   // Per-bundle flattened/sorted span cache (bundle-id indexed).
   // This mirrors regalloc2's use of ordered per-bundle ranges for conflict
   // scans while avoiding hash lookups in hot allocation loops.
-  bundle_span_cache : Array[Array[ProgPointRange]?]
+  bundle_span_cache : Array[Array[OrderedSpan]?]
 
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
@@ -92,6 +100,8 @@ struct BacktrackingAllocator {
   block_order : FixedArray[Int]
   // Approximate loop-depth per block (pre-computed once).
   loop_depths : Array[Int]
+  // Dense point order encoding stride per block.
+  point_block_stride : Int
 
   // Reference to function for constraint lookups
   func : VCodeFunction
@@ -199,8 +209,8 @@ fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
 }
 
 ///|
-fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, ProgPointRange)]] {
-  let table : Array[Array[(Int, ProgPointRange)]] = []
+fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, OrderedSpan)]] {
+  let table : Array[Array[(Int, OrderedSpan)]] = []
   for _ in 0..<cap {
     table.push([])
   }
@@ -229,8 +239,13 @@ pub fn BacktrackingAllocator::new(
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
   let mut total_insts = 0
+  let mut max_block_insts = 0
   for block in func.blocks {
-    total_insts = total_insts + block.insts.length()
+    let block_len = block.insts.length()
+    total_insts = total_insts + block_len
+    if block_len > max_block_insts {
+      max_block_insts = block_len
+    }
   }
   // Keep split probing budgeted on very large functions; regalloc2's Rust
   // implementation can afford broader scans, but in MoonBit this keeps wall
@@ -238,6 +253,7 @@ pub fn BacktrackingAllocator::new(
   let split_probe_limit = if total_insts >= 1200 { 2 } else { 1 << 30 }
   let bundle_retry_limit = if total_insts >= 1200 { 2 } else { 8 }
   let enable_backtracking = total_insts < 1200
+  let point_block_stride = (max_block_insts + 4) * 2
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)
     let callee_max = max_preg_index(callee_saved_int)
@@ -292,11 +308,25 @@ pub fn BacktrackingAllocator::new(
     enable_backtracking,
     block_order: ranges.block_order,
     loop_depths,
+    point_block_stride,
     func,
     conflict_seen_epoch: Array::make(bundles.length(), 0),
     conflict_epoch: 0,
     bundle_attempts: Array::make(bundles.length(), 0),
   }
+}
+
+///|
+fn BacktrackingAllocator::point_order(
+  self : BacktrackingAllocator,
+  point : ProgPoint,
+) -> Int {
+  let block_ord = self.block_order[point.block]
+  let pos_ord = match point.pos {
+    Before => 0
+    After => 1
+  }
+  block_ord * self.point_block_stride + (point.inst + 1) * 2 + pos_ord
 }
 
 ///|
@@ -409,7 +439,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
 fn BacktrackingAllocator::get_reg_allocs(
   self : BacktrackingAllocator,
   class : @abi.RegClass,
-) -> Array[Array[(Int, ProgPointRange)]] {
+) -> Array[Array[(Int, OrderedSpan)]] {
   match class {
     @abi.Int => self.int_reg_allocs
     @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
@@ -421,22 +451,24 @@ fn BacktrackingAllocator::get_reg_allocs(
 fn BacktrackingAllocator::bundle_sorted_spans(
   self : BacktrackingAllocator,
   bundle : Bundle,
-) -> Array[ProgPointRange] {
+) -> Array[OrderedSpan] {
   if bundle.id >= 0 &&
     bundle.id < self.bundle_span_cache.length() &&
     self.bundle_span_cache[bundle.id] is Some(spans) {
     return spans
   }
-  let spans : Array[ProgPointRange] = []
+  let spans : Array[OrderedSpan] = []
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
-    for span in range.ranges {
-      spans.push(span)
+    for raw_span in range.ranges {
+      spans.push({
+        start: raw_span.start,
+        start_ord: self.point_order(raw_span.start),
+        end_ord: self.point_order(raw_span.end),
+      })
     }
   }
-  spans.sort_by(fn(a, b) {
-    a.start.compare_with_order(b.start, self.block_order)
-  })
+  spans.sort_by(fn(a, b) { a.start_ord - b.start_ord })
   if bundle.id >= 0 && bundle.id < self.bundle_span_cache.length() {
     self.bundle_span_cache[bundle.id] = Some(spans)
   }
@@ -449,15 +481,16 @@ fn BacktrackingAllocator::bundle_sorted_spans(
 /// order is also monotonic.
 fn BacktrackingAllocator::occupied_lower_bound_by_end(
   self : BacktrackingAllocator,
-  occupied : Array[(Int, ProgPointRange)],
-  point : ProgPoint,
+  occupied : Array[(Int, OrderedSpan)],
+  point_ord : Int,
 ) -> Int {
+  ignore(self)
   let mut lo = 0
   let mut hi = occupied.length()
   while lo < hi {
     let mid = lo + (hi - lo) / 2
-    let end = occupied[mid].1.end
-    if end.compare_with_order(point, self.block_order) <= 0 {
+    let end_ord = occupied[mid].1.end_ord
+    if end_ord <= point_ord {
       lo = mid + 1
     } else {
       hi = mid
@@ -469,7 +502,7 @@ fn BacktrackingAllocator::occupied_lower_bound_by_end(
 ///|
 fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
   self : BacktrackingAllocator,
-  spans : Array[ProgPointRange],
+  spans : Array[OrderedSpan],
   preg : @abi.PReg,
 ) -> Bool {
   let allocs = self.get_reg_allocs(preg.class)
@@ -481,15 +514,15 @@ fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
     return false
   }
   let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+    if span.end_ord <= occ.start_ord {
       i = i + 1
       continue
     }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+    if occ.end_ord <= span.start_ord {
       j = j + 1
       continue
     }
@@ -580,12 +613,11 @@ fn BacktrackingAllocator::record_allocation(
   }
   let occupied = allocs[preg.index]
   let spans = self.bundle_sorted_spans(bundle)
-  let new_occupied : Array[(Int, ProgPointRange)] = []
+  let new_occupied : Array[(Int, OrderedSpan)] = []
   let mut i = 0
   let mut j = 0
   while i < occupied.length() && j < spans.length() {
-    if occupied[i].1.start.compare_with_order(spans[j].start, self.block_order) <=
-      0 {
+    if occupied[i].1.start_ord <= spans[j].start_ord {
       new_occupied.push(occupied[i])
       i = i + 1
     } else {
@@ -627,7 +659,7 @@ fn BacktrackingAllocator::remove_allocation(
     if preg.index >= 0 && preg.index < allocs.length() {
       let occupied = allocs[preg.index]
       // Remove ranges belonging to this bundle.
-      let new_occupied : Array[(Int, ProgPointRange)] = []
+      let new_occupied : Array[(Int, OrderedSpan)] = []
       for occ in occupied {
         if occ.0 != bundle.id {
           new_occupied.push(occ)
@@ -721,7 +753,7 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   self : BacktrackingAllocator,
   bundle : Bundle,
   preg : @abi.PReg,
-  spans : Array[ProgPointRange],
+  spans : Array[OrderedSpan],
   max_allowable_cost : Double?,
   conflicts : Array[Int],
 ) -> (Double, Bool) {
@@ -738,15 +770,15 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
     return (max_conflict_weight, false)
   }
   let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+    if span.end_ord <= occ.start_ord {
       i = i + 1
       continue
     }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+    if occ.end_ord <= span.start_ord {
       j = j + 1
       continue
     }
@@ -768,7 +800,7 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
         }
       }
     }
-    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+    if span.end_ord <= occ.end_ord {
       i = i + 1
     } else {
       j = j + 1
@@ -781,11 +813,12 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
 fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
   self : BacktrackingAllocator,
   preg : @abi.PReg,
-  spans : Array[ProgPointRange],
+  spans : Array[OrderedSpan],
   max_allowable_cost : Double?,
 ) -> (Double, ProgPoint?, Bool) {
   let mut max_conflict_weight = 0.0
   let mut first_conflict_point : ProgPoint? = None
+  let mut first_conflict_ord : Int? = None
   let allocs = self.get_reg_allocs(preg.class)
   if preg.index < 0 || preg.index >= allocs.length() {
     return (max_conflict_weight, first_conflict_point, false)
@@ -795,15 +828,15 @@ fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
     return (max_conflict_weight, first_conflict_point, false)
   }
   let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start)
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+    if span.end_ord <= occ.start_ord {
       i = i + 1
       continue
     }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+    if occ.end_ord <= span.start_ord {
       j = j + 1
       continue
     }
@@ -815,23 +848,23 @@ fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
         return (0.0, None, true)
       }
     }
-    let overlap_start = if span.start.compare_with_order(
-        occ.start,
-        self.block_order,
-      ) >=
-      0 {
-      span.start
+    let (overlap_start, overlap_ord) = if span.start_ord >= occ.start_ord {
+      (span.start, span.start_ord)
     } else {
-      occ.start
+      (occ.start, occ.start_ord)
     }
-    match first_conflict_point {
-      None => first_conflict_point = Some(overlap_start)
-      Some(existing) =>
-        if overlap_start.compare_with_order(existing, self.block_order) < 0 {
+    match first_conflict_ord {
+      None => {
+        first_conflict_ord = Some(overlap_ord)
+        first_conflict_point = Some(overlap_start)
+      }
+      Some(existing_ord) =>
+        if overlap_ord < existing_ord {
+          first_conflict_ord = Some(overlap_ord)
           first_conflict_point = Some(overlap_start)
         }
     }
-    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+    if span.end_ord <= occ.end_ord {
       i = i + 1
     } else {
       j = j + 1
@@ -959,7 +992,7 @@ fn BacktrackingAllocator::choose_split_option(
   let mut best_cost : Double? = None
   fn consider(
     self : BacktrackingAllocator,
-    spans : Array[ProgPointRange],
+    spans : Array[OrderedSpan],
     preg : @abi.PReg,
     best : (ProgPoint, @abi.PReg)?,
     best_cost : Double?,
