@@ -81,7 +81,7 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
   let insts = instruction_count(func)
-  if insts >= 2200 {
+  if insts >= 1800 {
     // Keep compile wall bounded on mega-functions; rely on lightweight passes.
     return false
   }

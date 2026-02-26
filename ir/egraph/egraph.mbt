@@ -2060,6 +2060,8 @@ fn EGraph::apply_indexed_rules_once(
       }
     }
   }
-  self.rebuild()
+  if changed {
+    self.rebuild()
+  }
   (changed, applied)
 }

@@ -7,12 +7,12 @@
 /// Builder for constructing an EGraph from IR instructions
 struct EGraphBuilder {
   egraph : @egraph.EGraph
-  // Map from IR Value id to EClassId
-  value_map : Map[Int, @egraph.EClassId]
+  // Dense map from IR Value id to EClassId (Cranelift SecondaryMap style).
+  value_map : Array[@egraph.EClassId?]
   // Reverse map from (canonical EClassId, Type) to an in-scope IR Value (for operand rewriting)
   class_to_value : Map[RepKey, Value]
-  // Map from IR Value id to its defining instruction
-  def_map : Map[Int, Inst]
+  // Dense map from IR Value id to its defining instruction.
+  def_map : Array[Inst?]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
   // Rewrite limits (Cranelift-style hard caps).
@@ -53,11 +53,43 @@ pub fn EGraphBuilder::new_with_limits_and_ruleset(
 ) -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
-    value_map: {},
+    value_map: [],
     class_to_value: {},
-    def_map: {},
+    def_map: [],
     ruleset,
     saturation_limits,
+  }
+}
+
+///|
+fn EGraphBuilder::ensure_value_slot(
+  self : EGraphBuilder,
+  value_id : Int,
+) -> Unit {
+  if value_id < 0 {
+    return
+  }
+  while self.value_map.length() <= value_id {
+    self.value_map.push(None)
+  }
+  while self.def_map.length() <= value_id {
+    self.def_map.push(None)
+  }
+}
+
+///|
+fn EGraphBuilder::reserve_value_slots(
+  self : EGraphBuilder,
+  count : Int,
+) -> Unit {
+  if count <= 0 {
+    return
+  }
+  while self.value_map.length() < count {
+    self.value_map.push(None)
+  }
+  while self.def_map.length() < count {
+    self.def_map.push(None)
   }
 }
 
@@ -65,7 +97,8 @@ pub fn EGraphBuilder::new_with_limits_and_ruleset(
 /// Register an instruction's definition
 pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
-    self.def_map.set(v.id, inst)
+    self.ensure_value_slot(v.id)
+    self.def_map[v.id] = Some(inst)
   }
 }
 
@@ -208,7 +241,9 @@ pub fn EGraphBuilder::add_value(
   value : Value,
 ) -> @egraph.EClassId {
   // Check if already converted
-  if self.value_map.get(value.id) is Some(id) {
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(id) {
     return self.egraph.find(id) // Return canonical id
   }
 
@@ -216,7 +251,9 @@ pub fn EGraphBuilder::add_value(
   let bits = type_bits(value.ty)
 
   // Look up the defining instruction
-  let class_id = if self.def_map.get(value.id) is Some(inst) {
+  let class_id = if value.id >= 0 &&
+    value.id < self.def_map.length() &&
+    self.def_map[value.id] is Some(inst) {
     // Try to convert the opcode (pass full instruction for type info)
     match opcode_to_eopcode(inst) {
       None => {
@@ -249,7 +286,8 @@ pub fn EGraphBuilder::add_value(
     self.egraph.set_type(id, bits)
     id
   }
-  self.value_map.set(value.id, class_id)
+  self.ensure_value_slot(value.id)
+  self.value_map[value.id] = Some(class_id)
   class_id
 }
 
@@ -279,9 +317,12 @@ pub fn EGraphBuilder::extract(
   self : EGraphBuilder,
   value : Value,
 ) -> (Int, @egraph.ENode)? {
-  match self.value_map.get(value.id) {
-    Some(class_id) => Some(self.egraph.extract(class_id))
-    None => None
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    Some(self.egraph.extract(class_id))
+  } else {
+    None
   }
 }
 
@@ -337,17 +378,18 @@ pub fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
 ) -> Opcode? {
-  match self.value_map.get(value.id) {
-    None => None
-    Some(class_id) => {
-      let (_, best_node) = self.egraph.extract(class_id)
-      // Only handle constant folding - returns Iconst if the result is a constant
-      match best_node.op {
-        Const(c) => Some(Iconst(c))
-        // Don't change opcode for non-constant results - would need operand reconstruction
-        _ => None
-      }
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    let (_, best_node) = self.egraph.extract(class_id)
+    // Only handle constant folding - returns Iconst if the result is a constant
+    match best_node.op {
+      Const(c) => Some(Iconst(c))
+      // Don't change opcode for non-constant results - would need operand reconstruction
+      _ => None
     }
+  } else {
+    None
   }
 }
 
@@ -359,24 +401,25 @@ pub fn EGraphBuilder::get_simplified_operand(
   self : EGraphBuilder,
   value : Value,
 ) -> Value? {
-  match self.value_map.get(value.id) {
-    None => None
-    Some(class_id) => {
-      // Get the canonical class after optimization
-      let canonical = self.egraph.find(class_id)
-      // Check if this class maps to a different (simpler) value with same IR type
-      let key : RepKey = { class_id: canonical.0, ty: value.ty }
-      match self.class_to_value.get(key) {
-        None => None
-        Some(simplified_value) =>
-          // Only return if it's different from the original
-          if simplified_value.id != value.id {
-            Some(simplified_value)
-          } else {
-            None
-          }
-      }
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    // Get the canonical class after optimization
+    let canonical = self.egraph.find(class_id)
+    // Check if this class maps to a different (simpler) value with same IR type
+    let key : RepKey = { class_id: canonical.0, ty: value.ty }
+    match self.class_to_value.get(key) {
+      None => None
+      Some(simplified_value) =>
+        // Only return if it's different from the original
+        if simplified_value.id != value.id {
+          Some(simplified_value)
+        } else {
+          None
+        }
     }
+  } else {
+    None
   }
 }
 
@@ -395,7 +438,9 @@ fn EGraphBuilder::recompute_representatives_for_block(
 ) -> Unit {
   self.class_to_value.clear()
   fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
-    if self.value_map.get(value.id) is Some(class_id) {
+    if value.id >= 0 &&
+      value.id < self.value_map.length() &&
+      self.value_map[value.id] is Some(class_id) {
       let canonical = self.egraph.find(class_id)
       let key : RepKey = { class_id: canonical.0, ty: value.ty }
       if !self.class_to_value.contains(key) {
@@ -493,6 +538,7 @@ pub fn optimize_function_with_stats_with_limits_and_ruleset(
 ) -> EGraphOptimizeStats {
   let mut changed = false
   let builder = EGraphBuilder::new_with_limits_and_ruleset(limits, ruleset)
+  builder.reserve_value_slots(func.next_value_id)
 
   // Function-scoped e-graph construction (Cranelift-directional alignment):
   // build one e-graph for the whole function instead of isolated per-block
@@ -534,7 +580,9 @@ pub fn optimize_function_with_stats_with_limits_and_ruleset(
       let scoped_entries : Array[(RepKey, Value?)] = []
 
       fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
-        if builder.value_map.get(value.id) is Some(class_id) {
+        if value.id >= 0 &&
+          value.id < builder.value_map.length() &&
+          builder.value_map[value.id] is Some(class_id) {
           let canonical = builder.egraph.find(class_id)
           let key : RepKey = { class_id: canonical.0, ty: value.ty }
           let previous = builder.class_to_value.get(key)
