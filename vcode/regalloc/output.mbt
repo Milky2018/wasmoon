@@ -460,16 +460,88 @@ pub fn Output::push_edit(
     Move(from, to, _cls) => if loc_eq(from, to) { return }
   }
   self.edits.push(((block_id, inst_idx, pos), edit))
-  let key = (block_id, inst_idx, pos)
-  let bucket = match self.edits_by_point.get(key) {
-    Some(arr) => arr
-    None => {
-      let arr : Array[Edit] = []
-      self.edits_by_point.set(key, arr)
-      arr
+}
+
+///|
+pub fn Output::rebuild_edits_index(self : Output) -> Unit {
+  self.edits_by_point.clear()
+  for entry in self.edits {
+    let ((block_id, inst_idx, pos), edit) = entry
+    let key = (block_id, inst_idx, pos)
+    let bucket = match self.edits_by_point.get(key) {
+      Some(arr) => arr
+      None => {
+        let arr : Array[Edit] = []
+        self.edits_by_point.set(key, arr)
+        arr
+      }
+    }
+    bucket.push(edit)
+  }
+}
+
+///|
+pub fn Output::sort_edits(self : Output) -> Unit {
+  fn pos_ord(pos : ProgPos) -> Int {
+    match pos {
+      Before => 0
+      After => 1
     }
   }
-  bucket.push(edit)
+  self.edits.sort_by(fn(lhs, rhs) {
+    let ((lb, li, lp), _le) = lhs
+    let ((rb, ri, rp), _re) = rhs
+    if lb != rb {
+      lb - rb
+    } else if li != ri {
+      li - ri
+    } else {
+      pos_ord(lp) - pos_ord(rp)
+    }
+  })
+}
+
+///|
+pub fn Output::finalize_edits(self : Output) -> Unit {
+  self.rebuild_edits_index()
+}
+
+///|
+pub fn Output::iter_edits(self : Output) -> Array[((Int, Int, ProgPos), Edit)] {
+  self.edits
+}
+
+///|
+/// Start recording operand allocations for one instruction/terminator.
+/// Returns `(start, total)` where `start` is the first index in `allocs`.
+pub fn Output::begin_inst_allocs(
+  self : Output,
+  block_id : Int,
+  inst_idx : Int,
+  is_terminator : Bool,
+  def_count : Int,
+  use_count : Int,
+) -> (Int, Int) {
+  let start = self.allocs.length()
+  let total = def_count + use_count
+  let range_idx = self.operand_ranges.length()
+  self.operand_ranges.push(
+    (block_id, inst_idx, is_terminator, start, def_count, use_count),
+  )
+  self.operand_range_index.set((block_id, inst_idx, is_terminator), range_idx)
+  (start, total)
+}
+
+///|
+pub fn Output::push_inst_alloc_loc(self : Output, loc : Loc) -> Unit {
+  self.allocs.push(loc)
+}
+
+///|
+pub fn Output::end_inst_allocs(self : Output, start : Int, total : Int) -> Unit {
+  guard self.allocs.length() == start + total else {
+    abort("bad inst alloc count")
+  }
 }
 
 ///|
@@ -484,15 +556,13 @@ pub fn Output::push_inst_allocs(
   use_count : Int,
   locs : Array[Loc],
 ) -> Unit {
-  let start = self.allocs.length()
-  for loc in locs {
-    self.allocs.push(loc)
-  }
-  let range_idx = self.operand_ranges.length()
-  self.operand_ranges.push(
-    (block_id, inst_idx, is_terminator, start, def_count, use_count),
+  let (start, total) = self.begin_inst_allocs(
+    block_id, inst_idx, is_terminator, def_count, use_count,
   )
-  self.operand_range_index.set((block_id, inst_idx, is_terminator), range_idx)
+  for loc in locs {
+    self.push_inst_alloc_loc(loc)
+  }
+  self.end_inst_allocs(start, total)
 }
 
 ///|

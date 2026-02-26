@@ -1913,14 +1913,12 @@ pub fn build_bundles_with_merging(
     merged
   }
 
-  let root_members_cache : Map[Int, Array[Int]] = {}
   let root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)] = {}
   let root_has_fixed_def_cache : Map[Int, Bool] = {}
   let root_spans_cache : Map[Int, Array[ProgPointRange]] = {}
 
   // Initialize per-root metadata so merges stay incremental.
   for i in 0..<n {
-    root_members_cache.set(i, [i])
     let range = ranges.get(i)
     root_fixed_info_cache.set(i, range_fixed_reg_conflict(range))
     root_has_fixed_def_cache.set(i, range_has_fixed_def(range))
@@ -1933,32 +1931,17 @@ pub fn build_bundles_with_merging(
     })
     root_spans_cache.set(i, spans)
   }
-  fn root_members(
-    uf : @unionfind.UnionFind,
-    root_members_cache : Map[Int, Array[Int]],
-    root : Int,
-  ) -> Array[Int] {
-    match root_members_cache.get(root) {
-      Some(members) => members
-      None => {
-        let members = uf.get_set(root)
-        root_members_cache.set(root, members)
-        members
-      }
-    }
-  }
 
   fn root_fixed_info(
     uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
     root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
     root : Int,
   ) -> (@abi.PReg?, Bool) {
     match root_fixed_info_cache.get(root) {
       Some(info) => info
       None => {
-        let members = root_members(uf, root_members_cache, root)
+        let members = uf.get_set(root)
         let info = set_fixed_reg(ranges, members)
         root_fixed_info_cache.set(root, info)
         info
@@ -1969,14 +1952,13 @@ pub fn build_bundles_with_merging(
   fn root_has_fixed_def(
     uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
     root_has_fixed_def_cache : Map[Int, Bool],
     root : Int,
   ) -> Bool {
     match root_has_fixed_def_cache.get(root) {
       Some(has_fixed_def) => has_fixed_def
       None => {
-        let members = root_members(uf, root_members_cache, root)
+        let members = uf.get_set(root)
         let has_fixed_def = set_has_fixed_def(ranges, members)
         root_has_fixed_def_cache.set(root, has_fixed_def)
         has_fixed_def
@@ -1987,14 +1969,13 @@ pub fn build_bundles_with_merging(
   fn root_spans(
     uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
     root_spans_cache : Map[Int, Array[ProgPointRange]],
     root : Int,
   ) -> Array[ProgPointRange] {
     match root_spans_cache.get(root) {
       Some(spans) => spans
       None => {
-        let members = root_members(uf, root_members_cache, root)
+        let members = uf.get_set(root)
         let spans = collect_root_spans(ranges, members)
         root_spans_cache.set(root, spans)
         spans
@@ -2025,20 +2006,20 @@ pub fn build_bundles_with_merging(
       return false
     }
     let set_a_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_a,
+      uf, ranges, root_has_fixed_def_cache, root_a,
     )
     let set_b_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_b,
+      uf, ranges, root_has_fixed_def_cache, root_b,
     )
 
     // Keep merged bundles compatible with fixed-register constraints.
     // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
     // incompatible fixed uses.
     let (fixed_a, conflict_a) = root_fixed_info(
-      uf, ranges, root_members_cache, root_fixed_info_cache, root_a,
+      uf, ranges, root_fixed_info_cache, root_a,
     )
     let (fixed_b, conflict_b) = root_fixed_info(
-      uf, ranges, root_members_cache, root_fixed_info_cache, root_b,
+      uf, ranges, root_fixed_info_cache, root_b,
     )
     if conflict_a || conflict_b {
       return false
@@ -2052,12 +2033,8 @@ pub fn build_bundles_with_merging(
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
-    let spans_a = root_spans(
-      uf, ranges, root_members_cache, root_spans_cache, root_a,
-    )
-    let spans_b = root_spans(
-      uf, ranges, root_members_cache, root_spans_cache, root_b,
-    )
+    let spans_a = root_spans(uf, ranges, root_spans_cache, root_a)
+    let spans_b = root_spans(uf, ranges, root_spans_cache, root_b)
     let mut ia = 0
     let mut ib = 0
     let mut range_checks = 0
@@ -2085,17 +2062,6 @@ pub fn build_bundles_with_merging(
     let old_root = if new_root == root_a { root_b } else { root_a }
 
     // Keep root metadata incremental (mirrors regalloc2's merge behavior).
-    let members_new = root_members(uf, root_members_cache, new_root)
-    let members_old = root_members(uf, root_members_cache, old_root)
-    let merged_members : Array[Int] = []
-    for idx in members_new {
-      merged_members.push(idx)
-    }
-    for idx in members_old {
-      merged_members.push(idx)
-    }
-    root_members_cache.set(new_root, merged_members)
-    root_members_cache.remove(old_root) |> ignore
     let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
     root_has_fixed_def_cache.set(new_root, merged_fixed_def)
     root_has_fixed_def_cache.remove(old_root) |> ignore

@@ -543,6 +543,13 @@ pub fn build_live_ranges(
     }
   }
   let num_blocks = func.blocks.length()
+  let blocks_in_order : FixedArray[Int] = FixedArray::make(num_blocks, -1)
+  for block_idx in 0..<num_blocks {
+    let ord = block_order[block_idx]
+    if ord >= 0 && ord < num_blocks {
+      blocks_in_order[ord] = block_idx
+    }
+  }
   // Scratch structures reused across vregs (epoch-tagged) to avoid per-vreg
   // HashMap churn in hot live-range construction paths.
   let use_first_points : Array[ProgPoint?] = Array::make(num_blocks, None)
@@ -599,16 +606,13 @@ pub fn build_live_ranges(
       }
     }
 
-    let covered_blocks_ordered : Array[Int] = []
     fn push_covered_once(
       block_idx : Int,
       epoch : Int,
       covered_block_epoch : FixedArray[Int],
-      covered_blocks_ordered : Array[Int],
     ) -> Unit {
       if covered_block_epoch[block_idx] != epoch {
         covered_block_epoch[block_idx] = epoch
-        covered_blocks_ordered.push(block_idx)
       }
     }
 
@@ -616,37 +620,29 @@ pub fn build_live_ranges(
       if vreg_live_in_blocks[vreg_id] is Some(blocks) {
         for block_idx in blocks {
           live_in_epoch[block_idx] = epoch
-          push_covered_once(
-            block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
-          )
+          push_covered_once(block_idx, epoch, covered_block_epoch)
         }
       }
       if vreg_live_out_blocks[vreg_id] is Some(blocks) {
         for block_idx in blocks {
           live_out_epoch[block_idx] = epoch
-          push_covered_once(
-            block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
-          )
+          push_covered_once(block_idx, epoch, covered_block_epoch)
         }
       }
     }
     for block_idx in use_blocks {
-      push_covered_once(
-        block_idx, epoch, covered_block_epoch, covered_blocks_ordered,
-      )
+      push_covered_once(block_idx, epoch, covered_block_epoch)
     }
     if info.def_point is Some((def, _)) {
-      push_covered_once(
-        def.block,
-        epoch,
-        covered_block_epoch,
-        covered_blocks_ordered,
-      )
+      push_covered_once(def.block, epoch, covered_block_epoch)
     }
-    covered_blocks_ordered.sort_by(fn(a, b) { block_order[a] - block_order[b] })
 
     let spans_unmerged : Array[ProgPointRange] = []
-    for block_idx in covered_blocks_ordered {
+    for ord in 0..<num_blocks {
+      let block_idx = blocks_in_order[ord]
+      if block_idx < 0 || covered_block_epoch[block_idx] != epoch {
+        continue
+      }
       let block = func.blocks[block_idx]
       let live_in = live_in_epoch[block_idx] == epoch
       let live_out = live_out_epoch[block_idx] == epoch

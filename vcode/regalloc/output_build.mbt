@@ -497,16 +497,22 @@ fn build_output(
         }
       }
       if !needs_spill_temps {
-        let locs : Array[Loc] = []
+        let (alloc_start, alloc_total) = out.begin_inst_allocs(
+          block_id,
+          inst_idx,
+          false,
+          inst.defs.length(),
+          inst.uses.length(),
+        )
         for i, def in inst.defs {
           match fixed_def_preg(inst, i) {
-            Some(preg) => locs.push(Reg(preg))
+            Some(preg) => out.push_inst_alloc_loc(Reg(preg))
             None =>
               match def.reg {
-                @abi.Physical(preg) => locs.push(Reg(preg))
+                @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
                 @abi.Virtual(vreg) =>
                   match assigned_preg_of(vreg.id, assigned_pregs) {
-                    Some(preg) => locs.push(Reg(preg))
+                    Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                     None => abort("missing def allocation for vreg \{vreg.id}")
                   }
               }
@@ -514,26 +520,19 @@ fn build_output(
         }
         for i, use_reg in inst.uses {
           match fixed_use_preg(inst, i) {
-            Some(preg) => locs.push(Reg(preg))
+            Some(preg) => out.push_inst_alloc_loc(Reg(preg))
             None =>
               match use_reg {
-                @abi.Physical(preg) => locs.push(Reg(preg))
+                @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
                 @abi.Virtual(vreg) =>
                   match assigned_preg_of(vreg.id, assigned_pregs) {
-                    Some(preg) => locs.push(Reg(preg))
+                    Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                     None => abort("missing use allocation for vreg \{vreg.id}")
                   }
               }
           }
         }
-        out.push_inst_allocs(
-          block_id,
-          inst_idx,
-          false,
-          inst.defs.length(),
-          inst.uses.length(),
-          locs,
-        )
+        out.end_inst_allocs(alloc_start, alloc_total)
         continue
       }
 
@@ -747,17 +746,23 @@ fn build_output(
       }
 
       // Record operand allocations for this instruction.
-      let locs : Array[Loc] = []
+      let (alloc_start, alloc_total) = out.begin_inst_allocs(
+        block_id,
+        inst_idx,
+        false,
+        inst.defs.length(),
+        inst.uses.length(),
+      )
       // defs first.
       for i, def in inst.defs {
         match fixed_def_preg(inst, i) {
-          Some(preg) => locs.push(Reg(preg))
+          Some(preg) => out.push_inst_alloc_loc(Reg(preg))
           None =>
             match def.reg {
-              @abi.Physical(preg) => locs.push(Reg(preg))
+              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
               @abi.Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
-                  Some(preg) => locs.push(Reg(preg))
+                  Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {
                     guard vreg.id >= 0 && vreg.id < max_vreg_id else {
                       abort("vreg id out of range in output build: \{vreg.id}")
@@ -767,7 +772,7 @@ fn build_output(
                         index: spill_def_tmp_idx[vreg.id],
                         class: vreg.class,
                       }
-                      locs.push(Reg(tmp))
+                      out.push_inst_alloc_loc(Reg(tmp))
                     } else {
                       abort("missing spilled def temp for vreg \{vreg.id}")
                     }
@@ -779,13 +784,13 @@ fn build_output(
       // then uses.
       for i, use_reg in inst.uses {
         match fixed_use_preg(inst, i) {
-          Some(preg) => locs.push(Reg(preg))
+          Some(preg) => out.push_inst_alloc_loc(Reg(preg))
           None =>
             match use_reg {
-              @abi.Physical(preg) => locs.push(Reg(preg))
+              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
               @abi.Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
-                  Some(preg) => locs.push(Reg(preg))
+                  Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {
                     guard vreg.id >= 0 && vreg.id < max_vreg_id else {
                       abort("vreg id out of range in output build: \{vreg.id}")
@@ -795,7 +800,7 @@ fn build_output(
                         index: spill_use_tmp_idx[vreg.id],
                         class: vreg.class,
                       }
-                      locs.push(Reg(tmp))
+                      out.push_inst_alloc_loc(Reg(tmp))
                     } else {
                       abort("missing spilled use temp for vreg \{vreg.id}")
                     }
@@ -804,14 +809,7 @@ fn build_output(
             }
         }
       }
-      out.push_inst_allocs(
-        block_id,
-        inst_idx,
-        false,
-        inst.defs.length(),
-        inst.uses.length(),
-        locs,
-      )
+      out.end_inst_allocs(alloc_start, alloc_total)
     }
 
     // Terminator allocations/edits.
@@ -839,7 +837,10 @@ fn build_output(
             push_resolved_moves(out, block_id, term_inst, Before, moves)
           }
           // Jump itself doesn't consume regs in the emitter; record an empty range.
-          out.push_inst_allocs(block_id, term_inst, true, 0, 0, [])
+          let (alloc_start, alloc_total) = out.begin_inst_allocs(
+            block_id, term_inst, true, 0, 0,
+          )
+          out.end_inst_allocs(alloc_start, alloc_total)
         }
         _ => {
           // For other terminators, treat their operands like uses.
@@ -915,13 +916,19 @@ fn build_output(
               add_used_reg_marks(used_int_marks, used_fp_marks, epoch, tmp)
             }
           }
-          let locs : Array[Loc] = []
+          let (alloc_start, alloc_total) = out.begin_inst_allocs(
+            block_id,
+            term_inst,
+            true,
+            0,
+            use_regs.length(),
+          )
           for r in use_regs {
             match r {
-              @abi.Physical(preg) => locs.push(Reg(preg))
+              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
               @abi.Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
-                  Some(preg) => locs.push(Reg(preg))
+                  Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {
                     guard vreg.id >= 0 && vreg.id < max_vreg_id else {
                       abort("vreg id out of range in output build: \{vreg.id}")
@@ -931,7 +938,7 @@ fn build_output(
                         index: spill_use_tmp_idx[vreg.id],
                         class: vreg.class,
                       }
-                      locs.push(Reg(tmp))
+                      out.push_inst_alloc_loc(Reg(tmp))
                     } else {
                       abort(
                         "missing spilled terminator use temp for vreg \{vreg.id}",
@@ -941,17 +948,11 @@ fn build_output(
                 }
             }
           }
-          out.push_inst_allocs(
-            block_id,
-            term_inst,
-            true,
-            0,
-            use_regs.length(),
-            locs,
-          )
+          out.end_inst_allocs(alloc_start, alloc_total)
         }
       }
     }
   }
+  out.finalize_edits()
   out
 }

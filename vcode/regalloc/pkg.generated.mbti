@@ -166,14 +166,21 @@ pub struct Output {
   edits_by_point : Map[(Int, Int, ProgPos), Array[Edit]]
   mut num_spillslots : Int
 }
+pub fn Output::begin_inst_allocs(Self, Int, Int, Bool, Int, Int) -> (Int, Int)
 pub fn Output::edits_at(Self, Int, Int, ProgPos) -> Array[Edit]?
+pub fn Output::end_inst_allocs(Self, Int, Int) -> Unit
+pub fn Output::finalize_edits(Self) -> Unit
 pub fn Output::get_num_spillslots(Self) -> Int
 pub fn Output::get_param_loc(Self, Int) -> Loc
 pub fn Output::inst_def_loc(Self, Int, Int, Bool, Int) -> Loc
 pub fn Output::inst_use_loc(Self, Int, Int, Bool, Int) -> Loc
+pub fn Output::iter_edits(Self) -> Array[((Int, Int, ProgPos), Edit)]
 pub fn Output::new() -> Self
 pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
+pub fn Output::push_inst_alloc_loc(Self, Loc) -> Unit
 pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
+pub fn Output::rebuild_edits_index(Self) -> Unit
+pub fn Output::sort_edits(Self) -> Unit
 pub fn Output::spill_reload_stats(Self) -> (Int, Int, Int, Int)
 pub fn Output::summary(Self) -> String
 pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit
