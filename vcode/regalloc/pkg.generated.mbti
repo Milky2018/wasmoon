@@ -214,7 +214,7 @@ pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]
   spill_slots : Map[Int, Int]
   num_spill_slots : Int
-  inst_edits : Map[(Int, Int), InstEdits]
+  inst_edits : Array[(Int, Int, InstEdits)]
 }
 
 type RegMove

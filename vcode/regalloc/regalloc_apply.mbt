@@ -329,9 +329,29 @@ pub fn apply_allocation(
     new_func.result_types.push(ty)
   }
 
+  // Build dense per-block edit index once (regalloc2-style linear edit stream).
+  let inst_edits_dense : Array[Array[InstEdits?]] = []
+  for _, block in func.blocks {
+    inst_edits_dense.push(Array::make(block.insts.length() + 1, None))
+  }
+  for entry in alloc.inst_edits {
+    let (block_id, inst_idx, edits) = entry
+    guard block_id >= 0 && block_id < inst_edits_dense.length() else {
+      abort("inst_edits block_id out of range: \{block_id}")
+    }
+    let block_edits = inst_edits_dense[block_id]
+    guard inst_idx >= 0 && inst_idx < block_edits.length() else {
+      abort(
+        "inst_edits inst_idx out of range: block=\{block_id} inst=\{inst_idx}",
+      )
+    }
+    block_edits[inst_idx] = Some(edits)
+  }
+
   // Process each block
   for block_idx, block in func.blocks {
     let new_block = new_func.new_block()
+    let block_inst_edits = inst_edits_dense[block_idx]
 
     // Entry block: materialize spilled params into spill slots.
     if block_idx == 0 {
@@ -581,7 +601,7 @@ pub fn apply_allocation(
       // Process constraint edits: insert moves before the instruction
       // Fixed register constraint handling
       // Use parallel move resolver to handle cyclic dependencies
-      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+      if block_inst_edits[inst_idx] is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before)
         // Track which spill slots have been reloaded in this batch for coalescing
         let reloaded_slots : Map[Int, @abi.PReg] = {}
@@ -652,7 +672,7 @@ pub fn apply_allocation(
 
       // Process constraint edits: insert moves after the instruction
       // Use parallel move resolver for consistency (though after moves rarely conflict)
-      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+      if block_inst_edits[inst_idx] is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.after)
         for mv in resolved_moves {
           if mv.to.is_spilled() {

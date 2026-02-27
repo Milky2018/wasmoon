@@ -451,6 +451,19 @@ fn build_output(
     pos : ProgPos,
     moves : Array[RegMove],
   ) -> Unit {
+    if moves.is_empty() {
+      return
+    }
+    if moves.length() == 1 {
+      let mv = moves[0]
+      out.push_edit(
+        block_id,
+        inst_idx,
+        pos,
+        Edit::Move(mv.from, mv.to, mv.class),
+      )
+      return
+    }
     let resolved = resolve_parallel_moves(moves)
     for mv in resolved {
       out.push_edit(
@@ -460,6 +473,27 @@ fn build_output(
         Edit::Move(mv.from, mv.to, mv.class),
       )
     }
+  }
+
+  // regalloc2 keeps edits in a dense, position-sorted stream and consumes
+  // them linearly during output building. Build an equivalent dense index
+  // once here to avoid hot-loop map lookups on every instruction.
+  let inst_edits_dense : Array[Array[InstEdits?]] = []
+  for _, block in func.blocks {
+    inst_edits_dense.push(Array::make(block.insts.length() + 1, None))
+  }
+  for entry in alloc.inst_edits {
+    let (block_id, inst_idx, edits) = entry
+    guard block_id >= 0 && block_id < inst_edits_dense.length() else {
+      abort("inst_edits block_id out of range: \{block_id}")
+    }
+    let block_edits = inst_edits_dense[block_id]
+    guard inst_idx >= 0 && inst_idx < block_edits.length() else {
+      abort(
+        "inst_edits inst_idx out of range: block=\{block_id} inst=\{inst_idx}",
+      )
+    }
+    block_edits[inst_idx] = Some(edits)
   }
 
   // Walk blocks and create per-operand allocations. Emit extra edits for spills
@@ -473,11 +507,13 @@ fn build_output(
   let spill_def_tmp_epoch = Array::make(max_vreg_id, 0)
   let mut spill_tmp_epoch = 1
   for block_id, block in func.blocks {
+    let block_inst_edits = inst_edits_dense[block_id]
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
+      let point_edits = block_inst_edits[inst_idx]
       // Fixed-reg constraint edits at this point.
-      if alloc.inst_edits.get((block_id, inst_idx)) is Some(edits) {
+      if point_edits is Some(edits) {
         push_resolved_moves(out, block_id, inst_idx, Before, edits.before)
         push_resolved_moves(out, block_id, inst_idx, After, edits.after)
       }
@@ -588,7 +624,7 @@ fn build_output(
       }
       // Also reserve any registers mentioned in fixed-reg constraint edits at this point.
       // If we steal one of these registers and later restore it, we'd clobber the move result.
-      if alloc.inst_edits.get((block_id, inst_idx)) is Some(edits) {
+      if point_edits is Some(edits) {
         for mv in edits.before {
           if mv.from is Reg(p) {
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, p)
@@ -822,7 +858,7 @@ fn build_output(
     // Terminator allocations/edits.
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
-      if alloc.inst_edits.get((block_id, term_inst)) is Some(edits) {
+      if block_inst_edits[term_inst] is Some(edits) {
         push_resolved_moves(out, block_id, term_inst, Before, edits.before)
         push_resolved_moves(out, block_id, term_inst, After, edits.after)
       }

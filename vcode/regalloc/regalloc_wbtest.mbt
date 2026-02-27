@@ -343,7 +343,7 @@ test "apply_allocation: BranchCmp reloads both spilled operands without clobber"
     assignments: {},
     spill_slots,
     num_spill_slots: 2,
-    inst_edits: {},
+    inst_edits: [],
   }
   let allocated = apply_allocation(func, alloc)
   match allocated.blocks[0].terminator {

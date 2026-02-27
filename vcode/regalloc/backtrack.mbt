@@ -1321,7 +1321,7 @@ pub fn BacktrackingAllocator::generate_result(
     assignments: {},
     spill_slots: {},
     num_spill_slots: self.bundles.next_spill_slot,
-    inst_edits: {},
+    inst_edits: [],
   }
   let max_vreg_id = self.func.next_vreg_id
   let assignment_dense : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
@@ -1456,7 +1456,7 @@ pub fn BacktrackingAllocator::generate_result(
 
       // Store edits if any
       if !edits.before.is_empty() || !edits.after.is_empty() {
-        result.inst_edits.set((block_idx, inst_idx), edits)
+        result.inst_edits.push((block_idx, inst_idx, edits))
       }
     }
   }
@@ -1706,7 +1706,8 @@ fn BacktrackingAllocator::compact_spill_slots(
       result.spill_slots.set(vreg_id, new_slot)
     }
   }
-  for _key, edits in result.inst_edits {
+  for entry in result.inst_edits {
+    let (_, _, edits) = entry
     for i in 0..<edits.before.length() {
       let mv = edits.before[i]
       let from = match mv.from {
