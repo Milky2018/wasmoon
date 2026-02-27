@@ -2186,6 +2186,30 @@ pub fn build_bundles_with_merging(
       }
       ranges.get_range_index_by_vreg(vreg_id)
     }
+    // Precompute target-block formal range indices once, so predecessor-edge
+    // merge walk only resolves argument-side indices.
+    let target_param_range_idxs : Array[Array[Int]?] = Array::make(
+      block_idx_dense.length(),
+      None,
+    )
+    for block in func.blocks {
+      if block.id < 0 || block.id >= target_param_range_idxs.length() {
+        continue
+      }
+      if block.params.is_empty() {
+        target_param_range_idxs[block.id] = Some([])
+        continue
+      }
+      let idxs : Array[Int] = []
+      for param in block.params {
+        let idx = match range_idx_of_vreg(ranges, range_idx_dense, param.id) {
+          Some(v) => v
+          None => -1
+        }
+        idxs.push(idx)
+      }
+      target_param_range_idxs[block.id] = Some(idxs)
+    }
     for pred_block in func.blocks {
       if pred_block.terminator is Some(Jump(target, args)) {
         if target < 0 || target >= block_idx_dense.length() {
@@ -2199,16 +2223,25 @@ pub fn build_bundles_with_merging(
         if target_block.params.is_empty() {
           continue
         }
+        let param_range_idxs = target_param_range_idxs[target].unwrap_or([])
         // Merge each param with its incoming argument vreg.
-        for i, param in target_block.params {
+        for i, _ in target_block.params {
           if i >= args.length() {
             break
           }
+          if i >= param_range_idxs.length() {
+            break
+          }
+          let param_idx = param_range_idxs[i]
+          if param_idx < 0 {
+            continue
+          }
           if args[i] is @abi.Virtual(arg_vreg) &&
-            range_idx_of_vreg(ranges, range_idx_dense, param.id)
-            is Some(param_idx) &&
             range_idx_of_vreg(ranges, range_idx_dense, arg_vreg.id)
             is Some(arg_idx) {
+            if arg_idx == param_idx {
+              continue
+            }
             try_merge(uf, param_idx, arg_idx, ranges) |> ignore
           }
         }
