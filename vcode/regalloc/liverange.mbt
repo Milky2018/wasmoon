@@ -440,18 +440,49 @@ pub fn build_live_ranges(
       0
     }
   })
-  let call_prog_points : Array[ProgPoint] = []
+  let num_blocks = func.blocks.length()
+  let block_call_point_orders : Array[Array[Int]] = []
+  let block_c_call_point_orders : Array[Array[Int]] = []
+  for _ in 0..<num_blocks {
+    block_call_point_orders.push([])
+    block_c_call_point_orders.push([])
+  }
   let call_prog_point_orders : Array[Int] = []
   let c_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
     let (call_point, call_conv) = entry
-    call_prog_points.push(call_point)
-    call_prog_point_orders.push(
-      point_order(call_point, block_order, point_block_stride),
-    )
+    let call_ord = point_order(call_point, block_order, point_block_stride)
+    call_prog_point_orders.push(call_ord)
+    if call_point.block >= 0 && call_point.block < num_blocks {
+      block_call_point_orders[call_point.block].push(call_ord)
+      if call_conv is @instr.C {
+        block_c_call_point_orders[call_point.block].push(call_ord)
+      }
+    }
     let prev = c_call_prefix[c_call_prefix.length() - 1]
     let add = if call_conv is @instr.C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
+  }
+  let calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
+  let c_calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    let ord = block_order[block_idx]
+    if ord >= 0 && ord < num_blocks {
+      calls_per_block_order[ord] = block_call_point_orders[block_idx].length()
+      c_calls_per_block_order[ord] = block_c_call_point_orders[block_idx].length()
+    }
+  }
+  let call_prefix_by_block_order : Array[Int] = [0]
+  let c_call_prefix_by_block_order : Array[Int] = [0]
+  for ord in 0..<num_blocks {
+    call_prefix_by_block_order.push(
+      call_prefix_by_block_order[call_prefix_by_block_order.length() - 1] +
+      calls_per_block_order[ord],
+    )
+    c_call_prefix_by_block_order.push(
+      c_call_prefix_by_block_order[c_call_prefix_by_block_order.length() - 1] +
+      c_calls_per_block_order[ord],
+    )
   }
 
   fn upper_bound_call_points(
@@ -486,6 +517,19 @@ pub fn build_live_ranges(
       }
     }
     lo
+  }
+  fn count_call_points_in_range(
+    point_orders : Array[Int],
+    start_ord : Int,
+    end_ord : Int,
+  ) -> Int {
+    let first_after_start = upper_bound_call_points(point_orders, start_ord)
+    let first_at_or_after_end = lower_bound_call_points(point_orders, end_ord)
+    if first_after_start < first_at_or_after_end {
+      first_at_or_after_end - first_after_start
+    } else {
+      0
+    }
   }
   fn point_after(point : ProgPoint, block_len : Int) -> ProgPoint {
     match point.pos {
@@ -914,7 +958,7 @@ pub fn build_live_ranges(
       // Compute call-crossing from normalized spans.
       // This is more precise than coarse def..end intervals (which can over-mark
       // values as call-crossing across dead holes between live spans).
-      if !call_prog_points.is_empty() {
+      if !call_prog_point_orders.is_empty() {
         for span in range.ranges {
           let span_start_ord = point_order(
             span.start,
@@ -926,17 +970,88 @@ pub fn build_live_ranges(
             block_order,
             point_block_stride,
           )
-          let first_after_start = upper_bound_call_points(
-            call_prog_point_orders, span_start_ord,
-          )
-          let first_at_or_after_end = lower_bound_call_points(
-            call_prog_point_orders, span_end_ord,
-          )
-          if first_after_start < first_at_or_after_end {
+          let mut call_count = 0
+          let mut c_call_count = 0
+          let mut used_block_fast_path = false
+          let start_block = span.start.block
+          let end_block = span.end.block
+          if start_block >= 0 &&
+            start_block < num_blocks &&
+            end_block >= 0 &&
+            end_block < num_blocks {
+            let start_block_ord = block_order[start_block]
+            let end_block_ord = block_order[end_block]
+            if start_block_ord <= end_block_ord {
+              used_block_fast_path = true
+              if start_block == end_block {
+                call_count = count_call_points_in_range(
+                  block_call_point_orders[start_block],
+                  span_start_ord,
+                  span_end_ord,
+                )
+                c_call_count = count_call_points_in_range(
+                  block_c_call_point_orders[start_block],
+                  span_start_ord,
+                  span_end_ord,
+                )
+              } else {
+                call_count = call_count +
+                  count_call_points_in_range(
+                    block_call_point_orders[start_block],
+                    span_start_ord,
+                    span_end_ord,
+                  )
+                c_call_count = c_call_count +
+                  count_call_points_in_range(
+                    block_c_call_point_orders[start_block],
+                    span_start_ord,
+                    span_end_ord,
+                  )
+                call_count = call_count +
+                  count_call_points_in_range(
+                    block_call_point_orders[end_block],
+                    span_start_ord,
+                    span_end_ord,
+                  )
+                c_call_count = c_call_count +
+                  count_call_points_in_range(
+                    block_c_call_point_orders[end_block],
+                    span_start_ord,
+                    span_end_ord,
+                  )
+                if end_block_ord - start_block_ord > 1 {
+                  let mid_lo = start_block_ord + 1
+                  let mid_hi = end_block_ord
+                  call_count = call_count +
+                    (
+                      call_prefix_by_block_order[mid_hi] -
+                      call_prefix_by_block_order[mid_lo]
+                    )
+                  c_call_count = c_call_count +
+                    (
+                      c_call_prefix_by_block_order[mid_hi] -
+                      c_call_prefix_by_block_order[mid_lo]
+                    )
+                }
+              }
+            }
+          }
+          if !used_block_fast_path {
+            let first_after_start = upper_bound_call_points(
+              call_prog_point_orders, span_start_ord,
+            )
+            let first_at_or_after_end = lower_bound_call_points(
+              call_prog_point_orders, span_end_ord,
+            )
+            if first_after_start < first_at_or_after_end {
+              call_count = first_at_or_after_end - first_after_start
+              c_call_count = c_call_prefix[first_at_or_after_end] -
+                c_call_prefix[first_after_start]
+            }
+          }
+          if call_count > 0 {
             range.crosses_call = true
-            let c_calls = c_call_prefix[first_at_or_after_end] -
-              c_call_prefix[first_after_start]
-            if c_calls > 0 {
+            if c_call_count > 0 {
               range.crosses_c_call = true
             }
             if range.crosses_c_call {

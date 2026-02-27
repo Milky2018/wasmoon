@@ -59,6 +59,7 @@ priv struct OrderedSpan {
 priv struct MergeSpan {
   span : ProgPointRange
   start_ord : Int
+  start_before_ord : Int
   end_ord : Int
 }
 
@@ -1829,16 +1830,10 @@ pub fn build_bundles_with_merging(
     block_order : FixedArray[Int],
     point_block_stride : Int,
   ) -> Int {
+    ignore(block_order)
+    ignore(point_block_stride)
     if adjust_to_inst_start {
-      point_order(
-        {
-          block: span.span.start.block,
-          inst: span.span.start.inst,
-          pos: Before,
-        },
-        block_order,
-        point_block_stride,
-      )
+      span.start_before_ord
     } else {
       span.start_ord
     }
@@ -1849,9 +1844,16 @@ pub fn build_bundles_with_merging(
     block_order : FixedArray[Int],
     point_block_stride : Int,
   ) -> MergeSpan {
+    let start_ord = point_order(span.start, block_order, point_block_stride)
+    let start_before_ord = point_order(
+      { block: span.start.block, inst: span.start.inst, pos: Before },
+      block_order,
+      point_block_stride,
+    )
     {
       span,
-      start_ord: point_order(span.start, block_order, point_block_stride),
+      start_ord,
+      start_before_ord,
       end_ord: point_order(span.end, block_order, point_block_stride),
     }
   }
@@ -1909,9 +1911,9 @@ pub fn build_bundles_with_merging(
       return root_spans_owned(root_spans_cache, target_root, target_fallback)
     }
     if target_fallback.is_empty() {
-      let merged = clone_spans(source_spans)
-      root_spans_cache[target_root] = Some(merged)
-      return merged
+      // regalloc2 merge.rs empty-target fast path: move source list directly.
+      root_spans_cache[target_root] = Some(source_spans)
+      return source_spans
     }
     let target_spans = root_spans_owned(
       root_spans_cache, target_root, target_fallback,
