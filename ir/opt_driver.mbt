@@ -55,14 +55,12 @@ fn run_opt_pass(
 ///|
 fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
   let insts = instruction_count(func)
-  if insts >= 1200 {
+  if insts >= 600 {
     @egraph.SaturationLimits::new(1, 1)
-  } else if insts >= 600 {
-    // Keep very large functions in the same "small hard caps" spirit as
-    // Cranelift's bounded egraph exploration.
-    @egraph.SaturationLimits::new(1, 2)
   } else if insts >= 300 {
-    @egraph.SaturationLimits::new(2, 3)
+    // Keep medium-large functions on minimal rewrite budgets to bound
+    // compile-time while preserving canonical Cranelift-style egraph usage.
+    @egraph.SaturationLimits::new(1, 2)
   } else {
     @egraph.SaturationLimits::cranelift_default()
   }
@@ -71,7 +69,7 @@ fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
 ///|
 fn run_egraph_pass(func : Function) -> Bool {
   let insts = instruction_count(func)
-  if insts >= 1200 {
+  if insts >= 300 {
     // Keep compile wall bounded on mega-functions; rely on lightweight passes.
     return false
   }
