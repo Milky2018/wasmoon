@@ -14,8 +14,8 @@ struct LoweringContext {
   vcode_func : @regalloc.VCodeFunction
   abi_settings : @abi.ABISettings
   num_imports : Int
-  // Map from IR Value id to @abi.VReg
-  value_map : Map[Int, @abi.VReg]
+  // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
+  value_map_dense : Array[@abi.VReg?]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
@@ -33,11 +33,10 @@ struct LoweringContext {
   // Module-level canonical type-index mapping (raw -> canonical). Used to align
   // call_indirect exact checks with Cranelift's shared-signature-id semantics.
   canonical_type_indices : Array[Int]
-  // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
-  fused_icmps : @hashset.HashSet[Int]
-  // Values that should not be lowered because they are subsumed by a fused instruction
-  // (Cranelift-style ISel fusion; e.g. imul/ishl used only by madd/add_shift).
-  skipped_values : @hashset.HashSet[Int]
+  // Icmp result value IDs exclusively used by Select/branch and fused in lowering.
+  fused_icmps_dense : Array[Bool]
+  // Values that should not be lowered because they are subsumed by fused lowering.
+  skipped_values_dense : Array[Bool]
   // Use counts for IR values (dense table, Cranelift SecondaryMap-style).
   use_counts : Array[Int]
   // Value-id keyed defining instruction table (dense, Cranelift-style).
@@ -75,7 +74,7 @@ pub fn LoweringContext::new(
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
     abi_settings,
     num_imports,
-    value_map: {},
+    value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
     stack_param_map: {},
     func_table_cache: {},
@@ -83,10 +82,59 @@ pub fn LoweringContext::new(
     mem_base_cache: {},
     use_subtype_indirect_check,
     canonical_type_indices,
-    fused_icmps: @hashset.new(),
-    skipped_values: @hashset.new(),
+    fused_icmps_dense: Array::make(ir_func.next_value_id, false),
+    skipped_values_dense: Array::make(ir_func.next_value_id, false),
     use_counts,
     def_inst_table,
+  }
+}
+
+///|
+fn LoweringContext::get_cached_vreg(
+  self : LoweringContext,
+  value_id : Int,
+) -> @abi.VReg? {
+  if value_id >= 0 && value_id < self.value_map_dense.length() {
+    return self.value_map_dense[value_id]
+  }
+  None
+}
+
+///|
+fn LoweringContext::set_cached_vreg(
+  self : LoweringContext,
+  value_id : Int,
+  vreg : @abi.VReg,
+) -> Unit {
+  if value_id >= 0 {
+    while self.value_map_dense.length() <= value_id {
+      self.value_map_dense.push(None)
+    }
+    self.value_map_dense[value_id] = Some(vreg)
+  }
+}
+
+///|
+fn LoweringContext::is_skipped_value(
+  self : LoweringContext,
+  value_id : Int,
+) -> Bool {
+  if value_id >= 0 && value_id < self.skipped_values_dense.length() {
+    self.skipped_values_dense[value_id]
+  } else {
+    false
+  }
+}
+
+///|
+fn LoweringContext::is_fused_icmp_result(
+  self : LoweringContext,
+  value_id : Int,
+) -> Bool {
+  if value_id >= 0 && value_id < self.fused_icmps_dense.length() {
+    self.fused_icmps_dense[value_id]
+  } else {
+    false
   }
 }
 
@@ -126,7 +174,7 @@ fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
 /// - iadd x (ishl y (iconst k)) => add_shift
 /// - iadd x (imul y z) => madd
 /// - isub x (imul y z) => msub
-fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
+fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   let skipped : @hashset.HashSet[Int] = @hashset.new()
   let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
   let addrmode_subsumed_uses : Map[Int, Int] = {}
@@ -492,7 +540,17 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
   for id in addrmode_skipped {
     skipped.add(id)
   }
-  skipped
+  let dense : Array[Bool] = Array::make(ctx.ir_func.next_value_id, false)
+  for id in skipped {
+    if id < 0 {
+      continue
+    }
+    while dense.length() <= id {
+      dense.push(false)
+    }
+    dense[id] = true
+  }
+  dense
 }
 
 ///|
@@ -551,7 +609,7 @@ fn compute_fused_icmps(
   ir_func : @ir.Function,
   use_counts : Array[Int],
   def_inst_table : Array[@ir.Inst?],
-) -> @hashset.HashSet[Int] {
+) -> Array[Bool] {
   fn is_single_use_icmp_result(
     use_counts : Array[Int],
     def_inst_table : Array[@ir.Inst?],
@@ -590,7 +648,17 @@ fn compute_fused_icmps(
       _ => ()
     }
   }
-  fused
+  let dense : Array[Bool] = Array::make(ir_func.next_value_id, false)
+  for id in fused {
+    if id < 0 {
+      continue
+    }
+    while dense.length() <= id {
+      dense.push(false)
+    }
+    dense[id] = true
+  }
+  dense
 }
 
 ///|
@@ -672,12 +740,12 @@ fn LoweringContext::get_vreg(
   self : LoweringContext,
   value : @ir.Value,
 ) -> @abi.VReg {
-  match self.value_map.get(value.id) {
+  match self.get_cached_vreg(value.id) {
     Some(vreg) => vreg
     None => {
       let class = ir_type_to_reg_class(value.ty)
       let vreg = self.vcode_func.new_vreg(class)
-      self.value_map.set(value.id, vreg)
+      self.set_cached_vreg(value.id, vreg)
       vreg
     }
   }
@@ -691,7 +759,7 @@ fn LoweringContext::get_vreg_for_use(
   value : @ir.Value,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
-  if self.value_map.get(value.id) is Some(vreg) {
+  if self.get_cached_vreg(value.id) is Some(vreg) {
     return vreg
   }
 
@@ -702,15 +770,16 @@ fn LoweringContext::get_vreg_for_use(
     let inst = @instr.VCodeInst::new(LoadStackParam(offset, class))
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
+    self.set_cached_vreg(value.id, result)
     result
   } else {
     // Materialize skipped pure defs on-demand. This prevents creating
     // undef virtual registers when an address-mode fusion path skipped a
     // producer that is still required by another lowered instruction.
-    if self.skipped_values.contains(value.id) &&
+    if self.is_skipped_value(value.id) &&
       find_defining_inst(self, value) is Some(def_inst) {
       lower_inst(self, def_inst, block)
-      if self.value_map.get(value.id) is Some(vreg) {
+      if self.get_cached_vreg(value.id) is Some(vreg) {
         return vreg
       }
     }
@@ -1269,14 +1338,22 @@ pub fn lower_function(
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
-  let fused = compute_fused_icmps(ir_func, ctx.use_counts, ctx.def_inst_table)
-  for id in fused {
-    ctx.fused_icmps.add(id)
+  let fused_dense = compute_fused_icmps(
+    ir_func,
+    ctx.use_counts,
+    ctx.def_inst_table,
+  )
+  for id in 0..<fused_dense.length() {
+    if id >= 0 && id < ctx.fused_icmps_dense.length() {
+      ctx.fused_icmps_dense[id] = fused_dense[id]
+    }
   }
   // Phase 0.5: Pre-compute values to skip (subsumed by fused instruction selection)
-  let skipped = compute_skipped_values(ctx)
-  for id in skipped {
-    ctx.skipped_values.add(id)
+  let skipped_dense = compute_skipped_values(ctx)
+  for id in 0..<skipped_dense.length() {
+    if id >= 0 && id < ctx.skipped_values_dense.length() {
+      ctx.skipped_values_dense[id] = skipped_dense[id]
+    }
   }
 
   // Phase 1: Create VCode blocks and set up block mapping
@@ -1304,7 +1381,7 @@ pub fn lower_function(
       if int_reg_count < max_int_reg_params {
         // Register parameter: allocate @abi.VReg
         let vreg = ctx.vcode_func.add_param(class)
-        ctx.value_map.set(value.id, vreg)
+        ctx.set_cached_vreg(value.id, vreg)
         int_reg_count = int_reg_count + 1
       } else {
         // Stack parameter: laid out in overflow area (entry SP).
@@ -1314,7 +1391,7 @@ pub fn lower_function(
     } else if float_reg_count < max_float_reg_params {
       // Register parameter: allocate @abi.VReg
       let vreg = ctx.vcode_func.add_param(class)
-      ctx.value_map.set(value.id, vreg)
+      ctx.set_cached_vreg(value.id, vreg)
       float_reg_count = float_reg_count + 1
     } else {
       float_stack_values.push((value, class))
@@ -1359,7 +1436,7 @@ pub fn lower_function(
       let (value, ty) = param
       let class = ir_type_to_reg_class(ty)
       let vreg = ctx.vcode_func.new_vreg(class)
-      ctx.value_map.set(value.id, vreg)
+      ctx.set_cached_vreg(value.id, vreg)
       ctx.vcode_func.blocks[i].params.push(vreg)
     }
   }
@@ -1453,8 +1530,7 @@ fn lower_block_body(
 
   // Lower instructions
   for inst in ir_block.instructions {
-    if inst.first_result() is Some(result) &&
-      ctx.skipped_values.contains(result.id) {
+    if inst.first_result() is Some(result) && ctx.is_skipped_value(result.id) {
       continue
     }
     lower_inst(ctx, inst, vcode_block)
@@ -2269,7 +2345,7 @@ fn lower_icmp(
 ) -> Unit {
   if inst.first_result() is Some(result) {
     // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
-    if ctx.fused_icmps.contains(result.id) {
+    if ctx.is_fused_icmp_result(result.id) {
       return
     }
     let dst = ctx.get_vreg(result)

@@ -1962,26 +1962,18 @@ pub fn build_bundles_with_merging(
       merged.insert(lo, insert)
       return merged
     }
+    // Match regalloc2/ion behavior: concatenating and sorting is usually
+    // faster than a manual merge for larger span vectors.
     let merged : Array[ProgPointRange] = []
-    let mut ia = 0
-    let mut ib = 0
-    while ia < a.length() && ib < b.length() {
-      if a[ia].start.compare_with_order(b[ib].start, ranges.block_order) <= 0 {
-        merged.push(a[ia])
-        ia = ia + 1
-      } else {
-        merged.push(b[ib])
-        ib = ib + 1
-      }
+    for span in a {
+      merged.push(span)
     }
-    while ia < a.length() {
-      merged.push(a[ia])
-      ia = ia + 1
+    for span in b {
+      merged.push(span)
     }
-    while ib < b.length() {
-      merged.push(b[ib])
-      ib = ib + 1
-    }
+    merged.sort_by(fn(x, y) {
+      x.start.compare_with_order(y.start, ranges.block_order)
+    })
     merged
   }
 

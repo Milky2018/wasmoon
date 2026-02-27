@@ -108,7 +108,7 @@ fn lower_load_mem_base(
     return
   }
   if ctx.mem_base_cache.get(memidx) is Some(cached_vreg) {
-    ctx.value_map.set(result.id, cached_vreg)
+    ctx.set_cached_vreg(result.id, cached_vreg)
     return
   }
   let result_vreg = ctx.get_vreg(result)

@@ -515,7 +515,19 @@ pub fn build_live_ranges(
     if ranges.length() <= 1 {
       return ranges
     }
-    ranges.sort_by(fn(a, b) { a.start.compare_with_order(b.start, block_order) })
+    let mut sorted = true
+    for i in 1..<ranges.length() {
+      if ranges[i - 1].start.compare_with_order(ranges[i].start, block_order) >
+        0 {
+        sorted = false
+        break
+      }
+    }
+    if !sorted {
+      ranges.sort_by(fn(a, b) {
+        a.start.compare_with_order(b.start, block_order)
+      })
+    }
     let out : Array[ProgPointRange] = []
     out.push(ranges[0])
     for i in 1..<ranges.length() {
@@ -651,15 +663,28 @@ pub fn build_live_ranges(
         }
       }
       if use_blocks.length() > 1 {
-        use_blocks.sort_by(fn(a, b) {
-          let ord_a = block_order[a]
-          let ord_b = block_order[b]
-          if ord_a != ord_b {
-            ord_a - ord_b
-          } else {
-            a - b
+        let mut sorted = true
+        for i in 1..<use_blocks.length() {
+          let prev = use_blocks[i - 1]
+          let cur = use_blocks[i]
+          let prev_ord = block_order[prev]
+          let cur_ord = block_order[cur]
+          if prev_ord > cur_ord || (prev_ord == cur_ord && prev > cur) {
+            sorted = false
+            break
           }
-        })
+        }
+        if !sorted {
+          use_blocks.sort_by(fn(a, b) {
+            let ord_a = block_order[a]
+            let ord_b = block_order[b]
+            if ord_a != ord_b {
+              ord_a - ord_b
+            } else {
+              a - b
+            }
+          })
+        }
       }
 
       fn block_less(a : Int, b : Int, block_order : FixedArray[Int]) -> Bool {

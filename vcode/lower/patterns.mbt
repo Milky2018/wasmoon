@@ -610,7 +610,7 @@ pub fn lower_function_optimized(
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.vcode_func.add_param(class)
-    ctx.value_map.set(value.id, vreg)
+    ctx.set_cached_vreg(value.id, vreg)
   }
 
   // Phase 3: Lower result types
@@ -638,7 +638,7 @@ fn lower_block_optimized(
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.vcode_func.new_vreg(class)
-    ctx.value_map.set(value.id, vreg)
+    ctx.set_cached_vreg(value.id, vreg)
     vcode_block.params.push(vreg)
   }
 
