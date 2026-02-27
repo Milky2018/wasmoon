@@ -15,6 +15,7 @@ pub fn UnionFind::new(Int) -> Self
 pub fn UnionFind::num_sets(Self) -> Int
 pub fn UnionFind::same_set(Self, Int, Int) -> Bool
 pub fn UnionFind::union(Self, Int, Int) -> Bool
+pub fn UnionFind::union_into(Self, Int, Int) -> Bool
 
 // Type aliases
 

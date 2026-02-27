@@ -1905,75 +1905,118 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  fn merge_sorted_spans(
+  fn clone_spans(spans : Array[ProgPointRange]) -> Array[ProgPointRange] {
+    let out : Array[ProgPointRange] = []
+    for span in spans {
+      out.push(span)
+    }
+    out
+  }
+
+  fn insert_sorted_span(
+    spans : Array[ProgPointRange],
+    insert : ProgPointRange,
+    ranges : LiveRangeSet,
+  ) -> Unit {
+    let mut lo = 0
+    let mut hi = spans.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if spans[mid].start.compare_with_order(insert.start, ranges.block_order) <=
+        0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    spans.insert(lo, insert)
+  }
+
+  fn point_order_key(
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int64 {
+    let block_ord = block_order[point.block].to_int64()
+    // `inst` may be -1 for block params; bias by +1 to keep ordering stable.
+    let inst_ord = (point.inst + 1).to_int64()
+    let pos_ord = match point.pos {
+      Before => 0L
+      After => 1L
+    }
+    (block_ord << 32) | (inst_ord << 1) | pos_ord
+  }
+
+  fn merge_sorted_span_lists(
     a : Array[ProgPointRange],
     b : Array[ProgPointRange],
     ranges : LiveRangeSet,
   ) -> Array[ProgPointRange] {
-    if a.is_empty() {
-      return b
-    }
-    if b.is_empty() {
-      return a
-    }
-    if a.length() == 1 {
-      let merged : Array[ProgPointRange] = []
-      for span in b {
-        merged.push(span)
-      }
-      let insert = a[0]
-      let mut lo = 0
-      let mut hi = merged.length()
-      while lo < hi {
-        let mid = lo + (hi - lo) / 2
-        if merged[mid].start.compare_with_order(
-            insert.start,
-            ranges.block_order,
-          ) <=
-          0 {
-          lo = mid + 1
-        } else {
-          hi = mid
-        }
-      }
-      merged.insert(lo, insert)
-      return merged
-    }
-    if b.length() == 1 {
-      let merged : Array[ProgPointRange] = []
-      for span in a {
-        merged.push(span)
-      }
-      let insert = b[0]
-      let mut lo = 0
-      let mut hi = merged.length()
-      while lo < hi {
-        let mid = lo + (hi - lo) / 2
-        if merged[mid].start.compare_with_order(
-            insert.start,
-            ranges.block_order,
-          ) <=
-          0 {
-          lo = mid + 1
-        } else {
-          hi = mid
-        }
-      }
-      merged.insert(lo, insert)
-      return merged
-    }
-    // Match regalloc2/ion behavior: concatenating and sorting is usually
-    // faster than a manual merge for larger span vectors.
     let merged : Array[ProgPointRange] = []
-    for span in a {
-      merged.push(span)
+    let mut ia = 0
+    let mut ib = 0
+    while ia < a.length() && ib < b.length() {
+      if a[ia].start.compare_with_order(b[ib].start, ranges.block_order) <= 0 {
+        merged.push(a[ia])
+        ia = ia + 1
+      } else {
+        merged.push(b[ib])
+        ib = ib + 1
+      }
     }
-    for span in b {
-      merged.push(span)
+    while ia < a.length() {
+      merged.push(a[ia])
+      ia = ia + 1
     }
-    merged.sort_by(fn(x, y) {
-      x.start.compare_with_order(y.start, ranges.block_order)
-    })
+    while ib < b.length() {
+      merged.push(b[ib])
+      ib = ib + 1
+    }
+    merged
+  }
+
+  // Keep merged-span buffers owned/cached by root and mutate only cache-owned
+  // arrays; never mutate original per-range span arrays in LiveRangeSet.
+  fn root_spans_owned(
+    root_spans_cache : Array[Array[ProgPointRange]?],
+    root : Int,
+    fallback : Array[ProgPointRange],
+  ) -> Array[ProgPointRange] {
+    match root_spans_cache[root] {
+      Some(spans) => spans
+      None => {
+        // If fallback is exactly the source range's spans, clone once to get
+        // an owned mutable buffer for this root cache entry.
+        let owned = clone_spans(fallback)
+        root_spans_cache[root] = Some(owned)
+        owned
+      }
+    }
+  }
+
+  fn merge_into_root_spans(
+    ranges : LiveRangeSet,
+    root_spans_cache : Array[Array[ProgPointRange]?],
+    target_root : Int,
+    target_fallback : Array[ProgPointRange],
+    source_spans : Array[ProgPointRange],
+  ) -> Array[ProgPointRange] {
+    if source_spans.is_empty() {
+      return root_spans_owned(root_spans_cache, target_root, target_fallback)
+    }
+    if target_fallback.is_empty() {
+      let merged = clone_spans(source_spans)
+      root_spans_cache[target_root] = Some(merged)
+      return merged
+    }
+    let target_spans = root_spans_owned(
+      root_spans_cache, target_root, target_fallback,
+    )
+    if source_spans.length() == 1 {
+      insert_sorted_span(target_spans, source_spans[0], ranges)
+      return target_spans
+    }
+    let merged = merge_sorted_span_lists(target_spans, source_spans, ranges)
+    root_spans_cache[target_root] = Some(merged)
     merged
   }
 
@@ -1981,6 +2024,10 @@ pub fn build_bundles_with_merging(
   let root_fixed_conflict_cache : Array[Bool] = []
   let root_has_fixed_def_cache : Array[Bool] = []
   let root_spans_cache : Array[Array[ProgPointRange]?] = Array::make(n, None)
+  let root_span_keys_cache : Array[Array[(Int64, Int64)]?] = Array::make(
+    n,
+    None,
+  )
 
   // Initialize per-root fixed-info metadata so merges stay incremental.
   // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
@@ -2030,6 +2077,36 @@ pub fn build_bundles_with_merging(
     }
   }
 
+  fn root_span_keys(
+    ranges : LiveRangeSet,
+    root_spans_cache : Array[Array[ProgPointRange]?],
+    root_has_fixed_def_cache : Array[Bool],
+    root_span_keys_cache : Array[Array[(Int64, Int64)]?],
+    root : Int,
+  ) -> Array[(Int64, Int64)] {
+    match root_span_keys_cache[root] {
+      Some(keys) => keys
+      None => {
+        let spans = root_spans(ranges, root_spans_cache, root)
+        let adjust_to_inst_start = root_has_fixed_def(
+          ranges, root_has_fixed_def_cache, root,
+        )
+        let keys : Array[(Int64, Int64)] = []
+        for span in spans {
+          let start = adjusted_start_for_overlap(span, adjust_to_inst_start)
+          keys.push(
+            (
+              point_order_key(start, ranges.block_order),
+              point_order_key(span.end, ranges.block_order),
+            ),
+          )
+        }
+        root_span_keys_cache[root] = Some(keys)
+        keys
+      }
+    }
+  }
+
   // Helper to try merging two ranges
   fn commit_union(
     uf : @unionfind.UnionFind,
@@ -2043,7 +2120,10 @@ pub fn build_bundles_with_merging(
     spans_b : Array[ProgPointRange],
     ranges : LiveRangeSet,
   ) -> Bool {
-    if !uf.union(root_a, root_b) {
+    // Keep directional merge semantics close to regalloc2/ion:
+    // merge `root_b` into `root_a` so the caller-chosen "to" root stays
+    // stable across repeated merges.
+    if !uf.union_into(root_b, root_a) {
       return true
     }
     let new_root = uf.find(root_a)
@@ -2060,9 +2140,18 @@ pub fn build_bundles_with_merging(
     root_fixed_conflict_cache[new_root] = false
     root_fixed_reg_cache[old_root] = merged_fixed
     root_fixed_conflict_cache[old_root] = false
-    let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
+    let (target_spans, source_spans) = if new_root == root_a {
+      (spans_a, spans_b)
+    } else {
+      (spans_b, spans_a)
+    }
+    let merged_spans = merge_into_root_spans(
+      ranges, root_spans_cache, new_root, target_spans, source_spans,
+    )
     root_spans_cache[new_root] = Some(merged_spans)
     root_spans_cache[old_root] = None
+    root_span_keys_cache[new_root] = None
+    root_span_keys_cache[old_root] = None
     true
   }
 
@@ -2118,13 +2207,18 @@ pub fn build_bundles_with_merging(
     // two cursors and stop early when one side advances past the other.
     let spans_a = root_spans(ranges, root_spans_cache, root_a)
     let spans_b = root_spans(ranges, root_spans_cache, root_b)
+    let span_keys_a = root_span_keys(
+      ranges, root_spans_cache, root_has_fixed_def_cache, root_span_keys_cache, root_a,
+    )
+    let span_keys_b = root_span_keys(
+      ranges, root_spans_cache, root_has_fixed_def_cache, root_span_keys_cache, root_b,
+    )
     if !spans_a.is_empty() && !spans_b.is_empty() {
-      let start_a = adjusted_start_for_overlap(spans_a[0], set_a_has_fixed_def)
-      let end_a = spans_a[spans_a.length() - 1].end
-      let start_b = adjusted_start_for_overlap(spans_b[0], set_b_has_fixed_def)
-      let end_b = spans_b[spans_b.length() - 1].end
-      let disjoint = start_a.compare_with_order(end_b, ranges.block_order) >= 0 ||
-        start_b.compare_with_order(end_a, ranges.block_order) >= 0
+      let start_a_key = span_keys_a[0].0
+      let end_a_key = span_keys_a[span_keys_a.length() - 1].1
+      let start_b_key = span_keys_b[0].0
+      let end_b_key = span_keys_b[span_keys_b.length() - 1].1
+      let disjoint = start_a_key >= end_b_key || start_b_key >= end_a_key
       if disjoint {
         return commit_union(
           uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
@@ -2140,13 +2234,11 @@ pub fn build_bundles_with_merging(
       if range_checks > 200 {
         return false
       }
-      let span_a = spans_a[ia]
-      let span_b = spans_b[ib]
-      let start_a = adjusted_start_for_overlap(span_a, set_a_has_fixed_def)
-      let start_b = adjusted_start_for_overlap(span_b, set_b_has_fixed_def)
-      if start_a.compare_with_order(span_b.end, ranges.block_order) >= 0 {
+      let span_a = span_keys_a[ia]
+      let span_b = span_keys_b[ib]
+      if span_a.0 >= span_b.1 {
         ib = ib + 1
-      } else if start_b.compare_with_order(span_a.end, ranges.block_order) >= 0 {
+      } else if span_b.0 >= span_a.1 {
         ia = ia + 1
       } else {
         return false
