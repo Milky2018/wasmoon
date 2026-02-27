@@ -1485,16 +1485,9 @@ pub fn lower_function(
   }
 
   // Phase 5: Peephole optimization
-  let mut vcode_inst_count = 0
-  for block in ctx.vcode_func.blocks {
-    vcode_inst_count = vcode_inst_count + block.insts.length()
-  }
-  // Cranelift lowers into a compact, bounded machinst pipeline without large
-  // post-lowering sweep passes. Keep our ad-hoc peephole work bounded on very
-  // large functions.
-  if vcode_inst_count < 200 {
-    optimize_vcode(ctx.vcode_func)
-  }
+  // Keep post-lowering cleanup deterministic (profile-driven) instead of
+  // function-size gating.
+  optimize_vcode_for_lowering(ctx.vcode_func)
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //

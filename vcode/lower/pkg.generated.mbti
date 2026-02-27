@@ -32,6 +32,8 @@ pub fn match_pattern(Pattern, @ir.Inst, LoweringContext) -> MatchResult?
 
 pub fn optimize_vcode(@regalloc.VCodeFunction) -> Unit
 
+pub fn optimize_vcode_for_lowering(@regalloc.VCodeFunction) -> Unit
+
 pub fn try_apply_rules(@ir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
 // Errors

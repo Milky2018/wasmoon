@@ -1475,7 +1475,16 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
 ///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
-pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
+pub(all) enum PeepholeProfile {
+  Full
+  Lowering
+}
+
+///|
+pub fn optimize_vcode(
+  func : @regalloc.VCodeFunction,
+  profile? : PeepholeProfile = Full,
+) -> Unit {
   let mut inst_count = 0
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
@@ -1487,11 +1496,13 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   let large_func_threshold = 1200
   let is_large_func = inst_count >= large_func_threshold
 
-  let enable_licm = !is_large_func
-  let enable_immutable_load_cse = !is_large_func
-  let enable_mem_base_cse = true
-  let enable_mem_peepholes = !is_large_func
-  let enable_inplace_updates = !is_large_func
+  let enable_full_passes = profile is Full
+  let enable_licm = enable_full_passes && !is_large_func
+  let enable_immutable_load_cse = enable_full_passes && !is_large_func
+  let enable_mem_base_cse = enable_full_passes
+  let enable_mem_peepholes = enable_full_passes && !is_large_func
+  let enable_inplace_updates = enable_full_passes && !is_large_func
+  let enable_copy_prop = true
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
@@ -1512,9 +1523,11 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     optimize_block(block, func, state) |> ignore
   }
   // Pass 1.5: Copy propagation for single-use moves
-  let global_use_counts = collect_use_counts(func)
-  for block in func.blocks {
-    propagate_single_use_moves(block, global_use_counts)
+  if enable_copy_prop {
+    let global_use_counts = collect_use_counts(func)
+    for block in func.blocks {
+      propagate_single_use_moves(block, global_use_counts)
+    }
   }
   // Pass 1.6: Global copy propagation for virtual moves.
   // Keep this disabled for now: global propagation tends to increase
