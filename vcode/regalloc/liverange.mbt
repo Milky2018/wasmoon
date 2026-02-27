@@ -484,7 +484,6 @@ pub fn build_live_ranges(
       c_calls_per_block_order[ord],
     )
   }
-
   fn upper_bound_call_points(
     point_orders : Array[Int],
     point_ord : Int,
@@ -589,62 +588,6 @@ pub fn build_live_ranges(
     }
   }
 
-  fn normalize_ranges(
-    ranges : Array[ProgPointRange],
-    block_order : FixedArray[Int],
-    point_block_stride : Int,
-  ) -> Array[ProgPointRange] {
-    if ranges.length() <= 1 {
-      return ranges
-    }
-    let mut sorted = true
-    for i in 1..<ranges.length() {
-      let prev_ord = point_order(
-        ranges[i - 1].start,
-        block_order,
-        point_block_stride,
-      )
-      let cur_ord = point_order(
-        ranges[i].start,
-        block_order,
-        point_block_stride,
-      )
-      if prev_ord > cur_ord {
-        sorted = false
-        break
-      }
-    }
-    if !sorted {
-      ranges.sort_by(fn(a, b) {
-        let a_ord = point_order(a.start, block_order, point_block_stride)
-        let b_ord = point_order(b.start, block_order, point_block_stride)
-        if a_ord < b_ord {
-          -1
-        } else if a_ord > b_ord {
-          1
-        } else {
-          0
-        }
-      })
-    }
-    let out : Array[ProgPointRange] = []
-    out.push(ranges[0])
-    for i in 1..<ranges.length() {
-      let r = ranges[i]
-      let last_idx = out.length() - 1
-      let last = out[last_idx]
-      let start_ord = point_order(r.start, block_order, point_block_stride)
-      let last_end_ord = point_order(last.end, block_order, point_block_stride)
-      if start_ord < last_end_ord {
-        let end = pp_max(last.end, r.end, block_order, point_block_stride)
-        out[last_idx] = ProgPointRange::new(last.start, end)
-      } else {
-        out.push(r)
-      }
-    }
-    out
-  }
-
   fn add_live_block_dense(
     block_map : Array[Array[Int]?],
     vreg_id : Int,
@@ -719,9 +662,7 @@ pub fn build_live_ranges(
   let use_blocks_scratch : Array[Int] = []
   let covered_blocks_scratch : Array[Int] = []
   let def_blocks_scratch : Array[Int] = []
-  let spans_unmerged_scratch : Array[ProgPointRange] = []
   let mut scratch_epoch = 1
-
   // Process each vreg from use-def info (dense walk; regalloc2-style).
   for vreg_id in 0..<liveness.use_def_dense.length() {
     if liveness.use_def_dense[vreg_id] is Some(info) {
@@ -885,7 +826,6 @@ pub fn build_live_ranges(
         }
       }
 
-      spans_unmerged_scratch.clear()
       for block_idx in covered_blocks_scratch {
         if covered_block_epoch[block_idx] != epoch {
           continue
@@ -945,13 +885,7 @@ pub fn build_live_ranges(
         } else {
           (start, end)
         }
-        spans_unmerged_scratch.push(ProgPointRange::new(start, end))
-      }
-      let spans = normalize_ranges(
-        spans_unmerged_scratch, block_order, point_block_stride,
-      )
-      for span in spans {
-        range.add_range(span)
+        range.add_range(ProgPointRange::new(start, end))
       }
       use_blocks_scratch.clear()
 

@@ -1908,29 +1908,7 @@ pub fn build_bundles_with_merging(
       insert_sorted_span(target_spans, source_spans[0])
       return target_spans
     }
-    // Keep lists sorted by start key with a linear merge in MoonBit. This
-    // keeps semantics equivalent to concat+sort while avoiding repeated
-    // NlogN resorting as bundles grow.
-    if target_spans[target_spans.length() - 1].start_ord <=
-      source_spans[0].start_ord {
-      for span in source_spans {
-        target_spans.push(span)
-      }
-      root_spans_cache[target_root] = Some(target_spans)
-      return target_spans
-    }
-    if source_spans[source_spans.length() - 1].start_ord <=
-      target_spans[0].start_ord {
-      let merged : Array[MergeSpan] = []
-      for span in source_spans {
-        merged.push(span)
-      }
-      for span in target_spans {
-        merged.push(span)
-      }
-      root_spans_cache[target_root] = Some(merged)
-      return merged
-    }
+    // Merge two sorted lists linearly (same semantic result as concat+sort).
     let merged : Array[MergeSpan] = []
     let mut i = 0
     let mut j = 0

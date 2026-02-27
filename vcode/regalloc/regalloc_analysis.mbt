@@ -690,101 +690,75 @@ fn compute_live_sets(
     }
   }
 
-  fn add_once_epoch(
-    epoch_map : FixedArray[Int],
-    epoch : Int,
-    dense : Array[Int],
-    vreg_id : Int,
-  ) -> Unit {
-    if vreg_id >= 0 &&
-      vreg_id < epoch_map.length() &&
-      epoch_map[vreg_id] != epoch {
-      epoch_map[vreg_id] = epoch
-      dense.push(vreg_id)
-    }
-  }
-
   fn mark_once(mask : FixedArray[Bool], vreg_id : Int) -> Unit {
     if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
       mask[vreg_id] = true
     }
   }
 
-  // First, compute use/def sets for each block in dense form.
+  // First, compute per-block use/def sets from collected SSA use-def info.
+  // This avoids a second full instruction walk after collect_defs_uses().
   let block_use_list : Array[Array[Int]] = []
+  for _ in 0..<num_blocks {
+    block_use_list.push([])
+  }
   let block_def_mask = make_bool_rows(num_blocks, num_vregs)
-  let use_seen_epoch : FixedArray[Int] = FixedArray::make(num_vregs, 0)
-  let mut use_epoch = 1
-  for block_idx, block in func.blocks {
-    use_epoch = use_epoch + 1
-    let cur_use_epoch = use_epoch
-    let use_list : Array[Int] = []
-    let def_mask = block_def_mask[block_idx]
-
-    // Block parameters are SSA definitions at block entry.
-    for param in block.params {
-      mark_once(def_mask, param.id)
+  let is_func_param_vreg : FixedArray[Bool] = FixedArray::make(num_vregs, false)
+  for param in func.params {
+    if param.id >= 0 && param.id < num_vregs {
+      is_func_param_vreg[param.id] = true
     }
+  }
 
-    // Process instructions
-    for inst in block.insts {
-      // Uses that are not already defined locally
-      for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-          add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-        }
-      }
-      // Definitions
-      for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
-          mark_once(def_mask, vreg.id)
-        }
+  fn point_before(a : ProgPoint, b : ProgPoint) -> Bool {
+    if a.inst < b.inst {
+      true
+    } else if a.inst > b.inst {
+      false
+    } else {
+      match (a.pos, b.pos) {
+        (Before, After) => true
+        _ => false
       }
     }
+  }
 
-    // Terminator uses
-    if block.terminator is Some(term) {
-      match term {
-        Jump(_, args) =>
-          for a in args {
-            if a is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-              add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
+  for vreg_id in 0..<result.use_def_dense.length() {
+    if result.use_def_dense[vreg_id] is Some(info) {
+      let mut def_point : ProgPoint? = None
+      if info.def_point is Some((def, _)) {
+        let is_entry_param_def = def.block == 0 &&
+          def.inst == -1 &&
+          vreg_id >= 0 &&
+          vreg_id < num_vregs &&
+          is_func_param_vreg[vreg_id]
+        if !is_entry_param_def {
+          def_point = Some(def)
+        }
+        if !is_entry_param_def && def.block >= 0 && def.block < num_blocks {
+          mark_once(block_def_mask[def.block], vreg_id)
+        }
+      }
+      for use_entry in info.use_points {
+        let use_point = use_entry.0
+        let block_idx = use_point.block
+        if block_idx < 0 || block_idx >= num_blocks {
+          continue
+        }
+        let include_use = match def_point {
+          Some(def) =>
+            if def.block != block_idx {
+              true
+            } else {
+              point_before(use_point, def)
             }
-          }
-        Branch(cond, _, _) =>
-          if cond is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
-        BranchCmp(lhs, rhs, _, _, _, _) => {
-          if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
-          if rhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
+          None => true
         }
-        BranchCmpImm(lhs, _, _, _, _, _) =>
-          if lhs is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
-        BranchZero(reg, _, _, _, _) =>
-          if reg is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
-        BrTable(index, _, _) =>
-          if index is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-            add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-          }
-        Return(values) =>
-          for value in values {
-            if value is @abi.Virtual(vreg) && !def_mask[vreg.id] {
-              add_once_epoch(use_seen_epoch, cur_use_epoch, use_list, vreg.id)
-            }
-          }
-        _ => ()
+        if include_use {
+          block_use_list[block_idx].push(vreg_id)
+        }
       }
     }
-    block_use_list.push(use_list)
   }
 
   // Pre-compute CFG edges (O(B + E), only once)
@@ -816,27 +790,22 @@ fn compute_live_sets(
   }
   while worklist.pop() is Some(block_idx) {
     let old_live_in_size = live_in_list[block_idx].length()
-    let added_live_out : Array[Int] = []
+    let live_out_mask_row = live_out_mask[block_idx]
+    let live_in_mask_row = live_in_mask[block_idx]
+    let def_mask_row = block_def_mask[block_idx]
 
     // live_out[B] = ∪ live_in[S] for S in succs[B]
     // Monotone: only adds, never removes
     for succ in cfg.succs[block_idx] {
       for vreg_id in live_in_list[succ] {
-        if !live_out_mask[block_idx][vreg_id] {
-          live_out_mask[block_idx][vreg_id] = true
+        if !live_out_mask_row[vreg_id] {
+          live_out_mask_row[vreg_id] = true
           live_out_list[block_idx].push(vreg_id)
-          added_live_out.push(vreg_id)
+          if !def_mask_row[vreg_id] && !live_in_mask_row[vreg_id] {
+            live_in_mask_row[vreg_id] = true
+            live_in_list[block_idx].push(vreg_id)
+          }
         }
-      }
-    }
-
-    // live_in[B] = use[B] ∪ (live_out[B] - def[B])
-    // Incrementally add only newly-grown live_out values (use was added in init).
-    for vreg_id in added_live_out {
-      if !block_def_mask[block_idx][vreg_id] &&
-        !live_in_mask[block_idx][vreg_id] {
-        live_in_mask[block_idx][vreg_id] = true
-        live_in_list[block_idx].push(vreg_id)
       }
     }
 
