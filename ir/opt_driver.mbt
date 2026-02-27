@@ -118,6 +118,9 @@ fn optimize_cranelift_style(
   if cbpe_result.changed {
     result.mark_changed()
   }
+  // Keep dead block-param elimination in wasmoon pipeline: unlike CLIF's
+  // richer alias/SSA plumbing, our IR lowering can otherwise retain many
+  // dead jump params that inflate regalloc pressure on large functions.
   let dbpe_result = run_opt_pass(
     func, "dead_block_param_elim", eliminate_dead_block_params,
   )

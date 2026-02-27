@@ -2021,10 +2021,9 @@ pub fn build_bundles_with_merging(
       Some(spans) => spans
       None => {
         let range = ranges.get(root)
-        let spans : Array[ProgPointRange] = []
-        for span in range.ranges {
-          spans.push(span)
-        }
+        // Reuse normalized ranges directly (regalloc2-style slice use) and
+        // avoid materializing a copied span vector per root.
+        let spans = range.ranges
         root_spans_cache[root] = Some(spans)
         spans
       }

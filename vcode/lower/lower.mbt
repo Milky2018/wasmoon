@@ -175,16 +175,60 @@ fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
 /// - iadd x (imul y z) => madd
 /// - isub x (imul y z) => msub
 fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
-  let skipped : @hashset.HashSet[Int] = @hashset.new()
-  let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
-  let addrmode_subsumed_uses : Map[Int, Int] = {}
+  let skipped_dense : Array[Bool] = Array::make(
+    ctx.ir_func.next_value_id,
+    false,
+  )
+  let addrmode_skipped_dense : Array[Bool] = Array::make(
+    ctx.ir_func.next_value_id,
+    false,
+  )
+  let addrmode_subsumed_counts : Array[Int] = Array::make(
+    ctx.ir_func.next_value_id,
+    0,
+  )
   let is_amd64 = @isa.ISA::current() is @isa.AMD64
   let is_aarch64 = @isa.ISA::current() is @isa.AArch64
   let enable_subextend_fusion = true
 
+  fn ensure_bool_slot(arr : Array[Bool], idx : Int) -> Unit {
+    if idx < 0 {
+      return
+    }
+    while arr.length() <= idx {
+      arr.push(false)
+    }
+  }
+
+  fn ensure_count_slot(arr : Array[Int], idx : Int) -> Unit {
+    if idx < 0 {
+      return
+    }
+    while arr.length() <= idx {
+      arr.push(0)
+    }
+  }
+
+  fn mark_skipped(value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    ensure_bool_slot(skipped_dense, value_id)
+    skipped_dense[value_id] = true
+  }
+
+  fn is_addrmode_skipped(value_id : Int) -> Bool {
+    value_id >= 0 &&
+    value_id < addrmode_skipped_dense.length() &&
+    addrmode_skipped_dense[value_id]
+  }
+
   fn mark_addrmode_subsumed_use(value_id : Int) -> Unit {
-    let old = addrmode_subsumed_uses.get(value_id).unwrap_or(0)
-    addrmode_subsumed_uses.set(value_id, old + 1)
+    if value_id < 0 {
+      return
+    }
+    ensure_count_slot(addrmode_subsumed_counts, value_id)
+    addrmode_subsumed_counts[value_id] = addrmode_subsumed_counts[value_id] + 1
   }
 
   // Pass 1: find address values that will be subsumed by load/store lowering.
@@ -365,9 +409,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
       }
     }
   }
-  for value_id, subsumed_count in addrmode_subsumed_uses {
-    if use_count(ctx.use_counts, value_id) == subsumed_count {
-      addrmode_skipped.add(value_id)
+  for value_id in 0..<addrmode_subsumed_counts.length() {
+    let subsumed_count = addrmode_subsumed_counts[value_id]
+    if subsumed_count > 0 &&
+      use_count(ctx.use_counts, value_id) == subsumed_count {
+      addrmode_skipped_dense[value_id] = true
     }
   }
 
@@ -384,7 +430,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           // Mirror lower_iadd's fusion priority so we never skip both sides.
@@ -394,36 +440,36 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           let rhs = inst.operands[1]
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_mul_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
           if is_i64 &&
             use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if is_i64 &&
             use_count(ctx.use_counts, lhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
         }
@@ -431,31 +477,31 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           let rhs = inst.operands[1]
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
           if enable_subextend_fusion &&
             is_i64 &&
             use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
         }
         @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           // Mirror lower_band/lower_bor/lower_bxor: fuse at most one shl const.
@@ -483,14 +529,14 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
-              skipped.add(lhs.id)
+              mark_skipped(lhs.id)
             }
             if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
               ) {
-              skipped.add(rhs.id)
+              mark_skipped(rhs.id)
             }
             continue
           }
@@ -501,35 +547,35 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
-              skipped.add(lhs.id)
+              mark_skipped(lhs.id)
             }
             if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
               ) {
-              skipped.add(rhs.id)
+              mark_skipped(rhs.id)
             }
             continue
           }
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_bnot_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_bnot_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
           if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
         }
@@ -537,20 +583,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
       }
     }
   }
-  for id in addrmode_skipped {
-    skipped.add(id)
-  }
-  let dense : Array[Bool] = Array::make(ctx.ir_func.next_value_id, false)
-  for id in skipped {
-    if id < 0 {
-      continue
+  for id in 0..<addrmode_skipped_dense.length() {
+    if addrmode_skipped_dense[id] {
+      ensure_bool_slot(skipped_dense, id)
+      skipped_dense[id] = true
     }
-    while dense.length() <= id {
-      dense.push(false)
-    }
-    dense[id] = true
   }
-  dense
+  skipped_dense
 }
 
 ///|
@@ -627,15 +666,24 @@ fn compute_fused_icmps(
     }
   }
 
-  // Find Icmp results that have exactly one use in a Select or branch
-  let fused : @hashset.HashSet[Int] = @hashset.new()
+  // Find Icmp results that have exactly one use in a Select or branch.
+  let fused_dense : Array[Bool] = Array::make(ir_func.next_value_id, false)
+  fn mark_fused(value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    while fused_dense.length() <= value_id {
+      fused_dense.push(false)
+    }
+    fused_dense[value_id] = true
+  }
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
       if inst.opcode is @ir.Opcode::Select {
         let cond = inst.operands[0]
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
-          fused.add(cond.id)
+          mark_fused(cond.id)
         }
       }
     }
@@ -643,22 +691,12 @@ fn compute_fused_icmps(
       Some(@ir.Terminator::Brz(cond, _, _))
       | Some(@ir.Terminator::Brnz(cond, _, _)) =>
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
-          fused.add(cond.id)
+          mark_fused(cond.id)
         }
       _ => ()
     }
   }
-  let dense : Array[Bool] = Array::make(ir_func.next_value_id, false)
-  for id in fused {
-    if id < 0 {
-      continue
-    }
-    while dense.length() <= id {
-      dense.push(false)
-    }
-    dense[id] = true
-  }
-  dense
+  fused_dense
 }
 
 ///|
