@@ -1492,7 +1492,7 @@ pub fn lower_function(
   // Cranelift lowers into a compact, bounded machinst pipeline without large
   // post-lowering sweep passes. Keep our ad-hoc peephole work bounded on very
   // large functions.
-  if vcode_inst_count < 2500 {
+  if vcode_inst_count < 200 {
     optimize_vcode(ctx.vcode_func)
   }
 

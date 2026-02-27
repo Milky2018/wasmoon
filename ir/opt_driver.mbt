@@ -108,14 +108,6 @@ fn optimize_cranelift_style(
   run_egraph? : Bool = true,
 ) -> OptResult {
   let result = OptResult::new()
-  // Keep this order aligned with Cranelift's `Context::optimize` pipeline:
-  // remove-constant-phis style cleanup before aegraph.
-  let cbpe_result = run_opt_pass(
-    func, "const_block_param_elim", eliminate_constant_block_params,
-  )
-  if cbpe_result.changed {
-    result.mark_changed()
-  }
   // Keep dead block-param elimination in wasmoon pipeline: unlike CLIF's
   // richer alias/SSA plumbing, our IR lowering can otherwise retain many
   // dead jump params that inflate regalloc pressure on large functions.
@@ -123,6 +115,14 @@ fn optimize_cranelift_style(
     func, "dead_block_param_elim", eliminate_dead_block_params,
   )
   if dbpe_result.changed {
+    result.mark_changed()
+  }
+  // Keep remove-constant-phis style cleanup before aegraph; run after dead
+  // block-param pruning so the solver walks a smaller phi graph.
+  let cbpe_result = run_opt_pass(
+    func, "const_block_param_elim", eliminate_constant_block_params,
+  )
+  if cbpe_result.changed {
     result.mark_changed()
   }
   if run_egraph && run_egraph_pass(func) {
