@@ -330,11 +330,18 @@ struct LiveRangeSet {
   vreg_to_range : Map[Int, Int] // vreg.id -> range index
   vreg_to_range_dense : Array[Int] // vreg.id -> range index (-1 if absent)
   block_order : FixedArray[Int] // Block execution order (O(1) lookup)
+  blockparam_out_pairs : Array[(Int, Int)] // (to_range_idx, from_range_idx)
 }
 
 ///|
 fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
-  { ranges: [], vreg_to_range: {}, vreg_to_range_dense: [], block_order }
+  {
+    ranges: [],
+    vreg_to_range: {},
+    vreg_to_range_dense: [],
+    block_order,
+    blockparam_out_pairs: [],
+  }
 }
 
 ///|
@@ -996,6 +1003,47 @@ pub fn build_live_ranges(
         range.crosses_wasm_call = range.crosses_call && !range.crosses_c_call
       }
       result.add_range(range)
+    }
+  }
+  // Build blockparam-out merge pairs once (regalloc2-style `blockparam_outs`):
+  // each pair links `to` (block param) <- `from` (incoming edge arg).
+  let mut max_block_id = -1
+  for block in func.blocks {
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
+  }
+  let block_idx_dense : Array[Int] = Array::make(max_block_id + 1, -1)
+  for i, block in func.blocks {
+    if block.id >= 0 && block.id < block_idx_dense.length() {
+      block_idx_dense[block.id] = i
+    }
+  }
+  for pred_block in func.blocks {
+    if pred_block.terminator is Some(Jump(target, args)) {
+      if target < 0 || target >= block_idx_dense.length() {
+        continue
+      }
+      let target_idx = block_idx_dense[target]
+      if target_idx < 0 {
+        continue
+      }
+      let target_block = func.blocks[target_idx]
+      for i, param in target_block.params {
+        if i >= args.length() {
+          break
+        }
+        guard args[i] is @abi.Virtual(arg_vreg) else { continue }
+        guard result.get_range_index_by_vreg(param.id) is Some(param_idx) else {
+          continue
+        }
+        guard result.get_range_index_by_vreg(arg_vreg.id) is Some(arg_idx) else {
+          continue
+        }
+        if arg_idx != param_idx {
+          result.blockparam_out_pairs.push((param_idx, arg_idx))
+        }
+      }
     }
   }
   result

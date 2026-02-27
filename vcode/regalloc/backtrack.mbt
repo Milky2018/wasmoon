@@ -1909,7 +1909,8 @@ pub fn build_bundles_with_merging(
       insert_sorted_span(target_spans, source_spans[0])
       return target_spans
     }
-    // Merge two sorted lists linearly (same semantic result as concat+sort).
+    // Keep merge semantics equivalent to regalloc2 while avoiding
+    // full re-sort on every merge in MoonBit's runtime.
     let merged : Array[MergeSpan] = []
     let mut i = 0
     let mut j = 0
@@ -2185,92 +2186,12 @@ pub fn build_bundles_with_merging(
   let tick_merge_blockargs = if perf_on { Some(@perf.tick_now()) } else { None }
   // Merge across block arguments (SSA phi-like connections).
   if block_param_merge_enabled {
-    let mut max_block_id = -1
-    for block in func.blocks {
-      if block.id > max_block_id {
-        max_block_id = block.id
-      }
-    }
-    let block_idx_dense : Array[Int] = Array::make(max_block_id + 1, -1)
-    for i, block in func.blocks {
-      if block.id >= 0 && block.id < block_idx_dense.length() {
-        block_idx_dense[block.id] = i
-      }
-    }
-    let range_idx_dense = ranges.vreg_to_range_dense
-    fn range_idx_of_vreg(
-      ranges : LiveRangeSet,
-      dense : Array[Int],
-      vreg_id : Int,
-    ) -> Int? {
-      if vreg_id >= 0 && vreg_id < dense.length() {
-        let idx = dense[vreg_id]
-        if idx >= 0 {
-          return Some(idx)
-        }
-      }
-      ranges.get_range_index_by_vreg(vreg_id)
-    }
-    // Precompute target-block formal range indices once, so predecessor-edge
-    // merge walk only resolves argument-side indices.
-    let target_param_range_idxs : Array[Array[Int]?] = Array::make(
-      block_idx_dense.length(),
-      None,
-    )
-    for block in func.blocks {
-      if block.id < 0 || block.id >= target_param_range_idxs.length() {
+    for pair in ranges.blockparam_out_pairs {
+      let (param_idx, arg_idx) = pair
+      if arg_idx == param_idx {
         continue
       }
-      if block.params.is_empty() {
-        target_param_range_idxs[block.id] = Some([])
-        continue
-      }
-      let idxs : Array[Int] = []
-      for param in block.params {
-        let idx = match range_idx_of_vreg(ranges, range_idx_dense, param.id) {
-          Some(v) => v
-          None => -1
-        }
-        idxs.push(idx)
-      }
-      target_param_range_idxs[block.id] = Some(idxs)
-    }
-    for pred_block in func.blocks {
-      if pred_block.terminator is Some(Jump(target, args)) {
-        if target < 0 || target >= block_idx_dense.length() {
-          continue
-        }
-        let target_idx = block_idx_dense[target]
-        if target_idx < 0 {
-          continue
-        }
-        let target_block = func.blocks[target_idx]
-        if target_block.params.is_empty() {
-          continue
-        }
-        let param_range_idxs = target_param_range_idxs[target].unwrap_or([])
-        // Merge each param with its incoming argument vreg.
-        for i, _ in target_block.params {
-          if i >= args.length() {
-            break
-          }
-          if i >= param_range_idxs.length() {
-            break
-          }
-          let param_idx = param_range_idxs[i]
-          if param_idx < 0 {
-            continue
-          }
-          if args[i] is @abi.Virtual(arg_vreg) &&
-            range_idx_of_vreg(ranges, range_idx_dense, arg_vreg.id)
-            is Some(arg_idx) {
-            if arg_idx == param_idx {
-              continue
-            }
-            try_merge(uf, param_idx, arg_idx, ranges) |> ignore
-          }
-        }
-      }
+      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
     }
   }
   if tick_merge_blockargs is Some(tick) {
