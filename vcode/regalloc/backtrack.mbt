@@ -2273,8 +2273,19 @@ pub fn build_bundles_with_merging(
     let root = bundle_to_root[bundle_id]
     let bundle = result.get(bundle_id)
     let merged_ranges : Array[ProgPointRange] = []
-    for span in root_spans(ranges, root_spans_cache, root) {
-      merged_ranges.push(span.span)
+    match root_spans_cache[root] {
+      Some(spans) =>
+        for span in spans {
+          merged_ranges.push(span.span)
+        }
+      None => {
+        // No merge cache materialized for this root: keep the original
+        // normalized ranges directly, avoiding redundant MergeSpan conversion.
+        let root_range = ranges.get(root)
+        for span in root_range.ranges {
+          merged_ranges.push(span)
+        }
+      }
     }
     bundle.merged_ranges = Some(merged_ranges)
   }
