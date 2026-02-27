@@ -475,25 +475,28 @@ fn build_output(
     }
   }
 
-  // regalloc2 keeps edits in a dense, position-sorted stream and consumes
-  // them linearly during output building. Build an equivalent dense index
-  // once here to avoid hot-loop map lookups on every instruction.
-  let inst_edits_dense : Array[Array[InstEdits?]] = []
-  for _, block in func.blocks {
-    inst_edits_dense.push(Array::make(block.insts.length() + 1, None))
-  }
-  for entry in alloc.inst_edits {
-    let (block_id, inst_idx, edits) = entry
-    guard block_id >= 0 && block_id < inst_edits_dense.length() else {
-      abort("inst_edits block_id out of range: \{block_id}")
+  // regalloc2 keeps edits as a position-sorted linear stream and consumes
+  // them with a forward cursor during output construction.
+  fn take_point_edits(
+    inst_edits : Array[(Int, Int, InstEdits)],
+    cursor : Int,
+    block_id : Int,
+    inst_idx : Int,
+  ) -> (InstEdits?, Int) {
+    if cursor >= inst_edits.length() {
+      return (None, cursor)
     }
-    let block_edits = inst_edits_dense[block_id]
-    guard inst_idx >= 0 && inst_idx < block_edits.length() else {
+    let (edit_block, edit_inst, edits) = inst_edits[cursor]
+    if edit_block == block_id && edit_inst == inst_idx {
+      (Some(edits), cursor + 1)
+    } else if edit_block < block_id ||
+      (edit_block == block_id && edit_inst < inst_idx) {
       abort(
-        "inst_edits inst_idx out of range: block=\{block_id} inst=\{inst_idx}",
+        "inst_edits stream out of order at block=\{block_id} inst=\{inst_idx}",
       )
+    } else {
+      (None, cursor)
     }
-    block_edits[inst_idx] = Some(edits)
   }
 
   // Walk blocks and create per-operand allocations. Emit extra edits for spills
@@ -506,12 +509,18 @@ fn build_output(
   let spill_def_tmp_idx = Array::make(max_vreg_id, -1)
   let spill_def_tmp_epoch = Array::make(max_vreg_id, 0)
   let mut spill_tmp_epoch = 1
+  let mut inst_edits_cursor = 0
   for block_id, block in func.blocks {
-    let block_inst_edits = inst_edits_dense[block_id]
     let active_reloads : Map[Int, @abi.PReg] = {}
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
-      let point_edits = block_inst_edits[inst_idx]
+      let (point_edits, next_inst_edits_cursor) = take_point_edits(
+        alloc.inst_edits,
+        inst_edits_cursor,
+        block_id,
+        inst_idx,
+      )
+      inst_edits_cursor = next_inst_edits_cursor
       // Fixed-reg constraint edits at this point.
       if point_edits is Some(edits) {
         push_resolved_moves(out, block_id, inst_idx, Before, edits.before)
@@ -858,7 +867,14 @@ fn build_output(
     // Terminator allocations/edits.
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
-      if block_inst_edits[term_inst] is Some(edits) {
+      let (term_edits, next_inst_edits_cursor) = take_point_edits(
+        alloc.inst_edits,
+        inst_edits_cursor,
+        block_id,
+        term_inst,
+      )
+      inst_edits_cursor = next_inst_edits_cursor
+      if term_edits is Some(edits) {
         push_resolved_moves(out, block_id, term_inst, Before, edits.before)
         push_resolved_moves(out, block_id, term_inst, After, edits.after)
       }
@@ -999,6 +1015,11 @@ fn build_output(
         }
       }
     }
+  }
+  guard inst_edits_cursor == alloc.inst_edits.length() else {
+    abort(
+      "unconsumed inst_edits entries: consumed=\{inst_edits_cursor} total=\{alloc.inst_edits.length()}",
+    )
   }
   out.finalize_edits()
   out
