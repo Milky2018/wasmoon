@@ -679,17 +679,6 @@ fn compute_live_sets(
     rows
   }
 
-  fn add_once(
-    mask : FixedArray[Bool],
-    dense : Array[Int],
-    vreg_id : Int,
-  ) -> Unit {
-    if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
-      mask[vreg_id] = true
-      dense.push(vreg_id)
-    }
-  }
-
   fn mark_once(mask : FixedArray[Bool], vreg_id : Int) -> Unit {
     if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
       mask[vreg_id] = true
@@ -698,11 +687,15 @@ fn compute_live_sets(
 
   // First, compute per-block use/def sets from collected SSA use-def info.
   // This avoids a second full instruction walk after collect_defs_uses().
-  let block_use_list : Array[Array[Int]] = []
-  for _ in 0..<num_blocks {
-    block_use_list.push([])
-  }
   let block_def_mask = make_bool_rows(num_blocks, num_vregs)
+  let live_in_mask = make_bool_rows(num_blocks, num_vregs)
+  let live_out_mask = make_bool_rows(num_blocks, num_vregs)
+  let live_in_list : Array[Array[Int]] = []
+  let live_out_list : Array[Array[Int]] = []
+  for _ in 0..<num_blocks {
+    live_in_list.push([])
+    live_out_list.push([])
+  }
   let is_func_param_vreg : FixedArray[Bool] = FixedArray::make(num_vregs, false)
   for param in func.params {
     if param.id >= 0 && param.id < num_vregs {
@@ -755,7 +748,10 @@ fn compute_live_sets(
           None => true
         }
         if include_use {
-          block_use_list[block_idx].push(vreg_id)
+          if !live_in_mask[block_idx][vreg_id] {
+            live_in_mask[block_idx][vreg_id] = true
+            live_in_list[block_idx].push(vreg_id)
+          }
         }
       }
     }
@@ -763,21 +759,6 @@ fn compute_live_sets(
 
   // Pre-compute CFG edges (O(B + E), only once)
   let cfg = build_cfg_edges(func)
-
-  let live_in_mask = make_bool_rows(num_blocks, num_vregs)
-  let live_out_mask = make_bool_rows(num_blocks, num_vregs)
-  let live_in_list : Array[Array[Int]] = []
-  let live_out_list : Array[Array[Int]] = []
-
-  // Initialize live_in with use sets.
-  for block_idx in 0..<num_blocks {
-    let initial_in : Array[Int] = []
-    for vreg_id in block_use_list[block_idx] {
-      add_once(live_in_mask[block_idx], initial_in, vreg_id)
-    }
-    live_in_list.push(initial_in)
-    live_out_list.push([])
-  }
 
   // Worklist-based dataflow with incremental update
   let worklist = LivenessWorklist::new(num_blocks)
