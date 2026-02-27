@@ -407,30 +407,62 @@ pub fn build_live_ranges(
   let result = LiveRangeSet::new(liveness.block_order)
   let mut next_id = 0
   let block_order = liveness.block_order
+  let mut max_block_insts = 0
+  for block in func.blocks {
+    let block_len = block.insts.length()
+    if block_len > max_block_insts {
+      max_block_insts = block_len
+    }
+  }
+  // Match regalloc2's use of a dense comparable key for ProgPoint ordering.
+  let point_block_stride = (max_block_insts + 4) * 2
+  fn point_order(
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+    point_block_stride : Int,
+  ) -> Int {
+    let block_ord = block_order[point.block]
+    let pos_ord = match point.pos {
+      Before => 0
+      After => 1
+    }
+    block_ord * point_block_stride + (point.inst + 1) * 2 + pos_ord
+  }
   let sorted_call_points = liveness.call_points.copy()
   sorted_call_points.sort_by(fn(a, b) {
-    a.0.compare_with_order(b.0, block_order)
+    let a_ord = point_order(a.0, block_order, point_block_stride)
+    let b_ord = point_order(b.0, block_order, point_block_stride)
+    if a_ord < b_ord {
+      -1
+    } else if a_ord > b_ord {
+      1
+    } else {
+      0
+    }
   })
   let call_prog_points : Array[ProgPoint] = []
+  let call_prog_point_orders : Array[Int] = []
   let c_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
     let (call_point, call_conv) = entry
     call_prog_points.push(call_point)
+    call_prog_point_orders.push(
+      point_order(call_point, block_order, point_block_stride),
+    )
     let prev = c_call_prefix[c_call_prefix.length() - 1]
     let add = if call_conv is @instr.C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
   }
 
   fn upper_bound_call_points(
-    points : Array[ProgPoint],
-    point : ProgPoint,
-    block_order : FixedArray[Int],
+    point_orders : Array[Int],
+    point_ord : Int,
   ) -> Int {
     let mut lo = 0
-    let mut hi = points.length()
+    let mut hi = point_orders.length()
     while lo < hi {
       let mid = lo + (hi - lo) / 2
-      if points[mid].compare_with_order(point, block_order) <= 0 {
+      if point_orders[mid] <= point_ord {
         lo = mid + 1
       } else {
         hi = mid
@@ -440,15 +472,14 @@ pub fn build_live_ranges(
   }
 
   fn lower_bound_call_points(
-    points : Array[ProgPoint],
-    point : ProgPoint,
-    block_order : FixedArray[Int],
+    point_orders : Array[Int],
+    point_ord : Int,
   ) -> Int {
     let mut lo = 0
-    let mut hi = points.length()
+    let mut hi = point_orders.length()
     while lo < hi {
       let mid = lo + (hi - lo) / 2
-      if points[mid].compare_with_order(point, block_order) < 0 {
+      if point_orders[mid] < point_ord {
         lo = mid + 1
       } else {
         hi = mid
@@ -472,24 +503,29 @@ pub fn build_live_ranges(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
+    point_block_stride : Int,
   ) -> Bool {
-    a.compare_with_order(b, block_order) < 0
+    point_order(a, block_order, point_block_stride) <
+    point_order(b, block_order, point_block_stride)
   }
 
   fn pp_le(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
+    point_block_stride : Int,
   ) -> Bool {
-    a.compare_with_order(b, block_order) <= 0
+    point_order(a, block_order, point_block_stride) <=
+    point_order(b, block_order, point_block_stride)
   }
 
   fn pp_min(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
+    point_block_stride : Int,
   ) -> ProgPoint {
-    if pp_le(a, b, block_order) {
+    if pp_le(a, b, block_order, point_block_stride) {
       a
     } else {
       b
@@ -500,8 +536,9 @@ pub fn build_live_ranges(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
+    point_block_stride : Int,
   ) -> ProgPoint {
-    if pp_lt(a, b, block_order) {
+    if pp_lt(a, b, block_order, point_block_stride) {
       b
     } else {
       a
@@ -511,21 +548,39 @@ pub fn build_live_ranges(
   fn normalize_ranges(
     ranges : Array[ProgPointRange],
     block_order : FixedArray[Int],
+    point_block_stride : Int,
   ) -> Array[ProgPointRange] {
     if ranges.length() <= 1 {
       return ranges
     }
     let mut sorted = true
     for i in 1..<ranges.length() {
-      if ranges[i - 1].start.compare_with_order(ranges[i].start, block_order) >
-        0 {
+      let prev_ord = point_order(
+        ranges[i - 1].start,
+        block_order,
+        point_block_stride,
+      )
+      let cur_ord = point_order(
+        ranges[i].start,
+        block_order,
+        point_block_stride,
+      )
+      if prev_ord > cur_ord {
         sorted = false
         break
       }
     }
     if !sorted {
       ranges.sort_by(fn(a, b) {
-        a.start.compare_with_order(b.start, block_order)
+        let a_ord = point_order(a.start, block_order, point_block_stride)
+        let b_ord = point_order(b.start, block_order, point_block_stride)
+        if a_ord < b_ord {
+          -1
+        } else if a_ord > b_ord {
+          1
+        } else {
+          0
+        }
       })
     }
     let out : Array[ProgPointRange] = []
@@ -534,8 +589,10 @@ pub fn build_live_ranges(
       let r = ranges[i]
       let last_idx = out.length() - 1
       let last = out[last_idx]
-      if r.start.compare_with_order(last.end, block_order) < 0 {
-        let end = pp_max(last.end, r.end, block_order)
+      let start_ord = point_order(r.start, block_order, point_block_stride)
+      let last_end_ord = point_order(last.end, block_order, point_block_stride)
+      if start_ord < last_end_ord {
+        let end = pp_max(last.end, r.end, block_order, point_block_stride)
         out[last_idx] = ProgPointRange::new(last.start, end)
       } else {
         out.push(r)
@@ -662,8 +719,12 @@ pub fn build_live_ranges(
         } else {
           let first = use_first_points[block_idx].unwrap()
           let last = use_last_points[block_idx].unwrap()
-          use_first_points[block_idx] = Some(pp_min(first, p, block_order))
-          use_last_points[block_idx] = Some(pp_max(last, p, block_order))
+          use_first_points[block_idx] = Some(
+            pp_min(first, p, block_order, point_block_stride),
+          )
+          use_last_points[block_idx] = Some(
+            pp_max(last, p, block_order, point_block_stride),
+          )
         }
       }
       if use_blocks_scratch.length() > 1 {
@@ -818,7 +879,7 @@ pub fn build_live_ranges(
         } else if use_bounds is Some((first_use, _)) {
           // Should not normally happen (use implies live_in or local def),
           // but be conservative.
-          pp_min(entry_point, first_use, block_order)
+          pp_min(entry_point, first_use, block_order, point_block_stride)
         } else {
           entry_point
         }
@@ -833,14 +894,18 @@ pub fn build_live_ranges(
         } else {
           point_after(start, block_len)
         }
-        let (start, end) = if end.compare_with_order(start, block_order) <= 0 {
+        let end_ord = point_order(end, block_order, point_block_stride)
+        let start_ord = point_order(start, block_order, point_block_stride)
+        let (start, end) = if end_ord <= start_ord {
           (start, point_after(start, block_len))
         } else {
           (start, end)
         }
         spans_unmerged_scratch.push(ProgPointRange::new(start, end))
       }
-      let spans = normalize_ranges(spans_unmerged_scratch, block_order)
+      let spans = normalize_ranges(
+        spans_unmerged_scratch, block_order, point_block_stride,
+      )
       for span in spans {
         range.add_range(span)
       }
@@ -851,15 +916,21 @@ pub fn build_live_ranges(
       // values as call-crossing across dead holes between live spans).
       if !call_prog_points.is_empty() {
         for span in range.ranges {
-          let first_after_start = upper_bound_call_points(
-            call_prog_points,
+          let span_start_ord = point_order(
             span.start,
             block_order,
+            point_block_stride,
           )
-          let first_at_or_after_end = lower_bound_call_points(
-            call_prog_points,
+          let span_end_ord = point_order(
             span.end,
             block_order,
+            point_block_stride,
+          )
+          let first_after_start = upper_bound_call_points(
+            call_prog_point_orders, span_start_ord,
+          )
+          let first_at_or_after_end = lower_bound_call_points(
+            call_prog_point_orders, span_end_ord,
           )
           if first_after_start < first_at_or_after_end {
             range.crosses_call = true
