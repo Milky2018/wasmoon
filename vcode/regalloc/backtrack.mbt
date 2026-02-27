@@ -116,6 +116,8 @@ struct BacktrackingAllocator {
   conflict_seen_epoch : Array[Int]
   mut conflict_epoch : Int
   bundle_attempts : Array[Int]
+  scratch_conflicts : Array[Int]
+  scratch_best_conflicts : Array[Int]
 }
 
 ///|
@@ -323,6 +325,8 @@ pub fn BacktrackingAllocator::new(
     conflict_seen_epoch: Array::make(bundles.length(), 0),
     conflict_epoch: 0,
     bundle_attempts: Array::make(bundles.length(), 0),
+    scratch_conflicts: [],
+    scratch_best_conflicts: [],
   }
 }
 
@@ -607,31 +611,6 @@ fn BacktrackingAllocator::get_available_regs(
 }
 
 ///|
-/// In Cranelift/regalloc2 terms, "non-preferred" generally corresponds to
-/// callee-saved registers. For bundles that do not cross calls, we should
-/// allocate preferred regs first and only then fall back to non-preferred.
-fn BacktrackingAllocator::is_nonpreferred_for_bundle(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-) -> Bool {
-  if bundle.crosses_call(self.ranges) {
-    return false
-  }
-  match bundle.reg_class {
-    @abi.Int =>
-      preg.index >= 0 &&
-      preg.index < self.int_is_callee_saved.length() &&
-      self.int_is_callee_saved[preg.index]
-    @abi.Float32 | @abi.Float64 =>
-      preg.index >= 0 &&
-      preg.index < self.float_is_callee_saved.length() &&
-      self.float_is_callee_saved[preg.index]
-    @abi.Vector => false
-  }
-}
-
-///|
 /// Check if a register is free for all ranges in a bundle
 fn BacktrackingAllocator::is_reg_free(
   self : BacktrackingAllocator,
@@ -780,6 +759,7 @@ fn BacktrackingAllocator::try_allocate(
       bundle.reg_class is @abi.Float32 ||
       bundle.reg_class is @abi.Float64
     )
+  let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
   let scan_limit = if self.split_probe_limit < n {
     self.split_probe_limit
@@ -798,7 +778,18 @@ fn BacktrackingAllocator::try_allocate(
         continue
       }
       if do_preferred_pass &&
-        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
+        (match reg_class {
+          @abi.Int =>
+            preg.index >= 0 &&
+            preg.index < self.int_is_callee_saved.length() &&
+            self.int_is_callee_saved[preg.index]
+          @abi.Float32 | @abi.Float64 =>
+            preg.index >= 0 &&
+            preg.index < self.float_is_callee_saved.length() &&
+            self.float_is_callee_saved[preg.index]
+          @abi.Vector => false
+        }) !=
+        want_nonpreferred {
         continue
       }
       scanned = scanned + 1
@@ -818,18 +809,19 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   spans : Array[OrderedSpan],
   max_allowable_cost : Double?,
   conflicts : Array[Int],
-) -> (Double, Bool) {
+) -> (Double, ProgPoint?, Bool) {
   conflicts.clear()
   self.conflict_epoch = self.conflict_epoch + 1
   let seen_epoch = self.conflict_epoch
   let mut max_conflict_weight = 0.0
+  let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
   if preg.index < 0 || preg.index >= allocs.length() {
-    return (max_conflict_weight, false)
+    return (max_conflict_weight, first_conflict_point, false)
   }
   let occupied = allocs[preg.index]
   if occupied.is_empty() || spans.is_empty() {
-    return (max_conflict_weight, false)
+    return (max_conflict_weight, first_conflict_point, false)
   }
   let mut i = 0
   let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
@@ -844,87 +836,31 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
       j = j + 1
       continue
     }
+    if first_conflict_point is None {
+      first_conflict_point = Some(
+        if span.start_ord >= occ.start_ord {
+          span.start
+        } else {
+          occ.start
+        },
+      )
+    }
     let other_id = occupied[j].0
-    if other_id < self.conflict_seen_epoch.length() &&
-      self.conflict_seen_epoch[other_id] != seen_epoch {
+    if self.conflict_seen_epoch[other_id] != seen_epoch {
       self.conflict_seen_epoch[other_id] = seen_epoch
       let other = self.bundles.get(other_id)
       if other.is_pinned || other.spill_weight >= bundle.spill_weight {
         conflicts.clear()
-        return (0.0, true)
+        return (0.0, first_conflict_point, true)
       }
       conflicts.push(other_id)
       if other.spill_weight > max_conflict_weight {
         max_conflict_weight = other.spill_weight
         if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
           conflicts.clear()
-          return (0.0, true)
+          return (0.0, first_conflict_point, true)
         }
       }
-    }
-    if span.end_ord <= occ.end_ord {
-      i = i + 1
-    } else {
-      j = j + 1
-    }
-  }
-  (max_conflict_weight, false)
-}
-
-///|
-fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
-  self : BacktrackingAllocator,
-  preg : @abi.PReg,
-  spans : Array[OrderedSpan],
-  max_allowable_cost : Double?,
-) -> (Double, ProgPoint?, Bool) {
-  let mut max_conflict_weight = 0.0
-  let mut first_conflict_point : ProgPoint? = None
-  let mut first_conflict_ord : Int? = None
-  let allocs = self.get_reg_allocs(preg.class)
-  if preg.index < 0 || preg.index >= allocs.length() {
-    return (max_conflict_weight, first_conflict_point, false)
-  }
-  let occupied = allocs[preg.index]
-  if occupied.is_empty() || spans.is_empty() {
-    return (max_conflict_weight, first_conflict_point, false)
-  }
-  let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end_ord <= occ.start_ord {
-      i = i + 1
-      continue
-    }
-    if occ.end_ord <= span.start_ord {
-      j = j + 1
-      continue
-    }
-    let other = self.bundles.get(occupied[j].0)
-    let weight = if other.is_pinned { 1.0e100 } else { other.spill_weight }
-    if weight > max_conflict_weight {
-      max_conflict_weight = weight
-      if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
-        return (0.0, None, true)
-      }
-    }
-    let (overlap_start, overlap_ord) = if span.start_ord >= occ.start_ord {
-      (span.start, span.start_ord)
-    } else {
-      (occ.start, occ.start_ord)
-    }
-    match first_conflict_ord {
-      None => {
-        first_conflict_ord = Some(overlap_ord)
-        first_conflict_point = Some(overlap_start)
-      }
-      Some(existing_ord) =>
-        if overlap_ord < existing_ord {
-          first_conflict_ord = Some(overlap_ord)
-          first_conflict_point = Some(overlap_start)
-        }
     }
     if span.end_ord <= occ.end_ord {
       i = i + 1
@@ -938,17 +874,19 @@ fn BacktrackingAllocator::split_conflict_cost_and_point_with_spans(
 ///|
 /// Try to find a register for a bundle in one scan:
 /// - If a register is conflict-free, allocate directly.
-/// - Otherwise, pick the cheapest legal eviction candidate.
-/// Returns the chosen register when allocation/eviction is possible.
+/// - Otherwise, keep both best legal eviction candidate and split candidate.
+/// Returns:
+/// - allocated preg on success;
+/// - split point + reg hint for caller-side split fallback when no eviction wins.
 fn BacktrackingAllocator::try_evict(
   self : BacktrackingAllocator,
   bundle : Bundle,
   hint_preg : @abi.PReg?,
-) -> @abi.PReg? {
+) -> (@abi.PReg?, (ProgPoint, @abi.PReg)?) {
   let avail_regs = self.get_available_regs(bundle)
   let n = avail_regs.length()
   if n == 0 {
-    return None
+    return (None, None)
   }
   let spans = self.bundle_sorted_spans(bundle)
   let offset = bundle.id % n
@@ -959,6 +897,7 @@ fn BacktrackingAllocator::try_evict(
       bundle.reg_class is @abi.Float32 ||
       bundle.reg_class is @abi.Float64
     )
+  let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
   let scan_limit = if self.split_probe_limit < n {
     self.split_probe_limit
@@ -967,8 +906,12 @@ fn BacktrackingAllocator::try_evict(
   }
   let mut best_preg : @abi.PReg? = None
   let mut best_conflict_cost : Double? = None
-  let best_conflicts : Array[Int] = []
-  let scratch_conflicts : Array[Int] = []
+  let best_conflicts = self.scratch_best_conflicts
+  let scratch_conflicts = self.scratch_conflicts
+  best_conflicts.clear()
+  scratch_conflicts.clear()
+  let mut best_split_cost : Double? = None
+  let mut best_split : (ProgPoint, @abi.PReg)? = None
   for phase in 0..<phase_count {
     let want_nonpreferred = phase == 1
     let mut scanned = 0
@@ -978,21 +921,56 @@ fn BacktrackingAllocator::try_evict(
       }
       let preg = avail_regs[(offset + i) % n]
       if do_preferred_pass &&
-        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
+        (match reg_class {
+          @abi.Int =>
+            preg.index >= 0 &&
+            preg.index < self.int_is_callee_saved.length() &&
+            self.int_is_callee_saved[preg.index]
+          @abi.Float32 | @abi.Float64 =>
+            preg.index >= 0 &&
+            preg.index < self.float_is_callee_saved.length() &&
+            self.float_is_callee_saved[preg.index]
+          @abi.Vector => false
+        }) !=
+        want_nonpreferred {
         continue
       }
       scanned = scanned + 1
-      // regalloc2-style high-cost cutoff: when we already have a best candidate,
-      // stop scanning early once this candidate's max-conflict cost exceeds it.
-      let cutoff = best_conflict_cost
-      let (max_conflict_weight, rejected) = self.scan_conflicts_with_cutoff(
+      // regalloc2-style high-cost cutoff:
+      // when we already have a best candidate (evict/split), stop considering
+      // higher-cost registers early.
+      let cutoff = match (best_conflict_cost, best_split_cost) {
+        (Some(a), Some(b)) => Some(if a > b { a } else { b })
+        (Some(a), None) => Some(a)
+        (None, Some(b)) => Some(b)
+        (None, None) => None
+      }
+      let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
         bundle, preg, spans, cutoff, scratch_conflicts,
       )
       if rejected {
         continue
       }
       if scratch_conflicts.is_empty() {
-        return Some(preg)
+        return (Some(preg), None)
+      }
+      if first_conflict_point is Some(point) {
+        match (best_split_cost, best_split) {
+          (None, None) => {
+            best_split_cost = Some(max_conflict_weight)
+            best_split = Some((point, preg))
+          }
+          (Some(existing_cost), Some((existing_point, _existing_preg))) =>
+            if max_conflict_weight < existing_cost {
+              best_split_cost = Some(max_conflict_weight)
+              best_split = Some((point, preg))
+            } else if max_conflict_weight == existing_cost &&
+              point.compare_with_order(existing_point, self.block_order) > 0 {
+              best_split_cost = Some(max_conflict_weight)
+              best_split = Some((point, preg))
+            }
+          _ => ()
+        }
       }
 
       // Keep only legal eviction candidates.
@@ -1033,98 +1011,12 @@ fn BacktrackingAllocator::try_evict(
         self.remove_allocation(conflict)
         self.queue_push(conflict_id, self.bundle_queue_prio(conflict), None)
       }
-      return Some(preg)
+      return (Some(preg), None)
     }
   }
-  None
-}
-
-///|
-/// Choose a split point and a reg hint (Cranelift-like):
-/// - Try all available regs (hint-first if provided).
-/// - Prefer lower maximum-conflict weight.
-/// - Tie-break by later first-conflict point (larger conflict-free prefix).
-fn BacktrackingAllocator::choose_split_option(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  hint_preg : @abi.PReg?,
-) -> (ProgPoint, @abi.PReg)? {
-  let avail_regs = self.get_available_regs(bundle)
-  if avail_regs.is_empty() {
-    return None
-  }
-  let mut best : (ProgPoint, @abi.PReg)? = None
-  let mut best_cost : Double? = None
-  fn consider(
-    self : BacktrackingAllocator,
-    spans : Array[OrderedSpan],
-    preg : @abi.PReg,
-    best : (ProgPoint, @abi.PReg)?,
-    best_cost : Double?,
-  ) -> ((ProgPoint, @abi.PReg)?, Double?) {
-    let (cost, point, rejected) = self.split_conflict_cost_and_point_with_spans(
-      preg, spans, best_cost,
-    )
-    if rejected {
-      return (best, best_cost)
-    }
-    if point is None {
-      return (best, best_cost)
-    }
-    let split_point = point.unwrap()
-    match (best, best_cost) {
-      (None, None) => (Some((split_point, preg)), Some(cost))
-      (Some((best_point, best_preg)), Some(best_cost_v)) =>
-        if cost < best_cost_v {
-          (Some((split_point, preg)), Some(cost))
-        } else if cost == best_cost_v &&
-          split_point.compare_with_order(best_point, self.block_order) > 0 {
-          (Some((split_point, preg)), Some(cost))
-        } else {
-          (Some((best_point, best_preg)), Some(best_cost_v))
-        }
-      _ => (best, best_cost)
-    }
-  }
-  let spans = self.bundle_sorted_spans(bundle)
-
-  // Hint-first.
-  if hint_preg is Some(hint) {
-    for preg in avail_regs {
-      if preg.class == hint.class && preg.index == hint.index {
-        let (b, c) = consider(self, spans, preg, best, best_cost)
-        best = b
-        best_cost = c
-        break
-      }
-    }
-  }
-
-  // Offset scan through the remaining regs.
-  let n = avail_regs.length()
-  let scan_limit = if self.split_probe_limit < n {
-    self.split_probe_limit
-  } else {
-    n
-  }
-  let offset = bundle.id % n
-  let mut scanned = 0
-  for i in 0..<n {
-    if scanned >= scan_limit {
-      break
-    }
-    let preg = avail_regs[(offset + i) % n]
-    if hint_preg is Some(hint) &&
-      preg.class == hint.class &&
-      preg.index == hint.index {
-      continue
-    }
-    scanned = scanned + 1
-    let (b, c) = consider(self, spans, preg, best, best_cost)
-    best = b
-    best_cost = c
-  }
-  best
+  best_conflicts.clear()
+  scratch_conflicts.clear()
+  (None, best_split)
 }
 
 ///|
@@ -1132,7 +1024,7 @@ fn BacktrackingAllocator::choose_split_option(
 fn BacktrackingAllocator::split_bundle(
   self : BacktrackingAllocator,
   bundle : Bundle,
-  hint_preg : @abi.PReg?,
+  split_opt : (ProgPoint, @abi.PReg)?,
 ) -> Unit {
   // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
   // Once a spillset exceeds this cap, fall back to direct spilling.
@@ -1144,8 +1036,6 @@ fn BacktrackingAllocator::split_bundle(
     return
   }
 
-  // Try to find a split point (and a reg hint) to split at.
-  let split_opt = self.choose_split_option(bundle, hint_preg)
   match split_opt {
     Some((split_point, split_hint_reg)) => {
       if spillset_id >= 0 && spillset_id < self.spillset_split_counts.length() {
@@ -1327,10 +1217,13 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     if self.enable_backtracking {
       // Cranelift/regalloc2-like single register scan: free-reg allocation and
       // eviction candidate selection share one conflict walk.
-      if self.try_evict(bundle, hint_preg) is Some(preg) {
+      let (alloc_preg, split_opt) = self.try_evict(bundle, hint_preg)
+      if alloc_preg is Some(preg) {
         self.record_allocation(bundle, preg)
         continue
       }
+      self.split_bundle(bundle, split_opt)
+      continue
     } else {
       // Non-backtracking fallback keeps simple first-fit behavior.
       if self.try_allocate(bundle, hint_preg) is Some(preg) {
@@ -1344,7 +1237,7 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
 
     // Split (spill) the bundle
-    self.split_bundle(bundle, hint_preg)
+    self.split_bundle(bundle, None)
   }
 }
 
