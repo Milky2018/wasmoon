@@ -498,29 +498,37 @@ fn BacktrackingAllocator::bundle_sorted_spans(
     self.bundle_span_cache[bundle.id] is Some(spans) {
     return spans
   }
-  let raw_spans = match bundle.merged_ranges {
-    Some(spans) => spans
+  let spans : Array[OrderedSpan] = []
+  match bundle.merged_ranges {
+    Some(raw_spans) =>
+      for raw_span in raw_spans {
+        spans.push({
+          start: raw_span.start,
+          start_ord: self.point_order(raw_span.start),
+          end_ord: self.point_order(raw_span.end),
+        })
+      }
     None => {
-      let spans : Array[ProgPointRange] = []
       for range_id in bundle.range_ids {
         let range = self.ranges.get(range_id)
         for raw_span in range.ranges {
-          spans.push(raw_span)
+          spans.push({
+            start: raw_span.start,
+            start_ord: self.point_order(raw_span.start),
+            end_ord: self.point_order(raw_span.end),
+          })
         }
       }
       spans.sort_by(fn(a, b) {
-        a.start.compare_with_order(b.start, self.block_order)
+        if a.start_ord < b.start_ord {
+          -1
+        } else if a.start_ord > b.start_ord {
+          1
+        } else {
+          0
+        }
       })
-      spans
     }
-  }
-  let spans : Array[OrderedSpan] = []
-  for raw_span in raw_spans {
-    spans.push({
-      start: raw_span.start,
-      start_ord: self.point_order(raw_span.start),
-      end_ord: self.point_order(raw_span.end),
-    })
   }
   if bundle.id >= 0 && bundle.id < self.bundle_span_cache.length() {
     self.bundle_span_cache[bundle.id] = Some(spans)
