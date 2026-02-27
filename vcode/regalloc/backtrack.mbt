@@ -1932,20 +1932,6 @@ pub fn build_bundles_with_merging(
     spans.insert(lo, insert)
   }
 
-  fn point_order_key(
-    point : ProgPoint,
-    block_order : FixedArray[Int],
-  ) -> Int64 {
-    let block_ord = block_order[point.block].to_int64()
-    // `inst` may be -1 for block params; bias by +1 to keep ordering stable.
-    let inst_ord = (point.inst + 1).to_int64()
-    let pos_ord = match point.pos {
-      Before => 0L
-      After => 1L
-    }
-    (block_ord << 32) | (inst_ord << 1) | pos_ord
-  }
-
   fn merge_sorted_span_lists(
     a : Array[ProgPointRange],
     b : Array[ProgPointRange],
@@ -2024,11 +2010,6 @@ pub fn build_bundles_with_merging(
   let root_fixed_conflict_cache : Array[Bool] = []
   let root_has_fixed_def_cache : Array[Bool] = []
   let root_spans_cache : Array[Array[ProgPointRange]?] = Array::make(n, None)
-  let root_span_keys_cache : Array[Array[(Int64, Int64)]?] = Array::make(
-    n,
-    None,
-  )
-
   // Initialize per-root fixed-info metadata so merges stay incremental.
   // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
   // roots that never participate in merges.
@@ -2077,36 +2058,6 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  fn root_span_keys(
-    ranges : LiveRangeSet,
-    root_spans_cache : Array[Array[ProgPointRange]?],
-    root_has_fixed_def_cache : Array[Bool],
-    root_span_keys_cache : Array[Array[(Int64, Int64)]?],
-    root : Int,
-  ) -> Array[(Int64, Int64)] {
-    match root_span_keys_cache[root] {
-      Some(keys) => keys
-      None => {
-        let spans = root_spans(ranges, root_spans_cache, root)
-        let adjust_to_inst_start = root_has_fixed_def(
-          ranges, root_has_fixed_def_cache, root,
-        )
-        let keys : Array[(Int64, Int64)] = []
-        for span in spans {
-          let start = adjusted_start_for_overlap(span, adjust_to_inst_start)
-          keys.push(
-            (
-              point_order_key(start, ranges.block_order),
-              point_order_key(span.end, ranges.block_order),
-            ),
-          )
-        }
-        root_span_keys_cache[root] = Some(keys)
-        keys
-      }
-    }
-  }
-
   // Helper to try merging two ranges
   fn commit_union(
     uf : @unionfind.UnionFind,
@@ -2150,8 +2101,6 @@ pub fn build_bundles_with_merging(
     )
     root_spans_cache[new_root] = Some(merged_spans)
     root_spans_cache[old_root] = None
-    root_span_keys_cache[new_root] = None
-    root_span_keys_cache[old_root] = None
     true
   }
 
@@ -2207,18 +2156,15 @@ pub fn build_bundles_with_merging(
     // two cursors and stop early when one side advances past the other.
     let spans_a = root_spans(ranges, root_spans_cache, root_a)
     let spans_b = root_spans(ranges, root_spans_cache, root_b)
-    let span_keys_a = root_span_keys(
-      ranges, root_spans_cache, root_has_fixed_def_cache, root_span_keys_cache, root_a,
-    )
-    let span_keys_b = root_span_keys(
-      ranges, root_spans_cache, root_has_fixed_def_cache, root_span_keys_cache, root_b,
-    )
+    let adjust_a = set_a_has_fixed_def
+    let adjust_b = set_b_has_fixed_def
     if !spans_a.is_empty() && !spans_b.is_empty() {
-      let start_a_key = span_keys_a[0].0
-      let end_a_key = span_keys_a[span_keys_a.length() - 1].1
-      let start_b_key = span_keys_b[0].0
-      let end_b_key = span_keys_b[span_keys_b.length() - 1].1
-      let disjoint = start_a_key >= end_b_key || start_b_key >= end_a_key
+      let start_a = adjusted_start_for_overlap(spans_a[0], adjust_a)
+      let end_a = spans_a[spans_a.length() - 1].end
+      let start_b = adjusted_start_for_overlap(spans_b[0], adjust_b)
+      let end_b = spans_b[spans_b.length() - 1].end
+      let disjoint = start_a.compare_with_order(end_b, ranges.block_order) >= 0 ||
+        start_b.compare_with_order(end_a, ranges.block_order) >= 0
       if disjoint {
         return commit_union(
           uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
@@ -2234,11 +2180,15 @@ pub fn build_bundles_with_merging(
       if range_checks > 200 {
         return false
       }
-      let span_a = span_keys_a[ia]
-      let span_b = span_keys_b[ib]
-      if span_a.0 >= span_b.1 {
+      let span_a = spans_a[ia]
+      let span_b = spans_b[ib]
+      let start_a = adjusted_start_for_overlap(span_a, adjust_a)
+      let end_a = span_a.end
+      let start_b = adjusted_start_for_overlap(span_b, adjust_b)
+      let end_b = span_b.end
+      if start_a.compare_with_order(end_b, ranges.block_order) >= 0 {
         ib = ib + 1
-      } else if span_b.0 >= span_a.1 {
+      } else if start_b.compare_with_order(end_a, ranges.block_order) >= 0 {
         ia = ia + 1
       } else {
         return false

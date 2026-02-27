@@ -441,6 +441,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
 fn compute_liveness_with_options(
   func : VCodeFunction,
   build_live_intervals : Bool,
+  record_sparse_use_def_map : Bool,
 ) -> LivenessResult {
   let num_blocks = func.blocks.length()
   let live_in : Array[Set[Int]] = []
@@ -464,7 +465,7 @@ fn compute_liveness_with_options(
   }
 
   // Phase 1: Collect definitions and uses
-  collect_defs_uses(func, result)
+  collect_defs_uses(func, result, record_sparse_use_def_map)
 
   // Phase 2: Compute live-in and live-out sets using dataflow analysis
   compute_live_sets(func, result, build_live_intervals)
@@ -479,24 +480,30 @@ fn compute_liveness_with_options(
 ///|
 /// Compute full liveness information including interval maps.
 pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
-  compute_liveness_with_options(func, true)
+  compute_liveness_with_options(func, true, true)
 }
 
 ///|
 /// Compute liveness for regalloc hot path (no interval map construction).
 pub fn compute_liveness_for_regalloc(func : VCodeFunction) -> LivenessResult {
-  compute_liveness_with_options(func, false)
+  compute_liveness_with_options(func, false, false)
 }
 
 ///|
-fn ensure_use_def_info(result : LivenessResult, vreg : @abi.VReg) -> UseDefInfo {
+fn ensure_use_def_info(
+  result : LivenessResult,
+  vreg : @abi.VReg,
+  record_sparse_use_def_map : Bool,
+) -> UseDefInfo {
   if vreg.id >= 0 && vreg.id < result.use_def_dense.length() {
     match result.use_def_dense[vreg.id] {
       Some(info) => info
       None => {
         let info = UseDefInfo::new(vreg)
         result.use_def_dense[vreg.id] = Some(info)
-        result.use_def.set(vreg.id, info)
+        if record_sparse_use_def_map {
+          result.use_def.set(vreg.id, info)
+        }
         info
       }
     }
@@ -514,10 +521,14 @@ fn ensure_use_def_info(result : LivenessResult, vreg : @abi.VReg) -> UseDefInfo 
 
 ///|
 /// Phase 1: Collect all definitions and uses
-fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
+fn collect_defs_uses(
+  func : VCodeFunction,
+  result : LivenessResult,
+  record_sparse_use_def_map : Bool,
+) -> Unit {
   // Record function parameters as definitions at the start
   for param in func.params {
-    let info = ensure_use_def_info(result, param)
+    let info = ensure_use_def_info(result, param, record_sparse_use_def_map)
     info.def_point = Some(({ block: 0, inst: -1, pos: After }, None))
   }
 
@@ -526,7 +537,7 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Block parameters are SSA definitions at block entry.
     // Their incoming values are passed via Jump(target, args) on CFG edges.
     for param in block.params {
-      let info = ensure_use_def_info(result, param)
+      let info = ensure_use_def_info(result, param, record_sparse_use_def_map)
       let def_point : ProgPoint = { block: block_idx, inst: -1, pos: After }
       if info.def_point is Some(_) {
         abort("block param defined twice")
@@ -559,7 +570,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Record uses (before the instruction)
       for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
-          let info = ensure_use_def_info(result, vreg)
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
           let fixed = if i < inst.use_constraints.length() &&
             inst.use_constraints[i] is @abi.FixedReg(preg) {
             Some(preg)
@@ -575,7 +588,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       // Record definitions (after the instruction)
       for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) {
-          let info = ensure_use_def_info(result, vreg)
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
           let new_def : ProgPoint = {
             block: block_idx,
             inst: inst_idx,
@@ -605,7 +620,9 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
         inst_idx : Int,
       ) -> Unit {
         if reg is @abi.Virtual(vreg) {
-          let info = ensure_use_def_info(result, vreg)
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
           info.use_points.push(
             ({ block: block_idx, inst: inst_idx, pos: Before }, None),
           )

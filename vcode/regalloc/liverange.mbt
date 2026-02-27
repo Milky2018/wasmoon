@@ -615,6 +615,10 @@ pub fn build_live_ranges(
   let covered_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let live_in_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let live_out_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
+  let use_blocks_scratch : Array[Int] = []
+  let covered_blocks_scratch : Array[Int] = []
+  let def_blocks_scratch : Array[Int] = []
+  let spans_unmerged_scratch : Array[ProgPointRange] = []
   let mut scratch_epoch = 1
 
   // Process each vreg from use-def info (dense walk; regalloc2-style).
@@ -646,7 +650,7 @@ pub fn build_live_ranges(
       // This is a conservative refinement over the previous single [start, end] span:
       // it never drops blocks where the value is live-in/out, but it avoids spanning
       // across blocks where the value is not live, reducing register pressure.
-      let use_blocks : Array[Int] = []
+      use_blocks_scratch.clear()
       for use_entry in info.use_points {
         let p = use_entry.0
         let block_idx = p.block
@@ -654,7 +658,7 @@ pub fn build_live_ranges(
           use_block_epoch[block_idx] = epoch
           use_first_points[block_idx] = Some(p)
           use_last_points[block_idx] = Some(p)
-          use_blocks.push(block_idx)
+          use_blocks_scratch.push(block_idx)
         } else {
           let first = use_first_points[block_idx].unwrap()
           let last = use_last_points[block_idx].unwrap()
@@ -662,11 +666,11 @@ pub fn build_live_ranges(
           use_last_points[block_idx] = Some(pp_max(last, p, block_order))
         }
       }
-      if use_blocks.length() > 1 {
+      if use_blocks_scratch.length() > 1 {
         let mut sorted = true
-        for i in 1..<use_blocks.length() {
-          let prev = use_blocks[i - 1]
-          let cur = use_blocks[i]
+        for i in 1..<use_blocks_scratch.length() {
+          let prev = use_blocks_scratch[i - 1]
+          let cur = use_blocks_scratch[i]
           let prev_ord = block_order[prev]
           let cur_ord = block_order[cur]
           if prev_ord > cur_ord || (prev_ord == cur_ord && prev > cur) {
@@ -675,7 +679,7 @@ pub fn build_live_ranges(
           }
         }
         if !sorted {
-          use_blocks.sort_by(fn(a, b) {
+          use_blocks_scratch.sort_by(fn(a, b) {
             let ord_a = block_order[a]
             let ord_b = block_order[b]
             if ord_a != ord_b {
@@ -693,7 +697,7 @@ pub fn build_live_ranges(
         ord_a < ord_b || (ord_a == ord_b && a < b)
       }
 
-      let covered_blocks : Array[Int] = []
+      covered_blocks_scratch.clear()
       let live_in_blocks = if vreg_id >= 0 &&
         vreg_id < max_vreg_id &&
         vreg_live_in_blocks[vreg_id] is Some(blocks) {
@@ -714,9 +718,9 @@ pub fn build_live_ranges(
       for block_idx in live_out_blocks {
         live_out_epoch[block_idx] = epoch
       }
-      let def_blocks : Array[Int] = []
+      def_blocks_scratch.clear()
       if info.def_point is Some((def, _)) {
-        def_blocks.push(def.block)
+        def_blocks_scratch.push(def.block)
       }
 
       // Merge live-in/live-out/use/def block lists in block-order without
@@ -727,8 +731,8 @@ pub fn build_live_ranges(
       let mut i_def = 0
       while i_in < live_in_blocks.length() ||
             i_out < live_out_blocks.length() ||
-            i_use < use_blocks.length() ||
-            i_def < def_blocks.length() {
+            i_use < use_blocks_scratch.length() ||
+            i_def < def_blocks_scratch.length() {
         let mut next_block = -1
         if i_in < live_in_blocks.length() {
           next_block = live_in_blocks[i_in]
@@ -739,14 +743,14 @@ pub fn build_live_ranges(
             next_block = candidate
           }
         }
-        if i_use < use_blocks.length() {
-          let candidate = use_blocks[i_use]
+        if i_use < use_blocks_scratch.length() {
+          let candidate = use_blocks_scratch[i_use]
           if next_block < 0 || block_less(candidate, next_block, block_order) {
             next_block = candidate
           }
         }
-        if i_def < def_blocks.length() {
-          let candidate = def_blocks[i_def]
+        if i_def < def_blocks_scratch.length() {
+          let candidate = def_blocks_scratch[i_def]
           if next_block < 0 || block_less(candidate, next_block, block_order) {
             next_block = candidate
           }
@@ -762,20 +766,22 @@ pub fn build_live_ranges(
               live_out_blocks[i_out] == next_block {
           i_out = i_out + 1
         }
-        while i_use < use_blocks.length() && use_blocks[i_use] == next_block {
+        while i_use < use_blocks_scratch.length() &&
+              use_blocks_scratch[i_use] == next_block {
           i_use = i_use + 1
         }
-        while i_def < def_blocks.length() && def_blocks[i_def] == next_block {
+        while i_def < def_blocks_scratch.length() &&
+              def_blocks_scratch[i_def] == next_block {
           i_def = i_def + 1
         }
         if covered_block_epoch[next_block] != epoch {
           covered_block_epoch[next_block] = epoch
-          covered_blocks.push(next_block)
+          covered_blocks_scratch.push(next_block)
         }
       }
 
-      let spans_unmerged : Array[ProgPointRange] = []
-      for block_idx in covered_blocks {
+      spans_unmerged_scratch.clear()
+      for block_idx in covered_blocks_scratch {
         if covered_block_epoch[block_idx] != epoch {
           continue
         }
@@ -832,12 +838,13 @@ pub fn build_live_ranges(
         } else {
           (start, end)
         }
-        spans_unmerged.push(ProgPointRange::new(start, end))
+        spans_unmerged_scratch.push(ProgPointRange::new(start, end))
       }
-      let spans = normalize_ranges(spans_unmerged, block_order)
+      let spans = normalize_ranges(spans_unmerged_scratch, block_order)
       for span in spans {
         range.add_range(span)
       }
+      use_blocks_scratch.clear()
 
       // Compute call-crossing from normalized spans.
       // This is more precise than coarse def..end intervals (which can over-mark
