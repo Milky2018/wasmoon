@@ -99,12 +99,10 @@ fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
 pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   let result = OptResult::new()
-  let cfg = CFG::build(func)
-  let rpo = cfg.reverse_postorder()
-  if rpo.length() == 0 {
+  if func.blocks.length() == 0 {
     return result
   }
-  let entry_id = rpo[0]
+  let entry_id = func.blocks[0].id
   let block_idx = build_block_index_array(func)
   let value_count = func.next_value_id
   if value_count <= 0 {

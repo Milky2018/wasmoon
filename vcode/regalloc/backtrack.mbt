@@ -106,8 +106,8 @@ struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
-  int_is_callee_saved : Array[Bool]
-  float_is_callee_saved : Array[Bool]
+  int_caller_saved : Array[@abi.PReg]
+  float_caller_saved : Array[@abi.PReg]
   split_probe_limit : Int
   bundle_retry_limit : Int
   enable_backtracking : Bool
@@ -303,6 +303,22 @@ pub fn BacktrackingAllocator::new(
       float_is_callee_saved[preg.index] = true
     }
   }
+  let int_caller_saved : Array[@abi.PReg] = []
+  for preg in int_regs {
+    if preg.index >= 0 &&
+      preg.index < int_is_callee_saved.length() &&
+      !int_is_callee_saved[preg.index] {
+      int_caller_saved.push(preg)
+    }
+  }
+  let float_caller_saved : Array[@abi.PReg] = []
+  for preg in float_regs {
+    if preg.index >= 0 &&
+      preg.index < float_is_callee_saved.length() &&
+      !float_is_callee_saved[preg.index] {
+      float_caller_saved.push(preg)
+    }
+  }
   {
     ranges,
     bundles,
@@ -322,8 +338,8 @@ pub fn BacktrackingAllocator::new(
     vector_regs,
     callee_saved_int,
     callee_saved_float,
-    int_is_callee_saved,
-    float_is_callee_saved,
+    int_caller_saved,
+    float_caller_saved,
     split_probe_limit,
     bundle_retry_limit,
     enable_backtracking,
@@ -766,9 +782,6 @@ fn BacktrackingAllocator::try_allocate(
   // Use cached sorted bundle spans to derive deterministic probe offset.
   // This avoids repeated per-attempt scans over bundle ranges.
   let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
-  // `ProgPoint.inst` may be -1 (block params). Ensure non-negative offset.
-  let raw = bundle.id + start_inst
-  let offset = (raw % n + n) % n
   let do_preferred_pass = self.enable_backtracking &&
     !bundle.crosses_call(self.ranges) &&
     (
@@ -783,30 +796,42 @@ fn BacktrackingAllocator::try_allocate(
   } else {
     n
   }
+  let raw_phase_offset = bundle.id + start_inst
   for phase in 0..<phase_count {
-    let want_nonpreferred = phase == 1
+    let phase_regs = if do_preferred_pass {
+      if phase == 0 {
+        match reg_class {
+          @abi.Int => self.int_caller_saved
+          @abi.Float32 | @abi.Float64 => self.float_caller_saved
+          @abi.Vector => avail_regs
+        }
+      } else {
+        match reg_class {
+          @abi.Int => self.callee_saved_int
+          @abi.Float32 | @abi.Float64 => self.callee_saved_float
+          @abi.Vector => []
+        }
+      }
+    } else {
+      avail_regs
+    }
+    let phase_n = phase_regs.length()
+    if phase_n == 0 {
+      continue
+    }
+    let phase_scan_limit = if scan_limit < phase_n {
+      scan_limit
+    } else {
+      phase_n
+    }
+    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
     let mut scanned = 0
-    for i in 0..<n {
-      if scanned >= scan_limit {
+    for i in 0..<phase_n {
+      if scanned >= phase_scan_limit {
         break
       }
-      let preg = avail_regs[(offset + i) % n]
+      let preg = phase_regs[(phase_offset + i) % phase_n]
       if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
-        continue
-      }
-      if do_preferred_pass &&
-        (match reg_class {
-          @abi.Int =>
-            preg.index >= 0 &&
-            preg.index < self.int_is_callee_saved.length() &&
-            self.int_is_callee_saved[preg.index]
-          @abi.Float32 | @abi.Float64 =>
-            preg.index >= 0 &&
-            preg.index < self.float_is_callee_saved.length() &&
-            self.float_is_callee_saved[preg.index]
-          @abi.Vector => false
-        }) !=
-        want_nonpreferred {
         continue
       }
       scanned = scanned + 1
@@ -906,7 +931,6 @@ fn BacktrackingAllocator::try_evict(
     return (None, None)
   }
   let spans = self.bundle_sorted_spans(bundle)
-  let offset = bundle.id % n
   let do_preferred_pass = self.enable_backtracking &&
     !bundle.crosses_call(self.ranges) &&
     (
@@ -921,6 +945,7 @@ fn BacktrackingAllocator::try_evict(
   } else {
     n
   }
+  let raw_phase_offset = bundle.id
   let mut best_preg : @abi.PReg? = None
   let mut best_conflict_cost : Double? = None
   let best_conflicts = self.scratch_best_conflicts
@@ -930,28 +955,39 @@ fn BacktrackingAllocator::try_evict(
   let mut best_split_cost : Double? = None
   let mut best_split : (ProgPoint, @abi.PReg)? = None
   for phase in 0..<phase_count {
-    let want_nonpreferred = phase == 1
+    let phase_regs = if do_preferred_pass {
+      if phase == 0 {
+        match reg_class {
+          @abi.Int => self.int_caller_saved
+          @abi.Float32 | @abi.Float64 => self.float_caller_saved
+          @abi.Vector => avail_regs
+        }
+      } else {
+        match reg_class {
+          @abi.Int => self.callee_saved_int
+          @abi.Float32 | @abi.Float64 => self.callee_saved_float
+          @abi.Vector => []
+        }
+      }
+    } else {
+      avail_regs
+    }
+    let phase_n = phase_regs.length()
+    if phase_n == 0 {
+      continue
+    }
+    let phase_scan_limit = if scan_limit < phase_n {
+      scan_limit
+    } else {
+      phase_n
+    }
+    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
     let mut scanned = 0
-    for i in 0..<n {
-      if scanned >= scan_limit {
+    for i in 0..<phase_n {
+      if scanned >= phase_scan_limit {
         break
       }
-      let preg = avail_regs[(offset + i) % n]
-      if do_preferred_pass &&
-        (match reg_class {
-          @abi.Int =>
-            preg.index >= 0 &&
-            preg.index < self.int_is_callee_saved.length() &&
-            self.int_is_callee_saved[preg.index]
-          @abi.Float32 | @abi.Float64 =>
-            preg.index >= 0 &&
-            preg.index < self.float_is_callee_saved.length() &&
-            self.float_is_callee_saved[preg.index]
-          @abi.Vector => false
-        }) !=
-        want_nonpreferred {
-        continue
-      }
+      let preg = phase_regs[(phase_offset + i) % phase_n]
       scanned = scanned + 1
       // regalloc2-style high-cost cutoff:
       // when we already have a best candidate (evict/split), stop considering

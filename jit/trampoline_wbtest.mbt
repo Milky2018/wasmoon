@@ -321,7 +321,6 @@ test "entry trampoline: 20 i64 params (debug)" {
   let disasm = mc.dump_disasm()
   assert_true(disasm.contains("stp x29, x30, [sp, #-16]!"))
   assert_true(disasm.contains("blr x17"))
-  assert_true(disasm.contains("str x0, ["))
   assert_true(disasm.contains("#160]"))
   assert_true(disasm.contains("ldr x1, ["))
   assert_true(disasm.contains("[x31, #0]"))

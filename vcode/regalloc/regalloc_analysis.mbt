@@ -671,25 +671,18 @@ fn compute_live_sets(
   let num_blocks = func.blocks.length()
   let num_vregs = func.next_vreg_id
 
-  fn make_bool_rows(num_rows : Int, num_cols : Int) -> Array[FixedArray[Bool]] {
-    let rows : Array[FixedArray[Bool]] = []
-    for _ in 0..<num_rows {
-      rows.push(FixedArray::make(num_cols, false))
-    }
-    rows
-  }
-
-  fn mark_once(mask : FixedArray[Bool], vreg_id : Int) -> Unit {
-    if vreg_id >= 0 && vreg_id < mask.length() && !mask[vreg_id] {
-      mask[vreg_id] = true
-    }
+  fn mask_index(block_idx : Int, vreg_id : Int, row_width : Int) -> Int {
+    block_idx * row_width + vreg_id
   }
 
   // First, compute per-block use/def sets from collected SSA use-def info.
   // This avoids a second full instruction walk after collect_defs_uses().
-  let block_def_mask = make_bool_rows(num_blocks, num_vregs)
-  let live_in_mask = make_bool_rows(num_blocks, num_vregs)
-  let live_out_mask = make_bool_rows(num_blocks, num_vregs)
+  // Use contiguous block×vreg bit-matrices to avoid allocating one FixedArray
+  // per block row in the hot liveness path.
+  let matrix_size = num_blocks * num_vregs
+  let block_def_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
+  let live_in_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
+  let live_out_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
   let live_in_list : Array[Array[Int]] = []
   let live_out_list : Array[Array[Int]] = []
   for _ in 0..<num_blocks {
@@ -729,7 +722,10 @@ fn compute_live_sets(
           def_point = Some(def)
         }
         if !is_entry_param_def && def.block >= 0 && def.block < num_blocks {
-          mark_once(block_def_mask[def.block], vreg_id)
+          let idx = mask_index(def.block, vreg_id, num_vregs)
+          if idx >= 0 && idx < block_def_mask.length() {
+            block_def_mask[idx] = true
+          }
         }
       }
       for use_entry in info.use_points {
@@ -748,8 +744,9 @@ fn compute_live_sets(
           None => true
         }
         if include_use {
-          if !live_in_mask[block_idx][vreg_id] {
-            live_in_mask[block_idx][vreg_id] = true
+          let idx = mask_index(block_idx, vreg_id, num_vregs)
+          if idx >= 0 && idx < live_in_mask.length() && !live_in_mask[idx] {
+            live_in_mask[idx] = true
             live_in_list[block_idx].push(vreg_id)
           }
         }
@@ -771,19 +768,28 @@ fn compute_live_sets(
   }
   while worklist.pop() is Some(block_idx) {
     let old_live_in_size = live_in_list[block_idx].length()
-    let live_out_mask_row = live_out_mask[block_idx]
-    let live_in_mask_row = live_in_mask[block_idx]
-    let def_mask_row = block_def_mask[block_idx]
+    let row_base = block_idx * num_vregs
 
     // live_out[B] = ∪ live_in[S] for S in succs[B]
     // Monotone: only adds, never removes
     for succ in cfg.succs[block_idx] {
       for vreg_id in live_in_list[succ] {
-        if !live_out_mask_row[vreg_id] {
-          live_out_mask_row[vreg_id] = true
+        let out_idx = row_base + vreg_id
+        if out_idx < 0 || out_idx >= live_out_mask.length() {
+          continue
+        }
+        if !live_out_mask[out_idx] {
+          live_out_mask[out_idx] = true
           live_out_list[block_idx].push(vreg_id)
-          if !def_mask_row[vreg_id] && !live_in_mask_row[vreg_id] {
-            live_in_mask_row[vreg_id] = true
+          let def_idx = row_base + vreg_id
+          let in_idx = row_base + vreg_id
+          if def_idx >= 0 &&
+            def_idx < block_def_mask.length() &&
+            !block_def_mask[def_idx] &&
+            in_idx >= 0 &&
+            in_idx < live_in_mask.length() &&
+            !live_in_mask[in_idx] {
+            live_in_mask[in_idx] = true
             live_in_list[block_idx].push(vreg_id)
           }
         }
