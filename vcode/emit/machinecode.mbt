@@ -31,6 +31,8 @@ pub struct MachineCode {
   amd64_const_entries : Array[Amd64ConstEntry]
   // Disassembly annotations (offset -> instruction text)
   disasm : Array[(Int, String)]
+  // Whether to record disassembly annotations during emission.
+  record_disasm : Bool
 }
 
 ///|
@@ -92,7 +94,7 @@ pub(all) enum FixupKind {
 }
 
 ///|
-pub fn MachineCode::new() -> MachineCode {
+pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
   {
     bytes: [],
     pos: 0,
@@ -105,6 +107,7 @@ pub fn MachineCode::new() -> MachineCode {
     amd64_const_labels: {},
     amd64_const_entries: [],
     disasm: [],
+    record_disasm,
   }
 }
 
@@ -156,7 +159,9 @@ pub fn MachineCode::current_pos(self : MachineCode) -> Int {
 ///|
 /// Add a disassembly annotation at the current position
 pub fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
-  self.disasm.push((self.pos, text))
+  if self.record_disasm {
+    self.disasm.push((self.pos, text))
+  }
 }
 
 ///|

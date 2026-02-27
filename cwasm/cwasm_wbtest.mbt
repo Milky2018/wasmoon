@@ -26,7 +26,7 @@ test "compiled entry: creation" {
 ///|
 test "precompiled module: creation" {
   let mod = PrecompiledModule::new(AArch64)
-  inspect(mod.version, content="5")
+  inspect(mod.version, content="6")
   inspect(mod.target.to_string(), content="aarch64")
   inspect(mod.function_count(), content="0")
 }
@@ -47,6 +47,34 @@ test "precompiled module: add function" {
 }
 
 ///|
+test "serialize and deserialize: preserves direct-call fixups" {
+  let mod = PrecompiledModule::new(AArch64)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.emit_ret(30)
+  mc.add_func_addr_fixup(0, 23, 16)
+  mc.add_call_fixup(4, 42, veneer_offset=8)
+  mc.add_call_fixup(12, -1000, veneer_offset=-1)
+  let func = @vcode.CompiledFunction::new("f", mc, 0)
+  mod.add_function(7, "f", func, 1, 0)
+
+  let restored = deserialize(mod.serialize()) catch { _ => panic() }
+  inspect(restored.functions.length(), content="1")
+  let entry = restored.functions[0]
+  inspect(entry.func_addr_fixups.length(), content="1")
+  inspect(entry.func_addr_fixups[0].offset, content="0")
+  inspect(entry.func_addr_fixups[0].func_idx, content="23")
+  inspect(entry.func_addr_fixups[0].reg, content="16")
+  inspect(entry.call_fixups.length(), content="2")
+  inspect(entry.call_fixups[0].offset, content="4")
+  inspect(entry.call_fixups[0].func_idx, content="42")
+  inspect(entry.call_fixups[0].veneer_offset, content="8")
+  inspect(entry.call_fixups[1].offset, content="12")
+  inspect(entry.call_fixups[1].func_idx, content="-1000")
+  inspect(entry.call_fixups[1].veneer_offset, content="-1")
+}
+
+///|
 test "serialize and deserialize: roundtrip" {
   let mod = PrecompiledModule::new(AArch64)
 
@@ -62,7 +90,7 @@ test "serialize and deserialize: roundtrip" {
 
   // Deserialize
   let restored = deserialize(bytes) catch { _ => panic() }
-  inspect(restored.version, content="5")
+  inspect(restored.version, content="6")
   inspect(restored.target.to_string(), content="aarch64")
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="42")
@@ -103,7 +131,7 @@ test "deserialize: invalid magic" {
 
 ///|
 test "deserialize: unsupported version" {
-  // Valid magic but wrong version (only v4 is supported)
+  // Valid magic but wrong versions (supported: v4/v5/v6)
   let v1_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
      0x01, 0x00, 0x00, 0x00,
@@ -231,7 +259,7 @@ test "complete module: memory + data + function roundtrip" {
   let restored = deserialize(bytes) catch { _ => panic() }
 
   // Check version
-  inspect(restored.version, content="5")
+  inspect(restored.version, content="6")
 
   // Check memory
   inspect(restored.memories.length(), content="1")

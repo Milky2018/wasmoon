@@ -41,7 +41,7 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// v3: Added import table for WASI/external function support
 /// v4: Added memory definitions and data segments
 /// v5: Added type signatures, globals, tables, and element segments
-const CWASM_VERSION : Int = 5
+const CWASM_VERSION : Int = 6
 
 // ============ Target Architecture ============
 
@@ -619,6 +619,22 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
     // Function signature: num_params and num_results
     write_u32(result, entry.num_params)
     write_u32(result, entry.num_results)
+
+    // v6: direct function-address fixups
+    write_u32(result, entry.func_addr_fixups.length())
+    for fixup in entry.func_addr_fixups {
+      write_u32(result, fixup.offset)
+      write_u32(result, fixup.func_idx)
+      write_u32(result, fixup.reg)
+    }
+
+    // v6: direct call fixups
+    write_u32(result, entry.call_fixups.length())
+    for fixup in entry.call_fixups {
+      write_u32(result, fixup.offset)
+      write_u32(result, fixup.func_idx)
+      write_u32(result, fixup.veneer_offset)
+    }
   }
 
   // Write number of memories
@@ -806,9 +822,9 @@ pub fn deserialize(
     }
   }
 
-  // Read version (support v4 and v5)
+  // Read version (support v4/v5/v6)
   let version = reader.read_u32()
-  if version != 4 && version != 5 {
+  if version != 4 && version != 5 && version != 6 {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
@@ -861,9 +877,35 @@ pub fn deserialize(
     // Function signature
     let num_params = reader.read_u32()
     let num_results = reader.read_u32()
+    let func_addr_fixups : Array[@emit.FuncAddrFixup] = []
+    let call_fixups : Array[@emit.CallFixup] = []
+    if version >= 6 {
+      let func_addr_fixup_count = reader.read_u32()
+      for _ in 0..<func_addr_fixup_count {
+        let offset = reader.read_u32()
+        let target_func_idx = reader.read_u32()
+        let reg = reader.read_u32()
+        func_addr_fixups.push({ offset, func_idx: target_func_idx, reg })
+      }
+      let call_fixup_count = reader.read_u32()
+      for _ in 0..<call_fixup_count {
+        let offset = reader.read_u32()
+        let target_func_idx = reader.read_u32()
+        let veneer_offset = reader.read_u32()
+        call_fixups.push({ offset, func_idx: target_func_idx, veneer_offset })
+      }
+    }
     functions.push(
       CompiledEntry::new(
-        func_idx, name, code, frame_size, entry_offset, num_params, num_results,
+        func_idx,
+        name,
+        code,
+        frame_size,
+        entry_offset,
+        num_params,
+        num_results,
+        func_addr_fixups~,
+        call_fixups~,
       ),
     )
   }

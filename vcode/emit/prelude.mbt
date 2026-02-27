@@ -595,11 +595,12 @@ pub fn emit_function(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new()
+  let mc = MachineCode::new(record_disasm~)
   // ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
   // Check if we call functions that return more than register capacity
@@ -1938,10 +1939,11 @@ pub fn emit_function_with_regalloc(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  record_disasm? : Bool = true,
 ) -> MachineCode {
   // Keep block layout optimization (targets are block IDs; ids stay stable).
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new()
+  let mc = MachineCode::new(record_disasm~)
   let is_amd64 = @isaregs.current_isa() is @isa.AMD64
 
   // Compute clobbers from regalloc output.

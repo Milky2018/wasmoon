@@ -282,10 +282,10 @@ fn thread_trivial_jumps(
   if blocks.length() == 0 {
     return func
   }
+  let block_idx_by_id = build_block_index_map(func)
 
   // Iterate to fixed point so newly-created jump-only blocks can be threaded too.
   for _ in 0..<blocks.length() {
-    let block_idx_by_id = build_block_index_map(func)
     let mut changed = false
     for block in blocks {
       if block.terminator is Some(term) {

@@ -1458,6 +1458,7 @@ fn compile_module_to_jit(
       ra_output,
       debug_func_idx~,
       force_frame_setup=enable_dwarf,
+      record_disasm=debug_db is Some(_),
     )
     if emit_tick is Some(tick) {
       @perf.record_stage_us("emit", @perf.elapsed_us(tick))
