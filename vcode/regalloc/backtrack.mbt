@@ -1759,6 +1759,7 @@ pub fn build_bundles_with_merging(
   func : VCodeFunction,
   ranges : LiveRangeSet,
 ) -> BundleSet {
+  let perf_on = @perf.enabled()
   let n = ranges.length()
   let uf = @unionfind.UnionFind::new(n)
   // regalloc2/ion always performs bundle coalescing, bounded by overlap and
@@ -1822,21 +1823,6 @@ pub fn build_bundles_with_merging(
       }
     }
     false
-  }
-
-  fn adjusted_start_ord_for_overlap(
-    span : MergeSpan,
-    adjust_to_inst_start : Bool,
-    block_order : FixedArray[Int],
-    point_block_stride : Int,
-  ) -> Int {
-    ignore(block_order)
-    ignore(point_block_stride)
-    if adjust_to_inst_start {
-      span.start_before_ord
-    } else {
-      span.start_ord
-    }
   }
 
   fn make_merge_span(
@@ -1922,30 +1908,61 @@ pub fn build_bundles_with_merging(
       insert_sorted_span(target_spans, source_spans[0])
       return target_spans
     }
-    // regalloc2/ion merge.rs: for non-singleton source list, extend target
-    // then sort by start key (faster than explicit merge in practice).
-    for span in source_spans {
-      target_spans.push(span)
-    }
-    target_spans.sort_by(fn(a, b) {
-      let a_ord = a.start_ord
-      let b_ord = b.start_ord
-      if a_ord < b_ord {
-        -1
-      } else if a_ord > b_ord {
-        1
-      } else {
-        0
+    // Keep lists sorted by start key with a linear merge in MoonBit. This
+    // keeps semantics equivalent to concat+sort while avoiding repeated
+    // NlogN resorting as bundles grow.
+    if target_spans[target_spans.length() - 1].start_ord <=
+      source_spans[0].start_ord {
+      for span in source_spans {
+        target_spans.push(span)
       }
-    })
-    root_spans_cache[target_root] = Some(target_spans)
-    target_spans
+      root_spans_cache[target_root] = Some(target_spans)
+      return target_spans
+    }
+    if source_spans[source_spans.length() - 1].start_ord <=
+      target_spans[0].start_ord {
+      let merged : Array[MergeSpan] = []
+      for span in source_spans {
+        merged.push(span)
+      }
+      for span in target_spans {
+        merged.push(span)
+      }
+      root_spans_cache[target_root] = Some(merged)
+      return merged
+    }
+    let merged : Array[MergeSpan] = []
+    let mut i = 0
+    let mut j = 0
+    while i < target_spans.length() && j < source_spans.length() {
+      if target_spans[i].start_ord <= source_spans[j].start_ord {
+        merged.push(target_spans[i])
+        i += 1
+      } else {
+        merged.push(source_spans[j])
+        j += 1
+      }
+    }
+    while i < target_spans.length() {
+      merged.push(target_spans[i])
+      i += 1
+    }
+    while j < source_spans.length() {
+      merged.push(source_spans[j])
+      j += 1
+    }
+    root_spans_cache[target_root] = Some(merged)
+    merged
   }
 
   let root_fixed_reg_cache : Array[@abi.PReg?] = []
   let root_fixed_conflict_cache : Array[Bool] = []
   let root_has_fixed_def_cache : Array[Bool] = []
   let root_spans_cache : Array[Array[MergeSpan]?] = Array::make(n, None)
+  let mut merge_span_fetch_us = 0L
+  let mut merge_overlap_scan_us = 0L
+  let mut merge_commit_us = 0L
+  let tick_init_metadata = if perf_on { Some(@perf.tick_now()) } else { None }
   // Initialize per-root fixed-info metadata so merges stay incremental.
   // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
   // roots that never participate in merges.
@@ -1955,6 +1972,12 @@ pub fn build_bundles_with_merging(
     root_fixed_reg_cache.push(fixed_reg)
     root_fixed_conflict_cache.push(fixed_conflict)
     root_has_fixed_def_cache.push(range_has_fixed_def(range))
+  }
+  if tick_init_metadata is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_init",
+      @perf.elapsed_us(tick),
+    )
   }
 
   fn root_fixed_info(
@@ -2092,31 +2115,42 @@ pub fn build_bundles_with_merging(
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
+    let tick_span_fetch = if perf_on { Some(@perf.tick_now()) } else { None }
     let spans_a = root_spans(ranges, root_spans_cache, root_a)
     let spans_b = root_spans(ranges, root_spans_cache, root_b)
+    if tick_span_fetch is Some(tick) {
+      merge_span_fetch_us = merge_span_fetch_us + @perf.elapsed_us(tick)
+    }
     let adjust_a = set_a_has_fixed_def
     let adjust_b = set_b_has_fixed_def
+    let tick_overlap_scan = if perf_on { Some(@perf.tick_now()) } else { None }
     if !spans_a.is_empty() && !spans_b.is_empty() {
-      let start_a_ord = adjusted_start_ord_for_overlap(
-        spans_a[0],
-        adjust_a,
-        ranges.block_order,
-        point_block_stride,
-      )
+      let start_a_ord = if adjust_a {
+        spans_a[0].start_before_ord
+      } else {
+        spans_a[0].start_ord
+      }
       let end_a_ord = spans_a[spans_a.length() - 1].end_ord
-      let start_b_ord = adjusted_start_ord_for_overlap(
-        spans_b[0],
-        adjust_b,
-        ranges.block_order,
-        point_block_stride,
-      )
+      let start_b_ord = if adjust_b {
+        spans_b[0].start_before_ord
+      } else {
+        spans_b[0].start_ord
+      }
       let end_b_ord = spans_b[spans_b.length() - 1].end_ord
       let disjoint = start_a_ord >= end_b_ord || start_b_ord >= end_a_ord
       if disjoint {
-        return commit_union(
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
+        let tick_commit = if perf_on { Some(@perf.tick_now()) } else { None }
+        let merged = commit_union(
           uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
           spans_a, spans_b,
         )
+        if tick_commit is Some(tick) {
+          merge_commit_us = merge_commit_us + @perf.elapsed_us(tick)
+        }
+        return merged
       }
     }
     let mut ia = 0
@@ -2125,38 +2159,51 @@ pub fn build_bundles_with_merging(
     while ia < spans_a.length() && ib < spans_b.length() {
       range_checks += 1
       if range_checks > 200 {
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
         return false
       }
       let span_a = spans_a[ia]
       let span_b = spans_b[ib]
-      let start_a_ord = adjusted_start_ord_for_overlap(
-        span_a,
-        adjust_a,
-        ranges.block_order,
-        point_block_stride,
-      )
+      let start_a_ord = if adjust_a {
+        span_a.start_before_ord
+      } else {
+        span_a.start_ord
+      }
       let end_a_ord = span_a.end_ord
-      let start_b_ord = adjusted_start_ord_for_overlap(
-        span_b,
-        adjust_b,
-        ranges.block_order,
-        point_block_stride,
-      )
+      let start_b_ord = if adjust_b {
+        span_b.start_before_ord
+      } else {
+        span_b.start_ord
+      }
       let end_b_ord = span_b.end_ord
       if start_a_ord >= end_b_ord {
         ib = ib + 1
       } else if start_b_ord >= end_a_ord {
         ia = ia + 1
       } else {
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
         return false
       }
     }
-    commit_union(
+    if tick_overlap_scan is Some(tick) {
+      merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+    }
+    let tick_commit = if perf_on { Some(@perf.tick_now()) } else { None }
+    let merged = commit_union(
       uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
       spans_a, spans_b,
     )
+    if tick_commit is Some(tick) {
+      merge_commit_us = merge_commit_us + @perf.elapsed_us(tick)
+    }
+    merged
   }
 
+  let tick_merge_blockargs = if perf_on { Some(@perf.tick_now()) } else { None }
   // Merge across block arguments (SSA phi-like connections).
   if block_param_merge_enabled {
     let mut max_block_id = -1
@@ -2247,7 +2294,21 @@ pub fn build_bundles_with_merging(
       }
     }
   }
+  if tick_merge_blockargs is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_blockargs",
+      @perf.elapsed_us(tick),
+    )
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_spans", merge_span_fetch_us,
+    )
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_overlap", merge_overlap_scan_us,
+    )
+    @perf.record_regalloc_phase_us("phase_bundle_merge_commit", merge_commit_us)
+  }
 
+  let tick_finalize = if perf_on { Some(@perf.tick_now()) } else { None }
   // Build final bundles from union-find roots (dense-indexed, regalloc2-style).
   let result = BundleSet::new()
   let root_to_bundle : Array[Int] = Array::make(n, -1)
@@ -2288,6 +2349,12 @@ pub fn build_bundles_with_merging(
       }
     }
     bundle.merged_ranges = Some(merged_ranges)
+  }
+  if tick_finalize is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_finalize",
+      @perf.elapsed_us(tick),
+    )
   }
   result
 }

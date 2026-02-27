@@ -446,9 +446,11 @@ fn compute_liveness_with_options(
   let num_blocks = func.blocks.length()
   let live_in : Array[Set[Int]] = []
   let live_out : Array[Set[Int]] = []
-  for _ in 0..<num_blocks {
-    live_in.push(Set::new())
-    live_out.push(Set::new())
+  if build_live_intervals {
+    for _ in 0..<num_blocks {
+      live_in.push(Set::new())
+      live_out.push(Set::new())
+    }
   }
   // Compute block order directly as FixedArray
   let block_order = compute_reverse_postorder(func)
