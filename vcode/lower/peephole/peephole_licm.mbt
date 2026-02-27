@@ -627,14 +627,26 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
 /// This reduces redundant copies created by earlier passes.
 fn propagate_single_use_moves(
   block : @block.VCodeBlock,
-  global_use_counts : Map[Int, Int],
+  global_use_counts : Array[Int],
 ) -> Unit {
-  let use_counts : Map[Int, Int] = {}
+  let use_counts : Array[Int] = Array::make(global_use_counts.length(), 0)
+  fn get_count(counts : Array[Int], id : Int) -> Int {
+    if id >= 0 && id < counts.length() {
+      counts[id]
+    } else {
+      0
+    }
+  }
+  fn inc_count(counts : Array[Int], id : Int) -> Unit {
+    if id < 0 || id >= counts.length() {
+      return
+    }
+    counts[id] = counts[id] + 1
+  }
   for inst in block.insts {
     for use_ in inst.uses {
       if get_vreg_id(use_) is Some(vid) {
-        let count = use_counts.get(vid).unwrap_or(0)
-        use_counts.set(vid, count + 1)
+        inc_count(use_counts, vid)
       }
     }
   }
@@ -651,8 +663,7 @@ fn propagate_single_use_moves(
     }
     for use_ in term_uses {
       if get_vreg_id(use_) is Some(vid) {
-        let count = use_counts.get(vid).unwrap_or(0)
-        use_counts.set(vid, count + 1)
+        inc_count(use_counts, vid)
       }
     }
   }
@@ -676,9 +687,9 @@ fn propagate_single_use_moves(
       inst.defs[0].reg is Virtual(dst_vreg) &&
       inst.uses[0] is Virtual(src_vreg) &&
       same_reg_class(dst_vreg.class, src_vreg.class) &&
-      use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
-      global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
-      use_counts.get(dst_vreg.id).unwrap_or(0) {
+      get_count(use_counts, dst_vreg.id) == 1 &&
+      get_count(global_use_counts, dst_vreg.id) ==
+      get_count(use_counts, dst_vreg.id) {
       let resolved = resolve_copy(src_vreg, copies)
       copies.set(dst_vreg.id, resolved)
       to_remove.add(i)

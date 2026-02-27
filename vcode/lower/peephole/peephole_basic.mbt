@@ -61,12 +61,20 @@ fn collect_uses(inst : @instr.VCodeInst, used : @hashset.HashSet[Int]) -> Unit {
 
 ///|
 /// Count uses of virtual regs across the whole function.
-fn collect_use_counts(func : @regalloc.VCodeFunction) -> Map[Int, Int] {
-  let counts : Map[Int, Int] = {}
+fn collect_use_counts(func : @regalloc.VCodeFunction) -> Array[Int] {
+  let counts : Array[Int] = Array::make(func.next_vreg_id, 0)
+  fn inc_use(counts : Array[Int], id : Int) -> Unit {
+    if id < 0 {
+      return
+    }
+    while id >= counts.length() {
+      counts.push(0)
+    }
+    counts[id] = counts[id] + 1
+  }
   let add_use = fn(reg : @abi.Reg) -> Unit {
     if get_vreg_id(reg) is Some(id) {
-      let count = counts.get(id).unwrap_or(0)
-      counts.set(id, count + 1)
+      inc_use(counts, id)
     }
   }
   for block in func.blocks {

@@ -81,14 +81,30 @@ fn fixed_def_preg(inst : @instr.VCodeInst, idx : Int) -> @abi.PReg? {
 }
 
 ///|
+fn mark_used_reg(mask : Array[Bool], idx : Int) -> Unit {
+  if idx < 0 {
+    return
+  }
+  while idx >= mask.length() {
+    mask.push(false)
+  }
+  mask[idx] = true
+}
+
+///|
+fn is_used_reg(mask : Array[Bool], idx : Int) -> Bool {
+  idx >= 0 && idx < mask.length() && mask[idx]
+}
+
+///|
 fn add_used_reg(
-  used_int : @hashset.HashSet[Int],
-  used_fp : @hashset.HashSet[Int],
+  used_int : Array[Bool],
+  used_fp : Array[Bool],
   preg : @abi.PReg,
 ) -> Unit {
   match preg.class {
-    @abi.Int => used_int.add(preg.index) |> ignore
-    _ => used_fp.add(preg.index) |> ignore
+    @abi.Int => mark_used_reg(used_int, preg.index)
+    _ => mark_used_reg(used_fp, preg.index)
   }
 }
 
@@ -321,8 +337,8 @@ fn build_output(
   }
 
   // Temp-reg pools for local reloads when no coalescing is available.
-  let used_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  let used_fp_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_int_regs : Array[Bool] = Array::make(USED_REG_MARK_CAP, false)
+  let used_fp_regs : Array[Bool] = Array::make(USED_REG_MARK_CAP, false)
   for _, preg in alloc.assignments {
     add_used_reg(used_int_regs, used_fp_regs, preg)
   }
@@ -339,32 +355,28 @@ fn build_output(
 
   // Reserve dedicated scratch regs (used by the move resolver).
   for idx in env.scratch_int {
-    used_int_regs.add(idx) |> ignore
+    mark_used_reg(used_int_regs, idx)
   }
   for idx in env.scratch_float {
-    used_fp_regs.add(idx) |> ignore
+    mark_used_reg(used_fp_regs, idx)
   }
 
   // Reserve pinned registers.
-  used_int_regs.add(isa.vmctx_reg_index()) |> ignore
+  mark_used_reg(used_int_regs, isa.vmctx_reg_index())
   if reserve_mem0_desc {
-    used_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
+    mark_used_reg(used_int_regs, isa.mem0_desc_reg_index())
   }
   if reserve_func_table {
-    used_int_regs.add(isa.func_table_reg_index()) |> ignore
+    mark_used_reg(used_int_regs, isa.func_table_reg_index())
   }
   if reserve_extra_results_ptr {
-    used_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
+    mark_used_reg(used_int_regs, isa.extra_results_ptr_reg_index())
   }
 
   // Temp-reg pools for local reloads/move resolution:
   // - Always include scratch regs.
   // - Prefer higher-index regs (avoid common arg/return regs on most ABIs).
-  fn push_temp_reg(
-    pool : Array[Int],
-    used : @hashset.HashSet[Int],
-    idx : Int,
-  ) -> Unit {
+  fn push_temp_reg(pool : Array[Int], used : Array[Bool], idx : Int) -> Unit {
     // Pool sizes are tiny; linear scan avoids extra dependencies.
     let mut already = false
     for v in pool {
@@ -372,7 +384,7 @@ fn build_output(
         already = true
       }
     }
-    if !used.contains(idx) && !already {
+    if !is_used_reg(used, idx) && !already {
       pool.push(idx)
     }
   }

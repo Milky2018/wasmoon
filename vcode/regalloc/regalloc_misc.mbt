@@ -294,11 +294,10 @@ pub fn allocate_registers_backtracking_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> VCodeFunction {
-  // Step 0: Eliminate dead code first
-  let func = eliminate_dead_code(func)
-  // Cranelift/regalloc2 performs rematerialization decisions inside regalloc,
-  // not as a whole-function pre-pass over lowered VCode. Keeping this path
-  // single-pass reduces compile-time overhead on large kernels.
+  // Cranelift/regalloc2 does not run a dedicated pre-regalloc dead-code sweep
+  // at this stage; keep the input VCode unchanged and let earlier lowering
+  // cleanup decide shape.
+  let func = func
 
   // Build register pools
   let (
@@ -350,10 +349,8 @@ pub fn allocate_registers_backtracking_output_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> (VCodeFunction, Output) {
-  // Step 0: Eliminate dead code first.
-  let func = eliminate_dead_code(func)
-  // Cranelift/regalloc2 does not run a whole-function pre-RA rematerialization
-  // pass in this stage; keep output allocator input unchanged here.
+  // Cranelift/regalloc2 keeps VCode shape unchanged at this stage; avoid an
+  // extra pre-regalloc dead-code sweep in Wasmoon as well.
   let func = func
 
   // Build register pools.
