@@ -303,73 +303,72 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|function test(v0:i64, v1:i32) -> f32 {
       #|block0:
       #|    v2:f32 = fconst 0
-      #|    v3:f32 = fconst 0
-      #|    v4:f32 = fconst 10
+      #|    v3:f32 = fconst 10
       #|    br_table v1, [block6, block7, block8], block5
-      #|block1(v5:i32, v6:f32, v7:f32):
-      #|    return v7
-      #|block2(v8:i32, v9:f32, v10:f32):
-      #|    v47:i32 = iconst 0
-      #|    v48:i64 = load_mem_base mem=0 v0
-      #|    v49:i64 = uextend v47
-      #|    v50:i64 = iconst 0
-      #|    v51:i64 = iadd v49, v50
-      #|    v52:i64 = iadd v48, v51
-      #|    v53:i64 = iconst 0
-      #|    store_ptr.F32 v52, v9, v53
-      #|    v54:i32 = iconst 0
-      #|    v55:i64 = load_mem_base mem=0 v0
-      #|    v56:i64 = uextend v54
-      #|    v57:i64 = iconst 0
-      #|    v58:i64 = iadd v56, v57
-      #|    v59:i64 = iadd v55, v58
-      #|    v60:i64 = iconst 0
-      #|    v61:f32 = load_ptr.F32 v59, v60
-      #|    jump block1(v8, v9, v61)
-      #|block3(v11:i32, v12:f32, v13:f32):
-      #|    v32:i32 = iconst 0
-      #|    v33:i64 = load_mem_base mem=0 v0
-      #|    v34:i64 = uextend v32
-      #|    v35:i64 = iconst 0
-      #|    v36:i64 = iadd v34, v35
-      #|    v37:i64 = iadd v33, v36
-      #|    v38:i64 = iconst 0
-      #|    store_ptr.F32 v37, v12, v38
-      #|    v39:i32 = iconst 0
-      #|    v40:i64 = load_mem_base mem=0 v0
-      #|    v41:i64 = uextend v39
-      #|    v42:i64 = iconst 0
-      #|    v43:i64 = iadd v41, v42
-      #|    v44:i64 = iadd v40, v43
-      #|    v45:i64 = iconst 0
-      #|    v46:f32 = load_ptr.F32 v44, v45
-      #|    jump block1(v11, v12, v46)
-      #|block4(v14:i32, v15:f32, v16:f32):
-      #|    v17:i32 = iconst 0
-      #|    v18:i64 = load_mem_base mem=0 v0
-      #|    v19:i64 = uextend v17
-      #|    v20:i64 = iconst 0
-      #|    v21:i64 = iadd v19, v20
-      #|    v22:i64 = iadd v18, v21
-      #|    v23:i64 = iconst 0
-      #|    store_ptr.F32 v22, v15, v23
-      #|    v24:i32 = iconst 0
-      #|    v25:i64 = load_mem_base mem=0 v0
-      #|    v26:i64 = uextend v24
-      #|    v27:i64 = iconst 0
-      #|    v28:i64 = iadd v26, v27
-      #|    v29:i64 = iadd v25, v28
-      #|    v30:i64 = iconst 0
-      #|    v31:f32 = load_ptr.F32 v29, v30
-      #|    jump block1(v14, v15, v31)
+      #|block1(v4:i32, v5:f32, v6:f32):
+      #|    return v6
+      #|block2(v7:i32, v8:f32, v9:f32):
+      #|    v46:i32 = iconst 0
+      #|    v47:i64 = load_mem_base mem=0 v0
+      #|    v48:i64 = uextend v46
+      #|    v49:i64 = iconst 0
+      #|    v50:i64 = iadd v48, v49
+      #|    v51:i64 = iadd v47, v50
+      #|    v52:i64 = iconst 0
+      #|    store_ptr.F32 v51, v8, v52
+      #|    v53:i32 = iconst 0
+      #|    v54:i64 = load_mem_base mem=0 v0
+      #|    v55:i64 = uextend v53
+      #|    v56:i64 = iconst 0
+      #|    v57:i64 = iadd v55, v56
+      #|    v58:i64 = iadd v54, v57
+      #|    v59:i64 = iconst 0
+      #|    v60:f32 = load_ptr.F32 v58, v59
+      #|    jump block1(v7, v8, v60)
+      #|block3(v10:i32, v11:f32, v12:f32):
+      #|    v31:i32 = iconst 0
+      #|    v32:i64 = load_mem_base mem=0 v0
+      #|    v33:i64 = uextend v31
+      #|    v34:i64 = iconst 0
+      #|    v35:i64 = iadd v33, v34
+      #|    v36:i64 = iadd v32, v35
+      #|    v37:i64 = iconst 0
+      #|    store_ptr.F32 v36, v11, v37
+      #|    v38:i32 = iconst 0
+      #|    v39:i64 = load_mem_base mem=0 v0
+      #|    v40:i64 = uextend v38
+      #|    v41:i64 = iconst 0
+      #|    v42:i64 = iadd v40, v41
+      #|    v43:i64 = iadd v39, v42
+      #|    v44:i64 = iconst 0
+      #|    v45:f32 = load_ptr.F32 v43, v44
+      #|    jump block1(v10, v11, v45)
+      #|block4(v13:i32, v14:f32, v15:f32):
+      #|    v16:i32 = iconst 0
+      #|    v17:i64 = load_mem_base mem=0 v0
+      #|    v18:i64 = uextend v16
+      #|    v19:i64 = iconst 0
+      #|    v20:i64 = iadd v18, v19
+      #|    v21:i64 = iadd v17, v20
+      #|    v22:i64 = iconst 0
+      #|    store_ptr.F32 v21, v14, v22
+      #|    v23:i32 = iconst 0
+      #|    v24:i64 = load_mem_base mem=0 v0
+      #|    v25:i64 = uextend v23
+      #|    v26:i64 = iconst 0
+      #|    v27:i64 = iadd v25, v26
+      #|    v28:i64 = iadd v24, v27
+      #|    v29:i64 = iconst 0
+      #|    v30:f32 = load_ptr.F32 v28, v29
+      #|    jump block1(v13, v14, v30)
       #|block5:
-      #|    jump block1(v1, v4, v3)
+      #|    jump block1(v1, v3, v2)
       #|block6:
-      #|    jump block4(v1, v4, v3)
+      #|    jump block4(v1, v3, v2)
       #|block7:
-      #|    jump block3(v1, v4, v3)
+      #|    jump block3(v1, v3, v2)
       #|block8:
-      #|    jump block2(v1, v4, v3)
+      #|    jump block2(v1, v3, v2)
       #|}
       #|
     ),
@@ -384,34 +383,34 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
-      #|    f15 = ldf 0
-      #|    f16 = ldf 10
+      #|    f14 = ldf 0
+      #|    f15 = ldf 10
       #|    br_cmp_imm.eq v1, #0, block6, block9
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f4
       #|block2(v5:int, f6:float, f7:float):
-      #|    v24 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v24, f6
-      #|    f36 = load_ptr.f32 +0 v24
-      #|    jump block1 (v5, f6, f36)
+      #|    v23 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v23, f6
+      #|    f35 = load_ptr.f32 +0 v23
+      #|    jump block1 (v5, f6, f35)
       #|block3(v8:int, f9:float, f10:float):
-      #|    v38 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v38, f9
-      #|    f50 = load_ptr.f32 +0 v38
-      #|    jump block1 (v8, f9, f50)
+      #|    v37 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v37, f9
+      #|    f49 = load_ptr.f32 +0 v37
+      #|    jump block1 (v8, f9, f49)
       #|block4(v11:int, f12:float, f13:float):
-      #|    v52 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v52, f12
-      #|    f64 = load_ptr.f32 +0 v52
-      #|    jump block1 (v11, f12, f64)
+      #|    v51 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v51, f12
+      #|    f63 = load_ptr.f32 +0 v51
+      #|    jump block1 (v11, f12, f63)
       #|block5:
-      #|    jump block1 (v1, f16, f15)
+      #|    jump block1 (v1, f15, f14)
       #|block6:
-      #|    jump block4 (v1, f16, f15)
+      #|    jump block4 (v1, f15, f14)
       #|block7:
-      #|    jump block3 (v1, f16, f15)
+      #|    jump block3 (v1, f15, f14)
       #|block8:
-      #|    jump block2 (v1, f16, f15)
+      #|    jump block2 (v1, f15, f14)
       #|block9:
       #|    br_cmp_imm.eq v1, #1, block7, block10
       #|block10:
