@@ -1208,6 +1208,28 @@ fn match_addr_reg_offset(
     return None
   }
   let scale = scale.unwrap()
+
+  if match_iadd_const(ctx, value) is Some((inner, folded_offset)) &&
+    match_addr_reg_offset(ctx, inner, access_size)
+    is Some((base, index, ext, shift, subsumed, extra_offset, _)) {
+    let merged_subsumed : Array[Int] = []
+    for id in subsumed {
+      merged_subsumed.push(id)
+    }
+    merged_subsumed.push(value.id)
+    return Some(
+      (
+        base,
+        index,
+        ext,
+        shift,
+        merged_subsumed,
+        extra_offset + folded_offset,
+        true,
+      ),
+    )
+  }
+
   fn analyze(
     ctx : LoweringContext,
     base : @ir.Value,
