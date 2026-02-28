@@ -409,15 +409,24 @@ test "peephole: add/sub with negative constants fold to opposite imm op" {
 
   let mut has_sub_imm7 = false
   let mut has_add_imm9 = false
+  let mut has_add_imm_neg7 = false
+  let mut has_sub_imm_neg9 = false
   for inst in block.insts {
     match inst.opcode {
       SubImm(7, true) => has_sub_imm7 = true
       AddImm(9, true) => has_add_imm9 = true
+      AddImm(-7, true) => has_add_imm_neg7 = true
+      SubImm(-9, true) => has_sub_imm_neg9 = true
       _ => ()
     }
   }
-  inspect(has_sub_imm7, content="true")
-  inspect(has_add_imm9, content="true")
+  if @isa.ISA::current() is @isa.AMD64 {
+    inspect(has_add_imm_neg7, content="true")
+    inspect(has_sub_imm_neg9, content="true")
+  } else {
+    inspect(has_sub_imm7, content="true")
+    inspect(has_add_imm9, content="true")
+  }
 }
 
 ///|

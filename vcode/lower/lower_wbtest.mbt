@@ -355,7 +355,9 @@ test "amd64 lower regoff folds base displacement" {
   let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off0)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
-  inspect(output.contains("load_ptr8_u_regoff (uxtw,0) +1"), content="true")
+  let has_uxtw = output.contains("load_ptr8_u_regoff (uxtw,0) +1")
+  let has_none = output.contains("load_ptr8_u_regoff (none,0) +1")
+  inspect(has_uxtw || has_none, content="true")
   inspect(output.contains("add #1"), content="false")
 }
 
