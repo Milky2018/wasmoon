@@ -37,7 +37,7 @@ pub fn compute_liveness_for_regalloc(VCodeFunction) -> LivenessResult
 
 pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
 
-pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Double
+pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Int
 
 pub fn debug_liveness(LivenessResult) -> String
 
@@ -166,28 +166,36 @@ pub struct Output {
   param_locs : Array[Loc]
   allocs : Array[Loc]
   operand_ranges : Array[(Int, Int, Bool, Int, Int, Int)]
-  operand_range_index : Map[(Int, Int, Bool), Int]
+  inst_operand_range_index : Array[Array[Int]]
+  term_operand_range_index : Array[Int]
   edits : Array[((Int, Int, ProgPos), Edit)]
-  edits_by_point : Map[(Int, Int, ProgPos), Array[Edit]]
+  edits_before_dense : Array[Array[Array[Edit]]]
+  edits_after_dense : Array[Array[Array[Edit]]]
+  used_int_pregs_any : Array[Bool]
+  used_fp_pregs_any : Array[Bool]
   mut num_spillslots : Int
 }
 pub fn Output::begin_inst_allocs(Self, Int, Int, Bool, Int, Int) -> (Int, Int)
 pub fn Output::edits_at(Self, Int, Int, ProgPos) -> Array[Edit]?
 pub fn Output::end_inst_allocs(Self, Int, Int) -> Unit
 pub fn Output::finalize_edits(Self) -> Unit
+pub fn Output::get_num_params(Self) -> Int
 pub fn Output::get_num_spillslots(Self) -> Int
 pub fn Output::get_param_loc(Self, Int) -> Loc
 pub fn Output::inst_def_loc(Self, Int, Int, Bool, Int) -> Loc
 pub fn Output::inst_use_loc(Self, Int, Int, Bool, Int) -> Loc
+pub fn Output::iter_allocs(Self) -> Array[Loc]
 pub fn Output::iter_edits(Self) -> Array[((Int, Int, ProgPos), Edit)]
 pub fn Output::new() -> Self
 pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
 pub fn Output::push_inst_alloc_loc(Self, Loc) -> Unit
 pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
+pub fn Output::push_param_loc(Self, Loc) -> Unit
 pub fn Output::rebuild_edits_index(Self) -> Unit
 pub fn Output::sort_edits(Self) -> Unit
 pub fn Output::spill_reload_stats(Self) -> (Int, Int, Int, Int)
 pub fn Output::summary(Self) -> String
+pub fn Output::uses_preg_index_any(Self, Int, Bool) -> Bool
 pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit
 
 pub struct ProgPoint {

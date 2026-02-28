@@ -116,8 +116,8 @@ struct BacktrackingAllocator {
   block_order : FixedArray[Int]
   // Approximate loop-depth per block (pre-computed once).
   loop_depths : Array[Int]
-  // Dense point order encoding stride per block.
-  point_block_stride : Int
+  // Dense point order base offset per block-order index.
+  block_point_base : Array[Int]
 
   // Reference to function for constraint lookups
   func : VCodeFunction
@@ -256,21 +256,25 @@ pub fn BacktrackingAllocator::new(
   callee_saved_float : Array[@abi.PReg],
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
-  let mut total_insts = 0
-  let mut max_block_insts = 0
-  for block in func.blocks {
-    let block_len = block.insts.length()
-    total_insts = total_insts + block_len
-    if block_len > max_block_insts {
-      max_block_insts = block_len
-    }
+  let num_blocks = func.blocks.length()
+  let block_order = ranges.block_order
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[block_order[block_idx]] = block_idx
+  }
+  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
+  let mut point_cursor = 0
+  for ord in 0..<num_blocks {
+    block_point_base[ord] = point_cursor
+    let block_idx = block_idx_by_order[ord]
+    let block_len = func.blocks[block_idx].insts.length()
+    point_cursor = point_cursor + (block_len + 2) * 2
   }
   // Keep register probing/regalloc retries aligned with regalloc2 behavior:
   // no large-function downscaling on the main allocation search.
   let split_probe_limit = 1 << 30
   let bundle_retry_limit = 1 << 30
   let enable_backtracking = true
-  let point_block_stride = (max_block_insts + 4) * 2
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)
     let callee_max = max_preg_index(callee_saved_int)
@@ -343,9 +347,9 @@ pub fn BacktrackingAllocator::new(
     split_probe_limit,
     bundle_retry_limit,
     enable_backtracking,
-    block_order: ranges.block_order,
+    block_order,
     loop_depths,
-    point_block_stride,
+    block_point_base,
     func,
     conflict_seen_epoch: Array::make(bundles.length(), 0),
     conflict_epoch: 0,
@@ -365,7 +369,7 @@ fn BacktrackingAllocator::point_order(
     Before => 0
     After => 1
   }
-  block_ord * self.point_block_stride + (point.inst + 1) * 2 + pos_ord
+  self.block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
 }
 
 ///|
@@ -384,10 +388,10 @@ fn BacktrackingAllocator::bundle_queue_prio(
 fn BacktrackingAllocator::recompute_bundle_spill_weight(
   self : BacktrackingAllocator,
   bundle : Bundle,
-) -> Double {
+) -> Int {
   let total = compute_spill_weight(bundle, self.ranges, self.loop_depths)
-  let prio = self.bundle_queue_prio(bundle).to_double()
-  if prio <= 0.0 {
+  let prio = self.bundle_queue_prio(bundle)
+  if prio <= 0 {
     total
   } else {
     total / prio
@@ -849,13 +853,13 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   bundle : Bundle,
   preg : @abi.PReg,
   spans : Array[OrderedSpan],
-  max_allowable_cost : Double?,
+  max_allowable_cost : Int?,
   conflicts : Array[Int],
-) -> (Double, ProgPoint?, Bool) {
+) -> (Int, ProgPoint?, Bool) {
   conflicts.clear()
   self.conflict_epoch = self.conflict_epoch + 1
   let seen_epoch = self.conflict_epoch
-  let mut max_conflict_weight = 0.0
+  let mut max_conflict_weight = 0
   let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
   if preg.index < 0 || preg.index >= allocs.length() {
@@ -893,14 +897,14 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
       let other = self.bundles.get(other_id)
       if other.is_pinned || other.spill_weight >= bundle.spill_weight {
         conflicts.clear()
-        return (0.0, first_conflict_point, true)
+        return (0, first_conflict_point, true)
       }
       conflicts.push(other_id)
       if other.spill_weight > max_conflict_weight {
         max_conflict_weight = other.spill_weight
         if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
           conflicts.clear()
-          return (0.0, first_conflict_point, true)
+          return (0, first_conflict_point, true)
         }
       }
     }
@@ -947,12 +951,12 @@ fn BacktrackingAllocator::try_evict(
   }
   let raw_phase_offset = bundle.id
   let mut best_preg : @abi.PReg? = None
-  let mut best_conflict_cost : Double? = None
+  let mut best_conflict_cost : Int? = None
   let best_conflicts = self.scratch_best_conflicts
   let scratch_conflicts = self.scratch_conflicts
   best_conflicts.clear()
   scratch_conflicts.clear()
-  let mut best_split_cost : Double? = None
+  let mut best_split_cost : Int? = None
   let mut best_split : (ProgPoint, @abi.PReg)? = None
   for phase in 0..<phase_count {
     let phase_regs = if do_preferred_pass {
@@ -1802,25 +1806,30 @@ pub fn build_bundles_with_merging(
   // regalloc2/ion always performs bundle coalescing, bounded by overlap and
   // complexity guards inside merge checks.
   let block_param_merge_enabled = true
-  let mut max_block_insts = 0
-  for block in func.blocks {
-    let block_len = block.insts.length()
-    if block_len > max_block_insts {
-      max_block_insts = block_len
-    }
+  let num_blocks = func.blocks.length()
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[ranges.block_order[block_idx]] = block_idx
   }
-  let point_block_stride = (max_block_insts + 4) * 2
+  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
+  let mut point_cursor = 0
+  for ord in 0..<num_blocks {
+    block_point_base[ord] = point_cursor
+    let block_idx = block_idx_by_order[ord]
+    let block_len = func.blocks[block_idx].insts.length()
+    point_cursor = point_cursor + (block_len + 2) * 2
+  }
   fn point_order(
     point : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> Int {
     let block_ord = block_order[point.block]
     let pos_ord = match point.pos {
       Before => 0
       After => 1
     }
-    block_ord * point_block_stride + (point.inst + 1) * 2 + pos_ord
+    block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
   }
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
@@ -1865,19 +1874,19 @@ pub fn build_bundles_with_merging(
   fn make_merge_span(
     span : ProgPointRange,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> MergeSpan {
-    let start_ord = point_order(span.start, block_order, point_block_stride)
+    let start_ord = point_order(span.start, block_order, block_point_base)
     let start_before_ord = point_order(
       { block: span.start.block, inst: span.start.inst, pos: Before },
       block_order,
-      point_block_stride,
+      block_point_base,
     )
     {
       span,
       start_ord,
       start_before_ord,
-      end_ord: point_order(span.end, block_order, point_block_stride),
+      end_ord: point_order(span.end, block_order, block_point_base),
     }
   }
 
@@ -2027,7 +2036,7 @@ pub fn build_bundles_with_merging(
         let spans : Array[MergeSpan] = []
         for span in range.ranges {
           spans.push(
-            make_merge_span(span, ranges.block_order, point_block_stride),
+            make_merge_span(span, ranges.block_order, block_point_base),
           )
         }
         root_spans_cache[root] = Some(spans)

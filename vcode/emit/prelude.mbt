@@ -1074,76 +1074,8 @@ fn output_uses_preg(
   output : @regalloc.Output,
   preg_idx : Int,
 ) -> Bool {
-  // Params.
-  for i in 0..<func.get_params().length() {
-    if output.get_param_loc(i) is @regalloc.Reg(p) && p.index == preg_idx {
-      return true
-    }
-  }
-  // Insts + terminators.
-  for block in func.get_blocks() {
-    for inst_idx, inst in block.insts {
-      for di in 0..<inst.defs.length() {
-        if output.inst_def_loc(block.id, inst_idx, false, di)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-      for ui in 0..<inst.uses.length() {
-        if output.inst_use_loc(block.id, inst_idx, false, ui)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-      // Edits around the instruction.
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.index == preg_idx {
-              return true
-            }
-          }
-        }
-      }
-    }
-    if block.terminator is Some(_) {
-      let term_inst = block.insts.length()
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, term_inst, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.index == preg_idx {
-              return true
-            }
-          }
-        }
-      }
-      // Terminator operand allocations.
-      // `output_build` records empty ranges for Jump/Trap, so this is safe.
-      let term = block.terminator.unwrap()
-      let use_count = match term {
-        @instr.Branch(_, _, _) => 1
-        @instr.BranchCmp(_, _, _, _, _, _) => 2
-        @instr.BranchZero(_, _, _, _, _) => 1
-        @instr.BranchCmpImm(_, _, _, _, _, _) => 1
-        @instr.Return(values) => values.length()
-        @instr.BrTable(_, _, _) => 1
-        @instr.Trap(_) => 0
-        @instr.Jump(_, _) => 0
-      }
-      for ui in 0..<use_count {
-        if output.inst_use_loc(block.id, term_inst, true, ui)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-    }
-  }
-  false
+  ignore(func)
+  output.uses_preg_index_any(preg_idx, true)
 }
 
 ///|
@@ -1152,20 +1084,24 @@ fn collect_used_callee_saved_from_output(
   output : @regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : Array[Bool] = Array::make(128, false)
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_int : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_int {
-    callee_saved_int.add(r.index)
+    if r.index >= 0 && r.index < callee_saved_int.length() {
+      callee_saved_int[r.index] = true
+    }
   }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     if output.get_param_loc(i) is @regalloc.Reg(p) &&
       p.class is @abi.Int &&
-      callee_saved_int.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_int.length() &&
+      callee_saved_int[p.index] {
+      used[p.index] = true
     }
   }
 
@@ -1174,8 +1110,10 @@ fn collect_used_callee_saved_from_output(
     let ((_block_id, _inst_idx, _pos), edit) = edit_entry
     if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
       p.class is @abi.Int &&
-      callee_saved_int.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_int.length() &&
+      callee_saved_int[p.index] {
+      used[p.index] = true
     }
   }
 
@@ -1192,18 +1130,25 @@ fn collect_used_callee_saved_from_output(
         if inst.defs[di].reg is @abi.Virtual(_) &&
           output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
           p.class is @abi.Int &&
-          callee_saved_int.contains(p.index) {
-          used.add(p.index)
+          p.index >= 0 &&
+          p.index < callee_saved_int.length() &&
+          callee_saved_int[p.index] {
+          used[p.index] = true
         }
       }
     }
   }
   if func_has_calls(func) && isa is @isa.AArch64 {
-    used.add(@isaregs.lr_index())
+    let lr = @isaregs.lr_index()
+    if lr >= 0 && lr < used.length() {
+      used[lr] = true
+    }
   }
   let result : Array[Int] = []
-  for reg in used {
-    result.push(reg)
+  for i, is_used in used {
+    if is_used {
+      result.push(i)
+    }
   }
   result.sort()
   result
@@ -1215,20 +1160,24 @@ fn collect_used_callee_saved_fprs_from_output(
   output : @regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : Array[Bool] = Array::make(128, false)
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_fprs : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_float {
-    callee_saved_fprs.add(r.index)
+    if r.index >= 0 && r.index < callee_saved_fprs.length() {
+      callee_saved_fprs[r.index] = true
+    }
   }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     if output.get_param_loc(i) is @regalloc.Reg(p) &&
       (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-      callee_saved_fprs.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_fprs.length() &&
+      callee_saved_fprs[p.index] {
+      used[p.index] = true
     }
   }
 
@@ -1237,8 +1186,10 @@ fn collect_used_callee_saved_fprs_from_output(
     let ((_block_id, _inst_idx, _pos), edit) = edit_entry
     if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
       (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-      callee_saved_fprs.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_fprs.length() &&
+      callee_saved_fprs[p.index] {
+      used[p.index] = true
     }
   }
 
@@ -1250,15 +1201,19 @@ fn collect_used_callee_saved_fprs_from_output(
         if inst.defs[di].reg is @abi.Virtual(_) &&
           output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
           (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-          callee_saved_fprs.contains(p.index) {
-          used.add(p.index)
+          p.index >= 0 &&
+          p.index < callee_saved_fprs.length() &&
+          callee_saved_fprs[p.index] {
+          used[p.index] = true
         }
       }
     }
   }
   let result : Array[Int] = []
-  for reg in used {
-    result.push(reg)
+  for i, is_used in used {
+    if is_used {
+      result.push(i)
+    }
   }
   result.sort()
   result
@@ -1374,20 +1329,19 @@ fn map_inst_for_emission(
   inst : @instr.VCodeInst,
   output : @regalloc.Output,
 ) -> @instr.VCodeInst {
-  let mapped = @instr.VCodeInst::new(inst.opcode)
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
-      @regalloc.Reg(preg) => mapped.add_def({ reg: @abi.Physical(preg) })
+      @regalloc.Reg(preg) => inst.defs[di] = { reg: @abi.Physical(preg) }
       @regalloc.Spill(_) => abort("Spill loc in instruction def allocation")
     }
   }
   for ui in 0..<inst.uses.length() {
     match output.inst_use_loc(block_id, inst_idx, false, ui) {
-      @regalloc.Reg(preg) => mapped.add_use(@abi.Physical(preg))
+      @regalloc.Reg(preg) => inst.uses[ui] = @abi.Physical(preg)
       @regalloc.Spill(_) => abort("Spill loc in instruction use allocation")
     }
   }
-  mapped
+  inst
 }
 
 ///|
@@ -2015,52 +1969,63 @@ pub fn emit_function_with_regalloc(
   } else {
     None
   }
-  let edits_by_block : Map[Int, Array[(Int, @regalloc.ProgPos, @regalloc.Edit)]] = {}
-  for entry in output.iter_edits() {
-    let ((block_id, inst_idx, pos), edit) = entry
-    let bucket = match edits_by_block.get(block_id) {
-      Some(arr) => arr
-      None => {
-        let arr : Array[(Int, @regalloc.ProgPos, @regalloc.Edit)] = []
-        edits_by_block.set(block_id, arr)
-        arr
+  let edit_slot_cache : Map[Int, @abi.PReg] = {}
+  fn emit_point_edits(
+    mc : MachineCode,
+    output : @regalloc.Output,
+    block_id : Int,
+    inst_idx : Int,
+    pos : @regalloc.ProgPos,
+    stack_frame : JITStackFrame,
+    edit_slot_cache : Map[Int, @abi.PReg],
+  ) -> Unit {
+    if output.edits_at(block_id, inst_idx, pos) is Some(edits) {
+      for edit in edits {
+        emit_edit_move_with_cache(mc, edit, stack_frame, edit_slot_cache)
       }
     }
-    bucket.push((inst_idx, pos, edit))
   }
-  let edit_slot_cache : Map[Int, @abi.PReg] = {}
   for i, block in blocks {
     edit_slot_cache.clear()
-    let block_edits = match edits_by_block.get(block.id) {
-      Some(arr) => arr
-      None => []
-    }
-    let mut block_edit_cursor = 0
-    fn emit_point_edits(inst_idx : Int, pos : @regalloc.ProgPos) -> Unit {
-      while block_edit_cursor < block_edits.length() {
-        let (edit_inst_idx, edit_pos, edit) = block_edits[block_edit_cursor]
-        if edit_inst_idx != inst_idx || edit_pos != pos {
-          break
-        }
-        emit_edit_move_with_cache(mc, edit, stack_frame, edit_slot_cache)
-        block_edit_cursor = block_edit_cursor + 1
-      }
-    }
     mc.define_label(block.id)
     for inst_idx, inst in block.insts {
       // Edits before instruction.
-      emit_point_edits(inst_idx, @regalloc.ProgPos::Before)
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        inst_idx,
+        @regalloc.ProgPos::Before,
+        stack_frame,
+        edit_slot_cache,
+      )
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
       mc.emit_instruction(mapped, stack_frame)
       invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
-      emit_point_edits(inst_idx, @regalloc.ProgPos::After)
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        inst_idx,
+        @regalloc.ProgPos::After,
+        stack_frame,
+        edit_slot_cache,
+      )
     }
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
       // Edits before terminator (block-arg moves, terminator reloads, etc).
-      emit_point_edits(term_inst, @regalloc.ProgPos::Before)
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        term_inst,
+        @regalloc.ProgPos::Before,
+        stack_frame,
+        edit_slot_cache,
+      )
       let next_block = if i + 1 < blocks.length() {
         Some(blocks[i + 1].id)
       } else {

@@ -10,7 +10,7 @@ struct Bundle {
   mut spillset_id : Int // Original bundle ID before splitting (Cranelift-style spillset)
   range_ids : Array[Int] // Indices into LiveRangeSet
   mut merged_ranges : Array[ProgPointRange]? // Sorted merged ranges for fast regalloc span setup
-  mut spill_weight : Double // Priority for allocation (higher = more important)
+  mut spill_weight : Int // Priority for allocation (higher = more important)
   mut prio : Int // Cached queue priority (total covered length)
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
   mut allocation : Allocation // Current allocation
@@ -31,7 +31,7 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     spillset_id: id,
     range_ids: [],
     merged_ranges: None,
-    spill_weight: 0.0,
+    spill_weight: 0,
     prio: 1,
     spill_bundle_id: -1,
     allocation: Unallocated,
@@ -389,8 +389,8 @@ pub fn compute_spill_weight(
   bundle : Bundle,
   ranges : LiveRangeSet,
   loop_depths : Array[Int],
-) -> Double {
-  let mut weight = 0.0
+) -> Int {
+  let mut weight = 0
   for range_id in bundle.range_ids {
     let range = ranges.get(range_id)
     for use_pos in range.uses {
@@ -405,23 +405,23 @@ pub fn compute_spill_weight(
       if depth > 10 {
         depth = 10
       }
-      let mut hot_bonus = 1000.0
+      let mut hot_bonus = 1000
       for _ in 0..<depth {
-        hot_bonus = hot_bonus * 4.0
+        hot_bonus = hot_bonus * 4
       }
       let def_bonus = match use_pos.kind {
-        Def => 2000.0
-        Use => 0.0
+        Def => 2000
+        Use => 0
       }
       let constraint_bonus = match use_pos.constraint {
-        AnyReg => 1000.0
-        FixedReg(_) => 2000.0
+        AnyReg => 1000
+        FixedReg(_) => 2000
       }
       weight = weight + hot_bonus + def_bonus + constraint_bonus
     }
   }
-  if weight <= 0.0 {
-    1.0
+  if weight <= 0 {
+    1
   } else {
     weight
   }

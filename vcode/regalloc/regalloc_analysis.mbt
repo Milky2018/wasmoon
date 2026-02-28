@@ -545,8 +545,6 @@ fn collect_defs_uses(
         abort("block param defined twice")
       }
       info.def_point = Some((def_point, None))
-      // Also add a use point at block entry to keep it live through the block.
-      info.use_points.push(({ block: block_idx, inst: 0, pos: Before }, None))
     }
 
     // Process instructions

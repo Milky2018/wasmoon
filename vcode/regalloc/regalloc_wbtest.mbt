@@ -409,7 +409,7 @@ test "progpoint: comparison" {
 
 ///|
 test "liveness: block parameters should have use points" {
-  // This test verifies that block parameters get use points at block entry.
+  // This test verifies that block parameters keep normal use points.
   // Block params are SSA defs; their incoming values are passed via Jump args.
   let func = VCodeFunction::new("test_block_param_use")
 
@@ -442,9 +442,9 @@ test "liveness: block parameters should have use points" {
   block1.set_terminator(@instr.Return([@abi.Virtual(v1_param)]))
   let liveness = compute_liveness(func)
 
-  // v1_param should have a use point at block entry and at return.
+  // v1_param should have at least one use point (here from return).
   let v1_info = liveness.use_def.get(v1_param.id).unwrap()
-  inspect(v1_info.use_points.length() >= 2, content="true")
+  inspect(v1_info.use_points.length() >= 1, content="true")
 
   // v1_param is defined at block entry, so it is not live-in.
   inspect(liveness.live_in[1].contains(v1_param.id), content="false")

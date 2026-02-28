@@ -84,12 +84,17 @@ pub struct Output {
   // This mirrors Cranelift’s operand_ranges; we keep block-local inst indexing
   // and treat the terminator as inst_idx==block.insts.length().
   operand_ranges : Array[(Int, Int, Bool, Int, Int, Int)]
-  // Quick lookup: (block_id, inst_idx, is_terminator) -> operand_ranges index.
-  operand_range_index : Map[(Int, Int, Bool), Int]
+  // Dense quick lookups for operand range indices.
+  inst_operand_range_index : Array[Array[Int]]
+  term_operand_range_index : Array[Int]
   // Edits to insert at program points.
   edits : Array[((Int, Int, ProgPos), Edit)]
-  // Fast path for emission: grouped edits per program point.
-  edits_by_point : Map[(Int, Int, ProgPos), Array[Edit]]
+  // Fast path for emission: grouped edits per program point (dense by block/inst).
+  edits_before_dense : Array[Array[Array[Edit]]]
+  edits_after_dense : Array[Array[Array[Edit]]]
+  // Any-use preg bitmap (including params/allocs/edits) for fast membership checks.
+  used_int_pregs_any : Array[Bool]
+  used_fp_pregs_any : Array[Bool]
   // Total number of spill slots reserved.
   mut num_spillslots : Int
 }
@@ -100,9 +105,13 @@ pub fn Output::new() -> Output {
     param_locs: [],
     allocs: [],
     operand_ranges: [],
-    operand_range_index: {},
+    inst_operand_range_index: [],
+    term_operand_range_index: [],
     edits: [],
-    edits_by_point: {},
+    edits_before_dense: [],
+    edits_after_dense: [],
+    used_int_pregs_any: Array::make(128, false),
+    used_fp_pregs_any: Array::make(128, false),
     num_spillslots: 0,
   }
 }
@@ -227,10 +236,21 @@ pub fn Output::summary(self : Output) -> String {
 
   // Top edit points by edit count.
   let hot_points : Array[(Int, Int, ProgPos, Int)] = [] // (block, inst, pos, count)
-  for point, edits in self.edits_by_point {
-    let (block_id, inst_idx, pos) = point
-    hot_points.push((block_id, inst_idx, pos, edits.length()))
+  fn collect_hot_points(
+    table : Array[Array[Array[Edit]]],
+    pos : ProgPos,
+    hot_points : Array[(Int, Int, ProgPos, Int)],
+  ) -> Unit {
+    for block_id, inst_rows in table {
+      for inst_idx, edits in inst_rows {
+        if edits.length() > 0 {
+          hot_points.push((block_id, inst_idx, pos, edits.length()))
+        }
+      }
+    }
   }
+  collect_hot_points(self.edits_before_dense, Before, hot_points)
+  collect_hot_points(self.edits_after_dense, After, hot_points)
   hot_points.sort_by(fn(a, b) {
     let (_, _, _, ac) = a
     let (_, _, _, bc) = b
@@ -429,13 +449,82 @@ pub fn Output::get_param_loc(self : Output, idx : Int) -> Loc {
 }
 
 ///|
+pub fn Output::get_num_params(self : Output) -> Int {
+  self.param_locs.length()
+}
+
+///|
+pub fn Output::iter_allocs(self : Output) -> Array[Loc] {
+  self.allocs
+}
+
+///|
+fn Output::mark_used_preg_any(self : Output, loc : Loc) -> Unit {
+  if loc is Reg(preg) {
+    if preg.index < 0 {
+      return
+    }
+    match preg.class {
+      @abi.Int =>
+        if preg.index < self.used_int_pregs_any.length() {
+          self.used_int_pregs_any[preg.index] = true
+        }
+      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        if preg.index < self.used_fp_pregs_any.length() {
+          self.used_fp_pregs_any[preg.index] = true
+        }
+    }
+  }
+}
+
+///|
+pub fn Output::uses_preg_index_any(
+  self : Output,
+  preg_idx : Int,
+  is_int_class : Bool,
+) -> Bool {
+  if preg_idx < 0 {
+    return false
+  }
+  if is_int_class {
+    preg_idx < self.used_int_pregs_any.length() &&
+    self.used_int_pregs_any[preg_idx]
+  } else {
+    preg_idx < self.used_fp_pregs_any.length() &&
+    self.used_fp_pregs_any[preg_idx]
+  }
+}
+
+///|
+pub fn Output::push_param_loc(self : Output, loc : Loc) -> Unit {
+  self.param_locs.push(loc)
+  self.mark_used_preg_any(loc)
+}
+
+///|
 pub fn Output::edits_at(
   self : Output,
   block_id : Int,
   inst_idx : Int,
   pos : ProgPos,
 ) -> Array[Edit]? {
-  self.edits_by_point.get((block_id, inst_idx, pos))
+  let table = match pos {
+    Before => self.edits_before_dense
+    After => self.edits_after_dense
+  }
+  if block_id < 0 || block_id >= table.length() {
+    return None
+  }
+  let inst_rows = table[block_id]
+  if inst_idx < 0 || inst_idx >= inst_rows.length() {
+    return None
+  }
+  let edits = inst_rows[inst_idx]
+  if edits.is_empty() {
+    None
+  } else {
+    Some(edits)
+  }
 }
 
 ///|
@@ -460,23 +549,42 @@ pub fn Output::push_edit(
     Move(from, to, _cls) => if loc_eq(from, to) { return }
   }
   self.edits.push(((block_id, inst_idx, pos), edit))
+  match edit {
+    Move(from, to, _class) => {
+      self.mark_used_preg_any(from)
+      self.mark_used_preg_any(to)
+    }
+  }
 }
 
 ///|
 pub fn Output::rebuild_edits_index(self : Output) -> Unit {
-  self.edits_by_point.clear()
+  self.edits_before_dense.clear()
+  self.edits_after_dense.clear()
+  fn push_dense(
+    table : Array[Array[Array[Edit]]],
+    block_id : Int,
+    inst_idx : Int,
+    edit : Edit,
+  ) -> Unit {
+    if block_id < 0 || inst_idx < 0 {
+      return
+    }
+    while table.length() <= block_id {
+      table.push([])
+    }
+    let inst_rows = table[block_id]
+    while inst_rows.length() <= inst_idx {
+      inst_rows.push([])
+    }
+    inst_rows[inst_idx].push(edit)
+  }
   for entry in self.edits {
     let ((block_id, inst_idx, pos), edit) = entry
-    let key = (block_id, inst_idx, pos)
-    let bucket = match self.edits_by_point.get(key) {
-      Some(arr) => arr
-      None => {
-        let arr : Array[Edit] = []
-        self.edits_by_point.set(key, arr)
-        arr
-      }
+    match pos {
+      Before => push_dense(self.edits_before_dense, block_id, inst_idx, edit)
+      After => push_dense(self.edits_after_dense, block_id, inst_idx, edit)
     }
-    bucket.push(edit)
   }
 }
 
@@ -528,13 +636,28 @@ pub fn Output::begin_inst_allocs(
   self.operand_ranges.push(
     (block_id, inst_idx, is_terminator, start, def_count, use_count),
   )
-  self.operand_range_index.set((block_id, inst_idx, is_terminator), range_idx)
+  while self.inst_operand_range_index.length() <= block_id {
+    self.inst_operand_range_index.push([])
+  }
+  while self.term_operand_range_index.length() <= block_id {
+    self.term_operand_range_index.push(-1)
+  }
+  if is_terminator {
+    self.term_operand_range_index[block_id] = range_idx
+  } else {
+    let inst_rows = self.inst_operand_range_index[block_id]
+    while inst_rows.length() <= inst_idx {
+      inst_rows.push(-1)
+    }
+    inst_rows[inst_idx] = range_idx
+  }
   (start, total)
 }
 
 ///|
 pub fn Output::push_inst_alloc_loc(self : Output, loc : Loc) -> Unit {
   self.allocs.push(loc)
+  self.mark_used_preg_any(loc)
 }
 
 ///|
@@ -572,9 +695,26 @@ fn Output::range_info(
   inst_idx : Int,
   is_terminator : Bool,
 ) -> (Int, Int, Int) {
-  let idx = self.operand_range_index
-    .get((block_id, inst_idx, is_terminator))
-    .unwrap()
+  let idx = if is_terminator {
+    guard block_id >= 0 && block_id < self.term_operand_range_index.length() else {
+      abort("bad block_id for terminator alloc lookup")
+    }
+    self.term_operand_range_index[block_id]
+  } else {
+    guard block_id >= 0 && block_id < self.inst_operand_range_index.length() else {
+      abort("bad block_id for instruction alloc lookup")
+    }
+    let inst_rows = self.inst_operand_range_index[block_id]
+    guard inst_idx >= 0 && inst_idx < inst_rows.length() else {
+      abort("bad inst_idx for instruction alloc lookup")
+    }
+    inst_rows[inst_idx]
+  }
+  guard idx >= 0 && idx < self.operand_ranges.length() else {
+    abort(
+      "missing alloc range for block=\{block_id} inst=\{inst_idx} term=\{is_terminator}",
+    )
+  }
   let (_b, _i, _t, start, defs, uses) = self.operand_ranges[idx]
   (start, defs, uses)
 }

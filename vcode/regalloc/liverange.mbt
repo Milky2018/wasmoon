@@ -327,18 +327,19 @@ pub impl Show for LiveRange with output(self, logger) {
 /// Collection of LiveRanges built from liveness analysis
 struct LiveRangeSet {
   ranges : Array[LiveRange]
-  vreg_to_range : Map[Int, Int] // vreg.id -> range index
   vreg_to_range_dense : Array[Int] // vreg.id -> range index (-1 if absent)
   block_order : FixedArray[Int] // Block execution order (O(1) lookup)
   blockparam_out_pairs : Array[(Int, Int)] // (to_range_idx, from_range_idx)
 }
 
 ///|
-fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
+fn LiveRangeSet::new(
+  block_order : FixedArray[Int],
+  max_vreg_id : Int,
+) -> LiveRangeSet {
   {
     ranges: [],
-    vreg_to_range: {},
-    vreg_to_range_dense: [],
+    vreg_to_range_dense: Array::make(max_vreg_id, -1),
     block_order,
     blockparam_out_pairs: [],
   }
@@ -348,12 +349,8 @@ fn LiveRangeSet::new(block_order : FixedArray[Int]) -> LiveRangeSet {
 /// Add a new LiveRange
 fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
   let idx = self.ranges.length()
-  self.vreg_to_range.set(range.vreg.id, idx)
-  if range.vreg.id >= self.vreg_to_range_dense.length() {
-    let grow_to = range.vreg.id + 1
-    while self.vreg_to_range_dense.length() < grow_to {
-      self.vreg_to_range_dense.push(-1)
-    }
+  guard range.vreg.id >= 0 && range.vreg.id < self.vreg_to_range_dense.length() else {
+    abort("vreg id out of range when building live ranges")
   }
   self.vreg_to_range_dense[range.vreg.id] = idx
   self.ranges.push(range)
@@ -365,15 +362,14 @@ pub fn LiveRangeSet::get_by_vreg(
   self : LiveRangeSet,
   vreg_id : Int,
 ) -> LiveRange? {
-  if vreg_id >= 0 && vreg_id < self.vreg_to_range_dense.length() {
-    let idx = self.vreg_to_range_dense[vreg_id]
-    if idx >= 0 {
-      return Some(self.ranges[idx])
-    }
+  if vreg_id < 0 || vreg_id >= self.vreg_to_range_dense.length() {
+    return None
   }
-  match self.vreg_to_range.get(vreg_id) {
-    Some(idx) => Some(self.ranges[idx])
-    None => None
+  let idx = self.vreg_to_range_dense[vreg_id]
+  if idx >= 0 {
+    Some(self.ranges[idx])
+  } else {
+    None
   }
 }
 
@@ -383,13 +379,15 @@ fn LiveRangeSet::get_range_index_by_vreg(
   self : LiveRangeSet,
   vreg_id : Int,
 ) -> Int? {
-  if vreg_id >= 0 && vreg_id < self.vreg_to_range_dense.length() {
-    let idx = self.vreg_to_range_dense[vreg_id]
-    if idx >= 0 {
-      return Some(idx)
-    }
+  if vreg_id < 0 || vreg_id >= self.vreg_to_range_dense.length() {
+    return None
   }
-  self.vreg_to_range.get(vreg_id)
+  let idx = self.vreg_to_range_dense[vreg_id]
+  if idx >= 0 {
+    Some(idx)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -411,34 +409,40 @@ pub fn build_live_ranges(
   func : VCodeFunction,
   liveness : LivenessResult,
 ) -> LiveRangeSet {
-  let result = LiveRangeSet::new(liveness.block_order)
+  let result = LiveRangeSet::new(liveness.block_order, func.next_vreg_id)
   let mut next_id = 0
   let block_order = liveness.block_order
-  let mut max_block_insts = 0
-  for block in func.blocks {
-    let block_len = block.insts.length()
-    if block_len > max_block_insts {
-      max_block_insts = block_len
-    }
+  let num_blocks = func.blocks.length()
+  // Match regalloc2's dense global ProgPoint ordering:
+  // order points by block order, and within each block by inst/pos.
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[block_order[block_idx]] = block_idx
   }
-  // Match regalloc2's use of a dense comparable key for ProgPoint ordering.
-  let point_block_stride = (max_block_insts + 4) * 2
+  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
+  let mut point_cursor = 0
+  for ord in 0..<num_blocks {
+    block_point_base[ord] = point_cursor
+    let block_idx = block_idx_by_order[ord]
+    let block_len = func.blocks[block_idx].insts.length()
+    point_cursor = point_cursor + (block_len + 2) * 2
+  }
   fn point_order(
     point : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> Int {
     let block_ord = block_order[point.block]
     let pos_ord = match point.pos {
       Before => 0
       After => 1
     }
-    block_ord * point_block_stride + (point.inst + 1) * 2 + pos_ord
+    block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
   }
   let sorted_call_points = liveness.call_points.copy()
   sorted_call_points.sort_by(fn(a, b) {
-    let a_ord = point_order(a.0, block_order, point_block_stride)
-    let b_ord = point_order(b.0, block_order, point_block_stride)
+    let a_ord = point_order(a.0, block_order, block_point_base)
+    let b_ord = point_order(b.0, block_order, block_point_base)
     if a_ord < b_ord {
       -1
     } else if a_ord > b_ord {
@@ -447,7 +451,6 @@ pub fn build_live_ranges(
       0
     }
   })
-  let num_blocks = func.blocks.length()
   let block_call_point_orders : Array[Array[Int]] = []
   let block_c_call_point_orders : Array[Array[Int]] = []
   for _ in 0..<num_blocks {
@@ -458,7 +461,7 @@ pub fn build_live_ranges(
   let c_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
     let (call_point, call_conv) = entry
-    let call_ord = point_order(call_point, block_order, point_block_stride)
+    let call_ord = point_order(call_point, block_order, block_point_base)
     call_prog_point_orders.push(call_ord)
     if call_point.block >= 0 && call_point.block < num_blocks {
       block_call_point_orders[call_point.block].push(call_ord)
@@ -553,29 +556,29 @@ pub fn build_live_ranges(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> Bool {
-    point_order(a, block_order, point_block_stride) <
-    point_order(b, block_order, point_block_stride)
+    point_order(a, block_order, block_point_base) <
+    point_order(b, block_order, block_point_base)
   }
 
   fn pp_le(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> Bool {
-    point_order(a, block_order, point_block_stride) <=
-    point_order(b, block_order, point_block_stride)
+    point_order(a, block_order, block_point_base) <=
+    point_order(b, block_order, block_point_base)
   }
 
   fn pp_min(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> ProgPoint {
-    if pp_le(a, b, block_order, point_block_stride) {
+    if pp_le(a, b, block_order, block_point_base) {
       a
     } else {
       b
@@ -586,9 +589,9 @@ pub fn build_live_ranges(
     a : ProgPoint,
     b : ProgPoint,
     block_order : FixedArray[Int],
-    point_block_stride : Int,
+    block_point_base : Array[Int],
   ) -> ProgPoint {
-    if pp_lt(a, b, block_order, point_block_stride) {
+    if pp_lt(a, b, block_order, block_point_base) {
       b
     } else {
       a
@@ -614,11 +617,6 @@ pub fn build_live_ranges(
   let max_vreg_id = func.next_vreg_id
   let vreg_live_in_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
   let vreg_live_out_blocks : Array[Array[Int]?] = Array::make(max_vreg_id, None)
-  let num_blocks = func.blocks.length()
-  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
-  for block_idx in 0..<num_blocks {
-    block_idx_by_order[block_order[block_idx]] = block_idx
-  }
   let live_in_rows : Array[Array[Int]] = match liveness.live_in_dense {
     Some(rows) => rows
     None => {
@@ -664,10 +662,7 @@ pub fn build_live_ranges(
   let use_last_points : Array[ProgPoint?] = Array::make(num_blocks, None)
   let use_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let covered_block_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
-  let live_in_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
-  let live_out_epoch : FixedArray[Int] = FixedArray::make(num_blocks, 0)
   let use_blocks_scratch : Array[Int] = []
-  let covered_blocks_scratch : Array[Int] = []
   let def_blocks_scratch : Array[Int] = []
   let mut scratch_epoch = 1
   // Process each vreg from use-def info (dense walk; regalloc2-style).
@@ -712,45 +707,19 @@ pub fn build_live_ranges(
           let first = use_first_points[block_idx].unwrap()
           let last = use_last_points[block_idx].unwrap()
           use_first_points[block_idx] = Some(
-            pp_min(first, p, block_order, point_block_stride),
+            pp_min(first, p, block_order, block_point_base),
           )
           use_last_points[block_idx] = Some(
-            pp_max(last, p, block_order, point_block_stride),
+            pp_max(last, p, block_order, block_point_base),
           )
         }
       }
-      if use_blocks_scratch.length() > 1 {
-        let mut sorted = true
-        for i in 1..<use_blocks_scratch.length() {
-          let prev = use_blocks_scratch[i - 1]
-          let cur = use_blocks_scratch[i]
-          let prev_ord = block_order[prev]
-          let cur_ord = block_order[cur]
-          if prev_ord > cur_ord || (prev_ord == cur_ord && prev > cur) {
-            sorted = false
-            break
-          }
-        }
-        if !sorted {
-          use_blocks_scratch.sort_by(fn(a, b) {
-            let ord_a = block_order[a]
-            let ord_b = block_order[b]
-            if ord_a != ord_b {
-              ord_a - ord_b
-            } else {
-              a - b
-            }
-          })
-        }
-      }
-
       fn block_less(a : Int, b : Int, block_order : FixedArray[Int]) -> Bool {
         let ord_a = block_order[a]
         let ord_b = block_order[b]
         ord_a < ord_b || (ord_a == ord_b && a < b)
       }
 
-      covered_blocks_scratch.clear()
       let live_in_blocks = if vreg_id >= 0 &&
         vreg_id < max_vreg_id &&
         vreg_live_in_blocks[vreg_id] is Some(blocks) {
@@ -765,26 +734,19 @@ pub fn build_live_ranges(
       } else {
         []
       }
-      for block_idx in live_in_blocks {
-        live_in_epoch[block_idx] = epoch
-      }
-      for block_idx in live_out_blocks {
-        live_out_epoch[block_idx] = epoch
-      }
       def_blocks_scratch.clear()
       if info.def_point is Some((def, _)) {
         def_blocks_scratch.push(def.block)
       }
 
       // Merge live-in/live-out/use/def block lists in block-order without
-      // sorting the union every iteration (regalloc2-style list walk).
+      // sorting the union every iteration (regalloc2-style list walk), and
+      // emit per-block spans directly in one pass.
       let mut i_in = 0
       let mut i_out = 0
-      let mut i_use = 0
       let mut i_def = 0
       while i_in < live_in_blocks.length() ||
             i_out < live_out_blocks.length() ||
-            i_use < use_blocks_scratch.length() ||
             i_def < def_blocks_scratch.length() {
         let mut next_block = -1
         if i_in < live_in_blocks.length() {
@@ -792,12 +754,6 @@ pub fn build_live_ranges(
         }
         if i_out < live_out_blocks.length() {
           let candidate = live_out_blocks[i_out]
-          if next_block < 0 || block_less(candidate, next_block, block_order) {
-            next_block = candidate
-          }
-        }
-        if i_use < use_blocks_scratch.length() {
-          let candidate = use_blocks_scratch[i_use]
           if next_block < 0 || block_less(candidate, next_block, block_order) {
             next_block = candidate
           }
@@ -811,37 +767,27 @@ pub fn build_live_ranges(
         if next_block < 0 {
           break
         }
+        let mut live_in = false
         while i_in < live_in_blocks.length() &&
               live_in_blocks[i_in] == next_block {
+          live_in = true
           i_in = i_in + 1
         }
+        let mut live_out = false
         while i_out < live_out_blocks.length() &&
               live_out_blocks[i_out] == next_block {
+          live_out = true
           i_out = i_out + 1
         }
-        while i_use < use_blocks_scratch.length() &&
-              use_blocks_scratch[i_use] == next_block {
-          i_use = i_use + 1
-        }
+        let mut has_def_in_block = false
         while i_def < def_blocks_scratch.length() &&
               def_blocks_scratch[i_def] == next_block {
+          has_def_in_block = true
           i_def = i_def + 1
         }
-        if covered_block_epoch[next_block] != epoch {
-          covered_block_epoch[next_block] = epoch
-          covered_blocks_scratch.push(next_block)
-        }
-      }
-
-      for block_idx in covered_blocks_scratch {
-        if covered_block_epoch[block_idx] != epoch {
-          continue
-        }
+        let block_idx = next_block
+        covered_block_epoch[block_idx] = epoch
         let block = func.blocks[block_idx]
-        let live_in = live_in_epoch[block_idx] == epoch
-        let live_out = live_out_epoch[block_idx] == epoch
-        let has_def_in_block = info.def_point is Some((def, _)) &&
-          def.block == block_idx
         let use_bounds = if use_block_epoch[block_idx] == epoch {
           Some(
             (
@@ -870,7 +816,7 @@ pub fn build_live_ranges(
         } else if use_bounds is Some((first_use, _)) {
           // Should not normally happen (use implies live_in or local def),
           // but be conservative.
-          pp_min(entry_point, first_use, block_order, point_block_stride)
+          pp_min(entry_point, first_use, block_order, block_point_base)
         } else {
           entry_point
         }
@@ -885,13 +831,34 @@ pub fn build_live_ranges(
         } else {
           point_after(start, block_len)
         }
-        let end_ord = point_order(end, block_order, point_block_stride)
-        let start_ord = point_order(start, block_order, point_block_stride)
+        let end_ord = point_order(end, block_order, block_point_base)
+        let start_ord = point_order(start, block_order, block_point_base)
         let (start, end) = if end_ord <= start_ord {
           (start, point_after(start, block_len))
         } else {
           (start, end)
         }
+        range.add_range(ProgPointRange::new(start, end))
+      }
+      // Fallback for malformed/edge cases where a use block was not covered by
+      // live-in/live-out/def (should not happen in SSA; kept for safety).
+      for block_idx in use_blocks_scratch {
+        if covered_block_epoch[block_idx] == epoch {
+          continue
+        }
+        let block = func.blocks[block_idx]
+        let block_len = block.insts.length()
+        let use_bounds = (
+          use_first_points[block_idx].unwrap(),
+          use_last_points[block_idx].unwrap(),
+        )
+        let start = pp_min(
+          { block: block_idx, inst: -1, pos: Before },
+          use_bounds.0,
+          block_order,
+          block_point_base,
+        )
+        let end = point_after(use_bounds.1, block_len)
         range.add_range(ProgPointRange::new(start, end))
       }
       use_blocks_scratch.clear()
@@ -904,12 +871,12 @@ pub fn build_live_ranges(
           let span_start_ord = point_order(
             span.start,
             block_order,
-            point_block_stride,
+            block_point_base,
           )
           let span_end_ord = point_order(
             span.end,
             block_order,
-            point_block_stride,
+            block_point_base,
           )
           let mut call_count = 0
           let mut c_call_count = 0
@@ -1019,6 +986,9 @@ pub fn build_live_ranges(
       block_idx_dense[block.id] = i
     }
   }
+  // Keep blockparam-out pairs unique. Repeated (param,arg) edges are a no-op
+  // for union-find coalescing but can amplify merge-phase cost on large CFGs.
+  let seen_blockparam_pairs : Map[(Int, Int), Unit] = {}
   for pred_block in func.blocks {
     if pred_block.terminator is Some(Jump(target, args)) {
       if target < 0 || target >= block_idx_dense.length() {
@@ -1041,7 +1011,11 @@ pub fn build_live_ranges(
           continue
         }
         if arg_idx != param_idx {
-          result.blockparam_out_pairs.push((param_idx, arg_idx))
+          let pair = (param_idx, arg_idx)
+          if seen_blockparam_pairs.get(pair) is None {
+            seen_blockparam_pairs.set(pair, ())
+            result.blockparam_out_pairs.push(pair)
+          }
         }
       }
     }

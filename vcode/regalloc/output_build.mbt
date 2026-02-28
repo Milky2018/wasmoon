@@ -138,6 +138,47 @@ fn add_used_reg_marks(
 }
 
 ///|
+fn active_reload_get(
+  active_reload_epoch : Array[Int],
+  active_reload_preg_idx : Array[Int],
+  slot : Int,
+  cls : @abi.RegClass,
+  epoch : Int,
+) -> @abi.PReg? {
+  if slot < 0 || slot >= active_reload_epoch.length() {
+    return None
+  }
+  if active_reload_epoch[slot] == epoch {
+    Some(@abi.PReg::{ index: active_reload_preg_idx[slot], class: cls })
+  } else {
+    None
+  }
+}
+
+///|
+fn active_reload_set(
+  active_reload_epoch : Array[Int],
+  active_reload_preg_idx : Array[Int],
+  slot : Int,
+  preg : @abi.PReg,
+  epoch : Int,
+) -> Unit {
+  if slot < 0 || slot >= active_reload_epoch.length() {
+    return
+  }
+  active_reload_epoch[slot] = epoch
+  active_reload_preg_idx[slot] = preg.index
+}
+
+///|
+fn active_reload_clear(active_reload_epoch : Array[Int], slot : Int) -> Unit {
+  if slot < 0 || slot >= active_reload_epoch.length() {
+    return
+  }
+  active_reload_epoch[slot] = 0
+}
+
+///|
 fn pick_temp_preg(
   out : Output,
   isa : @isa.ISA,
@@ -321,7 +362,7 @@ fn build_output(
 
   // Param allocations (used by the prologue).
   for p in func.params {
-    out.param_locs.push(vreg_home_loc_dense(p, assigned_pregs, spill_slots))
+    out.push_param_loc(vreg_home_loc_dense(p, assigned_pregs, spill_slots))
   }
 
   // Cranelift/regalloc2 does not run an extra per-block reload-coalescing pass
@@ -522,8 +563,15 @@ fn build_output(
   let spill_def_tmp_epoch = Array::make(max_vreg_id, 0)
   let mut spill_tmp_epoch = 1
   let mut inst_edits_cursor = 0
+  let active_reload_epoch : Array[Int] = Array::make(alloc.num_spill_slots, 0)
+  let active_reload_preg_idx : Array[Int] = Array::make(
+    alloc.num_spill_slots,
+    -1,
+  )
+  let mut block_reload_epoch = 0
   for block_id, block in func.blocks {
-    let active_reloads : Map[Int, @abi.PReg] = {}
+    block_reload_epoch = block_reload_epoch + 1
+    let reload_epoch = block_reload_epoch
     let mut temp_cursor = 0
     for inst_idx, inst in block.insts {
       let (point_edits, next_inst_edits_cursor) = take_point_edits(
@@ -686,7 +734,14 @@ fn build_output(
             continue
           }
           // If the slot is currently active in a coalesced reload reg, reuse it.
-          if active_reloads.get(slot) is Some(rp) {
+          if active_reload_get(
+              active_reload_epoch,
+              active_reload_preg_idx,
+              slot,
+              vreg.class,
+              reload_epoch,
+            )
+            is Some(rp) {
             spill_use_tmp_epoch[vreg.id] = spill_epoch
             spill_use_tmp_idx[vreg.id] = rp.index
             continue
@@ -700,7 +755,9 @@ fn build_output(
               Before,
               Edit::Move(Spill(slot), Reg(rp), vreg.class),
             )
-            active_reloads.set(slot, rp)
+            active_reload_set(
+              active_reload_epoch, active_reload_preg_idx, slot, rp, reload_epoch,
+            )
             spill_use_tmp_epoch[vreg.id] = spill_epoch
             spill_use_tmp_idx[vreg.id] = rp.index
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, rp)
@@ -805,7 +862,7 @@ fn build_output(
             )
           }
           // If this slot had an active reload register, it is now stale.
-          active_reloads.remove(slot) |> ignore
+          active_reload_clear(active_reload_epoch, slot)
         }
       }
 
@@ -960,7 +1017,14 @@ fn build_output(
               if spill_use_tmp_epoch[vreg.id] == spill_epoch {
                 continue
               }
-              if active_reloads.get(slot) is Some(rp) {
+              if active_reload_get(
+                  active_reload_epoch,
+                  active_reload_preg_idx,
+                  slot,
+                  vreg.class,
+                  reload_epoch,
+                )
+                is Some(rp) {
                 spill_use_tmp_epoch[vreg.id] = spill_epoch
                 spill_use_tmp_idx[vreg.id] = rp.index
                 continue
