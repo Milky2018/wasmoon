@@ -2493,7 +2493,11 @@ fn BacktrackingAllocator::preassign_params(
       // - relaxed mode: keep vmctx pinned, but treat other params as hints only.
       if strict_precolor || is_vmctx_param {
         self.record_allocation(bundle, preg)
-        if is_vmctx_param {
+        // Keep VMContext pinned. For strict precoloring, only pin params that
+        // do not cross calls; call-crossing values must remain movable so the
+        // allocator can satisfy call-clobber constraints.
+        if is_vmctx_param ||
+          (strict_precolor && !bundle.crosses_call(self.ranges)) {
           bundle.is_pinned = true
         }
       } else if bundle.spillset_id >= 0 &&
