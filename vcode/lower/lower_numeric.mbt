@@ -627,12 +627,20 @@ fn lower_shift(
     }
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
     if @isa.ISA::current() is @isa.AMD64 {
       // x86_64 variable shifts/rotates use CL as the implicit count register.
+      // Keep the data operand in Scratch1 to avoid clobbering when the count
+      // operand is moved into rcx by fixed-reg constraint edits.
+      let shift_data : @abi.PReg = {
+        index: @isa.ISA::current().scratch_reg_1_index(),
+        class: Int,
+      }
+      vcode_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
+      vcode_inst.add_use_fixed(Virtual(lhs), shift_data)
       vcode_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
     } else {
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(lhs))
       vcode_inst.add_use(Virtual(rhs))
     }
     block.add_inst(vcode_inst)
@@ -1448,12 +1456,19 @@ fn lower_rotl(
 
   // Step 2: Rotate right by -n (effectively rotl by n)
   let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
-  rotr_inst.add_def({ reg: Virtual(dst) })
-  rotr_inst.add_use(Virtual(src))
   if @isa.ISA::current() is @isa.AMD64 {
     // x86_64 variable shifts/rotates use CL as the implicit count register.
+    // Keep rotate source/dest away from rcx (count register).
+    let shift_data : @abi.PReg = {
+      index: @isa.ISA::current().scratch_reg_1_index(),
+      class: Int,
+    }
+    rotr_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
+    rotr_inst.add_use_fixed(Virtual(src), shift_data)
     rotr_inst.add_use_fixed(Virtual(neg_n), { index: 1, class: Int }) // rcx
   } else {
+    rotr_inst.add_def({ reg: Virtual(dst) })
+    rotr_inst.add_use(Virtual(src))
     rotr_inst.add_use(Virtual(neg_n))
   }
   block.add_inst(rotr_inst)
