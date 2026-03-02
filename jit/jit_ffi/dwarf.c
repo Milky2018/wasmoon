@@ -18,6 +18,8 @@
 #ifdef __APPLE__
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
+#else
+#include <elf.h>
 #endif
 
 // ============================================================================
@@ -252,8 +254,6 @@ static void generate_debug_info(buffer_t *buf, dwarf_builder_t *builder,
     buffer_write_u16(buf, 4);  // version (DWARF 4)
     buffer_write_u32(buf, (uint32_t)abbrev_offset);  // debug_abbrev_offset
     buffer_write_u8(buf, 8);   // address_size (64-bit)
-
-    size_t die_start = buf->size;
 
     // DW_TAG_compile_unit (abbrev 1)
     buffer_write_uleb128(buf, 1);
@@ -497,11 +497,184 @@ static void generate_macho_object(dwarf_builder_t *builder, buffer_t *output) {
 }
 
 #else
-// Linux/other platforms - generate ELF (stub for now)
+// Linux/other platforms - generate ELF object with DWARF + symbol table
 static void generate_elf_object(dwarf_builder_t *builder, buffer_t *output) {
-    // TODO: Implement ELF generation for Linux
-    (void)builder;
-    (void)output;
+    enum {
+        SEC_NULL = 0,
+        SEC_TEXT = 1,
+        SEC_DEBUG_ABBREV = 2,
+        SEC_DEBUG_INFO = 3,
+        SEC_SYMTAB = 4,
+        SEC_STRTAB = 5,
+        SEC_SHSTRTAB = 6,
+        SEC_COUNT = 7
+    };
+
+    buffer_t abbrev_buf, info_buf, strtab, shstrtab;
+    buffer_init(&abbrev_buf, 256);
+    buffer_init(&info_buf, 4096);
+    buffer_init(&strtab, 1024);
+    buffer_init(&shstrtab, 256);
+
+    generate_debug_abbrev(&abbrev_buf);
+    generate_debug_info(&info_buf, builder, 0);
+
+    // Build symbol string table.
+    buffer_write_u8(&strtab, 0);
+    uint32_t *string_offsets = (uint32_t *)malloc((size_t)builder->num_functions * sizeof(uint32_t));
+    for (int i = 0; i < builder->num_functions; i++) {
+        string_offsets[i] = (uint32_t)strtab.size;
+        buffer_write_string(&strtab, builder->functions[i].name);
+    }
+
+    // Build section-name string table.
+    buffer_write_u8(&shstrtab, 0);
+    uint32_t text_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".text");
+    uint32_t abbrev_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".debug_abbrev");
+    uint32_t info_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".debug_info");
+    uint32_t symtab_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".symtab");
+    uint32_t strtab_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".strtab");
+    uint32_t shstrtab_name = (uint32_t)shstrtab.size;
+    buffer_write_string(&shstrtab, ".shstrtab");
+
+    // Build symbol table: null + one symbol per function.
+    int num_syms = 1 + builder->num_functions;
+    size_t symtab_size = (size_t)num_syms * sizeof(Elf64_Sym);
+    Elf64_Sym *symbols = (Elf64_Sym *)calloc((size_t)num_syms, sizeof(Elf64_Sym));
+    for (int i = 0; i < builder->num_functions; i++) {
+        Elf64_Sym *sym = &symbols[i + 1];
+        sym->st_name = string_offsets[i];
+        sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC);
+        sym->st_other = STV_DEFAULT;
+        sym->st_shndx = SEC_TEXT;
+        sym->st_value = builder->functions[i].addr - builder->low_pc;
+        sym->st_size = builder->functions[i].size;
+    }
+
+    // File layout: [ELF header][section headers][section data...]
+    size_t header_size = sizeof(Elf64_Ehdr);
+    size_t shdrs_size = (size_t)SEC_COUNT * sizeof(Elf64_Shdr);
+    size_t data_offset = header_size + shdrs_size;
+    data_offset = (data_offset + 7) & ~((size_t)7);
+
+    size_t abbrev_offset = data_offset;
+    size_t info_offset = (abbrev_offset + abbrev_buf.size + 7) & ~((size_t)7);
+    size_t symtab_offset = (info_offset + info_buf.size + 7) & ~((size_t)7);
+    size_t strtab_offset = (symtab_offset + symtab_size + 7) & ~((size_t)7);
+    size_t shstrtab_offset = (strtab_offset + strtab.size + 7) & ~((size_t)7);
+    size_t total_size = shstrtab_offset + shstrtab.size;
+
+    Elf64_Shdr shdrs[SEC_COUNT];
+    memset(shdrs, 0, sizeof(shdrs));
+
+    uint64_t text_size = builder->high_pc - builder->low_pc;
+
+    shdrs[SEC_TEXT].sh_name = text_name;
+    shdrs[SEC_TEXT].sh_type = SHT_NOBITS;
+    shdrs[SEC_TEXT].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+    shdrs[SEC_TEXT].sh_addr = builder->low_pc;
+    shdrs[SEC_TEXT].sh_offset = 0;
+    shdrs[SEC_TEXT].sh_size = text_size;
+    shdrs[SEC_TEXT].sh_addralign = 16;
+
+    shdrs[SEC_DEBUG_ABBREV].sh_name = abbrev_name;
+    shdrs[SEC_DEBUG_ABBREV].sh_type = SHT_PROGBITS;
+    shdrs[SEC_DEBUG_ABBREV].sh_offset = abbrev_offset;
+    shdrs[SEC_DEBUG_ABBREV].sh_size = abbrev_buf.size;
+    shdrs[SEC_DEBUG_ABBREV].sh_addralign = 1;
+
+    shdrs[SEC_DEBUG_INFO].sh_name = info_name;
+    shdrs[SEC_DEBUG_INFO].sh_type = SHT_PROGBITS;
+    shdrs[SEC_DEBUG_INFO].sh_offset = info_offset;
+    shdrs[SEC_DEBUG_INFO].sh_size = info_buf.size;
+    shdrs[SEC_DEBUG_INFO].sh_addralign = 1;
+
+    shdrs[SEC_SYMTAB].sh_name = symtab_name;
+    shdrs[SEC_SYMTAB].sh_type = SHT_SYMTAB;
+    shdrs[SEC_SYMTAB].sh_offset = symtab_offset;
+    shdrs[SEC_SYMTAB].sh_size = symtab_size;
+    shdrs[SEC_SYMTAB].sh_link = SEC_STRTAB;
+    shdrs[SEC_SYMTAB].sh_info = 1; // first non-local symbol index
+    shdrs[SEC_SYMTAB].sh_addralign = 8;
+    shdrs[SEC_SYMTAB].sh_entsize = sizeof(Elf64_Sym);
+
+    shdrs[SEC_STRTAB].sh_name = strtab_name;
+    shdrs[SEC_STRTAB].sh_type = SHT_STRTAB;
+    shdrs[SEC_STRTAB].sh_offset = strtab_offset;
+    shdrs[SEC_STRTAB].sh_size = strtab.size;
+    shdrs[SEC_STRTAB].sh_addralign = 1;
+
+    shdrs[SEC_SHSTRTAB].sh_name = shstrtab_name;
+    shdrs[SEC_SHSTRTAB].sh_type = SHT_STRTAB;
+    shdrs[SEC_SHSTRTAB].sh_offset = shstrtab_offset;
+    shdrs[SEC_SHSTRTAB].sh_size = shstrtab.size;
+    shdrs[SEC_SHSTRTAB].sh_addralign = 1;
+
+    Elf64_Ehdr ehdr;
+    memset(&ehdr, 0, sizeof(ehdr));
+    ehdr.e_ident[EI_MAG0] = ELFMAG0;
+    ehdr.e_ident[EI_MAG1] = ELFMAG1;
+    ehdr.e_ident[EI_MAG2] = ELFMAG2;
+    ehdr.e_ident[EI_MAG3] = ELFMAG3;
+    ehdr.e_ident[EI_CLASS] = ELFCLASS64;
+    ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
+    ehdr.e_ident[EI_VERSION] = EV_CURRENT;
+    ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
+    ehdr.e_type = ET_REL;
+#ifdef __aarch64__
+    ehdr.e_machine = EM_AARCH64;
+#elif defined(__x86_64__)
+    ehdr.e_machine = EM_X86_64;
+#else
+    ehdr.e_machine = EM_NONE;
+#endif
+    ehdr.e_version = EV_CURRENT;
+    ehdr.e_ehsize = sizeof(Elf64_Ehdr);
+    ehdr.e_shoff = sizeof(Elf64_Ehdr);
+    ehdr.e_shentsize = sizeof(Elf64_Shdr);
+    ehdr.e_shnum = SEC_COUNT;
+    ehdr.e_shstrndx = SEC_SHSTRTAB;
+
+    buffer_ensure(output, total_size);
+    buffer_write_bytes(output, &ehdr, sizeof(ehdr));
+    buffer_write_bytes(output, shdrs, sizeof(shdrs));
+
+    while (output->size < abbrev_offset) {
+        buffer_write_u8(output, 0);
+    }
+    buffer_write_bytes(output, abbrev_buf.data, abbrev_buf.size);
+
+    while (output->size < info_offset) {
+        buffer_write_u8(output, 0);
+    }
+    buffer_write_bytes(output, info_buf.data, info_buf.size);
+
+    while (output->size < symtab_offset) {
+        buffer_write_u8(output, 0);
+    }
+    buffer_write_bytes(output, symbols, symtab_size);
+
+    while (output->size < strtab_offset) {
+        buffer_write_u8(output, 0);
+    }
+    buffer_write_bytes(output, strtab.data, strtab.size);
+
+    while (output->size < shstrtab_offset) {
+        buffer_write_u8(output, 0);
+    }
+    buffer_write_bytes(output, shstrtab.data, shstrtab.size);
+
+    free(symbols);
+    free(string_offsets);
+    buffer_free(&shstrtab);
+    buffer_free(&strtab);
+    buffer_free(&abbrev_buf);
+    buffer_free(&info_buf);
 }
 #endif
 

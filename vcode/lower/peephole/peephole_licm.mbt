@@ -468,6 +468,89 @@ fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
 }
 
 ///|
+fn invert_cond(cond : @instr.Cond) -> @instr.Cond {
+  match cond {
+    @instr.Cond::Eq => @instr.Cond::Ne
+    @instr.Cond::Ne => @instr.Cond::Eq
+    @instr.Cond::Hs => @instr.Cond::Lo
+    @instr.Cond::Lo => @instr.Cond::Hs
+    @instr.Cond::Mi => @instr.Cond::Pl
+    @instr.Cond::Pl => @instr.Cond::Mi
+    @instr.Cond::Vs => @instr.Cond::Vc
+    @instr.Cond::Vc => @instr.Cond::Vs
+    @instr.Cond::Ps => @instr.Cond::Pc
+    @instr.Cond::Pc => @instr.Cond::Ps
+    @instr.Cond::Hi => @instr.Cond::Ls
+    @instr.Cond::Ls => @instr.Cond::Hi
+    @instr.Cond::Ge => @instr.Cond::Lt
+    @instr.Cond::Lt => @instr.Cond::Ge
+    @instr.Cond::Gt => @instr.Cond::Le
+    @instr.Cond::Le => @instr.Cond::Gt
+    @instr.Cond::Al => @instr.Cond::Al
+  }
+}
+
+///|
+fn eval_cmp_imm_cond(lhs : Int, rhs : Int, cond : @instr.Cond) -> Bool {
+  match cond {
+    @instr.Cond::Eq => lhs == rhs
+    @instr.Cond::Ne => lhs != rhs
+    @instr.Cond::Hs | @instr.Cond::Ge => lhs >= rhs
+    @instr.Cond::Lo | @instr.Cond::Lt => lhs < rhs
+    @instr.Cond::Hi | @instr.Cond::Gt => lhs > rhs
+    @instr.Cond::Ls | @instr.Cond::Le => lhs <= rhs
+    @instr.Cond::Al => true
+    _ => false
+  }
+}
+
+///|
+fn classify_cmp_result_branching(imm : Int, cond : @instr.Cond) -> Bool? {
+  let when_cmp_true = eval_cmp_imm_cond(1, imm, cond)
+  let when_cmp_false = eval_cmp_imm_cond(0, imm, cond)
+  if when_cmp_true && !when_cmp_false {
+    return Some(true)
+  }
+  if !when_cmp_true && when_cmp_false {
+    return Some(false)
+  }
+  None
+}
+
+///|
+fn build_cmp_branch_terminator(
+  lhs : @abi.Reg,
+  rhs : @abi.Reg,
+  cmp_kind : @instr.CmpKind,
+  cmp_is_64 : Bool,
+  branch_when_cmp_true : Bool,
+  then_id : Int,
+  else_id : Int,
+  const_defs : Map[Int, Int64],
+) -> @instr.VCodeTerminator {
+  let mut cond = cmp_kind_to_cond(cmp_kind)
+  if !branch_when_cmp_true {
+    cond = invert_cond(cond)
+  }
+  if rhs is Virtual(rhs_vreg) &&
+    const_defs.get(rhs_vreg.id) is Some(val) &&
+    is_valid_add_imm(val) {
+    @instr.VCodeTerminator::BranchCmpImm(
+      lhs,
+      val.to_int(),
+      cond,
+      cmp_is_64,
+      then_id,
+      else_id,
+    )
+  } else {
+    @instr.VCodeTerminator::BranchCmp(
+      lhs, rhs, cond, cmp_is_64, then_id, else_id,
+    )
+  }
+}
+
+///|
 /// Check whether an opcode is trivially dead when its defs are unused.
 fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
   match op {
@@ -544,14 +627,26 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
 /// This reduces redundant copies created by earlier passes.
 fn propagate_single_use_moves(
   block : @block.VCodeBlock,
-  global_use_counts : Map[Int, Int],
+  global_use_counts : Array[Int],
 ) -> Unit {
-  let use_counts : Map[Int, Int] = {}
+  let use_counts : Array[Int] = Array::make(global_use_counts.length(), 0)
+  fn get_count(counts : Array[Int], id : Int) -> Int {
+    if id >= 0 && id < counts.length() {
+      counts[id]
+    } else {
+      0
+    }
+  }
+  fn inc_count(counts : Array[Int], id : Int) -> Unit {
+    if id < 0 || id >= counts.length() {
+      return
+    }
+    counts[id] = counts[id] + 1
+  }
   for inst in block.insts {
     for use_ in inst.uses {
       if get_vreg_id(use_) is Some(vid) {
-        let count = use_counts.get(vid).unwrap_or(0)
-        use_counts.set(vid, count + 1)
+        inc_count(use_counts, vid)
       }
     }
   }
@@ -568,8 +663,7 @@ fn propagate_single_use_moves(
     }
     for use_ in term_uses {
       if get_vreg_id(use_) is Some(vid) {
-        let count = use_counts.get(vid).unwrap_or(0)
-        use_counts.set(vid, count + 1)
+        inc_count(use_counts, vid)
       }
     }
   }
@@ -593,9 +687,9 @@ fn propagate_single_use_moves(
       inst.defs[0].reg is Virtual(dst_vreg) &&
       inst.uses[0] is Virtual(src_vreg) &&
       same_reg_class(dst_vreg.class, src_vreg.class) &&
-      use_counts.get(dst_vreg.id).unwrap_or(0) == 1 &&
-      global_use_counts.get(dst_vreg.id).unwrap_or(0) ==
-      use_counts.get(dst_vreg.id).unwrap_or(0) {
+      get_count(use_counts, dst_vreg.id) == 1 &&
+      get_count(global_use_counts, dst_vreg.id) ==
+      get_count(use_counts, dst_vreg.id) {
       let resolved = resolve_copy(src_vreg, copies)
       copies.set(dst_vreg.id, resolved)
       to_remove.add(i)
@@ -1065,10 +1159,53 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
     }
   }
   for blk in func.blocks {
-    if blk.terminator
-      is Some(@instr.VCodeTerminator::Branch(cond, then_id, else_id)) &&
-      cond is Virtual(cond_vreg) &&
-      blk.insts.length() > 0 {
+    let mut cond_vreg_opt : @abi.VReg? = None
+    let mut then_id = -1
+    let mut else_id = -1
+    let mut branch_when_cmp_true = true
+    match blk.terminator {
+      Some(@instr.VCodeTerminator::Branch(cond, then_b, else_b)) =>
+        if cond is Virtual(cond_vreg) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = true
+        }
+      Some(
+        @instr.VCodeTerminator::BranchZero(
+          cond,
+          is_nonzero,
+          _is_64,
+          then_b,
+          else_b
+        )
+      ) =>
+        if cond is Virtual(cond_vreg) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = is_nonzero
+        }
+      Some(
+        @instr.VCodeTerminator::BranchCmpImm(
+          lhs,
+          imm,
+          cond,
+          _is_64,
+          then_b,
+          else_b
+        )
+      ) =>
+        if lhs is Virtual(cond_vreg) &&
+          classify_cmp_result_branching(imm, cond) is Some(should_branch) {
+          cond_vreg_opt = Some(cond_vreg)
+          then_id = then_b
+          else_id = else_b
+          branch_when_cmp_true = should_branch
+        }
+      _ => ()
+    }
+    if cond_vreg_opt is Some(cond_vreg) && blk.insts.length() > 0 {
       let mut cond_uses = 0
       for inst in blk.insts {
         for use_ in inst.uses {
@@ -1095,23 +1232,9 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
           cmp.uses.length() == 2 {
           let lhs = cmp.uses[0]
           let rhs = cmp.uses[1]
-          let cond = cmp_kind_to_cond(kind)
-          let new_term = if rhs is Virtual(rhs_vreg) &&
-            const_defs.get(rhs_vreg.id) is Some(val) &&
-            is_valid_add_imm(val) {
-            @instr.VCodeTerminator::BranchCmpImm(
-              lhs,
-              val.to_int(),
-              cond,
-              is_64,
-              then_id,
-              else_id,
-            )
-          } else {
-            @instr.VCodeTerminator::BranchCmp(
-              lhs, rhs, cond, is_64, then_id, else_id,
-            )
-          }
+          let new_term = build_cmp_branch_terminator(
+            lhs, rhs, kind, is_64, branch_when_cmp_true, then_id, else_id, const_defs,
+          )
           let new_insts : Array[@instr.VCodeInst] = []
           for i, inst in blk.insts {
             if i != idx {
@@ -1363,17 +1486,34 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
 ///|
 /// Run peephole optimization on an entire VCode function
 /// This should be called after lower_function and before register allocation
-pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
+pub(all) enum PeepholeProfile {
+  Full
+  Lowering
+}
+
+///|
+pub fn optimize_vcode(
+  func : @regalloc.VCodeFunction,
+  profile? : PeepholeProfile = Full,
+) -> Unit {
   let mut inst_count = 0
   for block in func.blocks {
     inst_count = inst_count + block.insts.length()
   }
-  let enable_licm = true
-  let enable_immutable_load_cse = true
-  let enable_mem_base_cse = true
-  // Keep memory peepholes enabled for all functions.
-  // Runtime code quality is prioritized over compile-time savings here.
-  let enable_mem_peepholes = true
+  // Cranelift-aligned compile-time guardrail:
+  // avoid expensive ad-hoc peephole sweeps on very large functions.
+  // Large kernels already get most wins from IR/VCode canonicalization and
+  // regalloc; extra local sweeps tend to add substantial compile latency.
+  let large_func_threshold = 1200
+  let is_large_func = inst_count >= large_func_threshold
+
+  let enable_full_passes = profile is Full
+  let enable_licm = enable_full_passes && !is_large_func
+  let enable_immutable_load_cse = enable_full_passes && !is_large_func
+  let enable_mem_base_cse = enable_full_passes
+  let enable_mem_peepholes = enable_full_passes && !is_large_func
+  let enable_inplace_updates = enable_full_passes && !is_large_func
+  let enable_copy_prop = true
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
@@ -1394,9 +1534,11 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
     optimize_block(block, func, state) |> ignore
   }
   // Pass 1.5: Copy propagation for single-use moves
-  let global_use_counts = collect_use_counts(func)
-  for block in func.blocks {
-    propagate_single_use_moves(block, global_use_counts)
+  if enable_copy_prop {
+    let global_use_counts = collect_use_counts(func)
+    for block in func.blocks {
+      propagate_single_use_moves(block, global_use_counts)
+    }
   }
   // Pass 1.6: Global copy propagation for virtual moves.
   // Keep this disabled for now: global propagation tends to increase
@@ -1414,8 +1556,10 @@ pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
   dce_trivially_dead(func)
 
   // Pass 2: In-place update optimization
-  for block in func.blocks {
-    optimize_inplace_updates(block) |> ignore
+  if enable_inplace_updates {
+    for block in func.blocks {
+      optimize_inplace_updates(block) |> ignore
+    }
   }
 
   if enable_mem_peepholes {

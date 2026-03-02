@@ -14,6 +14,9 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
   _shared_exit_block : Int?,
 ) -> Unit {
   let isa = @isa.ISA::current()
+  fn fits_i32(value : Int) -> Bool {
+    value >= -2147483648 && value <= 2147483647
+  }
   fn trap_msg_to_imm16(msg : String) -> Int {
     if msg == "unreachable" {
       0
@@ -90,12 +93,20 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
     }
     @instr.BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       let rn = reg_num(lhs)
-      let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, imm.to_int64())
-      if is_64 {
-        self.x86_emit_cmp_rr(rn, scratch)
+      if fits_i32(imm) {
+        if is_64 {
+          self.x86_emit_cmp_r_imm32(rn, imm)
+        } else {
+          self.x86_emit_cmp_r32_imm32(rn, imm)
+        }
       } else {
-        self.x86_emit_cmp_rr32(rn, scratch)
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, imm.to_int64())
+        if is_64 {
+          self.x86_emit_cmp_rr(rn, scratch)
+        } else {
+          self.x86_emit_cmp_rr32(rn, scratch)
+        }
       }
       if next_block == Some(then_b) {
         self.x86_emit_jcc_rel32(cond.invert(), else_b)

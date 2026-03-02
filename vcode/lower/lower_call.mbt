@@ -38,7 +38,7 @@ fn emit_wasm_overflow_arg_stores(
   block : @block.VCodeBlock,
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
-) -> Unit {
+) -> Int {
   let max_int_reg_args = wasm_user_arg_gprs().length()
   let max_float_reg_args = wasm_arg_fprs().length()
   let int_overflow = if int_args.length() > max_int_reg_args {
@@ -69,6 +69,7 @@ fn emit_wasm_overflow_arg_stores(
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
+  total_bytes
 }
 
 ///|
@@ -145,7 +146,7 @@ fn lower_wasm_call_common(
   }
 
   // Store overflow args to stack (pre-allocated outgoing args area at SP).
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
 
   // vmctx constrained to the ISA's vmctx-arg register.
   call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
@@ -306,10 +307,13 @@ fn lower_return_call(
   }
 
   // Calculate overflow args count (user args, not including vmctx)
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
+  let stack_arg_bytes = emit_wasm_overflow_arg_stores(
+    ctx, block, int_args, float_args,
+  )
 
   // Create ReturnCallIndirect instruction with fixed register constraints
-  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+  // Encode tail-call stack-bytes in opcode metadata.
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
@@ -449,10 +453,13 @@ fn lower_return_call_indirect(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
+  let stack_arg_bytes = emit_wasm_overflow_arg_stores(
+    ctx, block, int_args, float_args,
+  )
 
   // Create ReturnCallIndirect with fixed constraints
-  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+  // Encode tail-call stack-bytes in opcode metadata.
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
@@ -534,10 +541,13 @@ fn lower_return_call_ref(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
+  let stack_arg_bytes = emit_wasm_overflow_arg_stores(
+    ctx, block, int_args, float_args,
+  )
 
   // Create ReturnCallIndirect with fixed constraints
-  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(0, 0))
+  // Encode tail-call stack-bytes in opcode metadata.
+  let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
@@ -872,7 +882,7 @@ fn lower_call_ptr(
       @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
     }
   }
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args)
+  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)

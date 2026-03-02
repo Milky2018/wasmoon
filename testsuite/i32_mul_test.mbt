@@ -66,8 +66,8 @@ test "i32 mul" {
       #|vcode test(v0:int, v1:int) -> int {
       #|block0:
       #|    x2 = ldi 3
-      #|    x4 = mul32 x1, x2
-      #|    ret x4
+      #|    x3 = mul32 x1, x2
+      #|    ret x3
       #|}
       #|
     ),
@@ -78,8 +78,8 @@ test "i32 mul" {
     content=(
       #|block0:
       #|  0000: 620080d2  movz x2, #3, lsl #0
-      #|  0004: 247c021b  mul w4, w1, w2
-      #|  0008: e00304aa  mov x0, x4
+      #|  0004: 237c021b  mul w3, w1, w2
+      #|  0008: e00303aa  mov x0, x3
       #|  000c: c0035fd6  ret
       #|
     ),

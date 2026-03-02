@@ -152,7 +152,8 @@ test "egraph: const_fold_and" {
       #|function test(v0:i64) -> i32 {
       #|block0:
       #|    v2:i32 = iconst 15
-      #|    return v2
+      #|    v3:i32 = copy v2
+      #|    return v3
       #|}
       #|
     ),

@@ -8,6 +8,9 @@
 // redundant StackLoad instructions.
 
 ///|
+const RELOAD_COALESCING_MAX_INSTS : Int = 1200
+
+///|
 /// A reload interval tracks where a reloaded value can be kept alive
 /// to eliminate redundant loads from the same spill slot.
 priv struct ReloadInterval {
@@ -22,6 +25,16 @@ fn compute_reload_intervals(
   func : VCodeFunction,
   alloc : RegAllocResult,
 ) -> Map[(Int, Int), ReloadInterval] {
+  let mut inst_count = 0
+  for block in func.blocks {
+    inst_count = inst_count + block.insts.length()
+  }
+  // Cranelift/regalloc2 does not run a dedicated spill-reload coalescing pass.
+  // Keep this Wasmoon-specific pass bounded so large-function compile time stays
+  // predictable and aligned with Cranelift's hot-path behavior.
+  if inst_count >= RELOAD_COALESCING_MAX_INSTS {
+    return {}
+  }
   let intervals : Map[(Int, Int), ReloadInterval] = {}
   for block_idx, block in func.blocks {
     // Track uses of spilled vregs in this block.
@@ -82,7 +95,11 @@ fn allocate_reload_registers(
   func : VCodeFunction,
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
+  liveness : LivenessResult,
 ) -> Unit {
+  if intervals.is_empty() {
+    return
+  }
   if @sys.get_env_var("WASMOON_DISABLE_RELOAD_COALESCING") is Some(v) &&
     (v == "1" || v == "true" || v == "TRUE") {
     return
@@ -128,9 +145,10 @@ fn allocate_reload_registers(
       for idx in [19, 20, 22, 23, 24, 25, 26, 27, 28] {
         reload_int_regs.push(idx)
       }
-      // In blocks without calls, allow a small caller-saved fallback set.
-      // Keep x0-x7 out to avoid competing with common argument/result traffic.
-      for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
+      // In call-free blocks, allow the full caller-saved allocatable set.
+      // This matches Cranelift/regalloc2's ability to use arg/result regs when
+      // liveness allows and helps reduce stack reload churn in tight loops.
+      for idx in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] {
         reload_int_regs_callfree_extra.push(idx)
       }
       for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
@@ -168,7 +186,6 @@ fn allocate_reload_registers(
   // fixed-reg constraints. This is less restrictive than a whole-function ban
   // and aligns closer to Cranelift/regalloc2's local freedom to reuse regs in
   // unrelated blocks.
-  let liveness = compute_liveness(func)
   let block_int_used_map : Map[Int, @hashset.HashSet[Int]] = {}
   let block_float_used_map : Map[Int, @hashset.HashSet[Int]] = {}
   let block_has_call_map : Map[Int, Bool] = {}

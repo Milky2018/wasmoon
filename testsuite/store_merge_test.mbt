@@ -1,6 +1,6 @@
 ///|
-/// Test for store merging peephole optimization
-test "store_merging_peephole" {
+/// Lowering profile keeps machine-level memory merge rewrites disabled.
+test "lowering_profile_keeps_store8_pairs" {
   if @isa.ISA::current() is @isa.AMD64 {
     return
   }
@@ -37,15 +37,15 @@ test "store_merging_peephole" {
   @ir.optimize(ir_func) |> ignore
   let vcode = @lower.lower_function(ir_func)
 
-  // Print VCode to see if store merging happened
+  // Lowering profile should keep explicit byte stores (Cranelift-aligned).
   inspect(
     vcode,
     content=(
       #|vcode test(v0:int, v1:int, v2:int) {
       #|block0:
       #|    v4 = load_mem_base mem=0 x21
-      #|    v9 = or.lsl #8 v1, v2
-      #|    store_ptr16 +200 v4, v9
+      #|    store_ptr8 +200 v4, v1
+      #|    store_ptr8 +201 v4, v2
       #|    ret
       #|}
       #|

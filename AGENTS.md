@@ -94,7 +94,6 @@ lldb -- ./wasmoon test path/to/test.wast
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -107,5 +106,3 @@ lldb -- ./wasmoon test path/to/test.wast
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-
-Use 'bd' for task tracking

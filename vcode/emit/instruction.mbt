@@ -1141,29 +1141,27 @@ fn MachineCode::emit_instruction(
       let rm = reg_num(inst.uses[1])
       self.emit_smull(rd, rn, rm)
     }
-    ReturnCallIndirect(_num_args, _num_results) => {
-      // Tail call optimization
-      // Parameters are already set up by lowering phase via:
-      // - StoreToStack for overflow arguments
-      // - add_use_fixed constraints for register arguments (X0=vmctx, X1-X7/V0-V7=args)
-      // Emit only needs to:
-      // 1. Restore callee-saved registers (epilogue)
-      // 2. BR to function pointer (doesn't save return address, callee returns to our caller)
-
-      // Epilogue - restore callee-saved registers and frame pointer
-      // Tail call common sequence
-      self.emit_epilogue(stack_frame)
-
-      // BR (not BLR) - jump to function without saving return address
-      // The call target is the first use operand.
-      // This is the KEY tail call semantic: callee returns directly to our caller.
+    ReturnCallIndirect(stack_arg_bytes, _num_results) => {
+      // Tail call optimization.
+      //
+      // When no overflow stack args are involved we can emit a true tail jump:
+      // epilogue + BR.
+      //
+      // With overflow stack args, the current ABI frame layout cannot guarantee
+      // safe in-place tail stack forwarding for all cases, so lower to
+      // call+return to preserve correctness.
       let target = match inst.use_constraints[0] {
         @abi.FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
-      self.emit_br(target)
-
-      // Note: No code after BR - control never returns here
+      if stack_arg_bytes > 0 {
+        self.emit_blr(target)
+        self.emit_epilogue(stack_frame)
+        self.emit_ret(30)
+      } else {
+        self.emit_epilogue(stack_frame)
+        self.emit_br(target)
+      }
     }
     TypeCheckIndirect(expected_type) => {
       // Check if actual_type == expected_type, trap if not
@@ -1288,13 +1286,13 @@ fn MachineCode::emit_instruction(
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 base pointer is cached in X20.
-        if dst != @isaregs.mem0_desc_index() {
-          self.emit_mov_reg(dst, @isaregs.mem0_desc_index())
+        // Fast path: memory0 base pointer is cached in the fixed register.
+        let mem0_base = @isaregs.mem0_desc_index()
+        if dst != mem0_base {
+          self.emit_mov_reg(dst, mem0_base)
         }
       } else if memidx == 0 {
-        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
-        self.emit_ldr_imm(dst, dst, 0)
+        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_BASE_OFFSET)
       } else {
         self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
         self.emit_ldr_imm(dst, dst, memidx * 8)
@@ -1308,19 +1306,27 @@ fn MachineCode::emit_instruction(
       let base_reg = reg_num(inst.uses[0])
       self.emit_load(ty, result_reg, base_reg, offset)
     }
-    LoadPtrRegOffset(ty, ext, shift) => {
+    LoadPtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer load with register offset (no bounds checking)
       // Uses: [base, index], Defs: [result]
       let result_reg = wreg_num(inst.defs[0])
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
+      if offset != 0 {
+        abort("LoadPtrRegOffset: non-zero offset not supported on AArch64")
+      }
       self.emit_load_reg_offset(ty, result_reg, base_reg, index_reg, ext, shift)
     }
-    LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
       // Raw pointer narrow load with register offset (no bounds checking).
       let result_reg = wreg_num(inst.defs[0])
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
+      if offset != 0 {
+        abort(
+          "LoadPtrNarrowRegOffset: non-zero offset not supported on AArch64",
+        )
+      }
       let option = index_extend_to_option(ext)
       match (bits, signed) {
         (8, false) =>
@@ -1363,19 +1369,27 @@ fn MachineCode::emit_instruction(
       let value_reg = reg_num(inst.uses[1])
       self.emit_store(ty, value_reg, base_reg, offset)
     }
-    StorePtrRegOffset(ty, ext, shift) => {
+    StorePtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer store with register offset (no bounds checking)
       // Uses: [base, index, value], Defs: []
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
       let value_reg = reg_num(inst.uses[2])
+      if offset != 0 {
+        abort("StorePtrRegOffset: non-zero offset not supported on AArch64")
+      }
       self.emit_store_reg_offset(ty, value_reg, base_reg, index_reg, ext, shift)
     }
-    StorePtrNarrowRegOffset(bits, ext, shift) => {
+    StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
       // Raw pointer narrow store with register offset (no bounds checking).
       let base_reg = reg_num(inst.uses[0])
       let index_reg = reg_num(inst.uses[1])
       let value_reg = reg_num(inst.uses[2])
+      if offset != 0 {
+        abort(
+          "StorePtrNarrowRegOffset: non-zero offset not supported on AArch64",
+        )
+      }
       let option = index_extend_to_option(ext)
       match bits {
         8 =>
@@ -1499,10 +1513,18 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64_fixed(result_reg, 0L)
       self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
     }
-    CallDirect(func_idx, _num_args, _num_results, _call_conv) =>
-      // Emit BL with runtime fixup. A local veneer fallback is appended later
-      // (during function finalization) for out-of-range targets.
+    // Emit BL with runtime fixup. A local veneer fallback is appended later
+    // (during function finalization) for out-of-range targets.
+    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       self.emit_bl_func(func_idx)
+      if stack_frame.cache_mem0_desc {
+        self.emit_ldr_imm(
+          @isaregs.mem0_desc_index(),
+          @isaregs.vmctx_index(),
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
+      }
+    }
     CallPtr(_, _, _call_conv) => {
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.
@@ -1511,6 +1533,13 @@ fn MachineCode::emit_instruction(
         _ => reg_num(inst.uses[0])
       }
       self.emit_blr(target)
+      if stack_frame.cache_mem0_desc {
+        self.emit_ldr_imm(
+          @isaregs.mem0_desc_index(),
+          @isaregs.vmctx_index(),
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
+      }
     }
     AdjustSP(delta) =>
       // Adjust stack pointer by delta bytes

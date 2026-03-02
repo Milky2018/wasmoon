@@ -254,10 +254,10 @@ fn lower_struct_new(
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
-  // Fast path (AArch64): inline bump allocation with slow-path fallback.
+  // Fast path: inline bump allocation with slow-path fallback.
   // Keep `struct.new_default` as pure slow path (num_fields == 0).
-  // AArch64 LDR/STR (immediate, 64-bit) encodes offsets up to 32760 bytes.
-  if @isa.ISA::current() is @isa.AArch64 && num_fields > 0 && num_fields <= 4092 {
+  // Keep a conservative field-count cap for inline lowering.
+  if num_fields > 0 && num_fields <= 4092 {
     // Use outgoing args area as temporary field buffer.
     let stack_space = (num_fields * 8 + 15) / 16 * 16
     ctx.vcode_func.update_max_outgoing_args_size(stack_space)
@@ -671,9 +671,9 @@ fn lower_array_new_fixed(
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
-  // Fast path (AArch64): inline fixed-array allocation with slow-path fallback.
-  // AArch64 LDR/STR (immediate, 64-bit) encodes offsets up to 32760 bytes.
-  if @isa.ISA::current() is @isa.AArch64 && len > 0 && len <= 4092 {
+  // Fast path: inline fixed-array allocation with slow-path fallback.
+  // Keep a conservative element-count cap for inline lowering.
+  if len > 0 && len <= 4092 {
     // Spill all element values to outgoing args area as contiguous int64_t[].
     let stack_space = (len * 8 + 15) / 16 * 16
     ctx.vcode_func.update_max_outgoing_args_size(stack_space)

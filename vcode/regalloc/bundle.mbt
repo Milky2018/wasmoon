@@ -9,7 +9,9 @@ struct Bundle {
   id : Int
   mut spillset_id : Int // Original bundle ID before splitting (Cranelift-style spillset)
   range_ids : Array[Int] // Indices into LiveRangeSet
-  mut spill_weight : Double // Priority for allocation (higher = more important)
+  mut merged_ranges : Array[ProgPointRange]? // Sorted merged ranges for fast regalloc span setup
+  mut spill_weight : Int // Priority for allocation (higher = more important)
+  mut prio : Int // Cached queue priority (total covered length)
   mut spill_bundle_id : Int // SpillBundle ID for split bundles (-1 if none)
   mut allocation : Allocation // Current allocation
   reg_class : @abi.RegClass // Register class for this bundle
@@ -18,6 +20,8 @@ struct Bundle {
   mut crosses_call_cached : Bool
   mut crosses_wasm_call_cached : Bool
   mut crosses_c_call_cached : Bool
+  mut requirement_flags_ready : Bool // Lazy cache for fixed-constraint queries
+  mut has_fixed_constraint_cached : Bool
 }
 
 ///|
@@ -26,7 +30,9 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     id,
     spillset_id: id,
     range_ids: [],
-    spill_weight: 0.0,
+    merged_ranges: None,
+    spill_weight: 0,
+    prio: 1,
     spill_bundle_id: -1,
     allocation: Unallocated,
     reg_class,
@@ -35,6 +41,8 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     crosses_call_cached: false,
     crosses_wasm_call_cached: false,
     crosses_c_call_cached: false,
+    requirement_flags_ready: false,
+    has_fixed_constraint_cached: false,
   }
 }
 
@@ -42,7 +50,9 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
 /// Add a LiveRange to this bundle
 fn Bundle::add_range(self : Bundle, range_id : Int) -> Unit {
   self.range_ids.push(range_id)
+  self.merged_ranges = None
   self.call_flags_ready = false
+  self.requirement_flags_ready = false
 }
 
 ///|
@@ -91,16 +101,31 @@ pub fn Bundle::total_length(self : Bundle, ranges : LiveRangeSet) -> Int {
 
 ///|
 /// Check if this bundle has any fixed register constraint
+fn Bundle::ensure_requirement_flags(
+  self : Bundle,
+  ranges : LiveRangeSet,
+) -> Unit {
+  if self.requirement_flags_ready {
+    return
+  }
+  let mut has_fixed = false
+  for range_id in self.range_ids {
+    if ranges.get(range_id).has_fixed_constraint() {
+      has_fixed = true
+      break
+    }
+  }
+  self.has_fixed_constraint_cached = has_fixed
+  self.requirement_flags_ready = true
+}
+
+///|
 pub fn Bundle::has_fixed_constraint(
   self : Bundle,
   ranges : LiveRangeSet,
 ) -> Bool {
-  for range_id in self.range_ids {
-    if ranges.get(range_id).has_fixed_constraint() {
-      return true
-    }
-  }
-  false
+  self.ensure_requirement_flags(ranges)
+  self.has_fixed_constraint_cached
 }
 
 ///|
@@ -364,8 +389,8 @@ pub fn compute_spill_weight(
   bundle : Bundle,
   ranges : LiveRangeSet,
   loop_depths : Array[Int],
-) -> Double {
-  let mut weight = 0.0
+) -> Int {
+  let mut weight = 0
   for range_id in bundle.range_ids {
     let range = ranges.get(range_id)
     for use_pos in range.uses {
@@ -380,23 +405,23 @@ pub fn compute_spill_weight(
       if depth > 10 {
         depth = 10
       }
-      let mut hot_bonus = 1000.0
+      let mut hot_bonus = 1000
       for _ in 0..<depth {
-        hot_bonus = hot_bonus * 4.0
+        hot_bonus = hot_bonus * 4
       }
       let def_bonus = match use_pos.kind {
-        Def => 2000.0
-        Use => 0.0
+        Def => 2000
+        Use => 0
       }
       let constraint_bonus = match use_pos.constraint {
-        AnyReg => 1000.0
-        FixedReg(_) => 2000.0
+        AnyReg => 1000
+        FixedReg(_) => 2000
       }
       weight = weight + hot_bonus + def_bonus + constraint_bonus
     }
   }
-  if weight <= 0.0 {
-    1.0
+  if weight <= 0 {
+    1
   } else {
     weight
   }

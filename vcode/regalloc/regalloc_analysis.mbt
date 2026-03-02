@@ -138,8 +138,8 @@ pub impl Show for LiveInterval with output(self, logger) {
 /// Use-def information for a single vreg
 struct UseDefInfo {
   vreg : @abi.VReg
-  mut def_point : ProgPoint? // Where this vreg is defined
-  use_points : Array[ProgPoint] // Where this vreg is used
+  mut def_point : (ProgPoint, @abi.PReg?)? // Where this vreg is defined
+  use_points : Array[(ProgPoint, @abi.PReg?)] // Where this vreg is used
 }
 
 ///|
@@ -159,59 +159,90 @@ priv struct CFGEdges {
 }
 
 ///|
+fn build_block_id_to_index_dense(func : VCodeFunction) -> Array[Int] {
+  let mut max_block_id = -1
+  for block in func.blocks {
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
+  }
+  if max_block_id < 0 {
+    return []
+  }
+  let block_id_to_index = Array::make(max_block_id + 1, -1)
+  for i, block in func.blocks {
+    if block.id >= 0 && block.id < block_id_to_index.length() {
+      block_id_to_index[block.id] = i
+    }
+  }
+  block_id_to_index
+}
+
+///|
 /// Build CFG edges once (O(B + E))
 fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
   let blocks = func.blocks
   let n = func.blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index = build_block_id_to_index_dense(func)
 
   // Initialize arrays
   for _ in 0..<n {
     preds.push([])
     succs.push([])
   }
-  for i, block in blocks {
-    block_id_to_index.set(block.id, i)
-  }
 
   // Build edges from terminators
   for block_idx, block in blocks {
     if block.terminator is Some(term) {
-      let block_succ_ids = get_terminator_succ_ids(term)
       let block_succs : Array[Int] = []
-      for succ_id in block_succ_ids {
-        if block_id_to_index.get(succ_id) is Some(succ_idx) {
-          block_succs.push(succ_idx)
-          preds[succ_idx].push(block_idx)
+      fn push_succ(
+        block_id_to_index : Array[Int],
+        block_succs : Array[Int],
+        preds : Array[Array[Int]],
+        block_idx : Int,
+        succ_id : Int,
+      ) -> Unit {
+        if succ_id >= 0 && succ_id < block_id_to_index.length() {
+          let succ_idx = block_id_to_index[succ_id]
+          if succ_idx >= 0 {
+            block_succs.push(succ_idx)
+            preds[succ_idx].push(block_idx)
+          }
         }
+      }
+      match term {
+        Jump(target, _) =>
+          push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+        Branch(_, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
+          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
+          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+        }
+        BrTable(_, targets, default) => {
+          for target in targets {
+            push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+          }
+          push_succ(block_id_to_index, block_succs, preds, block_idx, default)
+        }
+        Return(_) | Trap(_) => ()
       }
       succs[block_idx] = block_succs
     }
   }
   { preds, succs }
-}
-
-///|
-/// Extract successor block IDs from terminator
-fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
-  match term {
-    Jump(target, _) => [target]
-    Branch(_, then_b, else_b) => [then_b, else_b]
-    BranchCmp(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BranchCmpImm(_, _, _, _, then_b, else_b) => [then_b, else_b]
-    BranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
-    BrTable(_, targets, default) => {
-      let result : Array[Int] = []
-      for t in targets {
-        result.push(t)
-      }
-      result.push(default)
-      result
-    }
-    Return(_) | Trap(_) => []
-  }
 }
 
 // ============ Worklist ============
@@ -257,11 +288,11 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
   for entry in liveness.use_def {
     let (vreg_id, info) = entry
     result = result + "  v\{vreg_id}: def=\{info.def_point}, uses=["
-    for i, use_point in info.use_points {
+    for i, use_entry in info.use_points {
       if i > 0 {
         result = result + ", "
       }
-      result = result + "\{use_point}"
+      result = result + "\{use_entry.0}"
     }
     result = result + "]\n"
   }
@@ -296,10 +327,16 @@ pub struct LivenessResult {
   intervals : Map[Int, LiveInterval]
   // Use-def chains
   use_def : Map[Int, UseDefInfo]
+  // Dense UseDef side table (vreg_id -> info) for regalloc hot path.
+  use_def_dense : Array[UseDefInfo?]
   // Block live-in sets (vregs live at block entry)
   live_in : Array[Set[Int]]
   // Block live-out sets (vregs live at block exit)
   live_out : Array[Set[Int]]
+  // Dense live-in rows per block (regalloc hot path).
+  mut live_in_dense : Array[Array[Int]]?
+  // Dense live-out rows per block (regalloc hot path).
+  mut live_out_dense : Array[Array[Int]]?
   // Block order: block_order[block_id] = linear position (O(1) lookup)
   block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
@@ -310,19 +347,15 @@ pub struct LivenessResult {
 /// Compute reverse postorder of blocks (for linearizing the CFG)
 /// Returns a FixedArray where order[block_idx] = position in reverse postorder
 fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
-  let blocks = func.blocks
   let n = func.blocks.length()
   let visited : Array[Bool] = Array::make(n, false)
   let postorder : Array[Int] = []
-  let block_id_to_index : Map[Int, Int] = {}
-  for i, block in blocks {
-    block_id_to_index.set(block.id, i)
-  }
+  let block_id_to_index = build_block_id_to_index_dense(func)
 
   // DFS to compute postorder
   fn dfs(
     func : VCodeFunction,
-    block_id_to_index : Map[Int, Int],
+    block_id_to_index : Array[Int],
     block_idx : Int,
     visited : Array[Bool],
     postorder : Array[Int],
@@ -335,11 +368,46 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
     // Visit successors first
     let block = func.blocks[block_idx]
     if block.terminator is Some(term) {
-      let succ_ids = get_terminator_succ_ids(term)
-      for succ_id in succ_ids {
-        if block_id_to_index.get(succ_id) is Some(succ_idx) {
-          dfs(func, block_id_to_index, succ_idx, visited, postorder)
+      fn visit_succ(
+        func : VCodeFunction,
+        block_id_to_index : Array[Int],
+        succ_id : Int,
+        visited : Array[Bool],
+        postorder : Array[Int],
+      ) -> Unit {
+        if succ_id >= 0 && succ_id < block_id_to_index.length() {
+          let succ_idx = block_id_to_index[succ_id]
+          if succ_idx >= 0 {
+            dfs(func, block_id_to_index, succ_idx, visited, postorder)
+          }
         }
+      }
+      match term {
+        Jump(target, _) =>
+          visit_succ(func, block_id_to_index, target, visited, postorder)
+        Branch(_, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchCmp(_, _, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchCmpImm(_, _, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BranchZero(_, _, _, then_b, else_b) => {
+          visit_succ(func, block_id_to_index, then_b, visited, postorder)
+          visit_succ(func, block_id_to_index, else_b, visited, postorder)
+        }
+        BrTable(_, targets, default) => {
+          for target in targets {
+            visit_succ(func, block_id_to_index, target, visited, postorder)
+          }
+          visit_succ(func, block_id_to_index, default, visited, postorder)
+        }
+        Return(_) | Trap(_) => ()
       }
     }
 
@@ -369,45 +437,101 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
 }
 
 ///|
-/// Compute liveness information for a VCode function
-pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
+/// Compute liveness information for a VCode function.
+fn compute_liveness_with_options(
+  func : VCodeFunction,
+  build_live_intervals : Bool,
+  record_sparse_use_def_map : Bool,
+) -> LivenessResult {
   let num_blocks = func.blocks.length()
   let live_in : Array[Set[Int]] = []
   let live_out : Array[Set[Int]] = []
-  for _ in 0..<num_blocks {
-    live_in.push(Set::new())
-    live_out.push(Set::new())
+  if build_live_intervals {
+    for _ in 0..<num_blocks {
+      live_in.push(Set::new())
+      live_out.push(Set::new())
+    }
   }
   // Compute block order directly as FixedArray
   let block_order = compute_reverse_postorder(func)
   let result : LivenessResult = {
     intervals: {},
     use_def: {},
+    use_def_dense: Array::make(func.next_vreg_id, None),
     live_in,
     live_out,
+    live_in_dense: None,
+    live_out_dense: None,
     block_order,
     call_points: [],
   }
 
   // Phase 1: Collect definitions and uses
-  collect_defs_uses(func, result)
+  collect_defs_uses(func, result, record_sparse_use_def_map)
 
   // Phase 2: Compute live-in and live-out sets using dataflow analysis
-  compute_live_sets(func, result)
+  compute_live_sets(func, result, build_live_intervals)
 
-  // Phase 3: Build live intervals from the live sets
-  build_intervals(func, result)
+  // Phase 3: Build live intervals from the live sets (debug/stats path).
+  if build_live_intervals {
+    build_intervals(func, result)
+  }
   result
 }
 
 ///|
+/// Compute full liveness information including interval maps.
+pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
+  compute_liveness_with_options(func, true, true)
+}
+
+///|
+/// Compute liveness for regalloc hot path (no interval map construction).
+pub fn compute_liveness_for_regalloc(func : VCodeFunction) -> LivenessResult {
+  compute_liveness_with_options(func, false, false)
+}
+
+///|
+fn ensure_use_def_info(
+  result : LivenessResult,
+  vreg : @abi.VReg,
+  record_sparse_use_def_map : Bool,
+) -> UseDefInfo {
+  if vreg.id >= 0 && vreg.id < result.use_def_dense.length() {
+    match result.use_def_dense[vreg.id] {
+      Some(info) => info
+      None => {
+        let info = UseDefInfo::new(vreg)
+        result.use_def_dense[vreg.id] = Some(info)
+        if record_sparse_use_def_map {
+          result.use_def.set(vreg.id, info)
+        }
+        info
+      }
+    }
+  } else {
+    match result.use_def.get(vreg.id) {
+      Some(existing) => existing
+      None => {
+        let info = UseDefInfo::new(vreg)
+        result.use_def.set(vreg.id, info)
+        info
+      }
+    }
+  }
+}
+
+///|
 /// Phase 1: Collect all definitions and uses
-fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
+fn collect_defs_uses(
+  func : VCodeFunction,
+  result : LivenessResult,
+  record_sparse_use_def_map : Bool,
+) -> Unit {
   // Record function parameters as definitions at the start
   for param in func.params {
-    let info = UseDefInfo::new(param)
-    info.def_point = Some({ block: 0, inst: -1, pos: After })
-    result.use_def.set(param.id, info)
+    let info = ensure_use_def_info(result, param, record_sparse_use_def_map)
+    info.def_point = Some(({ block: 0, inst: -1, pos: After }, None))
   }
 
   // Process each block
@@ -415,20 +539,14 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
     // Block parameters are SSA definitions at block entry.
     // Their incoming values are passed via Jump(target, args) on CFG edges.
     for param in block.params {
-      let info = if result.use_def.get(param.id) is Some(existing) {
-        existing
-      } else {
-        let new_info = UseDefInfo::new(param)
-        result.use_def.set(param.id, new_info)
-        new_info
-      }
+      let info = ensure_use_def_info(result, param, record_sparse_use_def_map)
       let def_point : ProgPoint = { block: block_idx, inst: -1, pos: After }
       if info.def_point is Some(_) {
         abort("block param defined twice")
       }
-      info.def_point = Some(def_point)
+      info.def_point = Some((def_point, None))
       // Also add a use point at block entry to keep it live through the block.
-      info.use_points.push({ block: block_idx, inst: 0, pos: Before })
+      info.use_points.push(({ block: block_idx, inst: 0, pos: Before }, None))
     }
 
     // Process instructions
@@ -452,30 +570,29 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
       }
 
       // Record uses (before the instruction)
-      for use_reg in inst.uses {
+      for i, use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) {
-          let info = if result.use_def.get(vreg.id) is Some(existing) {
-            existing
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
+          let fixed = if i < inst.use_constraints.length() &&
+            inst.use_constraints[i] is @abi.FixedReg(preg) {
+            Some(preg)
           } else {
-            let new_info = UseDefInfo::new(vreg)
-            result.use_def.set(vreg.id, new_info)
-            new_info
+            None
           }
-          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
+          info.use_points.push(
+            ({ block: block_idx, inst: inst_idx, pos: Before }, fixed),
+          )
         }
       }
 
       // Record definitions (after the instruction)
-      for def in inst.defs {
+      for i, def in inst.defs {
         if def.reg is @abi.Virtual(vreg) {
-          let info = match result.use_def.get(vreg.id) {
-            Some(existing) => existing
-            None => {
-              let new_info = UseDefInfo::new(vreg)
-              result.use_def.set(vreg.id, new_info)
-              new_info
-            }
-          }
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
           let new_def : ProgPoint = {
             block: block_idx,
             inst: inst_idx,
@@ -484,7 +601,13 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
           if info.def_point is Some(_) {
             abort("vreg defined multiple times (SSA violation)")
           }
-          info.def_point = Some(new_def)
+          let fixed = if i < inst.def_constraints.length() &&
+            inst.def_constraints[i] is @abi.FixedReg(preg) {
+            Some(preg)
+          } else {
+            None
+          }
+          info.def_point = Some((new_def, fixed))
         }
       }
     }
@@ -499,14 +622,12 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
         inst_idx : Int,
       ) -> Unit {
         if reg is @abi.Virtual(vreg) {
-          let info = if result.use_def.get(vreg.id) is Some(existing) {
-            existing
-          } else {
-            let new_info = UseDefInfo::new(vreg)
-            result.use_def.set(vreg.id, new_info)
-            new_info
-          }
-          info.use_points.push({ block: block_idx, inst: inst_idx, pos: Before })
+          let info = ensure_use_def_info(
+            result, vreg, record_sparse_use_def_map,
+          )
+          info.use_points.push(
+            ({ block: block_idx, inst: inst_idx, pos: Before }, None),
+          )
         }
       }
 
@@ -539,127 +660,161 @@ fn collect_defs_uses(func : VCodeFunction, result : LivenessResult) -> Unit {
 
 ///|
 /// Phase 2: Compute live-in and live-out sets
-fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
+fn compute_live_sets(
+  func : VCodeFunction,
+  result : LivenessResult,
+  materialize_sets : Bool,
+) -> Unit {
   // Fixed-point iteration for dataflow analysis
   // live_in[B] = use[B] ∪ (live_out[B] - def[B])
   // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
+  let num_blocks = func.blocks.length()
+  let num_vregs = func.next_vreg_id
 
-  // First, compute use and def sets for each block
-  let block_use : Array[Set[Int]] = []
-  let block_def : Array[Set[Int]] = []
-  for block in func.blocks {
-    let use_set : Set[Int] = Set::new()
-    let def_set : Set[Int] = Set::new()
+  fn mask_index(block_idx : Int, vreg_id : Int, row_width : Int) -> Int {
+    block_idx * row_width + vreg_id
+  }
 
-    // Block parameters are SSA definitions at block entry.
-    for param in block.params {
-      def_set.add(param.id)
+  // First, compute per-block use/def sets from collected SSA use-def info.
+  // This avoids a second full instruction walk after collect_defs_uses().
+  // Use contiguous block×vreg bit-matrices to avoid allocating one FixedArray
+  // per block row in the hot liveness path.
+  let matrix_size = num_blocks * num_vregs
+  let block_def_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
+  let live_in_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
+  let live_out_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
+  let live_in_list : Array[Array[Int]] = []
+  let live_out_list : Array[Array[Int]] = []
+  for _ in 0..<num_blocks {
+    live_in_list.push([])
+    live_out_list.push([])
+  }
+  let is_func_param_vreg : FixedArray[Bool] = FixedArray::make(num_vregs, false)
+  for param in func.params {
+    if param.id >= 0 && param.id < num_vregs {
+      is_func_param_vreg[param.id] = true
     }
+  }
 
-    // Process instructions
-    for inst in block.insts {
-      // Uses that are not already defined locally
-      for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-          use_set.add(vreg.id)
+  fn point_before(a : ProgPoint, b : ProgPoint) -> Bool {
+    if a.inst < b.inst {
+      true
+    } else if a.inst > b.inst {
+      false
+    } else {
+      match (a.pos, b.pos) {
+        (Before, After) => true
+        _ => false
+      }
+    }
+  }
+
+  for vreg_id in 0..<result.use_def_dense.length() {
+    if result.use_def_dense[vreg_id] is Some(info) {
+      let mut def_point : ProgPoint? = None
+      if info.def_point is Some((def, _)) {
+        let is_entry_param_def = def.block == 0 &&
+          def.inst == -1 &&
+          vreg_id >= 0 &&
+          vreg_id < num_vregs &&
+          is_func_param_vreg[vreg_id]
+        if !is_entry_param_def {
+          def_point = Some(def)
+        }
+        if !is_entry_param_def && def.block >= 0 && def.block < num_blocks {
+          let idx = mask_index(def.block, vreg_id, num_vregs)
+          if idx >= 0 && idx < block_def_mask.length() {
+            block_def_mask[idx] = true
+          }
         }
       }
-      // Definitions
-      for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
-          def_set.add(vreg.id)
+      for use_entry in info.use_points {
+        let use_point = use_entry.0
+        let block_idx = use_point.block
+        if block_idx < 0 || block_idx >= num_blocks {
+          continue
         }
-      }
-    }
-
-    // Terminator uses
-    if block.terminator is Some(term) {
-      match term {
-        Jump(_, args) =>
-          for a in args {
-            if a is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-              use_set.add(vreg.id)
+        let include_use = match def_point {
+          Some(def) =>
+            if def.block != block_idx {
+              true
+            } else {
+              point_before(use_point, def)
             }
-          }
-        Branch(cond, _, _) =>
-          if cond is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
-          }
-        BranchCmp(lhs, rhs, _, _, _, _) => {
-          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
-          }
-          if rhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
+          None => true
+        }
+        if include_use {
+          let idx = mask_index(block_idx, vreg_id, num_vregs)
+          if idx >= 0 && idx < live_in_mask.length() && !live_in_mask[idx] {
+            live_in_mask[idx] = true
+            live_in_list[block_idx].push(vreg_id)
           }
         }
-        BranchCmpImm(lhs, _, _, _, _, _) =>
-          if lhs is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
-          }
-        BranchZero(reg, _, _, _, _) =>
-          if reg is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
-          }
-        BrTable(index, _, _) =>
-          if index is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-            use_set.add(vreg.id)
-          }
-        Return(values) =>
-          for value in values {
-            if value is @abi.Virtual(vreg) && !def_set.contains(vreg.id) {
-              use_set.add(vreg.id)
-            }
-          }
-        _ => ()
       }
     }
-    block_use.push(use_set)
-    block_def.push(def_set)
   }
 
   // Pre-compute CFG edges (O(B + E), only once)
   let cfg = build_cfg_edges(func)
 
-  // Initialize live_in with use sets
-  for block_idx in 0..<func.blocks.length() {
-    for vreg_id in block_use[block_idx] {
-      result.live_in[block_idx].add(vreg_id)
-    }
-  }
-
   // Worklist-based dataflow with incremental update
-  let worklist = LivenessWorklist::new(func.blocks.length())
+  let worklist = LivenessWorklist::new(num_blocks)
 
   // Initialize worklist - push in forward order so pop() gives reverse order
   // (pop removes from end, so queue [0,1,..,n-1] pops n-1, n-2, .., 0)
   // For backward dataflow, we want to process successors before predecessors
-  for i in 0..<func.blocks.length() {
+  for i in 0..<num_blocks {
     worklist.push(i)
   }
   while worklist.pop() is Some(block_idx) {
-    let old_live_in_size = result.live_in[block_idx].length()
+    let old_live_in_size = live_in_list[block_idx].length()
+    let row_base = block_idx * num_vregs
 
     // live_out[B] = ∪ live_in[S] for S in succs[B]
     // Monotone: only adds, never removes
     for succ in cfg.succs[block_idx] {
-      for vreg_id in result.live_in[succ] {
-        result.live_out[block_idx].add(vreg_id)
-      }
-    }
-
-    // live_in[B] = use[B] ∪ (live_out[B] - def[B])
-    // Incrementally add from live_out (use already added in init)
-    for vreg_id in result.live_out[block_idx] {
-      if !block_def[block_idx].contains(vreg_id) {
-        result.live_in[block_idx].add(vreg_id)
+      for vreg_id in live_in_list[succ] {
+        let out_idx = row_base + vreg_id
+        if out_idx < 0 || out_idx >= live_out_mask.length() {
+          continue
+        }
+        if !live_out_mask[out_idx] {
+          live_out_mask[out_idx] = true
+          live_out_list[block_idx].push(vreg_id)
+          let def_idx = row_base + vreg_id
+          let in_idx = row_base + vreg_id
+          if def_idx >= 0 &&
+            def_idx < block_def_mask.length() &&
+            !block_def_mask[def_idx] &&
+            in_idx >= 0 &&
+            in_idx < live_in_mask.length() &&
+            !live_in_mask[in_idx] {
+            live_in_mask[in_idx] = true
+            live_in_list[block_idx].push(vreg_id)
+          }
+        }
       }
     }
 
     // If live_in grew, propagate to predecessors
-    if result.live_in[block_idx].length() > old_live_in_size {
+    if live_in_list[block_idx].length() > old_live_in_size {
       for pred in cfg.preds[block_idx] {
         worklist.push(pred)
+      }
+    }
+  }
+
+  result.live_in_dense = Some(live_in_list)
+  result.live_out_dense = Some(live_out_list)
+
+  // Materialize to set-backed API only for full/debug liveness mode.
+  if materialize_sets {
+    for block_idx in 0..<num_blocks {
+      for vreg_id in live_in_list[block_idx] {
+        result.live_in[block_idx].add(vreg_id)
+      }
+      for vreg_id in live_out_list[block_idx] {
+        result.live_out[block_idx].add(vreg_id)
       }
     }
   }
@@ -670,24 +825,88 @@ fn compute_live_sets(func : VCodeFunction, result : LivenessResult) -> Unit {
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
+  let sorted_call_points = result.call_points.copy()
+  sorted_call_points.sort_by(fn(a, b) {
+    a.0.compare_with_order(b.0, block_order)
+  })
+  let call_prog_points : Array[ProgPoint] = []
+  let c_call_prefix : Array[Int] = [0]
+  for entry in sorted_call_points {
+    let (call_point, call_conv) = entry
+    call_prog_points.push(call_point)
+    let prev = c_call_prefix[c_call_prefix.length() - 1]
+    let add = if call_conv is @instr.C { 1 } else { 0 }
+    c_call_prefix.push(prev + add)
+  }
 
-  // Pre-compute vreg -> blocks mappings to avoid O(vregs × blocks) containment checks
-  // This changes from O(V × B × contains) to O(total_live_in_entries + total_live_out_entries)
-  let vreg_live_in_blocks : Map[Int, Array[Int]] = {}
-  let vreg_live_out_blocks : Map[Int, Array[Int]] = {}
+  fn upper_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) <= 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
+
+  fn lower_bound_call_points(
+    points : Array[ProgPoint],
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+  ) -> Int {
+    let mut lo = 0
+    let mut hi = points.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if points[mid].compare_with_order(point, block_order) < 0 {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    lo
+  }
+
+  // Summarize liveness boundaries once:
+  // - earliest live-in block per vreg
+  // - latest live-out block per vreg
+  //
+  // Use fixed arrays keyed by vreg id (like Cranelift SecondaryMap style)
+  // to avoid repeated hashmap lookups in large functions.
+  let max_vreg_id = func.next_vreg_id
+  let vreg_first_live_in_block : FixedArray[Int] = FixedArray::make(
+    max_vreg_id, -1,
+  )
+  let vreg_last_live_out_block : FixedArray[Int] = FixedArray::make(
+    max_vreg_id, -1,
+  )
   for block_idx, live_in_set in result.live_in {
     for vreg_id in live_in_set {
-      match vreg_live_in_blocks.get(vreg_id) {
-        Some(blocks) => blocks.push(block_idx)
-        None => vreg_live_in_blocks.set(vreg_id, [block_idx])
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        let old_block_idx = vreg_first_live_in_block[vreg_id]
+        if old_block_idx < 0 ||
+          block_order[block_idx] < block_order[old_block_idx] {
+          vreg_first_live_in_block[vreg_id] = block_idx
+        }
       }
     }
   }
   for block_idx, live_out_set in result.live_out {
     for vreg_id in live_out_set {
-      match vreg_live_out_blocks.get(vreg_id) {
-        Some(blocks) => blocks.push(block_idx)
-        None => vreg_live_out_blocks.set(vreg_id, [block_idx])
+      if vreg_id >= 0 && vreg_id < max_vreg_id {
+        let old_block_idx = vreg_last_live_out_block[vreg_id]
+        if old_block_idx < 0 ||
+          block_order[block_idx] > block_order[old_block_idx] {
+          vreg_last_live_out_block[vreg_id] = block_idx
+        }
       }
     }
   }
@@ -695,59 +914,63 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // For each vreg, create an interval spanning from def to last use
   for entry in result.use_def {
     let (vreg_id, info) = entry
-    let start = if info.def_point is Some(def) {
+    let start = if info.def_point is Some((def, _)) {
       def
       // If no def point, use the first use (shouldn't happen in valid code)
     } else if info.use_points.length() > 0 {
-      info.use_points[0]
+      info.use_points[0].0
     } else {
       continue // No uses or defs, skip
     }
     let interval = LiveInterval::new(info.vreg, start)
 
     // Extend to cover all uses (using block order for correct comparison)
-    for use_point in info.use_points {
+    for use_entry in info.use_points {
+      let use_point = use_entry.0
       interval.extend_with_order(use_point, block_order)
     }
 
-    // Extend to cover live-in blocks - use pre-computed mapping
-    if vreg_live_in_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        let entry_point = { block: block_idx, inst: -1, pos: Before }
-        interval.extend_with_order(entry_point, block_order)
+    // Extend interval using summarized live-in/live-out boundaries.
+    if vreg_id >= 0 &&
+      vreg_id < max_vreg_id &&
+      vreg_first_live_in_block[vreg_id] >= 0 {
+      let block_idx = vreg_first_live_in_block[vreg_id]
+      let entry_point = { block: block_idx, inst: -1, pos: Before }
+      interval.extend_with_order(entry_point, block_order)
+    }
+    if vreg_id >= 0 &&
+      vreg_id < max_vreg_id &&
+      vreg_last_live_out_block[vreg_id] >= 0 {
+      let block_idx = vreg_last_live_out_block[vreg_id]
+      let block = func.blocks[block_idx]
+      let end_point = {
+        block: block_idx,
+        inst: block.insts.length(),
+        pos: After,
       }
+      interval.extend_with_order(end_point, block_order)
     }
 
-    // Extend to cover live-out blocks - use pre-computed mapping
-    if vreg_live_out_blocks.get(vreg_id) is Some(blocks) {
-      for block_idx in blocks {
-        let block = func.blocks[block_idx]
-        let end_point = {
-          block: block_idx,
-          inst: block.insts.length(),
-          pos: After,
-        }
-        interval.extend_with_order(end_point, block_order)
-      }
-    }
-
-    // Check if this interval crosses any call point
-    // If so, it cannot be assigned to a caller-saved register
-    for entry in result.call_points {
-      let (call_point, call_conv) = entry
-      // An interval crosses a call if:
-      // - The call is strictly after the interval's start AND before the interval's end
-      //   (Values defined by the call itself start at the same progpoint and do not
-      //    need to survive across the call.)
-      let start_cmp = interval.start.compare_with_order(call_point, block_order)
-      let end_cmp = interval.end.compare_with_order(call_point, block_order)
-      // start < call_point < end (interval is live across the call)
-      if start_cmp < 0 && end_cmp > 0 {
+    // Check if this interval crosses any call point.
+    // start < call_point < end (strict bounds).
+    if !call_prog_points.is_empty() {
+      let first_after_start = upper_bound_call_points(
+        call_prog_points,
+        interval.start,
+        block_order,
+      )
+      let first_at_or_after_end = lower_bound_call_points(
+        call_prog_points,
+        interval.end,
+        block_order,
+      )
+      if first_after_start < first_at_or_after_end {
         interval.crosses_call = true
-        if call_conv is @instr.C {
+        let c_calls = c_call_prefix[first_at_or_after_end] -
+          c_call_prefix[first_after_start]
+        if c_calls > 0 {
           interval.crosses_c_call = true
         }
-        break
       }
     }
     result.intervals.set(vreg_id, interval)

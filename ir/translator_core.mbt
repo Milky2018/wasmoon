@@ -627,23 +627,85 @@ pub fn Translator::translate(
   // Create the entry block
   let entry = self.builder.create_block()
   self.builder.switch_to_block(entry)
-  // Initialize locals with default values
+  // Initialize locals with default values.
+  //
+  // Cranelift alignment:
+  // - hoist zero/null initializer construction out of the per-local loop
+  // - assign many locals from a shared initializer SSA value
+  //
+  // This matches Cranelift's `declare_locals` behavior where each local-decl
+  // group reuses one `init` value across all locals in that group, instead of
+  // materializing a fresh constant instruction per local slot.
+  let mut init_i32 : Value? = None
+  let mut init_i64 : Value? = None
+  let mut init_f32 : Value? = None
+  let mut init_f64 : Value? = None
+  let mut init_funcref : Value? = None
+  let mut init_externref : Value? = None
+  let mut init_v128 : Value? = None
   for i, loc in self.locals {
     // Skip parameters - they already have values
     // Use num_wasm_params (not IR params.length which includes vmctx)
     if i >= self.num_wasm_params {
-      let zero_val = match loc.ty {
-        I32 => self.builder.iconst_i32(0)
-        I64 => self.builder.iconst_i64(0L)
-        F32 => self.builder.fconst_f32(0.0)
-        F64 => self.builder.fconst_f64(0.0)
-        FuncRef | ExternRef => self.builder.iconst(loc.ty, @types.NULL_REF)
-        V128 => {
-          let z = self.builder.iconst(Type::I64, 0L)
-          self.builder.v128_splat64(z)
-        }
+      let init = match loc.ty {
+        I32 =>
+          if init_i32 is Some(v) {
+            v
+          } else {
+            let v = self.builder.iconst_i32(0)
+            init_i32 = Some(v)
+            v
+          }
+        I64 =>
+          if init_i64 is Some(v) {
+            v
+          } else {
+            let v = self.builder.iconst_i64(0L)
+            init_i64 = Some(v)
+            v
+          }
+        F32 =>
+          if init_f32 is Some(v) {
+            v
+          } else {
+            let v = self.builder.fconst_f32(0.0)
+            init_f32 = Some(v)
+            v
+          }
+        F64 =>
+          if init_f64 is Some(v) {
+            v
+          } else {
+            let v = self.builder.fconst_f64(0.0)
+            init_f64 = Some(v)
+            v
+          }
+        FuncRef =>
+          if init_funcref is Some(v) {
+            v
+          } else {
+            let v = self.builder.iconst(Type::FuncRef, @types.NULL_REF)
+            init_funcref = Some(v)
+            v
+          }
+        ExternRef =>
+          if init_externref is Some(v) {
+            v
+          } else {
+            let v = self.builder.iconst(Type::ExternRef, @types.NULL_REF)
+            init_externref = Some(v)
+            v
+          }
+        V128 =>
+          if init_v128 is Some(v) {
+            v
+          } else {
+            let v = self.builder.v128_const(Bytes::make(16, b'\x00'))
+            init_v128 = Some(v)
+            v
+          }
       }
-      self.locals[i] = zero_val
+      self.locals[i] = init
     }
   }
 

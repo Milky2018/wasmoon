@@ -130,6 +130,13 @@ test "x86_64 lea base+index*scale+disp encoding" {
 }
 
 ///|
+test "x86_64 lea32 base+index*scale+disp encoding" {
+  let mc = MachineCode::new()
+  mc.x86_emit_lea_r32_base_index_scale_disp(10, 11, 9, 2, 0x20)
+  inspect(mc.get_bytes(), content="[71, 141, 148, 139, 32, 0, 0, 0]")
+}
+
+///|
 test "x86_64 indexed mov load/store encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_mov_r32_m32_base_index_scale_disp(8, 10, 9, 3, 0x1234)
@@ -215,6 +222,34 @@ test "x86_64 movsx/movzx encodings" {
   inspect(
     mc.get_bytes(),
     content="[72, 15, 190, 132, 36, 0, 0, 0, 0, 69, 15, 183, 147, 8, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 indexed narrow movsx/movzx and stores encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movzx_r32_m8_base_index_scale_disp(8, 10, 9, 2, 0x1234)
+  mc.x86_emit_movsx_r64_m16_base_index_scale_disp(11, 10, 9, 1, 8)
+  mc.x86_emit_mov_m8_r8_base_index_scale_disp(10, 9, 0, 16, 8)
+  mc.x86_emit_mov_m16_r16_base_index_scale_disp(10, 9, 3, 0x20, 11)
+  inspect(
+    mc.get_bytes(),
+    content="[71, 15, 182, 132, 138, 52, 18, 0, 0, 79, 15, 191, 156, 74, 8, 0, 0, 0, 71, 136, 132, 10, 16, 0, 0, 0, 102, 71, 137, 156, 202, 32, 0, 0, 0]",
+  )
+}
+
+///|
+test "x86_64 indexed scalar/vector mem encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_movss_xmm_m32_base_index_scale_disp(15, 10, 9, 2, 0x1234)
+  mc.x86_emit_movss_m32_xmm_base_index_scale_disp(10, 9, 1, 8, 15)
+  mc.x86_emit_movsd_xmm_m64_base_index_scale_disp(15, 10, 9, 3, 0x20)
+  mc.x86_emit_movsd_m64_xmm_base_index_scale_disp(10, 9, 0, 16, 15)
+  mc.x86_emit_movdqu_xmm_m128_base_index_scale_disp(15, 10, 9, 2, 0)
+  mc.x86_emit_movdqu_m128_xmm_base_index_scale_disp(10, 9, 1, 32, 15)
+  inspect(
+    mc.get_bytes(),
+    content="[243, 71, 15, 16, 188, 138, 52, 18, 0, 0, 243, 71, 15, 17, 188, 74, 8, 0, 0, 0, 242, 71, 15, 16, 188, 202, 32, 0, 0, 0, 242, 71, 15, 17, 188, 10, 16, 0, 0, 0, 243, 71, 15, 111, 188, 138, 0, 0, 0, 0, 243, 71, 15, 127, 188, 74, 32, 0, 0, 0]",
   )
 }
 
@@ -628,6 +663,19 @@ test "x86_64 cmp reg, imm32 encodings" {
   inspect(
     mc.get_bytes(),
     content="[73, 129, 248, 255, 255, 255, 255, 65, 129, 249, 120, 86, 52, 18]",
+  )
+}
+
+///|
+test "x86_64 add/sub reg, imm encodings" {
+  let mc = MachineCode::new()
+  mc.x86_emit_add_r_imm32(8, -1) // add r8, -1
+  mc.x86_emit_sub_r_imm8(9, 5) // sub r9, 5
+  mc.x86_emit_add_r32_imm8(10, -8) // add r10d, -8
+  mc.x86_emit_sub_r32_imm32(11, 0x12345678) // sub r11d, imm32
+  inspect(
+    mc.get_bytes(),
+    content="[73, 129, 192, 255, 255, 255, 255, 73, 131, 233, 5, 65, 131, 194, 248, 65, 129, 235, 120, 86, 52, 18]",
   )
 }
 

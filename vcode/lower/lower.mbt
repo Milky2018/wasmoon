@@ -14,8 +14,8 @@ struct LoweringContext {
   vcode_func : @regalloc.VCodeFunction
   abi_settings : @abi.ABISettings
   num_imports : Int
-  // Map from IR Value id to @abi.VReg
-  value_map : Map[Int, @abi.VReg]
+  // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
+  value_map_dense : Array[@abi.VReg?]
   // Map from IR Block id to VCode block id
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
@@ -33,15 +33,14 @@ struct LoweringContext {
   // Module-level canonical type-index mapping (raw -> canonical). Used to align
   // call_indirect exact checks with Cranelift's shared-signature-id semantics.
   canonical_type_indices : Array[Int]
-  // Set of Icmp result value IDs that are exclusively used by Select (will be fused)
-  fused_icmps : @hashset.HashSet[Int]
-  // Values that should not be lowered because they are subsumed by a fused instruction
-  // (Cranelift-style ISel fusion; e.g. imul/ishl used only by madd/add_shift).
-  skipped_values : @hashset.HashSet[Int]
-  // Use counts for IR values (used to skip unused call results)
-  use_counts : Map[Int, Int]
-  // Value id -> defining IR instruction for O(1) lookup during pattern matching.
-  def_inst_map : Map[Int, @ir.Inst]
+  // Icmp result value IDs exclusively used by Select/branch and fused in lowering.
+  fused_icmps_dense : Array[Bool]
+  // Values that should not be lowered because they are subsumed by fused lowering.
+  skipped_values_dense : Array[Bool]
+  // Use counts for IR values (dense table, Cranelift SecondaryMap-style).
+  use_counts : Array[Int]
+  // Value-id keyed defining instruction table (dense, Cranelift-style).
+  def_inst_table : Array[@ir.Inst?]
 }
 
 ///|
@@ -53,11 +52,20 @@ pub fn LoweringContext::new(
   canonical_type_indices : Array[Int],
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
-  let def_inst_map : Map[Int, @ir.Inst] = {}
+  let def_inst_table : Array[@ir.Inst?] = []
+  fn ensure_def_slot(table : Array[@ir.Inst?], value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    while table.length() <= value_id {
+      table.push(None)
+    }
+  }
   for block in ir_func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(result) {
-        def_inst_map.set(result.id, inst)
+        ensure_def_slot(def_inst_table, result.id)
+        def_inst_table[result.id] = Some(inst)
       }
     }
   }
@@ -66,7 +74,7 @@ pub fn LoweringContext::new(
     vcode_func: @regalloc.VCodeFunction::new(ir_func.name),
     abi_settings,
     num_imports,
-    value_map: {},
+    value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
     stack_param_map: {},
     func_table_cache: {},
@@ -74,10 +82,59 @@ pub fn LoweringContext::new(
     mem_base_cache: {},
     use_subtype_indirect_check,
     canonical_type_indices,
-    fused_icmps: @hashset.new(),
-    skipped_values: @hashset.new(),
+    fused_icmps_dense: Array::make(ir_func.next_value_id, false),
+    skipped_values_dense: Array::make(ir_func.next_value_id, false),
     use_counts,
-    def_inst_map,
+    def_inst_table,
+  }
+}
+
+///|
+fn LoweringContext::get_cached_vreg(
+  self : LoweringContext,
+  value_id : Int,
+) -> @abi.VReg? {
+  if value_id >= 0 && value_id < self.value_map_dense.length() {
+    return self.value_map_dense[value_id]
+  }
+  None
+}
+
+///|
+fn LoweringContext::set_cached_vreg(
+  self : LoweringContext,
+  value_id : Int,
+  vreg : @abi.VReg,
+) -> Unit {
+  if value_id >= 0 {
+    while self.value_map_dense.length() <= value_id {
+      self.value_map_dense.push(None)
+    }
+    self.value_map_dense[value_id] = Some(vreg)
+  }
+}
+
+///|
+fn LoweringContext::is_skipped_value(
+  self : LoweringContext,
+  value_id : Int,
+) -> Bool {
+  if value_id >= 0 && value_id < self.skipped_values_dense.length() {
+    self.skipped_values_dense[value_id]
+  } else {
+    false
+  }
+}
+
+///|
+fn LoweringContext::is_fused_icmp_result(
+  self : LoweringContext,
+  value_id : Int,
+) -> Bool {
+  if value_id >= 0 && value_id < self.fused_icmps_dense.length() {
+    self.fused_icmps_dense[value_id]
+  } else {
+    false
   }
 }
 
@@ -100,25 +157,13 @@ fn LoweringContext::canonicalize_indirect_type_idx(
 ///|
 /// Invalidate cached memory bases in lowering context.
 fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
-  let keys : Array[Int] = []
-  for k, _ in ctx.mem_base_cache {
-    keys.push(k)
-  }
-  for k in keys {
-    ctx.mem_base_cache.remove(k)
-  }
+  ctx.mem_base_cache.clear()
 }
 
 ///|
 /// Invalidate cached table0 base pointers in lowering context.
 fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
-  let keys : Array[Int] = []
-  for k, _ in ctx.table0_base_cache {
-    keys.push(k)
-  }
-  for k in keys {
-    ctx.table0_base_cache.remove(k)
-  }
+  ctx.table0_base_cache.clear()
 }
 
 ///|
@@ -129,17 +174,61 @@ fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
 /// - iadd x (ishl y (iconst k)) => add_shift
 /// - iadd x (imul y z) => madd
 /// - isub x (imul y z) => msub
-fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
-  let skipped : @hashset.HashSet[Int] = @hashset.new()
-  let addrmode_skipped : @hashset.HashSet[Int] = @hashset.new()
-  let addrmode_subsumed_uses : Map[Int, Int] = {}
+fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
+  let skipped_dense : Array[Bool] = Array::make(
+    ctx.ir_func.next_value_id,
+    false,
+  )
+  let addrmode_skipped_dense : Array[Bool] = Array::make(
+    ctx.ir_func.next_value_id,
+    false,
+  )
+  let addrmode_subsumed_counts : Array[Int] = Array::make(
+    ctx.ir_func.next_value_id,
+    0,
+  )
   let is_amd64 = @isa.ISA::current() is @isa.AMD64
   let is_aarch64 = @isa.ISA::current() is @isa.AArch64
   let enable_subextend_fusion = true
 
+  fn ensure_bool_slot(arr : Array[Bool], idx : Int) -> Unit {
+    if idx < 0 {
+      return
+    }
+    while arr.length() <= idx {
+      arr.push(false)
+    }
+  }
+
+  fn ensure_count_slot(arr : Array[Int], idx : Int) -> Unit {
+    if idx < 0 {
+      return
+    }
+    while arr.length() <= idx {
+      arr.push(0)
+    }
+  }
+
+  fn mark_skipped(value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    ensure_bool_slot(skipped_dense, value_id)
+    skipped_dense[value_id] = true
+  }
+
+  fn is_addrmode_skipped(value_id : Int) -> Bool {
+    value_id >= 0 &&
+    value_id < addrmode_skipped_dense.length() &&
+    addrmode_skipped_dense[value_id]
+  }
+
   fn mark_addrmode_subsumed_use(value_id : Int) -> Unit {
-    let old = addrmode_subsumed_uses.get(value_id).unwrap_or(0)
-    addrmode_subsumed_uses.set(value_id, old + 1)
+    if value_id < 0 {
+      return
+    }
+    ensure_count_slot(addrmode_subsumed_counts, value_id)
+    addrmode_subsumed_counts[value_id] = addrmode_subsumed_counts[value_id] + 1
   }
 
   // Pass 1: find address values that will be subsumed by load/store lowering.
@@ -170,15 +259,10 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some(
-              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
-            ) &&
-            (
-              !is_amd64 ||
-              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-            ) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -221,15 +305,10 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           let mut matched = false
           if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some(
-              (_, am_index, ext, shift, subsumed, extra_offset, has_extra)
-            ) &&
-            (
-              !is_amd64 ||
-              (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-            ) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -263,11 +342,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             0L
           }
           let mut matched = false
-          if is_aarch64 &&
+          if (is_aarch64 || is_amd64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -301,11 +381,12 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
             0L
           }
           let mut matched = false
-          if is_aarch64 &&
+          if (is_aarch64 || is_amd64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
-            is Some((_, am_index, _, _, subsumed, extra_offset, has_extra)) {
+            is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
+            (!is_amd64 || (shift >= 0 && shift <= 3)) {
             let effective_offset = explicit_offset + extra_offset
-            if (effective_offset == 0L || has_extra) &&
+            if (is_amd64 || effective_offset == 0L || has_extra) &&
               prefer_reg_offset_for_index(
                 ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
               ) {
@@ -328,9 +409,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
       }
     }
   }
-  for value_id, subsumed_count in addrmode_subsumed_uses {
-    if ctx.use_counts.get(value_id).unwrap_or(0) == subsumed_count {
-      addrmode_skipped.add(value_id)
+  for value_id in 0..<addrmode_subsumed_counts.length() {
+    let subsumed_count = addrmode_subsumed_counts[value_id]
+    if subsumed_count > 0 &&
+      use_count(ctx.use_counts, value_id) == subsumed_count {
+      addrmode_skipped_dense[value_id] = true
     }
   }
 
@@ -347,7 +430,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           // Mirror lower_iadd's fusion priority so we never skip both sides.
@@ -355,38 +438,38 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           // multiply can be fused into a single MADD; the other must be materialized.
           let lhs = inst.operands[0]
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_mul_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
           if is_i64 &&
-            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
           if is_i64 &&
-            ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, lhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
         }
@@ -394,31 +477,31 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           let rhs = inst.operands[1]
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_mul_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
           if enable_subextend_fusion &&
             is_i64 &&
-            ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
             !(ext is @instr.IndexExtend::None) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
           }
         }
         @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
           if !is_shift_fusable_int {
             continue
           }
-          if inst.first_result() is Some(r) && addrmode_skipped.contains(r.id) {
+          if inst.first_result() is Some(r) && is_addrmode_skipped(r.id) {
             continue
           }
           // Mirror lower_band/lower_bor/lower_bxor: fuse at most one shl const.
@@ -441,58 +524,58 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
           }
           if inst.opcode is @ir.Opcode::Bor &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
-            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
-              skipped.add(lhs.id)
+              mark_skipped(lhs.id)
             }
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
               ) {
-              skipped.add(rhs.id)
+              mark_skipped(rhs.id)
             }
             continue
           }
           if inst.opcode is @ir.Opcode::Bor &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
-            if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, lhs) is Some(_) ||
                 match_ushr_const_value(ctx, lhs) is Some(_)
               ) {
-              skipped.add(lhs.id)
+              mark_skipped(lhs.id)
             }
-            if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+            if use_count(ctx.use_counts, rhs.id) == 1 &&
               (
                 match_shl_const_value(ctx, rhs) is Some(_) ||
                 match_ushr_const_value(ctx, rhs) is Some(_)
               ) {
-              skipped.add(rhs.id)
+              mark_skipped(rhs.id)
             }
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_bnot_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_bnot_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
-          if ctx.use_counts.get(rhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, rhs.id) == 1 &&
             match_shl_const_value(ctx, rhs) is Some(_) {
-            skipped.add(rhs.id)
+            mark_skipped(rhs.id)
             continue
           }
-          if ctx.use_counts.get(lhs.id).unwrap_or(0) == 1 &&
+          if use_count(ctx.use_counts, lhs.id) == 1 &&
             match_shl_const_value(ctx, lhs) is Some(_) {
-            skipped.add(lhs.id)
+            mark_skipped(lhs.id)
             continue
           }
         }
@@ -500,21 +583,44 @@ fn compute_skipped_values(ctx : LoweringContext) -> @hashset.HashSet[Int] {
       }
     }
   }
-  for id in addrmode_skipped {
-    skipped.add(id)
+  for id in 0..<addrmode_skipped_dense.length() {
+    if addrmode_skipped_dense[id] {
+      ensure_bool_slot(skipped_dense, id)
+      skipped_dense[id] = true
+    }
   }
-  skipped
+  skipped_dense
 }
 
 ///|
 /// Compute use counts for each IR value.
-fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
-  let use_counts : Map[Int, Int] = {}
+fn ensure_use_count_slot(use_counts : Array[Int], value_id : Int) -> Unit {
+  if value_id < 0 {
+    return
+  }
+  while use_counts.length() <= value_id {
+    use_counts.push(0)
+  }
+}
+
+///|
+fn use_count(use_counts : Array[Int], value_id : Int) -> Int {
+  if value_id >= 0 && value_id < use_counts.length() {
+    use_counts[value_id]
+  } else {
+    0
+  }
+}
+
+///|
+/// Compute use counts for each IR value.
+fn compute_use_counts(ir_func : @ir.Function) -> Array[Int] {
+  let use_counts : Array[Int] = []
   for block in ir_func.blocks {
     for inst in block.instructions {
       for op in inst.operands {
-        let count = use_counts.get(op.id).unwrap_or(0)
-        use_counts.set(op.id, count + 1)
+        ensure_use_count_slot(use_counts, op.id)
+        use_counts[op.id] = use_counts[op.id] + 1
       }
     }
     // Also count uses in terminators
@@ -527,8 +633,8 @@ fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
         @ir.Terminator::Trap(_) => []
       }
       for v in term_uses {
-        let count = use_counts.get(v.id).unwrap_or(0)
-        use_counts.set(v.id, count + 1)
+        ensure_use_count_slot(use_counts, v.id)
+        use_counts[v.id] = use_counts[v.id] + 1
       }
     }
   }
@@ -540,52 +646,57 @@ fn compute_use_counts(ir_func : @ir.Function) -> Map[Int, Int] {
 /// This allows lower_icmp to skip emitting redundant Cmp instructions.
 fn compute_fused_icmps(
   ir_func : @ir.Function,
-  use_counts : Map[Int, Int],
-) -> @hashset.HashSet[Int] {
-  // Find Icmp results that have exactly one use in a Select or branch
-  let fused : @hashset.HashSet[Int] = @hashset.new()
+  use_counts : Array[Int],
+  def_inst_table : Array[@ir.Inst?],
+) -> Array[Bool] {
+  fn is_single_use_icmp_result(
+    use_counts : Array[Int],
+    def_inst_table : Array[@ir.Inst?],
+    value : @ir.Value,
+  ) -> Bool {
+    if use_count(use_counts, value.id) != 1 {
+      return false
+    }
+    if value.id < 0 || value.id >= def_inst_table.length() {
+      return false
+    }
+    match def_inst_table[value.id] {
+      Some(def_inst) => def_inst.opcode is @ir.Opcode::Icmp(_)
+      None => false
+    }
+  }
+
+  // Find Icmp results that have exactly one use in a Select or branch.
+  let fused_dense : Array[Bool] = Array::make(ir_func.next_value_id, false)
+  fn mark_fused(value_id : Int) -> Unit {
+    if value_id < 0 {
+      return
+    }
+    while fused_dense.length() <= value_id {
+      fused_dense.push(false)
+    }
+    fused_dense[value_id] = true
+  }
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
       if inst.opcode is @ir.Opcode::Select {
         let cond = inst.operands[0]
-        // Check if the condition is an Icmp result with exactly one use
-        if use_counts.get(cond.id).unwrap_or(0) == 1 {
-          // Find the defining instruction of the condition
-          for b in ir_func.blocks {
-            for i in b.instructions {
-              if i.first_result() is Some(r) && r.id == cond.id {
-                // Check if it's an Icmp
-                if i.opcode is @ir.Opcode::Icmp(_) {
-                  fused.add(cond.id)
-                }
-              }
-            }
-          }
+        if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
+          mark_fused(cond.id)
         }
       }
     }
     match block.terminator {
       Some(@ir.Terminator::Brz(cond, _, _))
       | Some(@ir.Terminator::Brnz(cond, _, _)) =>
-        // Check if the condition is an Icmp result with exactly one use
-        if use_counts.get(cond.id).unwrap_or(0) == 1 {
-          // Find the defining instruction of the condition
-          for b in ir_func.blocks {
-            for i in b.instructions {
-              if i.first_result() is Some(r) && r.id == cond.id {
-                // Check if it's an Icmp
-                if i.opcode is @ir.Opcode::Icmp(_) {
-                  fused.add(cond.id)
-                }
-              }
-            }
-          }
+        if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
+          mark_fused(cond.id)
         }
       _ => ()
     }
   }
-  fused
+  fused_dense
 }
 
 ///|
@@ -596,7 +707,7 @@ fn collect_call_result_vregs(
 ) -> Array[@abi.VReg] {
   let mut any_used = false
   for result in inst.all_results() {
-    if ctx.use_counts.get(result.id).unwrap_or(0) > 0 {
+    if use_count(ctx.use_counts, result.id) > 0 {
       any_used = true
       break
     }
@@ -617,7 +728,7 @@ fn try_collect_call_arg_const(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> CallConstArg? {
-  if ctx.use_counts.get(value.id).unwrap_or(0) != 1 {
+  if use_count(ctx.use_counts, value.id) != 1 {
     return None
   }
   if find_defining_inst(ctx, value) is Some(inst) {
@@ -667,12 +778,12 @@ fn LoweringContext::get_vreg(
   self : LoweringContext,
   value : @ir.Value,
 ) -> @abi.VReg {
-  match self.value_map.get(value.id) {
+  match self.get_cached_vreg(value.id) {
     Some(vreg) => vreg
     None => {
       let class = ir_type_to_reg_class(value.ty)
       let vreg = self.vcode_func.new_vreg(class)
-      self.value_map.set(value.id, vreg)
+      self.set_cached_vreg(value.id, vreg)
       vreg
     }
   }
@@ -686,7 +797,7 @@ fn LoweringContext::get_vreg_for_use(
   value : @ir.Value,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
-  if self.value_map.get(value.id) is Some(vreg) {
+  if self.get_cached_vreg(value.id) is Some(vreg) {
     return vreg
   }
 
@@ -697,15 +808,16 @@ fn LoweringContext::get_vreg_for_use(
     let inst = @instr.VCodeInst::new(LoadStackParam(offset, class))
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
+    self.set_cached_vreg(value.id, result)
     result
   } else {
     // Materialize skipped pure defs on-demand. This prevents creating
     // undef virtual registers when an address-mode fusion path skipped a
     // producer that is still required by another lowered instruction.
-    if self.skipped_values.contains(value.id) &&
+    if self.is_skipped_value(value.id) &&
       find_defining_inst(self, value) is Some(def_inst) {
       lower_inst(self, def_inst, block)
-      if self.value_map.get(value.id) is Some(vreg) {
+      if self.get_cached_vreg(value.id) is Some(vreg) {
         return vreg
       }
     }
@@ -951,10 +1063,26 @@ fn resolve_iconst_value(ctx : LoweringContext, value0 : @ir.Value) -> Int64? {
 }
 
 ///|
+fn fits_i32_int64(value : Int64) -> Bool {
+  value >= -2147483648L && value <= 2147483647L
+}
+
+///|
+/// Check whether an ADD/SUB immediate is encodable for the selected ISA.
+fn is_valid_add_sub_imm_for_isa(isa : @isa.ISA, value : Int64) -> Bool {
+  match isa {
+    @isa.AArch64 => is_valid_add_imm(value)
+    @isa.AMD64 => fits_i32_int64(value)
+  }
+}
+
+///|
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
-/// Returns Some(val) if the value is a constant in valid 12-bit immediate range
+/// Returns Some(val) if the value is a constant in current ISA immediate range.
 fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
-  if resolve_iconst_value(ctx, value) is Some(val) && is_valid_add_imm(val) {
+  let isa = @isa.ISA::current()
+  if resolve_iconst_value(ctx, value) is Some(val) &&
+    is_valid_add_sub_imm_for_isa(isa, val) {
     return Some(val)
   }
   None
@@ -962,14 +1090,15 @@ fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {
 
 ///|
 /// Check if a value is a constant whose negation is a valid ADD/SUB immediate.
-/// Returns Some(-val) when val is a constant and -val fits AArch64 add/sub imm12.
+/// Returns Some(-val) when val is a constant and -val is encodable for current ISA.
 fn match_negated_add_imm_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> Int64? {
+  let isa = @isa.ISA::current()
   if resolve_iconst_value(ctx, value) is Some(val) {
     let neg = -val
-    if val < 0L && is_valid_add_imm(neg) {
+    if val < 0L && is_valid_add_sub_imm_for_isa(isa, neg) {
       return Some(neg)
     }
   }
@@ -1014,9 +1143,9 @@ fn prefer_reg_offset_for_index(
   access_size : Int,
   explicit_offset : Int64,
   extra_offset : Int64,
-  has_extra : Bool,
+  _has_extra : Bool,
 ) -> Bool {
-  if iconst_value(ctx, index) is Some(iconst) && !has_extra {
+  if iconst_value(ctx, index) is Some(iconst) {
     let combined = explicit_offset + extra_offset + iconst
     return !is_valid_load_store_offset(combined, access_size)
   }
@@ -1079,12 +1208,35 @@ fn match_addr_reg_offset(
     return None
   }
   let scale = scale.unwrap()
+
+  if match_iadd_const(ctx, value) is Some((inner, folded_offset)) &&
+    match_addr_reg_offset(ctx, inner, access_size)
+    is Some((base, index, ext, shift, subsumed, extra_offset, _)) {
+    let merged_subsumed : Array[Int] = []
+    for id in subsumed {
+      merged_subsumed.push(id)
+    }
+    merged_subsumed.push(value.id)
+    return Some(
+      (
+        base,
+        index,
+        ext,
+        shift,
+        merged_subsumed,
+        extra_offset + folded_offset,
+        true,
+      ),
+    )
+  }
+
   fn analyze(
     ctx : LoweringContext,
     base : @ir.Value,
     index0 : @ir.Value,
     scale : Int,
   ) -> (@ir.Value, @ir.Value, @instr.IndexExtend, Int, Array[Int], Int64, Int) {
+    let mut base = base
     let mut index = index0
     let mut ext = @instr.IndexExtend::None
     let mut shift = 0
@@ -1096,6 +1248,14 @@ fn match_addr_reg_offset(
     if match_iadd_const(ctx, index) is Some((inner, off)) {
       subsumed.push(index.id)
       index = inner
+      extra_offset = extra_offset + off
+      score = score + 1
+    }
+
+    // Match base displacement: iadd(base, iconst C).
+    if match_iadd_const(ctx, base) is Some((inner, off)) {
+      subsumed.push(base.id)
+      base = inner
       extra_offset = extra_offset + off
       score = score + 1
     }
@@ -1113,6 +1273,11 @@ fn match_addr_reg_offset(
       subsumed.push(index.id)
       index = inner
       ext = e
+      score = score + 1
+    }
+    // Prefer shapes where the base is a known memory-base pointer.
+    if find_defining_inst(ctx, base) is Some(base_inst) &&
+      base_inst.opcode is @ir.Opcode::LoadMemBase(_) {
       score = score + 1
     }
     (base, index, ext, shift, subsumed, extra_offset, score)
@@ -1136,19 +1301,33 @@ fn match_addr_reg_offset(
 }
 
 ///|
-/// Check if an offset is valid for AArch64 LDR/STR unsigned immediate
-/// offset must be non-negative, aligned to access_size, and fit in 12-bit scaled
+/// Check if an offset is encodable in selected ISA addressing mode immediate.
+fn is_valid_load_store_offset_for_isa(
+  isa : @isa.ISA,
+  offset : Int64,
+  access_size : Int,
+) -> Bool {
+  match isa {
+    @isa.AArch64 => {
+      if offset < 0L {
+        return false
+      }
+      // Check alignment
+      if offset % access_size.to_int64() != 0L {
+        return false
+      }
+      // Check scaled offset fits in 12 bits (max 4095 * access_size)
+      let max_offset = 4095L * access_size.to_int64()
+      offset <= max_offset
+    }
+    @isa.AMD64 => fits_i32_int64(offset)
+  }
+}
+
+///|
+/// Check if an offset is encodable in current ISA addressing mode immediate.
 fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
-  if offset < 0L {
-    return false
-  }
-  // Check alignment
-  if offset % access_size.to_int64() != 0L {
-    return false
-  }
-  // Check scaled offset fits in 12 bits (max 4095 * access_size)
-  let max_offset = 4095L * access_size.to_int64()
-  offset <= max_offset
+  is_valid_load_store_offset_for_isa(@isa.ISA::current(), offset, access_size)
 }
 
 ///|
@@ -1219,14 +1398,22 @@ pub fn lower_function(
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
-  let fused = compute_fused_icmps(ir_func, ctx.use_counts)
-  for id in fused {
-    ctx.fused_icmps.add(id)
+  let fused_dense = compute_fused_icmps(
+    ir_func,
+    ctx.use_counts,
+    ctx.def_inst_table,
+  )
+  for id in 0..<fused_dense.length() {
+    if id >= 0 && id < ctx.fused_icmps_dense.length() {
+      ctx.fused_icmps_dense[id] = fused_dense[id]
+    }
   }
   // Phase 0.5: Pre-compute values to skip (subsumed by fused instruction selection)
-  let skipped = compute_skipped_values(ctx)
-  for id in skipped {
-    ctx.skipped_values.add(id)
+  let skipped_dense = compute_skipped_values(ctx)
+  for id in 0..<skipped_dense.length() {
+    if id >= 0 && id < ctx.skipped_values_dense.length() {
+      ctx.skipped_values_dense[id] = skipped_dense[id]
+    }
   }
 
   // Phase 1: Create VCode blocks and set up block mapping
@@ -1254,7 +1441,7 @@ pub fn lower_function(
       if int_reg_count < max_int_reg_params {
         // Register parameter: allocate @abi.VReg
         let vreg = ctx.vcode_func.add_param(class)
-        ctx.value_map.set(value.id, vreg)
+        ctx.set_cached_vreg(value.id, vreg)
         int_reg_count = int_reg_count + 1
       } else {
         // Stack parameter: laid out in overflow area (entry SP).
@@ -1264,7 +1451,7 @@ pub fn lower_function(
     } else if float_reg_count < max_float_reg_params {
       // Register parameter: allocate @abi.VReg
       let vreg = ctx.vcode_func.add_param(class)
-      ctx.value_map.set(value.id, vreg)
+      ctx.set_cached_vreg(value.id, vreg)
       float_reg_count = float_reg_count + 1
     } else {
       float_stack_values.push((value, class))
@@ -1309,7 +1496,7 @@ pub fn lower_function(
       let (value, ty) = param
       let class = ir_type_to_reg_class(ty)
       let vreg = ctx.vcode_func.new_vreg(class)
-      ctx.value_map.set(value.id, vreg)
+      ctx.set_cached_vreg(value.id, vreg)
       ctx.vcode_func.blocks[i].params.push(vreg)
     }
   }
@@ -1320,12 +1507,13 @@ pub fn lower_function(
   }
 
   // Phase 5: Peephole optimization
-  optimize_vcode(ctx.vcode_func)
+  // Keep post-lowering cleanup deterministic (profile-driven) instead of
+  // function-size gating.
+  optimize_vcode_for_lowering(ctx.vcode_func)
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //
-  // AArch64 target-specific role fixups (currently disabled under the
-  // Cranelift-aligned policy where no dedicated mem0 cache register is used).
+  // AArch64 target-specific role fixups for memory0-base caching.
   fixup_aarch64_mem0_desc_constraints(ctx.vcode_func, abi_settings)
 
   // Phase 7: Target-specific fixups (Cranelift-style).
@@ -1395,8 +1583,7 @@ fn lower_block_body(
 
   // Lower instructions
   for inst in ir_block.instructions {
-    if inst.first_result() is Some(result) &&
-      ctx.skipped_values.contains(result.id) {
+    if inst.first_result() is Some(result) && ctx.is_skipped_value(result.id) {
       continue
     }
     lower_inst(ctx, inst, vcode_block)
@@ -2211,7 +2398,7 @@ fn lower_icmp(
 ) -> Unit {
   if inst.first_result() is Some(result) {
     // Skip if this Icmp will be fused with a Select (to avoid redundant Cmp)
-    if ctx.fused_icmps.contains(result.id) {
+    if ctx.is_fused_icmp_result(result.id) {
       return
     }
     let dst = ctx.get_vreg(result)
@@ -2558,18 +2745,19 @@ fn lower_load_ptr(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2588,27 +2776,31 @@ fn lower_load_ptr(
   // Try Cranelift-style register-offset addressing:
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
-  // On amd64 Step 1, we currently support IndexExtend::None with scales 0..3.
+  // On amd64, we support scales 0..3 and lower extends through regoffset as well.
+  let isa = @isa.ISA::current()
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (
-      !(@isa.ISA::current() is @isa.AMD64) ||
-      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-    ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    (!is_amd64 || (shift >= 0 && shift <= 3)) {
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
-    let load_inst = @instr.VCodeInst::new(LoadPtrRegOffset(mem_ty, ext, shift))
+    let load_inst = @instr.VCodeInst::new(
+      LoadPtrRegOffset(mem_ty, ext, shift, regoff_offset),
+    )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
     load_inst.add_use(Virtual(index))
@@ -2680,18 +2872,19 @@ fn lower_store_ptr(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2708,28 +2901,30 @@ fn lower_store_ptr(
   }
 
   // Try Cranelift-style register-offset addressing for stores.
+  let isa = @isa.ISA::current()
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) &&
-    (
-      !(@isa.ISA::current() is @isa.AMD64) ||
-      (ext is @instr.IndexExtend::None && shift >= 0 && shift <= 3)
-    ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    (!is_amd64 || (shift >= 0 && shift <= 3)) {
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrRegOffset(mem_ty, ext, shift),
+      StorePtrRegOffset(mem_ty, ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))
@@ -2800,18 +2995,19 @@ fn lower_load_ptr_narrow(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2827,25 +3023,32 @@ fn lower_load_ptr_narrow(
     result
   }
 
-  // AArch64-specific narrow register-offset addressing (Cranelift-style):
+  // Cranelift-style narrow register-offset addressing:
   //   load{8,16,32} [base + index{,extend}{,scale}]
-  if @isa.ISA::current() is @isa.AArch64 &&
+  let isa = @isa.ISA::current()
+  let is_aarch64 = isa is @isa.AArch64
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
+  if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (!is_amd64 || (shift >= 0 && shift <= 3)) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let load_inst = @instr.VCodeInst::new(
-      LoadPtrNarrowRegOffset(bits, signed, ext, shift),
+      LoadPtrNarrowRegOffset(bits, signed, ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
@@ -2914,18 +3117,19 @@ fn lower_store_ptr_narrow(
     base : @abi.VReg,
     offset : Int64,
   ) -> @abi.VReg {
+    let isa = @isa.ISA::current()
     if offset == 0L {
       return base
     }
     let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_imm(offset) {
+    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
       let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
       add_inst.add_def({ reg: Virtual(result) })
       add_inst.add_use(Virtual(base))
       block.add_inst(add_inst)
       return result
     }
-    if offset < 0L && is_valid_add_imm(-offset) {
+    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
       let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
       sub_inst.add_def({ reg: Virtual(result) })
       sub_inst.add_use(Virtual(base))
@@ -2941,26 +3145,33 @@ fn lower_store_ptr_narrow(
     result
   }
 
-  // AArch64-specific narrow register-offset addressing (Cranelift-style):
+  // Cranelift-style narrow register-offset addressing:
   //   store{8,16,32} [base + index{,extend}{,scale}]
-  if @isa.ISA::current() is @isa.AArch64 &&
+  let isa = @isa.ISA::current()
+  let is_aarch64 = isa is @isa.AArch64
+  let is_amd64 = isa is @isa.AMD64
+  let allow_nonzero_regoff = is_amd64
+  if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
     is Some((am_base, am_index, ext, shift, _, extra_offset, has_extra)) &&
-    (explicit_offset + extra_offset == 0L || has_extra) &&
+    (!is_amd64 || (shift >= 0 && shift <= 3)) &&
+    (allow_nonzero_regoff || explicit_offset + extra_offset == 0L || has_extra) &&
     prefer_reg_offset_for_index(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
-    let base0 = ctx.get_vreg_for_use(am_base, block)
-    let base = adjust_base_with_offset(
-      ctx,
-      block,
-      base0,
-      explicit_offset + extra_offset,
-    )
+    let fused_offset = explicit_offset + extra_offset
+    let (base, regoff_offset) = if is_amd64 &&
+      is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
+      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+    } else {
+      let base0 = ctx.get_vreg_for_use(am_base, block)
+      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
+      (adjusted, 0)
+    }
     let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrNarrowRegOffset(bits, ext, shift),
+      StorePtrNarrowRegOffset(bits, ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))

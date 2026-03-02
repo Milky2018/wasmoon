@@ -25,20 +25,26 @@ fn PhiAbstractValue::join(
 ///|
 
 ///|
-fn build_value_map(func : Function) -> @hashmap.HashMap[Int, Value] {
-  let values : @hashmap.HashMap[Int, Value] = @hashmap.new()
+fn build_value_array(func : Function, value_count : Int) -> Array[Value?] {
+  let values : Array[Value?] = Array::make(value_count, None)
   for param in func.params {
     let (v, _) = param
-    values.set(v.id, v)
+    if v.id >= 0 && v.id < value_count {
+      values[v.id] = Some(v)
+    }
   }
   for block in func.blocks {
     for param in block.params {
       let (v, _) = param
-      values.set(v.id, v)
+      if v.id >= 0 && v.id < value_count {
+        values[v.id] = Some(v)
+      }
     }
     for inst in block.instructions {
       for result in inst.results {
-        values.set(result.id, result)
+        if result.id >= 0 && result.id < value_count {
+          values[result.id] = Some(result)
+        }
       }
     }
   }
@@ -46,29 +52,44 @@ fn build_value_map(func : Function) -> @hashmap.HashMap[Int, Value] {
 }
 
 ///|
-fn resolve_replacement(
-  v : Value,
-  replace_map : @hashmap.HashMap[Int, Int],
-  value_map : @hashmap.HashMap[Int, Value],
-) -> Value {
-  let mut current_id = v.id
-  let mut steps = 0
-  while steps < 1024 {
-    match replace_map.get(current_id) {
-      Some(next_id) => {
-        if next_id == current_id {
-          break
-        }
-        current_id = next_id
-        steps = steps + 1
-      }
-      None => break
+fn build_block_index_array(func : Function) -> Array[Int] {
+  let block_count = func.next_block_id
+  let block_idx : Array[Int] = Array::make(block_count, -1)
+  for i, block in func.blocks {
+    if block.id >= 0 && block.id < block_count {
+      block_idx[block.id] = i
     }
   }
-  if current_id == v.id {
-    v
-  } else {
-    value_map.get(current_id).unwrap_or(v)
+  block_idx
+}
+
+///|
+fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
+  let count = replace_ids.length()
+  for key in 0..<count {
+    if replace_ids[key] < 0 {
+      continue
+    }
+    let mut current = key
+    let path : Array[Int] = []
+    let mut steps = 0
+    while steps < 1024 {
+      path.push(current)
+      if current < 0 || current >= count {
+        break
+      }
+      let next = replace_ids[current]
+      if next < 0 || next == current {
+        break
+      }
+      current = next
+      steps = steps + 1
+    }
+    for visited in path {
+      if visited >= 0 && visited < count {
+        replace_ids[visited] = current
+      }
+    }
   }
 }
 
@@ -78,17 +99,16 @@ fn resolve_replacement(
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
 pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   let result = OptResult::new()
-  let cfg = CFG::build(func)
-  let rpo = cfg.reverse_postorder()
-  if rpo.length() == 0 {
+  if func.blocks.length() == 0 {
     return result
   }
-  let entry_id = rpo[0]
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
+  let entry_id = func.blocks[0].id
+  let block_idx = build_block_index_array(func)
+  let value_count = func.next_value_id
+  if value_count <= 0 {
+    return result
   }
-  let state : @hashmap.HashMap[Int, PhiAbstractValue] = @hashmap.new()
+  let state : Array[PhiAbstractValue?] = Array::make(value_count, None)
   let mut has_params = false
   for block in func.blocks {
     if block.id == entry_id {
@@ -96,83 +116,139 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     }
     for param in block.params {
       let (v, _) = param
-      state.set(v.id, PhiAbstractValue::None)
-      has_params = true
+      if v.id >= 0 && v.id < value_count {
+        state[v.id] = Some(PhiAbstractValue::None)
+        has_params = true
+      }
     }
   }
   if !has_params {
     return result
   }
-  let mut changed = true
-  let mut iterations = 0
-  let max_iterations = 512
-  while changed && iterations < max_iterations {
-    changed = false
-    iterations = iterations + 1
-    for block_id in rpo {
-      let block = match block_idx.get(block_id) {
-        Some(idx) => func.blocks[idx]
-        None => continue
+  // Precompute jump-argument -> target-formal propagation pairs once.
+  // This mirrors Cranelift's block-summary approach and avoids repeated
+  // block/edge lookup work in each solver iteration.
+  let propagation_pairs : Array[(Int, Int)] = []
+  for block in func.blocks {
+    if block.terminator is Some(Jump(target, args)) {
+      if args.length() == 0 {
+        continue
       }
-      if block.terminator is Some(Jump(target, args)) {
-        if args.length() == 0 {
-          continue
+      if target < 0 || target >= block_idx.length() {
+        continue
+      }
+      let target_i = block_idx[target]
+      if target_i < 0 {
+        continue
+      }
+      let target_block = func.blocks[target_i]
+      let param_count = target_block.params.length()
+      let arg_count = args.length()
+      let count = if param_count < arg_count { param_count } else { arg_count }
+      for i in 0..<count {
+        let (formal, _) = target_block.params[i]
+        if formal.id >= 0 &&
+          formal.id < value_count &&
+          state[formal.id] is Some(_) {
+          propagation_pairs.push((formal.id, args[i].id))
         }
-        let target_block = match block_idx.get(target) {
-          Some(idx) => func.blocks[idx]
-          None => continue
-        }
-        let param_count = target_block.params.length()
-        let arg_count = args.length()
-        let count = if param_count < arg_count {
-          param_count
-        } else {
-          arg_count
-        }
-        for i in 0..<count {
-          let (formal, _) = target_block.params[i]
-          if state.get(formal.id) is None {
-            continue
-          }
-          let actual = args[i]
-          let actual_absval = match state.get(actual.id) {
-            Some(absval) => absval
-            None => PhiAbstractValue::One(actual.id)
-          }
-          let old_absval = state
-            .get(formal.id)
-            .unwrap_or(PhiAbstractValue::None)
-          let new_absval = old_absval.join(actual_absval)
-          if new_absval != old_absval {
-            state.set(formal.id, new_absval)
-            changed = true
+      }
+    }
+  }
+  if propagation_pairs.length() == 0 {
+    return result
+  }
+  // Event-driven solver:
+  // - process each propagation pair once
+  // - when a formal changes, only reprocess pairs that depend on it
+  // This avoids repeatedly scanning all edges until fixed-point.
+  let dependent_pairs : Array[Array[Int]?] = Array::make(value_count, None)
+  for pair_idx, pair in propagation_pairs {
+    let (_, actual_id) = pair
+    if actual_id >= 0 && actual_id < value_count && state[actual_id] is Some(_) {
+      let deps = dependent_pairs[actual_id].unwrap_or([])
+      deps.push(pair_idx)
+      dependent_pairs[actual_id] = Some(deps)
+    }
+  }
+  let queue : Array[Int] = []
+  let in_queue : Array[Bool] = Array::make(propagation_pairs.length(), false)
+  for pair_idx, _ in propagation_pairs {
+    queue.push(pair_idx)
+    in_queue[pair_idx] = true
+  }
+  let mut queue_head = 0
+  let mut steps = 0
+  let max_steps = propagation_pairs.length() * 16 + 1024
+  while queue_head < queue.length() && steps < max_steps {
+    let pair_idx = queue[queue_head]
+    queue_head = queue_head + 1
+    in_queue[pair_idx] = false
+    steps = steps + 1
+    let (formal_id, actual_id) = propagation_pairs[pair_idx]
+    if formal_id < 0 || formal_id >= value_count {
+      continue
+    }
+    let old_absval = state[formal_id].unwrap_or(PhiAbstractValue::None)
+    if old_absval is PhiAbstractValue::Many {
+      continue
+    }
+    let actual_absval = if actual_id >= 0 && actual_id < value_count {
+      match state[actual_id] {
+        Some(absval) => absval
+        None => PhiAbstractValue::One(actual_id)
+      }
+    } else {
+      PhiAbstractValue::One(actual_id)
+    }
+    let new_absval = old_absval.join(actual_absval)
+    if new_absval != old_absval {
+      state[formal_id] = Some(new_absval)
+      if dependent_pairs[formal_id] is Some(deps) {
+        for dep_idx in deps {
+          if dep_idx >= 0 && dep_idx < in_queue.length() && !in_queue[dep_idx] {
+            queue.push(dep_idx)
+            in_queue[dep_idx] = true
           }
         }
       }
     }
   }
-  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
-  let replace_map : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let params_to_keep : Array[Array[Int]] = []
+  let replace_ids : Array[Int] = Array::make(value_count, -1)
   let mut will_change = false
   for block in func.blocks {
     let keep : Array[Int] = []
     for i, param in block.params {
       let (v, _) = param
-      match state.get(v.id) {
-        Some(PhiAbstractValue::One(replacement_id)) => {
-          replace_map.set(v.id, replacement_id)
-          will_change = true
+      if v.id >= 0 && v.id < value_count {
+        match state[v.id] {
+          Some(PhiAbstractValue::One(replacement_id)) => {
+            replace_ids[v.id] = replacement_id
+            will_change = true
+          }
+          _ => keep.push(i)
         }
-        _ => keep.push(i)
+      } else {
+        keep.push(i)
       }
     }
-    params_to_keep.set(block.id, keep)
+    params_to_keep.push(keep)
   }
   if !will_change {
     return result
   }
+  compress_replace_array(replace_ids)
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       let old_params = block.params.copy()
       block.params.clear()
@@ -184,7 +260,14 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
   }
   for block in func.blocks {
     if block.terminator is Some(Jump(target, args)) {
-      let keep = params_to_keep.get(target).unwrap_or([])
+      let keep = if target >= 0 &&
+        target < block_idx.length() &&
+        block_idx[target] >= 0 &&
+        block_idx[target] < params_to_keep.length() {
+        params_to_keep[block_idx[target]]
+      } else {
+        []
+      }
       if keep.length() != args.length() {
         let new_args : Array[Value] = []
         for idx in keep {
@@ -197,82 +280,98 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       }
     }
   }
-  let value_map = build_value_map(func)
+  let replace_values : Array[Value?] = Array::make(value_count, None)
+  let values = build_value_array(func, value_count)
+  for from_id, to_id in replace_ids {
+    if to_id >= 0 && to_id < value_count && values[to_id] is Some(replacement) {
+      replace_values[from_id] = Some(replacement)
+    }
+  }
   for block in func.blocks {
     for inst in block.instructions {
-      let mut needs_update = false
-      let new_operands : Array[Value] = []
-      for op in inst.operands {
-        let resolved = resolve_replacement(op, replace_map, value_map)
-        if resolved.id != op.id {
-          needs_update = true
+      let mut changed_inst = false
+      for i, op in inst.operands {
+        if op.id >= 0 && op.id < value_count {
+          if replace_values[op.id] is Some(replacement) &&
+            replacement.id != op.id {
+            inst.operands[i] = replacement
+            changed_inst = true
+          }
         }
-        new_operands.push(resolved)
       }
-      if needs_update {
-        inst.operands.clear()
-        for op in new_operands {
-          inst.operands.push(op)
-        }
+      if changed_inst {
         result.mark_changed()
       }
     }
     if block.terminator is Some(term) {
       match term {
         Jump(target, args) => {
-          let mut needs_update = false
-          let new_args : Array[Value] = []
-          for arg in args {
-            let resolved = resolve_replacement(arg, replace_map, value_map)
-            if resolved.id != arg.id {
-              needs_update = true
+          let mut new_args : Array[Value]? = None
+          for i, arg in args {
+            if arg.id >= 0 && arg.id < value_count {
+              if replace_values[arg.id] is Some(replacement) &&
+                replacement.id != arg.id {
+                if new_args is None {
+                  new_args = Some(args.copy())
+                }
+                if new_args is Some(updated_args) {
+                  updated_args[i] = replacement
+                }
+              }
             }
-            new_args.push(resolved)
           }
-          if needs_update {
-            block.terminator = Some(Terminator::Jump(target, new_args))
+          if new_args is Some(updated_args) {
+            block.terminator = Some(Terminator::Jump(target, updated_args))
             result.mark_changed()
           }
         }
-        Brz(cond, then_target, else_target) => {
-          let resolved = resolve_replacement(cond, replace_map, value_map)
-          if resolved.id != cond.id {
-            block.terminator = Some(
-              Terminator::Brz(resolved, then_target, else_target),
-            )
-            result.mark_changed()
+        Brz(cond, then_target, else_target) =>
+          if cond.id >= 0 && cond.id < value_count {
+            if replace_values[cond.id] is Some(resolved) &&
+              resolved.id != cond.id {
+              block.terminator = Some(
+                Terminator::Brz(resolved, then_target, else_target),
+              )
+              result.mark_changed()
+            }
           }
-        }
-        Brnz(cond, then_target, else_target) => {
-          let resolved = resolve_replacement(cond, replace_map, value_map)
-          if resolved.id != cond.id {
-            block.terminator = Some(
-              Terminator::Brnz(resolved, then_target, else_target),
-            )
-            result.mark_changed()
+        Brnz(cond, then_target, else_target) =>
+          if cond.id >= 0 && cond.id < value_count {
+            if replace_values[cond.id] is Some(resolved) &&
+              resolved.id != cond.id {
+              block.terminator = Some(
+                Terminator::Brnz(resolved, then_target, else_target),
+              )
+              result.mark_changed()
+            }
           }
-        }
-        BrTable(index, targets, default_target) => {
-          let resolved = resolve_replacement(index, replace_map, value_map)
-          if resolved.id != index.id {
-            block.terminator = Some(
-              Terminator::BrTable(resolved, targets, default_target),
-            )
-            result.mark_changed()
+        BrTable(index, targets, default_target) =>
+          if index.id >= 0 && index.id < value_count {
+            if replace_values[index.id] is Some(resolved) &&
+              resolved.id != index.id {
+              block.terminator = Some(
+                Terminator::BrTable(resolved, targets, default_target),
+              )
+              result.mark_changed()
+            }
           }
-        }
         Return(values) => {
-          let mut needs_update = false
-          let new_values : Array[Value] = []
-          for value in values {
-            let resolved = resolve_replacement(value, replace_map, value_map)
-            if resolved.id != value.id {
-              needs_update = true
+          let mut new_values : Array[Value]? = None
+          for i, value in values {
+            if value.id >= 0 && value.id < value_count {
+              if replace_values[value.id] is Some(replacement) &&
+                replacement.id != value.id {
+                if new_values is None {
+                  new_values = Some(values.copy())
+                }
+                if new_values is Some(updated_values) {
+                  updated_values[i] = replacement
+                }
+              }
             }
-            new_values.push(resolved)
           }
-          if needs_update {
-            block.terminator = Some(Terminator::Return(new_values))
+          if new_values is Some(updated_values) {
+            block.terminator = Some(Terminator::Return(updated_values))
             result.mark_changed()
           }
         }
@@ -294,25 +393,34 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 
   // Build use counts for values in each block
   // A block parameter is "used" if it's referenced in instructions or passed to another used param
-  let used_params = compute_used_block_params(func)
+  let block_idx = build_block_index_array(func)
+  let used_params = compute_used_block_params(func, block_idx)
 
   // Track which parameter indices to keep for each block
-  let params_to_keep : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let params_to_keep : Array[Array[Int]] = []
   for block in func.blocks {
     let keep : Array[Int] = []
     for i, param in block.params {
       let (v, _) = param
-      if used_params.get(v.id).unwrap_or(false) {
+      if v.id >= 0 && v.id < used_params.length() && used_params[v.id] {
         keep.push(i)
       }
     }
-    params_to_keep.set(block.id, keep)
+    params_to_keep.push(keep)
   }
 
   // Check if any parameters will be removed
   let mut will_change = false
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       will_change = true
       break
@@ -324,7 +432,15 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 
   // Update block parameters - remove unused ones
   for block in func.blocks {
-    let keep = params_to_keep.get(block.id).unwrap_or([])
+    let block_i = if block.id >= 0 && block.id < block_idx.length() {
+      block_idx[block.id]
+    } else {
+      -1
+    }
+    if block_i < 0 || block_i >= params_to_keep.length() {
+      continue
+    }
+    let keep = params_to_keep[block_i]
     if keep.length() != block.params.length() {
       let old_params = block.params.copy()
       block.params.clear()
@@ -339,7 +455,14 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
   for block in func.blocks {
     match block.terminator {
       Some(Jump(target, args)) => {
-        let keep = params_to_keep.get(target).unwrap_or([])
+        let keep = if target >= 0 &&
+          target < block_idx.length() &&
+          block_idx[target] >= 0 &&
+          block_idx[target] < params_to_keep.length() {
+          params_to_keep[block_idx[target]]
+        } else {
+          []
+        }
         if keep.length() != args.length() {
           let new_args : Array[Value] = []
           for idx in keep {
@@ -363,62 +486,101 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 ///|
 /// Compute which block parameters are actually used
 /// Uses iterative dataflow analysis
-fn compute_used_block_params(func : Function) -> @hashmap.HashMap[Int, Bool] {
-  let used : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+fn compute_used_block_params(
+  func : Function,
+  block_idx : Array[Int],
+) -> Array[Bool] {
+  let value_count = func.next_value_id
+  if value_count <= 0 {
+    return []
+  }
+  let used = Array::make(value_count, false)
+  let propagation_edges : Array[Array[Int]?] = Array::make(value_count, None)
+  for block in func.blocks {
+    if block.terminator is Some(Jump(target, args)) {
+      if target >= 0 && target < block_idx.length() {
+        let target_idx = block_idx[target]
+        if target_idx < 0 {
+          continue
+        }
+        let target_block = func.blocks[target_idx]
+        let count = if target_block.params.length() < args.length() {
+          target_block.params.length()
+        } else {
+          args.length()
+        }
+        for i in 0..<count {
+          let (param_v, _) = target_block.params[i]
+          if param_v.id < 0 || param_v.id >= value_count {
+            continue
+          }
+          match propagation_edges[param_v.id] {
+            Some(edges) => edges.push(args[i].id)
+            None => propagation_edges[param_v.id] = Some([args[i].id])
+          }
+        }
+      }
+    }
+  }
 
   // Initialize: all function parameters are used (they come from caller)
   for param in func.params {
     let (v, _) = param
-    used.set(v.id, true)
+    if v.id >= 0 && v.id < value_count {
+      used[v.id] = true
+    }
   }
 
   // First pass: mark values used directly in instructions
   for block in func.blocks {
     for inst in block.instructions {
       for op in inst.operands {
-        used.set(op.id, true)
+        if op.id >= 0 && op.id < value_count {
+          used[op.id] = true
+        }
       }
     }
     // Also count uses in terminators (excluding jump args; handled by dataflow)
     if block.terminator is Some(term) {
       match term {
         Jump(_, _) => ()
-        Brz(cond, _, _) | Brnz(cond, _, _) => used.set(cond.id, true)
-        BrTable(index, _, _) => used.set(index.id, true)
+        Brz(cond, _, _) | Brnz(cond, _, _) =>
+          if cond.id >= 0 && cond.id < value_count {
+            used[cond.id] = true
+          }
+        BrTable(index, _, _) =>
+          if index.id >= 0 && index.id < value_count {
+            used[index.id] = true
+          }
         Return(args) =>
           for v in args {
-            used.set(v.id, true)
+            if v.id >= 0 && v.id < value_count {
+              used[v.id] = true
+            }
           }
         Trap(_) => ()
       }
     }
   }
 
-  // Iterative dataflow: propagate "used" backwards through jump arguments
-  // If a block parameter is used, the corresponding jump argument is also used
-  let mut changed = true
-  while changed {
-    changed = false
-    for block in func.blocks {
-      if block.terminator is Some(Jump(target, args)) {
-        // Find target block and its parameters
-        for target_block in func.blocks {
-          if target_block.id == target {
-            // For each parameter-argument pair
-            for i, param in target_block.params {
-              let (param_v, _) = param
-              if i < args.length() {
-                let arg = args[i]
-                // If target param is used, mark the argument as used
-                if used.get(param_v.id).unwrap_or(false) &&
-                  !used.get(arg.id).unwrap_or(false) {
-                  used.set(arg.id, true)
-                  changed = true
-                }
-              }
-            }
-            break
-          }
+  // Worklist propagation: if a block parameter is used, propagate that mark to
+  // incoming jump arguments for the corresponding edge position.
+  let worklist : Array[Int] = []
+  for value_id in 0..<value_count {
+    if used[value_id] {
+      worklist.push(value_id)
+    }
+  }
+  while worklist.length() > 0 {
+    let value_id = worklist.pop().unwrap()
+    if value_id < 0 || value_id >= value_count {
+      continue
+    }
+    if propagation_edges[value_id] is Some(edges) {
+      for arg_id in edges {
+        if arg_id >= 0 && arg_id < value_count && !used[arg_id] {
+          used[arg_id] = true
+          worklist.push(arg_id)
         }
       }
     }

@@ -308,7 +308,11 @@ fn pattern_opcode_eq(a : PatternOpcode, b : PatternOpcode) -> Bool {
 ///|
 /// Find the instruction that defines a given value
 fn find_defining_inst(ctx : LoweringContext, value : @ir.Value) -> @ir.Inst? {
-  ctx.def_inst_map.get(value.id)
+  if value.id >= 0 && value.id < ctx.def_inst_table.length() {
+    ctx.def_inst_table[value.id]
+  } else {
+    None
+  }
 }
 
 // ============ Rewrite Rules ============
@@ -606,7 +610,7 @@ pub fn lower_function_optimized(
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.vcode_func.add_param(class)
-    ctx.value_map.set(value.id, vreg)
+    ctx.set_cached_vreg(value.id, vreg)
   }
 
   // Phase 3: Lower result types
@@ -634,7 +638,7 @@ fn lower_block_optimized(
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.vcode_func.new_vreg(class)
-    ctx.value_map.set(value.id, vreg)
+    ctx.set_cached_vreg(value.id, vreg)
     vcode_block.params.push(vreg)
   }
 

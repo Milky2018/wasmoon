@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "generated_at_unix_sec": 1771995937,
+  "config": {
+    "iterations": 5,
+    "warmup": 1,
+    "timeout_sec": 300,
+    "wasmoon": "./wasmoon",
+    "wasmtime": "wasmtime"
+  },
+  "workloads": [
+    {
+      "workload": "examples/algorithms/aead_aegis128l.wasm",
+      "wasmoon_times_sec": [
+        5.530251582999881,
+        5.49593220800034,
+        5.5359269999999015,
+        5.540611082999931,
+        5.543655542000124
+      ],
+      "wasmtime_times_sec": [
+        0.7821737920003216,
+        0.7852934579996145,
+        0.7765845409994654,
+        0.780338374999701,
+        0.7829722910000783
+      ],
+      "wasmoon_median_sec": 5.5359269999999015,
+      "wasmtime_median_sec": 0.7821737920003216,
+      "ratio_vs_wasmtime": 7.077617604448738,
+      "threshold": 999.0,
+      "status": "ok"
+    },
+    {
+      "workload": "examples/benchmark.wasm",
+      "wasmoon_times_sec": [
+        0.29287729199950263,
+        0.2908420419998947,
+        0.28495679200023005,
+        0.2934114159997989,
+        0.2899356660000194
+      ],
+      "wasmtime_times_sec": [
+        0.29335449999962293,
+        0.2921407909998379,
+        0.2940350839999155,
+        0.29066537500057166,
+        0.29533387500032404
+      ],
+      "wasmoon_median_sec": 0.2908420419998947,
+      "wasmtime_median_sec": 0.29335449999962293,
+      "ratio_vs_wasmtime": 0.991435420285929,
+      "threshold": 999.0,
+      "status": "ok"
+    }
+  ]
+}

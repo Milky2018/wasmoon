@@ -13,6 +13,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     // Initialize all fields to match VMContext v3 layout
     // High frequency fields
     ctx->memory0 = NULL;
+    ctx->memory0_base = NULL;
+    atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
     ctx->func_table = (void **)calloc(func_count, sizeof(void *));
     if (!ctx->func_table) {
         free(ctx);
@@ -168,6 +170,8 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->owns_memory0 && ctx->memory0) {
         wasmoon_jit_free_memory_desc((int64_t)ctx->memory0);
         ctx->memory0 = NULL;
+        ctx->memory0_base = NULL;
+        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
         ctx->owns_memory0 = 0;
     }
 
@@ -227,6 +231,21 @@ void free_context_internal(jit_context_t *ctx) {
 
 // ============ Context Setters ============
 
+void ctx_refresh_memory0_fast_fields(jit_context_t *ctx) {
+    if (!ctx) return;
+    if (!ctx->memory0) {
+        ctx->memory0_base = NULL;
+        atomic_store_explicit(&ctx->memory0_size, 0, memory_order_relaxed);
+        return;
+    }
+    ctx->memory0_base = ctx->memory0->base;
+    atomic_store_explicit(
+        &ctx->memory0_size,
+        atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed),
+        memory_order_relaxed
+    );
+}
+
 void ctx_set_func_internal(jit_context_t *ctx, int idx, void *func_ptr) {
     if (ctx && idx >= 0 && idx < ctx->func_count) {
         ctx->func_table[idx] = func_ptr;
@@ -236,6 +255,7 @@ void ctx_set_func_internal(jit_context_t *ctx, int idx, void *func_ptr) {
 void ctx_set_memory_internal(jit_context_t *ctx, wasmoon_memory_t *mem0) {
     if (ctx) {
         ctx->memory0 = mem0;
+        ctx_refresh_memory0_fast_fields(ctx);
     }
 }
 

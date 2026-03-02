@@ -7,12 +7,14 @@
 /// Builder for constructing an EGraph from IR instructions
 struct EGraphBuilder {
   egraph : @egraph.EGraph
-  // Map from IR Value id to EClassId
-  value_map : Map[Int, @egraph.EClassId]
+  // Dense map from IR Value id to EClassId (Cranelift SecondaryMap style).
+  value_map : Array[@egraph.EClassId?]
   // Reverse map from (canonical EClassId, Type) to an in-scope IR Value (for operand rewriting)
   class_to_value : Map[RepKey, Value]
-  // Map from IR Value id to its defining instruction
-  def_map : Map[Int, Inst]
+  // Dense map from IR Value id to its defining instruction.
+  def_map : Array[Inst?]
+  // Dense map from IR Value id to its e-graph-encodable opcode (if pure/admitted).
+  def_eop_map : Array[@egraph.EOpcode?]
   // Ruleset for eager optimization
   ruleset : @egraph.IndexedRuleSet
   // Rewrite limits (Cranelift-style hard caps).
@@ -30,20 +32,73 @@ struct RepKey {
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {
-  EGraphBuilder::new_with_limits(@egraph.SaturationLimits::cranelift_default())
+  EGraphBuilder::new_with_limits_and_ruleset(
+    @egraph.SaturationLimits::cranelift_default(),
+    @egraph.get_global_ruleset(),
+  )
 }
 
 ///|
 pub fn EGraphBuilder::new_with_limits(
   saturation_limits : @egraph.SaturationLimits,
 ) -> EGraphBuilder {
+  EGraphBuilder::new_with_limits_and_ruleset(
+    saturation_limits,
+    @egraph.get_global_ruleset(),
+  )
+}
+
+///|
+pub fn EGraphBuilder::new_with_limits_and_ruleset(
+  saturation_limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+) -> EGraphBuilder {
   {
     egraph: @egraph.EGraph::new(),
-    value_map: {},
+    value_map: [],
     class_to_value: {},
-    def_map: {},
-    ruleset: @egraph.get_global_ruleset(),
+    def_map: [],
+    def_eop_map: [],
+    ruleset,
     saturation_limits,
+  }
+}
+
+///|
+fn EGraphBuilder::ensure_value_slot(
+  self : EGraphBuilder,
+  value_id : Int,
+) -> Unit {
+  if value_id < 0 {
+    return
+  }
+  while self.value_map.length() <= value_id {
+    self.value_map.push(None)
+  }
+  while self.def_map.length() <= value_id {
+    self.def_map.push(None)
+  }
+  while self.def_eop_map.length() <= value_id {
+    self.def_eop_map.push(None)
+  }
+}
+
+///|
+fn EGraphBuilder::reserve_value_slots(
+  self : EGraphBuilder,
+  count : Int,
+) -> Unit {
+  if count <= 0 {
+    return
+  }
+  while self.value_map.length() < count {
+    self.value_map.push(None)
+  }
+  while self.def_map.length() < count {
+    self.def_map.push(None)
+  }
+  while self.def_eop_map.length() < count {
+    self.def_eop_map.push(None)
   }
 }
 
@@ -51,7 +106,9 @@ pub fn EGraphBuilder::new_with_limits(
 /// Register an instruction's definition
 pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
-    self.def_map.set(v.id, inst)
+    self.ensure_value_slot(v.id)
+    self.def_map[v.id] = Some(inst)
+    self.def_eop_map[v.id] = opcode_to_eopcode(inst)
   }
 }
 
@@ -86,12 +143,13 @@ fn type_bits(ty : Type) -> Int {
 }
 
 ///|
-/// Cranelift-style purity boundary for e-graph rewrites:
-/// only admit operations that are pure and non-trapping.
+
+///|
+/// Whether an opcode currently has an e-graph encoding in `@egraph.EOpcode`.
 ///
-/// Excluded (trap-sensitive) examples:
-/// - `sdiv`, `udiv`, `srem`, `urem` (division by zero / overflow trap semantics)
-fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
+/// This is intentionally narrower than generic IR purity: admission also needs
+/// an explicit encoding in the e-graph node language.
+fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
   match opcode {
     Iconst(_) => true
     Iadd | Isub | Imul => true
@@ -106,10 +164,21 @@ fn opcode_is_egraph_pure_nontrapping(opcode : Opcode) -> Bool {
 }
 
 ///|
+/// Cranelift-aligned e-graph purity boundary:
+/// - exactly one result
+/// - no side effects / trapping semantics (per IR side-effect model)
+/// - opcode has a representable e-graph encoding
+fn inst_is_egraph_pure(inst : Inst) -> Bool {
+  inst.all_results().length() == 1 &&
+  !has_side_effects(inst) &&
+  opcode_has_egraph_encoding(inst.opcode)
+}
+
+///|
 /// Convert an IR Opcode to an EOpcode (if optimizable and purity-safe).
 /// Takes the instruction to extract type information for extend/reduce ops.
 fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
-  if !opcode_is_egraph_pure_nontrapping(inst.opcode) {
+  if !inst_is_egraph_pure(inst) {
     return None
   }
   match inst.opcode {
@@ -182,7 +251,9 @@ pub fn EGraphBuilder::add_value(
   value : Value,
 ) -> @egraph.EClassId {
   // Check if already converted
-  if self.value_map.get(value.id) is Some(id) {
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(id) {
     return self.egraph.find(id) // Return canonical id
   }
 
@@ -190,9 +261,10 @@ pub fn EGraphBuilder::add_value(
   let bits = type_bits(value.ty)
 
   // Look up the defining instruction
-  let class_id = if self.def_map.get(value.id) is Some(inst) {
-    // Try to convert the opcode (pass full instruction for type info)
-    match opcode_to_eopcode(inst) {
+  let class_id = if value.id >= 0 &&
+    value.id < self.def_map.length() &&
+    self.def_map[value.id] is Some(inst) {
+    match self.def_eop_map[value.id] {
       None => {
         // Not an optimizable opcode - treat as variable
         let id = self.egraph.add_var(value.id)
@@ -200,6 +272,7 @@ pub fn EGraphBuilder::add_value(
         id
       }
       Some(eop) =>
+        // Optimizable opcode: recursively add operands, then add node.
         match eop {
           Const(c) => {
             let id = self.egraph.add_const(c)
@@ -223,7 +296,8 @@ pub fn EGraphBuilder::add_value(
     self.egraph.set_type(id, bits)
     id
   }
-  self.value_map.set(value.id, class_id)
+  self.ensure_value_slot(value.id)
+  self.value_map[value.id] = Some(class_id)
   class_id
 }
 
@@ -253,9 +327,12 @@ pub fn EGraphBuilder::extract(
   self : EGraphBuilder,
   value : Value,
 ) -> (Int, @egraph.ENode)? {
-  match self.value_map.get(value.id) {
-    Some(class_id) => Some(self.egraph.extract(class_id))
-    None => None
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    Some(self.egraph.extract(class_id))
+  } else {
+    None
   }
 }
 
@@ -283,8 +360,10 @@ pub fn optimize_block_with_limits(
 
   // Second pass: add all arithmetic values to e-graph
   for inst in block.instructions {
-    if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
-      // Only add if it's an optimizable operation
+    if inst.first_result() is Some(v) &&
+      v.id >= 0 &&
+      v.id < builder.def_eop_map.length() &&
+      builder.def_eop_map[v.id] is Some(_) {
       builder.add_value(v) |> ignore
     }
   }
@@ -311,17 +390,18 @@ pub fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
 ) -> Opcode? {
-  match self.value_map.get(value.id) {
-    None => None
-    Some(class_id) => {
-      let (_, best_node) = self.egraph.extract(class_id)
-      // Only handle constant folding - returns Iconst if the result is a constant
-      match best_node.op {
-        Const(c) => Some(Iconst(c))
-        // Don't change opcode for non-constant results - would need operand reconstruction
-        _ => None
-      }
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    let (_, best_node) = self.egraph.extract(class_id)
+    // Only handle constant folding - returns Iconst if the result is a constant
+    match best_node.op {
+      Const(c) => Some(Iconst(c))
+      // Don't change opcode for non-constant results - would need operand reconstruction
+      _ => None
     }
+  } else {
+    None
   }
 }
 
@@ -333,24 +413,25 @@ pub fn EGraphBuilder::get_simplified_operand(
   self : EGraphBuilder,
   value : Value,
 ) -> Value? {
-  match self.value_map.get(value.id) {
-    None => None
-    Some(class_id) => {
-      // Get the canonical class after optimization
-      let canonical = self.egraph.find(class_id)
-      // Check if this class maps to a different (simpler) value with same IR type
-      let key : RepKey = { class_id: canonical.0, ty: value.ty }
-      match self.class_to_value.get(key) {
-        None => None
-        Some(simplified_value) =>
-          // Only return if it's different from the original
-          if simplified_value.id != value.id {
-            Some(simplified_value)
-          } else {
-            None
-          }
-      }
+  if value.id >= 0 &&
+    value.id < self.value_map.length() &&
+    self.value_map[value.id] is Some(class_id) {
+    // Get the canonical class after optimization
+    let canonical = self.egraph.find(class_id)
+    // Check if this class maps to a different (simpler) value with same IR type
+    let key : RepKey = { class_id: canonical.0, ty: value.ty }
+    match self.class_to_value.get(key) {
+      None => None
+      Some(simplified_value) =>
+        // Only return if it's different from the original
+        if simplified_value.id != value.id {
+          Some(simplified_value)
+        } else {
+          None
+        }
     }
+  } else {
+    None
   }
 }
 
@@ -359,13 +440,19 @@ pub fn EGraphBuilder::get_simplified_operand(
 /// This ensures the representative:
 /// - has the correct IR type for the use site
 /// - is defined early enough in the block (dominates subsequent uses in the block)
+#warnings("-unused_value")
 fn EGraphBuilder::recompute_representatives_for_block(
   self : EGraphBuilder,
+  func : Function,
   block : Block,
+  idom : Array[Int],
+  block_idx : Map[Int, Int],
 ) -> Unit {
   self.class_to_value.clear()
   fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
-    if self.value_map.get(value.id) is Some(class_id) {
+    if value.id >= 0 &&
+      value.id < self.value_map.length() &&
+      self.value_map[value.id] is Some(class_id) {
       let canonical = self.egraph.find(class_id)
       let key : RepKey = { class_id: canonical.0, ty: value.ty }
       if !self.class_to_value.contains(key) {
@@ -374,21 +461,54 @@ fn EGraphBuilder::recompute_representatives_for_block(
     }
   }
 
-  // Block params dominate all instructions in the block.
-  for pair in block.params {
-    let (v, _) = pair
-    try_add_rep(self, v)
+  // Dominance-aware representatives:
+  // process dominator chain from root to current block so every chosen value
+  // dominates uses in `block`, while preferring earlier dominating forms.
+  let dom_chain : Array[Int] = []
+  if block.id >= 0 && block.id < idom.length() {
+    let mut current = block.id
+    dom_chain.push(current)
+    while current != 0 {
+      let parent = idom[current]
+      if parent < 0 || parent == current {
+        break
+      }
+      dom_chain.push(parent)
+      current = parent
+    }
+  } else {
+    dom_chain.push(block.id)
   }
+  dom_chain.rev_in_place()
 
-  // Instruction order within the block defines dominance.
-  for inst in block.instructions {
-    for op in inst.operands {
-      try_add_rep(self, op)
-    }
-    if inst.first_result() is Some(v) {
-      try_add_rep(self, v)
+  for block_id in dom_chain {
+    if block_idx.get(block_id) is Some(idx) {
+      let dom_block = func.blocks[idx]
+      // Block params dominate instructions in their block.
+      for pair in dom_block.params {
+        let (v, _) = pair
+        try_add_rep(self, v)
+      }
+      // Instruction order defines in-block dominance.
+      for inst in dom_block.instructions {
+        for op in inst.operands {
+          try_add_rep(self, op)
+        }
+        if inst.first_result() is Some(v) {
+          try_add_rep(self, v)
+        }
+      }
     }
   }
+}
+
+///|
+fn build_block_index(func : Function) -> Map[Int, Int] {
+  let index : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    index.set(block.id, i)
+  }
+  index
 }
 
 ///|
@@ -415,75 +535,148 @@ pub fn optimize_function_with_stats_with_limits(
   func : Function,
   limits : @egraph.SaturationLimits,
 ) -> EGraphOptimizeStats {
-  let mut changed = false
-  let mut total_classes = 0
-  let mut total_nodes = 0
-  let mut total_rule_applications = 0
-  for block in func.blocks {
-    let builder = EGraphBuilder::new_with_limits(limits)
+  optimize_function_with_stats_with_limits_and_ruleset(
+    func,
+    limits,
+    @egraph.get_global_ruleset(),
+  )
+}
 
-    // Register all definitions in this block
+///|
+pub fn optimize_function_with_stats_with_limits_and_ruleset(
+  func : Function,
+  limits : @egraph.SaturationLimits,
+  ruleset : @egraph.IndexedRuleSet,
+) -> EGraphOptimizeStats {
+  let mut changed = false
+  let builder = EGraphBuilder::new_with_limits_and_ruleset(limits, ruleset)
+  builder.reserve_value_slots(func.next_value_id)
+
+  // Function-scoped e-graph construction (Cranelift-directional alignment):
+  // build one e-graph for the whole function instead of isolated per-block
+  // e-graphs.
+  for block in func.blocks {
     for inst in block.instructions {
       builder.register_def(inst)
     }
+  }
 
-    // Add all values to e-graph
+  for block in func.blocks {
+    // Add all e-graph-admitted values from all blocks.
     for inst in block.instructions {
-      if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+      if inst.first_result() is Some(v) &&
+        v.id >= 0 &&
+        v.id < builder.def_eop_map.length() &&
+        builder.def_eop_map[v.id] is Some(_) {
         builder.add_value(v) |> ignore
       }
     }
+  }
 
-    // Run saturation
-    builder.optimize()
-    let egraph = builder.get_egraph()
-    total_classes = total_classes + egraph.num_classes()
-    total_nodes = total_nodes + egraph.num_nodes()
-    total_rule_applications = total_rule_applications +
-      egraph.last_rule_applications()
-    builder.recompute_representatives_for_block(block)
+  // Run one saturation pass on the function-wide e-graph.
+  builder.optimize()
+  let egraph = builder.get_egraph()
+  let total_classes = egraph.num_classes()
+  let total_nodes = egraph.num_nodes()
+  let total_rule_applications = egraph.last_rule_applications()
 
-    // Apply optimizations: constant folding and operand rewriting
-    for inst in block.instructions {
-      // First, try to simplify operands (e.g., x + 0 -> x means operand can be simplified)
-      for i in 0..<inst.operands.length() {
-        let operand = inst.operands[i]
-        if builder.get_simplified_operand(operand) is Some(simplified) {
-          inst.operands[i] = simplified
-          changed = true
+  // Rewrite blocks with scoped representatives along the dominator tree.
+  // This mirrors Cranelift's ScopedHashMap elaboration direction: each block
+  // sees dominating representatives, can refine them locally, and restores on
+  // scope exit.
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  let block_idx = build_block_index(func)
+
+  fn rewrite_block(block_id : Int) -> Unit {
+    if block_idx.get(block_id) is Some(idx) {
+      let block = func.blocks[idx]
+      let scoped_entries : Array[(RepKey, Value?)] = []
+
+      fn bind_rep(builder : EGraphBuilder, value : Value) -> Unit {
+        if value.id >= 0 &&
+          value.id < builder.value_map.length() &&
+          builder.value_map[value.id] is Some(class_id) {
+          let canonical = builder.egraph.find(class_id)
+          let key : RepKey = { class_id: canonical.0, ty: value.ty }
+          let previous = builder.class_to_value.get(key)
+          let should_bind = previous is None
+          if should_bind {
+            scoped_entries.push((key, previous))
+            builder.class_to_value.set(key, value)
+          }
         }
       }
 
-      // Then, try to simplify the result value
-      if inst.first_result() is Some(v) &&
-        builder.get_simplified_opcode(v) is Some(op) {
-        if op is Iconst(c) {
-          // Replace with constant only when it materially changes the IR.
-          // Otherwise we can report spurious "changed" forever.
-          let mut inst_changed = false
-          match inst.opcode {
-            Iconst(old_c) =>
-              if old_c != c || inst.operands.length() > 0 {
+      for pair in block.params {
+        let (param, _) = pair
+        bind_rep(builder, param)
+      }
+
+      // Apply optimizations: constant folding and operand rewriting.
+      for inst in block.instructions {
+        for operand in inst.operands {
+          bind_rep(builder, operand)
+        }
+        for i in 0..<inst.operands.length() {
+          let operand = inst.operands[i]
+          if builder.get_simplified_operand(operand) is Some(simplified) {
+            inst.operands[i] = simplified
+            changed = true
+          }
+        }
+
+        if inst.first_result() is Some(v) &&
+          builder.get_simplified_opcode(v) is Some(op) {
+          if op is Iconst(c) {
+            let mut inst_changed = false
+            match inst.opcode {
+              Iconst(old_c) =>
+                if old_c != c || inst.operands.length() > 0 {
+                  inst.opcode = Iconst(c)
+                  inst.operands.clear()
+                  inst_changed = true
+                }
+              _ => {
                 inst.opcode = Iconst(c)
                 inst.operands.clear()
                 inst_changed = true
               }
-            _ => {
-              inst.opcode = Iconst(c)
-              inst.operands.clear()
-              inst_changed = true
             }
-          }
-          if inst_changed {
+            if inst_changed {
+              changed = true
+            }
+          } else if inst.opcode != op {
+            inst.opcode = op
             changed = true
           }
-        } else if inst.opcode != op {
-          // Opcode changed - update it only when different.
-          inst.opcode = op
-          changed = true
+        }
+
+        if inst.first_result() is Some(v) {
+          bind_rep(builder, v)
+        }
+      }
+
+      if block_id < domtree.length() {
+        for child in domtree[block_id] {
+          rewrite_block(child)
+        }
+      }
+
+      for entry in scoped_entries.rev_iter() {
+        let (key, previous) = entry
+        match previous {
+          Some(value) => builder.class_to_value.set(key, value)
+          None => builder.class_to_value.remove(key)
         }
       }
     }
+  }
+
+  if cfg.is_valid(0) {
+    builder.class_to_value.clear()
+    rewrite_block(0)
   }
   { changed, total_classes, total_nodes, total_rule_applications }
 }

@@ -258,6 +258,8 @@ fn MachineCode::emit_terminator_with_epilogue(
     )
     return
   }
+  let isa = @isaregs.current_isa()
+  let sret_reg = @isaregs.sret_index()
   fn trap_msg_to_brk_imm(msg : String) -> Int {
     // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
     //   0 unreachable
@@ -438,9 +440,10 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
-      // ABI: Use X0-X7 for integer returns (up to 8)
-      let max_int_ret_regs = @abi.MAX_INT_RET_REGS // 8
-      let max_float_ret_regs = @abi.MAX_FLOAT_RET_REGS // 8
+      let int_ret_regs = isa.wasm_ret_gprs()
+      let float_ret_regs = isa.wasm_ret_fprs()
+      let max_int_ret_regs = int_ret_regs.length()
+      let max_float_ret_regs = float_ret_regs.length()
 
       // We must implement parallel moves for returns, because sources can overlap
       // destinations (e.g. returning (x1, x0) requires a swap). Do this using
@@ -575,12 +578,13 @@ fn MachineCode::emit_terminator_with_epilogue(
       for idx, entry in int_sources {
         let (src, _) = entry
         if idx < max_int_ret_regs {
-          if src != idx {
-            int_moves.push((src, idx))
+          let dst = int_ret_regs[idx].index
+          if src != dst {
+            int_moves.push((src, dst))
           }
         } else {
           // Extra results go to SRET buffer (X8).
-          self.emit_str_offset(src, @abi.REG_SRET, extra_offset)
+          self.emit_str_offset(src, sret_reg, extra_offset)
           extra_offset = extra_offset + 8
         }
       }
@@ -596,8 +600,9 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       for idx in 0..<num_float_in_regs {
         let (_, src, _) = float_sources[idx]
-        if src != idx {
-          float_moves.push((src, idx))
+        let dst = float_ret_regs[idx].index
+        if src != dst {
+          float_moves.push((src, dst))
         }
       }
       emit_parallel_moves_v(self, float_moves)
@@ -605,7 +610,7 @@ fn MachineCode::emit_terminator_with_epilogue(
       // Extra float results go to SRET buffer (X8).
       for idx in max_float_ret_regs..<float_sources.length() {
         let (_, src, _) = float_sources[idx]
-        self.emit_str_d_offset(src, @abi.REG_SRET, extra_offset)
+        self.emit_str_d_offset(src, sret_reg, extra_offset)
         extra_offset = extra_offset + 8
       }
       match shared_exit_block {

@@ -25,11 +25,17 @@ pub fn UnionFind::new(n : Int) -> UnionFind {
 /// Find the root of the set containing x
 /// Uses path compression for amortized O(α(n)) time
 pub fn UnionFind::find(self : UnionFind, x : Int) -> Int {
-  if self.parent[x] != x {
-    // Path compression: make all nodes on path point to root
-    self.parent[x] = self.find(self.parent[x])
+  let mut root = x
+  while self.parent[root] != root {
+    root = self.parent[root]
   }
-  self.parent[x]
+  let mut current = x
+  while self.parent[current] != current {
+    let next = self.parent[current]
+    self.parent[current] = root
+    current = next
+  }
+  root
 }
 
 ///|
@@ -53,6 +59,19 @@ pub fn UnionFind::union(self : UnionFind, x : Int, y : Int) -> Bool {
     self.parent[root_y] = root_x
     self.rank[root_x] += 1
   }
+  true
+}
+
+///|
+/// Union the set containing `from` into the set containing `to`.
+/// Returns true if a union was performed (sets were different).
+pub fn UnionFind::union_into(self : UnionFind, from : Int, to : Int) -> Bool {
+  let from_root = self.find(from)
+  let to_root = self.find(to)
+  if from_root == to_root {
+    return false
+  }
+  self.parent[from_root] = to_root
   true
 }
 

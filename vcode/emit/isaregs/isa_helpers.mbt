@@ -38,3 +38,8 @@ pub fn scratch2_index() -> Int {
 pub fn lr_index() -> Int {
   current_isa().lr_reg_index()
 }
+
+///|
+pub fn sret_index() -> Int {
+  current_isa().sret_reg_index()
+}

@@ -627,12 +627,20 @@ fn lower_shift(
     }
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
     if @isa.ISA::current() is @isa.AMD64 {
       // x86_64 variable shifts/rotates use CL as the implicit count register.
+      // Keep the data operand in Scratch1 to avoid clobbering when the count
+      // operand is moved into rcx by fixed-reg constraint edits.
+      let shift_data : @abi.PReg = {
+        index: @isa.ISA::current().scratch_reg_1_index(),
+        class: Int,
+      }
+      vcode_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
+      vcode_inst.add_use_fixed(Virtual(lhs), shift_data)
       vcode_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
     } else {
+      vcode_inst.add_def({ reg: Virtual(dst) })
+      vcode_inst.add_use(Virtual(lhs))
       vcode_inst.add_use(Virtual(rhs))
     }
     block.add_inst(vcode_inst)
@@ -790,8 +798,8 @@ fn lower_iadd(
     return
   }
 
-  // Match Cranelift iadd_imm12_neg_{right,left}:
-  // add(x, -C) -> sub #C, x when C fits add/sub imm12 encoding.
+  // Match Cranelift immediate-negation canonicalization:
+  // add(x, -C) -> sub #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
@@ -810,7 +818,7 @@ fn lower_iadd(
     return
   }
 
-  // Pattern: add(x, const) -> AddImm where const is valid 12-bit immediate
+  // Pattern: add(x, const) -> AddImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
@@ -1013,8 +1021,8 @@ fn lower_isub(
     return
   }
 
-  // Match Cranelift isub_imm12_neg:
-  // sub(x, -C) -> add #C, x when C fits add/sub imm12 encoding.
+  // Match Cranelift immediate-negation canonicalization:
+  // sub(x, -C) -> add #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1023,7 +1031,7 @@ fn lower_isub(
     return
   }
 
-  // Pattern: sub(x, const) -> SubImm where const is valid 12-bit immediate
+  // Pattern: sub(x, const) -> SubImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1448,12 +1456,19 @@ fn lower_rotl(
 
   // Step 2: Rotate right by -n (effectively rotl by n)
   let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
-  rotr_inst.add_def({ reg: Virtual(dst) })
-  rotr_inst.add_use(Virtual(src))
   if @isa.ISA::current() is @isa.AMD64 {
     // x86_64 variable shifts/rotates use CL as the implicit count register.
+    // Keep rotate source/dest away from rcx (count register).
+    let shift_data : @abi.PReg = {
+      index: @isa.ISA::current().scratch_reg_1_index(),
+      class: Int,
+    }
+    rotr_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
+    rotr_inst.add_use_fixed(Virtual(src), shift_data)
     rotr_inst.add_use_fixed(Virtual(neg_n), { index: 1, class: Int }) // rcx
   } else {
+    rotr_inst.add_def({ reg: Virtual(dst) })
+    rotr_inst.add_use(Virtual(src))
     rotr_inst.add_use(Virtual(neg_n))
   }
   block.add_inst(rotr_inst)

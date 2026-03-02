@@ -15,36 +15,42 @@
 pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
 ///|
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
+pub const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
 
 ///|
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
+pub const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
 
 ///|
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 24
 
 ///|
-pub const VMCTX_GLOBALS_OFFSET : Int = 32
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 32
 
 ///|
-pub const VMCTX_TABLES_OFFSET : Int = 40
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
 
 ///|
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
+pub const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
+pub const VMCTX_TABLES_OFFSET : Int = 56
 
 ///|
-pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 64
+
+///|
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 72
+
+///|
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 80
 
 // Multi-memory support offsets
 
 ///|
-pub const VMCTX_MEMORIES_OFFSET : Int = 72
+pub const VMCTX_MEMORIES_OFFSET : Int = 88
 
 ///|
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 96
 
 // Offsets within `wasmoon_memory_t` (see jit_ffi.h)
 
@@ -84,6 +90,14 @@ struct FuncEnvironment {
   mut memory_trap_block : Block?
   // Shared trap block for atomic unaligned accesses
   mut atomic_unaligned_trap_block : Block?
+  // Per-block dynamic bounds-check cache:
+  // key = "block_id:memidx:wasm_addr_value_id", value = max checked
+  // (offset + access_size) for that address within the block.
+  //
+  // This mirrors Cranelift's "same-index checks can dedup" idea for repeated
+  // field/stack accesses and is safe because we only reuse checks when a later
+  // access has an equal-or-smaller range end in the same block.
+  bounds_check_cache : @hashmap.HashMap[String, Int64]
 }
 
 ///|
@@ -100,6 +114,7 @@ pub fn FuncEnvironment::new(
     memory_page_size_log2,
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
+    bounds_check_cache: @hashmap.new(),
   }
 }
 
@@ -315,10 +330,14 @@ pub fn FuncEnvironment::translate_table_set(
 /// For memidx 0: use fast path (direct vmctx field)
 /// For memidx > 0: load from memories array
 fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
-  let mem_ptr = if memidx == 0 {
-    let mem0_off = builder.iconst(Type::I64, VMCTX_MEMORY0_OFFSET.to_int64())
-    builder.load_ptr(Type::I64, vmctx, mem0_off)
-  } else {
+  if memidx == 0 {
+    let mem0_size_off = builder.iconst(
+      Type::I64,
+      VMCTX_MEMORY0_SIZE_OFFSET.to_int64(),
+    )
+    return builder.load_ptr(Type::I64, vmctx, mem0_size_off)
+  }
+  let mem_ptr = {
     let memories_off = builder.iconst(
       Type::I64,
       VMCTX_MEMORIES_OFFSET.to_int64(),
@@ -494,6 +513,68 @@ fn FuncEnvironment::can_eliminate_bounds_check(
 }
 
 ///|
+fn bounds_check_cache_key(
+  block_id : Int,
+  memidx : Int,
+  addr_id : Int,
+) -> String {
+  "\{block_id}:\{memidx}:\{addr_id}"
+}
+
+///|
+fn checked_access_end(offset : Int64, access_size : Int) -> Int64? {
+  if offset < 0L || access_size < 0 {
+    return None
+  }
+  let end = offset + access_size.to_int64()
+  if end < offset {
+    None
+  } else {
+    Some(end)
+  }
+}
+
+///|
+/// Cranelift-aligned local dedup: if we already checked the same wasm address
+/// in this block with a larger (offset + size), we can skip the later check.
+fn FuncEnvironment::can_eliminate_redundant_bounds_check(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  wasm_addr : Value,
+  offset : Int64,
+  access_size : Int,
+) -> Bool {
+  guard builder.current_block() is Some(block) else { return false }
+  guard checked_access_end(offset, access_size) is Some(end) else {
+    return false
+  }
+  let key = bounds_check_cache_key(block.id, memidx, wasm_addr.id)
+  match self.bounds_check_cache.get(key) {
+    Some(max_end) => end <= max_end
+    None => false
+  }
+}
+
+///|
+fn FuncEnvironment::record_bounds_check(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+  memidx : Int,
+  wasm_addr : Value,
+  offset : Int64,
+  access_size : Int,
+) -> Unit {
+  guard builder.current_block() is Some(block) else { return }
+  guard checked_access_end(offset, access_size) is Some(end) else { return }
+  let key = bounds_check_cache_key(block.id, memidx, wasm_addr.id)
+  match self.bounds_check_cache.get(key) {
+    Some(max_end) => if end > max_end { self.bounds_check_cache.set(key, end) }
+    None => self.bounds_check_cache.set(key, end)
+  }
+}
+
+///|
 /// Emit bounds check and return effective address for memory access
 /// This is a public helper for SIMD and other complex load operations
 pub fn FuncEnvironment::emit_bounds_check(
@@ -514,10 +595,16 @@ pub fn FuncEnvironment::emit_bounds_check(
     return builder.iadd(memory_base, addr_plus_offset)
   }
 
-  // Check if bounds check can be eliminated for constant addresses
-  let skip_bounds_check = self.can_eliminate_bounds_check(
+  // Check if bounds check can be eliminated:
+  // - statically (constant in min memory)
+  // - dynamically (already checked in this block with wider end range)
+  let skip_const_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
+  let skip_redundant_bounds_check = self.can_eliminate_redundant_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
+  let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
   let memory_size = load_memory_size(builder, vmctx, memidx)
 
@@ -565,6 +652,7 @@ pub fn FuncEnvironment::emit_bounds_check(
 
     // Continue block
     builder.switch_to_block(continue_block)
+    self.record_bounds_check(builder, memidx, wasm_addr, offset, access_size)
   }
 
   // Return effective address: memory_base + addr + offset
@@ -599,10 +687,16 @@ pub fn FuncEnvironment::translate_memory_load(
     return builder.load_ptr(ty, effective_addr, zero_offset)
   }
 
-  // Check if bounds check can be eliminated for constant addresses
-  let skip_bounds_check = self.can_eliminate_bounds_check(
+  // Check if bounds check can be eliminated:
+  // - statically (constant in min memory)
+  // - dynamically (already checked in this block with wider end range)
+  let skip_const_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
+  let skip_redundant_bounds_check = self.can_eliminate_redundant_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
+  let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
   let memory_size = load_memory_size(builder, vmctx, memidx)
 
@@ -656,6 +750,7 @@ pub fn FuncEnvironment::translate_memory_load(
 
     // Continue block: perform the load
     builder.switch_to_block(continue_block)
+    self.record_bounds_check(builder, memidx, wasm_addr, offset, access_size)
   }
 
   // Calculate effective address: memory_base + addr + offset
@@ -693,10 +788,16 @@ pub fn FuncEnvironment::translate_memory_store(
     return builder.store_ptr(ty, effective_addr, value, zero_offset)
   }
 
-  // Check if bounds check can be eliminated for constant addresses
-  let skip_bounds_check = self.can_eliminate_bounds_check(
+  // Check if bounds check can be eliminated:
+  // - statically (constant in min memory)
+  // - dynamically (already checked in this block with wider end range)
+  let skip_const_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
+  let skip_redundant_bounds_check = self.can_eliminate_redundant_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
+  let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
   let memory_size = load_memory_size(builder, vmctx, memidx)
 
@@ -744,6 +845,7 @@ pub fn FuncEnvironment::translate_memory_store(
 
     // Continue block: perform the store
     builder.switch_to_block(continue_block)
+    self.record_bounds_check(builder, memidx, wasm_addr, offset, access_size)
   }
 
   // Calculate effective address: memory_base + addr + offset
@@ -779,10 +881,16 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
     )
   }
 
-  // Check if bounds check can be eliminated for constant addresses
-  let skip_bounds_check = self.can_eliminate_bounds_check(
+  // Check if bounds check can be eliminated:
+  // - statically (constant in min memory)
+  // - dynamically (already checked in this block with wider end range)
+  let skip_const_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
+  let skip_redundant_bounds_check = self.can_eliminate_redundant_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
+  let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
   let memory_size = load_memory_size(builder, vmctx, memidx)
 
@@ -830,6 +938,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
 
     // Continue block: perform the load
     builder.switch_to_block(continue_block)
+    self.record_bounds_check(builder, memidx, wasm_addr, offset, access_size)
   }
 
   // Calculate effective address
@@ -866,10 +975,16 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
     )
   }
 
-  // Check if bounds check can be eliminated for constant addresses
-  let skip_bounds_check = self.can_eliminate_bounds_check(
+  // Check if bounds check can be eliminated:
+  // - statically (constant in min memory)
+  // - dynamically (already checked in this block with wider end range)
+  let skip_const_bounds_check = self.can_eliminate_bounds_check(
     builder, memidx, wasm_addr, offset, access_size,
   )
+  let skip_redundant_bounds_check = self.can_eliminate_redundant_bounds_check(
+    builder, memidx, wasm_addr, offset, access_size,
+  )
+  let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
   let memory_size = load_memory_size(builder, vmctx, memidx)
 
@@ -917,6 +1032,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
 
     // Continue block: perform the store
     builder.switch_to_block(continue_block)
+    self.record_bounds_check(builder, memidx, wasm_addr, offset, access_size)
   }
 
   // Calculate effective address

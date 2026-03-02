@@ -206,7 +206,7 @@ test "remat: clones LoadFuncAddr across blocks" {
 }
 
 ///|
-test "remat: clones AndImm across blocks" {
+test "remat: keeps AndImm defs across blocks" {
   let func = VCodeFunction::new("test_remat_andimm")
   func.add_result(@abi.Int)
   let src = func.add_param(@abi.Int)
@@ -225,20 +225,16 @@ test "remat: clones AndImm across blocks" {
   use_block.add_inst(mv)
   use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
   let rewritten = rematerialize_cross_block_constants(func)
-  inspect(rewritten.blocks[1].insts.length(), content="2")
-  match rewritten.blocks[1].insts[0].opcode {
-    @instr.AndImm(255L, true) => inspect(true, content="true")
-    _ => inspect(false, content="true")
-  }
-  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
-    inspect(v.id != masked.id, content="true")
+  inspect(rewritten.blocks[1].insts.length(), content="1")
+  if rewritten.blocks[1].insts[0].uses[0] is @abi.Virtual(v) {
+    inspect(v.id == masked.id, content="true")
   } else {
     inspect(false, content="true")
   }
 }
 
 ///|
-test "remat: clones Not across blocks" {
+test "remat: keeps Not defs across blocks" {
   let func = VCodeFunction::new("test_remat_not")
   func.add_result(@abi.Int)
   let src = func.add_param(@abi.Int)
@@ -257,13 +253,9 @@ test "remat: clones Not across blocks" {
   use_block.add_inst(mv)
   use_block.set_terminator(@instr.Return([@abi.Virtual(moved)]))
   let rewritten = rematerialize_cross_block_constants(func)
-  inspect(rewritten.blocks[1].insts.length(), content="2")
-  match rewritten.blocks[1].insts[0].opcode {
-    @instr.Not(true) => inspect(true, content="true")
-    _ => inspect(false, content="true")
-  }
-  if rewritten.blocks[1].insts[1].uses[0] is @abi.Virtual(v) {
-    inspect(v.id != inverted.id, content="true")
+  inspect(rewritten.blocks[1].insts.length(), content="1")
+  if rewritten.blocks[1].insts[0].uses[0] is @abi.Virtual(v) {
+    inspect(v.id == inverted.id, content="true")
   } else {
     inspect(false, content="true")
   }
@@ -351,7 +343,7 @@ test "apply_allocation: BranchCmp reloads both spilled operands without clobber"
     assignments: {},
     spill_slots,
     num_spill_slots: 2,
-    inst_edits: {},
+    inst_edits: [],
   }
   let allocated = apply_allocation(func, alloc)
   match allocated.blocks[0].terminator {
@@ -417,7 +409,7 @@ test "progpoint: comparison" {
 
 ///|
 test "liveness: block parameters should have use points" {
-  // This test verifies that block parameters get use points at block entry.
+  // This test verifies that block parameters keep normal use points.
   // Block params are SSA defs; their incoming values are passed via Jump args.
   let func = VCodeFunction::new("test_block_param_use")
 
@@ -450,9 +442,9 @@ test "liveness: block parameters should have use points" {
   block1.set_terminator(@instr.Return([@abi.Virtual(v1_param)]))
   let liveness = compute_liveness(func)
 
-  // v1_param should have a use point at block entry and at return.
+  // v1_param should have at least one use point (here from return).
   let v1_info = liveness.use_def.get(v1_param.id).unwrap()
-  inspect(v1_info.use_points.length() >= 2, content="true")
+  inspect(v1_info.use_points.length() >= 1, content="true")
 
   // v1_param is defined at block entry, so it is not live-in.
   inspect(liveness.live_in[1].contains(v1_param.id), content="false")
@@ -555,11 +547,11 @@ test "liveness: complete output for linear function" {
     content=(
       #|=== Liveness Debug ===
       #|Use-Def Chains:
-      #|  v0: def=Some((0:-1a)), uses=[(0:0b)]
-      #|  v1: def=Some((0:-1a)), uses=[(0:0b)]
-      #|  v2: def=Some((0:0a)), uses=[(0:2b)]
-      #|  v3: def=Some((0:1a)), uses=[(0:2b)]
-      #|  v4: def=Some((0:2a)), uses=[(0:3b)]
+      #|  v0: def=Some(((0:-1a), None)), uses=[(0:0b)]
+      #|  v1: def=Some(((0:-1a), None)), uses=[(0:0b)]
+      #|  v2: def=Some(((0:0a), None)), uses=[(0:2b)]
+      #|  v3: def=Some(((0:1a), None)), uses=[(0:2b)]
+      #|  v4: def=Some(((0:2a), None)), uses=[(0:3b)]
       #|
       #|Live-in/out:
       #|  block0: in=[0, 1], out=[]
@@ -755,8 +747,8 @@ test "regalloc: interval extension across blocks" {
     content=(
       #|=== Liveness Debug ===
       #|Use-Def Chains:
-      #|  v0: def=Some((0:0a)), uses=[(1:0b), (1:0b)]
-      #|  v1: def=Some((1:0a)), uses=[(1:1b)]
+      #|  v0: def=Some(((0:0a), None)), uses=[(1:0b), (1:0b)]
+      #|  v1: def=Some(((1:0a), None)), uses=[(1:1b)]
       #|
       #|Live-in/out:
       #|  block0: in=[], out=[0]
@@ -833,9 +825,9 @@ test "regalloc: f64 registers" {
       #|vcode f64_test() -> double {
       #|block0:
       #|    d0 = ldf 1.5
-      #|    d2 = ldf 2.5
-      #|    d4 = fadd.d d0, d2
-      #|    ret d4
+      #|    d1 = ldf 2.5
+      #|    d2 = fadd.d d0, d1
+      #|    ret d2
       #|}
       #|
     ),
@@ -946,13 +938,13 @@ test "regalloc: mixed int, f32, f64 registers" {
       #|vcode mixed_types() -> double {
       #|block0:
       #|    x0 = ldi 10
-      #|    d2 = ldf 3.140000104904175
-      #|    d4 = ldf 2.718
-      #|    x6 = add x0, x0
-      #|    d18 = fadd.d d2, d4
-      #|    d20 = fadd.d d18, d18
-      #|    store.i32 +0 x6, x6
-      #|    ret d20
+      #|    d1 = ldf 3.140000104904175
+      #|    d2 = ldf 2.718
+      #|    x3 = add x0, x0
+      #|    d4 = fadd.d d1, d2
+      #|    d5 = fadd.d d4, d4
+      #|    store.i32 +0 x3, x3
+      #|    ret d5
       #|}
       #|
     ),
@@ -1042,16 +1034,16 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
       #|vcode test_many_f64_args() -> double {
       #|block0:
       #|    d0 = ldf 1
-      #|    d2 = ldf 2
-      #|    d4 = ldf 3
-      #|    d6 = ldf 4
-      #|    d18 = ldf 5
-      #|    d20 = ldf 6
-      #|    d22 = ldf 7
-      #|    d24 = ldf 8
-      #|    x0 = ldi 4096
-      #|    d28 = call_ptr[Wasm](8) -> 1 results x0
-      #|    ret d28
+      #|    d1 = ldf 2
+      #|    d2 = ldf 3
+      #|    d3 = ldf 4
+      #|    d4 = ldf 5
+      #|    d5 = ldf 6
+      #|    d6 = ldf 7
+      #|    d7 = ldf 8
+      #|    x8 = ldi 4096
+      #|    d19 = call_ptr[Wasm](8) -> 1 results x8
+      #|    ret d19
       #|}
       #|
     ),
@@ -1143,10 +1135,10 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
       #|vcode test_f32_across_call() -> (float, double) {
       #|block0:
       #|    d8 = ldf 42
-      #|    d2 = ldf 3.14
-      #|    x4 = ldi 8192
-      #|    d6 = call_ptr[Wasm](1) -> 1 results x4
-      #|    ret d8, d6
+      #|    d1 = ldf 3.14
+      #|    x2 = ldi 8192
+      #|    d3 = call_ptr[Wasm](1) -> 1 results x2
+      #|    ret d8, d3
       #|}
       #|
     ),
@@ -1290,13 +1282,13 @@ test "regalloc: direct move does not force bundle merge" {
   dst.crosses_wasm_call = false
   dst.crosses_c_call = false
   let bundles = build_bundles_with_merging(func, ranges)
-  // Cranelift/regalloc2-style merge policy does not blindly merge all
-  // move-related ranges; keep these as separate bundles.
+  // Cranelift/regalloc2 merges blockparams/reuse constraints, not arbitrary
+  // copy instructions.
   inspect(bundles.length(), content="2")
 }
 
 ///|
-test "regalloc: direct move merges with matching call profile" {
+test "regalloc: direct move remains separate with matching call profile" {
   let func = VCodeFunction::new("merge_move_profile_match")
   let a = func.add_param(@abi.Int)
   func.add_result(@abi.Int)
@@ -1318,8 +1310,8 @@ test "regalloc: direct move merges with matching call profile" {
   dst.crosses_wasm_call = true
   dst.crosses_c_call = false
   let bundles = build_bundles_with_merging(func, ranges)
-  inspect(src.bundle_id == dst.bundle_id, content="true")
-  inspect(bundles.length(), content="1")
+  inspect(src.bundle_id == dst.bundle_id, content="false")
+  inspect(bundles.length(), content="2")
 }
 
 ///|

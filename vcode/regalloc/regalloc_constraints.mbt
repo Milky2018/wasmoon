@@ -302,9 +302,9 @@ pub struct RegAllocResult {
   spill_slots : Map[Int, Int]
   // Total number of spill slots used
   num_spill_slots : Int
-  // Constraint edits: (block_idx, inst_idx) -> edits to insert
-  // Fixed register constraint handling
-  inst_edits : Map[(Int, Int), InstEdits]
+  // Constraint edits as a linear stream of (block_idx, inst_idx, edits),
+  // aligned with regalloc2's position-sorted edit storage model.
+  inst_edits : Array[(Int, Int, InstEdits)]
 }
 
 // ============ Constraint Processing ============
@@ -399,7 +399,7 @@ pub fn process_constraints(
 
       // Store edits if any
       if !edits.before.is_empty() || !edits.after.is_empty() {
-        alloc.inst_edits.set((block_idx, inst_idx), edits)
+        alloc.inst_edits.push((block_idx, inst_idx, edits))
       }
     }
   }

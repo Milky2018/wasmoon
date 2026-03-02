@@ -122,12 +122,13 @@ test "entry trampoline: no params, i32 result" {
       #|block0:
       #|  0014: f10302aa  mov x17, x2
       #|  0018: 20023fd6  blr x17
-      #|  001c: 600200b9  str w0, [x19, #0]
-      #|  0020: 060080d2  movz x6, #0, lsl #0
-      #|  0024: e00306aa  mov x0, x6
-      #|  0028: f30741f8  ldr x19, [sp], #16
-      #|  002c: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0030: c0035fd6  ret
+      #|  001c: e30300aa  mov x3, x0
+      #|  0020: 630200b9  str w3, [x19, #0]
+      #|  0024: 040080d2  movz x4, #0, lsl #0
+      #|  0028: e00304aa  mov x0, x4
+      #|  002c: f30741f8  ldr x19, [sp], #16
+      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0034: c0035fd6  ret
       #|
     ),
   )
@@ -152,15 +153,17 @@ test "entry trampoline: i32 param, i32 result" {
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
-      #|  0014: 610240b9  ldr w1, [x19, #0]
+      #|  0014: 630240b9  ldr w3, [x19, #0]
       #|  0018: f10302aa  mov x17, x2
-      #|  001c: 20023fd6  blr x17
-      #|  0020: 600a00b9  str w0, [x19, #8]
-      #|  0024: 080080d2  movz x8, #0, lsl #0
-      #|  0028: e00308aa  mov x0, x8
-      #|  002c: f30741f8  ldr x19, [sp], #16
-      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0034: c0035fd6  ret
+      #|  001c: e10303aa  mov x1, x3
+      #|  0020: 20023fd6  blr x17
+      #|  0024: e40300aa  mov x4, x0
+      #|  0028: 640a00b9  str w4, [x19, #8]
+      #|  002c: 050080d2  movz x5, #0, lsl #0
+      #|  0030: e00305aa  mov x0, x5
+      #|  0034: f30741f8  ldr x19, [sp], #16
+      #|  0038: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  003c: c0035fd6  ret
       #|
     ),
   )
@@ -185,8 +188,8 @@ test "entry trampoline: no params, no result" {
       #|block0:
       #|  000c: f10302aa  mov x17, x2
       #|  0010: 20023fd6  blr x17
-      #|  0014: 040080d2  movz x4, #0, lsl #0
-      #|  0018: e00304aa  mov x0, x4
+      #|  0014: 030080d2  movz x3, #0, lsl #0
+      #|  0018: e00303aa  mov x0, x3
       #|  001c: fd7bc1a8  ldp x29, x30, [sp], #16
       #|  0020: c0035fd6  ret
       #|
@@ -212,15 +215,17 @@ test "entry trampoline: f64 param, f64 result" {
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
-      #|  0014: 600240fd  ldr d0, [x19, #0]
+      #|  0014: 630240fd  ldr d3, [x19, #0]
       #|  0018: f10302aa  mov x17, x2
-      #|  001c: 20023fd6  blr x17
-      #|  0020: 600600fd  str d0, [x19, #8]
-      #|  0024: 080080d2  movz x8, #0, lsl #0
-      #|  0028: e00308aa  mov x0, x8
-      #|  002c: f30741f8  ldr x19, [sp], #16
-      #|  0030: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  0034: c0035fd6  ret
+      #|  001c: 6040601e  fmov d0, d3
+      #|  0020: 20023fd6  blr x17
+      #|  0024: 0440601e  fmov d4, d0
+      #|  0028: 640600fd  str d4, [x19, #8]
+      #|  002c: 050080d2  movz x5, #0, lsl #0
+      #|  0030: e00305aa  mov x0, x5
+      #|  0034: f30741f8  ldr x19, [sp], #16
+      #|  0038: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  003c: c0035fd6  ret
       #|
     ),
   )
@@ -241,10 +246,10 @@ test "entry trampoline: multiple params" {
   let disasm = mc.dump_disasm()
   assert_true(disasm.contains("stp x29, x30, [sp, #-16]!"))
   assert_true(disasm.contains("mov x21, x0"))
-  assert_true(disasm.contains("ldr w1, [x"))
-  assert_true(disasm.contains("ldr s7, [x"))
+  assert_true(disasm.contains("ldr w"))
+  assert_true(disasm.contains("ldr s"))
   assert_true(disasm.contains("blr x17"))
-  assert_true(disasm.contains("str x0, [x"))
+  assert_true(disasm.contains("str x"))
   assert_true(disasm.contains("ret"))
 }
 
@@ -270,21 +275,31 @@ test "entry trampoline: 8 f64 params" {
       #|  000c: f50300aa  mov x21, x0
       #|  0010: f30301aa  mov x19, x1
       #|block0:
-      #|  0014: 600240fd  ldr d0, [x19, #0]
-      #|  0018: 610640fd  ldr d1, [x19, #8]
-      #|  001c: 620a40fd  ldr d2, [x19, #16]
-      #|  0020: 630e40fd  ldr d3, [x19, #24]
-      #|  0024: 641240fd  ldr d4, [x19, #32]
-      #|  0028: 651640fd  ldr d5, [x19, #40]
-      #|  002c: 661a40fd  ldr d6, [x19, #48]
-      #|  0030: 671e40fd  ldr d7, [x19, #56]
+      #|  0014: 630240fd  ldr d3, [x19, #0]
+      #|  0018: 640640fd  ldr d4, [x19, #8]
+      #|  001c: 650a40fd  ldr d5, [x19, #16]
+      #|  0020: 660e40fd  ldr d6, [x19, #24]
+      #|  0024: 671240fd  ldr d7, [x19, #32]
+      #|  0028: 721640fd  ldr d18, [x19, #40]
+      #|  002c: 731a40fd  ldr d19, [x19, #48]
+      #|  0030: 741e40fd  ldr d20, [x19, #56]
       #|  0034: f10302aa  mov x17, x2
-      #|  0038: 20023fd6  blr x17
-      #|  003c: 602200fd  str d0, [x19, #64]
-      #|  0040: 000080d2  movz x0, #0, lsl #0
-      #|  0044: f30741f8  ldr x19, [sp], #16
-      #|  0048: fd7bc1a8  ldp x29, x30, [sp], #16
-      #|  004c: c0035fd6  ret
+      #|  0038: 6040601e  fmov d0, d3
+      #|  003c: 8140601e  fmov d1, d4
+      #|  0040: a240601e  fmov d2, d5
+      #|  0044: c340601e  fmov d3, d6
+      #|  0048: e440601e  fmov d4, d7
+      #|  004c: 4542601e  fmov d5, d18
+      #|  0050: 6642601e  fmov d6, d19
+      #|  0054: 8742601e  fmov d7, d20
+      #|  0058: 20023fd6  blr x17
+      #|  005c: 1540601e  fmov d21, d0
+      #|  0060: 752200fd  str d21, [x19, #64]
+      #|  0064: 0c0080d2  movz x12, #0, lsl #0
+      #|  0068: e0030caa  mov x0, x12
+      #|  006c: f30741f8  ldr x19, [sp], #16
+      #|  0070: fd7bc1a8  ldp x29, x30, [sp], #16
+      #|  0074: c0035fd6  ret
       #|
     ),
   )
@@ -306,7 +321,6 @@ test "entry trampoline: 20 i64 params (debug)" {
   let disasm = mc.dump_disasm()
   assert_true(disasm.contains("stp x29, x30, [sp, #-16]!"))
   assert_true(disasm.contains("blr x17"))
-  assert_true(disasm.contains("str x0, ["))
   assert_true(disasm.contains("#160]"))
   assert_true(disasm.contains("ldr x1, ["))
   assert_true(disasm.contains("[x31, #0]"))

@@ -382,6 +382,56 @@ test "validate translated function" {
   assert_true(result.valid)
 }
 
+///|
+test "validate SIMD binary requires v128 operands" {
+  let builder = IRBuilder::new("simd_invalid_binary")
+  let a = builder.add_param(Type::I32)
+  let b = builder.add_param(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Add8, [a, b]) |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_false(result.valid)
+  assert_true(result.errors.length() > 0)
+}
+
+///|
+test "validate SIMD lane load accepts integer address and v128 lane source" {
+  let builder = IRBuilder::new("simd_valid_lane_load")
+  let addr = builder.add_param(Type::I32)
+  let vector = builder.add_param(Type::V128)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Load8Lane(0, 0, 0L, 0), [
+    addr, vector,
+  ])
+  |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_true(result.valid)
+}
+
+///|
+test "validate SIMD lane store must not produce a result" {
+  let builder = IRBuilder::new("simd_invalid_lane_store")
+  let addr = builder.add_param(Type::I32)
+  let vector = builder.add_param(Type::V128)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.emit_inst(Type::V128, Opcode::V128Store8Lane(0, 0, 0L, 0), [
+    addr, vector,
+  ])
+  |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  let result = validate_function(func)
+  assert_false(result.valid)
+  assert_true(result.errors.length() > 0)
+}
+
 // ============ CFG Tests ============
 
 ///|
@@ -675,6 +725,76 @@ test "egraph purity boundary: pure arithmetic remains admitted" {
   let stats = optimize_function_with_stats(func)
   assert_true(stats.changed)
   assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(30L))
+}
+
+///|
+test "egraph purity boundary: multi-result instruction is excluded" {
+  let builder = IRBuilder::new("egraph_purity_multi_result")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let sum = builder.iadd(c1, c2)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let add_inst = func.blocks[0].instructions[2]
+
+  // Cranelift parity: e-graph purity only admits one-result instructions.
+  let extra_result = func.new_value(Type::I32)
+  add_inst.results.push(extra_result)
+  assert_true(add_inst.all_results().length() == 2)
+  assert_false(opcode_to_eopcode(add_inst) is Some(_))
+}
+
+///|
+test "egraph function-scope reps: child duplicate maps to dominator value" {
+  let builder = IRBuilder::new("egraph_function_scope_representatives")
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let child = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let c1 = builder.iconst_i32(10)
+  let c2 = builder.iconst_i32(20)
+  let parent_sum = builder.iadd(c1, c2)
+  builder.jump(child, [])
+
+  builder.switch_to_block(child)
+  let child_sum = builder.iadd(c1, c2)
+  builder.return_([child_sum])
+  let func = builder.get_function()
+
+  let egraph_builder = EGraphBuilder::new_with_limits(
+    @egraph.SaturationLimits::cranelift_default(),
+  )
+  for block in func.blocks {
+    for inst in block.instructions {
+      egraph_builder.register_def(inst)
+    }
+  }
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.first_result() is Some(v) && opcode_to_eopcode(inst) is Some(_) {
+        egraph_builder.add_value(v) |> ignore
+      }
+    }
+  }
+  egraph_builder.optimize()
+
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let block_idx : Map[Int, Int] = {}
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  egraph_builder.recompute_representatives_for_block(
+    func, child, idom, block_idx,
+  )
+  match egraph_builder.get_simplified_operand(child_sum) {
+    Some(v) => assert_true(v.id == parent_sum.id)
+    None => assert_true(false)
+  }
 }
 
 ///|
@@ -1967,6 +2087,83 @@ test "bounds check elimination: combined addr and offset" {
 }
 
 ///|
+test "bounds check elimination: redundant dynamic check in same block" {
+  // Cranelift-aligned behavior: if we already proved
+  //   addr + large_offset + large_size <= bound
+  // then a later access using the same addr and a smaller end range can reuse
+  // that proof in the same block.
+  let builder = IRBuilder::new("bounds_redundant_dynamic")
+  let vmctx = builder.add_param(Type::I64)
+  let addr = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
+
+  // First check end-range: offset 16 + size 8 => 24 bytes from `addr`.
+  func_env.translate_memory_load(builder, vmctx, 1, Type::I64, addr, 16L)
+  |> ignore
+  // Second check end-range: offset 4 + size 1 => 5 bytes from `addr`.
+  // Should reuse first check and avoid emitting another bounds-check split.
+  let loaded = func_env.translate_memory_load_narrow(
+    builder,
+    vmctx,
+    1,
+    Type::I32,
+    8,
+    true,
+    addr,
+    4L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Entry + shared trap + first continue = 3 blocks.
+  inspect(func.blocks.length(), content="3")
+}
+
+///|
+test "bounds check elimination: wider later access still checks" {
+  // Later access requires a larger end-range than the previous proof, so we
+  // must keep the second dynamic bounds check.
+  let builder = IRBuilder::new("bounds_redundant_dynamic_wider")
+  let vmctx = builder.add_param(Type::I64)
+  let addr = builder.add_param(Type::I32)
+  builder.add_result(Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
+
+  // First check end-range: offset 4 + size 1 => 5 bytes from `addr`.
+  func_env.translate_memory_load_narrow(
+    builder,
+    vmctx,
+    1,
+    Type::I32,
+    8,
+    true,
+    addr,
+    4L,
+  )
+  |> ignore
+  // Second check end-range: offset 16 + size 8 => 24 bytes from `addr`.
+  // Must emit another split/check.
+  let loaded = func_env.translate_memory_load(
+    builder,
+    vmctx,
+    1,
+    Type::I64,
+    addr,
+    16L,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+
+  // Entry + shared trap + two continue blocks = 4 blocks.
+  inspect(func.blocks.length(), content="4")
+}
+
+///|
 test "GVN: loads are not CSE'd (can trap)" {
   // LoadPtr has side effects (can trap on null pointer), so they are not CSE'd
   // This is by design - a more sophisticated analysis would be needed to safely CSE loads
@@ -2019,6 +2216,43 @@ test "GVN: store-to-load forwarding exact address" {
   let load_inst = func.blocks[0].instructions[4]
   assert_true(load_inst.opcode is Opcode::Copy)
   assert_eq(load_inst.operands[0].id, stored.id)
+}
+
+///|
+test "GVN: join path-local store blocks forwarding" {
+  let builder = IRBuilder::new("gvn_join_path_local_store")
+  let vmctx = builder.add_param(Type::I64)
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  let join_block = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let mem0_base = builder.load_mem_base(vmctx, 0)
+  let offset = builder.iconst_i64(0L)
+  let initial = builder.iconst_i32(1)
+  builder.store_ptr(Type::I32, mem0_base, initial, offset)
+  builder.brnz(cond, then_block, else_block)
+
+  builder.switch_to_block(then_block)
+  let updated = builder.iconst_i32(2)
+  builder.store_ptr(Type::I32, mem0_base, updated, offset)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(else_block)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(join_block)
+  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  builder.return_([loaded])
+
+  let func = builder.get_function()
+  let gvn_result = gvn_global(func)
+  assert_false(gvn_result.changed)
+  let load_inst = func.blocks[3].instructions[0]
+  assert_true(load_inst.opcode is Opcode::LoadPtr(_))
 }
 
 ///|

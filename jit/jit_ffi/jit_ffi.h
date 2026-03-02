@@ -35,48 +35,54 @@ typedef struct {
 } wasmoon_memory_t;
 
 // VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
-//   +0:  memory0 (wasmoon_memory_t*) - High frequency: memory definition pointer (memory 0 fast path)
-//   +8:  func_table (void**)         - High frequency: function pointer array
-//   +24: table0_base (void**)       - High frequency: table 0 base (fast path for call_indirect)
-//   +32: table0_elements (size_t)   - Medium frequency: table 0 element count
-//   +40: globals (void*)            - Medium frequency: global variable array
-//   +48: tables (void***)           - Low frequency: multi-table pointer array
-//   +56: table_count (int)          - Low frequency: number of tables
-//   +60: func_count (int)           - Low frequency: number of functions
-//   +64: table_sizes (size_t*)      - Low frequency: array of table sizes
-//   +72: table_max_sizes (size_t*)  - Low frequency: array of table max sizes
-//   +80: memories (uint8_t**)       - Low frequency: multi-memory pointer array
-//   +88: memory_sizes (size_t*)     - Low frequency: array of memory sizes
-//   +96: memory_max_sizes (size_t*) - Low frequency: array of memory max sizes (in pages)
-//   +104: memory_count (int)        - Low frequency: number of memories
+//   +0:   memory0 (wasmoon_memory_t*)  - memory 0 descriptor pointer
+//   +8:   memory0_base (uint8_t*)      - cached memory 0 base pointer (hot)
+//   +16:  memory0_size (size_t)        - cached memory 0 current length bytes (hot)
+//   +24:  func_table (void**)          - function pointer array
+//   +32:  table0_base (void**)         - table 0 base (fast path for call_indirect)
+//   +40:  table0_elements (size_t)     - table 0 element count
+//   +48:  globals (void*)              - global variable array
+//   +56:  tables (void***)             - multi-table pointer array
+//   +64:  table_count (int)            - number of tables
+//   +68:  func_count (int)             - number of functions
+//   +72:  table_sizes (size_t*)        - array of table sizes
+//   +80:  table_max_sizes (size_t*)    - array of table max sizes
+//   +88:  memories (wasmoon_memory_t**) - multi-memory pointer array
+//   +96:  memory_count (int)           - number of memories
+//   +100: debug_current_func_idx (int32) - current executing func idx
+//   +104: gc_heap_ptr (uint8_t*)       - GC inline-allocation cursor
+//   +112: gc_heap_limit (uint8_t*)     - GC inline-allocation limit
+//   +120: gc_heap (void*)              - GcHeap* pointer
 typedef struct {
     // High frequency fields (accessed in hot paths)
-    wasmoon_memory_t *memory0; // +0:  WebAssembly memory 0 definition
-    void **func_table;         // +8:  Array of function pointers
-    void **table0_base;        // +16: Table 0 base (for fast call_indirect)
+    wasmoon_memory_t *memory0;     // +0:  WebAssembly memory 0 descriptor
+    uint8_t *memory0_base;         // +8:  Cached memory0->base
+    _Atomic size_t memory0_size;   // +16: Cached memory0->current_length
+    void **func_table;             // +24: Array of function pointers
+    void **table0_base;            // +32: Table 0 base (for fast call_indirect)
 
     // Medium frequency fields
-    size_t table0_elements;    // +24: Number of elements in table 0
-    void *globals;             // +32: Array of global variable values (WasmValue*)
+    size_t table0_elements;    // +40: Number of elements in table 0
+    void *globals;             // +48: Array of global variable values (WasmValue*)
 
     // Low frequency fields (multi-table support)
-    void ***tables;            // +40: Array of table pointers (for table_idx != 0)
-    int table_count;           // +48: Number of tables
-    int func_count;            // +52: Number of entries in func_table
-    size_t *table_sizes;       // +56: Array of table current sizes for all tables
-    size_t *table_max_sizes;   // +64: Array of table max sizes (-1 = unlimited)
+    void ***tables;            // +56: Array of table pointers (for table_idx != 0)
+    int table_count;           // +64: Number of tables
+    int func_count;            // +68: Number of entries in func_table
+    size_t *table_sizes;       // +72: Array of table current sizes for all tables
+    size_t *table_max_sizes;   // +80: Array of table max sizes (-1 = unlimited)
 
     // Multi-memory support
-    wasmoon_memory_t **memories; // +72: Array of memory definition pointers
-    int memory_count;            // +80: Number of memories
+    wasmoon_memory_t **memories; // +88: Array of memory definition pointers
+    int memory_count;            // +96: Number of memories
 
     // Debug: current wasm function index (best-effort)
-    int32_t debug_current_func_idx; // +84: Currently executing wasm func_idx (-1 = unknown)
+    int32_t debug_current_func_idx; // +100: Currently executing wasm func_idx (-1 = unknown)
 
     // GC heap for inline allocation (accessed by JIT code)
-    uint8_t *gc_heap_ptr;     // +88: Current allocation pointer (aligned to 8)
-    uint8_t *gc_heap_limit;   // +96: Allocation limit (triggers slow path when exceeded)
-    void *gc_heap;            // +104: GcHeap* pointer for slow path
+    uint8_t *gc_heap_ptr;     // +104: Current allocation pointer (aligned to 8)
+    uint8_t *gc_heap_limit;   // +112: Allocation limit (triggers slow path when exceeded)
+    void *gc_heap;            // +120: GcHeap* pointer for slow path
 
     // GC runtime caches (context-local, not accessed by JIT code directly)
     int32_t *gc_type_cache;

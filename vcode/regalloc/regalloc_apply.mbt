@@ -169,9 +169,16 @@ pub fn apply_allocation(
     }
   }
 
-  // Compute reload intervals for spill coalescing
-  let reload_intervals = compute_reload_intervals(func, alloc)
-  allocate_reload_registers(func, alloc, reload_intervals)
+  // Keep reload-coalescing pass disabled by default for Cranelift alignment.
+  let liveness = compute_liveness_for_regalloc(func)
+  let enable_reload_coalescing = false
+  let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
+    let intervals = compute_reload_intervals(func, alloc)
+    allocate_reload_registers(func, alloc, intervals, liveness)
+    intervals
+  } else {
+    {}
+  }
 
   // Convert function parameters
   // Parameters use Wasmoon's internal Wasm ABI (ISA-dependent).
@@ -322,6 +329,30 @@ pub fn apply_allocation(
     new_func.result_types.push(ty)
   }
 
+  // Consume regalloc2-style linear edit stream with a forward cursor.
+  fn take_point_edits(
+    inst_edits : Array[(Int, Int, InstEdits)],
+    cursor : Int,
+    block_id : Int,
+    inst_idx : Int,
+  ) -> (InstEdits?, Int) {
+    if cursor >= inst_edits.length() {
+      return (None, cursor)
+    }
+    let (edit_block, edit_inst, edits) = inst_edits[cursor]
+    if edit_block == block_id && edit_inst == inst_idx {
+      (Some(edits), cursor + 1)
+    } else if edit_block < block_id ||
+      (edit_block == block_id && edit_inst < inst_idx) {
+      abort(
+        "inst_edits stream out of order at block=\{block_id} inst=\{inst_idx}",
+      )
+    } else {
+      (None, cursor)
+    }
+  }
+  let mut inst_edits_cursor = 0
+
   // Process each block
   for block_idx, block in func.blocks {
     let new_block = new_func.new_block()
@@ -350,6 +381,14 @@ pub fn apply_allocation(
 
     // Process instructions
     for inst_idx, inst in block.insts {
+      let (point_edits, next_inst_edits_cursor) = take_point_edits(
+        alloc.inst_edits,
+        inst_edits_cursor,
+        block_idx,
+        inst_idx,
+      )
+      inst_edits_cursor = next_inst_edits_cursor
+
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
       let spill_regs : Map[Int, @abi.PReg] = {}
@@ -574,7 +613,7 @@ pub fn apply_allocation(
       // Process constraint edits: insert moves before the instruction
       // Fixed register constraint handling
       // Use parallel move resolver to handle cyclic dependencies
-      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+      if point_edits is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before)
         // Track which spill slots have been reloaded in this batch for coalescing
         let reloaded_slots : Map[Int, @abi.PReg] = {}
@@ -645,7 +684,7 @@ pub fn apply_allocation(
 
       // Process constraint edits: insert moves after the instruction
       // Use parallel move resolver for consistency (though after moves rarely conflict)
-      if alloc.inst_edits.get((block_idx, inst_idx)) is Some(edits) {
+      if point_edits is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.after)
         for mv in resolved_moves {
           if mv.to.is_spilled() {
@@ -880,6 +919,11 @@ pub fn apply_allocation(
       fold_stack_slot_loads(new_block)
       new_block.set_terminator(new_term)
     }
+  }
+  guard inst_edits_cursor == alloc.inst_edits.length() else {
+    abort(
+      "unconsumed inst_edits entries: consumed=\{inst_edits_cursor} total=\{alloc.inst_edits.length()}",
+    )
   }
   eliminate_trivial_moves(new_func)
 }

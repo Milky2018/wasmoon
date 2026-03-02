@@ -160,6 +160,14 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
+  fn fits_i8(value : Int) -> Bool {
+    value >= -128 && value <= 127
+  }
+
+  fn fits_i32(value : Int) -> Bool {
+    value >= -2147483648 && value <= 2147483647
+  }
+
   fn pick_scratch_gpr(
     isa : @isa.ISA,
     avoid0 : Int,
@@ -328,9 +336,40 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if is_64 && (rm & 7) != 4 {
-        // Cranelift-style iadd preference: use LEA for pure address/add trees.
-        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+      // Cranelift x64 emit_lea alignment:
+      // - prefer add when dst aliases one operand (equivalent to lea disp=0, scale=1),
+      // - otherwise keep lea form.
+      if rd == rn {
+        if is_64 {
+          self.x86_emit_add_rr(rd, rm)
+        } else {
+          self.x86_emit_add_rr32(rd, rm)
+        }
+        return
+      }
+      if rd == rm {
+        if is_64 {
+          self.x86_emit_add_rr(rd, rn)
+        } else {
+          self.x86_emit_add_rr32(rd, rn)
+        }
+        return
+      }
+      // x86 SIB requires index != rsp/r12, so try both operand orders.
+      if (rm & 7) != 4 {
+        if is_64 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, 0, 0)
+        } else {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rn, rm, 0, 0)
+        }
+        return
+      }
+      if (rn & 7) != 4 {
+        if is_64 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rm, rn, 0, 0)
+        } else {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rm, rn, 0, 0)
+        }
         return
       }
       let mut tmp = isa.scratch_reg_1_index()
@@ -360,7 +399,8 @@ fn MachineCode::emit_instruction_x86_64(
       }
     }
     @instr.AddImm(imm, is_64) => {
-      // Fallback: materialize imm into scratch and use add/sub.
+      // Cranelift-style: prefer direct reg-imm ALU forms (imm8/imm32) and
+      // only fall back to scratch materialization for out-of-range immediates.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -370,12 +410,26 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, imm.to_int64())
-      if is_64 {
-        self.x86_emit_add_rr(rd, scratch)
+      if fits_i32(imm) {
+        if is_64 {
+          if fits_i8(imm) {
+            self.x86_emit_add_r_imm8(rd, imm)
+          } else {
+            self.x86_emit_add_r_imm32(rd, imm)
+          }
+        } else if fits_i8(imm) {
+          self.x86_emit_add_r32_imm8(rd, imm)
+        } else {
+          self.x86_emit_add_r32_imm32(rd, imm)
+        }
       } else {
-        self.x86_emit_add_rr32(rd, scratch)
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, imm.to_int64())
+        if is_64 {
+          self.x86_emit_add_rr(rd, scratch)
+        } else {
+          self.x86_emit_add_rr32(rd, scratch)
+        }
       }
     }
     @instr.SubImm(imm, is_64) => {
@@ -388,12 +442,26 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, imm.to_int64())
-      if is_64 {
-        self.x86_emit_sub_rr(rd, scratch)
+      if fits_i32(imm) {
+        if is_64 {
+          if fits_i8(imm) {
+            self.x86_emit_sub_r_imm8(rd, imm)
+          } else {
+            self.x86_emit_sub_r_imm32(rd, imm)
+          }
+        } else if fits_i8(imm) {
+          self.x86_emit_sub_r32_imm8(rd, imm)
+        } else {
+          self.x86_emit_sub_r32_imm32(rd, imm)
+        }
       } else {
-        self.x86_emit_sub_rr32(rd, scratch)
+        let scratch = isa.scratch_reg_1_index()
+        self.x86_emit_mov_imm64(scratch, imm.to_int64())
+        if is_64 {
+          self.x86_emit_sub_rr(rd, scratch)
+        } else {
+          self.x86_emit_sub_rr32(rd, scratch)
+        }
       }
     }
     @instr.FAdd(is_f32) => {
@@ -919,13 +987,28 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if shift is @instr.ShiftType::Lsl &&
-        amount >= 0 &&
-        amount <= 3 &&
-        (rm & 7) != 4 {
-        // Cranelift x64 iadd-shift style: lea rd, [rn + rm * scale].
-        self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
-        return
+      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        // Cranelift emit_lea does add-conversion for scale=1, disp=0 when dst aliases base/index.
+        if amount == 0 {
+          if rd == rn {
+            self.x86_emit_add_rr(rd, rm)
+            return
+          }
+          if rd == rm {
+            self.x86_emit_add_rr(rd, rn)
+            return
+          }
+        }
+        // Cranelift x64 iadd-shift style: lea rd, [base + index * scale].
+        if (rm & 7) != 4 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rn, rm, amount, 0)
+          return
+        }
+        // For scale=1, addition is commutative; swap operands to avoid rsp/r12 index.
+        if amount == 0 && (rn & 7) != 4 {
+          self.x86_emit_lea_r64_base_index_scale_disp(rd, rm, rn, 0, 0)
+          return
+        }
       }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
@@ -949,6 +1032,26 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
+      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+        if amount == 0 {
+          if rd == rn {
+            self.x86_emit_add_rr32(rd, rm)
+            return
+          }
+          if rd == rm {
+            self.x86_emit_add_rr32(rd, rn)
+            return
+          }
+        }
+        if (rm & 7) != 4 {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rn, rm, amount, 0)
+          return
+        }
+        if amount == 0 && (rn & 7) != 4 {
+          self.x86_emit_lea_r32_base_index_scale_disp(rd, rm, rn, 0, 0)
+          return
+        }
+      }
       let mut tmp = isa.scratch_reg_1_index()
       if tmp == rd || tmp == rn {
         tmp = isa.scratch_reg_2_index()
@@ -2435,8 +2538,11 @@ fn MachineCode::emit_instruction_x86_64(
         // Fast path: memory0 descriptor pointer is cached in Mem0Desc role.
         self.x86_emit_mov_r64_m64(dst, @isaregs.mem0_desc_index(), 0)
       } else if memidx == 0 {
-        self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORY0_OFFSET)
-        self.x86_emit_mov_r64_m64(dst, dst, 0)
+        self.x86_emit_mov_r64_m64(
+          dst,
+          vmctx_reg,
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
       } else {
         self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
         self.x86_emit_mov_r64_m64(dst, dst, memidx * 8)
@@ -2487,29 +2593,223 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
-    @instr.LoadPtrRegOffset(ty, ext, shift) => {
+    @instr.LoadPtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer load with scaled index addressing (Cranelift-style sinkable load).
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
-      let mut use_amode = shift >= 0 &&
-        shift <= 3 &&
-        (index & 7) != 4 &&
-        (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
-      if !(ext is @instr.IndexExtend::None) {
-        use_amode = false
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode {
+        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, index, shift, offset,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, index, shift, offset,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_xmm_m32_base_index_scale_disp(
+                rt, base, index, shift, offset,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
+                rt, base, index, shift, offset,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
+                rt, base, index, shift, offset,
+              )
+          }
+          return
+        }
+        if ext is @instr.IndexExtend::None &&
+          shift == 0 &&
+          (index & 7) == 4 &&
+          (base & 7) != 4 {
+          // Cranelift to_amode_add style commutative swap for iadd with scale=1:
+          // avoid scratch when only index-register legality blocks encoding.
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, index, base, 0, offset,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, index, base, 0, offset,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_xmm_m32_base_index_scale_disp(
+                rt, index, base, 0, offset,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
+                rt, index, base, 0, offset,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
+                rt, index, base, 0, offset,
+              )
+          }
+          return
+        }
+        let mut idx = isa.scratch_reg_1_index()
+        if idx == base || idx == rt {
+          idx = isa.scratch_reg_2_index()
+        }
+        match ext {
+          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
+          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
+          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+        }
+        if (idx & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, idx, shift, offset,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, idx, shift, offset,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_xmm_m32_base_index_scale_disp(
+                rt, base, idx, shift, offset,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
+                rt, base, idx, shift, offset,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
+                rt, base, idx, shift, offset,
+              )
+          }
+          return
+        }
       }
-      if use_amode {
+      let mut idx = isa.scratch_reg_1_index()
+      if idx == base || idx == rt {
+        idx = isa.scratch_reg_2_index()
+      }
+      self.x86_emit_mov_rr(idx, index)
+      match ext {
+        @instr.IndexExtend::None => ()
+        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+      }
+      if shift > 0 {
+        self.x86_emit_shl_r_imm8(idx, shift)
+      }
+      if (idx & 7) != 4 {
         match ty {
           @instr.MemType::I32 =>
             self.x86_emit_mov_r32_m32_base_index_scale_disp(
-              rt, base, index, shift, 0,
+              rt, base, idx, 0, offset,
             )
           @instr.MemType::I64 =>
             self.x86_emit_mov_r64_m64_base_index_scale_disp(
-              rt, base, index, shift, 0,
+              rt, base, idx, 0, offset,
             )
-          _ => abort("x86_64 LoadPtrRegOffset: unsupported mem type \{ty}")
+          @instr.MemType::F32 =>
+            self.x86_emit_movss_xmm_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+          @instr.MemType::F64 =>
+            self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+          @instr.MemType::V128 =>
+            self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+        }
+        return
+      }
+      self.x86_emit_add_rr(idx, base)
+      match ty {
+        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, offset)
+        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, offset)
+        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, offset)
+        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, offset)
+        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, offset)
+      }
+    }
+    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
+      // Raw pointer narrow load with register-offset addressing.
+      let rt = wreg_num(inst.defs[0])
+      let base = reg_num(inst.uses[0])
+      let index = reg_num(inst.uses[1])
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        (index & 7) != 4 {
+        match (bits, signed) {
+          (8, true) =>
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (8, false) =>
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (16, true) =>
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (16, false) =>
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          (32, true) => {
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+            self.x86_emit_movsxd_r64_r32(rt, rt)
+          }
+          (32, false) =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, index, shift, offset,
+            )
+          _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        shift == 0 &&
+        (index & 7) == 4 &&
+        (base & 7) != 4 {
+        match (bits, signed) {
+          (8, true) =>
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+          (8, false) =>
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+          (16, true) =>
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+          (16, false) =>
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+          (32, true) => {
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+            self.x86_emit_movsxd_r64_r32(rt, rt)
+          }
+          (32, false) =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, index, base, 0, offset,
+            )
+          _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
         }
         return
       }
@@ -2523,57 +2823,78 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
-      if shift > 0 {
-        self.x86_emit_shl_r_imm8(idx, shift)
-      }
-      if (idx & 7) != 4 {
-        match ty {
-          @instr.MemType::I32 =>
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
-          @instr.MemType::I64 =>
-            self.x86_emit_mov_r64_m64_base_index_scale_disp(rt, base, idx, 0, 0)
-          _ => ()
+      if can_use_scaled_amode && (idx & 7) != 4 {
+        match (bits, signed) {
+          (8, true) =>
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (8, false) =>
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (16, true) =>
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (16, false) =>
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          (32, true) => {
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+            self.x86_emit_movsxd_r64_r32(rt, rt)
+          }
+          (32, false) =>
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, shift, offset,
+            )
+          _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
         }
-        if ty is @instr.MemType::I32 || ty is @instr.MemType::I64 {
-          return
-        }
-      }
-      self.x86_emit_add_rr(idx, base)
-      match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, 0)
-        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, 0)
-        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, 0)
-        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, 0)
-        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, 0)
-      }
-    }
-    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift) => {
-      // Raw pointer narrow load with register-offset addressing.
-      let rt = wreg_num(inst.defs[0])
-      let base = reg_num(inst.uses[0])
-      let index = reg_num(inst.uses[1])
-      let mut idx = isa.scratch_reg_1_index()
-      if idx == base || idx == rt {
-        idx = isa.scratch_reg_2_index()
-      }
-      self.x86_emit_mov_rr(idx, index)
-      match ext {
-        @instr.IndexExtend::None => ()
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+        return
       }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
       if (idx & 7) != 4 {
         match (bits, signed) {
+          (8, true) => {
+            self.x86_emit_movsx_r64_m8_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (8, false) => {
+            self.x86_emit_movzx_r32_m8_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (16, true) => {
+            self.x86_emit_movsx_r64_m16_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
+          (16, false) => {
+            self.x86_emit_movzx_r32_m16_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
+            return
+          }
           (32, true) => {
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
             self.x86_emit_movsxd_r64_r32(rt, rt)
             return
           }
           (32, false) => {
-            self.x86_emit_mov_r32_m32_base_index_scale_disp(rt, base, idx, 0, 0)
+            self.x86_emit_mov_r32_m32_base_index_scale_disp(
+              rt, base, idx, 0, offset,
+            )
             return
           }
           _ => ()
@@ -2581,12 +2902,12 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match (bits, signed) {
-        (8, true) => self.x86_emit_movsx_r64_m8(rt, idx, 0)
-        (8, false) => self.x86_emit_movzx_r32_m8(rt, idx, 0)
-        (16, true) => self.x86_emit_movsx_r64_m16(rt, idx, 0)
-        (16, false) => self.x86_emit_movzx_r32_m16(rt, idx, 0)
-        (32, true) => self.x86_emit_movsxd_r64_m32(rt, idx, 0)
-        (32, false) => self.x86_emit_mov_r32_m32(rt, idx, 0)
+        (8, true) => self.x86_emit_movsx_r64_m8(rt, idx, offset)
+        (8, false) => self.x86_emit_movzx_r32_m8(rt, idx, offset)
+        (16, true) => self.x86_emit_movsx_r64_m16(rt, idx, offset)
+        (16, false) => self.x86_emit_movzx_r32_m16(rt, idx, offset)
+        (32, true) => self.x86_emit_movsxd_r64_m32(rt, idx, offset)
+        (32, false) => self.x86_emit_mov_r32_m32(rt, idx, offset)
         _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
@@ -2602,31 +2923,100 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
       }
     }
-    @instr.StorePtrRegOffset(ty, ext, shift) => {
+    @instr.StorePtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer store with scaled index addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
-      let mut use_amode = shift >= 0 &&
-        shift <= 3 &&
-        (index & 7) != 4 &&
-        (ty is @instr.MemType::I32 || ty is @instr.MemType::I64)
-      if !(ext is @instr.IndexExtend::None) {
-        use_amode = false
-      }
-      if use_amode {
-        match ty {
-          @instr.MemType::I32 =>
-            self.x86_emit_mov_m32_r32_base_index_scale_disp(
-              base, index, shift, 0, value,
-            )
-          @instr.MemType::I64 =>
-            self.x86_emit_mov_m64_r64_base_index_scale_disp(
-              base, index, shift, 0, value,
-            )
-          _ => abort("x86_64 StorePtrRegOffset: unsupported mem type \{ty}")
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode {
+        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_m32_r32_base_index_scale_disp(
+                base, index, shift, offset, value,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_m64_r64_base_index_scale_disp(
+                base, index, shift, offset, value,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_m32_xmm_base_index_scale_disp(
+                base, index, shift, offset, value,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
+                base, index, shift, offset, value,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
+                base, index, shift, offset, value,
+              )
+          }
+          return
         }
-        return
+        if ext is @instr.IndexExtend::None &&
+          shift == 0 &&
+          (index & 7) == 4 &&
+          (base & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_m32_r32_base_index_scale_disp(
+                index, base, 0, offset, value,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_m64_r64_base_index_scale_disp(
+                index, base, 0, offset, value,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_m32_xmm_base_index_scale_disp(
+                index, base, 0, offset, value,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
+                index, base, 0, offset, value,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
+                index, base, 0, offset, value,
+              )
+          }
+          return
+        }
+        let mut idx = isa.scratch_reg_1_index()
+        if idx == base || idx == value {
+          idx = isa.scratch_reg_2_index()
+        }
+        match ext {
+          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
+          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
+          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+        }
+        if (idx & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_m32_r32_base_index_scale_disp(
+                base, idx, shift, offset, value,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_m64_r64_base_index_scale_disp(
+                base, idx, shift, offset, value,
+              )
+            @instr.MemType::F32 =>
+              self.x86_emit_movss_m32_xmm_base_index_scale_disp(
+                base, idx, shift, offset, value,
+              )
+            @instr.MemType::F64 =>
+              self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
+                base, idx, shift, offset, value,
+              )
+            @instr.MemType::V128 =>
+              self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
+                base, idx, shift, offset, value,
+              )
+          }
+          return
+        }
       }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == value {
@@ -2645,32 +3035,85 @@ fn MachineCode::emit_instruction_x86_64(
         match ty {
           @instr.MemType::I32 =>
             self.x86_emit_mov_m32_r32_base_index_scale_disp(
-              base, idx, 0, 0, value,
+              base, idx, 0, offset, value,
             )
           @instr.MemType::I64 =>
             self.x86_emit_mov_m64_r64_base_index_scale_disp(
-              base, idx, 0, 0, value,
+              base, idx, 0, offset, value,
             )
-          _ => ()
+          @instr.MemType::F32 =>
+            self.x86_emit_movss_m32_xmm_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          @instr.MemType::F64 =>
+            self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          @instr.MemType::V128 =>
+            self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
         }
-        if ty is @instr.MemType::I32 || ty is @instr.MemType::I64 {
-          return
-        }
+        return
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, 0, value)
-        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, 0, value)
-        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, 0, value)
-        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, 0, value)
-        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(idx, 0, value)
+        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, offset, value)
+        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, offset, value)
+        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, offset, value)
+        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, offset, value)
+        @instr.MemType::V128 =>
+          self.x86_emit_movdqu_m128_xmm(idx, offset, value)
       }
     }
-    @instr.StorePtrNarrowRegOffset(bits, ext, shift) => {
+    @instr.StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
       // Raw pointer narrow store with register-offset addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
+      let can_use_scaled_amode = shift >= 0 && shift <= 3
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        (index & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, index, shift, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
+      if can_use_scaled_amode &&
+        ext is @instr.IndexExtend::None &&
+        shift == 0 &&
+        (index & 7) == 4 &&
+        (base & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              index, base, 0, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              index, base, 0, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              index, base, 0, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
       let mut idx = isa.scratch_reg_1_index()
       if idx == base || idx == value {
         idx = isa.scratch_reg_2_index()
@@ -2681,18 +3124,50 @@ fn MachineCode::emit_instruction_x86_64(
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
+      if can_use_scaled_amode && (idx & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, idx, shift, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
+        return
+      }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
-      if (idx & 7) != 4 && bits == 32 {
-        self.x86_emit_mov_m32_r32_base_index_scale_disp(base, idx, 0, 0, value)
+      if (idx & 7) != 4 {
+        match bits {
+          8 =>
+            self.x86_emit_mov_m8_r8_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          16 =>
+            self.x86_emit_mov_m16_r16_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          32 =>
+            self.x86_emit_mov_m32_r32_base_index_scale_disp(
+              base, idx, 0, offset, value,
+            )
+          _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
+        }
         return
       }
       self.x86_emit_add_rr(idx, base)
       match bits {
-        8 => self.x86_emit_mov_m8_r8(idx, 0, value)
-        16 => self.x86_emit_mov_m16_r16(idx, 0, value)
-        32 => self.x86_emit_mov_m32_r32(idx, 0, value)
+        8 => self.x86_emit_mov_m8_r8(idx, offset, value)
+        16 => self.x86_emit_mov_m16_r16(idx, offset, value)
+        32 => self.x86_emit_mov_m32_r32(idx, offset, value)
         _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
@@ -2776,14 +3251,22 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_call_r64(target)
     }
-    @instr.ReturnCallIndirect(_, _) => {
-      // Tail-call: restore frame then jump to callee without pushing a return address.
-      self.emit_epilogue(stack_frame)
+    @instr.ReturnCallIndirect(stack_arg_bytes, _) => {
+      // Tail-call:
+      // - fast path (no stack overflow args): epilogue + jmp
+      // - overflow args: call + return for correctness with current ABI
       let target = match inst.use_constraints[0] {
         @abi.FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
-      self.x86_emit_jmp_r64(target)
+      if stack_arg_bytes > 0 {
+        self.x86_emit_call_r64(target)
+        self.emit_epilogue(stack_frame)
+        self.x86_emit_ret()
+      } else {
+        self.emit_epilogue(stack_frame)
+        self.x86_emit_jmp_r64(target)
+      }
     }
     @instr.AdjustSP(delta) =>
       if delta > 0 {
@@ -2811,64 +3294,176 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
     }
     @instr.GCAllocStructInline(type_idx, num_fields) => {
-      // Use slow-path helper on amd64 for now:
-      // gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields)
+      // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
-      let scratch = isa.scratch_reg_1_index()
+      let obj = isa.scratch_reg_1_index()
+      let end = isa.scratch_reg_2_index()
+      let tmp = 0 // rax
+      let gc_header_size = 16
+      let gc_align = 16
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(gc_header_size + num_fields * 8, gc_align)
+      let kind = 1 // GC_KIND_STRUCT
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow = self.new_internal_label()
+      let done = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_rr(end, obj)
+      emit_add_imm_to_reg_in_chunks(self, end, total_size)
+      // if end > vmctx->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_cmp_rr(end, tmp)
+      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+
+      // Fast path: header + fields copy from outgoing-args stack area.
+      self.x86_emit_mov_imm64(tmp, header_low)
+      self.x86_emit_mov_m64_r64(obj, 0, tmp)
+      self.x86_emit_mov_imm64(tmp, num_fields.to_int64())
+      self.x86_emit_mov_m64_r64(obj, 8, tmp)
+      for i in 0..<num_fields {
+        let off = i * 8
+        self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
+        self.x86_emit_mov_m64_r64(obj, gc_header_size + off, tmp)
+      }
+      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+
+      // register_struct_inline(vmctx, obj_ptr, total_size)
+      if vmctx != arg0 {
+        self.x86_emit_mov_rr(arg0, vmctx)
+      }
+      if obj != arg1 {
+        self.x86_emit_mov_rr(arg1, obj)
+      }
+      self.x86_emit_mov_imm64(arg2, total_size.to_int64())
+      self.x86_emit_mov_imm64(
+        end,
+        @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+      )
+      self.x86_emit_call_r64(end)
+      if dst != 0 {
+        self.x86_emit_mov_rr(dst, 0)
+      }
+      self.x86_emit_jmp_rel32(done)
+
+      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields)
+      self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp
-      emit_add_imm_to_reg_in_chunks(
-        self,
-        arg2,
-        stack_frame.outgoing_args_offset,
-      )
+      emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
       self.x86_emit_mov_imm64(
-        scratch,
+        end,
         @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
       )
-      self.x86_emit_call_r64(scratch)
+      self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
+      self.define_label(done)
     }
     @instr.GCAllocArrayFixedInline(type_idx, len) => {
-      // Use slow-path helper on amd64 for now:
-      // gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len)
+      // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
-      let scratch = isa.scratch_reg_1_index()
+      let obj = isa.scratch_reg_1_index()
+      let end = isa.scratch_reg_2_index()
+      let tmp = 0 // rax
+      let gc_header_size = 16
+      let gc_align = 16
+      let array_meta_size = 8
+      let stack_base_off = stack_frame.outgoing_args_offset
+      let total_size = @abi.align_up(
+        gc_header_size + array_meta_size + len * 8,
+        gc_align,
+      )
+      let kind = 2 // GC_KIND_ARRAY
+      let header_low = kind.to_int64() |
+        ((type_idx & 0xFFFF).to_int64() << 16) |
+        (total_size.to_int64() << 32)
+
+      let slow = self.new_internal_label()
+      let done = self.new_internal_label()
+
+      // next = vmctx->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_rr(end, obj)
+      emit_add_imm_to_reg_in_chunks(self, end, total_size)
+      // if end > vmctx->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_cmp_rr(end, tmp)
+      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+
+      // Fast path: header + len + elements copy.
+      self.x86_emit_mov_imm64(tmp, header_low)
+      self.x86_emit_mov_m64_r64(obj, 0, tmp)
+      self.x86_emit_mov_imm64(tmp, 0L)
+      self.x86_emit_mov_m64_r64(obj, 8, tmp)
+      self.x86_emit_mov_imm64(tmp, len.to_int64())
+      self.x86_emit_mov_m64_r64(obj, gc_header_size, tmp)
+      for i in 0..<len {
+        let off = i * 8
+        self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
+        self.x86_emit_mov_m64_r64(
+          obj,
+          gc_header_size + array_meta_size + off,
+          tmp,
+        )
+      }
+      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+
+      // register_array_inline(vmctx, obj_ptr, total_size)
+      if vmctx != arg0 {
+        self.x86_emit_mov_rr(arg0, vmctx)
+      }
+      if obj != arg1 {
+        self.x86_emit_mov_rr(arg1, obj)
+      }
+      self.x86_emit_mov_imm64(arg2, total_size.to_int64())
+      self.x86_emit_mov_imm64(
+        end,
+        @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+      )
+      self.x86_emit_call_r64(end)
+      if dst != 0 {
+        self.x86_emit_mov_rr(dst, 0)
+      }
+      self.x86_emit_jmp_rel32(done)
+
+      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len)
+      self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp
-      emit_add_imm_to_reg_in_chunks(
-        self,
-        arg2,
-        stack_frame.outgoing_args_offset,
-      )
+      emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, len.to_int64())
       self.x86_emit_mov_imm64(
-        scratch,
+        end,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
       )
-      self.x86_emit_call_r64(scratch)
+      self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
+      self.define_label(done)
     }
     @instr.LoadConstV128(bytes) => {
       // Materialize a 128-bit constant via constant pool (Cranelift-style).

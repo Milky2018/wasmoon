@@ -53,22 +53,21 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|function test(v0:i64, v1:i32) -> f32 {
       #|block0:
       #|    v2:f32 = fconst 0
-      #|    v3:f32 = fconst 0
       #|    br_table v1, [block5, block6], block4
-      #|block1(v4:i32, v5:f32, v6:f32):
-      #|    return v5
-      #|block2(v7:i32, v8:f32, v9:f32):
-      #|    v14:f32 = fconst 3
-      #|    jump block1(v7, v14, v9)
-      #|block3(v10:i32, v11:f32, v12:f32):
-      #|    v13:f32 = fconst 2
-      #|    jump block1(v10, v13, v12)
+      #|block1(v3:i32, v4:f32, v5:f32):
+      #|    return v4
+      #|block2(v6:i32, v7:f32, v8:f32):
+      #|    v13:f32 = fconst 3
+      #|    jump block1(v6, v13, v8)
+      #|block3(v9:i32, v10:f32, v11:f32):
+      #|    v12:f32 = fconst 2
+      #|    jump block1(v9, v12, v11)
       #|block4:
-      #|    jump block1(v1, v2, v3)
+      #|    jump block1(v1, v2, v2)
       #|block5:
-      #|    jump block3(v1, v2, v3)
+      #|    jump block3(v1, v2, v2)
       #|block6:
-      #|    jump block2(v1, v2, v3)
+      #|    jump block2(v1, v2, v2)
       #|}
       #|
     ),
@@ -80,22 +79,21 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
       #|    f11 = ldf 0
-      #|    f12 = ldf 0
       #|    br_cmp_imm.eq v1, #0, block5, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f3
       #|block2(v5:int, f6:float, f7:float):
-      #|    f17 = ldf 3
-      #|    jump block1 (v5, f17, f7)
+      #|    f16 = ldf 3
+      #|    jump block1 (v5, f16, f7)
       #|block3(v8:int, f9:float, f10:float):
-      #|    f18 = ldf 2
-      #|    jump block1 (v8, f18, f10)
+      #|    f17 = ldf 2
+      #|    jump block1 (v8, f17, f10)
       #|block4:
-      #|    jump block1 (v1, f11, f12)
+      #|    jump block1 (v1, f11, f11)
       #|block5:
-      #|    jump block3 (v1, f11, f12)
+      #|    jump block3 (v1, f11, f11)
       #|block6:
-      #|    jump block2 (v1, f11, f12)
+      #|    jump block2 (v1, f11, f11)
       #|block7:
       #|    br_cmp_imm.eq v1, #1, block6, block4
       #|}
@@ -108,6 +106,7 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
+      #|    d2 = ldf 0
       #|    br_cmp_imm.eq x1, #0, block5, block7
       #|block1(v2:int, f3:float, f4:float):
       #|    ret d2
@@ -118,16 +117,13 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
       #|    d2 = ldf 2
       #|    jump block1
       #|block4:
-      #|    d2 = ldf 0
-      #|    d4 = ldf 0
+      #|    d3 = mov d2
       #|    jump block1
       #|block5:
-      #|    d5 = ldf 0
-      #|    d4 = ldf 0
+      #|    d3 = mov d2
       #|    jump block3
       #|block6:
-      #|    d5 = ldf 0
-      #|    d4 = ldf 0
+      #|    d3 = mov d2
       #|    jump block2
       #|block7:
       #|    br_cmp_imm.eq x1, #1, block6, block4

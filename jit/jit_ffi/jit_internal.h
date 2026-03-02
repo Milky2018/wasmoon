@@ -76,6 +76,7 @@ int free_exec_internal(int64_t ptr);
 jit_context_t *alloc_context_internal(int func_count);
 void free_context_internal(jit_context_t *ctx);
 void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr);
+void ctx_refresh_memory0_fast_fields(jit_context_t *ctx);
 
 // ============ Memory Operations (memory_ops.c) ============
 

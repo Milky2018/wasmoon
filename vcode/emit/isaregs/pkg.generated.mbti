@@ -18,6 +18,8 @@ pub fn scratch1_index() -> Int
 
 pub fn scratch2_index() -> Int
 
+pub fn sret_index() -> Int
+
 pub fn vmctx_index() -> Int
 
 // Errors

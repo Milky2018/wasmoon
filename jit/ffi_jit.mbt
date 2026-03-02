@@ -149,8 +149,9 @@ pub fn MemoryInfo::new(
 ///|
 /// JIT execution context (JIT ABI) - GC managed
 /// Uses Standard on-demand loading from vmctx:
-/// +0: memory_base, +8: memory_size, +16: func_table, +24: table0_base
-/// Only X19 caches vmctx; all other values are loaded on-demand.
+/// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
+/// +24: func_table, +32: table0_base.
+/// Only pinned vmctx is cached; all other values are loaded on-demand.
 /// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
   ctx : @jit_ffi.JITContext

@@ -520,37 +520,41 @@ fn validate_instruction(
       if inst.first_result() is None {
         result.add_error("GetSpilledLocal must have a result")
       }
-    // SIMD operations - basic validation (TODO: add detailed type checking)
-    V128Const(_)
-    | V128Splat8
-    | V128Splat16
-    | V128Splat32
-    | V128Splat64
-    | V128SplatF32
-    | V128SplatF64
-    | V128ExtractLane8S(_)
+    opcode => validate_simd_instruction(opcode, inst, result)
+  }
+}
+
+///|
+fn validate_simd_instruction(
+  opcode : Opcode,
+  inst : Inst,
+  result : ValidationResult,
+) -> Unit {
+  match opcode {
+    V128Const(_) =>
+      if validate_simd_operand_count(inst, result, 0) {
+        validate_simd_result_type(inst, result, Type::V128)
+      }
+    V128Splat8 | V128Splat16 | V128Splat32 =>
+      validate_simd_splat(inst, result, Type::I32)
+    V128Splat64 => validate_simd_splat(inst, result, Type::I64)
+    V128SplatF32 => validate_simd_splat(inst, result, Type::F32)
+    V128SplatF64 => validate_simd_splat(inst, result, Type::F64)
+    V128ExtractLane8S(_)
     | V128ExtractLane8U(_)
     | V128ExtractLane16S(_)
     | V128ExtractLane16U(_)
-    | V128ExtractLane32(_)
-    | V128ExtractLane64(_)
-    | V128ExtractLaneF32(_)
-    | V128ExtractLaneF64(_)
-    | V128ReplaceLane8(_)
-    | V128ReplaceLane16(_)
-    | V128ReplaceLane32(_)
-    | V128ReplaceLane64(_)
-    | V128ReplaceLaneF32(_)
-    | V128ReplaceLaneF64(_)
-    | V128Shuffle(_)
-    | V128Swizzle
-    | V128Not
-    | V128And
-    | V128AndNot
-    | V128Or
-    | V128Xor
-    | V128Bitselect
-    | V128AnyTrue
+    | V128ExtractLane32(_) =>
+      validate_simd_extract_lane(inst, result, Type::I32)
+    V128ExtractLane64(_) => validate_simd_extract_lane(inst, result, Type::I64)
+    V128ExtractLaneF32(_) => validate_simd_extract_lane(inst, result, Type::F32)
+    V128ExtractLaneF64(_) => validate_simd_extract_lane(inst, result, Type::F64)
+    V128ReplaceLane8(_) | V128ReplaceLane16(_) | V128ReplaceLane32(_) =>
+      validate_simd_replace_lane(inst, result, Type::I32)
+    V128ReplaceLane64(_) => validate_simd_replace_lane(inst, result, Type::I64)
+    V128ReplaceLaneF32(_) => validate_simd_replace_lane(inst, result, Type::F32)
+    V128ReplaceLaneF64(_) => validate_simd_replace_lane(inst, result, Type::F64)
+    V128AnyTrue
     | V128AllTrue8
     | V128AllTrue16
     | V128AllTrue32
@@ -558,7 +562,111 @@ fn validate_instruction(
     | V128Bitmask8
     | V128Bitmask16
     | V128Bitmask32
-    | V128Bitmask64
+    | V128Bitmask64 => validate_simd_unary_v128_to_i32(inst, result)
+    V128Load8x8S(_, _, _)
+    | V128Load8x8U(_, _, _)
+    | V128Load16x4S(_, _, _)
+    | V128Load16x4U(_, _, _)
+    | V128Load32x2S(_, _, _)
+    | V128Load32x2U(_, _, _)
+    | V128Load8Splat(_, _, _)
+    | V128Load16Splat(_, _, _)
+    | V128Load32Splat(_, _, _)
+    | V128Load64Splat(_, _, _)
+    | V128Load32Zero(_, _, _)
+    | V128Load64Zero(_, _, _) => validate_simd_load(inst, result)
+    V128Load8Lane(_, _, _, _)
+    | V128Load16Lane(_, _, _, _)
+    | V128Load32Lane(_, _, _, _)
+    | V128Load64Lane(_, _, _, _) => validate_simd_load_lane(inst, result)
+    V128Store8Lane(_, _, _, _)
+    | V128Store16Lane(_, _, _, _)
+    | V128Store32Lane(_, _, _, _)
+    | V128Store64Lane(_, _, _, _) => validate_simd_store_lane(inst, result)
+    V128Shl8
+    | V128Shl16
+    | V128Shl32
+    | V128Shl64
+    | V128Shr8S
+    | V128Shr8U
+    | V128Shr16S
+    | V128Shr16U
+    | V128Shr32S
+    | V128Shr32U
+    | V128Shr64S
+    | V128Shr64U => validate_simd_shift(inst, result)
+    V128Bitselect
+    | V128RelaxedMaddF32
+    | V128RelaxedNmaddF32
+    | V128RelaxedMaddF64
+    | V128RelaxedNmaddF64
+    | V128RelaxedLaneselect8
+    | V128RelaxedLaneselect16
+    | V128RelaxedLaneselect32
+    | V128RelaxedLaneselect64
+    | V128RelaxedDot8to32AddS =>
+      validate_simd_ternary_v128_to_v128(inst, result)
+    V128Not
+    | V128Abs8
+    | V128Abs16
+    | V128Abs32
+    | V128Abs64
+    | V128Neg8
+    | V128Neg16
+    | V128Neg32
+    | V128Neg64
+    | V128Popcnt8
+    | V128ExtendLow8to16S
+    | V128ExtendHigh8to16S
+    | V128ExtendLow8to16U
+    | V128ExtendHigh8to16U
+    | V128ExtendLow16to32S
+    | V128ExtendHigh16to32S
+    | V128ExtendLow16to32U
+    | V128ExtendHigh16to32U
+    | V128ExtendLow32to64S
+    | V128ExtendHigh32to64S
+    | V128ExtendLow32to64U
+    | V128ExtendHigh32to64U
+    | V128ExtAddPairwise8to16S
+    | V128ExtAddPairwise8to16U
+    | V128ExtAddPairwise16to32S
+    | V128ExtAddPairwise16to32U
+    | V128AbsF32
+    | V128AbsF64
+    | V128NegF32
+    | V128NegF64
+    | V128SqrtF32
+    | V128SqrtF64
+    | V128CeilF32
+    | V128CeilF64
+    | V128FloorF32
+    | V128FloorF64
+    | V128TruncF32
+    | V128TruncF64
+    | V128NearestF32
+    | V128NearestF64
+    | V128TruncSatF32toI32S
+    | V128TruncSatF32toI32U
+    | V128TruncSatF64toI32SZero
+    | V128TruncSatF64toI32UZero
+    | V128ConvertI32toF32S
+    | V128ConvertI32toF32U
+    | V128ConvertLowI32toF64S
+    | V128ConvertLowI32toF64U
+    | V128DemoteF64toF32Zero
+    | V128PromoteLowF32toF64
+    | V128RelaxedTruncF32toI32S
+    | V128RelaxedTruncF32toI32U
+    | V128RelaxedTruncF64toI32SZero
+    | V128RelaxedTruncF64toI32UZero =>
+      validate_simd_unary_v128_to_v128(inst, result)
+    V128Shuffle(_)
+    | V128Swizzle
+    | V128And
+    | V128AndNot
+    | V128Or
+    | V128Xor
     | V128Add8
     | V128Add16
     | V128Add32
@@ -592,27 +700,6 @@ fn validate_instruction(
     | V128Max32U
     | V128Avgr8U
     | V128Avgr16U
-    | V128Abs8
-    | V128Abs16
-    | V128Abs32
-    | V128Abs64
-    | V128Neg8
-    | V128Neg16
-    | V128Neg32
-    | V128Neg64
-    | V128Popcnt8
-    | V128Shl8
-    | V128Shl16
-    | V128Shl32
-    | V128Shl64
-    | V128Shr8S
-    | V128Shr8U
-    | V128Shr16S
-    | V128Shr16U
-    | V128Shr32S
-    | V128Shr32U
-    | V128Shr64S
-    | V128Shr64U
     | V128Eq8
     | V128Eq16
     | V128Eq32
@@ -653,18 +740,6 @@ fn validate_instruction(
     | V128Narrow16to8U
     | V128Narrow32to16S
     | V128Narrow32to16U
-    | V128ExtendLow8to16S
-    | V128ExtendHigh8to16S
-    | V128ExtendLow8to16U
-    | V128ExtendHigh8to16U
-    | V128ExtendLow16to32S
-    | V128ExtendHigh16to32S
-    | V128ExtendLow16to32U
-    | V128ExtendHigh16to32U
-    | V128ExtendLow32to64S
-    | V128ExtendHigh32to64S
-    | V128ExtendLow32to64U
-    | V128ExtendHigh32to64U
     | V128ExtMulLow8to16S
     | V128ExtMulHigh8to16S
     | V128ExtMulLow8to16U
@@ -677,10 +752,6 @@ fn validate_instruction(
     | V128ExtMulHigh32to64S
     | V128ExtMulLow32to64U
     | V128ExtMulHigh32to64U
-    | V128ExtAddPairwise8to16S
-    | V128ExtAddPairwise8to16U
-    | V128ExtAddPairwise16to32S
-    | V128ExtAddPairwise16to32U
     | V128Dot16to32S
     | V128Q15MulrSat16S
     | V128AddF32
@@ -699,20 +770,6 @@ fn validate_instruction(
     | V128PMinF64
     | V128PMaxF32
     | V128PMaxF64
-    | V128AbsF32
-    | V128AbsF64
-    | V128NegF32
-    | V128NegF64
-    | V128SqrtF32
-    | V128SqrtF64
-    | V128CeilF32
-    | V128CeilF64
-    | V128FloorF32
-    | V128FloorF64
-    | V128TruncF32
-    | V128TruncF64
-    | V128NearestF32
-    | V128NearestF64
     | V128EqF32
     | V128EqF64
     | V128NeF32
@@ -725,57 +782,208 @@ fn validate_instruction(
     | V128LeF64
     | V128GeF32
     | V128GeF64
-    | V128TruncSatF32toI32S
-    | V128TruncSatF32toI32U
-    | V128TruncSatF64toI32SZero
-    | V128TruncSatF64toI32UZero
-    | V128ConvertI32toF32S
-    | V128ConvertI32toF32U
-    | V128ConvertLowI32toF64S
-    | V128ConvertLowI32toF64U
-    | V128DemoteF64toF32Zero
-    | V128PromoteLowF32toF64
-    | V128Load8x8S(_, _, _)
-    | V128Load8x8U(_, _, _)
-    | V128Load16x4S(_, _, _)
-    | V128Load16x4U(_, _, _)
-    | V128Load32x2S(_, _, _)
-    | V128Load32x2U(_, _, _)
-    | V128Load8Splat(_, _, _)
-    | V128Load16Splat(_, _, _)
-    | V128Load32Splat(_, _, _)
-    | V128Load64Splat(_, _, _)
-    | V128Load32Zero(_, _, _)
-    | V128Load64Zero(_, _, _)
-    | V128Load8Lane(_, _, _, _)
-    | V128Load16Lane(_, _, _, _)
-    | V128Load32Lane(_, _, _, _)
-    | V128Load64Lane(_, _, _, _)
-    | V128Store8Lane(_, _, _, _)
-    | V128Store16Lane(_, _, _, _)
-    | V128Store32Lane(_, _, _, _)
-    | V128Store64Lane(_, _, _, _)
-    // Relaxed SIMD instructions
     | V128RelaxedSwizzle
-    | V128RelaxedTruncF32toI32S
-    | V128RelaxedTruncF32toI32U
-    | V128RelaxedTruncF64toI32SZero
-    | V128RelaxedTruncF64toI32UZero
-    | V128RelaxedMaddF32
-    | V128RelaxedNmaddF32
-    | V128RelaxedMaddF64
-    | V128RelaxedNmaddF64
-    | V128RelaxedLaneselect8
-    | V128RelaxedLaneselect16
-    | V128RelaxedLaneselect32
-    | V128RelaxedLaneselect64
     | V128RelaxedMinF32
     | V128RelaxedMaxF32
     | V128RelaxedMinF64
     | V128RelaxedMaxF64
     | V128RelaxedQ15MulrS
-    | V128RelaxedDot8to16S
-    | V128RelaxedDot8to32AddS => ()
+    | V128RelaxedDot8to16S => validate_simd_binary_v128_to_v128(inst, result)
+    _ => ()
+  }
+}
+
+///|
+fn validate_simd_operand_count(
+  inst : Inst,
+  result : ValidationResult,
+  expected_count : Int,
+) -> Bool {
+  let actual_count = inst.operands.length()
+  if actual_count != expected_count {
+    result.add_error(
+      "\{inst.opcode} expects \{expected_count} operands, got \{actual_count}",
+    )
+    false
+  } else {
+    true
+  }
+}
+
+///|
+fn validate_simd_result_type(
+  inst : Inst,
+  result : ValidationResult,
+  expected_type : Type,
+) -> Unit {
+  match inst.first_result() {
+    Some(value) =>
+      if !types_match(value.ty, expected_type) {
+        result.add_error(
+          "\{inst.opcode} expects result type \{expected_type}, got \{value.ty}",
+        )
+      }
+    None =>
+      result.add_error(
+        "\{inst.opcode} expects result type \{expected_type}, but has no result",
+      )
+  }
+}
+
+///|
+fn validate_simd_no_result(inst : Inst, result : ValidationResult) -> Unit {
+  if inst.first_result() is Some(value) {
+    result.add_error(
+      "\{inst.opcode} must not produce a result, got \{value.ty}",
+    )
+  }
+}
+
+///|
+fn validate_simd_operand_type(
+  inst : Inst,
+  result : ValidationResult,
+  operand_index : Int,
+  expected_type : Type,
+) -> Unit {
+  let operand = inst.operands[operand_index]
+  if !types_match(operand.ty, expected_type) {
+    result.add_error(
+      "\{inst.opcode} expects operand \{operand_index} type \{expected_type}, got \{operand.ty}",
+    )
+  }
+}
+
+///|
+fn validate_simd_operand_is_integer(
+  inst : Inst,
+  result : ValidationResult,
+  operand_index : Int,
+) -> Unit {
+  let operand = inst.operands[operand_index]
+  if !is_integer_type(operand.ty) {
+    result.add_error(
+      "\{inst.opcode} expects operand \{operand_index} to be integer address/index, got \{operand.ty}",
+    )
+  }
+}
+
+///|
+fn validate_simd_unary_v128_to_v128(
+  inst : Inst,
+  result : ValidationResult,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 1) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_unary_v128_to_i32(
+  inst : Inst,
+  result : ValidationResult,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 1) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_result_type(inst, result, Type::I32)
+  }
+}
+
+///|
+fn validate_simd_binary_v128_to_v128(
+  inst : Inst,
+  result : ValidationResult,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 2) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 1, Type::V128)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_ternary_v128_to_v128(
+  inst : Inst,
+  result : ValidationResult,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 3) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 1, Type::V128)
+    validate_simd_operand_type(inst, result, 2, Type::V128)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_shift(inst : Inst, result : ValidationResult) -> Unit {
+  if validate_simd_operand_count(inst, result, 2) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 1, Type::I32)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_splat(
+  inst : Inst,
+  result : ValidationResult,
+  scalar_type : Type,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 1) {
+    validate_simd_operand_type(inst, result, 0, scalar_type)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_extract_lane(
+  inst : Inst,
+  result : ValidationResult,
+  lane_type : Type,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 1) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_result_type(inst, result, lane_type)
+  }
+}
+
+///|
+fn validate_simd_replace_lane(
+  inst : Inst,
+  result : ValidationResult,
+  lane_type : Type,
+) -> Unit {
+  if validate_simd_operand_count(inst, result, 2) {
+    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 1, lane_type)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_load(inst : Inst, result : ValidationResult) -> Unit {
+  if validate_simd_operand_count(inst, result, 1) {
+    validate_simd_operand_is_integer(inst, result, 0)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_load_lane(inst : Inst, result : ValidationResult) -> Unit {
+  if validate_simd_operand_count(inst, result, 2) {
+    validate_simd_operand_is_integer(inst, result, 0)
+    validate_simd_operand_type(inst, result, 1, Type::V128)
+    validate_simd_result_type(inst, result, Type::V128)
+  }
+}
+
+///|
+fn validate_simd_store_lane(inst : Inst, result : ValidationResult) -> Unit {
+  if validate_simd_operand_count(inst, result, 2) {
+    validate_simd_operand_is_integer(inst, result, 0)
+    validate_simd_operand_type(inst, result, 1, Type::V128)
+    validate_simd_no_result(inst, result)
   }
 }
 
@@ -887,6 +1095,7 @@ fn types_match(a : Type, b : Type) -> Bool {
     | (I64, I64)
     | (F32, F32)
     | (F64, F64)
+    | (V128, V128)
     | (FuncRef, FuncRef)
     | (ExternRef, ExternRef) => true
     _ => false

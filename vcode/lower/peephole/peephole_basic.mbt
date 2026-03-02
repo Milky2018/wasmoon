@@ -61,12 +61,20 @@ fn collect_uses(inst : @instr.VCodeInst, used : @hashset.HashSet[Int]) -> Unit {
 
 ///|
 /// Count uses of virtual regs across the whole function.
-fn collect_use_counts(func : @regalloc.VCodeFunction) -> Map[Int, Int] {
-  let counts : Map[Int, Int] = {}
+fn collect_use_counts(func : @regalloc.VCodeFunction) -> Array[Int] {
+  let counts : Array[Int] = Array::make(func.next_vreg_id, 0)
+  fn inc_use(counts : Array[Int], id : Int) -> Unit {
+    if id < 0 {
+      return
+    }
+    while id >= counts.length() {
+      counts.push(0)
+    }
+    counts[id] = counts[id] + 1
+  }
   let add_use = fn(reg : @abi.Reg) -> Unit {
     if get_vreg_id(reg) is Some(id) {
-      let count = counts.get(id).unwrap_or(0)
-      counts.set(id, count + 1)
+      inc_use(counts, id)
     }
   }
   for block in func.blocks {
@@ -297,6 +305,30 @@ fn power_of_two_shift(value : Int64, is_64 : Bool) -> Int? {
 }
 
 ///|
+fn fits_i32(value : Int64) -> Bool {
+  value >= -2147483648L && value <= 2147483647L
+}
+
+///|
+fn is_valid_add_sub_imm_for_target(value : Int64) -> Bool {
+  match @isa.ISA::current() {
+    @isa.AArch64 =>
+      value >= 0L &&
+      (value <= 4095L || ((value & 0xFFFL) == 0L && value >> 12 <= 4095L))
+    @isa.AMD64 => fits_i32(value)
+  }
+}
+
+///|
+fn known_const(state : PeepholeState, reg : @abi.Reg) -> Int64? {
+  if get_vreg_id(reg) is Some(id) {
+    state.constants.get(id)
+  } else {
+    None
+  }
+}
+
+///|
 /// Optimize a single instruction
 /// Returns None if the instruction should be eliminated
 /// Returns Some(inst) with possibly modified instruction otherwise
@@ -352,70 +384,64 @@ fn optimize_instruction(
       }
       Some(inst)
     }
-    // Add with constant 0 operand → Move or eliminate
+    // Add with constant operand → Move / AddImm / SubImm
     Add(is_64) => {
-      if inst.uses.length() >= 2 {
-        // Check if second operand is known to be 0
-        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
-          state.constants.get(use_id) is Some(0L) {
-          // add x, y, const_0 → mov x, y
-          if inst.defs.length() > 0 {
-            let def = inst.defs[0]
-            let use_ = inst.uses[0]
-            if same_vreg(def.reg, use_) {
+      if inst.uses.length() >= 2 && inst.defs.length() > 0 {
+        let def = inst.defs[0]
+        let lhs = inst.uses[0]
+        let rhs = inst.uses[1]
+        if known_const(state, rhs) is Some(const_val) {
+          if const_val == 0L {
+            if same_vreg(def.reg, lhs) {
               return None
             }
-            return Some(make_move(def, use_))
+            return Some(make_move(def, lhs))
+          }
+          if is_valid_add_sub_imm_for_target(const_val) {
+            return Some(make_add_imm(const_val.to_int(), is_64, def, lhs))
+          }
+          let neg = -const_val
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+            return Some(make_sub_imm(neg.to_int(), is_64, def, lhs))
           }
         }
-        // Check if first operand is known to be 0
-        if get_vreg_id(inst.uses[0]) is Some(use_id) &&
-          state.constants.get(use_id) is Some(0L) {
-          // add x, const_0, y → mov x, y
-          if inst.defs.length() > 0 {
-            let def = inst.defs[0]
-            let use_ = inst.uses[1]
-            if same_vreg(def.reg, use_) {
+        if known_const(state, lhs) is Some(const_val) {
+          if const_val == 0L {
+            if same_vreg(def.reg, rhs) {
               return None
             }
-            return Some(make_move(def, use_))
+            return Some(make_move(def, rhs))
           }
-        }
-        // Check if we can use AddImm instead of Add with reg
-        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
-          state.constants.get(use_id) is Some(const_val) {
-          let imm = const_val.to_int()
-          // AArch64 ADD immediate: 12-bit unsigned (0-4095)
-          if imm >= 0 && imm <= 4095 && inst.defs.length() > 0 {
-            return Some(make_add_imm(imm, is_64, inst.defs[0], inst.uses[0]))
+          if is_valid_add_sub_imm_for_target(const_val) {
+            return Some(make_add_imm(const_val.to_int(), is_64, def, rhs))
+          }
+          let neg = -const_val
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+            return Some(make_sub_imm(neg.to_int(), is_64, def, rhs))
           }
         }
       }
       Some(inst)
     }
-    // Sub with constant 0 operand → Move or eliminate
+    // Sub with constant rhs operand → Move / SubImm / AddImm
     Sub(is_64) => {
-      if inst.uses.length() >= 2 {
-        // Check if second operand is known to be 0
-        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
-          state.constants.get(use_id) is Some(0L) {
-          // sub x, y, const_0 → mov x, y
-          if inst.defs.length() > 0 {
-            let def = inst.defs[0]
-            let use_ = inst.uses[0]
-            if same_vreg(def.reg, use_) {
+      if inst.uses.length() >= 2 && inst.defs.length() > 0 {
+        let def = inst.defs[0]
+        let lhs = inst.uses[0]
+        let rhs = inst.uses[1]
+        if known_const(state, rhs) is Some(const_val) {
+          if const_val == 0L {
+            if same_vreg(def.reg, lhs) {
               return None
             }
-            return Some(make_move(def, use_))
+            return Some(make_move(def, lhs))
           }
-        }
-        // Check if we can use SubImm instead of Sub with reg
-        if get_vreg_id(inst.uses[1]) is Some(use_id) &&
-          state.constants.get(use_id) is Some(const_val) {
-          let imm = const_val.to_int()
-          // AArch64 SUB immediate: 12-bit unsigned (0-4095)
-          if imm >= 0 && imm <= 4095 && inst.defs.length() > 0 {
-            return Some(make_sub_imm(imm, is_64, inst.defs[0], inst.uses[0]))
+          if is_valid_add_sub_imm_for_target(const_val) {
+            return Some(make_sub_imm(const_val.to_int(), is_64, def, lhs))
+          }
+          let neg = -const_val
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+            return Some(make_add_imm(neg.to_int(), is_64, def, lhs))
           }
         }
       }

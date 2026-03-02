@@ -268,6 +268,100 @@ test "lower memory operations" {
 }
 
 ///|
+test "amd64 lower load/store regoff with uxtw index" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_load_store_regoff_uxtw")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let sh3 = builder.iconst_i64(3L)
+  let scaled = builder.ishl(idx64, sh3)
+  let addr = builder.iadd(base, scaled)
+  let offset0 = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(@ir.Type::I64, addr, offset0)
+  builder.store_ptr(@ir.Type::I64, addr, loaded, offset0)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i64 (uxtw,3)"), content="true")
+  inspect(output.contains("store_ptr_regoff.i64 (uxtw,3)"), content="true")
+}
+
+///|
+test "amd64 lower regoff with explicit offset" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_regoff_explicit_offset")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let addr = builder.iadd(base, idx)
+  let off = builder.iconst_i64(8L)
+  let loaded = builder.load_ptr(@ir.Type::I64, addr, off)
+  builder.store_ptr(@ir.Type::I64, addr, loaded, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i64 (none,0) +8"), content="true")
+  inspect(output.contains("store_ptr_regoff.i64 (none,0) +8"), content="true")
+  inspect(output.contains("add #8"), content="false")
+}
+
+///|
+test "amd64 lower narrow regoff with explicit offset" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_narrow_regoff_explicit_offset")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let addr = builder.iadd(base, idx64)
+  let off = builder.iconst_i64(8L)
+  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off)
+  builder.store_ptr_narrow(8, addr, loaded, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr8_u_regoff (uxtw,0) +8"), content="true")
+  inspect(output.contains("store_ptr8_regoff (uxtw,0) +8"), content="true")
+  inspect(output.contains("add #8"), content="false")
+}
+
+///|
+test "amd64 lower regoff folds base displacement" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_regoff_base_displacement")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let addr0 = builder.iadd(base, idx64)
+  let one = builder.iconst_i64(1L)
+  let addr = builder.iadd(addr0, one)
+  let off0 = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off0)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  let has_uxtw = output.contains("load_ptr8_u_regoff (uxtw,0) +1")
+  let has_none = output.contains("load_ptr8_u_regoff (none,0) +1")
+  inspect(has_uxtw || has_none, content="true")
+  inspect(output.contains("add #1"), content="false")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)
@@ -964,6 +1058,50 @@ test "lower i32 sub(x, -imm) to add32 #imm" {
 }
 
 ///|
+test "isa add/sub immediate encoding helpers" {
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 0L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4095L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4097L), content="false")
+  inspect(
+    is_valid_add_sub_imm_for_isa(@isa.AMD64, -2147483648L),
+    content="true",
+  )
+  inspect(is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483647L), content="true")
+  inspect(
+    is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483648L),
+    content="false",
+  )
+}
+
+///|
+test "isa load/store offset encoding helpers" {
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 0L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L + 8L, 8),
+    content="false",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, -1L, 8),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483647L, 1),
+    content="true",
+  )
+  inspect(
+    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483648L, 1),
+    content="false",
+  )
+}
+
+///|
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")
@@ -1502,27 +1640,23 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
+      #|    d2 = ldf 10
+      #|    x3 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    x1 = ldi 0
-      #|    d3 = ldf 10
-      #|    store_ptr.f32 +0 x1, d3
-      #|    d6 = load_ptr.f32 +0 x1
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block2:
-      #|    x4 = ldi 0
-      #|    d6 = ldf 10
-      #|    store_ptr.f32 +0 x4, d6
-      #|    d6 = load_ptr.f32 +0 x4
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block3:
-      #|    x6 = ldi 0
-      #|    d18 = ldf 10
-      #|    store_ptr.f32 +0 x6, d18
-      #|    d6 = load_ptr.f32 +0 x6
+      #|    store_ptr.f32 +0 x3, d2
+      #|    d1 = load_ptr.f32 +0 x3
       #|    jump block4
       #|block4(f1:float):
-      #|    ret d6
+      #|    ret d1
       #|block5:
       #|    br_cmp_imm.eq x0, #1, block2, block6
       #|block6:
@@ -1551,25 +1685,43 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   //
   // This ensures the value correctly flows through all paths
 
-  // Check block1's last instruction defines d2
+  // Check block1's last instruction defines the merged float register.
   let block1_last = allocated_func.blocks[1].insts.last().unwrap()
   inspect(block1_last.opcode, content="load_ptr.f32 +0")
   match block1_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d6")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d1
+        ),
+      )
     Virtual(_) => fail("block1_last is virtual")
   }
 
-  // Check block2's last instruction defines d2
+  // Check block2's last instruction defines the same register.
   let block2_last = allocated_func.blocks[2].insts.last().unwrap()
   match block2_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d6")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d1
+        ),
+      )
     Virtual(_) => fail("block2_last is virtual")
   }
 
-  // Check block3's last instruction defines d2
+  // Check block3's last instruction defines the same register.
   let block3_last = allocated_func.blocks[3].insts.last().unwrap()
   match block3_last.defs[0].reg {
-    Physical(preg) => inspect(preg.to_string(), content="d6")
+    Physical(preg) =>
+      inspect(
+        preg.to_string(),
+        content=(
+          #|d1
+        ),
+      )
     Virtual(_) => fail("block3_last is virtual")
   }
 }
@@ -1626,9 +1778,9 @@ test "minimal: dead float constant should not affect live values" {
       #|vcode dead_fconst_test() -> float {
       #|block0:
       #|    d0 = ldf 2
-      #|    d2 = ldf 10
-      #|    x4 = ldi 0
-      #|    store_ptr.f32 +0 x4, d2
+      #|    d1 = ldf 10
+      #|    x2 = ldi 0
+      #|    store_ptr.f32 +0 x2, d1
       #|    ret d0
       #|}
       #|

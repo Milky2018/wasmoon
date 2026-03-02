@@ -239,10 +239,11 @@ pub fn VCodeFunction::uses_mem0(self : VCodeFunction) -> Bool {
 
 ///|
 /// Returns true if memory0 descriptor caching should be enabled for this function.
-pub fn VCodeFunction::should_cache_mem0_desc(_self : VCodeFunction) -> Bool {
-  // Cranelift AArch64 keeps all allocatable GPRs available to regalloc and
-  // does not reserve a dedicated memory0-base register in the machine env.
-  // Keep the same policy here.
+pub fn VCodeFunction::should_cache_mem0_desc(self : VCodeFunction) -> Bool {
+  ignore(self)
+  // Cranelift-style policy:
+  // Keep memory base as a regular SSA value and let RA/CSE/LICM place it.
+  // Do not reserve a dedicated physical register for mem0 cache.
   false
 }
 
@@ -269,7 +270,11 @@ pub fn VCodeFunction::uses_func_table(self : VCodeFunction) -> Bool {
 ///|
 /// Returns true if func_table pointer caching should be enabled for this function.
 pub fn VCodeFunction::should_cache_func_table(self : VCodeFunction) -> Bool {
-  self.uses_func_table()
+  ignore(self)
+  // Cranelift-style policy:
+  // Keep func_table pointer as a regular SSA value; avoid a dedicated pinned
+  // physical register that increases global register pressure.
+  false
 }
 
 ///|

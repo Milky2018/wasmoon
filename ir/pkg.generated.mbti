@@ -15,27 +15,31 @@ pub const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
 
 pub const TABLE_ENTRY_STRIDE : Int = 16
 
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 8
+pub const VMCTX_FUNC_TABLE_OFFSET : Int = 24
 
-pub const VMCTX_GLOBALS_OFFSET : Int = 32
+pub const VMCTX_GLOBALS_OFFSET : Int = 48
 
-pub const VMCTX_MEMORIES_OFFSET : Int = 72
+pub const VMCTX_MEMORIES_OFFSET : Int = 88
+
+pub const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
 
 pub const VMCTX_MEMORY0_OFFSET : Int = 0
 
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 80
+pub const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
 
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 16
+pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 96
 
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 24
+pub const VMCTX_TABLE0_BASE_OFFSET : Int = 32
 
-pub const VMCTX_TABLES_OFFSET : Int = 40
+pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
 
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 48
+pub const VMCTX_TABLES_OFFSET : Int = 56
 
-pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 64
+pub const VMCTX_TABLE_COUNT_OFFSET : Int = 64
 
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 56
+pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 80
+
+pub const VMCTX_TABLE_SIZES_OFFSET : Int = 72
 
 pub const WASM_PAGE_SIZE : Int = 65536
 
@@ -84,6 +88,8 @@ pub fn optimize_function_with_limits(Function, @egraph.SaturationLimits) -> Bool
 pub fn optimize_function_with_stats(Function) -> EGraphOptimizeStats
 
 pub fn optimize_function_with_stats_with_limits(Function, @egraph.SaturationLimits) -> EGraphOptimizeStats
+
+pub fn optimize_function_with_stats_with_limits_and_ruleset(Function, @egraph.SaturationLimits, @egraph.IndexedRuleSet) -> EGraphOptimizeStats
 
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
@@ -149,6 +155,7 @@ pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
 pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
 pub fn EGraphBuilder::new() -> Self
 pub fn EGraphBuilder::new_with_limits(@egraph.SaturationLimits) -> Self
+pub fn EGraphBuilder::new_with_limits_and_ruleset(@egraph.SaturationLimits, @egraph.IndexedRuleSet) -> Self
 pub fn EGraphBuilder::optimize(Self) -> Unit
 pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
 

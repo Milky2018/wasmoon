@@ -6,15 +6,15 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
     LoadPtr(_, _)
-    | LoadPtrRegOffset(_, _, _)
-    | LoadPtrNarrowRegOffset(_, _, _, _)
+    | LoadPtrRegOffset(_, _, _, _)
+    | LoadPtrNarrowRegOffset(_, _, _, _, _)
     | LoadPtrNarrow(_, _, _) => true
     // Memory stores have side effects
     Store(_, _)
     | StackStore(_)
     | StorePtr(_, _)
-    | StorePtrRegOffset(_, _, _)
-    | StorePtrNarrowRegOffset(_, _, _) => true
+    | StorePtrRegOffset(_, _, _, _)
+    | StorePtrNarrowRegOffset(_, _, _, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
     TypeCheckSubtypeIndirect(_) => true
@@ -294,12 +294,10 @@ pub fn allocate_registers_backtracking_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> VCodeFunction {
-  // Step 0: Eliminate dead code first
-  let func = eliminate_dead_code(func)
-  // Cranelift-style remat for cross-block constants to reduce reg pressure.
-  let func = rematerialize_cross_block_constants(func)
-  // Remat may make original const-defs dead in their original blocks.
-  let func = eliminate_dead_code(func)
+  // Cranelift/regalloc2 does not run a dedicated pre-regalloc dead-code sweep
+  // at this stage; keep the input VCode unchanged and let earlier lowering
+  // cleanup decide shape.
+  let func = func
 
   // Build register pools
   let (
@@ -311,7 +309,7 @@ pub fn allocate_registers_backtracking_with_isa(
   ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1)
-  let liveness = compute_liveness(func)
+  let liveness = compute_liveness_for_regalloc(func)
 
   // Use backtracking allocator (Phases 2-4)
   let alloc_result = allocate_backtracking(
@@ -322,9 +320,6 @@ pub fn allocate_registers_backtracking_with_isa(
   if regalloc_validation_enabled() {
     verify_allocation(func, liveness, alloc_result, isa, settings~)
   }
-
-  // Process constraints and generate RegMove edits
-  process_constraints(func, alloc_result)
 
   // Apply allocation
   apply_allocation(func, alloc_result)
@@ -354,10 +349,9 @@ pub fn allocate_registers_backtracking_output_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> (VCodeFunction, Output) {
-  // Step 0: Eliminate dead code first.
-  let func = eliminate_dead_code(func)
-  let func = rematerialize_cross_block_constants(func)
-  let func = eliminate_dead_code(func)
+  // Cranelift/regalloc2 keeps VCode shape unchanged at this stage; avoid an
+  // extra pre-regalloc dead-code sweep in Wasmoon as well.
+  let func = func
 
   // Build register pools.
   let (
@@ -369,7 +363,15 @@ pub fn allocate_registers_backtracking_output_with_isa(
   ) = build_reg_pools(isa, func, settings)
 
   // Compute liveness (Phase 1).
-  let liveness = compute_liveness(func)
+  let perf_on = @perf.enabled()
+  let tick_liveness = if perf_on { Some(@perf.tick_now()) } else { None }
+  let liveness = compute_liveness_for_regalloc(func)
+  if tick_liveness is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_compute_liveness",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Use backtracking allocator (Phases 2-4).
   let alloc_result = allocate_backtracking(
@@ -388,12 +390,15 @@ pub fn allocate_registers_backtracking_output_with_isa(
     verify_allocation(func, liveness, alloc_result, isa, settings~)
   }
 
-  // Process constraints and generate RegMove edits.
-  process_constraints(func, alloc_result)
-
   // Build output (allocs + edits). VCode remains in terms of vregs.
-  let output = build_output(func, alloc_result, isa, settings)
-  output.validate_for_isa(isa)
+  let tick_output = if perf_on { Some(@perf.tick_now()) } else { None }
+  let output = build_output(func, liveness, alloc_result, isa, settings)
+  if tick_output is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_build_output", @perf.elapsed_us(tick))
+  }
+  if regalloc_validation_enabled() {
+    output.validate_for_isa(isa)
+  }
   (func, output)
 }
 

@@ -445,12 +445,9 @@ fn MachineCode::emit_prologue(
 
   // Best-effort: record current wasm func_idx for trap diagnostics.
   if debug_func_idx is Some(idx) {
+    let vmctx_arg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
     self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(
-      16,
-      @abi.REG_CALLEE_VMCTX,
-      @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
-    )
+    self.emit_str_w_imm(16, vmctx_arg, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
   }
 
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
@@ -517,18 +514,12 @@ fn MachineCode::emit_prologue(
     }
     let vmctx = @isaregs.vmctx_index()
     self.emit_mov_reg(vmctx, 0)
-    // Optionally cache memory0 base pointer in X20.
-    // This allows `LoadMemBase(mem=0)` to become a register move.
+    // Optionally cache memory0 base pointer in Mem0Desc role.
     if stack_frame.cache_mem0_desc {
       self.emit_ldr_imm(
         @isaregs.mem0_desc_index(),
         vmctx,
-        @abi.VMCTX_MEMORY0_OFFSET,
-      )
-      self.emit_ldr_imm(
-        @isaregs.mem0_desc_index(),
-        @isaregs.mem0_desc_index(),
-        0,
+        @abi.VMCTX_MEMORY0_BASE_OFFSET,
       )
     }
     // Optionally cache func_table pointer.
@@ -542,10 +533,9 @@ fn MachineCode::emit_prologue(
   }
 
   // Step 6: Move arguments from ABI registers to allocated registers
-  // Note: all params use X0-X7 (int) or V0-V7 (float)
-  // vmctx is params[0] and comes in X0, already cached to X19 above
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let isa = @isaregs.current_isa()
+  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
+  let float_arg_regs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -556,9 +546,8 @@ fn MachineCode::emit_prologue(
     }
     match param.class {
       Float32 | Float64 =>
-        // Float params come in V0-V7 directly
-        if float_idx < max_float_params {
-          let v_src = float_idx // V0, V1, V2, ...
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != v_src {
@@ -572,9 +561,8 @@ fn MachineCode::emit_prologue(
           float_idx = float_idx + 1
         }
       Vector =>
-        // Vector params come in V0-V7 (same as floats)
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != v_src {
@@ -585,9 +573,8 @@ fn MachineCode::emit_prologue(
           float_idx = float_idx + 1
         }
       Int =>
-        // Integer params come in X0-X7
-        if int_idx < max_int_params {
-          let x_src = int_idx // X0, X1, X2, ...
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match dest_preg {
             Some(preg) =>
               if preg.index != x_src {
@@ -608,11 +595,12 @@ pub fn emit_function(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new()
+  let mc = MachineCode::new(record_disasm~)
   // ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
   // Check if we call functions that return more than register capacity
@@ -1086,76 +1074,8 @@ fn output_uses_preg(
   output : @regalloc.Output,
   preg_idx : Int,
 ) -> Bool {
-  // Params.
-  for i in 0..<func.get_params().length() {
-    if output.get_param_loc(i) is @regalloc.Reg(p) && p.index == preg_idx {
-      return true
-    }
-  }
-  // Insts + terminators.
-  for block in func.get_blocks() {
-    for inst_idx, inst in block.insts {
-      for di in 0..<inst.defs.length() {
-        if output.inst_def_loc(block.id, inst_idx, false, di)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-      for ui in 0..<inst.uses.length() {
-        if output.inst_use_loc(block.id, inst_idx, false, ui)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-      // Edits around the instruction.
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.index == preg_idx {
-              return true
-            }
-          }
-        }
-      }
-    }
-    if block.terminator is Some(_) {
-      let term_inst = block.insts.length()
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, term_inst, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.index == preg_idx {
-              return true
-            }
-          }
-        }
-      }
-      // Terminator operand allocations.
-      // `output_build` records empty ranges for Jump/Trap, so this is safe.
-      let term = block.terminator.unwrap()
-      let use_count = match term {
-        @instr.Branch(_, _, _) => 1
-        @instr.BranchCmp(_, _, _, _, _, _) => 2
-        @instr.BranchZero(_, _, _, _, _) => 1
-        @instr.BranchCmpImm(_, _, _, _, _, _) => 1
-        @instr.Return(values) => values.length()
-        @instr.BrTable(_, _, _) => 1
-        @instr.Trap(_) => 0
-        @instr.Jump(_, _) => 0
-      }
-      for ui in 0..<use_count {
-        if output.inst_use_loc(block.id, term_inst, true, ui)
-          is @regalloc.Reg(p) &&
-          p.index == preg_idx {
-          return true
-        }
-      }
-    }
-  }
-  false
+  ignore(func)
+  output.uses_preg_index_any(preg_idx, true)
 }
 
 ///|
@@ -1164,46 +1084,41 @@ fn collect_used_callee_saved_from_output(
   output : @regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : Array[Bool] = Array::make(128, false)
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_int : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_int {
-    callee_saved_int.add(r.index)
+    if r.index >= 0 && r.index < callee_saved_int.length() {
+      callee_saved_int[r.index] = true
+    }
   }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     if output.get_param_loc(i) is @regalloc.Reg(p) &&
       p.class is @abi.Int &&
-      callee_saved_int.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_int.length() &&
+      callee_saved_int[p.index] {
+      used[p.index] = true
     }
   }
 
   // Edits (moves) define their destination reg.
+  for edit_entry in output.iter_edits() {
+    let ((_block_id, _inst_idx, _pos), edit) = edit_entry
+    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+      p.class is @abi.Int &&
+      p.index >= 0 &&
+      p.index < callee_saved_int.length() &&
+      callee_saved_int[p.index] {
+      used[p.index] = true
+    }
+  }
+
+  // Instruction defs.
   for block in func.get_blocks() {
-    let term_inst = block.insts.length()
-    fn record_edits_at(inst_idx : Int) -> Unit {
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              p.class is @abi.Int &&
-              callee_saved_int.contains(p.index) {
-              used.add(p.index)
-            }
-          }
-        }
-      }
-    }
-
-    for inst_idx in 0..<term_inst {
-      record_edits_at(inst_idx)
-    }
-    record_edits_at(term_inst)
-
-    // Instruction defs.
     //
     // Ignore *physical* defs here. Calls model clobbers as physical defs so
     // regalloc can treat them as kills. However, prologue saves must be driven
@@ -1215,18 +1130,25 @@ fn collect_used_callee_saved_from_output(
         if inst.defs[di].reg is @abi.Virtual(_) &&
           output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
           p.class is @abi.Int &&
-          callee_saved_int.contains(p.index) {
-          used.add(p.index)
+          p.index >= 0 &&
+          p.index < callee_saved_int.length() &&
+          callee_saved_int[p.index] {
+          used[p.index] = true
         }
       }
     }
   }
   if func_has_calls(func) && isa is @isa.AArch64 {
-    used.add(@isaregs.lr_index())
+    let lr = @isaregs.lr_index()
+    if lr >= 0 && lr < used.length() {
+      used[lr] = true
+    }
   }
   let result : Array[Int] = []
-  for reg in used {
-    result.push(reg)
+  for i, is_used in used {
+    if is_used {
+      result.push(i)
+    }
   }
   result.sort()
   result
@@ -1238,61 +1160,60 @@ fn collect_used_callee_saved_fprs_from_output(
   output : @regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : Array[Bool] = Array::make(128, false)
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_fprs : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_float {
-    callee_saved_fprs.add(r.index)
+    if r.index >= 0 && r.index < callee_saved_fprs.length() {
+      callee_saved_fprs[r.index] = true
+    }
   }
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
     if output.get_param_loc(i) is @regalloc.Reg(p) &&
       (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-      callee_saved_fprs.contains(p.index) {
-      used.add(p.index)
+      p.index >= 0 &&
+      p.index < callee_saved_fprs.length() &&
+      callee_saved_fprs[p.index] {
+      used[p.index] = true
     }
   }
 
   // Edits define their destination reg.
+  for edit_entry in output.iter_edits() {
+    let ((_block_id, _inst_idx, _pos), edit) = edit_entry
+    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
+      (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+      p.index >= 0 &&
+      p.index < callee_saved_fprs.length() &&
+      callee_saved_fprs[p.index] {
+      used[p.index] = true
+    }
+  }
+
+  // Instruction defs: only count allocations of virtual values (see comment
+  // above in collect_used_callee_saved_from_output).
   for block in func.get_blocks() {
-    let term_inst = block.insts.length()
-    fn record_edits_at(inst_idx : Int) -> Unit {
-      for pos in [@regalloc.ProgPos::Before, @regalloc.ProgPos::After] {
-        if output.edits_at(block.id, inst_idx, pos) is Some(edits) {
-          for e in edits {
-            if e is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-              (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-              callee_saved_fprs.contains(p.index) {
-              used.add(p.index)
-            }
-          }
-        }
-      }
-    }
-
-    for inst_idx in 0..<term_inst {
-      record_edits_at(inst_idx)
-    }
-    record_edits_at(term_inst)
-
-    // Instruction defs: only count allocations of virtual values (see comment
-    // above in collect_used_callee_saved_from_output).
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
         if inst.defs[di].reg is @abi.Virtual(_) &&
           output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
           (p.class is @abi.Float32 || p.class is @abi.Float64) &&
-          callee_saved_fprs.contains(p.index) {
-          used.add(p.index)
+          p.index >= 0 &&
+          p.index < callee_saved_fprs.length() &&
+          callee_saved_fprs[p.index] {
+          used[p.index] = true
         }
       }
     }
   }
   let result : Array[Int] = []
-  for reg in used {
-    result.push(reg)
+  for i, is_used in used {
+    if is_used {
+      result.push(i)
+    }
   }
   result.sort()
   result
@@ -1408,20 +1329,19 @@ fn map_inst_for_emission(
   inst : @instr.VCodeInst,
   output : @regalloc.Output,
 ) -> @instr.VCodeInst {
-  let mapped = @instr.VCodeInst::new(inst.opcode)
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
-      @regalloc.Reg(preg) => mapped.add_def({ reg: @abi.Physical(preg) })
+      @regalloc.Reg(preg) => inst.defs[di] = { reg: @abi.Physical(preg) }
       @regalloc.Spill(_) => abort("Spill loc in instruction def allocation")
     }
   }
   for ui in 0..<inst.uses.length() {
     match output.inst_use_loc(block_id, inst_idx, false, ui) {
-      @regalloc.Reg(preg) => mapped.add_use(@abi.Physical(preg))
+      @regalloc.Reg(preg) => inst.uses[ui] = @abi.Physical(preg)
       @regalloc.Spill(_) => abort("Spill loc in instruction use allocation")
     }
   }
-  mapped
+  inst
 }
 
 ///|
@@ -1755,16 +1675,17 @@ fn MachineCode::emit_prologue_with_output(
   )
 
   // Store spilled params from incoming ABI regs to spill slots.
-  let max_int_params = @abi.MAX_REG_PARAMS // 8
-  let max_float_params = @abi.MAX_FLOAT_REG_PARAMS // 8
+  let isa = @isaregs.current_isa()
+  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
+  let float_arg_regs = isa.wasm_arg_fprs()
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
     let loc = output.get_param_loc(param_idx)
     match param.class {
       @abi.Int =>
-        if int_idx < max_int_params {
-          let x_src = int_idx
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_imm(x_src, 31, stack_frame.spill_offset + slot * 8)
@@ -1773,8 +1694,8 @@ fn MachineCode::emit_prologue_with_output(
           int_idx += 1
         }
       @abi.Float32 | @abi.Float64 =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_d_imm(
@@ -1787,8 +1708,8 @@ fn MachineCode::emit_prologue_with_output(
           float_idx += 1
         }
       @abi.Vector =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Spill(slot) =>
               self.emit_str_q_imm(
@@ -1929,8 +1850,8 @@ fn MachineCode::emit_prologue_with_output(
     let loc = output.get_param_loc(param_idx)
     match param.class {
       @abi.Int =>
-        if int_idx < max_int_params {
-          let x_src = int_idx
+        if int_idx < int_arg_regs.length() {
+          let x_src = int_arg_regs[int_idx].index
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != x_src {
@@ -1947,8 +1868,8 @@ fn MachineCode::emit_prologue_with_output(
           int_idx += 1
         }
       @abi.Float32 | @abi.Float64 | @abi.Vector =>
-        if float_idx < max_float_params {
-          let v_src = float_idx
+        if float_idx < float_arg_regs.length() {
+          let v_src = float_arg_regs[float_idx].index
           match loc {
             @regalloc.Reg(dst) =>
               if dst.index != v_src {
@@ -1972,10 +1893,11 @@ pub fn emit_function_with_regalloc(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  record_disasm? : Bool = true,
 ) -> MachineCode {
   // Keep block layout optimization (targets are block IDs; ids stay stable).
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new()
+  let mc = MachineCode::new(record_disasm~)
   let is_amd64 = @isaregs.current_isa() is @isa.AMD64
 
   // Compute clobbers from regalloc output.
@@ -2048,38 +1970,62 @@ pub fn emit_function_with_regalloc(
     None
   }
   let edit_slot_cache : Map[Int, @abi.PReg] = {}
+  fn emit_point_edits(
+    mc : MachineCode,
+    output : @regalloc.Output,
+    block_id : Int,
+    inst_idx : Int,
+    pos : @regalloc.ProgPos,
+    stack_frame : JITStackFrame,
+    edit_slot_cache : Map[Int, @abi.PReg],
+  ) -> Unit {
+    if output.edits_at(block_id, inst_idx, pos) is Some(edits) {
+      for edit in edits {
+        emit_edit_move_with_cache(mc, edit, stack_frame, edit_slot_cache)
+      }
+    }
+  }
   for i, block in blocks {
     edit_slot_cache.clear()
     mc.define_label(block.id)
     for inst_idx, inst in block.insts {
       // Edits before instruction.
-      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::Before)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        inst_idx,
+        @regalloc.ProgPos::Before,
+        stack_frame,
+        edit_slot_cache,
+      )
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
       mc.emit_instruction(mapped, stack_frame)
       invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
-      if output.edits_at(block.id, inst_idx, @regalloc.ProgPos::After)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        inst_idx,
+        @regalloc.ProgPos::After,
+        stack_frame,
+        edit_slot_cache,
+      )
     }
     if block.terminator is Some(term) {
       let term_inst = block.insts.length()
       // Edits before terminator (block-arg moves, terminator reloads, etc).
-      if output.edits_at(block.id, term_inst, @regalloc.ProgPos::Before)
-        is Some(edits) {
-        for e in edits {
-          emit_edit_move_with_cache(mc, e, stack_frame, edit_slot_cache)
-        }
-      }
+      emit_point_edits(
+        mc,
+        output,
+        block.id,
+        term_inst,
+        @regalloc.ProgPos::Before,
+        stack_frame,
+        edit_slot_cache,
+      )
       let next_block = if i + 1 < blocks.length() {
         Some(blocks[i + 1].id)
       } else {

@@ -198,6 +198,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem0
 
         // If the pointer is unchanged, keep existing ownership state.
         if (ctx->memory0 == new_mem0) {
+            ctx_refresh_memory0_fast_fields(ctx);
             return;
         }
 
@@ -208,6 +209,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory(int64_t ctx_ptr, int64_t mem0
 
         ctx->memory0 = new_mem0;
         ctx->owns_memory0 = 0;
+        ctx_refresh_memory0_fast_fields(ctx);
     }
 }
 
@@ -557,6 +559,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
     ctx->memory_count = 0;
     ctx->memory0 = NULL;
     ctx->owns_memory0 = (old_owns_mem0 && old_mem0 == new_mem0) ? 1 : 0;
+    ctx_refresh_memory0_fast_fields(ctx);
 
     // Allocate array to hold memory pointers
     ctx->memories = (wasmoon_memory_t **)calloc(memory_count, sizeof(wasmoon_memory_t *));
@@ -572,6 +575,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_memory_pointers(
     if (memory_count > 0) {
         ctx->memory0 = ctx->memories[0];
     }
+    ctx_refresh_memory0_fast_fields(ctx);
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_use_shared_table(int64_t ctx_ptr, int64_t shared_table_ptr, int count) {
@@ -691,6 +695,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     g_trap_active = 1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    ctx_refresh_memory0_fast_fields(ctx);
     exception_reset_context_state(ctx);
     g_current_jit_context = ctx;  // Set for guard page detection
     g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
@@ -758,6 +763,7 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
     if (!trampoline_ptr || !ctx_ptr || !func_ptr) return -1;
 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    ctx_refresh_memory0_fast_fields(ctx);
 
     // Check if WASM stack is allocated
     if (!ctx->wasm_stack_top) {
@@ -1043,6 +1049,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
         wasmoon_jit_free_memory_desc((int64_t)ctx->memory0);
         ctx->memory0 = NULL;
         ctx->owns_memory0 = 0;
+        ctx_refresh_memory0_fast_fields(ctx);
     }
 
     wasmoon_memory_t *memory = (wasmoon_memory_t *)calloc(1, sizeof(wasmoon_memory_t));
@@ -1064,6 +1071,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_alloc_guarded_memory(
     // Set memory0 in context
     ctx->memory0 = memory;
     ctx->owns_memory0 = 1;
+    ctx_refresh_memory0_fast_fields(ctx);
 
     return (int64_t)memory;
 }
@@ -1146,7 +1154,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_ptr(int64_t ctx_ptr, int m
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
 
     if (memidx == 0) {
-        return (ctx->memory0 && ctx->memory0->base) ? (int64_t)ctx->memory0->base : 0;
+        return ctx->memory0_base ? (int64_t)ctx->memory0_base : 0;
     }
 
     if (ctx->memories && ctx->memory_count > 0 && memidx < ctx->memory_count) {
@@ -1162,7 +1170,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_size(int64_t ctx_ptr, int 
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
 
     if (memidx == 0) {
-        return (ctx->memory0) ? (int64_t)atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed) : 0;
+        return (int64_t)atomic_load_explicit(&ctx->memory0_size, memory_order_relaxed);
     }
 
     if (ctx->memories && ctx->memory_count > 0 && memidx < ctx->memory_count) {

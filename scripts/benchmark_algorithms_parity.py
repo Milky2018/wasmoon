@@ -190,21 +190,21 @@ def main() -> int:
     parser.add_argument("--baseline-iterations", type=int, default=3)
     parser.add_argument("--baseline-warmup", type=int, default=1)
     parser.add_argument(
-        "--value-threshold-pct",
+        "--value-ratio-threshold",
         type=float,
-        default=5.0,
+        default=1.05,
         help=(
-            "Allowed positive delta percentage vs wasmtime parsed output value "
-            "(one-sided: only slower-than-baseline is flagged)."
+            "Allowed one-sided output ratio (wasmoon/wasmtime). "
+            "Ratios above this threshold are flagged."
         ),
     )
     parser.add_argument(
-        "--value-threshold-abs",
+        "--wall-ratio-threshold",
         type=float,
-        default=50000.0,
+        default=2.0,
         help=(
-            "Allowed absolute positive delta vs wasmtime parsed output value; "
-            "a perf gap is flagged only if both pct and abs thresholds are exceeded."
+            "Allowed one-sided wall-time ratio (wasmoon/wasmtime). "
+            "Ratios above this threshold are flagged."
         ),
     )
     parser.add_argument(
@@ -306,6 +306,16 @@ def main() -> int:
         value_delta_pct = pct_delta(median_value, baseline_value)
         value_delta_abs = abs_delta(median_value, baseline_value)
         wall_delta_pct = pct_delta(median_duration, baseline_duration)
+        value_ratio = (
+            (median_value / baseline_value)
+            if median_value is not None and baseline_value not in (None, 0.0)
+            else None
+        )
+        wall_ratio = (
+            (median_duration / baseline_duration)
+            if median_duration is not None and baseline_duration not in (None, 0.0)
+            else None
+        )
 
         status = "ok"
         if not ok_runs:
@@ -314,17 +324,20 @@ def main() -> int:
         elif value_delta_pct is None:
             status = "parse_error"
             failures.append(f"{workload_str}: unable to parse numeric output")
-        elif (
-            value_delta_pct > args.value_threshold_pct
-            and value_delta_abs is not None
-            and value_delta_abs > args.value_threshold_abs
-        ):
+        elif value_ratio is None:
+            status = "parse_error"
+            failures.append(f"{workload_str}: unable to compute output ratio")
+        elif value_ratio > args.value_ratio_threshold:
             status = "perf_gap"
             perf_gaps.append(
-                f"{workload_str}: value delta {value_delta_pct:.2f}% "
-                f"(threshold {args.value_threshold_pct:.2f}%), "
-                f"abs delta {value_delta_abs:.0f} "
-                f"(threshold {args.value_threshold_abs:.0f})"
+                f"{workload_str}: output ratio {value_ratio:.4f} "
+                f"(threshold {args.value_ratio_threshold:.4f})"
+            )
+        elif wall_ratio is not None and wall_ratio > args.wall_ratio_threshold:
+            status = "perf_gap"
+            perf_gaps.append(
+                f"{workload_str}: wall ratio {wall_ratio:.4f} "
+                f"(threshold {args.wall_ratio_threshold:.4f})"
             )
 
         rows.append(
@@ -353,11 +366,14 @@ def main() -> int:
                 "value_delta_pct": value_delta_pct,
                 "value_delta_abs": value_delta_abs,
                 "wall_delta_pct": wall_delta_pct,
+                "value_ratio": value_ratio,
+                "wall_ratio": wall_ratio,
             }
         )
         print(
             f"[run] {workload_str} status={status} "
-            f"value_delta_pct={'n/a' if value_delta_pct is None else f'{value_delta_pct:.2f}'}",
+            f"value_ratio={'n/a' if value_ratio is None else f'{value_ratio:.4f}'} "
+            f"wall_ratio={'n/a' if wall_ratio is None else f'{wall_ratio:.4f}'}",
             file=sys.stderr,
             flush=True,
         )
@@ -371,8 +387,8 @@ def main() -> int:
             "timeout_sec": args.timeout_sec,
             "iterations": args.iterations,
             "warmup": args.warmup,
-            "value_threshold_pct": args.value_threshold_pct,
-            "value_threshold_abs": args.value_threshold_abs,
+            "value_ratio_threshold": args.value_ratio_threshold,
+            "wall_ratio_threshold": args.wall_ratio_threshold,
             "baseline_file": str(baseline_path),
         },
         "stats": {
@@ -400,22 +416,22 @@ def main() -> int:
         f"- Failures: `{summary_payload['stats']['failures']}`",
         f"- Perf gaps: `{summary_payload['stats']['perf_gaps']}`",
         "",
-        "| Workload | Status | Value Delta % | Value Delta Abs | Wall Delta % | Wasmoon Median Value | Wasmtime Value |",
+        "| Workload | Status | Value Ratio | Wall Ratio | Value Delta % | Wasmoon Median Value | Wasmtime Value |",
         "|---|---|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
+        value_ratio = row.get("value_ratio")
+        wall_ratio = row.get("wall_ratio")
         value_delta = row.get("value_delta_pct")
-        value_delta_abs = row.get("value_delta_abs")
-        wall_delta = row.get("wall_delta_pct")
         wasmoon_median_value = row.get("wasmoon", {}).get("median_value")
         wasmtime_value = row.get("wasmtime_baseline", {}).get("parsed_value")
         md_lines.append(
             "| `{}` | {} | {} | {} | {} | {} | {} |".format(
                 row.get("workload"),
                 row.get("status"),
+                "n/a" if value_ratio is None else f"{value_ratio:.4f}",
+                "n/a" if wall_ratio is None else f"{wall_ratio:.4f}",
                 "n/a" if value_delta is None else f"{value_delta:.2f}",
-                "n/a" if value_delta_abs is None else f"{value_delta_abs:.0f}",
-                "n/a" if wall_delta is None else f"{wall_delta:.2f}",
                 "n/a" if wasmoon_median_value is None else f"{wasmoon_median_value:.2f}",
                 "n/a" if wasmtime_value is None else f"{wasmtime_value:.2f}",
             )

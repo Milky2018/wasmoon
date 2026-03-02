@@ -1314,6 +1314,39 @@ fn compile_module_to_jit(
       )
     }
   }
+  let import_func_type_indices : Array[Int] = []
+  let global_types : Array[@types.GlobalType] = []
+  let all_tags : Array[@types.TagType] = []
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) => import_func_type_indices.push(type_idx)
+      Global(global_type) => global_types.push(global_type)
+      @types.ImportDesc::Tag(tag_type_idx) =>
+        all_tags.push({ type_idx: tag_type_idx })
+      _ => ()
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+  for tag in mod_.tags {
+    all_tags.push(tag)
+  }
+  let memory_max_for_translate : Int? = match actual_memory_max {
+    Some(_) => actual_memory_max
+    None =>
+      if mod_.memories.length() > 0 {
+        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+      } else {
+        None
+      }
+  }
+  let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+  let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
+  let memory_mins = mod_.memories.map(fn(m) {
+    m.limits.min * (1L << m.page_size_log2)
+  })
+  let func_types = @types.extract_func_types(mod_.types)
   // Record imports in precompiled module
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1341,13 +1374,30 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // Stage 1: Translate WASM to IR - use simplified from_module API
-    let ir_func = @ir.translate_function(
-      mod_,
-      i,
-      name=func_name,
-      memory_max_override=actual_memory_max,
+    // Stage 1: Translate WASM to IR.
+    // Reuse per-module metadata across all function translations (Cranelift-style
+    // module-environment reuse) to avoid rebuilding import/global/type vectors in
+    // every function.
+    let code = mod_.codes[i]
+    let translator = @ir.Translator::new(
+      func_name,
+      func_type,
+      code.locals,
+      func_types,
+      mod_.funcs,
+      num_imports,
+      import_func_type_indices,
+      memory_max=memory_max_for_translate,
+      memory_is_64~,
+      memory_page_size_log2~,
+      tables=mod_.tables,
+      global_types~,
+      type_rec_groups=mod_.type_rec_groups,
+      module_types=mod_.types,
+      tags=all_tags,
+      memory_mins~,
     )
+    let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (configurable level)
     let normalized_opt_level = if opt_level < 0 {
       0
@@ -1458,6 +1508,7 @@ fn compile_module_to_jit(
       ra_output,
       debug_func_idx~,
       force_frame_setup=enable_dwarf,
+      record_disasm=debug_db is Some(_),
     )
     if emit_tick is Some(tick) {
       @perf.record_stage_us("emit", @perf.elapsed_us(tick))

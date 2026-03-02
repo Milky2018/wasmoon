@@ -147,25 +147,24 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
-      #|    br_cmp_imm.eq x1, #0, block1, block6
-      #|block1:
       #|    d2 = ldf 10
+      #|    d3 = ldf 0
+      #|    br_cmp_imm.eq x1, #0, block5, block6
+      #|block1:
       #|    jump block5
       #|block2:
-      #|    d2 = ldf 10
       #|    jump block5
       #|block3:
-      #|    d2 = ldf 10
       #|    jump block5
       #|block4:
-      #|    d2 = ldf 0
+      #|    d2 = mov d3
       #|    jump block5
       #|block5(f2:float):
       #|    ret d2
       #|block6:
-      #|    br_cmp_imm.eq x1, #1, block2, block7
+      #|    br_cmp_imm.eq x1, #1, block5, block7
       #|block7:
-      #|    br_cmp_imm.eq x1, #2, block3, block4
+      #|    br_cmp_imm.eq x1, #2, block5, block4
       #|}
       #|
     ),
@@ -304,73 +303,72 @@ test "end-to-end: f32_br_2locals.wast from source" {
       #|function test(v0:i64, v1:i32) -> f32 {
       #|block0:
       #|    v2:f32 = fconst 0
-      #|    v3:f32 = fconst 0
-      #|    v4:f32 = fconst 10
+      #|    v3:f32 = fconst 10
       #|    br_table v1, [block6, block7, block8], block5
-      #|block1(v5:i32, v6:f32, v7:f32):
-      #|    return v7
-      #|block2(v8:i32, v9:f32, v10:f32):
-      #|    v47:i32 = iconst 0
-      #|    v48:i64 = load_mem_base mem=0 v0
-      #|    v49:i64 = uextend v47
-      #|    v50:i64 = iconst 0
-      #|    v51:i64 = iadd v49, v50
-      #|    v52:i64 = iadd v48, v51
-      #|    v53:i64 = iconst 0
-      #|    store_ptr.F32 v52, v9, v53
-      #|    v54:i32 = iconst 0
-      #|    v55:i64 = load_mem_base mem=0 v0
-      #|    v56:i64 = uextend v54
-      #|    v57:i64 = iconst 0
-      #|    v58:i64 = iadd v56, v57
-      #|    v59:i64 = iadd v55, v58
-      #|    v60:i64 = iconst 0
-      #|    v61:f32 = load_ptr.F32 v59, v60
-      #|    jump block1(v8, v9, v61)
-      #|block3(v11:i32, v12:f32, v13:f32):
-      #|    v32:i32 = iconst 0
-      #|    v33:i64 = load_mem_base mem=0 v0
-      #|    v34:i64 = uextend v32
-      #|    v35:i64 = iconst 0
-      #|    v36:i64 = iadd v34, v35
-      #|    v37:i64 = iadd v33, v36
-      #|    v38:i64 = iconst 0
-      #|    store_ptr.F32 v37, v12, v38
-      #|    v39:i32 = iconst 0
-      #|    v40:i64 = load_mem_base mem=0 v0
-      #|    v41:i64 = uextend v39
-      #|    v42:i64 = iconst 0
-      #|    v43:i64 = iadd v41, v42
-      #|    v44:i64 = iadd v40, v43
-      #|    v45:i64 = iconst 0
-      #|    v46:f32 = load_ptr.F32 v44, v45
-      #|    jump block1(v11, v12, v46)
-      #|block4(v14:i32, v15:f32, v16:f32):
-      #|    v17:i32 = iconst 0
-      #|    v18:i64 = load_mem_base mem=0 v0
-      #|    v19:i64 = uextend v17
-      #|    v20:i64 = iconst 0
-      #|    v21:i64 = iadd v19, v20
-      #|    v22:i64 = iadd v18, v21
-      #|    v23:i64 = iconst 0
-      #|    store_ptr.F32 v22, v15, v23
-      #|    v24:i32 = iconst 0
-      #|    v25:i64 = load_mem_base mem=0 v0
-      #|    v26:i64 = uextend v24
-      #|    v27:i64 = iconst 0
-      #|    v28:i64 = iadd v26, v27
-      #|    v29:i64 = iadd v25, v28
-      #|    v30:i64 = iconst 0
-      #|    v31:f32 = load_ptr.F32 v29, v30
-      #|    jump block1(v14, v15, v31)
+      #|block1(v4:i32, v5:f32, v6:f32):
+      #|    return v6
+      #|block2(v7:i32, v8:f32, v9:f32):
+      #|    v46:i32 = iconst 0
+      #|    v47:i64 = load_mem_base mem=0 v0
+      #|    v48:i64 = uextend v46
+      #|    v49:i64 = iconst 0
+      #|    v50:i64 = iadd v48, v49
+      #|    v51:i64 = iadd v47, v50
+      #|    v52:i64 = iconst 0
+      #|    store_ptr.F32 v51, v8, v52
+      #|    v53:i32 = iconst 0
+      #|    v54:i64 = load_mem_base mem=0 v0
+      #|    v55:i64 = uextend v53
+      #|    v56:i64 = iconst 0
+      #|    v57:i64 = iadd v55, v56
+      #|    v58:i64 = iadd v54, v57
+      #|    v59:i64 = iconst 0
+      #|    v60:f32 = load_ptr.F32 v58, v59
+      #|    jump block1(v7, v8, v60)
+      #|block3(v10:i32, v11:f32, v12:f32):
+      #|    v31:i32 = iconst 0
+      #|    v32:i64 = load_mem_base mem=0 v0
+      #|    v33:i64 = uextend v31
+      #|    v34:i64 = iconst 0
+      #|    v35:i64 = iadd v33, v34
+      #|    v36:i64 = iadd v32, v35
+      #|    v37:i64 = iconst 0
+      #|    store_ptr.F32 v36, v11, v37
+      #|    v38:i32 = iconst 0
+      #|    v39:i64 = load_mem_base mem=0 v0
+      #|    v40:i64 = uextend v38
+      #|    v41:i64 = iconst 0
+      #|    v42:i64 = iadd v40, v41
+      #|    v43:i64 = iadd v39, v42
+      #|    v44:i64 = iconst 0
+      #|    v45:f32 = load_ptr.F32 v43, v44
+      #|    jump block1(v10, v11, v45)
+      #|block4(v13:i32, v14:f32, v15:f32):
+      #|    v16:i32 = iconst 0
+      #|    v17:i64 = load_mem_base mem=0 v0
+      #|    v18:i64 = uextend v16
+      #|    v19:i64 = iconst 0
+      #|    v20:i64 = iadd v18, v19
+      #|    v21:i64 = iadd v17, v20
+      #|    v22:i64 = iconst 0
+      #|    store_ptr.F32 v21, v14, v22
+      #|    v23:i32 = iconst 0
+      #|    v24:i64 = load_mem_base mem=0 v0
+      #|    v25:i64 = uextend v23
+      #|    v26:i64 = iconst 0
+      #|    v27:i64 = iadd v25, v26
+      #|    v28:i64 = iadd v24, v27
+      #|    v29:i64 = iconst 0
+      #|    v30:f32 = load_ptr.F32 v28, v29
+      #|    jump block1(v13, v14, v30)
       #|block5:
-      #|    jump block1(v1, v4, v3)
+      #|    jump block1(v1, v3, v2)
       #|block6:
-      #|    jump block4(v1, v4, v3)
+      #|    jump block4(v1, v3, v2)
       #|block7:
-      #|    jump block3(v1, v4, v3)
+      #|    jump block3(v1, v3, v2)
       #|block8:
-      #|    jump block2(v1, v4, v3)
+      #|    jump block2(v1, v3, v2)
       #|}
       #|
     ),
@@ -385,34 +383,34 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
-      #|    f15 = ldf 0
-      #|    f16 = ldf 10
+      #|    f14 = ldf 0
+      #|    f15 = ldf 10
       #|    br_cmp_imm.eq v1, #0, block6, block9
       #|block1(v2:int, f3:float, f4:float):
       #|    ret f4
       #|block2(v5:int, f6:float, f7:float):
-      #|    v24 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v24, f6
-      #|    f36 = load_ptr.f32 +0 v24
-      #|    jump block1 (v5, f6, f36)
+      #|    v23 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v23, f6
+      #|    f35 = load_ptr.f32 +0 v23
+      #|    jump block1 (v5, f6, f35)
       #|block3(v8:int, f9:float, f10:float):
-      #|    v38 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v38, f9
-      #|    f50 = load_ptr.f32 +0 v38
-      #|    jump block1 (v8, f9, f50)
+      #|    v37 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v37, f9
+      #|    f49 = load_ptr.f32 +0 v37
+      #|    jump block1 (v8, f9, f49)
       #|block4(v11:int, f12:float, f13:float):
-      #|    v52 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 v52, f12
-      #|    f64 = load_ptr.f32 +0 v52
-      #|    jump block1 (v11, f12, f64)
+      #|    v51 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 v51, f12
+      #|    f63 = load_ptr.f32 +0 v51
+      #|    jump block1 (v11, f12, f63)
       #|block5:
-      #|    jump block1 (v1, f16, f15)
+      #|    jump block1 (v1, f15, f14)
       #|block6:
-      #|    jump block4 (v1, f16, f15)
+      #|    jump block4 (v1, f15, f14)
       #|block7:
-      #|    jump block3 (v1, f16, f15)
+      #|    jump block3 (v1, f15, f14)
       #|block8:
-      #|    jump block2 (v1, f16, f15)
+      #|    jump block2 (v1, f15, f14)
       #|block9:
       #|    br_cmp_imm.eq v1, #1, block7, block10
       #|block10:
@@ -429,39 +427,33 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|vcode test(v0:int, v1:int) -> float {
       #|block0:
+      #|    d3 = ldf 0
+      #|    d2 = ldf 10
       #|    br_cmp_imm.eq x1, #0, block6, block9
       #|block1(v2:int, f3:float, f4:float):
-      #|    ret d4
+      #|    ret d3
       #|block2(v5:int, f6:float, f7:float):
-      #|    x5 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x5, d2
-      #|    d4 = load_ptr.f32 +0 x5
+      #|    x4 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 x4, d2
+      #|    d3 = load_ptr.f32 +0 x4
       #|    jump block1
       #|block3(v8:int, f9:float, f10:float):
-      #|    x7 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x7, d2
-      #|    d4 = load_ptr.f32 +0 x7
+      #|    x5 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 x5, d2
+      #|    d3 = load_ptr.f32 +0 x5
       #|    jump block1
       #|block4(v11:int, f12:float, f13:float):
-      #|    x9 = load_mem_base mem=0 x21
-      #|    store_ptr.f32 +0 x9, d2
-      #|    d4 = load_ptr.f32 +0 x9
+      #|    x6 = load_mem_base mem=0 x21
+      #|    store_ptr.f32 +0 x6, d2
+      #|    d3 = load_ptr.f32 +0 x6
       #|    jump block1
       #|block5:
-      #|    d2 = ldf 10
-      #|    d4 = ldf 0
       #|    jump block1
       #|block6:
-      #|    d2 = ldf 10
-      #|    d19 = ldf 0
       #|    jump block4
       #|block7:
-      #|    d2 = ldf 10
-      #|    d7 = ldf 0
       #|    jump block3
       #|block8:
-      #|    d2 = ldf 10
-      #|    d5 = ldf 0
       #|    jump block2
       #|block9:
       #|    br_cmp_imm.eq x1, #1, block7, block10
@@ -477,58 +469,43 @@ test "end-to-end: f32_br_2locals.wast from source" {
     content=(
       #|  0000: f50300aa  mov x21, x0
       #|block0:
-      #|  0004: e1030034  cbz w1, block6
+      #|  0004: 100080d2  movz x16, #0, lsl #0
+      #|  0008: 0302271e  fmov s3, w16
+      #|  000c: 100080d2  movz x16, #0, lsl #0
+      #|  0010: 1024a8f2  movk x16, #16672, lsl #16
+      #|  0014: 0202271e  fmov s2, w16
+      #|  0018: a1010034  cbz w1, block4
       #|block9:
-      #|  0008: 3f040071  cmp w1, #1
-      #|  000c: 60020054  b.eq block7
+      #|  001c: 3f040071  cmp w1, #1
+      #|  0020: e0000054  b.eq block3
       #|block10:
-      #|  0010: 3f080071  cmp w1, #2
-      #|  0014: e0000054  b.eq block8
-      #|block5:
-      #|  0018: 100080d2  movz x16, #0, lsl #0
-      #|  001c: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0020: 0202271e  fmov s2, w16
-      #|  0024: 100080d2  movz x16, #0, lsl #0
-      #|  0028: 0402271e  fmov s4, w16
-      #|  002c: 1e000014  b block1
-      #|block8:
-      #|  0030: 100080d2  movz x16, #0, lsl #0
-      #|  0034: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0038: 0202271e  fmov s2, w16
-      #|  003c: 100080d2  movz x16, #0, lsl #0
-      #|  0040: 0502271e  fmov s5, w16
+      #|  0024: 3f080071  cmp w1, #2
+      #|  0028: 81010054  b.ne block1
       #|block2:
-      #|  0044: a50240f9  ldr x5, [x21, #0]
-      #|  0048: a50040f9  ldr x5, [x5, #0]
-      #|  004c: a20000bd  str s2, [x5, #0]
-      #|  0050: a40040bd  ldr s4, [x5, #0]
-      #|  0054: 14000014  b block1
-      #|block7:
-      #|  0058: 100080d2  movz x16, #0, lsl #0
-      #|  005c: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0060: 0202271e  fmov s2, w16
-      #|  0064: 100080d2  movz x16, #0, lsl #0
-      #|  0068: 0702271e  fmov s7, w16
+      #|  002c: a40640f9  ldr x4, [x21, #8]
+      #|  0030: 820000bd  str s2, [x4, #0]
+      #|  0034: 830040bd  ldr s3, [x4, #0]
+      #|  0038: 08000014  b block1
       #|block3:
-      #|  006c: a70240f9  ldr x7, [x21, #0]
-      #|  0070: e70040f9  ldr x7, [x7, #0]
-      #|  0074: e20000bd  str s2, [x7, #0]
-      #|  0078: e40040bd  ldr s4, [x7, #0]
-      #|  007c: 0a000014  b block1
-      #|block6:
-      #|  0080: 100080d2  movz x16, #0, lsl #0
-      #|  0084: 1024a8f2  movk x16, #16672, lsl #16
-      #|  0088: 0202271e  fmov s2, w16
-      #|  008c: 100080d2  movz x16, #0, lsl #0
-      #|  0090: 1302271e  fmov s19, w16
+      #|  003c: a50640f9  ldr x5, [x21, #8]
+      #|  0040: a20000bd  str s2, [x5, #0]
+      #|  0044: a30040bd  ldr s3, [x5, #0]
+      #|  0048: 04000014  b block1
       #|block4:
-      #|  0094: a90240f9  ldr x9, [x21, #0]
-      #|  0098: 290140f9  ldr x9, [x9, #0]
-      #|  009c: 220100bd  str s2, [x9, #0]
-      #|  00a0: 240140bd  ldr s4, [x9, #0]
+      #|  004c: a60640f9  ldr x6, [x21, #8]
+      #|  0050: c20000bd  str s2, [x6, #0]
+      #|  0054: c30040bd  ldr s3, [x6, #0]
       #|block1:
-      #|  00a4: 801ca44e  orr v0.16b, v4.16b, v4.16b
-      #|  00a8: c0035fd6  ret
+      #|  0058: 601ca34e  orr v0.16b, v3.16b, v3.16b
+      #|  005c: c0035fd6  ret
+      #|block5:
+      #|  0060: feffff17  b block1
+      #|block6:
+      #|  0064: faffff17  b block4
+      #|block7:
+      #|  0068: f5ffff17  b block3
+      #|block8:
+      #|  006c: f0ffff17  b block2
       #|
     ),
   )

@@ -47,14 +47,20 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 }
 
 ///|
-/// Check whether a preg is contained in a register list (bank/index match).
-fn preg_in_list(preg : @abi.PReg, regs : Array[@abi.PReg]) -> Bool {
-  for reg in regs {
-    if preg_same_bank_and_index(preg, reg) {
-      return true
-    }
-  }
-  false
+/// A span with precomputed total-order keys for faster overlap tests.
+priv struct OrderedSpan {
+  start : ProgPoint
+  start_ord : Int
+  end_ord : Int
+}
+
+///|
+/// Bundle-merge working span with cached order keys.
+priv struct MergeSpan {
+  span : ProgPointRange
+  start_ord : Int
+  start_before_ord : Int
+  end_ord : Int
 }
 
 ///|
@@ -64,24 +70,35 @@ struct BacktrackingAllocator {
   ranges : LiveRangeSet
   bundles : BundleSet
 
-  // Physical register occupancy: preg.index -> list of occupied ranges
+  // Physical register occupancy: preg.index -> list of occupied ranges.
   //
+  // Kept as direct-index arrays (instead of maps) to avoid hash lookups in the
+  // hot conflict-scan path.
   // Each entry stores (bundle_id, span) so eviction/removal cannot accidentally
   // remove spans that belong to a different bundle with identical boundaries.
-  int_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
-  float_reg_allocs : Map[Int, Array[(Int, ProgPointRange)]]
+  int_reg_allocs : Array[Array[(Int, OrderedSpan)]]
+  float_reg_allocs : Array[Array[(Int, OrderedSpan)]]
 
-  // Per-bundle flattened/sorted span cache. This mirrors regalloc2's use of
-  // ordered per-bundle ranges for conflict scans.
-  bundle_span_cache : Map[Int, Array[ProgPointRange]]
+  // Per-bundle flattened/sorted span cache (bundle-id indexed).
+  // This mirrors regalloc2's use of ordered per-bundle ranges for conflict
+  // scans while avoiding hash lookups in hot allocation loops.
+  bundle_span_cache : Array[Array[OrderedSpan]?]
 
   // Priority queue of bundles to process
   mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
   mut queue_next_seq : Int
+  queue_in_heap : Array[Bool]
 
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
   spillset_hints : Array[@abi.PReg?]
+  // Track split count per original spillset (regalloc2 MAX_SPLITS_PER_SPILLSET).
+  spillset_split_counts : Array[Int]
+  max_splits_per_spillset : Int
+  // Cache fixed-constraint-derived hints per bundle to avoid rescanning
+  // all bundle uses on every queue pop.
+  bundle_hint_cache : Array[@abi.PReg?]
+  bundle_hint_ready : Array[Bool]
 
   // Configuration
   int_regs : Array[@abi.PReg]
@@ -89,14 +106,27 @@ struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
+  int_caller_saved : Array[@abi.PReg]
+  float_caller_saved : Array[@abi.PReg]
+  split_probe_limit : Int
+  bundle_retry_limit : Int
+  enable_backtracking : Bool
 
   // Block order for comparison (O(1) lookup)
   block_order : FixedArray[Int]
   // Approximate loop-depth per block (pre-computed once).
   loop_depths : Array[Int]
+  // Dense point order base offset per block-order index.
+  block_point_base : Array[Int]
 
   // Reference to function for constraint lookups
   func : VCodeFunction
+  // Per-allocation-query seen markers for conflict dedup (bundle-id indexed).
+  conflict_seen_epoch : Array[Int]
+  mut conflict_epoch : Int
+  bundle_attempts : Array[Int]
+  scratch_conflicts : Array[Int]
+  scratch_best_conflicts : Array[Int]
 }
 
 ///|
@@ -107,6 +137,11 @@ fn BacktrackingAllocator::queue_push(
   prio : Int,
   hint_preg : @abi.PReg?,
 ) -> Unit {
+  if bundle_id >= 0 &&
+    bundle_id < self.queue_in_heap.length() &&
+    self.queue_in_heap[bundle_id] {
+    return
+  }
   let entry : QueueEntry = {
     bundle_id,
     prio,
@@ -115,6 +150,9 @@ fn BacktrackingAllocator::queue_push(
   }
   self.queue_next_seq = self.queue_next_seq + 1
   self.queue.push(entry)
+  if bundle_id >= 0 && bundle_id < self.queue_in_heap.length() {
+    self.queue_in_heap[bundle_id] = true
+  }
   // Sift up.
   let mut i = self.queue.length() - 1
   while i > 0 {
@@ -140,6 +178,9 @@ fn BacktrackingAllocator::queue_pop(
   }
   // Remove root.
   let top = self.queue[0]
+  if top.bundle_id >= 0 && top.bundle_id < self.queue_in_heap.length() {
+    self.queue_in_heap[top.bundle_id] = false
+  }
   let last = self.queue.pop()
   match last {
     None => None
@@ -175,6 +216,35 @@ fn BacktrackingAllocator::queue_pop(
 }
 
 ///|
+fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
+  let mut max_idx = -1
+  for preg in regs {
+    if preg.index > max_idx {
+      max_idx = preg.index
+    }
+  }
+  max_idx
+}
+
+///|
+fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, OrderedSpan)]] {
+  let table : Array[Array[(Int, OrderedSpan)]] = []
+  for _ in 0..<cap {
+    table.push([])
+  }
+  table
+}
+
+///|
+fn make_bool_table(cap : Int) -> Array[Bool] {
+  let table : Array[Bool] = []
+  for _ in 0..<cap {
+    table.push(false)
+  }
+  table
+}
+
+///|
 pub fn BacktrackingAllocator::new(
   func : VCodeFunction,
   ranges : LiveRangeSet,
@@ -186,24 +256,120 @@ pub fn BacktrackingAllocator::new(
   callee_saved_float : Array[@abi.PReg],
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
+  let num_blocks = func.blocks.length()
+  let block_order = ranges.block_order
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[block_order[block_idx]] = block_idx
+  }
+  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
+  let mut point_cursor = 0
+  for ord in 0..<num_blocks {
+    block_point_base[ord] = point_cursor
+    let block_idx = block_idx_by_order[ord]
+    let block_len = func.blocks[block_idx].insts.length()
+    point_cursor = point_cursor + (block_len + 2) * 2
+  }
+  // Keep register probing/regalloc retries aligned with regalloc2 behavior:
+  // no large-function downscaling on the main allocation search.
+  let split_probe_limit = 1 << 30
+  let bundle_retry_limit = 1 << 30
+  let enable_backtracking = true
+  let int_max = {
+    let mut max_idx = max_preg_index(int_regs)
+    let callee_max = max_preg_index(callee_saved_int)
+    if callee_max > max_idx {
+      max_idx = callee_max
+    }
+    max_idx
+  }
+  let float_max = {
+    let mut max_idx = max_preg_index(float_regs)
+    let vector_max = max_preg_index(vector_regs)
+    if vector_max > max_idx {
+      max_idx = vector_max
+    }
+    let callee_max = max_preg_index(callee_saved_float)
+    if callee_max > max_idx {
+      max_idx = callee_max
+    }
+    max_idx
+  }
+  let int_is_callee_saved = make_bool_table(int_max + 1)
+  for preg in callee_saved_int {
+    if preg.index >= 0 && preg.index < int_is_callee_saved.length() {
+      int_is_callee_saved[preg.index] = true
+    }
+  }
+  let float_is_callee_saved = make_bool_table(float_max + 1)
+  for preg in callee_saved_float {
+    if preg.index >= 0 && preg.index < float_is_callee_saved.length() {
+      float_is_callee_saved[preg.index] = true
+    }
+  }
+  let int_caller_saved : Array[@abi.PReg] = []
+  for preg in int_regs {
+    if preg.index >= 0 &&
+      preg.index < int_is_callee_saved.length() &&
+      !int_is_callee_saved[preg.index] {
+      int_caller_saved.push(preg)
+    }
+  }
+  let float_caller_saved : Array[@abi.PReg] = []
+  for preg in float_regs {
+    if preg.index >= 0 &&
+      preg.index < float_is_callee_saved.length() &&
+      !float_is_callee_saved[preg.index] {
+      float_caller_saved.push(preg)
+    }
+  }
   {
     ranges,
     bundles,
-    int_reg_allocs: {},
-    float_reg_allocs: {},
-    bundle_span_cache: {},
+    int_reg_allocs: make_reg_alloc_table(int_max + 1),
+    float_reg_allocs: make_reg_alloc_table(float_max + 1),
+    bundle_span_cache: Array::make(bundles.length(), None),
     queue: [],
     queue_next_seq: 0,
+    queue_in_heap: Array::make(bundles.length(), false),
     spillset_hints: Array::make(bundles.length(), None),
+    spillset_split_counts: Array::make(bundles.length(), 0),
+    max_splits_per_spillset: 2,
+    bundle_hint_cache: Array::make(bundles.length(), None),
+    bundle_hint_ready: Array::make(bundles.length(), false),
     int_regs,
     float_regs,
     vector_regs,
     callee_saved_int,
     callee_saved_float,
-    block_order: ranges.block_order,
+    int_caller_saved,
+    float_caller_saved,
+    split_probe_limit,
+    bundle_retry_limit,
+    enable_backtracking,
+    block_order,
     loop_depths,
+    block_point_base,
     func,
+    conflict_seen_epoch: Array::make(bundles.length(), 0),
+    conflict_epoch: 0,
+    bundle_attempts: Array::make(bundles.length(), 0),
+    scratch_conflicts: [],
+    scratch_best_conflicts: [],
   }
+}
+
+///|
+fn BacktrackingAllocator::point_order(
+  self : BacktrackingAllocator,
+  point : ProgPoint,
+) -> Int {
+  let block_ord = self.block_order[point.block]
+  let pos_ord = match point.pos {
+    Before => 0
+    After => 1
+  }
+  self.block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
 }
 
 ///|
@@ -213,7 +379,8 @@ fn BacktrackingAllocator::bundle_queue_prio(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> Int {
-  bundle.total_length(self.ranges)
+  ignore(self)
+  bundle.prio
 }
 
 ///|
@@ -221,10 +388,10 @@ fn BacktrackingAllocator::bundle_queue_prio(
 fn BacktrackingAllocator::recompute_bundle_spill_weight(
   self : BacktrackingAllocator,
   bundle : Bundle,
-) -> Double {
+) -> Int {
   let total = compute_spill_weight(bundle, self.ranges, self.loop_depths)
-  let prio = self.bundle_queue_prio(bundle).to_double()
-  if prio <= 0.0 {
+  let prio = self.bundle_queue_prio(bundle)
+  if prio <= 0 {
     total
   } else {
     total / prio
@@ -245,42 +412,69 @@ fn BacktrackingAllocator::constraint_hint_preg(
   if avail_regs.is_empty() {
     return None
   }
-  let avail_idx : Set[Int] = Set::new()
-  for r in avail_regs {
-    avail_idx.add(r.index) |> ignore
+  let mut max_idx = -1
+  for preg in avail_regs {
+    if preg.index > max_idx {
+      max_idx = preg.index
+    }
+  }
+  if max_idx < 0 {
+    return None
+  }
+  let avail_idx = Array::make(max_idx + 1, false)
+  let counts = Array::make(max_idx + 1, 0)
+  for preg in avail_regs {
+    avail_idx[preg.index] = true
   }
 
   // Count how often each fixed preg appears in uses.
-  let counts : Map[Int, Int] = {}
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for use_pos in range.uses {
-      if use_pos.constraint is FixedReg(preg) &&
-        preg.class == bundle.reg_class &&
-        avail_idx.contains(preg.index) {
-        let cur = match counts.get(preg.index) {
-          Some(v) => v
-          None => 0
+      if use_pos.constraint is FixedReg(preg) && preg.class == bundle.reg_class {
+        if preg.index >= 0 &&
+          preg.index < avail_idx.length() &&
+          avail_idx[preg.index] {
+          counts[preg.index] = counts[preg.index] + 1
         }
-        counts.set(preg.index, cur + 1)
       }
     }
   }
-  let mut best : (@abi.PReg, Int)? = None
-  for idx, cnt in counts {
-    let preg : @abi.PReg = { index: idx, class: bundle.reg_class }
-    match best {
-      None => best = Some((preg, cnt))
-      Some((bp, bc)) =>
-        if cnt > bc || (cnt == bc && idx < bp.index) {
-          best = Some((preg, cnt))
-        }
+
+  let mut best_idx = -1
+  let mut best_cnt = 0
+  for preg in avail_regs {
+    let idx = preg.index
+    let cnt = counts[idx]
+    if cnt > best_cnt ||
+      (cnt == best_cnt && cnt > 0 && (best_idx < 0 || idx < best_idx)) {
+      best_idx = idx
+      best_cnt = cnt
     }
   }
-  match best {
-    Some((preg, _)) => Some(preg)
-    None => None
+  if best_idx >= 0 && best_cnt > 0 {
+    Some({ index: best_idx, class: bundle.reg_class })
+  } else {
+    None
   }
+}
+
+///|
+fn BacktrackingAllocator::constraint_hint_preg_cached(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+) -> @abi.PReg? {
+  if bundle.id >= 0 &&
+    bundle.id < self.bundle_hint_ready.length() &&
+    self.bundle_hint_ready[bundle.id] {
+    return self.bundle_hint_cache[bundle.id]
+  }
+  let hint = self.constraint_hint_preg(bundle)
+  if bundle.id >= 0 && bundle.id < self.bundle_hint_ready.length() {
+    self.bundle_hint_ready[bundle.id] = true
+    self.bundle_hint_cache[bundle.id] = hint
+  }
+  hint
 }
 
 ///|
@@ -291,12 +485,14 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
   // Recompute spill weights, enqueue by bundle priority.
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
+    bundle.prio = bundle.total_length(self.ranges)
     bundle.spill_weight = self.recompute_bundle_spill_weight(bundle)
-    self.queue_push(
-      i,
-      self.bundle_queue_prio(bundle),
-      self.constraint_hint_preg(bundle),
-    )
+    let hint_preg = if self.enable_backtracking {
+      self.constraint_hint_preg_cached(bundle)
+    } else {
+      None
+    }
+    self.queue_push(i, self.bundle_queue_prio(bundle), hint_preg)
   }
 }
 
@@ -305,7 +501,7 @@ fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
 fn BacktrackingAllocator::get_reg_allocs(
   self : BacktrackingAllocator,
   class : @abi.RegClass,
-) -> Map[Int, Array[(Int, ProgPointRange)]] {
+) -> Array[Array[(Int, OrderedSpan)]] {
   match class {
     @abi.Int => self.int_reg_allocs
     @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
@@ -317,46 +513,104 @@ fn BacktrackingAllocator::get_reg_allocs(
 fn BacktrackingAllocator::bundle_sorted_spans(
   self : BacktrackingAllocator,
   bundle : Bundle,
-) -> Array[ProgPointRange] {
-  if self.bundle_span_cache.get(bundle.id) is Some(spans) {
+) -> Array[OrderedSpan] {
+  if bundle.id >= 0 &&
+    bundle.id < self.bundle_span_cache.length() &&
+    self.bundle_span_cache[bundle.id] is Some(spans) {
     return spans
   }
-  let spans : Array[ProgPointRange] = []
-  for range_id in bundle.range_ids {
-    let range = self.ranges.get(range_id)
-    for span in range.ranges {
-      spans.push(span)
+  let spans : Array[OrderedSpan] = []
+  match bundle.merged_ranges {
+    Some(raw_spans) =>
+      for raw_span in raw_spans {
+        spans.push({
+          start: raw_span.start,
+          start_ord: self.point_order(raw_span.start),
+          end_ord: self.point_order(raw_span.end),
+        })
+      }
+    None => {
+      for range_id in bundle.range_ids {
+        let range = self.ranges.get(range_id)
+        for raw_span in range.ranges {
+          spans.push({
+            start: raw_span.start,
+            start_ord: self.point_order(raw_span.start),
+            end_ord: self.point_order(raw_span.end),
+          })
+        }
+      }
+      spans.sort_by(fn(a, b) {
+        if a.start_ord < b.start_ord {
+          -1
+        } else if a.start_ord > b.start_ord {
+          1
+        } else {
+          0
+        }
+      })
     }
   }
-  spans.sort_by(fn(a, b) {
-    a.start.compare_with_order(b.start, self.block_order)
-  })
-  self.bundle_span_cache.set(bundle.id, spans)
+  if bundle.id >= 0 && bundle.id < self.bundle_span_cache.length() {
+    self.bundle_span_cache[bundle.id] = Some(spans)
+  }
   spans
 }
 
 ///|
-/// Insert a (bundle_id, span) entry while keeping the occupancy list sorted by
-/// `span.start`, matching regalloc2's ordered traversal strategy.
-fn BacktrackingAllocator::insert_occupied_span_sorted(
+/// Find first occupied index whose span.end is strictly after `point`.
+/// Occupied spans for one preg are non-overlapping and sorted by start, so end
+/// order is also monotonic.
+fn BacktrackingAllocator::occupied_lower_bound_by_end(
   self : BacktrackingAllocator,
-  occupied : Array[(Int, ProgPointRange)],
-  bundle_id : Int,
-  span : ProgPointRange,
-) -> Unit {
-  occupied.push((bundle_id, span))
-  let mut i = occupied.length() - 1
-  while i > 0 {
-    let prev = occupied[i - 1].1.start
-    let cur = occupied[i].1.start
-    if prev.compare_with_order(cur, self.block_order) <= 0 {
-      break
+  occupied : Array[(Int, OrderedSpan)],
+  point_ord : Int,
+) -> Int {
+  ignore(self)
+  let mut lo = 0
+  let mut hi = occupied.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    let end_ord = occupied[mid].1.end_ord
+    if end_ord <= point_ord {
+      lo = mid + 1
+    } else {
+      hi = mid
     }
-    let tmp = occupied[i - 1]
-    occupied[i - 1] = occupied[i]
-    occupied[i] = tmp
-    i = i - 1
   }
+  lo
+}
+
+///|
+fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
+  self : BacktrackingAllocator,
+  spans : Array[OrderedSpan],
+  preg : @abi.PReg,
+) -> Bool {
+  let allocs = self.get_reg_allocs(preg.class)
+  if preg.index < 0 || preg.index >= allocs.length() {
+    return false
+  }
+  let occupied = allocs[preg.index]
+  if occupied.is_empty() || spans.is_empty() {
+    return false
+  }
+  let mut i = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j].1
+    if span.end_ord <= occ.start_ord {
+      i = i + 1
+      continue
+    }
+    if occ.end_ord <= span.start_ord {
+      j = j + 1
+      continue
+    }
+    return true
+  }
+  false
 }
 
 ///|
@@ -366,28 +620,8 @@ fn BacktrackingAllocator::has_conflict_on_preg(
   bundle : Bundle,
   preg : @abi.PReg,
 ) -> Bool {
-  let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return false }
-  if occupied.is_empty() {
-    return false
-  }
   let spans = self.bundle_sorted_spans(bundle)
-  let mut i = 0
-  let mut j = 0
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
-      i = i + 1
-      continue
-    }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
-      j = j + 1
-      continue
-    }
-    return true
-  }
-  false
+  self.has_conflict_on_preg_with_spans(spans, preg)
 }
 
 ///|
@@ -414,25 +648,6 @@ fn BacktrackingAllocator::get_available_regs(
 }
 
 ///|
-/// In Cranelift/regalloc2 terms, "non-preferred" generally corresponds to
-/// callee-saved registers. For bundles that do not cross calls, we should
-/// allocate preferred regs first and only then fall back to non-preferred.
-fn BacktrackingAllocator::is_nonpreferred_for_bundle(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-) -> Bool {
-  if bundle.crosses_call(self.ranges) {
-    return false
-  }
-  match bundle.reg_class {
-    @abi.Int => preg_in_list(preg, self.callee_saved_int)
-    @abi.Float32 | @abi.Float64 => preg_in_list(preg, self.callee_saved_float)
-    @abi.Vector => false
-  }
-}
-
-///|
 /// Check if a register is free for all ranges in a bundle
 fn BacktrackingAllocator::is_reg_free(
   self : BacktrackingAllocator,
@@ -450,16 +665,55 @@ fn BacktrackingAllocator::record_allocation(
   preg : @abi.PReg,
 ) -> Unit {
   let allocs = self.get_reg_allocs(preg.class)
-  if allocs.get(preg.index) is None {
-    allocs.set(preg.index, [])
+  while allocs.length() <= preg.index {
+    allocs.push([])
   }
-  let occupied = allocs.get(preg.index).unwrap()
+  let occupied = allocs[preg.index]
+  let spans = self.bundle_sorted_spans(bundle)
+  if spans.length() == 1 {
+    let span = spans[0]
+    let mut lo = 0
+    let mut hi = occupied.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if occupied[mid].1.start_ord <= span.start_ord {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    occupied.insert(lo, (bundle.id, span))
+  } else if occupied.is_empty() {
+    let new_occupied : Array[(Int, OrderedSpan)] = []
+    for span in spans {
+      new_occupied.push((bundle.id, span))
+    }
+    allocs[preg.index] = new_occupied
+  } else {
+    let new_occupied : Array[(Int, OrderedSpan)] = []
+    let mut i = 0
+    let mut j = 0
+    while i < occupied.length() && j < spans.length() {
+      if occupied[i].1.start_ord <= spans[j].start_ord {
+        new_occupied.push(occupied[i])
+        i = i + 1
+      } else {
+        new_occupied.push((bundle.id, spans[j]))
+        j = j + 1
+      }
+    }
+    while i < occupied.length() {
+      new_occupied.push(occupied[i])
+      i = i + 1
+    }
+    while j < spans.length() {
+      new_occupied.push((bundle.id, spans[j]))
+      j = j + 1
+    }
+    allocs[preg.index] = new_occupied
+  }
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
-    for span in range.ranges {
-      self.insert_occupied_span_sorted(occupied, bundle.id, span)
-    }
-    // Also update the LiveRange's allocation
     range.allocation = Reg(preg)
   }
   bundle.allocation = Reg(preg)
@@ -480,15 +734,16 @@ fn BacktrackingAllocator::remove_allocation(
 ) -> Unit {
   if bundle.allocation is Reg(preg) {
     let allocs = self.get_reg_allocs(preg.class)
-    if allocs.get(preg.index) is Some(occupied) {
+    if preg.index >= 0 && preg.index < allocs.length() {
+      let occupied = allocs[preg.index]
       // Remove ranges belonging to this bundle.
-      let new_occupied : Array[(Int, ProgPointRange)] = []
+      let new_occupied : Array[(Int, OrderedSpan)] = []
       for occ in occupied {
         if occ.0 != bundle.id {
           new_occupied.push(occ)
         }
       }
-      allocs.set(preg.index, new_occupied)
+      allocs[preg.index] = new_occupied
     }
 
     // Clear allocation
@@ -509,12 +764,17 @@ fn BacktrackingAllocator::try_allocate(
   hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
   let avail_regs = self.get_available_regs(bundle)
+  let n = avail_regs.length()
+  if n == 0 {
+    return None
+  }
+  let spans = self.bundle_sorted_spans(bundle)
 
   // Probe hint first if present and available.
   if hint_preg is Some(hint) {
     for preg in avail_regs {
       if preg.class == hint.class && preg.index == hint.index {
-        if self.is_reg_free(preg, bundle) {
+        if !self.has_conflict_on_preg_with_spans(spans, preg) {
           return Some(preg)
         }
         break
@@ -523,50 +783,63 @@ fn BacktrackingAllocator::try_allocate(
   }
 
   // Try each available register (Cranelift-like offset scan to distribute contention).
-  let n = avail_regs.length()
-  if n == 0 {
-    return None
-  }
-  let mut start_inst = 0
-  let mut start_point : ProgPoint? = None
-  for range_id in bundle.range_ids {
-    let range = self.ranges.get(range_id)
-    for span in range.ranges {
-      let p = span.start
-      match start_point {
-        None => start_point = Some(p)
-        Some(existing) =>
-          if p.compare_with_order(existing, self.block_order) < 0 {
-            start_point = Some(p)
-          }
-      }
-    }
-  }
-  if start_point is Some(p) {
-    start_inst = p.inst
-  }
-  // `ProgPoint.inst` may be -1 (block params). Ensure non-negative offset.
-  let raw = bundle.id + start_inst
-  let offset = (raw % n + n) % n
-  let do_preferred_pass = !bundle.crosses_call(self.ranges) &&
+  // Use cached sorted bundle spans to derive deterministic probe offset.
+  // This avoids repeated per-attempt scans over bundle ranges.
+  let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
+  let do_preferred_pass = self.enable_backtracking &&
+    !bundle.crosses_call(self.ranges) &&
     (
       bundle.reg_class is @abi.Int ||
       bundle.reg_class is @abi.Float32 ||
       bundle.reg_class is @abi.Float64
     )
+  let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
+  let scan_limit = if self.split_probe_limit < n {
+    self.split_probe_limit
+  } else {
+    n
+  }
+  let raw_phase_offset = bundle.id + start_inst
   for phase in 0..<phase_count {
-    let want_nonpreferred = phase == 1
-    for i in 0..<n {
-      let preg = avail_regs[(offset + i) % n]
+    let phase_regs = if do_preferred_pass {
+      if phase == 0 {
+        match reg_class {
+          @abi.Int => self.int_caller_saved
+          @abi.Float32 | @abi.Float64 => self.float_caller_saved
+          @abi.Vector => avail_regs
+        }
+      } else {
+        match reg_class {
+          @abi.Int => self.callee_saved_int
+          @abi.Float32 | @abi.Float64 => self.callee_saved_float
+          @abi.Vector => []
+        }
+      }
+    } else {
+      avail_regs
+    }
+    let phase_n = phase_regs.length()
+    if phase_n == 0 {
+      continue
+    }
+    let phase_scan_limit = if scan_limit < phase_n {
+      scan_limit
+    } else {
+      phase_n
+    }
+    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
+    let mut scanned = 0
+    for i in 0..<phase_n {
+      if scanned >= phase_scan_limit {
+        break
+      }
+      let preg = phase_regs[(phase_offset + i) % phase_n]
       if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
         continue
       }
-      if do_preferred_pass &&
-        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
-        continue
-      }
-      if self.is_reg_free(preg, bundle) {
+      scanned = scanned + 1
+      if !self.has_conflict_on_preg_with_spans(spans, preg) {
         return Some(preg)
       }
     }
@@ -575,159 +848,186 @@ fn BacktrackingAllocator::try_allocate(
 }
 
 ///|
-/// Collect conflicting bundles for `bundle` on `preg` using ordered
-/// span traversal (regalloc2-style).
-fn BacktrackingAllocator::find_conflicts(
+fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   self : BacktrackingAllocator,
   bundle : Bundle,
   preg : @abi.PReg,
-) -> Array[Int] {
-  let conflicts : Array[Int] = []
-  let seen : Set[Int] = Set::new()
+  spans : Array[OrderedSpan],
+  max_allowable_cost : Int?,
+  conflicts : Array[Int],
+) -> (Int, ProgPoint?, Bool) {
+  conflicts.clear()
+  self.conflict_epoch = self.conflict_epoch + 1
+  let seen_epoch = self.conflict_epoch
+  let mut max_conflict_weight = 0
+  let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return conflicts }
-  if occupied.is_empty() {
-    return conflicts
+  if preg.index < 0 || preg.index >= allocs.length() {
+    return (max_conflict_weight, first_conflict_point, false)
   }
-  let spans = self.bundle_sorted_spans(bundle)
+  let occupied = allocs[preg.index]
+  if occupied.is_empty() || spans.is_empty() {
+    return (max_conflict_weight, first_conflict_point, false)
+  }
   let mut i = 0
-  let mut j = 0
+  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
   while i < spans.length() && j < occupied.length() {
     let span = spans[i]
     let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
+    if span.end_ord <= occ.start_ord {
       i = i + 1
       continue
     }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
+    if occ.end_ord <= span.start_ord {
       j = j + 1
       continue
+    }
+    if first_conflict_point is None {
+      first_conflict_point = Some(
+        if span.start_ord >= occ.start_ord {
+          span.start
+        } else {
+          occ.start
+        },
+      )
     }
     let other_id = occupied[j].0
-    if !seen.contains(other_id) {
-      seen.add(other_id) |> ignore
-      conflicts.push(other_id)
-    }
-    // Both lists are sorted and preg allocations are non-overlapping; advance
-    // whichever interval ends first.
-    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
-      i = i + 1
-    } else {
-      j = j + 1
-    }
-  }
-  conflicts
-}
-
-///|
-/// Collect conflicting bundles for `bundle` on `preg` using ordered span
-/// traversal, but stop early when we already know this candidate cannot win.
-///
-/// This matches regalloc2's `ion/process.rs` behavior:
-/// - Reject immediately on pinned / non-evictable conflicts.
-/// - Track the maximum conflict spill weight as we discover conflicts.
-/// - If `max_allowable_cost` is provided and the max conflict weight grows
-///   beyond it, stop early (high-cost cutoff).
-fn BacktrackingAllocator::find_conflicts_with_cutoff(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-  max_allowable_cost : Double?,
-) -> (Array[Int], Double, Bool) {
-  let conflicts : Array[Int] = []
-  let seen : Set[Int] = Set::new()
-  let mut max_conflict_weight = 0.0
-  let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else {
-    return (conflicts, max_conflict_weight, false)
-  }
-  if occupied.is_empty() {
-    return (conflicts, max_conflict_weight, false)
-  }
-  let spans = self.bundle_sorted_spans(bundle)
-  let mut i = 0
-  let mut j = 0
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
-      i = i + 1
-      continue
-    }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
-      j = j + 1
-      continue
-    }
-    let other_id = occupied[j].0
-    if !seen.contains(other_id) {
-      seen.add(other_id) |> ignore
+    if self.conflict_seen_epoch[other_id] != seen_epoch {
+      self.conflict_seen_epoch[other_id] = seen_epoch
       let other = self.bundles.get(other_id)
-      // Non-evictable conflicts: reject this candidate immediately.
       if other.is_pinned || other.spill_weight >= bundle.spill_weight {
-        return ([], 0.0, true)
+        conflicts.clear()
+        return (0, first_conflict_point, true)
       }
       conflicts.push(other_id)
       if other.spill_weight > max_conflict_weight {
         max_conflict_weight = other.spill_weight
         if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
-          return ([], 0.0, true)
+          conflicts.clear()
+          return (0, first_conflict_point, true)
         }
       }
     }
-    // Both lists are sorted and preg allocations are non-overlapping; advance
-    // whichever interval ends first.
-    if span.end.compare_with_order(occ.end, self.block_order) <= 0 {
+    if span.end_ord <= occ.end_ord {
       i = i + 1
     } else {
       j = j + 1
     }
   }
-  (conflicts, max_conflict_weight, false)
+  (max_conflict_weight, first_conflict_point, false)
 }
 
 ///|
-/// Try to evict lower-weight bundles to make room
-/// Returns the register if eviction was successful
+/// Try to find a register for a bundle in one scan:
+/// - If a register is conflict-free, allocate directly.
+/// - Otherwise, keep both best legal eviction candidate and split candidate.
+/// Returns:
+/// - allocated preg on success;
+/// - split point + reg hint for caller-side split fallback when no eviction wins.
 fn BacktrackingAllocator::try_evict(
   self : BacktrackingAllocator,
   bundle : Bundle,
   hint_preg : @abi.PReg?,
-) -> @abi.PReg? {
+) -> (@abi.PReg?, (ProgPoint, @abi.PReg)?) {
   let avail_regs = self.get_available_regs(bundle)
   let n = avail_regs.length()
   if n == 0 {
-    return None
+    return (None, None)
   }
-  let offset = bundle.id % n
-  let do_preferred_pass = !bundle.crosses_call(self.ranges) &&
+  let spans = self.bundle_sorted_spans(bundle)
+  let do_preferred_pass = self.enable_backtracking &&
+    !bundle.crosses_call(self.ranges) &&
     (
       bundle.reg_class is @abi.Int ||
       bundle.reg_class is @abi.Float32 ||
       bundle.reg_class is @abi.Float64
     )
+  let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
+  let scan_limit = if self.split_probe_limit < n {
+    self.split_probe_limit
+  } else {
+    n
+  }
+  let raw_phase_offset = bundle.id
   let mut best_preg : @abi.PReg? = None
-  let mut best_conflict_cost : Double? = None
-  let best_conflicts : Array[Int] = []
+  let mut best_conflict_cost : Int? = None
+  let best_conflicts = self.scratch_best_conflicts
+  let scratch_conflicts = self.scratch_conflicts
+  best_conflicts.clear()
+  scratch_conflicts.clear()
+  let mut best_split_cost : Int? = None
+  let mut best_split : (ProgPoint, @abi.PReg)? = None
   for phase in 0..<phase_count {
-    let want_nonpreferred = phase == 1
-    for i in 0..<n {
-      let preg = avail_regs[(offset + i) % n]
-      if do_preferred_pass &&
-        self.is_nonpreferred_for_bundle(bundle, preg) != want_nonpreferred {
-        continue
+    let phase_regs = if do_preferred_pass {
+      if phase == 0 {
+        match reg_class {
+          @abi.Int => self.int_caller_saved
+          @abi.Float32 | @abi.Float64 => self.float_caller_saved
+          @abi.Vector => avail_regs
+        }
+      } else {
+        match reg_class {
+          @abi.Int => self.callee_saved_int
+          @abi.Float32 | @abi.Float64 => self.callee_saved_float
+          @abi.Vector => []
+        }
       }
-      // regalloc2-style high-cost cutoff: when we already have a best candidate,
-      // stop scanning early once this candidate's max-conflict cost exceeds it.
-      let cutoff = best_conflict_cost
-      let (conflicts, max_conflict_weight, rejected) = self.find_conflicts_with_cutoff(
-        bundle, preg, cutoff,
+    } else {
+      avail_regs
+    }
+    let phase_n = phase_regs.length()
+    if phase_n == 0 {
+      continue
+    }
+    let phase_scan_limit = if scan_limit < phase_n {
+      scan_limit
+    } else {
+      phase_n
+    }
+    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
+    let mut scanned = 0
+    for i in 0..<phase_n {
+      if scanned >= phase_scan_limit {
+        break
+      }
+      let preg = phase_regs[(phase_offset + i) % phase_n]
+      scanned = scanned + 1
+      // regalloc2-style high-cost cutoff:
+      // when we already have a best candidate (evict/split), stop considering
+      // higher-cost registers early.
+      let cutoff = match (best_conflict_cost, best_split_cost) {
+        (Some(a), Some(b)) => Some(if a > b { a } else { b })
+        (Some(a), None) => Some(a)
+        (None, Some(b)) => Some(b)
+        (None, None) => None
+      }
+      let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
+        bundle, preg, spans, cutoff, scratch_conflicts,
       )
       if rejected {
         continue
       }
-      if conflicts.is_empty() {
-        continue // Should have been caught by try_allocate
+      if scratch_conflicts.is_empty() {
+        return (Some(preg), None)
+      }
+      if first_conflict_point is Some(point) {
+        match (best_split_cost, best_split) {
+          (None, None) => {
+            best_split_cost = Some(max_conflict_weight)
+            best_split = Some((point, preg))
+          }
+          (Some(existing_cost), Some((existing_point, _existing_preg))) =>
+            if max_conflict_weight < existing_cost {
+              best_split_cost = Some(max_conflict_weight)
+              best_split = Some((point, preg))
+            } else if max_conflict_weight == existing_cost &&
+              point.compare_with_order(existing_point, self.block_order) > 0 {
+              best_split_cost = Some(max_conflict_weight)
+              best_split = Some((point, preg))
+            }
+          _ => ()
+        }
       }
 
       // Keep only legal eviction candidates.
@@ -754,7 +1054,7 @@ fn BacktrackingAllocator::try_evict(
         best_preg = Some(preg)
         best_conflict_cost = Some(max_conflict_weight)
         best_conflicts.clear()
-        for conflict_id in conflicts {
+        for conflict_id in scratch_conflicts {
           best_conflicts.push(conflict_id)
         }
       }
@@ -768,132 +1068,12 @@ fn BacktrackingAllocator::try_evict(
         self.remove_allocation(conflict)
         self.queue_push(conflict_id, self.bundle_queue_prio(conflict), None)
       }
-      return Some(preg)
+      return (Some(preg), None)
     }
   }
-  None
-}
-
-///|
-/// Find the first conflict point for a bundle on a specific physical register.
-fn BacktrackingAllocator::find_first_conflict_point_for_preg(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-) -> ProgPoint? {
-  let allocs = self.get_reg_allocs(preg.class)
-  guard allocs.get(preg.index) is Some(occupied) else { return None }
-  if occupied.is_empty() {
-    return None
-  }
-  let spans = self.bundle_sorted_spans(bundle)
-  let mut i = 0
-  let mut j = 0
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end.compare_with_order(occ.start, self.block_order) <= 0 {
-      i = i + 1
-      continue
-    }
-    if occ.end.compare_with_order(span.start, self.block_order) <= 0 {
-      j = j + 1
-      continue
-    }
-    if span.start.compare_with_order(occ.start, self.block_order) >= 0 {
-      return Some(span.start)
-    }
-    return Some(occ.start)
-  }
-  None
-}
-
-///|
-/// Choose a split point and a reg hint (Cranelift-like):
-/// - Try all available regs (hint-first if provided).
-/// - Prefer lower maximum-conflict weight.
-/// - Tie-break by later first-conflict point (larger conflict-free prefix).
-fn BacktrackingAllocator::choose_split_option(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  hint_preg : @abi.PReg?,
-) -> (ProgPoint, @abi.PReg)? {
-  let avail_regs = self.get_available_regs(bundle)
-  if avail_regs.is_empty() {
-    return None
-  }
-  let mut best : (ProgPoint, @abi.PReg)? = None
-  let mut best_cost : Double? = None
-  fn consider(
-    self : BacktrackingAllocator,
-    bundle : Bundle,
-    preg : @abi.PReg,
-    best : (ProgPoint, @abi.PReg)?,
-    best_cost : Double?,
-  ) -> ((ProgPoint, @abi.PReg)?, Double?) {
-    let conflicts = self.find_conflicts(bundle, preg)
-    if conflicts.is_empty() {
-      return (best, best_cost)
-    }
-    let point = self.find_first_conflict_point_for_preg(bundle, preg)
-    if point is None {
-      return (best, best_cost)
-    }
-    let split_point = point.unwrap()
-    let mut cost = 0.0
-    for conflict_id in conflicts {
-      let b = self.bundles.get(conflict_id)
-      // Treat pinned bundles as extremely expensive to conflict with.
-      if b.is_pinned {
-        cost = 1.0e100
-        break
-      }
-      if b.spill_weight > cost {
-        cost = b.spill_weight
-      }
-    }
-    match (best, best_cost) {
-      (None, None) => (Some((split_point, preg)), Some(cost))
-      (Some((best_point, best_preg)), Some(best_cost_v)) =>
-        if cost < best_cost_v {
-          (Some((split_point, preg)), Some(cost))
-        } else if cost == best_cost_v &&
-          split_point.compare_with_order(best_point, self.block_order) > 0 {
-          (Some((split_point, preg)), Some(cost))
-        } else {
-          (Some((best_point, best_preg)), Some(best_cost_v))
-        }
-      _ => (best, best_cost)
-    }
-  }
-
-  // Hint-first.
-  if hint_preg is Some(hint) {
-    for preg in avail_regs {
-      if preg.class == hint.class && preg.index == hint.index {
-        let (b, c) = consider(self, bundle, preg, best, best_cost)
-        best = b
-        best_cost = c
-        break
-      }
-    }
-  }
-
-  // Offset scan through the remaining regs.
-  let n = avail_regs.length()
-  let offset = bundle.id % n
-  for i in 0..<n {
-    let preg = avail_regs[(offset + i) % n]
-    if hint_preg is Some(hint) &&
-      preg.class == hint.class &&
-      preg.index == hint.index {
-      continue
-    }
-    let (b, c) = consider(self, bundle, preg, best, best_cost)
-    best = b
-    best_cost = c
-  }
-  best
+  best_conflicts.clear()
+  scratch_conflicts.clear()
+  (None, best_split)
 }
 
 ///|
@@ -901,12 +1081,24 @@ fn BacktrackingAllocator::choose_split_option(
 fn BacktrackingAllocator::split_bundle(
   self : BacktrackingAllocator,
   bundle : Bundle,
-  hint_preg : @abi.PReg?,
+  split_opt : (ProgPoint, @abi.PReg)?,
 ) -> Unit {
-  // Try to find a split point (and a reg hint) to split at.
-  let split_opt = self.choose_split_option(bundle, hint_preg)
+  // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
+  // Once a spillset exceeds this cap, fall back to direct spilling.
+  let spillset_id = bundle.spillset_id
+  if spillset_id >= 0 &&
+    spillset_id < self.spillset_split_counts.length() &&
+    self.spillset_split_counts[spillset_id] >= self.max_splits_per_spillset {
+    self.force_spill_bundle(bundle)
+    return
+  }
+
   match split_opt {
     Some((split_point, split_hint_reg)) => {
+      if spillset_id >= 0 && spillset_id < self.spillset_split_counts.length() {
+        self.spillset_split_counts[spillset_id] = self.spillset_split_counts[spillset_id] +
+          1
+      }
       // Split the bundle at this point
       // Create two new bundles: before and after the split point
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
@@ -958,10 +1150,17 @@ fn BacktrackingAllocator::split_bundle(
         before_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = before_bundle.id
       }
+      before_bundle.prio = before_bundle.total_length(self.ranges)
       before_bundle.spill_weight = self.recompute_bundle_spill_weight(
         before_bundle,
       )
       self.bundles.add_bundle(before_bundle)
+      self.conflict_seen_epoch.push(0)
+      self.queue_in_heap.push(false)
+      self.bundle_attempts.push(0)
+      self.bundle_span_cache.push(None)
+      self.bundle_hint_cache.push(None)
+      self.bundle_hint_ready.push(false)
       spill_bundle.add_bundle(before_bundle.id)
       self.queue_push(
         before_bundle.id,
@@ -980,10 +1179,17 @@ fn BacktrackingAllocator::split_bundle(
         after_bundle.add_range(range_id)
         self.ranges.get(range_id).bundle_id = after_bundle.id
       }
+      after_bundle.prio = after_bundle.total_length(self.ranges)
       after_bundle.spill_weight = self.recompute_bundle_spill_weight(
         after_bundle,
       )
       self.bundles.add_bundle(after_bundle)
+      self.conflict_seen_epoch.push(0)
+      self.queue_in_heap.push(false)
+      self.bundle_attempts.push(0)
+      self.bundle_span_cache.push(None)
+      self.bundle_hint_cache.push(None)
+      self.bundle_hint_ready.push(false)
       spill_bundle.add_bundle(after_bundle.id)
       self.queue_push(
         after_bundle.id,
@@ -1012,8 +1218,6 @@ fn BacktrackingAllocator::split_bundle(
 pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
   self.init_queue()
 
-  // Track processed bundles to avoid infinite loops
-  let processed : Set[Int] = Set::new()
   let max_iterations = self.bundles.length() * 10 // Safety limit
   let mut iterations = 0
   while self.queue.length() > 0 && iterations < max_iterations {
@@ -1038,44 +1242,59 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
     let hint_preg = match hint_preg {
       Some(p) => Some(p)
-      None => self.constraint_hint_preg(bundle)
+      None =>
+        if self.enable_backtracking {
+          self.constraint_hint_preg_cached(bundle)
+        } else {
+          None
+        }
     }
 
     // Skip if already allocated
     if bundle.allocation is Reg(_) || bundle.allocation is Spill(_) {
       continue
     }
+    if entry.bundle_id >= 0 && entry.bundle_id < self.bundle_attempts.length() {
+      self.bundle_attempts[entry.bundle_id] = self.bundle_attempts[entry.bundle_id] +
+        1
+      if self.bundle_attempts[entry.bundle_id] > self.bundle_retry_limit &&
+        !bundle.is_pinned &&
+        !bundle.has_fixed_constraint(self.ranges) {
+        self.force_spill_bundle(bundle)
+        continue
+      }
+    }
 
     // Vector values live across calls must spill.
     if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
       self.force_spill_bundle(bundle)
-      processed.add(entry.bundle_id)
       continue
     }
 
-    // Try to allocate a register
-    if self.try_allocate(bundle, hint_preg) is Some(preg) {
-      self.record_allocation(bundle, preg)
-      processed.add(entry.bundle_id)
+    if self.enable_backtracking {
+      // Cranelift/regalloc2-like single register scan: free-reg allocation and
+      // eviction candidate selection share one conflict walk.
+      let (alloc_preg, split_opt) = self.try_evict(bundle, hint_preg)
+      if alloc_preg is Some(preg) {
+        self.record_allocation(bundle, preg)
+        continue
+      }
+      self.split_bundle(bundle, split_opt)
       continue
-    }
-
-    // try_allocate may have decided to spill
-    if bundle.allocation is Spill(_) {
-      processed.add(entry.bundle_id)
-      continue
-    }
-
-    // Try to evict lower-weight bundles
-    if self.try_evict(bundle, hint_preg) is Some(preg) {
-      self.record_allocation(bundle, preg)
-      processed.add(entry.bundle_id)
-      continue
+    } else {
+      // Non-backtracking fallback keeps simple first-fit behavior.
+      if self.try_allocate(bundle, hint_preg) is Some(preg) {
+        self.record_allocation(bundle, preg)
+        continue
+      }
+      if !bundle.is_pinned && !bundle.has_fixed_constraint(self.ranges) {
+        self.force_spill_bundle(bundle)
+        continue
+      }
     }
 
     // Split (spill) the bundle
-    self.split_bundle(bundle, hint_preg)
-    processed.add(entry.bundle_id)
+    self.split_bundle(bundle, None)
   }
 }
 
@@ -1142,8 +1361,11 @@ pub fn BacktrackingAllocator::generate_result(
     assignments: {},
     spill_slots: {},
     num_spill_slots: self.bundles.next_spill_slot,
-    inst_edits: {},
+    inst_edits: [],
   }
+  let max_vreg_id = self.func.next_vreg_id
+  let assignment_dense : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
+  let spill_slot_dense : Array[Int] = Array::make(max_vreg_id, -1)
 
   // Collect assignments from LiveRanges
   for i in 0..<self.ranges.length() {
@@ -1158,8 +1380,16 @@ pub fn BacktrackingAllocator::generate_result(
           class: range.vreg.class,
         }
         result.assignments.set(range.vreg.id, corrected_preg)
+        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
+          assignment_dense[range.vreg.id] = Some(corrected_preg)
+        }
       }
-      Spill(slot) => result.spill_slots.set(range.vreg.id, slot)
+      Spill(slot) => {
+        result.spill_slots.set(range.vreg.id, slot)
+        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
+          spill_slot_dense[range.vreg.id] = slot
+        }
+      }
       Unallocated => () // Should not happen after allocation
     }
   }
@@ -1181,7 +1411,20 @@ pub fn BacktrackingAllocator::generate_result(
           let use_reg = inst.uses[i]
           if use_reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              assignment_dense[vreg.id]
+            } else {
+              result.assignments.get(vreg.id)
+            }
+            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              spill_slot_dense[vreg.id]
+            } else {
+              match result.spill_slots.get(vreg.id) {
+                Some(slot) => slot
+                None => -1
+              }
+            }
+            if assigned_opt is Some(assigned_preg) {
               if assigned_preg.index != required_preg.index {
                 // Need to move from assigned to required
                 edits.before.push({
@@ -1190,12 +1433,20 @@ pub fn BacktrackingAllocator::generate_result(
                   class: vreg.class,
                 })
               }
-            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+            } else if spill_slot >= 0 {
               // Spilled: need to reload to the required register
               edits.before.push({
-                from: Spill(slot),
+                from: Spill(spill_slot),
                 to: Reg(required_preg),
                 class: vreg.class,
+              })
+            }
+          } else if use_reg is @abi.Physical(preg) {
+            if preg.index != required_preg.index {
+              edits.before.push({
+                from: Reg(preg),
+                to: Reg(required_preg),
+                class: preg.class,
               })
             }
           }
@@ -1208,7 +1459,20 @@ pub fn BacktrackingAllocator::generate_result(
           let def = inst.defs[i]
           if def.reg is @abi.Virtual(vreg) {
             // Check if already allocated to the required register
-            if result.assignments.get(vreg.id) is Some(assigned_preg) {
+            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              assignment_dense[vreg.id]
+            } else {
+              result.assignments.get(vreg.id)
+            }
+            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
+              spill_slot_dense[vreg.id]
+            } else {
+              match result.spill_slots.get(vreg.id) {
+                Some(slot) => slot
+                None => -1
+              }
+            }
+            if assigned_opt is Some(assigned_preg) {
               if assigned_preg.index != required_preg.index {
                 // Need to move from required to assigned
                 // (the instruction produces in required_preg, we need to move to assigned)
@@ -1218,11 +1482,11 @@ pub fn BacktrackingAllocator::generate_result(
                   class: vreg.class,
                 })
               }
-            } else if result.spill_slots.get(vreg.id) is Some(slot) {
+            } else if spill_slot >= 0 {
               // Spilled: need to store from required register to spill slot
               edits.after.push({
                 from: Reg(required_preg),
-                to: Spill(slot),
+                to: Spill(spill_slot),
                 class: vreg.class,
               })
             }
@@ -1232,7 +1496,7 @@ pub fn BacktrackingAllocator::generate_result(
 
       // Store edits if any
       if !edits.before.is_empty() || !edits.after.is_empty() {
-        result.inst_edits.set((block_idx, inst_idx), edits)
+        result.inst_edits.push((block_idx, inst_idx, edits))
       }
     }
   }
@@ -1247,6 +1511,9 @@ pub fn BacktrackingAllocator::generate_result(
   //
   // This mirrors regalloc2's concept of assigning spillsets to spillslots
   // (see regalloc2 doc/ION.md), but adapted to Wasmoon’s existing BundleSet.
+  if self.ranges.length() >= 2000 || self.bundles.next_spill_slot >= 256 {
+    return result
+  }
   let compacted_spillslots = self.compact_spill_slots(result)
   {
     assignments: result.assignments,
@@ -1479,7 +1746,8 @@ fn BacktrackingAllocator::compact_spill_slots(
       result.spill_slots.set(vreg_id, new_slot)
     }
   }
-  for _key, edits in result.inst_edits {
+  for entry in result.inst_edits {
+    let (_, _, edits) = entry
     for i in 0..<edits.before.length() {
       let mv = edits.before[i]
       let from = match mv.from {
@@ -1532,8 +1800,37 @@ pub fn build_bundles_with_merging(
   func : VCodeFunction,
   ranges : LiveRangeSet,
 ) -> BundleSet {
+  let perf_on = @perf.enabled()
   let n = ranges.length()
   let uf = @unionfind.UnionFind::new(n)
+  // regalloc2/ion always performs bundle coalescing, bounded by overlap and
+  // complexity guards inside merge checks.
+  let block_param_merge_enabled = true
+  let num_blocks = func.blocks.length()
+  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
+  for block_idx in 0..<num_blocks {
+    block_idx_by_order[ranges.block_order[block_idx]] = block_idx
+  }
+  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
+  let mut point_cursor = 0
+  for ord in 0..<num_blocks {
+    block_point_base[ord] = point_cursor
+    let block_idx = block_idx_by_order[ord]
+    let block_len = func.blocks[block_idx].insts.length()
+    point_cursor = point_cursor + (block_len + 2) * 2
+  }
+  fn point_order(
+    point : ProgPoint,
+    block_order : FixedArray[Int],
+    block_point_base : Array[Int],
+  ) -> Int {
+    let block_ord = block_order[point.block]
+    let pos_ord = match point.pos {
+      Before => 0
+      After => 1
+    }
+    block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
+  }
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
       (@abi.Int, @abi.Int) => true
@@ -1565,30 +1862,6 @@ pub fn build_bundles_with_merging(
     (fixed, false)
   }
 
-  fn set_fixed_reg(
-    ranges : LiveRangeSet,
-    members : Array[Int],
-  ) -> (@abi.PReg?, Bool) {
-    let mut fixed : @abi.PReg? = None
-    for idx in members {
-      let range = ranges.get(idx)
-      let (range_fixed, has_conflict) = range_fixed_reg_conflict(range)
-      if has_conflict {
-        return (None, true)
-      }
-      if range_fixed is Some(preg) {
-        match fixed {
-          None => fixed = Some(preg)
-          Some(existing) =>
-            if existing.index != preg.index || !same_fixed_bank(existing, preg) {
-              return (None, true)
-            }
-        }
-      }
-    }
-    (fixed, false)
-  }
-
   fn range_has_fixed_def(range : LiveRange) -> Bool {
     for use_pos in range.uses {
       if use_pos.kind is Def && use_pos.constraint is FixedReg(_) {
@@ -1598,158 +1871,223 @@ pub fn build_bundles_with_merging(
     false
   }
 
-  fn set_has_fixed_def(ranges : LiveRangeSet, members : Array[Int]) -> Bool {
-    for idx in members {
-      if range_has_fixed_def(ranges.get(idx)) {
-        return true
-      }
-    }
-    false
-  }
-
-  fn adjusted_start_for_overlap(
+  fn make_merge_span(
     span : ProgPointRange,
-    adjust_to_inst_start : Bool,
-  ) -> ProgPoint {
-    if adjust_to_inst_start {
-      { block: span.start.block, inst: span.start.inst, pos: Before }
-    } else {
-      span.start
+    block_order : FixedArray[Int],
+    block_point_base : Array[Int],
+  ) -> MergeSpan {
+    let start_ord = point_order(span.start, block_order, block_point_base)
+    let start_before_ord = point_order(
+      { block: span.start.block, inst: span.start.inst, pos: Before },
+      block_order,
+      block_point_base,
+    )
+    {
+      span,
+      start_ord,
+      start_before_ord,
+      end_ord: point_order(span.end, block_order, block_point_base),
     }
   }
 
-  fn collect_root_spans(
-    ranges : LiveRangeSet,
-    members : Array[Int],
-  ) -> Array[ProgPointRange] {
-    let spans : Array[ProgPointRange] = []
-    for idx in members {
-      let range = ranges.get(idx)
-      for span in range.ranges {
-        spans.push(span)
-      }
+  fn clone_spans(spans : Array[MergeSpan]) -> Array[MergeSpan] {
+    let out : Array[MergeSpan] = []
+    for span in spans {
+      out.push(span)
     }
-    spans.sort_by(fn(a, b) {
-      a.start.compare_with_order(b.start, ranges.block_order)
-    })
-    spans
+    out
   }
 
-  fn merge_sorted_spans(
-    a : Array[ProgPointRange],
-    b : Array[ProgPointRange],
-    ranges : LiveRangeSet,
-  ) -> Array[ProgPointRange] {
-    let merged : Array[ProgPointRange] = []
-    let mut ia = 0
-    let mut ib = 0
-    while ia < a.length() && ib < b.length() {
-      if a[ia].start.compare_with_order(b[ib].start, ranges.block_order) <= 0 {
-        merged.push(a[ia])
-        ia = ia + 1
+  fn insert_sorted_span(spans : Array[MergeSpan], insert : MergeSpan) -> Unit {
+    let insert_ord = insert.start_ord
+    let mut lo = 0
+    let mut hi = spans.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      let mid_ord = spans[mid].start_ord
+      if mid_ord <= insert_ord {
+        lo = mid + 1
       } else {
-        merged.push(b[ib])
-        ib = ib + 1
+        hi = mid
       }
     }
-    while ia < a.length() {
-      merged.push(a[ia])
-      ia = ia + 1
+    spans.insert(lo, insert)
+  }
+
+  // Keep merged-span buffers owned/cached by root and mutate only cache-owned
+  // arrays; never mutate original per-range span arrays in LiveRangeSet.
+  fn root_spans_owned(
+    root_spans_cache : Array[Array[MergeSpan]?],
+    root : Int,
+    fallback : Array[MergeSpan],
+  ) -> Array[MergeSpan] {
+    match root_spans_cache[root] {
+      Some(spans) => spans
+      None => {
+        // If fallback is exactly the source range's spans, clone once to get
+        // an owned mutable buffer for this root cache entry.
+        let owned = clone_spans(fallback)
+        root_spans_cache[root] = Some(owned)
+        owned
+      }
     }
-    while ib < b.length() {
-      merged.push(b[ib])
-      ib = ib + 1
+  }
+
+  fn merge_into_root_spans(
+    root_spans_cache : Array[Array[MergeSpan]?],
+    target_root : Int,
+    target_fallback : Array[MergeSpan],
+    source_spans : Array[MergeSpan],
+  ) -> Array[MergeSpan] {
+    if source_spans.is_empty() {
+      return root_spans_owned(root_spans_cache, target_root, target_fallback)
     }
+    if target_fallback.is_empty() {
+      // regalloc2 merge.rs empty-target fast path: move source list directly.
+      root_spans_cache[target_root] = Some(source_spans)
+      return source_spans
+    }
+    let target_spans = root_spans_owned(
+      root_spans_cache, target_root, target_fallback,
+    )
+    if source_spans.length() == 1 {
+      insert_sorted_span(target_spans, source_spans[0])
+      return target_spans
+    }
+    // Keep merge semantics equivalent to regalloc2 while avoiding
+    // full re-sort on every merge in MoonBit's runtime.
+    let merged : Array[MergeSpan] = []
+    let mut i = 0
+    let mut j = 0
+    while i < target_spans.length() && j < source_spans.length() {
+      if target_spans[i].start_ord <= source_spans[j].start_ord {
+        merged.push(target_spans[i])
+        i += 1
+      } else {
+        merged.push(source_spans[j])
+        j += 1
+      }
+    }
+    while i < target_spans.length() {
+      merged.push(target_spans[i])
+      i += 1
+    }
+    while j < source_spans.length() {
+      merged.push(source_spans[j])
+      j += 1
+    }
+    root_spans_cache[target_root] = Some(merged)
     merged
   }
 
-  let root_members_cache : Map[Int, Array[Int]] = {}
-  let root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)] = {}
-  let root_has_fixed_def_cache : Map[Int, Bool] = {}
-  let root_spans_cache : Map[Int, Array[ProgPointRange]] = {}
-
-  // Initialize per-root metadata so merges stay incremental.
+  let root_fixed_reg_cache : Array[@abi.PReg?] = []
+  let root_fixed_conflict_cache : Array[Bool] = []
+  let root_has_fixed_def_cache : Array[Bool] = []
+  let root_spans_cache : Array[Array[MergeSpan]?] = Array::make(n, None)
+  let mut merge_span_fetch_us = 0L
+  let mut merge_overlap_scan_us = 0L
+  let mut merge_commit_us = 0L
+  let tick_init_metadata = if perf_on { Some(@perf.tick_now()) } else { None }
+  // Initialize per-root fixed-info metadata so merges stay incremental.
+  // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
+  // roots that never participate in merges.
   for i in 0..<n {
-    root_members_cache.set(i, [i])
     let range = ranges.get(i)
-    root_fixed_info_cache.set(i, range_fixed_reg_conflict(range))
-    root_has_fixed_def_cache.set(i, range_has_fixed_def(range))
-    let spans : Array[ProgPointRange] = []
-    for span in range.ranges {
-      spans.push(span)
-    }
-    spans.sort_by(fn(a, b) {
-      a.start.compare_with_order(b.start, ranges.block_order)
-    })
-    root_spans_cache.set(i, spans)
+    let (fixed_reg, fixed_conflict) = range_fixed_reg_conflict(range)
+    root_fixed_reg_cache.push(fixed_reg)
+    root_fixed_conflict_cache.push(fixed_conflict)
+    root_has_fixed_def_cache.push(range_has_fixed_def(range))
   }
-  fn root_members(
-    uf : @unionfind.UnionFind,
-    root_members_cache : Map[Int, Array[Int]],
-    root : Int,
-  ) -> Array[Int] {
-    match root_members_cache.get(root) {
-      Some(members) => members
-      None => {
-        let members = uf.get_set(root)
-        root_members_cache.set(root, members)
-        members
-      }
-    }
+  if tick_init_metadata is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_init",
+      @perf.elapsed_us(tick),
+    )
   }
 
   fn root_fixed_info(
-    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
-    root_fixed_info_cache : Map[Int, (@abi.PReg?, Bool)],
+    root_fixed_reg_cache : Array[@abi.PReg?],
+    root_fixed_conflict_cache : Array[Bool],
     root : Int,
   ) -> (@abi.PReg?, Bool) {
-    match root_fixed_info_cache.get(root) {
-      Some(info) => info
-      None => {
-        let members = root_members(uf, root_members_cache, root)
-        let info = set_fixed_reg(ranges, members)
-        root_fixed_info_cache.set(root, info)
-        info
-      }
-    }
+    ignore(ranges)
+    (root_fixed_reg_cache[root], root_fixed_conflict_cache[root])
   }
 
   fn root_has_fixed_def(
-    uf : @unionfind.UnionFind,
     ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
-    root_has_fixed_def_cache : Map[Int, Bool],
+    root_has_fixed_def_cache : Array[Bool],
     root : Int,
   ) -> Bool {
-    match root_has_fixed_def_cache.get(root) {
-      Some(has_fixed_def) => has_fixed_def
+    ignore(ranges)
+    root_has_fixed_def_cache[root]
+  }
+
+  fn root_spans(
+    ranges : LiveRangeSet,
+    root_spans_cache : Array[Array[MergeSpan]?],
+    root : Int,
+  ) -> Array[MergeSpan] {
+    match root_spans_cache[root] {
+      Some(spans) => spans
       None => {
-        let members = root_members(uf, root_members_cache, root)
-        let has_fixed_def = set_has_fixed_def(ranges, members)
-        root_has_fixed_def_cache.set(root, has_fixed_def)
-        has_fixed_def
+        let range = ranges.get(root)
+        let spans : Array[MergeSpan] = []
+        for span in range.ranges {
+          spans.push(
+            make_merge_span(span, ranges.block_order, block_point_base),
+          )
+        }
+        root_spans_cache[root] = Some(spans)
+        spans
       }
     }
   }
 
-  fn root_spans(
+  // Helper to try merging two ranges
+  fn commit_union(
     uf : @unionfind.UnionFind,
-    ranges : LiveRangeSet,
-    root_members_cache : Map[Int, Array[Int]],
-    root_spans_cache : Map[Int, Array[ProgPointRange]],
-    root : Int,
-  ) -> Array[ProgPointRange] {
-    match root_spans_cache.get(root) {
-      Some(spans) => spans
-      None => {
-        let members = root_members(uf, root_members_cache, root)
-        let spans = collect_root_spans(ranges, members)
-        root_spans_cache.set(root, spans)
-        spans
-      }
+    root_a : Int,
+    root_b : Int,
+    fixed_a : @abi.PReg?,
+    fixed_b : @abi.PReg?,
+    set_a_has_fixed_def : Bool,
+    set_b_has_fixed_def : Bool,
+    spans_a : Array[MergeSpan],
+    spans_b : Array[MergeSpan],
+  ) -> Bool {
+    // Keep directional merge semantics close to regalloc2/ion:
+    // merge `root_b` into `root_a` so the caller-chosen "to" root stays
+    // stable across repeated merges.
+    if !uf.union_into(root_b, root_a) {
+      return true
     }
+    let new_root = uf.find(root_a)
+    let old_root = if new_root == root_a { root_b } else { root_a }
+    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
+    root_has_fixed_def_cache[new_root] = merged_fixed_def
+    root_has_fixed_def_cache[old_root] = merged_fixed_def
+    let merged_fixed = match (fixed_a, fixed_b) {
+      (Some(preg), _) => Some(preg)
+      (_, Some(preg)) => Some(preg)
+      _ => None
+    }
+    root_fixed_reg_cache[new_root] = merged_fixed
+    root_fixed_conflict_cache[new_root] = false
+    root_fixed_reg_cache[old_root] = merged_fixed
+    root_fixed_conflict_cache[old_root] = false
+    let (target_spans, source_spans) = if new_root == root_a {
+      (spans_a, spans_b)
+    } else {
+      (spans_b, spans_a)
+    }
+    let merged_spans = merge_into_root_spans(
+      root_spans_cache, new_root, target_spans, source_spans,
+    )
+    root_spans_cache[new_root] = Some(merged_spans)
+    root_spans_cache[old_root] = None
+    true
   }
 
   // Helper to try merging two ranges
@@ -1775,20 +2113,20 @@ pub fn build_bundles_with_merging(
       return false
     }
     let set_a_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_a,
+      ranges, root_has_fixed_def_cache, root_a,
     )
     let set_b_has_fixed_def = root_has_fixed_def(
-      uf, ranges, root_members_cache, root_has_fixed_def_cache, root_b,
+      ranges, root_has_fixed_def_cache, root_b,
     )
 
     // Keep merged bundles compatible with fixed-register constraints.
     // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
     // incompatible fixed uses.
     let (fixed_a, conflict_a) = root_fixed_info(
-      uf, ranges, root_members_cache, root_fixed_info_cache, root_a,
+      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_a,
     )
     let (fixed_b, conflict_b) = root_fixed_info(
-      uf, ranges, root_members_cache, root_fixed_info_cache, root_b,
+      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_b,
     )
     if conflict_a || conflict_b {
       return false
@@ -1802,145 +2140,166 @@ pub fn build_bundles_with_merging(
     // Check for overlap within potential merged bundle.
     // Follow regalloc2's merge scan style: compare sorted range starts with
     // two cursors and stop early when one side advances past the other.
-    let spans_a = root_spans(
-      uf, ranges, root_members_cache, root_spans_cache, root_a,
-    )
-    let spans_b = root_spans(
-      uf, ranges, root_members_cache, root_spans_cache, root_b,
-    )
+    let tick_span_fetch = if perf_on { Some(@perf.tick_now()) } else { None }
+    let spans_a = root_spans(ranges, root_spans_cache, root_a)
+    let spans_b = root_spans(ranges, root_spans_cache, root_b)
+    if tick_span_fetch is Some(tick) {
+      merge_span_fetch_us = merge_span_fetch_us + @perf.elapsed_us(tick)
+    }
+    let adjust_a = set_a_has_fixed_def
+    let adjust_b = set_b_has_fixed_def
+    let tick_overlap_scan = if perf_on { Some(@perf.tick_now()) } else { None }
+    if !spans_a.is_empty() && !spans_b.is_empty() {
+      let start_a_ord = if adjust_a {
+        spans_a[0].start_before_ord
+      } else {
+        spans_a[0].start_ord
+      }
+      let end_a_ord = spans_a[spans_a.length() - 1].end_ord
+      let start_b_ord = if adjust_b {
+        spans_b[0].start_before_ord
+      } else {
+        spans_b[0].start_ord
+      }
+      let end_b_ord = spans_b[spans_b.length() - 1].end_ord
+      let disjoint = start_a_ord >= end_b_ord || start_b_ord >= end_a_ord
+      if disjoint {
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
+        let tick_commit = if perf_on { Some(@perf.tick_now()) } else { None }
+        let merged = commit_union(
+          uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
+          spans_a, spans_b,
+        )
+        if tick_commit is Some(tick) {
+          merge_commit_us = merge_commit_us + @perf.elapsed_us(tick)
+        }
+        return merged
+      }
+    }
     let mut ia = 0
     let mut ib = 0
     let mut range_checks = 0
     while ia < spans_a.length() && ib < spans_b.length() {
       range_checks += 1
       if range_checks > 200 {
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
         return false
       }
       let span_a = spans_a[ia]
       let span_b = spans_b[ib]
-      let start_a = adjusted_start_for_overlap(span_a, set_a_has_fixed_def)
-      let start_b = adjusted_start_for_overlap(span_b, set_b_has_fixed_def)
-      if start_a.compare_with_order(span_b.end, ranges.block_order) >= 0 {
+      let start_a_ord = if adjust_a {
+        span_a.start_before_ord
+      } else {
+        span_a.start_ord
+      }
+      let end_a_ord = span_a.end_ord
+      let start_b_ord = if adjust_b {
+        span_b.start_before_ord
+      } else {
+        span_b.start_ord
+      }
+      let end_b_ord = span_b.end_ord
+      if start_a_ord >= end_b_ord {
         ib = ib + 1
-      } else if start_b.compare_with_order(span_a.end, ranges.block_order) >= 0 {
+      } else if start_b_ord >= end_a_ord {
         ia = ia + 1
       } else {
+        if tick_overlap_scan is Some(tick) {
+          merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
+        }
         return false
       }
     }
-    if !uf.union(root_a, root_b) {
-      return true
+    if tick_overlap_scan is Some(tick) {
+      merge_overlap_scan_us = merge_overlap_scan_us + @perf.elapsed_us(tick)
     }
-    let new_root = uf.find(root_a)
-    let old_root = if new_root == root_a { root_b } else { root_a }
-
-    // Keep root metadata incremental (mirrors regalloc2's merge behavior).
-    let members_new = root_members(uf, root_members_cache, new_root)
-    let members_old = root_members(uf, root_members_cache, old_root)
-    let merged_members : Array[Int] = []
-    for idx in members_new {
-      merged_members.push(idx)
+    let tick_commit = if perf_on { Some(@perf.tick_now()) } else { None }
+    let merged = commit_union(
+      uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
+      spans_a, spans_b,
+    )
+    if tick_commit is Some(tick) {
+      merge_commit_us = merge_commit_us + @perf.elapsed_us(tick)
     }
-    for idx in members_old {
-      merged_members.push(idx)
-    }
-    root_members_cache.set(new_root, merged_members)
-    root_members_cache.remove(old_root) |> ignore
-    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
-    root_has_fixed_def_cache.set(new_root, merged_fixed_def)
-    root_has_fixed_def_cache.remove(old_root) |> ignore
-    let merged_fixed = match (fixed_a, fixed_b) {
-      (Some(preg), _) => Some(preg)
-      (_, Some(preg)) => Some(preg)
-      _ => None
-    }
-    root_fixed_info_cache.set(new_root, (merged_fixed, false))
-    root_fixed_info_cache.remove(old_root) |> ignore
-    let merged_spans = merge_sorted_spans(spans_a, spans_b, ranges)
-    root_spans_cache.set(new_root, merged_spans)
-    root_spans_cache.remove(old_root) |> ignore
-    true
+    merged
   }
 
-  // Merge across Move instructions when call profiles are compatible.
-  //
-  // Cranelift/regalloc2 does not blindly coalesce arbitrary copies: merge is
-  // constrained by live-range overlap and bundle requirements. Keep that shape
-  // here by requiring matching call-crossing profile in addition to `try_merge`.
-  for block in func.blocks {
-    for inst in block.insts {
-      if inst.opcode is @instr.Move &&
-        inst.defs.length() == 1 &&
-        inst.uses.length() == 1 {
-        let src_vreg_id = match inst.uses[0] {
-          @abi.Virtual(vreg) => Some(vreg.id)
-          _ => None
-        }
-        let dst_vreg_id = match inst.defs[0].reg {
-          @abi.Virtual(vreg) => Some(vreg.id)
-          _ => None
-        }
-        if (src_vreg_id, dst_vreg_id) is (Some(src_id), Some(dst_id)) &&
-          ranges.vreg_to_range.get(src_id) is Some(src_idx) &&
-          ranges.vreg_to_range.get(dst_id) is Some(dst_idx) {
-          let src_range = ranges.get(src_idx)
-          let dst_range = ranges.get(dst_idx)
-          if src_range.crosses_wasm_call == dst_range.crosses_wasm_call &&
-            src_range.crosses_c_call == dst_range.crosses_c_call {
-            try_merge(uf, src_idx, dst_idx, ranges) |> ignore
-          }
-        }
-      }
-    }
-  }
-
+  let tick_merge_blockargs = if perf_on { Some(@perf.tick_now()) } else { None }
   // Merge across block arguments (SSA phi-like connections).
-  // For each Jump(target, args), the i-th arg corresponds to the i-th block param.
-  // Coalescing these bundles avoids edge moves and preserves SSA semantics.
-  let block_idx : Map[Int, Int] = {}
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
-  }
-  for pred_block in func.blocks {
-    if pred_block.terminator is Some(Jump(target, args)) {
-      let target_block = match block_idx.get(target) {
-        Some(idx) => func.blocks[idx]
-        None => continue
-      }
-      if target_block.params.is_empty() {
+  if block_param_merge_enabled {
+    for pair in ranges.blockparam_out_pairs {
+      let (param_idx, arg_idx) = pair
+      if arg_idx == param_idx {
         continue
       }
-      // Merge each param with its incoming argument vreg.
-      for i, param in target_block.params {
-        if i >= args.length() {
-          break
+      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+    }
+  }
+  if tick_merge_blockargs is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_blockargs",
+      @perf.elapsed_us(tick),
+    )
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_spans", merge_span_fetch_us,
+    )
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_overlap", merge_overlap_scan_us,
+    )
+    @perf.record_regalloc_phase_us("phase_bundle_merge_commit", merge_commit_us)
+  }
+
+  let tick_finalize = if perf_on { Some(@perf.tick_now()) } else { None }
+  // Build final bundles from union-find roots (dense-indexed, regalloc2-style).
+  let result = BundleSet::new()
+  let root_to_bundle : Array[Int] = Array::make(n, -1)
+  let bundle_to_root : Array[Int] = []
+  for range_idx in 0..<n {
+    let root = uf.find(range_idx)
+    let bundle_id = root_to_bundle[root]
+    let bundle = if bundle_id >= 0 {
+      result.get(bundle_id)
+    } else {
+      let first_range = ranges.get(range_idx)
+      let created = Bundle::new(result.bundles.length(), first_range.vreg.class)
+      result.add_bundle(created)
+      let new_id = created.id
+      root_to_bundle[root] = new_id
+      bundle_to_root.push(root)
+      created
+    }
+    bundle.add_range(range_idx)
+    ranges.get(range_idx).bundle_id = bundle.id
+  }
+  for bundle_id in 0..<result.bundles.length() {
+    let root = bundle_to_root[bundle_id]
+    let bundle = result.get(bundle_id)
+    let merged_ranges : Array[ProgPointRange] = []
+    match root_spans_cache[root] {
+      Some(spans) =>
+        for span in spans {
+          merged_ranges.push(span.span)
         }
-        if args[i] is @abi.Virtual(arg_vreg) &&
-          ranges.vreg_to_range.get(param.id) is Some(param_idx) &&
-          ranges.vreg_to_range.get(arg_vreg.id) is Some(arg_idx) {
-          try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+      None => {
+        // No merge cache materialized for this root: keep the original
+        // normalized ranges directly, avoiding redundant MergeSpan conversion.
+        let root_range = ranges.get(root)
+        for span in root_range.ranges {
+          merged_ranges.push(span)
         }
       }
     }
+    bundle.merged_ranges = Some(merged_ranges)
   }
-
-  // Build final bundles from union-find sets
-  let result = BundleSet::new()
-  let sets = uf.get_all_sets()
-  for set_idx, members in sets {
-    ignore(set_idx)
-    if members.is_empty() {
-      continue
-    }
-
-    // Get register class from first member
-    let first_range = ranges.get(members[0])
-    let bundle = Bundle::new(result.bundles.length(), first_range.vreg.class)
-    for range_idx in members {
-      bundle.add_range(range_idx)
-      ranges.get(range_idx).bundle_id = bundle.id
-    }
-    result.add_bundle(bundle)
+  if tick_finalize is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_bundle_merge_finalize",
+      @perf.elapsed_us(tick),
+    )
   }
   result
 }
@@ -2105,21 +2464,60 @@ pub fn allocate_backtracking(
   callee_saved_float : Array[@abi.PReg],
   param_precolor_strict? : Bool = true,
 ) -> RegAllocResult {
+  let perf_on = @perf.enabled()
+
   // Phase 2: Build LiveRanges
+  let tick_live_ranges = if perf_on { Some(@perf.tick_now()) } else { None }
   let ranges = build_live_ranges(func, liveness)
+  if tick_live_ranges is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_live_ranges", @perf.elapsed_us(tick))
+  }
 
   // Phase 3: Build Bundles with merging
+  let tick_bundles = if perf_on { Some(@perf.tick_now()) } else { None }
   let bundles = build_bundles_with_merging(func, ranges)
+  if tick_bundles is Some(tick) {
+    @perf.record_regalloc_phase_us("phase_bundle_merge", @perf.elapsed_us(tick))
+  }
 
   // Phase 4: Allocate
+  let tick_alloc_new = if perf_on { Some(@perf.tick_now()) } else { None }
   let allocator = BacktrackingAllocator::new(
     func, ranges, bundles, int_regs, float_regs, vector_regs, callee_saved_int, callee_saved_float,
   )
+  if tick_alloc_new is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_allocator_new",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Pre-assign function parameters to ABI registers (before main allocation)
+  let tick_preassign = if perf_on { Some(@perf.tick_now()) } else { None }
   allocator.preassign_params(param_precolor_strict)
+  if tick_preassign is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_preassign_params",
+      @perf.elapsed_us(tick),
+    )
+  }
+  let tick_allocate = if perf_on { Some(@perf.tick_now()) } else { None }
   allocator.allocate()
+  if tick_allocate is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_allocate_main",
+      @perf.elapsed_us(tick),
+    )
+  }
 
   // Generate result
-  allocator.generate_result()
+  let tick_result = if perf_on { Some(@perf.tick_now()) } else { None }
+  let result = allocator.generate_result()
+  if tick_result is Some(tick) {
+    @perf.record_regalloc_phase_us(
+      "phase_generate_result",
+      @perf.elapsed_us(tick),
+    )
+  }
+  result
 }
