@@ -39,7 +39,7 @@ moon build
 
 ```bash
 # Before committing
-moon info && moon fmt
+moon fmt && moon info && moon check --target native
 
 # Run tests
 moon test
@@ -47,6 +47,12 @@ moon test
 # Build and install
 moon build && ./install.sh
 ```
+
+With git hooks enabled (`core.hooksPath=.githooks`), `git commit` runs:
+
+- `moon fmt`
+- `moon info`
+- `moon check --target native`
 
 ## Project Structure
 
