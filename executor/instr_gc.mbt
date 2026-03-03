@@ -26,6 +26,7 @@ fn ExecContext::exec_struct_new(
   // Allocate struct in the store
   let ref_idx = self.store.alloc_struct(type_idx, fields)
   self.stack.push(@types.Value::StructRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -48,6 +49,7 @@ fn ExecContext::exec_struct_new_default(
   // Allocate struct in the store
   let ref_idx = self.store.alloc_struct(type_idx, fields)
   self.stack.push(@types.Value::StructRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -184,6 +186,7 @@ fn ExecContext::exec_array_new(
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
   self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -208,6 +211,7 @@ fn ExecContext::exec_array_new_default(
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
   self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -226,6 +230,7 @@ fn ExecContext::exec_array_new_fixed(
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
   self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -466,6 +471,7 @@ fn ExecContext::exec_array_new_data(
     // Create empty array
     let ref_idx = self.store.alloc_array(type_idx, [])
     self.stack.push(@types.Value::ArrayRef(ref_idx))
+    self.maybe_collect_gc_stress()
     return
   }
   let data_segment = self.instance.data_segments[data_idx]
@@ -495,6 +501,7 @@ fn ExecContext::exec_array_new_data(
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
   self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|
@@ -525,6 +532,7 @@ fn ExecContext::exec_array_new_elem(
   if is_dropped || is_declarative {
     let ref_idx = self.store.alloc_array(type_idx, [])
     self.stack.push(@types.Value::ArrayRef(ref_idx))
+    self.maybe_collect_gc_stress()
     return
   }
 
@@ -545,6 +553,7 @@ fn ExecContext::exec_array_new_elem(
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
   self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.maybe_collect_gc_stress()
 }
 
 ///|

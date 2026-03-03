@@ -261,6 +261,14 @@ int32_t gc_heap_sweep(GcHeap* heap);
  */
 int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots);
 
+/**
+ * Verify internal heap invariants and object graph integrity.
+ * @param heap The GC heap
+ * @param verbose Print diagnostics to stderr when verification fails
+ * @return 1 if valid, 0 if invariant violation detected
+ */
+int32_t gc_heap_verify(GcHeap* heap, int32_t verbose);
+
 // ============ Utilities ============
 
 /**

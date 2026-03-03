@@ -108,6 +108,7 @@ pub(all) enum ExternVal {
 type Frame
 pub fn Frame::get_func_idx(Self) -> Int
 pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
+pub fn Frame::locals_values(Self) -> Array[@types.Value]
 pub fn Frame::new(Int, Array[@types.Value], Int) -> Self
 pub fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
 pub impl Show for Frame
@@ -341,6 +342,7 @@ pub(all) enum RuntimeFeature {
 }
 
 type Stack
+pub fn Stack::active_values(Self) -> Array[@types.Value]
 pub fn Stack::clear(Self) -> Unit
 pub fn Stack::new() -> Self
 pub fn Stack::peek(Self) -> @types.Value raise RuntimeError

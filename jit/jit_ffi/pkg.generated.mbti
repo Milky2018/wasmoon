@@ -74,6 +74,8 @@ pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_sweep(Int64) -> Int
 
+pub fn c_gc_heap_verify(Int64, Int) -> Int
+
 pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
 
 pub fn c_jit_alloc_context_managed(Int) -> JITContext

@@ -289,6 +289,24 @@ test "gc: field access after collection" {
 }
 
 ///|
+test "gc: heap verify succeeds on valid graph" {
+  let heap = CHeap::new()
+  let leaf = heap.alloc_struct(0, [@types.Value::I32(7)])
+  let root = heap.alloc_struct(0, [@types.Value::StructRef(leaf)])
+  let _ = heap.collect([@types.Value::StructRef(root)])
+  inspect(heap.verify(), content="true")
+}
+
+///|
+test "gc: heap verify detects dangling encoded reference" {
+  let heap = CHeap::new()
+  let obj = heap.alloc_struct(0, [@types.Value::I32(1)])
+  // Force an invalid even positive payload that decodes to an out-of-range gc_ref.
+  heap.struct_set(obj, 0, @types.Value::I64(2000000L))
+  inspect(heap.verify(), content="false")
+}
+
+///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)

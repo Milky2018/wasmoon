@@ -19,6 +19,40 @@
 // Alignment
 #define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
 
+// Optional runtime verification mode. Set WASMOON_GC_VERIFY=1 to enable.
+static int gc_verify_env_cached = -1;
+
+static int gc_is_truthy_env(const char* value) {
+    if (!value) {
+        return 0;
+    }
+    return strcmp(value, "1") == 0
+        || strcmp(value, "true") == 0
+        || strcmp(value, "TRUE") == 0
+        || strcmp(value, "yes") == 0
+        || strcmp(value, "YES") == 0
+        || strcmp(value, "on") == 0
+        || strcmp(value, "ON") == 0;
+}
+
+static int gc_verify_enabled(void) {
+    if (gc_verify_env_cached < 0) {
+        const char* value = getenv("WASMOON_GC_VERIFY");
+        gc_verify_env_cached = gc_is_truthy_env(value) ? 1 : 0;
+    }
+    return gc_verify_env_cached;
+}
+
+static void gc_heap_maybe_verify(GcHeap* heap, const char* op_name) {
+    if (!gc_verify_enabled()) {
+        return;
+    }
+    if (!gc_heap_verify(heap, 1)) {
+        fprintf(stderr, "[GC VERIFY] invariant violation after %s\n", op_name);
+        abort();
+    }
+}
+
 // ============ Internal Helpers ============
 
 static int ensure_heap_capacity(GcHeap* heap, size_t needed) {
@@ -180,6 +214,7 @@ int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
     heap->object_count++;
     heap->total_allocations++;
 
+    gc_heap_maybe_verify(heap, "alloc_struct");
     return gc_ref;
 }
 
@@ -201,6 +236,7 @@ void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t
 
     int64_t* fields = (int64_t*)data;
     fields[field_idx] = value;
+    gc_heap_maybe_verify(heap, "struct_set");
 }
 
 // ============ Array Operations ============
@@ -255,6 +291,7 @@ int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
     heap->object_count++;
     heap->total_allocations++;
 
+    gc_heap_maybe_verify(heap, "alloc_array");
     return gc_ref;
 }
 
@@ -296,6 +333,7 @@ void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value)
 
     int64_t* elements = (int64_t*)(data + 8);
     elements[idx] = value;
+    gc_heap_maybe_verify(heap, "array_set");
 }
 
 void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
@@ -311,6 +349,7 @@ void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
     for (int32_t i = 0; i < count && (offset + i) < len; i++) {
         elements[offset + i] = value;
     }
+    gc_heap_maybe_verify(heap, "array_fill");
 }
 
 void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
@@ -335,6 +374,7 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
     // Use memmove to handle overlapping regions
     memmove(&dst_elements[dst_offset], &src_elements[src_offset],
             count * sizeof(int64_t));
+    gc_heap_maybe_verify(heap, "array_copy");
 }
 
 int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
@@ -386,6 +426,7 @@ int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
     heap->object_count++;
     heap->total_allocations++;
 
+    gc_heap_maybe_verify(heap, "alloc_array_from_values");
     return gc_ref;
 }
 
@@ -554,7 +595,206 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
     gc_heap_compact(heap);
 
     heap->total_collections++;
+    gc_heap_maybe_verify(heap, "collect");
     return collected;
+}
+
+static int gc_verify_fail(const char* message, int32_t verbose) {
+    if (verbose) {
+        fprintf(stderr, "[GC VERIFY] %s\n", message);
+    }
+    return 0;
+}
+
+static int gc_verify_ref_target(
+    GcHeap* heap,
+    int32_t owner_ref,
+    int32_t slot,
+    int32_t target_ref,
+    int32_t verbose
+) {
+    if (target_ref <= 0 || target_ref > heap->object_count) {
+        if (verbose) {
+            fprintf(
+                stderr,
+                "[GC VERIFY] invalid gc_ref target: owner=%d slot=%d target=%d object_count=%d\n",
+                owner_ref,
+                slot,
+                target_ref,
+                heap->object_count
+            );
+        }
+        return 0;
+    }
+    if (heap->object_table[target_ref - 1] < 0) {
+        if (verbose) {
+            fprintf(
+                stderr,
+                "[GC VERIFY] dangling gc_ref target: owner=%d slot=%d target=%d\n",
+                owner_ref,
+                slot,
+                target_ref
+            );
+        }
+        return 0;
+    }
+    return 1;
+}
+
+int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
+    if (!heap) {
+        return gc_verify_fail("heap is NULL", verbose);
+    }
+    if (!heap->data || !heap->object_table || !heap->free_list) {
+        return gc_verify_fail("heap buffers are NULL", verbose);
+    }
+    if (heap->size > heap->capacity) {
+        return gc_verify_fail("heap size exceeds capacity", verbose);
+    }
+    if (heap->object_count < 0 || heap->object_count > heap->object_capacity) {
+        return gc_verify_fail("object_count out of bounds", verbose);
+    }
+    if (heap->free_count < 0 || heap->free_count > heap->free_capacity) {
+        return gc_verify_fail("free_count out of bounds", verbose);
+    }
+    if (heap->total_allocations < 0 || heap->total_collections < 0) {
+        return gc_verify_fail("negative GC statistics", verbose);
+    }
+
+    size_t previous_end = 0;
+    int32_t saw_active = 0;
+    for (int32_t i = 0; i < heap->object_count; i++) {
+        int32_t gc_ref = i + 1;
+        int32_t offset = heap->object_table[i];
+        if (offset < 0) {
+            continue;
+        }
+
+        if ((size_t)offset + GC_HEADER_SIZE > heap->size) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] header out of heap: gc_ref=%d offset=%d size=%zu\n", gc_ref, offset, heap->size);
+            }
+            return 0;
+        }
+        if ((offset % 16) != 0) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] unaligned object offset: gc_ref=%d offset=%d\n", gc_ref, offset);
+            }
+            return 0;
+        }
+
+        GcHeader* header = (GcHeader*)(heap->data + offset);
+        if (header->size < GC_HEADER_SIZE) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] invalid object size: gc_ref=%d size=%u\n", gc_ref, header->size);
+            }
+            return 0;
+        }
+        if ((header->size % 16) != 0) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] object size is not 16-byte aligned: gc_ref=%d size=%u\n", gc_ref, header->size);
+            }
+            return 0;
+        }
+
+        size_t object_end = (size_t)offset + (size_t)header->size;
+        if (object_end > heap->size) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] object exceeds heap size: gc_ref=%d end=%zu heap_size=%zu\n", gc_ref, object_end, heap->size);
+            }
+            return 0;
+        }
+        if (saw_active && (size_t)offset < previous_end) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] object overlap/order violation: gc_ref=%d offset=%d previous_end=%zu\n", gc_ref, offset, previous_end);
+            }
+            return 0;
+        }
+        previous_end = object_end;
+        saw_active = 1;
+
+        if (header->kind != GC_KIND_STRUCT && header->kind != GC_KIND_ARRAY) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] invalid active object kind: gc_ref=%d kind=%u\n", gc_ref, header->kind);
+            }
+            return 0;
+        }
+
+        uint8_t* data = ((uint8_t*)header) + GC_HEADER_SIZE;
+        size_t payload_size = (size_t)header->size - GC_HEADER_SIZE;
+
+        if (header->kind == GC_KIND_STRUCT) {
+            uint64_t num_fields_u64 = header->reserved;
+            if (num_fields_u64 > (payload_size / sizeof(int64_t))) {
+                if (verbose) {
+                    fprintf(stderr, "[GC VERIFY] struct field count exceeds payload: gc_ref=%d fields=%llu payload=%zu\n",
+                            gc_ref, (unsigned long long)num_fields_u64, payload_size);
+                }
+                return 0;
+            }
+            int64_t* fields = (int64_t*)data;
+            int32_t num_fields = (int32_t)num_fields_u64;
+            for (int32_t j = 0; j < num_fields; j++) {
+                int64_t value = fields[j];
+                if (value > 0 && (value & 1) == 0) {
+                    int32_t target_ref = (int32_t)(value >> 1);
+                    if (!gc_verify_ref_target(heap, gc_ref, j, target_ref, verbose)) {
+                        return 0;
+                    }
+                }
+            }
+        } else {
+            if (payload_size < 8) {
+                if (verbose) {
+                    fprintf(stderr, "[GC VERIFY] array payload too small: gc_ref=%d payload=%zu\n", gc_ref, payload_size);
+                }
+                return 0;
+            }
+            int32_t len = ((int32_t*)data)[0];
+            if (len < 0) {
+                if (verbose) {
+                    fprintf(stderr, "[GC VERIFY] negative array length: gc_ref=%d len=%d\n", gc_ref, len);
+                }
+                return 0;
+            }
+            size_t need = 8 + ((size_t)len * sizeof(int64_t));
+            if (need > payload_size) {
+                if (verbose) {
+                    fprintf(stderr, "[GC VERIFY] array elements exceed payload: gc_ref=%d len=%d need=%zu payload=%zu\n",
+                            gc_ref, len, need, payload_size);
+                }
+                return 0;
+            }
+            int64_t* elements = (int64_t*)(data + 8);
+            for (int32_t j = 0; j < len; j++) {
+                int64_t value = elements[j];
+                if (value > 0 && (value & 1) == 0) {
+                    int32_t target_ref = (int32_t)(value >> 1);
+                    if (!gc_verify_ref_target(heap, gc_ref, j, target_ref, verbose)) {
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+
+    for (int32_t i = 0; i < heap->free_count; i++) {
+        int32_t gc_ref = heap->free_list[i];
+        if (gc_ref <= 0 || gc_ref > heap->object_count) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] free list gc_ref out of range: index=%d gc_ref=%d object_count=%d\n", i, gc_ref, heap->object_count);
+            }
+            return 0;
+        }
+        if (heap->object_table[gc_ref - 1] >= 0) {
+            if (verbose) {
+                fprintf(stderr, "[GC VERIFY] free list entry points to live object: index=%d gc_ref=%d\n", i, gc_ref);
+            }
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 // ============ Utilities ============
@@ -709,4 +949,8 @@ int32_t wasmoon_gc_heap_get_total_collections(int64_t heap_ptr) {
     int32_t collections = 0;
     gc_heap_get_stats((GcHeap*)(uintptr_t)heap_ptr, NULL, &collections);
     return collections;
+}
+
+int32_t wasmoon_gc_heap_verify(int64_t heap_ptr, int32_t verbose) {
+    return gc_heap_verify((GcHeap*)(uintptr_t)heap_ptr, verbose);
 }

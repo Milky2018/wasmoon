@@ -109,6 +109,16 @@ pub fn Stack::size(self : Stack) -> Int {
 }
 
 ///|
+/// Snapshot currently live stack values [0, sp)
+pub fn Stack::active_values(self : Stack) -> Array[@types.Value] {
+  let active : Array[@types.Value] = []
+  for i in 0..<self.sp {
+    active.push(self.values[i])
+  }
+  active
+}
+
+///|
 pub fn Stack::clear(self : Stack) -> Unit {
   self.sp = 0
 }

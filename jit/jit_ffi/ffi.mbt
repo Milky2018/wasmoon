@@ -1314,6 +1314,10 @@ pub extern "c" fn c_gc_heap_collect(
   num_roots : Int,
 ) -> Int = "wasmoon_gc_heap_collect"
 
+///|
+/// Verify C heap invariants (returns 1 when valid, 0 on failure)
+pub extern "c" fn c_gc_heap_verify(heap : Int64, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
+
 // ============ JIT Utilities ============
 
 ///|

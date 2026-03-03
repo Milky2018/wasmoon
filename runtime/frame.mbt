@@ -43,3 +43,13 @@ pub fn Frame::set_local(
   }
   self.locals[idx] = value
 }
+
+///|
+/// Snapshot local values (for GC root collection/debugging)
+pub fn Frame::locals_values(self : Frame) -> Array[@types.Value] {
+  let locals : Array[@types.Value] = []
+  for local_value in self.locals {
+    locals.push(local_value)
+  }
+  locals
+}

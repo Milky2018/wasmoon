@@ -392,6 +392,12 @@ pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int {
   @jit_ffi.c_gc_heap_collect(self.ptr, raw_roots, num_roots)
 }
 
+///|
+/// Verify heap invariants (for debugging)
+pub fn CHeap::verify(self : CHeap, verbose? : Bool = false) -> Bool {
+  @jit_ffi.c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
+}
+
 // ============================================================
 // JIT Utilities
 // ============================================================
