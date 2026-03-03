@@ -1371,9 +1371,17 @@ fn match_addr_reg_offset(
       ext = e
       score = score + 1
     }
-    // Match offset-index again after extend/shift normalization:
-    // uextend(iadd(idx, C)) -> (uextend idx) + C
-    if match_iadd_const(ctx, index) is Some((inner, off)) {
+    // Match offset-index again after extend/shift normalization.
+    //
+    // Do this only for already-64-bit index forms.
+    //
+    // For `uxtw`/`sxtw`, rewriting:
+    //   extend(iadd32(idx, C)) -> (extend idx) + C
+    // is not semantics-preserving in general because `iadd32` wraps before
+    // the extend. Splitting the constant can change addresses when overflow
+    // occurs in 32-bit arithmetic.
+    if ext is @instr.IndexExtend::None &&
+      match_iadd_const(ctx, index) is Some((inner, off)) {
       subsumed.push(index.id)
       index = inner
       extra_offset = extra_offset + off

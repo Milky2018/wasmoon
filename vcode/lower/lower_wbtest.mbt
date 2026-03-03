@@ -362,6 +362,29 @@ test "amd64 lower regoff folds base displacement" {
 }
 
 ///|
+test "aarch64 keeps i32 add before uxtw regoff" {
+  if !(@isa.ISA::current() is @isa.AArch64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("aarch64_uxtw_wrap_safety")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let delta = builder.iconst_i32(1056064)
+  let idx_plus = builder.iadd(idx, delta)
+  let idx64 = builder.uextend(@ir.Type::I64, idx_plus)
+  let addr = builder.iadd(base, idx64)
+  let off = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(@ir.Type::I32, addr, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i32 (uxtw,0)"), content="true")
+  inspect(output.contains("add #1056064"), content="false")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)
