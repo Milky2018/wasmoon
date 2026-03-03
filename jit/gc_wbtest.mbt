@@ -298,12 +298,12 @@ test "gc: heap verify succeeds on valid graph" {
 }
 
 ///|
-test "gc: heap verify detects dangling encoded reference" {
+test "gc: heap verify allows non-reference immediates" {
   let heap = CHeap::new()
   let obj = heap.alloc_struct(0, [@types.Value::I32(1)])
-  // Force an invalid even positive payload that decodes to an out-of-range gc_ref.
+  // Large even i64 payload is a valid immediate value, not necessarily a GC ref.
   heap.struct_set(obj, 0, @types.Value::I64(2000000L))
-  inspect(heap.verify(), content="false")
+  inspect(heap.verify(), content="true")
 }
 
 ///|

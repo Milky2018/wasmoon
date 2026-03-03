@@ -606,41 +606,6 @@ static int gc_verify_fail(const char* message, int32_t verbose) {
     return 0;
 }
 
-static int gc_verify_ref_target(
-    GcHeap* heap,
-    int32_t owner_ref,
-    int32_t slot,
-    int32_t target_ref,
-    int32_t verbose
-) {
-    if (target_ref <= 0 || target_ref > heap->object_count) {
-        if (verbose) {
-            fprintf(
-                stderr,
-                "[GC VERIFY] invalid gc_ref target: owner=%d slot=%d target=%d object_count=%d\n",
-                owner_ref,
-                slot,
-                target_ref,
-                heap->object_count
-            );
-        }
-        return 0;
-    }
-    if (heap->object_table[target_ref - 1] < 0) {
-        if (verbose) {
-            fprintf(
-                stderr,
-                "[GC VERIFY] dangling gc_ref target: owner=%d slot=%d target=%d\n",
-                owner_ref,
-                slot,
-                target_ref
-            );
-        }
-        return 0;
-    }
-    return 1;
-}
-
 int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
     if (!heap) {
         return gc_verify_fail("heap is NULL", verbose);
@@ -734,15 +699,8 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
             }
             int64_t* fields = (int64_t*)data;
             int32_t num_fields = (int32_t)num_fields_u64;
-            for (int32_t j = 0; j < num_fields; j++) {
-                int64_t value = fields[j];
-                if (value > 0 && (value & 1) == 0) {
-                    int32_t target_ref = (int32_t)(value >> 1);
-                    if (!gc_verify_ref_target(heap, gc_ref, j, target_ref, verbose)) {
-                        return 0;
-                    }
-                }
-            }
+            (void)fields;
+            (void)num_fields;
         } else {
             if (payload_size < 8) {
                 if (verbose) {
@@ -766,15 +724,7 @@ int32_t gc_heap_verify(GcHeap* heap, int32_t verbose) {
                 return 0;
             }
             int64_t* elements = (int64_t*)(data + 8);
-            for (int32_t j = 0; j < len; j++) {
-                int64_t value = elements[j];
-                if (value > 0 && (value & 1) == 0) {
-                    int32_t target_ref = (int32_t)(value >> 1);
-                    if (!gc_verify_ref_target(heap, gc_ref, j, target_ref, verbose)) {
-                        return 0;
-                    }
-                }
-            }
+            (void)elements;
         }
     }
 
