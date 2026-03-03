@@ -124,15 +124,8 @@ fn optimize_cranelift_style(
   if dbpe_result.changed {
     result.mark_changed()
   }
-  // Cranelift-style redundant-load elimination: run a CFG-aware mem-base load
-  // CSE before egraph so large functions also benefit from reduced address-load
-  // noise in lowering/codegen.
-  let mb_global_result = run_opt_pass(
-    func, "mem_base_cse_global", eliminate_redundant_mem_base_loads_global,
-  )
-  if mb_global_result.changed {
-    result.mark_changed()
-  }
+  // NOTE: Temporarily keep global mem-base CSE disabled due correctness
+  // regression on algorithm workloads; local mem-base CSE remains enabled.
   let addr_reassoc_result = run_opt_pass(
     func, "wasm_addr_reassoc", reassociate_wasm_addresses,
   )
