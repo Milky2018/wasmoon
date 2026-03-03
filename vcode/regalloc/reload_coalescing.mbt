@@ -8,9 +8,6 @@
 // redundant StackLoad instructions.
 
 ///|
-const RELOAD_COALESCING_MAX_INSTS : Int = 1200
-
-///|
 /// A reload interval tracks where a reloaded value can be kept alive
 /// to eliminate redundant loads from the same spill slot.
 priv struct ReloadInterval {
@@ -25,16 +22,6 @@ fn compute_reload_intervals(
   func : VCodeFunction,
   alloc : RegAllocResult,
 ) -> Map[(Int, Int), ReloadInterval] {
-  let mut inst_count = 0
-  for block in func.blocks {
-    inst_count = inst_count + block.insts.length()
-  }
-  // Cranelift/regalloc2 does not run a dedicated spill-reload coalescing pass.
-  // Keep this Wasmoon-specific pass bounded so large-function compile time stays
-  // predictable and aligned with Cranelift's hot-path behavior.
-  if inst_count >= RELOAD_COALESCING_MAX_INSTS {
-    return {}
-  }
   let intervals : Map[(Int, Int), ReloadInterval] = {}
   for block_idx, block in func.blocks {
     // Track uses of spilled vregs in this block.

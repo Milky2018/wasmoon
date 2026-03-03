@@ -507,16 +507,6 @@ fn build_output(
     if moves.is_empty() {
       return
     }
-    if moves.length() == 1 {
-      let mv = moves[0]
-      out.push_edit(
-        block_id,
-        inst_idx,
-        pos,
-        Edit::Move(mv.from, mv.to, mv.class),
-      )
-      return
-    }
     let resolved = resolve_parallel_moves(moves)
     for mv in resolved {
       out.push_edit(
