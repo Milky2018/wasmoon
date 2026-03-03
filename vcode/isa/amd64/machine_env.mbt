@@ -37,13 +37,15 @@ fn allocatable_callee_saved_regs(enable_pinned_reg : Bool) -> Array[@abi.PReg] {
 ///|
 fn allocatable_scratch_regs() -> Array[@abi.PReg] {
   // SysV caller-saved GPRs excluding rsp/rbp.
+  // Order mirrors Cranelift x64 create_reg_env_systemv() preference
+  // (rsi,rdi,rax,rcx,rdx,r8,r9,...) as far as our reserved-scratch policy allows.
   // Note: r10/r11 are reserved as scratch via MachineEnvData.scratch_int.
   [
+    { index: 6, class: @abi.Int }, // rsi
+    { index: 7, class: @abi.Int }, // rdi
     { index: 0, class: @abi.Int }, // rax
     { index: 1, class: @abi.Int }, // rcx
     { index: 2, class: @abi.Int }, // rdx
-    { index: 6, class: @abi.Int }, // rsi
-    { index: 7, class: @abi.Int }, // rdi
     { index: 8, class: @abi.Int }, // r8
     { index: 9, class: @abi.Int },
   ] // r9
