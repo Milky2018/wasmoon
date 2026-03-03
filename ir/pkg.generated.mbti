@@ -61,6 +61,8 @@ pub fn eliminate_dead_code(Function) -> OptResult
 
 pub fn eliminate_redundant_mem_base_loads(Function) -> OptResult
 
+pub fn eliminate_redundant_mem_base_loads_global(Function) -> OptResult
+
 pub fn eliminate_unreachable_code(Function) -> OptResult
 
 pub fn fold_constants(Function) -> OptResult
@@ -96,6 +98,8 @@ pub fn optimize_with_level(Function, OptLevel) -> OptResult
 pub fn propagate_copies(Function) -> OptResult
 
 pub fn propagate_copies_global(Function) -> OptResult
+
+pub fn reassociate_wasm_addresses(Function) -> OptResult
 
 pub fn reduce_strength(Function) -> OptResult
 

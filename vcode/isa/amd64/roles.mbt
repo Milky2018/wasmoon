@@ -11,9 +11,9 @@ pub fn int_reg_index(_role : @spec.IntRegRole) -> Int {
   //   8: r8   9: r9  10: r10 11: r11
   //  12: r12 13: r13 14: r14 15: r15
   match _role {
-    // Prefer callee-saved registers for pinned/cached pointers.
-    Vmctx => 14 // r14
-    Mem0Desc => 15 // r15
+    // Cranelift x64 uses r15 as pinned vmctx.
+    Vmctx => 15 // r15
+    Mem0Desc => 14 // r14
     FuncTable => 13 // r13
     ExtraResultsPtr => 12 // r12
     // Reserve two caller-saved scratch regs for lowering/emission.

@@ -167,6 +167,102 @@ fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
 }
 
 ///|
+/// Materialize `base + offset` for address lowering.
+///
+/// Cranelift's AArch64 `amode_add` lowering emits this adjustment as part of
+/// each amode construction rather than caching adjusted bases globally.
+fn get_adjusted_base_with_offset(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  base : @abi.VReg,
+  offset : Int64,
+) -> @abi.VReg {
+  if offset == 0L {
+    return base
+  }
+  let isa = @isa.ISA::current()
+  let result = ctx.vcode_func.new_vreg(Int)
+  if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
+    let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
+    add_inst.add_def({ reg: Virtual(result) })
+    add_inst.add_use(Virtual(base))
+    block.add_inst(add_inst)
+    return result
+  }
+  if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
+    let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
+    sub_inst.add_def({ reg: Virtual(result) })
+    sub_inst.add_use(Virtual(base))
+    block.add_inst(sub_inst)
+    return result
+  }
+  let imm_vreg = materialize_imm(ctx, block, offset)
+  let add_inst = @instr.VCodeInst::new(Add(true))
+  add_inst.add_def({ reg: Virtual(result) })
+  add_inst.add_use(Virtual(base))
+  add_inst.add_use(Virtual(imm_vreg))
+  block.add_inst(add_inst)
+  result
+}
+
+///|
+/// Materialize `index + offset` for register-offset addressing on AArch64.
+///
+/// V8's arm64 load/store lowering canonicalizes memory ops to `(base + index)`,
+/// and keeps constant displacements on the index side when possible.
+/// We mirror this for `uxtw`/unscaled addressing to reduce pressure on base
+/// temporaries and improve generated shape for Wasm memory hot paths.
+fn get_adjusted_regoff_index_with_offset(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  index : @abi.VReg,
+  ext : @instr.IndexExtend,
+  shift : Int,
+  offset : Int64,
+) -> (@abi.VReg, @instr.IndexExtend)? {
+  if offset == 0L {
+    return Some((index, ext))
+  }
+  if shift != 0 {
+    return None
+  }
+  // Keep extend-based addressing (`uxtw`/`sxtw`) untouched. Pre-adjusting the
+  // index before the extend can change semantics via 32-bit wraparound.
+  //
+  // We only adjust already-64-bit index forms (`Ext::None`).
+  let (is_i32_index, new_ext) = if ext is @instr.IndexExtend::None {
+    (false, @instr.IndexExtend::None)
+  } else {
+    return None
+  }
+  let isa = @isa.ISA::current()
+  let result = ctx.vcode_func.new_vreg(Int)
+  if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
+    let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), !is_i32_index))
+    add_inst.add_def({ reg: Virtual(result) })
+    add_inst.add_use(Virtual(index))
+    block.add_inst(add_inst)
+    return Some((result, new_ext))
+  }
+  if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
+    let sub_inst = @instr.VCodeInst::new(
+      SubImm((-offset).to_int(), !is_i32_index),
+    )
+    sub_inst.add_def({ reg: Virtual(result) })
+    sub_inst.add_use(Virtual(index))
+    block.add_inst(sub_inst)
+    return Some((result, new_ext))
+  }
+  let imm_vreg = materialize_imm(ctx, block, offset)
+  let add_inst = @instr.VCodeInst::new(Add(!is_i32_index))
+  add_inst.add_def({ reg: Virtual(result) })
+  add_inst.add_use(Virtual(index))
+  add_inst.add_use(Virtual(imm_vreg))
+  block.add_inst(add_inst)
+  Some((result, new_ext))
+}
+
+///|
 /// Pre-compute values that should be skipped during lowering because they are subsumed
 /// by a fused instruction selection rule.
 ///
@@ -1273,6 +1369,31 @@ fn match_addr_reg_offset(
       subsumed.push(index.id)
       index = inner
       ext = e
+      score = score + 1
+    }
+    // Match offset-index again after extend/shift normalization.
+    //
+    // Do this only for already-64-bit index forms.
+    //
+    // For `uxtw`/`sxtw`, rewriting:
+    //   extend(iadd32(idx, C)) -> (extend idx) + C
+    // is not semantics-preserving in general because `iadd32` wraps before
+    // the extend. Splitting the constant can change addresses when overflow
+    // occurs in 32-bit arithmetic.
+    if ext is @instr.IndexExtend::None &&
+      match_iadd_const(ctx, index) is Some((inner, off)) {
+      subsumed.push(index.id)
+      index = inner
+      extra_offset = extra_offset + off
+      score = score + 1
+    }
+    // Second chance to recover scaled-index after peeling nested adds.
+    if shift == 0 &&
+      match_shl_const_value(ctx, index) is Some((inner, sh)) &&
+      sh == scale {
+      subsumed.push(index.id)
+      index = inner
+      shift = scale
       score = score + 1
     }
     // Prefer shapes where the base is a known memory-base pointer.
@@ -2739,40 +2860,6 @@ fn lower_load_ptr(
   } else {
     0L
   }
-  fn adjust_base_with_offset(
-    ctx : LoweringContext,
-    block : @block.VCodeBlock,
-    base : @abi.VReg,
-    offset : Int64,
-  ) -> @abi.VReg {
-    let isa = @isa.ISA::current()
-    if offset == 0L {
-      return base
-    }
-    let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
-      add_inst.add_def({ reg: Virtual(result) })
-      add_inst.add_use(Virtual(base))
-      block.add_inst(add_inst)
-      return result
-    }
-    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
-      sub_inst.add_def({ reg: Virtual(result) })
-      sub_inst.add_use(Virtual(base))
-      block.add_inst(sub_inst)
-      return result
-    }
-    let imm_vreg = materialize_imm(ctx, block, offset)
-    let add_inst = @instr.VCodeInst::new(Add(true))
-    add_inst.add_def({ reg: Virtual(result) })
-    add_inst.add_use(Virtual(base))
-    add_inst.add_use(Virtual(imm_vreg))
-    block.add_inst(add_inst)
-    result
-  }
-
   // Try Cranelift-style register-offset addressing:
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
@@ -2789,17 +2876,39 @@ fn lower_load_ptr(
     ) &&
     (!is_amd64 || (shift >= 0 && shift <= 3)) {
     let fused_offset = explicit_offset + extra_offset
-    let (base, regoff_offset) = if is_amd64 &&
+    let mut regoff_ext = ext
+    let (base, index, regoff_offset) = if is_amd64 &&
       is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
-      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+      (
+        ctx.get_vreg_for_use(am_base, block),
+        ctx.get_vreg_for_use(am_index, block),
+        fused_offset.to_int(),
+      )
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
-      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
-      (adjusted, 0)
+      let index0 = ctx.get_vreg_for_use(am_index, block)
+      // V8 Liftoff (arm64 GetMemOp) materializes base+imm first, then applies
+      // register offset with UXTW/LSL. Keep AArch64 on that shape.
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
+          ctx, block, index0, ext, shift, fused_offset,
+        )
+        is Some((adjusted_index, adjusted_ext)) {
+        regoff_ext = adjusted_ext
+        (base0, adjusted_index, 0)
+      } else {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      }
     }
-    let index = ctx.get_vreg_for_use(am_index, block)
     let load_inst = @instr.VCodeInst::new(
-      LoadPtrRegOffset(mem_ty, ext, shift, regoff_offset),
+      LoadPtrRegOffset(mem_ty, regoff_ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
@@ -2866,40 +2975,6 @@ fn lower_store_ptr(
   } else {
     0L
   }
-  fn adjust_base_with_offset(
-    ctx : LoweringContext,
-    block : @block.VCodeBlock,
-    base : @abi.VReg,
-    offset : Int64,
-  ) -> @abi.VReg {
-    let isa = @isa.ISA::current()
-    if offset == 0L {
-      return base
-    }
-    let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
-      add_inst.add_def({ reg: Virtual(result) })
-      add_inst.add_use(Virtual(base))
-      block.add_inst(add_inst)
-      return result
-    }
-    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
-      sub_inst.add_def({ reg: Virtual(result) })
-      sub_inst.add_use(Virtual(base))
-      block.add_inst(sub_inst)
-      return result
-    }
-    let imm_vreg = materialize_imm(ctx, block, offset)
-    let add_inst = @instr.VCodeInst::new(Add(true))
-    add_inst.add_def({ reg: Virtual(result) })
-    add_inst.add_use(Virtual(base))
-    add_inst.add_use(Virtual(imm_vreg))
-    block.add_inst(add_inst)
-    result
-  }
-
   // Try Cranelift-style register-offset addressing for stores.
   let isa = @isa.ISA::current()
   let is_amd64 = isa is @isa.AMD64
@@ -2913,18 +2988,39 @@ fn lower_store_ptr(
     ) &&
     (!is_amd64 || (shift >= 0 && shift <= 3)) {
     let fused_offset = explicit_offset + extra_offset
-    let (base, regoff_offset) = if is_amd64 &&
+    let mut regoff_ext = ext
+    let (base, index, regoff_offset) = if is_amd64 &&
       is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
-      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+      (
+        ctx.get_vreg_for_use(am_base, block),
+        ctx.get_vreg_for_use(am_index, block),
+        fused_offset.to_int(),
+      )
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
-      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
-      (adjusted, 0)
+      let index0 = ctx.get_vreg_for_use(am_index, block)
+      // Align AArch64 regoff shape with V8 Liftoff: add immediate on base.
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
+          ctx, block, index0, ext, shift, fused_offset,
+        )
+        is Some((adjusted_index, adjusted_ext)) {
+        regoff_ext = adjusted_ext
+        (base0, adjusted_index, 0)
+      } else {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      }
     }
-    let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrRegOffset(mem_ty, ext, shift, regoff_offset),
+      StorePtrRegOffset(mem_ty, regoff_ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))
@@ -2989,39 +3085,6 @@ fn lower_load_ptr_narrow(
   } else {
     0L
   }
-  fn adjust_base_with_offset(
-    ctx : LoweringContext,
-    block : @block.VCodeBlock,
-    base : @abi.VReg,
-    offset : Int64,
-  ) -> @abi.VReg {
-    let isa = @isa.ISA::current()
-    if offset == 0L {
-      return base
-    }
-    let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
-      add_inst.add_def({ reg: Virtual(result) })
-      add_inst.add_use(Virtual(base))
-      block.add_inst(add_inst)
-      return result
-    }
-    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
-      sub_inst.add_def({ reg: Virtual(result) })
-      sub_inst.add_use(Virtual(base))
-      block.add_inst(sub_inst)
-      return result
-    }
-    let imm_vreg = materialize_imm(ctx, block, offset)
-    let add_inst = @instr.VCodeInst::new(Add(true))
-    add_inst.add_def({ reg: Virtual(result) })
-    add_inst.add_use(Virtual(base))
-    add_inst.add_use(Virtual(imm_vreg))
-    block.add_inst(add_inst)
-    result
-  }
 
   // Cranelift-style narrow register-offset addressing:
   //   load{8,16,32} [base + index{,extend}{,scale}]
@@ -3038,17 +3101,37 @@ fn lower_load_ptr_narrow(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
     let fused_offset = explicit_offset + extra_offset
-    let (base, regoff_offset) = if is_amd64 &&
+    let mut regoff_ext = ext
+    let (base, index, regoff_offset) = if is_amd64 &&
       is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
-      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+      (
+        ctx.get_vreg_for_use(am_base, block),
+        ctx.get_vreg_for_use(am_index, block),
+        fused_offset.to_int(),
+      )
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
-      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
-      (adjusted, 0)
+      let index0 = ctx.get_vreg_for_use(am_index, block)
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
+          ctx, block, index0, ext, shift, fused_offset,
+        )
+        is Some((adjusted_index, adjusted_ext)) {
+        regoff_ext = adjusted_ext
+        (base0, adjusted_index, 0)
+      } else {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      }
     }
-    let index = ctx.get_vreg_for_use(am_index, block)
     let load_inst = @instr.VCodeInst::new(
-      LoadPtrNarrowRegOffset(bits, signed, ext, shift, regoff_offset),
+      LoadPtrNarrowRegOffset(bits, signed, regoff_ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
     load_inst.add_use(Virtual(base))
@@ -3111,39 +3194,6 @@ fn lower_store_ptr_narrow(
   } else {
     0L
   }
-  fn adjust_base_with_offset(
-    ctx : LoweringContext,
-    block : @block.VCodeBlock,
-    base : @abi.VReg,
-    offset : Int64,
-  ) -> @abi.VReg {
-    let isa = @isa.ISA::current()
-    if offset == 0L {
-      return base
-    }
-    let result = ctx.vcode_func.new_vreg(Int)
-    if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-      let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
-      add_inst.add_def({ reg: Virtual(result) })
-      add_inst.add_use(Virtual(base))
-      block.add_inst(add_inst)
-      return result
-    }
-    if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-      let sub_inst = @instr.VCodeInst::new(SubImm((-offset).to_int(), true))
-      sub_inst.add_def({ reg: Virtual(result) })
-      sub_inst.add_use(Virtual(base))
-      block.add_inst(sub_inst)
-      return result
-    }
-    let imm_vreg = materialize_imm(ctx, block, offset)
-    let add_inst = @instr.VCodeInst::new(Add(true))
-    add_inst.add_def({ reg: Virtual(result) })
-    add_inst.add_use(Virtual(base))
-    add_inst.add_use(Virtual(imm_vreg))
-    block.add_inst(add_inst)
-    result
-  }
 
   // Cranelift-style narrow register-offset addressing:
   //   store{8,16,32} [base + index{,extend}{,scale}]
@@ -3160,18 +3210,38 @@ fn lower_store_ptr_narrow(
       ctx, am_index, access_size, explicit_offset, extra_offset, has_extra,
     ) {
     let fused_offset = explicit_offset + extra_offset
-    let (base, regoff_offset) = if is_amd64 &&
+    let mut regoff_ext = ext
+    let (base, index, regoff_offset) = if is_amd64 &&
       is_valid_load_store_offset_for_isa(isa, fused_offset, access_size) {
-      (ctx.get_vreg_for_use(am_base, block), fused_offset.to_int())
+      (
+        ctx.get_vreg_for_use(am_base, block),
+        ctx.get_vreg_for_use(am_index, block),
+        fused_offset.to_int(),
+      )
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
-      let adjusted = adjust_base_with_offset(ctx, block, base0, fused_offset)
-      (adjusted, 0)
+      let index0 = ctx.get_vreg_for_use(am_index, block)
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
+          ctx, block, index0, ext, shift, fused_offset,
+        )
+        is Some((adjusted_index, adjusted_ext)) {
+        regoff_ext = adjusted_ext
+        (base0, adjusted_index, 0)
+      } else {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      }
     }
-    let index = ctx.get_vreg_for_use(am_index, block)
     let value = ctx.get_vreg_for_use(store_value, block)
     let store_inst = @instr.VCodeInst::new(
-      StorePtrNarrowRegOffset(bits, ext, shift, regoff_offset),
+      StorePtrNarrowRegOffset(bits, regoff_ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
     store_inst.add_use(Virtual(index))

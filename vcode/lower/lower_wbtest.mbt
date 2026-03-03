@@ -362,6 +362,29 @@ test "amd64 lower regoff folds base displacement" {
 }
 
 ///|
+test "aarch64 keeps i32 add before uxtw regoff" {
+  if !(@isa.ISA::current() is @isa.AArch64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("aarch64_uxtw_wrap_safety")
+  let base = builder.add_param(@ir.Type::I64)
+  let idx = builder.add_param(@ir.Type::I32)
+  builder.add_result(@ir.Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let delta = builder.iconst_i32(1056064)
+  let idx_plus = builder.iadd(idx, delta)
+  let idx64 = builder.uextend(@ir.Type::I64, idx_plus)
+  let addr = builder.iadd(base, idx64)
+  let off = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(@ir.Type::I32, addr, off)
+  builder.return_([loaded])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("load_ptr_regoff.i32 (uxtw,0)"), content="true")
+  inspect(output.contains("add #1056064"), content="false")
+}
+
+///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
   let a = builder.add_param(@ir.Type::I32)
@@ -1640,20 +1663,24 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
     content=(
       #|vcode test(v0:int) -> float {
       #|block0:
-      #|    d2 = ldf 10
-      #|    x3 = ldi 0
       #|    br_cmp_imm.eq x0, #0, block1, block5
       #|block1:
-      #|    store_ptr.f32 +0 x3, d2
-      #|    d1 = load_ptr.f32 +0 x3
+      #|    x2 = ldi 0
+      #|    d3 = ldf 10
+      #|    store_ptr.f32 +0 x2, d3
+      #|    d1 = load_ptr.f32 +0 x2
       #|    jump block4
       #|block2:
-      #|    store_ptr.f32 +0 x3, d2
-      #|    d1 = load_ptr.f32 +0 x3
+      #|    x4 = ldi 0
+      #|    d5 = ldf 10
+      #|    store_ptr.f32 +0 x4, d5
+      #|    d1 = load_ptr.f32 +0 x4
       #|    jump block4
       #|block3:
-      #|    store_ptr.f32 +0 x3, d2
-      #|    d1 = load_ptr.f32 +0 x3
+      #|    x6 = ldi 0
+      #|    d7 = ldf 10
+      #|    store_ptr.f32 +0 x6, d7
+      #|    d1 = load_ptr.f32 +0 x6
       #|    jump block4
       #|block4(f1:float):
       #|    ret d1
@@ -1777,11 +1804,11 @@ test "minimal: dead float constant should not affect live values" {
     content=(
       #|vcode dead_fconst_test() -> float {
       #|block0:
-      #|    d0 = ldf 2
-      #|    d1 = ldf 10
-      #|    x2 = ldi 0
-      #|    store_ptr.f32 +0 x2, d1
-      #|    ret d0
+      #|    d0 = ldf 10
+      #|    x1 = ldi 0
+      #|    store_ptr.f32 +0 x1, d0
+      #|    d2 = ldf 2
+      #|    ret d2
       #|}
       #|
     ),

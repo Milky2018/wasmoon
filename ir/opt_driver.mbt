@@ -124,6 +124,14 @@ fn optimize_cranelift_style(
   if dbpe_result.changed {
     result.mark_changed()
   }
+  // NOTE: Temporarily keep global mem-base CSE disabled due correctness
+  // regression on algorithm workloads; local mem-base CSE remains enabled.
+  let addr_reassoc_result = run_opt_pass(
+    func, "wasm_addr_reassoc", reassociate_wasm_addresses,
+  )
+  if addr_reassoc_result.changed {
+    result.mark_changed()
+  }
   if run_egraph && run_egraph_pass(func) {
     result.mark_changed()
   }

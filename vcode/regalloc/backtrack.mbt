@@ -1083,13 +1083,17 @@ fn BacktrackingAllocator::split_bundle(
   bundle : Bundle,
   split_opt : (ProgPoint, @abi.PReg)?,
 ) -> Unit {
+  let split_hint = match split_opt {
+    Some((_, hint)) => Some(hint)
+    None => None
+  }
   // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
   // Once a spillset exceeds this cap, fall back to direct spilling.
   let spillset_id = bundle.spillset_id
   if spillset_id >= 0 &&
     spillset_id < self.spillset_split_counts.length() &&
     self.spillset_split_counts[spillset_id] >= self.max_splits_per_spillset {
-    self.force_spill_bundle(bundle)
+    self.split_into_minimal_bundles(bundle, split_hint)
     return
   }
 
@@ -1130,12 +1134,7 @@ fn BacktrackingAllocator::split_bundle(
 
       // If we couldn't split effectively, just spill
       if before_ranges.is_empty() || after_ranges.is_empty() {
-        let slot = spill_bundle.slot
-        bundle.allocation = Spill(slot)
-        for range_id in bundle.range_ids {
-          let range = self.ranges.get(range_id)
-          range.allocation = Spill(slot)
-        }
+        self.split_into_minimal_bundles(bundle, Some(split_hint_reg))
         return
       }
 
@@ -1211,6 +1210,59 @@ fn BacktrackingAllocator::split_bundle(
       }
     }
   }
+}
+
+///|
+fn BacktrackingAllocator::enqueue_single_range_bundle(
+  self : BacktrackingAllocator,
+  source_bundle : Bundle,
+  spill_bundle : SpillBundle,
+  range_id : Int,
+  hint : @abi.PReg?,
+) -> Unit {
+  let new_bundle = Bundle::new(
+    self.bundles.bundles.length(),
+    source_bundle.reg_class,
+  )
+  new_bundle.spill_bundle_id = spill_bundle.id
+  new_bundle.spillset_id = source_bundle.spillset_id
+  new_bundle.add_range(range_id)
+  self.ranges.get(range_id).bundle_id = new_bundle.id
+  new_bundle.prio = new_bundle.total_length(self.ranges)
+  new_bundle.spill_weight = self.recompute_bundle_spill_weight(new_bundle)
+  self.bundles.add_bundle(new_bundle)
+  self.conflict_seen_epoch.push(0)
+  self.queue_in_heap.push(false)
+  self.bundle_attempts.push(0)
+  self.bundle_span_cache.push(None)
+  self.bundle_hint_cache.push(None)
+  self.bundle_hint_ready.push(false)
+  spill_bundle.add_bundle(new_bundle.id)
+  self.queue_push(new_bundle.id, self.bundle_queue_prio(new_bundle), hint)
+}
+
+///|
+fn BacktrackingAllocator::split_into_minimal_bundles(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  hint : @abi.PReg?,
+) -> Unit {
+  if bundle.range_ids.length() <= 1 {
+    self.force_spill_bundle(bundle)
+    return
+  }
+  let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
+  let mut first = true
+  for range_id in bundle.range_ids {
+    let child_hint = if first {
+      first = false
+      hint
+    } else {
+      None
+    }
+    self.enqueue_single_range_bundle(bundle, spill_bundle, range_id, child_hint)
+  }
+  bundle.allocation = Spill(spill_bundle.slot)
 }
 
 ///|
@@ -2441,7 +2493,11 @@ fn BacktrackingAllocator::preassign_params(
       // - relaxed mode: keep vmctx pinned, but treat other params as hints only.
       if strict_precolor || is_vmctx_param {
         self.record_allocation(bundle, preg)
-        if is_vmctx_param {
+        // Keep VMContext pinned. For strict precoloring, only pin params that
+        // do not cross calls; call-crossing values must remain movable so the
+        // allocator can satisfy call-clobber constraints.
+        if is_vmctx_param ||
+          (strict_precolor && !bundle.crosses_call(self.ranges)) {
           bundle.is_pinned = true
         }
       } else if bundle.spillset_id >= 0 &&

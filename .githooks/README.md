@@ -3,6 +3,14 @@
 ## Pre-commit Hook
 
 This pre-commit hook performs automatic checks before finalizing your commit.
+It runs:
+
+- `moon fmt`
+- `moon info`
+- `moon check --target native`
+
+If `moon fmt` or `moon info` changes tracked files, the commit is stopped so you
+can review and stage the updates first.
 
 ### Usage Instructions
 

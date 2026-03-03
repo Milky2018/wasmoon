@@ -1,3 +1,22 @@
 #!/bin/sh
 
-moon check
+set -eu
+
+echo "[pre-commit] moon fmt"
+moon fmt
+if ! git diff --quiet --; then
+  echo "[pre-commit] formatting updated files. Please review and re-stage."
+  git --no-pager diff --stat
+  exit 1
+fi
+
+echo "[pre-commit] moon info"
+moon info
+if ! git diff --quiet --; then
+  echo "[pre-commit] interface files updated. Please review and re-stage."
+  git --no-pager diff --stat
+  exit 1
+fi
+
+echo "[pre-commit] moon check --target native"
+moon check --target native

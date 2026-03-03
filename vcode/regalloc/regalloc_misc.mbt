@@ -294,10 +294,11 @@ pub fn allocate_registers_backtracking_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> VCodeFunction {
-  // Cranelift/regalloc2 does not run a dedicated pre-regalloc dead-code sweep
-  // at this stage; keep the input VCode unchanged and let earlier lowering
-  // cleanup decide shape.
-  let func = func
+  // Keep Cranelift-style cheap rematerialization before allocation to shorten
+  // cross-block live ranges for constants/function pointers.
+  let func = rematerialize_long_distance_constants(func)
+  let func = rematerialize_cross_block_constants(func)
+  let func = eliminate_dead_code(func)
 
   // Build register pools
   let (
@@ -349,9 +350,11 @@ pub fn allocate_registers_backtracking_output_with_isa(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
 ) -> (VCodeFunction, Output) {
-  // Cranelift/regalloc2 keeps VCode shape unchanged at this stage; avoid an
-  // extra pre-regalloc dead-code sweep in Wasmoon as well.
-  let func = func
+  // Keep Cranelift-style cheap rematerialization before allocation to shorten
+  // cross-block live ranges for constants/function pointers.
+  let func = rematerialize_long_distance_constants(func)
+  let func = rematerialize_cross_block_constants(func)
+  let func = eliminate_dead_code(func)
 
   // Build register pools.
   let (
@@ -382,7 +385,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    param_precolor_strict=false,
+    param_precolor_strict=true,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.

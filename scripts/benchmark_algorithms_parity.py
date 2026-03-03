@@ -306,11 +306,12 @@ def main() -> int:
         value_delta_pct = pct_delta(median_value, baseline_value)
         value_delta_abs = abs_delta(median_value, baseline_value)
         wall_delta_pct = pct_delta(median_duration, baseline_duration)
-        value_ratio = (
-            (median_value / baseline_value)
-            if median_value is not None and baseline_value not in (None, 0.0)
-            else None
-        )
+        value_ratio = None
+        if median_value is not None and baseline_value is not None:
+            if baseline_value == 0.0:
+                value_ratio = 1.0 if median_value == 0.0 else float("inf")
+            else:
+                value_ratio = median_value / baseline_value
         wall_ratio = (
             (median_duration / baseline_duration)
             if median_duration is not None and baseline_duration not in (None, 0.0)
