@@ -2887,7 +2887,14 @@ fn lower_load_ptr(
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
       let index0 = ctx.get_vreg_for_use(am_index, block)
-      if get_adjusted_regoff_index_with_offset(
+      // V8 Liftoff (arm64 GetMemOp) materializes base+imm first, then applies
+      // register offset with UXTW/LSL. Keep AArch64 on that shape.
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
           ctx, block, index0, ext, shift, fused_offset,
         )
         is Some((adjusted_index, adjusted_ext)) {
@@ -2992,7 +2999,13 @@ fn lower_store_ptr(
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
       let index0 = ctx.get_vreg_for_use(am_index, block)
-      if get_adjusted_regoff_index_with_offset(
+      // Align AArch64 regoff shape with V8 Liftoff: add immediate on base.
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
           ctx, block, index0, ext, shift, fused_offset,
         )
         is Some((adjusted_index, adjusted_ext)) {
@@ -3099,7 +3112,12 @@ fn lower_load_ptr_narrow(
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
       let index0 = ctx.get_vreg_for_use(am_index, block)
-      if get_adjusted_regoff_index_with_offset(
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
           ctx, block, index0, ext, shift, fused_offset,
         )
         is Some((adjusted_index, adjusted_ext)) {
@@ -3203,7 +3221,12 @@ fn lower_store_ptr_narrow(
     } else {
       let base0 = ctx.get_vreg_for_use(am_base, block)
       let index0 = ctx.get_vreg_for_use(am_index, block)
-      if get_adjusted_regoff_index_with_offset(
+      if !is_amd64 {
+        let adjusted_base = get_adjusted_base_with_offset(
+          ctx, block, base0, fused_offset,
+        )
+        (adjusted_base, index0, 0)
+      } else if get_adjusted_regoff_index_with_offset(
           ctx, block, index0, ext, shift, fused_offset,
         )
         is Some((adjusted_index, adjusted_ext)) {
