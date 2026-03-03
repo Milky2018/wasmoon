@@ -2378,6 +2378,73 @@ test "mem_base_cse_global: merge with memory.grow keeps load" {
 }
 
 ///|
+test "wasm address reassociation: shared base plus immediate offsets" {
+  let builder = IRBuilder::new("wasm_address_reassoc_shared_base")
+  let vmctx = builder.add_param(Type::I64)
+  let dyn_off = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  let base = builder.load_mem_base(vmctx, 0)
+  let base_plus_dyn = builder.iadd(base, dyn_off)
+  let addr1 = builder.iadd(base_plus_dyn, builder.iconst_i64(8L))
+  let zero = builder.iconst_i64(0L)
+  let load1 = builder.load_ptr(Type::I32, addr1, zero)
+  let addr2 = builder.iadd(base_plus_dyn, builder.iconst_i64(16L))
+  let load2 = builder.load_ptr(Type::I32, addr2, zero)
+  let sum = builder.iadd(load1, load2)
+  builder.return_([sum])
+
+  let func = builder.get_function()
+  let result = reassociate_wasm_addresses(func)
+  assert_true(result.changed)
+
+  let loads : Array[Inst] = []
+  for inst in func.blocks[0].instructions {
+    if inst.opcode is Opcode::LoadPtr(_) {
+      loads.push(inst)
+    }
+  }
+  assert_eq(loads.length(), 2)
+  assert_eq(loads[0].operands[0].id, base_plus_dyn.id)
+  assert_eq(loads[1].operands[0].id, base_plus_dyn.id)
+
+  fn iconst_of(block : Block, value : Value) -> Int64? {
+    for inst in block.instructions {
+      if inst.first_result() is Some(result) && result.id == value.id {
+        if inst.opcode is Opcode::Iconst(c) {
+          return Some(c)
+        }
+      }
+    }
+    None
+  }
+
+  assert_eq(iconst_of(func.blocks[0], loads[0].operands[1]), Some(8L))
+  assert_eq(iconst_of(func.blocks[0], loads[1].operands[1]), Some(16L))
+}
+
+///|
+test "wasm address reassociation: requires repeated pair usage" {
+  let builder = IRBuilder::new("wasm_address_reassoc_single_use")
+  let vmctx = builder.add_param(Type::I64)
+  let dyn_off = builder.add_param(Type::I64)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+
+  let base = builder.load_mem_base(vmctx, 0)
+  let addr = builder.iadd(builder.iadd(base, dyn_off), builder.iconst_i64(8L))
+  let load = builder.load_ptr(Type::I32, addr, builder.iconst_i64(0L))
+  builder.return_([load])
+
+  let func = builder.get_function()
+  let result = reassociate_wasm_addresses(func)
+  assert_false(result.changed)
+}
+
+///|
 test "GVN: pure arithmetic CSE" {
   // Test that GVN also handles pure arithmetic (same as CSE)
   let builder = IRBuilder::new("gvn_pure_cse")
