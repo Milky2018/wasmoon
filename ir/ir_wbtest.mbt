@@ -2305,6 +2305,79 @@ test "GVN: copied mem base keeps memory region" {
 }
 
 ///|
+test "mem_base_cse_global: merge keeps dominating mem base" {
+  let builder = IRBuilder::new("mem_base_cse_global_merge")
+  let vmctx = builder.add_param(Type::I64)
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  let join_block = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let base0 = builder.load_mem_base(vmctx, 0)
+  builder.brnz(cond, then_block, else_block)
+
+  builder.switch_to_block(then_block)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(else_block)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(join_block)
+  let base1 = builder.load_mem_base(vmctx, 0)
+  let off = builder.iconst_i64(0L)
+  let value = builder.load_ptr(Type::I32, base1, off)
+  builder.return_([value])
+
+  let func = builder.get_function()
+  let result = eliminate_redundant_mem_base_loads_global(func)
+  assert_true(result.changed)
+  let join_first = func.blocks[3].instructions[0]
+  assert_true(join_first.opcode is Opcode::Copy)
+  assert_eq(join_first.operands[0].id, base0.id)
+}
+
+///|
+test "mem_base_cse_global: merge with memory.grow keeps load" {
+  let builder = IRBuilder::new("mem_base_cse_global_invalidate")
+  let vmctx = builder.add_param(Type::I64)
+  let cond = builder.add_param(Type::I32)
+  builder.add_result(Type::I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  let join_block = builder.create_block()
+
+  builder.switch_to_block(entry)
+  let base0 = builder.load_mem_base(vmctx, 0)
+  ignore(base0)
+  builder.brnz(cond, then_block, else_block)
+
+  builder.switch_to_block(then_block)
+  let delta = builder.iconst_i32(0)
+  let old_pages = builder.memory_grow(0, delta)
+  ignore(old_pages)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(else_block)
+  builder.jump(join_block, [])
+
+  builder.switch_to_block(join_block)
+  let base1 = builder.load_mem_base(vmctx, 0)
+  let off = builder.iconst_i64(0L)
+  let value = builder.load_ptr(Type::I32, base1, off)
+  builder.return_([value])
+
+  let func = builder.get_function()
+  let result = eliminate_redundant_mem_base_loads_global(func)
+  assert_false(result.changed)
+  let join_first = func.blocks[3].instructions[0]
+  assert_true(join_first.opcode is Opcode::LoadMemBase(_))
+}
+
+///|
 test "GVN: pure arithmetic CSE" {
   // Test that GVN also handles pure arithmetic (same as CSE)
   let builder = IRBuilder::new("gvn_pure_cse")

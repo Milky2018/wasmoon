@@ -141,6 +141,202 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
   result
 }
 
+///|
+/// Eliminate redundant `LoadMemBase` across basic blocks with CFG meet.
+///
+/// This mirrors Cranelift-style dataflow:
+/// - forward-propagate available memory-base loads,
+/// - meet at merge points (keep only identical dominating values),
+/// - invalidate on operations that may mutate memory base.
+pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
+  let result = OptResult::new()
+  if func.blocks.length() == 0 {
+    return result
+  }
+  let cfg = CFG::build(func)
+  if !cfg.is_valid(0) {
+    return result
+  }
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  for i, block in func.blocks {
+    block_idx.set(block.id, i)
+  }
+  let iconst_values = collect_iconst_values(func)
+  let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
+
+  fn copy_state(
+    src : @hashmap.HashMap[Int64, Value],
+  ) -> @hashmap.HashMap[Int64, Value] {
+    let dst : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    for entry in src.iter() {
+      let (k, v) = entry
+      dst.set(k, v)
+    }
+    dst
+  }
+
+  fn invalidates_mem_base(
+    inst : Inst,
+    ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ) -> Bool {
+    match inst.opcode {
+      MemoryGrow(_, _)
+      | Call(_)
+      | CallIndirect(_, _)
+      | CallRef(_)
+      | ReturnCall(_)
+      | ReturnCallIndirect(_, _)
+      | ReturnCallRef(_)
+      | CallPtr(_, _)
+      | TableGrow(_) => true
+      StorePtr(_) | StorePtrNarrow(_) =>
+        if ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
+          access.region is Vmctx
+        } else {
+          false
+        }
+      _ => false
+    }
+  }
+
+  fn transfer_mem_base_state(
+    in_state : @hashmap.HashMap[Int64, Value],
+    block : Block,
+    ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
+  ) -> @hashmap.HashMap[Int64, Value] {
+    let out_state = copy_state(in_state)
+    for inst in block.instructions {
+      if invalidates_mem_base(inst, ptr_base_infos) {
+        out_state.clear()
+        continue
+      }
+      if inst.opcode is LoadMemBase(memidx) &&
+        inst.first_result() is Some(r) &&
+        inst.operands.length() == 1 {
+        let vmctx = inst.operands[0]
+        let key = (memidx.to_int64() << 32) |
+          (vmctx.id.to_int64() & 0xFFFF_FFFFL)
+        if out_state.get(key) is None {
+          out_state.set(key, r)
+        }
+      }
+    }
+    out_state
+  }
+
+  fn update_meet_state(
+    dst : @hashmap.HashMap[Int64, Value],
+    incoming : @hashmap.HashMap[Int64, Value],
+  ) -> Bool {
+    let next : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    for entry in dst.iter() {
+      let (k, old_v) = entry
+      if incoming.get(k) is Some(in_v) && in_v.id == old_v.id {
+        next.set(k, old_v)
+      }
+    }
+    let mut changed = dst.length() != next.length()
+    if !changed {
+      for entry in next.iter() {
+        let (k, v) = entry
+        if dst.get(k) is Some(old_v) {
+          if old_v.id != v.id {
+            changed = true
+            break
+          }
+        } else {
+          changed = true
+          break
+        }
+      }
+    }
+    if changed {
+      dst.clear()
+      for entry in next.iter() {
+        let (k, v) = entry
+        dst.set(k, v)
+      }
+    }
+    changed
+  }
+
+  // Block input state: block_id -> available (memidx, vmctx) -> dominating value.
+  let block_input : @hashmap.HashMap[Int, @hashmap.HashMap[Int64, Value]] = @hashmap.new()
+  block_input.set(0, @hashmap.new())
+  let worklist : Array[Int] = [0]
+  let in_worklist : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  in_worklist.add(0) |> ignore
+
+  while worklist.length() > 0 {
+    let block_id = worklist.pop().unwrap()
+    in_worklist.remove(block_id) |> ignore
+    let block_i = match block_idx.get(block_id) {
+      Some(i) => i
+      None => continue
+    }
+    let in_state = match block_input.get(block_id) {
+      Some(state) => state
+      None => continue
+    }
+    let out_state = transfer_mem_base_state(
+      in_state,
+      func.blocks[block_i],
+      ptr_base_infos,
+    )
+    for succ in cfg.get_successors(block_id) {
+      if !cfg.is_valid(succ) {
+        continue
+      }
+      match block_input.get(succ) {
+        None => {
+          block_input.set(succ, copy_state(out_state))
+          if !in_worklist.contains(succ) {
+            worklist.push(succ)
+            in_worklist.add(succ) |> ignore
+          }
+        }
+        Some(succ_state) =>
+          if update_meet_state(succ_state, out_state) &&
+            !in_worklist.contains(succ) {
+            worklist.push(succ)
+            in_worklist.add(succ) |> ignore
+          }
+      }
+    }
+  }
+
+  // Rewrite using computed block input states.
+  for block in func.blocks {
+    let state = match block_input.get(block.id) {
+      Some(s) => copy_state(s)
+      None => @hashmap.new()
+    }
+    for inst in block.instructions {
+      if invalidates_mem_base(inst, ptr_base_infos) {
+        state.clear()
+        continue
+      }
+      if inst.opcode is LoadMemBase(memidx) &&
+        inst.first_result() is Some(r) &&
+        inst.operands.length() == 1 {
+        let vmctx = inst.operands[0]
+        let key = (memidx.to_int64() << 32) |
+          (vmctx.id.to_int64() & 0xFFFF_FFFFL)
+        if state.get(key) is Some(existing) {
+          inst.opcode = Opcode::Copy
+          inst.operands.clear()
+          inst.operands.push(existing)
+          result.mark_changed()
+        } else {
+          state.set(key, r)
+        }
+      }
+    }
+  }
+
+  result
+}
+
 // ============ Global Value Numbering with Load CSE ============
 
 ///|

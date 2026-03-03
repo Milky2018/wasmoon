@@ -124,6 +124,15 @@ fn optimize_cranelift_style(
   if dbpe_result.changed {
     result.mark_changed()
   }
+  // Cranelift-style redundant-load elimination: run a CFG-aware mem-base load
+  // CSE before egraph so large functions also benefit from reduced address-load
+  // noise in lowering/codegen.
+  let mb_global_result = run_opt_pass(
+    func, "mem_base_cse_global", eliminate_redundant_mem_base_loads_global,
+  )
+  if mb_global_result.changed {
+    result.mark_changed()
+  }
   if run_egraph && run_egraph_pass(func) {
     result.mark_changed()
   }

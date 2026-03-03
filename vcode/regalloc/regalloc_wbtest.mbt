@@ -1033,17 +1033,17 @@ test "regalloc: @instr.CallIndirect with 8 f64 arguments" {
     content=(
       #|vcode test_many_f64_args() -> double {
       #|block0:
-      #|    d0 = ldf 1
-      #|    d1 = ldf 2
-      #|    d2 = ldf 3
-      #|    d3 = ldf 4
-      #|    d4 = ldf 5
-      #|    d5 = ldf 6
-      #|    d6 = ldf 7
-      #|    d7 = ldf 8
-      #|    x8 = ldi 4096
-      #|    d19 = call_ptr[Wasm](8) -> 1 results x8
-      #|    ret d19
+      #|    d0 = ldf 7
+      #|    d1 = ldf 8
+      #|    x2 = ldi 4096
+      #|    d4 = ldf 1
+      #|    d5 = ldf 2
+      #|    d6 = ldf 3
+      #|    d7 = ldf 4
+      #|    d18 = ldf 5
+      #|    d19 = ldf 6
+      #|    d3 = call_ptr[Wasm](8) -> 1 results x2
+      #|    ret d3
       #|}
       #|
     ),
@@ -1134,11 +1134,11 @@ test "regalloc: f32 value live across @instr.CallIndirect" {
     content=(
       #|vcode test_f32_across_call() -> (float, double) {
       #|block0:
-      #|    d8 = ldf 42
-      #|    d1 = ldf 3.14
-      #|    x2 = ldi 8192
-      #|    d3 = call_ptr[Wasm](1) -> 1 results x2
-      #|    ret d8, d3
+      #|    d0 = ldf 3.14
+      #|    x1 = ldi 8192
+      #|    d2 = call_ptr[Wasm](1) -> 1 results x1
+      #|    d3 = ldf 42
+      #|    ret d3, d2
       #|}
       #|
     ),
