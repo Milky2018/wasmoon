@@ -107,6 +107,8 @@ static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context
     return table;
 }
 
+static int gc_alloc_debug_enabled(void);
+
 static int32_t gc_clamp_root_count(int32_t root_count, int32_t fallback) {
     if (root_count <= 0) {
         return 0;
@@ -120,54 +122,29 @@ static int32_t gc_clamp_root_count(int32_t root_count, int32_t fallback) {
     return root_count;
 }
 
-static int32_t gc_lookup_safepoint_root_count(
-    jit_context_t *ctx,
+static int gc_requires_precise_roots(int32_t safepoint_id) {
+    return safepoint_id >= 0;
+}
+
+static void gc_log_precise_root_failure(
+    const char *op,
     int32_t safepoint_id,
-    int32_t fallback
+    const char *reason
 ) {
-    if (!ctx || safepoint_id < 0) {
-        return fallback;
+    if (!gc_alloc_debug_enabled()) {
+        return;
     }
-    const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
-    if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
-        return fallback;
-    }
-    const uint8_t *blob = table->stackmap_blob;
-    uint32_t version = gc_read_u32_le(blob);
-    uint32_t count = gc_read_u32_le(blob + 4);
-    if ((uint32_t)safepoint_id >= count) {
-        return fallback;
-    }
-    if (version == 1u) {
-        size_t entry_offset = 8u + ((size_t)safepoint_id * 4u);
-        if (entry_offset + 4u > table->stackmap_blob_size) {
-            return fallback;
-        }
-        return (int32_t)gc_read_u32_le(blob + entry_offset);
-    }
-    if (version == 2u) {
-        size_t offset = 8u;
-        for (uint32_t i = 0; i < count; i++) {
-            if (offset + 8u > table->stackmap_blob_size) {
-                return fallback;
-            }
-            int32_t root_count = (int32_t)gc_read_u32_le(blob + offset);
-            uint32_t index_count = gc_read_u32_le(blob + offset + 4u);
-            offset += 8u;
-            size_t index_bytes = (size_t)index_count * 4u;
-            if (offset + index_bytes > table->stackmap_blob_size) {
-                return fallback;
-            }
-            if (i == (uint32_t)safepoint_id) {
-                return root_count;
-            }
-            offset += index_bytes;
-        }
-    }
-    return fallback;
+    fprintf(
+        stderr,
+        "[GC ROOTS] %s safepoint=%d precise-root selection failed: %s\n",
+        op,
+        safepoint_id,
+        reason ? reason : "unknown"
+    );
 }
 
 static int32_t gc_select_alloc_roots(
+    const char *op,
     jit_context_t *ctx,
     int32_t safepoint_id,
     const int64_t *roots,
@@ -185,42 +162,44 @@ static int32_t gc_select_alloc_roots(
         return 0;
     }
 
-    int32_t root_count = gc_clamp_root_count(
-        gc_lookup_safepoint_root_count(ctx, safepoint_id, fallback_root_count),
-        fallback_root_count
-    );
-    if (root_count <= 0) {
-        return 0;
-    }
-
-    if (!ctx || safepoint_id < 0) {
+    int32_t root_count = gc_clamp_root_count(fallback_root_count, fallback_root_count);
+    if (!gc_requires_precise_roots(safepoint_id)) {
         return root_count;
+    }
+    if (!ctx) {
+        gc_log_precise_root_failure(op, safepoint_id, "missing jit context");
+        return -1;
     }
     const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
-        return root_count;
+        gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
+        return -1;
     }
     const uint8_t *blob = table->stackmap_blob;
     uint32_t version = gc_read_u32_le(blob);
     if (version != 2u) {
-        return root_count;
+        gc_log_precise_root_failure(op, safepoint_id, "stackmap v2 required");
+        return -1;
     }
     uint32_t count = gc_read_u32_le(blob + 4);
     if ((uint32_t)safepoint_id >= count) {
-        return root_count;
+        gc_log_precise_root_failure(op, safepoint_id, "safepoint id out of range");
+        return -1;
     }
 
     size_t offset = 8u;
     for (uint32_t i = 0; i < count; i++) {
         if (offset + 8u > table->stackmap_blob_size) {
-            return root_count;
+            gc_log_precise_root_failure(op, safepoint_id, "truncated stackmap header");
+            return -1;
         }
         uint32_t encoded_root_count = gc_read_u32_le(blob + offset);
         uint32_t index_count = gc_read_u32_le(blob + offset + 4u);
         offset += 8u;
         size_t index_bytes = (size_t)index_count * 4u;
         if (offset + index_bytes > table->stackmap_blob_size) {
-            return root_count;
+            gc_log_precise_root_failure(op, safepoint_id, "truncated stackmap index list");
+            return -1;
         }
         if (i != (uint32_t)safepoint_id) {
             offset += index_bytes;
@@ -230,28 +209,36 @@ static int32_t gc_select_alloc_roots(
         int32_t encoded_clamped = gc_clamp_root_count((int32_t)encoded_root_count, fallback_root_count);
         if (encoded_clamped > 0) {
             root_count = encoded_clamped;
+        } else {
+            return 0;
         }
         if (index_count == 0u) {
-            return root_count;
+            gc_log_precise_root_failure(op, safepoint_id, "missing root indices");
+            return -1;
+        }
+        if (index_count < (uint32_t)root_count) {
+            gc_log_precise_root_failure(op, safepoint_id, "root index count too small");
+            return -1;
         }
         int64_t *selected = (int64_t *)malloc((size_t)root_count * sizeof(int64_t));
         if (!selected) {
-            return root_count;
+            gc_log_precise_root_failure(op, safepoint_id, "out of memory while selecting roots");
+            return -1;
         }
-        int32_t produced = 0;
         int invalid_index = 0;
-        for (uint32_t j = 0; j < index_count && produced < root_count; j++) {
+        for (int32_t j = 0; j < root_count; j++) {
             uint32_t root_idx = gc_read_u32_le(blob + offset + ((size_t)j * 4u));
             if (root_idx < (uint32_t)fallback_root_count) {
-                selected[produced++] = roots[root_idx];
+                selected[j] = roots[root_idx];
             } else {
                 invalid_index = 1;
                 break;
             }
         }
-        if (invalid_index || produced != root_count) {
+        if (invalid_index) {
             free(selected);
-            return root_count;
+            gc_log_precise_root_failure(op, safepoint_id, "root index out of bounds");
+            return -1;
         }
         if (selected_roots_out) {
             *selected_roots_out = selected;
@@ -259,9 +246,10 @@ static int32_t gc_select_alloc_roots(
         if (selected_roots_owned) {
             *selected_roots_owned = selected;
         }
-        return produced;
+        return root_count;
     }
-    return root_count;
+    gc_log_precise_root_failure(op, safepoint_id, "safepoint entry not found");
+    return -1;
 }
 
 // ============ Struct Operations ============
@@ -640,6 +628,7 @@ int64_t gc_alloc_struct_slow(
     const int64_t *alloc_roots = NULL;
     int64_t *alloc_roots_owned = NULL;
     int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_struct_slow",
         actual_ctx,
         safepoint_id,
         fields,
@@ -647,6 +636,15 @@ int64_t gc_alloc_struct_slow(
         &alloc_roots,
         &alloc_roots_owned
     );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        if (default_fields) {
+            free(default_fields);
+        }
+        return trap_out_of_memory_i64();
+    }
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_struct_with_retry(
@@ -708,6 +706,7 @@ int64_t gc_alloc_array_slow(
     const int64_t *alloc_roots = NULL;
     int64_t *alloc_roots_owned = NULL;
     int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_array_slow",
         actual_ctx,
         safepoint_id,
         roots_buf,
@@ -715,6 +714,12 @@ int64_t gc_alloc_array_slow(
         &alloc_roots,
         &alloc_roots_owned
     );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        return trap_out_of_memory_i64();
+    }
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_array_with_retry(
@@ -763,6 +768,7 @@ int64_t gc_alloc_array_from_values_slow(
     const int64_t *alloc_roots = NULL;
     int64_t *alloc_roots_owned = NULL;
     int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_array_from_values_slow",
         actual_ctx,
         safepoint_id,
         values,
@@ -770,6 +776,12 @@ int64_t gc_alloc_array_from_values_slow(
         &alloc_roots,
         &alloc_roots_owned
     );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        return trap_out_of_memory_i64();
+    }
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_array_from_values_with_retry(
