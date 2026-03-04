@@ -3264,8 +3264,18 @@ fn MachineCode::emit_instruction_x86_64(
         self.emit_epilogue(stack_frame)
         self.x86_emit_ret()
       } else {
+        // Preserve tail target across epilogue debug-state restore.
+        // emit_epilogue() may use scratch2 (r11) as a temporary when writing
+        // VMCTX_DEBUG_CURRENT_FUNC_IDX. Tail calls also constrain target to
+        // scratch2, so copy to scratch1 first.
+        let mut jump_target = target
+        if target == @isaregs.current_isa().scratch_reg_2_index() {
+          let preserved_target = @isaregs.current_isa().scratch_reg_1_index()
+          self.x86_emit_mov_rr(preserved_target, target)
+          jump_target = preserved_target
+        }
         self.emit_epilogue(stack_frame)
-        self.x86_emit_jmp_r64(target)
+        self.x86_emit_jmp_r64(jump_target)
       }
     }
     @instr.AdjustSP(delta) =>
