@@ -96,6 +96,30 @@ static uint32_t gc_read_u32_le(const uint8_t *ptr) {
            ((uint32_t)ptr[3] << 24);
 }
 
+static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context_t *ctx) {
+    if (!ctx) {
+        return NULL;
+    }
+    const wasmoon_gc_safepoint_table_t *table = ctx->gc_safepoint_table;
+    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
+        table = ctx->gc_frame_chain_head->table;
+    }
+    return table;
+}
+
+static int32_t gc_clamp_root_count(int32_t root_count, int32_t fallback) {
+    if (root_count <= 0) {
+        return 0;
+    }
+    if (fallback <= 0) {
+        return 0;
+    }
+    if (root_count > fallback) {
+        return fallback;
+    }
+    return root_count;
+}
+
 static int32_t gc_lookup_safepoint_root_count(
     jit_context_t *ctx,
     int32_t safepoint_id,
@@ -104,27 +128,140 @@ static int32_t gc_lookup_safepoint_root_count(
     if (!ctx || safepoint_id < 0) {
         return fallback;
     }
-    const wasmoon_gc_safepoint_table_t *table = ctx->gc_safepoint_table;
-    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
-        table = ctx->gc_frame_chain_head->table;
-    }
+    const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
         return fallback;
     }
     const uint8_t *blob = table->stackmap_blob;
     uint32_t version = gc_read_u32_le(blob);
-    if (version != 1u) {
-        return fallback;
-    }
     uint32_t count = gc_read_u32_le(blob + 4);
     if ((uint32_t)safepoint_id >= count) {
         return fallback;
     }
-    size_t entry_offset = 8u + ((size_t)safepoint_id * 4u);
-    if (entry_offset + 4u > table->stackmap_blob_size) {
-        return fallback;
+    if (version == 1u) {
+        size_t entry_offset = 8u + ((size_t)safepoint_id * 4u);
+        if (entry_offset + 4u > table->stackmap_blob_size) {
+            return fallback;
+        }
+        return (int32_t)gc_read_u32_le(blob + entry_offset);
     }
-    return (int32_t)gc_read_u32_le(blob + entry_offset);
+    if (version == 2u) {
+        size_t offset = 8u;
+        for (uint32_t i = 0; i < count; i++) {
+            if (offset + 8u > table->stackmap_blob_size) {
+                return fallback;
+            }
+            int32_t root_count = (int32_t)gc_read_u32_le(blob + offset);
+            uint32_t index_count = gc_read_u32_le(blob + offset + 4u);
+            offset += 8u;
+            size_t index_bytes = (size_t)index_count * 4u;
+            if (offset + index_bytes > table->stackmap_blob_size) {
+                return fallback;
+            }
+            if (i == (uint32_t)safepoint_id) {
+                return root_count;
+            }
+            offset += index_bytes;
+        }
+    }
+    return fallback;
+}
+
+static int32_t gc_select_alloc_roots(
+    jit_context_t *ctx,
+    int32_t safepoint_id,
+    const int64_t *roots,
+    int32_t fallback_root_count,
+    const int64_t **selected_roots_out,
+    int64_t **selected_roots_owned
+) {
+    if (selected_roots_out) {
+        *selected_roots_out = roots;
+    }
+    if (selected_roots_owned) {
+        *selected_roots_owned = NULL;
+    }
+    if (!roots || fallback_root_count <= 0) {
+        return 0;
+    }
+
+    int32_t root_count = gc_clamp_root_count(
+        gc_lookup_safepoint_root_count(ctx, safepoint_id, fallback_root_count),
+        fallback_root_count
+    );
+    if (root_count <= 0) {
+        return 0;
+    }
+
+    if (!ctx || safepoint_id < 0) {
+        return root_count;
+    }
+    const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
+    if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
+        return root_count;
+    }
+    const uint8_t *blob = table->stackmap_blob;
+    uint32_t version = gc_read_u32_le(blob);
+    if (version != 2u) {
+        return root_count;
+    }
+    uint32_t count = gc_read_u32_le(blob + 4);
+    if ((uint32_t)safepoint_id >= count) {
+        return root_count;
+    }
+
+    size_t offset = 8u;
+    for (uint32_t i = 0; i < count; i++) {
+        if (offset + 8u > table->stackmap_blob_size) {
+            return root_count;
+        }
+        uint32_t encoded_root_count = gc_read_u32_le(blob + offset);
+        uint32_t index_count = gc_read_u32_le(blob + offset + 4u);
+        offset += 8u;
+        size_t index_bytes = (size_t)index_count * 4u;
+        if (offset + index_bytes > table->stackmap_blob_size) {
+            return root_count;
+        }
+        if (i != (uint32_t)safepoint_id) {
+            offset += index_bytes;
+            continue;
+        }
+
+        int32_t encoded_clamped = gc_clamp_root_count((int32_t)encoded_root_count, fallback_root_count);
+        if (encoded_clamped > 0) {
+            root_count = encoded_clamped;
+        }
+        if (index_count == 0u) {
+            return root_count;
+        }
+        int64_t *selected = (int64_t *)malloc((size_t)root_count * sizeof(int64_t));
+        if (!selected) {
+            return root_count;
+        }
+        int32_t produced = 0;
+        int invalid_index = 0;
+        for (uint32_t j = 0; j < index_count && produced < root_count; j++) {
+            uint32_t root_idx = gc_read_u32_le(blob + offset + ((size_t)j * 4u));
+            if (root_idx < (uint32_t)fallback_root_count) {
+                selected[produced++] = roots[root_idx];
+            } else {
+                invalid_index = 1;
+                break;
+            }
+        }
+        if (invalid_index || produced != root_count) {
+            free(selected);
+            return root_count;
+        }
+        if (selected_roots_out) {
+            *selected_roots_out = selected;
+        }
+        if (selected_roots_owned) {
+            *selected_roots_owned = selected;
+        }
+        return produced;
+    }
+    return root_count;
 }
 
 // ============ Struct Operations ============
@@ -500,18 +637,16 @@ int64_t gc_alloc_struct_slow(
         }
     }
 
-    int32_t alloc_root_count =
-        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, num_fields);
-    if (alloc_root_count < 0) {
-        alloc_root_count = 0;
-    }
-    if (alloc_root_count > num_fields) {
-        alloc_root_count = num_fields;
-    }
-    const int64_t *alloc_roots = (alloc_root_count > 0 && fields) ? fields : NULL;
-    if (!alloc_roots) {
-        alloc_root_count = 0;
-    }
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        actual_ctx,
+        safepoint_id,
+        fields,
+        num_fields,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_struct_with_retry(
@@ -524,6 +659,9 @@ int64_t gc_alloc_struct_slow(
         alloc_root_count,
         &alloc_result
     );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
 
     // Free temporary default fields buffer
     if (default_fields) {
@@ -567,15 +705,16 @@ int64_t gc_alloc_array_slow(
     }
 
     int64_t roots_buf[1] = { init_value };
-    int32_t alloc_root_count =
-        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, 1);
-    if (alloc_root_count < 0) {
-        alloc_root_count = 0;
-    }
-    if (alloc_root_count > 1) {
-        alloc_root_count = 1;
-    }
-    const int64_t *alloc_roots = alloc_root_count > 0 ? roots_buf : NULL;
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        actual_ctx,
+        safepoint_id,
+        roots_buf,
+        1,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_array_with_retry(
@@ -588,6 +727,9 @@ int64_t gc_alloc_array_slow(
         alloc_root_count,
         &alloc_result
     );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
     }
@@ -618,18 +760,16 @@ int64_t gc_alloc_array_from_values_slow(
         return trap_unreachable_i64();
     }
 
-    int32_t alloc_root_count =
-        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, len);
-    if (alloc_root_count < 0) {
-        alloc_root_count = 0;
-    }
-    if (alloc_root_count > len) {
-        alloc_root_count = len;
-    }
-    const int64_t *alloc_roots = (alloc_root_count > 0 && values) ? values : NULL;
-    if (!alloc_roots) {
-        alloc_root_count = 0;
-    }
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        actual_ctx,
+        safepoint_id,
+        values,
+        len,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
 
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_array_from_values_with_retry(
@@ -642,6 +782,9 @@ int64_t gc_alloc_array_from_values_slow(
         alloc_root_count,
         &alloc_result
     );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
     }

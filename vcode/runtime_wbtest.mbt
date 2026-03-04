@@ -9,26 +9,96 @@ fn decode_u32_le(bytes : Array[Int], offset : Int) -> Int {
 }
 
 ///|
-fn decode_stackmap_root_counts(blob : Bytes) -> Array[Int] {
+fn decode_stackmap_bytes(blob : Bytes) -> Array[Int] {
   let bytes : Array[Int] = []
   for b in blob {
     bytes.push(b.to_int())
   }
+  bytes
+}
+
+///|
+fn decode_stackmap_version(blob : Bytes) -> Int {
+  let bytes = decode_stackmap_bytes(blob)
+  if bytes.length() < 8 {
+    return 0
+  }
+  decode_u32_le(bytes, 0)
+}
+
+///|
+fn decode_stackmap_root_counts(blob : Bytes) -> Array[Int] {
+  let bytes = decode_stackmap_bytes(blob)
   if bytes.length() < 8 {
     return []
   }
-  if decode_u32_le(bytes, 0) != 1 {
+  let version = decode_u32_le(bytes, 0)
+  if version != 1 && version != 2 {
     return []
   }
   let count = decode_u32_le(bytes, 4)
-  if bytes.length() < 8 + count * 4 {
-    return []
-  }
   let root_counts : Array[Int] = []
-  for i in 0..<count {
-    root_counts.push(decode_u32_le(bytes, 8 + i * 4))
+  if version == 1 {
+    if bytes.length() < 8 + count * 4 {
+      return []
+    }
+    for i in 0..<count {
+      root_counts.push(decode_u32_le(bytes, 8 + i * 4))
+    }
+    return root_counts
+  }
+  let mut offset = 8
+  for _i in 0..<count {
+    if offset + 8 > bytes.length() {
+      return []
+    }
+    let root_count = decode_u32_le(bytes, offset)
+    let index_count = decode_u32_le(bytes, offset + 4)
+    root_counts.push(root_count)
+    offset = offset + 8 + index_count * 4
+    if offset > bytes.length() {
+      return []
+    }
   }
   root_counts
+}
+
+///|
+fn decode_stackmap_root_indices(
+  blob : Bytes,
+  safepoint_idx : Int,
+) -> Array[Int] {
+  let bytes = decode_stackmap_bytes(blob)
+  if bytes.length() < 8 {
+    return []
+  }
+  if decode_u32_le(bytes, 0) != 2 {
+    return []
+  }
+  let count = decode_u32_le(bytes, 4)
+  if safepoint_idx < 0 || safepoint_idx >= count {
+    return []
+  }
+  let mut offset = 8
+  for i in 0..<count {
+    if offset + 8 > bytes.length() {
+      return []
+    }
+    let index_count = decode_u32_le(bytes, offset + 4)
+    offset = offset + 8
+    if offset + index_count * 4 > bytes.length() {
+      return []
+    }
+    if i == safepoint_idx {
+      let indices : Array[Int] = []
+      for j in 0..<index_count {
+        indices.push(decode_u32_le(bytes, offset + j * 4))
+      }
+      return indices
+    }
+    offset = offset + index_count * 4
+  }
+  []
 }
 
 ///|
@@ -96,6 +166,35 @@ test "compiled function: explicit safepoints build stackmap when blob missing" {
   inspect(
     decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
     content="[3, 1]",
+  )
+}
+
+///|
+test "compiled function: explicit safepoint indices build v2 stackmap" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  let explicit_points : Array[GcSafepoint] = [
+    GcSafepoint::new(32, [5, 1, 9], 2L),
+    GcSafepoint::new(48, [3], 1L),
+  ]
+  let func = CompiledFunction::new(
+    "gc_meta_indices",
+    mc,
+    0,
+    gc_safepoints=explicit_points,
+  )
+  inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[2, 1]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
+    content="[5, 1]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 1),
+    content="[3]",
   )
 }
 

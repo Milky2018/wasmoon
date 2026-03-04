@@ -48,6 +48,85 @@ fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
 }
 
 ///|
+fn encode_stackmap_root_count(root_count : Int) -> Int {
+  if root_count <= 0 {
+    0
+  } else if root_count > @types.I32_MAX {
+    @types.I32_MAX
+  } else {
+    root_count
+  }
+}
+
+///|
+fn has_stackmap_live_ref_indices(safepoints : Array[GcSafepoint]) -> Bool {
+  for safepoint in safepoints {
+    if safepoint.live_refs.length() > 0 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Build stackmap blob v2 with optional per-safepoint root-index lists.
+/// Format v2:
+///   u32 version (=2)
+///   u32 safepoint_count
+///   repeated safepoint_count times:
+///     u32 root_count
+///     u32 root_index_count
+///     u32 root_indices[root_index_count]
+fn build_gc_stackmap_blob_v2(
+  safepoints : Array[GcSafepoint],
+  fallback_root_counts : Array[Int],
+) -> Bytes {
+  if safepoints.length() == 0 {
+    return b""
+  }
+  let bytes : Array[Byte] = []
+  append_u32_le(bytes, 2)
+  append_u32_le(bytes, safepoints.length())
+  for i, safepoint in safepoints {
+    let fallback_root_count = if i < fallback_root_counts.length() {
+      fallback_root_counts[i]
+    } else {
+      safepoint.live_refs.length()
+    }
+    let metadata_root_count = safepoint_metadata_to_root_count(
+      safepoint.metadata,
+    )
+    let mut root_count = encode_stackmap_root_count(
+      if metadata_root_count > 0 {
+        metadata_root_count
+      } else {
+        fallback_root_count
+      },
+    )
+    let valid_indices : Array[Int] = []
+    for live_ref in safepoint.live_refs {
+      if live_ref >= 0 && live_ref <= @types.I32_MAX {
+        valid_indices.push(live_ref)
+      }
+    }
+    if valid_indices.length() > 0 {
+      if root_count <= 0 || root_count > valid_indices.length() {
+        root_count = valid_indices.length()
+      }
+      append_u32_le(bytes, root_count)
+      append_u32_le(bytes, root_count)
+      for idx in 0..<root_count {
+        append_u32_le(bytes, valid_indices[idx])
+      }
+    } else {
+      append_u32_le(bytes, root_count)
+      append_u32_le(bytes, 0)
+    }
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
 /// A compiled function ready for execution
 pub struct CompiledFunction {
   // Function name or identifier
@@ -106,6 +185,8 @@ pub fn CompiledFunction::new(
   }
   let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
     gc_stackmap_blob
+  } else if has_stackmap_live_ref_indices(resolved_gc_safepoints) {
+    build_gc_stackmap_blob_v2(resolved_gc_safepoints, stackmap_root_counts)
   } else {
     build_gc_stackmap_blob(stackmap_root_counts)
   }
