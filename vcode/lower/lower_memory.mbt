@@ -146,7 +146,7 @@ fn lower_memory_grow(
   let is_memory64 = result.ty is @ir.Type::I64
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_grow(vmctx, memidx, delta, max_pages) -> i32
+  //   wasmoon_jit_memory_grow(vmctx, memidx, delta(i64), max_pages) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryGrow))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })

@@ -381,7 +381,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_table_grow_ptr(void) {
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_memory_grow(
     jit_context_t *ctx,
     int32_t memidx,
-    int32_t delta,
+    int64_t delta,
     int32_t max_pages
 ) {
     return memory_grow_indexed_internal(ctx, memidx, delta, max_pages);

@@ -37,8 +37,8 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
     }
 
     // Check section ordering (non-custom sections must be in order, no duplicates)
-    // The canonical order is: 1→2→3→4→5→6→13→7→8→9→12→10→11
-    // (DataCount=12 appears between Elem=9 and Code=10, Tag=13 after Global=6)
+    // The canonical order is: 1→2→3→4→5→13→6→7→8→9→12→10→11
+    // (Tag=13 is before Global=6, DataCount=12 appears between Elem=9 and Code=10)
     fn section_order(id : Int) -> Int {
       match id {
         1 => 1 // Type
@@ -46,8 +46,8 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         3 => 3 // Function
         4 => 4 // Table
         5 => 5 // Memory
-        6 => 6 // Global
-        13 => 7 // Tag (exception handling, after Global)
+        13 => 6 // Tag (exception handling, before Global)
+        6 => 7 // Global
         7 => 8 // Export
         8 => 9 // Start
         9 => 10 // Elem

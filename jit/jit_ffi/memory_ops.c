@@ -145,9 +145,10 @@ int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
 
 // ============ Linear Memory Operations ============
 
-int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages) {
+int32_t memory_grow_ctx_internal(jit_context_t *ctx, int64_t delta, int32_t max_pages) {
     if (!ctx || !ctx->memory0) return -1;
     if (delta < 0) return -1;
+    if (delta > INT32_MAX) return -1;
 
     wasmoon_memory_t *mem = ctx->memory0;
     size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
@@ -156,7 +157,7 @@ int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_
     size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
     int64_t current_pages = (int64_t)(current_size / page_size);
 
-    int64_t new_pages = current_pages + (int64_t)delta;
+    int64_t new_pages = current_pages + delta;
 
     // Spec max: memory32 has a 32-bit address space (4GiB bytes).
     int64_t arch_max_pages;
@@ -369,9 +370,10 @@ static inline void fill_bytes_fast(uint8_t *dst, uint8_t val, size_t size) {
     memset(dst, val, size);
 }
 
-int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t delta, int32_t max_pages) {
+int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages) {
     if (!ctx) return -1;
     if (delta < 0) return -1;
+    if (delta > INT32_MAX) return -1;
     if (memidx < 0) return -1;
     if (memidx > 0 && (!ctx->memories || memidx >= ctx->memory_count)) return -1;
 
@@ -385,7 +387,7 @@ int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t
     size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
     int64_t current_pages = (int64_t)(current_size / page_size);
 
-    int64_t new_pages = current_pages + (int64_t)delta;
+    int64_t new_pages = current_pages + delta;
 
     // Check against max limit (pages)
     int64_t stored_max = (int64_t)get_memory_max_pages(ctx, memidx);

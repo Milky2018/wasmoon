@@ -276,7 +276,7 @@ pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_g
 
 ///|
 /// Get memory_grow function pointer for JIT (multi-memory)
-/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i32, max_pages: i32) -> i32
+/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i32
 pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
