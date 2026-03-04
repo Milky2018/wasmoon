@@ -840,6 +840,53 @@ pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
 }
 
 ///|
+fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
+  match ty {
+    @types.AnyRef
+    | @types.ExnRef
+    | @types.StructRef
+    | @types.ArrayRef
+    | @types.RefStruct(_)
+    | @types.RefNullStruct(_)
+    | @types.RefArray(_)
+    | @types.RefNullArray(_)
+    | @types.RefAny
+    | @types.RefEq
+    | @types.RefNullEq
+    | @types.RefI31
+    | @types.RefNullI31
+    | @types.RefStructAbs
+    | @types.RefArrayAbs
+    | @types.NullRef => true
+    _ => false
+  }
+}
+
+///|
+fn collect_gc_root_args(
+  args : Array[Int64],
+  param_types : Array[@types.ValueType],
+) -> Array[Int64] {
+  let roots : Array[Int64] = []
+  let upto = if args.length() < param_types.length() {
+    args.length()
+  } else {
+    param_types.length()
+  }
+  for i in 0..<upto {
+    let ty = param_types[i]
+    if !value_type_may_hold_gc_ref(ty) {
+      continue
+    }
+    let value = args[i]
+    if value > 0L && (value & 1L) == 0L {
+      roots.push(value)
+    }
+  }
+  roots
+}
+
+///|
 /// Call a function using the JIT context (for functions that need to call other functions)
 /// Returns Array[Int64] where each element corresponds to a return value:
 /// - For I32/I64: the value is directly in Int64
@@ -864,9 +911,8 @@ pub fn JITModule::call_with_context(
       }
       let results : Array[Int64] = Array::make(num_result_slots, 0L)
       let mut call_error : JITTrap? = None
-      // Phase-B scaffolding: track active JIT frame for allocation-triggered GC.
-      // Safepoint table pointer is currently optional and set to null until full
-      // stackmap decode wiring lands.
+      let frame_roots = collect_gc_root_args(args, func.param_types)
+      self.gc_set_root_scratch(frame_roots) |> ignore
       self.gc_set_safepoint_table(0L)
       self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
@@ -880,6 +926,7 @@ pub fn JITModule::call_with_context(
       }
       self.gc_end_frame()
       self.gc_set_safepoint_table(0L)
+      self.gc_set_root_scratch([]) |> ignore
       self.flush_wasi_output(ctx)
       match call_error {
         Some(JITTrap(msg)) => {
