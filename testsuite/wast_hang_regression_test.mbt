@@ -146,25 +146,25 @@ fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> @wast.JITModuleContext? {
+) -> Result[@wast.JITModuleContext, String] {
   if @wast.has_unsupported_instructions_for_wast(mod_) {
-    return None
+    return Err("unsupported instructions")
   }
   if @wast.has_cross_module_imports(mod_) {
-    return None
+    return Err("cross-module imports")
   }
   if @wast.exports_shared_resources(mod_) {
-    return None
+    return Err("shared resources exported")
   }
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
       @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
-      return None
+      return Err("missing import trampoline")
     }
   }
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
-      _ => abort("memory missing")
+      _ => return Err("memory missing")
     }
     let (_, max) = mem.get_limits()
     max
@@ -173,16 +173,16 @@ fn try_compile_jit(
   }
   let compiled = compile_module_to_jit(mod_, actual_memory_max~, 2)
   match compiled {
-    None => None
+    None => Err("compile_module_to_jit returned None")
     Some(pc) => {
       let func_signatures = @wast.build_func_signatures(mod_)
       let jm = @jit.JITModule::load(pc, func_signatures) catch {
-        err => abort("Failed to create JIT module: \{err}")
+        err => return Err("failed to create JIT module: \{err}")
       }
       let _ = jm.alloc_wasm_stack(1048576L)
       jm.init_wasi_quiet([], [], [])
       guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
-        return None
+        return Err("failed to initialize JIT memories")
       }
       let globals_ptr = init_jit_globals(instance, store, jm)
       if globals_ptr != 0L {
@@ -209,7 +209,7 @@ fn try_compile_jit(
       for canonical_idx in instance.canonical_type_indices {
         canonical_type_indices_copy.push(canonical_idx)
       }
-      Some(
+      Ok(
         @wast.JITModuleContext::new(
           jm,
           globals_ptr,

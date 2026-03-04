@@ -256,12 +256,12 @@ fn try_compile_jit(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
-) -> @wast.JITModuleContext? {
+) -> Result[@wast.JITModuleContext, String] {
   let lowered_mod = rewrite_module_alias_indices_for_jit(mod_, instance)
   wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
   if @wast.has_unsupported_instructions_for_wast(lowered_mod) {
-    abort(
+    return Err(
       "WAST JIT strict mode: module contains instructions not supported by JIT",
     )
   }
@@ -269,7 +269,7 @@ fn try_compile_jit(
   // This is crucial for memory.grow to enforce the correct max limit
   let actual_memory_max : Int? = if instance.mem_addrs.length() > 0 {
     let mem = store.get_mem(instance.mem_addrs[0]) catch {
-      _ => abort("Memory not found")
+      _ => return Err("WAST JIT strict mode: memory not found")
     }
     let (_, max) = mem.get_limits()
     max
@@ -288,7 +288,7 @@ fn try_compile_jit(
   )
   match compiled {
     None =>
-      abort(
+      return Err(
         "WAST JIT strict mode: compile_module_to_jit returned None (unsupported or failed compilation)",
       )
     Some((pc, _)) => {
@@ -302,7 +302,10 @@ fn try_compile_jit(
         pc, func_signatures, external_imports,
       )
       match jit_module_result {
-        Err(err) => abort("Failed to create JIT module: \{err}")
+        Err(err) =>
+          return Err(
+            "WAST JIT strict mode: failed to create JIT module: \{err}",
+          )
         Ok(jm) => {
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
@@ -319,7 +322,7 @@ fn try_compile_jit(
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {
-            abort(
+            return Err(
               "WAST JIT strict mode: failed to initialize JIT memories from store",
             )
           }
@@ -347,7 +350,12 @@ fn try_compile_jit(
             instance,
             store,
             use_subtype_indirect_check~,
-          )
+          ) catch {
+            err =>
+              return Err(
+                "WAST JIT strict mode: failed to initialize JIT bulk segments: \{err}",
+              )
+          }
           // One-time sync: copy interpreter table contents (including active elem init)
           // into the shared JIT table memory before any JIT execution.
           @wast.sync_tables_to_jit(
@@ -386,7 +394,7 @@ fn try_compile_jit(
           for group in lowered_mod.type_rec_groups {
             module_rec_groups_copy.push(group)
           }
-          Some(
+          Ok(
             @wast.JITModuleContext::new(
               jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
               func_type_indices_copy, canonical_type_indices_copy, module_types_copy,

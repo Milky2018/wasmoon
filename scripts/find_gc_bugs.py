@@ -55,6 +55,15 @@ MODES: tuple[Mode, ...] = (
     ),
 )
 
+WASMTIME_WAST_FLAGS: tuple[str, ...] = (
+    "-W",
+    "all-proposals=y",
+    "-W",
+    "gc=y",
+    "-W",
+    "function-references=y",
+)
+
 TRAP_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"JIT Trap:\s*(.+)"),
     re.compile(r"runtime error:\s*(.+)", re.IGNORECASE),
@@ -75,6 +84,21 @@ GC_COLLECT_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 GC_ALLOC_PATTERN = re.compile(
     r"\[GC ALLOC\]\s+\S+\s+retries=(\d+)\s+collected=(-?\d+)"
+)
+
+WASMTIME_CRASH_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bsegmentation fault\b", re.IGNORECASE),
+    re.compile(r"\bcore dumped\b", re.IGNORECASE),
+    re.compile(r"\bsignal\s+\d+\b", re.IGNORECASE),
+    re.compile(r"\bfatal runtime error\b", re.IGNORECASE),
+    re.compile(r"\bthread '.*' panicked\b", re.IGNORECASE),
+)
+
+WASMTIME_NON_CRASH_FAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bassert_?\w*\b", re.IGNORECASE),
+    re.compile(r"\bexpected\b.*\b(actual|got)\b", re.IGNORECASE),
+    re.compile(r"\bmismatch\b", re.IGNORECASE),
+    re.compile(r"\bunknown (operator|module|function)\b", re.IGNORECASE),
 )
 
 
@@ -127,6 +151,16 @@ def extract_gc_metrics(output: str) -> dict[str, int]:
     }
 
 
+def classify_wasmtime_failure(output: str) -> str:
+    for pattern in WASMTIME_CRASH_PATTERNS:
+        if pattern.search(output):
+            return "crash"
+    for pattern in WASMTIME_NON_CRASH_FAIL_PATTERNS:
+        if pattern.search(output):
+            return "fail"
+    return "fail"
+
+
 def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
     passed = 0
     failed = 0
@@ -150,12 +184,13 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
                 "trap_signature": None,
                 **metrics,
             }
+        status = classify_wasmtime_failure(output)
         lines = [line.strip() for line in output.splitlines() if line.strip()]
         tail = " | ".join(lines[-3:]) if lines else f"exit {return_code}"
         return {
-            "status": "crash",
+            "status": status,
             "passed": 0,
-            "failed": 0,
+            "failed": 1 if status == "fail" else 0,
             "error": tail,
             "trap_signature": trap_signature,
             **metrics,
@@ -222,9 +257,9 @@ def run_one(
                 "trap_signature": None,
             }
         if wast_file.suffix == ".wast":
-            cmd = [str(wasmtime_bin), "wast", "-W", "gc", str(wast_file)]
+            cmd = [str(wasmtime_bin), "wast", *WASMTIME_WAST_FLAGS, str(wast_file)]
         else:
-            cmd = [str(wasmtime_bin), "run", "-W", "gc", str(wast_file)]
+            cmd = [str(wasmtime_bin), "run", *WASMTIME_WAST_FLAGS, str(wast_file)]
     else:
         return {
             "status": "error",

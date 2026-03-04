@@ -212,13 +212,13 @@ fn WastContext::try_compile_jit(
   self : WastContext,
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
-) -> JITModuleContext? {
+) -> Result[JITModuleContext, String] {
   if !self.use_jit {
-    return None
+    return Err("JIT is disabled")
   }
   match self.jit_compiler {
     Some(compiler) => (compiler.compile_fn)(mod_, instance, self.store)
-    None => abort("WAST JIT strict mode: JIT compiler callback is missing")
+    None => Err("WAST JIT strict mode: JIT compiler callback is missing")
   }
 }
 
@@ -315,16 +315,23 @@ pub fn run_wast_command(
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
         match ctx.try_compile_jit(mod_, instance) {
-          Some(jit_ctx) => {
+          Ok(jit_ctx) => {
             ctx.current_jit = Some(jit_ctx)
             if name is Some(n) {
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None =>
-            abort(
-              "WAST JIT strict mode: try_compile_jit returned None for module command",
+          Err(err) => {
+            ctx.current_jit = None
+            if name is Some(n) {
+              ctx.jit_modules.remove(n) |> ignore
+            }
+            result.failed = result.failed + 1
+            result.failures.push(
+              "line \{line}: JIT module compile failed: \{err}",
             )
+            return
+          }
         }
       } else {
         ctx.current_jit = None
@@ -374,11 +381,15 @@ pub fn run_wast_command(
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
         match ctx.try_compile_jit(mod_, instance) {
-          Some(jit_ctx) => ctx.current_jit = Some(jit_ctx)
-          None =>
-            abort(
-              "WAST JIT strict mode: try_compile_jit returned None for quoted module",
+          Ok(jit_ctx) => ctx.current_jit = Some(jit_ctx)
+          Err(err) => {
+            ctx.current_jit = None
+            result.failed = result.failed + 1
+            result.failures.push(
+              "line \{line}: JIT quoted module compile failed: \{err}",
             )
+            return
+          }
         }
       } else {
         ctx.current_jit = None
@@ -445,16 +456,23 @@ pub fn run_wast_command(
       // Try to compile JIT version (only if JIT is enabled)
       if ctx.use_jit {
         match ctx.try_compile_jit(mod_, instance) {
-          Some(jit_ctx) => {
+          Ok(jit_ctx) => {
             ctx.current_jit = Some(jit_ctx)
             if instance_name is Some(n) {
               ctx.jit_modules.set(n, jit_ctx)
             }
           }
-          None =>
-            abort(
-              "WAST JIT strict mode: try_compile_jit returned None for module instance command",
+          Err(err) => {
+            ctx.current_jit = None
+            if instance_name is Some(n) {
+              ctx.jit_modules.remove(n) |> ignore
+            }
+            result.failed = result.failed + 1
+            result.failures.push(
+              "line \{line}: JIT module instance compile failed: \{err}",
             )
+            return
+          }
         }
       } else {
         ctx.current_jit = None
@@ -1458,11 +1476,8 @@ fn try_instantiate_source_traps(
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
             1]
           match ctx.try_compile_jit(mod_, trapped_instance) {
-            Some(_) => ()
-            None =>
-              abort(
-                "WAST JIT strict mode: failed to compile trapped module for source(Binary)",
-              )
+            Ok(_) => ()
+            Err(_) => return false
           }
         } else {
           match
@@ -1472,11 +1487,8 @@ fn try_instantiate_source_traps(
             ) {
             Some(partial_instance) =>
               match ctx.try_compile_jit(mod_, partial_instance) {
-                Some(_) => ()
-                None =>
-                  abort(
-                    "WAST JIT strict mode: failed to compile trapped partial module for source(Binary)",
-                  )
+                Ok(_) => ()
+                Err(_) => return false
               }
             None => ()
           }
@@ -1506,11 +1518,8 @@ fn try_instantiate_source_traps(
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
             1]
           match ctx.try_compile_jit(mod_, trapped_instance) {
-            Some(_) => ()
-            None =>
-              abort(
-                "WAST JIT strict mode: failed to compile trapped module for source(Inline)",
-              )
+            Ok(_) => ()
+            Err(_) => return false
           }
         } else {
           match
@@ -1520,11 +1529,8 @@ fn try_instantiate_source_traps(
             ) {
             Some(partial_instance) =>
               match ctx.try_compile_jit(mod_, partial_instance) {
-                Some(_) => ()
-                None =>
-                  abort(
-                    "WAST JIT strict mode: failed to compile trapped partial module for source(Inline)",
-                  )
+                Ok(_) => ()
+                Err(_) => return false
               }
             None => ()
           }
