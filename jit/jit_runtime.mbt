@@ -490,6 +490,13 @@ pub fn JITModule::load_with_imports(
             jit_module.by_name.set(entry.name, entry.func_idx)
             // Set function pointer in context's function table
             ctx.set_func(entry.func_idx, ec.ptr())
+            // Install per-function GC safepoint metadata (if present).
+            jit_module.gc_set_func_safepoints(
+              entry.func_idx,
+              entry.gc_safepoints,
+              entry.gc_stackmap_blob,
+            )
+            |> ignore
           }
           None =>
             raise FunctionCodeAllocationFailed(
@@ -913,7 +920,7 @@ pub fn JITModule::call_with_context(
       let mut call_error : JITTrap? = None
       let frame_roots = collect_gc_root_args(args, func.param_types)
       self.gc_set_root_scratch(frame_roots) |> ignore
-      self.gc_set_safepoint_table(0L)
+      self.gc_use_func_safepoints(func.func_idx)
       self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
         func.exec_code.ptr(),
@@ -925,7 +932,7 @@ pub fn JITModule::call_with_context(
         e => call_error = Some(e)
       }
       self.gc_end_frame()
-      self.gc_set_safepoint_table(0L)
+      self.gc_use_func_safepoints(-1)
       self.gc_set_root_scratch([]) |> ignore
       self.flush_wasi_output(ctx)
       match call_error {
@@ -1331,6 +1338,42 @@ pub fn JITModule::gc_set_safepoint_table(
 ) -> Unit {
   if self.context_ptr != 0L {
     @jit_ffi.c_jit_gc_set_safepoint_table(self.context_ptr, table_ptr)
+  }
+}
+
+///|
+/// Install a function's GC safepoint table into context-owned storage.
+pub fn JITModule::gc_set_func_safepoints(
+  self : JITModule,
+  func_idx : Int,
+  safepoints : Array[@vcode.GcSafepoint],
+  stackmap_blob : Bytes,
+) -> Bool {
+  if self.context_ptr == 0L {
+    return false
+  }
+  let offsets = FixedArray::makei(safepoints.length(), fn(i) {
+    safepoints[i].code_offset
+  })
+  @jit_ffi.c_jit_gc_set_func_safepoints(
+    self.context_ptr,
+    func_idx,
+    stackmap_blob,
+    stackmap_blob.length(),
+    offsets,
+    safepoints.length(),
+  ) ==
+  1
+}
+
+///|
+/// Select currently active function safepoint table (`func_idx < 0` clears).
+pub fn JITModule::gc_use_func_safepoints(
+  self : JITModule,
+  func_idx : Int,
+) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_use_func_safepoints(self.context_ptr, func_idx)
   }
 }
 

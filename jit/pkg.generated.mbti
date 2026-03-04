@@ -498,8 +498,10 @@ pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
 pub fn JITModule::gc_end_frame(Self) -> Unit
+pub fn JITModule::gc_set_func_safepoints(Self, Int, Array[@vcode.GcSafepoint], Bytes) -> Bool
 pub fn JITModule::gc_set_root_scratch(Self, Array[Int64]) -> Bool
 pub fn JITModule::gc_set_safepoint_table(Self, Int64) -> Unit
+pub fn JITModule::gc_use_func_safepoints(Self, Int) -> Unit
 pub fn JITModule::get_context_ptr(Self) -> Int64
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?

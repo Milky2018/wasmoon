@@ -1431,3 +1431,30 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_safepoint_table(
         (const wasmoon_gc_safepoint_table_t *)(uintptr_t)table_ptr;
     ctx_gc_set_safepoint_table_internal(ctx, table);
 }
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_func_safepoints(
+    int64_t ctx_ptr,
+    int32_t func_idx,
+    uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size,
+    int32_t *code_offsets,
+    int32_t safepoint_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return ctx_gc_set_func_safepoints_internal(
+        ctx,
+        func_idx,
+        stackmap_blob,
+        stackmap_blob_size,
+        code_offsets,
+        safepoint_count
+    );
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_use_func_safepoints(
+    int64_t ctx_ptr,
+    int32_t func_idx
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_gc_use_func_safepoints_internal(ctx, func_idx);
+}

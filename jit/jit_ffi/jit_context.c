@@ -91,6 +91,10 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->gc_root_scratch_cap = 0;
     ctx->gc_safepoint_table = NULL;
     ctx->gc_frame_chain_head = NULL;
+    ctx->gc_func_safepoint_tables = NULL;
+    ctx->gc_func_stackmap_blobs = NULL;
+    ctx->gc_func_safepoint_offsets = NULL;
+    ctx->gc_func_safepoint_table_count = 0;
 
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_memory0 = 0;        // Default: does not own memory0
@@ -248,6 +252,28 @@ void free_context_internal(jit_context_t *ctx) {
         free(ctx->gc_frame_chain_head);
         ctx->gc_frame_chain_head = prev;
     }
+    if (ctx->gc_func_safepoint_tables) {
+        int32_t count = ctx->gc_func_safepoint_table_count;
+        for (int32_t i = 0; i < count; i++) {
+            if (ctx->gc_func_stackmap_blobs && ctx->gc_func_stackmap_blobs[i]) {
+                free(ctx->gc_func_stackmap_blobs[i]);
+            }
+            if (ctx->gc_func_safepoint_offsets && ctx->gc_func_safepoint_offsets[i]) {
+                free(ctx->gc_func_safepoint_offsets[i]);
+            }
+        }
+        free(ctx->gc_func_safepoint_tables);
+        ctx->gc_func_safepoint_tables = NULL;
+    }
+    if (ctx->gc_func_stackmap_blobs) {
+        free(ctx->gc_func_stackmap_blobs);
+        ctx->gc_func_stackmap_blobs = NULL;
+    }
+    if (ctx->gc_func_safepoint_offsets) {
+        free(ctx->gc_func_safepoint_offsets);
+        ctx->gc_func_safepoint_offsets = NULL;
+    }
+    ctx->gc_func_safepoint_table_count = 0;
 
     // Free exception handling state
     if (ctx->exception_values) free(ctx->exception_values);
@@ -487,6 +513,143 @@ void ctx_gc_set_safepoint_table_internal(
     ctx->gc_safepoint_table = table;
 }
 
+static int32_t gc_alloc_func_safepoint_tables(jit_context_t *ctx) {
+    if (!ctx) {
+        return 0;
+    }
+    if (ctx->gc_func_safepoint_tables) {
+        return 1;
+    }
+    int32_t count = ctx->func_count > 0 ? ctx->func_count : 0;
+    if (count <= 0) {
+        return 0;
+    }
+    wasmoon_gc_safepoint_table_t *tables =
+        (wasmoon_gc_safepoint_table_t *)calloc((size_t)count, sizeof(wasmoon_gc_safepoint_table_t));
+    if (!tables) {
+        return 0;
+    }
+    uint8_t **blobs = (uint8_t **)calloc((size_t)count, sizeof(uint8_t *));
+    if (!blobs) {
+        free(tables);
+        return 0;
+    }
+    uint32_t **offsets = (uint32_t **)calloc((size_t)count, sizeof(uint32_t *));
+    if (!offsets) {
+        free(blobs);
+        free(tables);
+        return 0;
+    }
+    ctx->gc_func_safepoint_tables = tables;
+    ctx->gc_func_stackmap_blobs = blobs;
+    ctx->gc_func_safepoint_offsets = offsets;
+    ctx->gc_func_safepoint_table_count = count;
+    return 1;
+}
+
+static void gc_clear_func_safepoint_slot(jit_context_t *ctx, int32_t func_idx) {
+    if (!ctx || !ctx->gc_func_safepoint_tables) {
+        return;
+    }
+    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+        return;
+    }
+    if (ctx->gc_func_stackmap_blobs && ctx->gc_func_stackmap_blobs[func_idx]) {
+        free(ctx->gc_func_stackmap_blobs[func_idx]);
+        ctx->gc_func_stackmap_blobs[func_idx] = NULL;
+    }
+    if (ctx->gc_func_safepoint_offsets && ctx->gc_func_safepoint_offsets[func_idx]) {
+        free(ctx->gc_func_safepoint_offsets[func_idx]);
+        ctx->gc_func_safepoint_offsets[func_idx] = NULL;
+    }
+    memset(&ctx->gc_func_safepoint_tables[func_idx], 0, sizeof(wasmoon_gc_safepoint_table_t));
+}
+
+int32_t ctx_gc_set_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    const uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size,
+    const int32_t *code_offsets,
+    int32_t safepoint_count
+) {
+    if (!ctx || func_idx < 0 || func_idx >= ctx->func_count) {
+        return 0;
+    }
+    if (!gc_alloc_func_safepoint_tables(ctx)) {
+        return 0;
+    }
+
+    gc_clear_func_safepoint_slot(ctx, func_idx);
+
+    uint8_t *blob_copy = NULL;
+    uint32_t *offset_copy = NULL;
+    int32_t safe_blob_size = stackmap_blob_size > 0 ? stackmap_blob_size : 0;
+    int32_t safe_count = safepoint_count > 0 ? safepoint_count : 0;
+
+    if (safe_blob_size > 0) {
+        blob_copy = (uint8_t *)malloc((size_t)safe_blob_size);
+        if (!blob_copy) {
+            return 0;
+        }
+        if (stackmap_blob) {
+            memcpy(blob_copy, stackmap_blob, (size_t)safe_blob_size);
+        } else {
+            memset(blob_copy, 0, (size_t)safe_blob_size);
+        }
+    }
+
+    if (safe_count > 0) {
+        offset_copy = (uint32_t *)malloc((size_t)safe_count * sizeof(uint32_t));
+        if (!offset_copy) {
+            if (blob_copy) free(blob_copy);
+            return 0;
+        }
+        if (code_offsets) {
+            for (int32_t i = 0; i < safe_count; i++) {
+                offset_copy[i] = (uint32_t)code_offsets[i];
+            }
+        } else {
+            memset(offset_copy, 0, (size_t)safe_count * sizeof(uint32_t));
+        }
+    }
+
+    if (ctx->gc_func_stackmap_blobs) {
+        ctx->gc_func_stackmap_blobs[func_idx] = blob_copy;
+    }
+    if (ctx->gc_func_safepoint_offsets) {
+        ctx->gc_func_safepoint_offsets[func_idx] = offset_copy;
+    }
+    wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    table->stackmap_blob = blob_copy;
+    table->stackmap_blob_size = (uint32_t)safe_blob_size;
+    table->code_offsets = offset_copy;
+    table->safepoint_count = (uint32_t)safe_count;
+    return 1;
+}
+
+void ctx_gc_use_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx
+) {
+    if (!ctx || !ctx->gc_func_safepoint_tables) {
+        if (ctx) {
+            ctx->gc_safepoint_table = NULL;
+        }
+        return;
+    }
+    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+        ctx->gc_safepoint_table = NULL;
+        return;
+    }
+    wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    if (table->safepoint_count == 0 && table->stackmap_blob_size == 0) {
+        ctx->gc_safepoint_table = NULL;
+    } else {
+        ctx->gc_safepoint_table = table;
+    }
+}
+
 int32_t ctx_gc_set_root_scratch_internal(
     jit_context_t *ctx,
     const int64_t *roots,
@@ -541,6 +704,10 @@ int32_t gc_collect_for_alloc_internal(
     int32_t store_root_count = exception_root_count + spilled_root_count;
     int32_t total_roots = stack_root_count + store_root_count;
     int32_t collected = 0;
+    const wasmoon_gc_safepoint_table_t *active_table = ctx->gc_safepoint_table;
+    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
+        active_table = ctx->gc_frame_chain_head->table;
+    }
     size_t heap_size_before = heap->size;
     int32_t object_count_before = heap->object_count;
     int32_t free_count_before = heap->free_count;
@@ -597,9 +764,11 @@ int32_t gc_collect_for_alloc_internal(
         );
         fprintf(
             stderr,
-            "[GC COLLECT] frame_depth=%d safepoint_table=%s\n",
+            "[GC COLLECT] frame_depth=%d safepoint_table=%s safepoints=%u stackmap=%u\n",
             gc_frame_chain_depth(ctx),
-            ctx->gc_safepoint_table ? "set" : "none"
+            active_table ? "set" : "none",
+            active_table ? active_table->safepoint_count : 0,
+            active_table ? active_table->stackmap_blob_size : 0
         );
     }
 

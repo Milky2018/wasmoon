@@ -38,8 +38,8 @@ typedef struct {
 typedef struct wasmoon_gc_safepoint_table {
     const uint8_t *stackmap_blob;
     uint32_t stackmap_blob_size;
+    const uint32_t *code_offsets;
     uint32_t safepoint_count;
-    uint32_t reserved;
 } wasmoon_gc_safepoint_table_t;
 
 // Per-call frame node for GC bookkeeping.
@@ -211,6 +211,11 @@ typedef struct {
     int32_t gc_root_scratch_cap;
     const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
     wasmoon_gc_frame_t *gc_frame_chain_head;
+    // Per-function safepoint tables owned by this context.
+    wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
+    uint8_t **gc_func_stackmap_blobs;
+    uint32_t **gc_func_safepoint_offsets;
+    int32_t gc_func_safepoint_table_count;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

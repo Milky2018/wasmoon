@@ -96,6 +96,7 @@ pub struct GcSafepoint {
   live_refs : Array[Int]
   metadata : Int64
 }
+pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
 pub impl Show for GcSafepoint
 
 type JITRuntime

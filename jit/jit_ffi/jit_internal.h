@@ -120,6 +120,18 @@ void ctx_gc_set_safepoint_table_internal(
     jit_context_t *ctx,
     const wasmoon_gc_safepoint_table_t *table
 );
+int32_t ctx_gc_set_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    const uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size,
+    const int32_t *code_offsets,
+    int32_t safepoint_count
+);
+void ctx_gc_use_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx
+);
 int32_t ctx_gc_set_root_scratch_internal(
     jit_context_t *ctx,
     const int64_t *roots,

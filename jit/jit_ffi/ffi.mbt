@@ -1147,6 +1147,27 @@ pub extern "c" fn c_jit_gc_set_safepoint_table(
 ) -> Unit = "wasmoon_jit_gc_set_safepoint_table"
 
 ///|
+/// Install per-function safepoint metadata into context-owned storage.
+/// Returns 1 on success, 0 on failure.
+#borrow(stackmap_blob, code_offsets)
+pub extern "c" fn c_jit_gc_set_func_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+  stackmap_blob : Bytes,
+  stackmap_blob_size : Int,
+  code_offsets : FixedArray[Int],
+  safepoint_count : Int,
+) -> Int = "wasmoon_jit_gc_set_func_safepoints"
+
+///|
+/// Select currently active safepoint table by wasm function index.
+/// Pass func_idx < 0 to clear active table.
+pub extern "c" fn c_jit_gc_use_func_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+) -> Unit = "wasmoon_jit_gc_use_func_safepoints"
+
+///|
 /// Set GC heap pointer in VMContext for inline allocation
 /// This enables ctx-passing GC libcalls
 pub extern "c" fn c_jit_ctx_set_gc_heap(

@@ -30,6 +30,15 @@ pub struct GcSafepoint {
 } derive(Show)
 
 ///|
+pub fn GcSafepoint::new(
+  code_offset : Int,
+  live_refs : Array[Int],
+  metadata : Int64,
+) -> GcSafepoint {
+  { code_offset, live_refs, metadata }
+}
+
+///|
 /// GC compiler capabilities - what features does this GC need?
 pub struct GcCompilerConfig {
   /// Does this GC need write barriers?

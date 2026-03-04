@@ -198,6 +198,8 @@ pub fn c_jit_gc_leave_critical() -> Unit
 
 pub fn c_jit_gc_set_canonical_indices(Int64, FixedArray[Int], Int) -> Unit
 
+pub fn c_jit_gc_set_func_safepoints(Int64, Int, Bytes, Int, FixedArray[Int], Int) -> Int
+
 pub fn c_jit_gc_set_func_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_gc_set_func_type_indices(Int64, FixedArray[Int], Int) -> Unit
@@ -209,6 +211,8 @@ pub fn c_jit_gc_set_root_scratch(Int64, FixedArray[Int64], Int) -> Int
 pub fn c_jit_gc_set_safepoint_table(Int64, Int64) -> Unit
 
 pub fn c_jit_gc_set_type_cache(Int64, FixedArray[Int], Int) -> Unit
+
+pub fn c_jit_gc_use_func_safepoints(Int64, Int) -> Unit
 
 pub fn c_jit_get_args_get_ptr() -> Int64
 
