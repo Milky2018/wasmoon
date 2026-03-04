@@ -53,6 +53,14 @@ static int64_t trap_out_of_memory_i64(void) {
     return 0;
 }
 
+static int64_t trap_gc_precise_roots_i64(void) {
+    g_trap_code = 10;
+    if (g_trap_active) {
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
 static int gc_alloc_debug_cached = -1;
 
 static int gc_is_truthy_env(const char *value) {
@@ -96,11 +104,32 @@ static uint32_t gc_read_u32_le(const uint8_t *ptr) {
            ((uint32_t)ptr[3] << 24);
 }
 
+static const wasmoon_gc_safepoint_table_t *gc_func_safepoint_table_for_current(
+    jit_context_t *ctx
+) {
+    if (!ctx || !ctx->gc_func_safepoint_tables) {
+        return NULL;
+    }
+    int32_t func_idx = ctx->debug_current_func_idx;
+    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+        return NULL;
+    }
+    const wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    if (!table->stackmap_blob || table->stackmap_blob_size < 8) {
+        return NULL;
+    }
+    return table;
+}
+
 static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context_t *ctx) {
     if (!ctx) {
         return NULL;
     }
-    const wasmoon_gc_safepoint_table_t *table = ctx->gc_safepoint_table;
+    const wasmoon_gc_safepoint_table_t *table = gc_func_safepoint_table_for_current(ctx);
+    if (table) {
+        return table;
+    }
+    table = ctx->gc_safepoint_table;
     if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
         table = ctx->gc_frame_chain_head->table;
     }
@@ -168,12 +197,12 @@ static int32_t gc_select_alloc_roots(
     }
     if (!ctx) {
         gc_log_precise_root_failure(op, safepoint_id, "missing jit context");
-        return root_count;
+        return -1;
     }
     const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
         gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
-        return root_count;
+        return -1;
     }
     const uint8_t *blob = table->stackmap_blob;
     uint32_t version = gc_read_u32_le(blob);
@@ -643,7 +672,7 @@ int64_t gc_alloc_struct_slow(
         if (default_fields) {
             free(default_fields);
         }
-        return trap_out_of_memory_i64();
+        return trap_gc_precise_roots_i64();
     }
 
     gc_alloc_result_t alloc_result = {0};
@@ -734,7 +763,7 @@ int64_t gc_alloc_array_slow(
         if (gc_alloc_debug_enabled()) {
             fprintf(stderr, "[GC ALLOC] alloc_array_slow precise roots unavailable\n");
         }
-        return trap_out_of_memory_i64();
+        return trap_gc_precise_roots_i64();
     }
 
     gc_alloc_result_t alloc_result = {0};
@@ -799,7 +828,7 @@ int64_t gc_alloc_array_from_values_slow(
         if (alloc_roots_owned) {
             free(alloc_roots_owned);
         }
-        return trap_out_of_memory_i64();
+        return trap_gc_precise_roots_i64();
     }
 
     gc_alloc_result_t alloc_result = {0};

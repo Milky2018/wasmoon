@@ -215,3 +215,8 @@ jobs:
         timeout-minutes: 10
         run: |
           python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+
+      - name: run GC differential fault-injection lane (sanitizer)
+        timeout-minutes: 10
+        run: |
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7

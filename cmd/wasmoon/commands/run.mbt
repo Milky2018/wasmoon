@@ -1502,7 +1502,7 @@ fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     // Stage 5: Emit machine code
-    let debug_func_idx = if debug { Some(func_idx) } else { None }
+    let debug_func_idx = Some(func_idx)
     let mc = @emit.emit_function_with_regalloc(
       vcode_ra,
       ra_output,

@@ -19,7 +19,18 @@ def run_command(command_template: str, file_path: Path, timeout: int) -> bool:
         text=True,
         timeout=timeout,
     )
-    return completed.returncode != 0
+    if completed.returncode != 0:
+        return True
+    output = completed.stdout + completed.stderr
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("Failed:"):
+            continue
+        try:
+            return int(stripped.split(":", maxsplit=1)[1].strip()) > 0
+        except Exception:
+            continue
+    return False
 
 
 def ddmin_lines(

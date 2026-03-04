@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -273,6 +274,81 @@ def collect_wast_files(root: Path, recursive: bool) -> list[Path]:
     return sorted(root.glob(pattern))
 
 
+def build_reduce_command_template(mode: Mode, wasmoon_bin: Path) -> str:
+    command: list[str] = [str(wasmoon_bin), "test", "{file}"]
+    if mode.no_jit:
+        command.append("--no-jit")
+    command_text = " ".join(shlex.quote(part) for part in command)
+    if not mode.extra_env:
+        return command_text
+    env_pairs = " ".join(
+        f"{key}={shlex.quote(value)}" for key, value in sorted(mode.extra_env.items())
+    )
+    return f"env {env_pairs} {command_text}"
+
+
+def run_auto_reduce(
+    repo_root: Path,
+    wast_file: Path,
+    rel_path: str,
+    mode: Mode,
+    wasmoon_bin: Path,
+    timeout_seconds: int,
+    reduce_dir: str,
+) -> dict[str, Any]:
+    reduce_script = repo_root / "scripts" / "reduce_wast.py"
+    rel = Path(rel_path)
+    output_file = (
+        repo_root
+        / reduce_dir
+        / rel.parent
+        / f"{rel.stem}.{mode.name}.reduced{wast_file.suffix}"
+    ).resolve()
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd_template = build_reduce_command_template(mode, wasmoon_bin)
+    cmd = [
+        sys.executable,
+        str(reduce_script),
+        str(wast_file),
+        "--cmd",
+        cmd_template,
+        "--output",
+        str(output_file),
+        "--timeout",
+        str(timeout_seconds),
+    ]
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=max(timeout_seconds * 120, 120),
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "mode": mode.name,
+            "status": "timeout",
+            "output": str(output_file),
+            "error": "auto-reduce timeout",
+        }
+    if completed.returncode == 0:
+        return {
+            "mode": mode.name,
+            "status": "ok",
+            "output": str(output_file),
+        }
+    tail_lines = (completed.stdout + completed.stderr).splitlines()
+    tail = "\n".join(tail_lines[-20:])
+    return {
+        "mode": mode.name,
+        "status": "error",
+        "output": str(output_file),
+        "error": tail if tail else f"exit {completed.returncode}",
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Differential GC bug finder")
     parser.add_argument("--dir", default="spec/gc", help="Directory containing .wast files")
@@ -321,6 +397,22 @@ def main() -> None:
         default="wasmtime",
         help="Path to wasmtime binary (default: wasmtime on PATH)",
     )
+    parser.add_argument(
+        "--auto-reduce",
+        action="store_true",
+        help="Automatically run scripts/reduce_wast.py for first failing lane per file",
+    )
+    parser.add_argument(
+        "--auto-reduce-limit",
+        type=int,
+        default=5,
+        help="Maximum number of files to auto-reduce (default: 5)",
+    )
+    parser.add_argument(
+        "--auto-reduce-dir",
+        default="tmp/gc_reduced",
+        help="Directory to write auto-reduced reproducers",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -364,6 +456,7 @@ def main() -> None:
     report: dict[str, Any] = {
         "test_dir": str(test_dir),
         "files": {},
+        "reductions": [],
         "summary": {
             "total_files": len(wast_files),
             "interp_pass": 0,
@@ -374,6 +467,9 @@ def main() -> None:
             "issues": [],
             "trap_mismatches": [],
             "fault_inject_non_pass": 0,
+            "reductions_attempted": 0,
+            "reductions_succeeded": 0,
+            "reductions_failed": 0,
         },
     }
 
@@ -396,6 +492,8 @@ def main() -> None:
         modes.append(
             Mode(name="wasmtime", runner="wasmtime", no_jit=False, extra_env={})
         )
+    modes_by_name = {mode.name: mode for mode in modes}
+    reduce_attempted = 0
 
     for wast in wast_files:
         rel = str(wast.relative_to(test_dir))
@@ -483,6 +581,43 @@ def main() -> None:
                         }
                     )
 
+        if args.auto_reduce and reduce_attempted < max(args.auto_reduce_limit, 0):
+            reduce_mode_name: str | None = None
+            if jit_status != "pass":
+                reduce_mode_name = "jit"
+            elif stress_status != "pass":
+                reduce_mode_name = "jit_stress_verify"
+            elif small_heap_status != "pass":
+                reduce_mode_name = "jit_stress_small_heap"
+            elif interp_status != "pass":
+                reduce_mode_name = "interp"
+            if reduce_mode_name:
+                mode = modes_by_name.get(reduce_mode_name)
+                if mode:
+                    reduce_attempted += 1
+                    report["summary"]["reductions_attempted"] += 1
+                    reduced = run_auto_reduce(
+                        repo_root=repo_root,
+                        wast_file=wast,
+                        rel_path=rel,
+                        mode=mode,
+                        wasmoon_bin=wasmoon_bin,
+                        timeout_seconds=args.timeout,
+                        reduce_dir=args.auto_reduce_dir,
+                    )
+                    reduced["file"] = rel
+                    report["reductions"].append(reduced)
+                    if reduced["status"] == "ok":
+                        report["summary"]["reductions_succeeded"] += 1
+                        print(
+                            f"{rel:50} auto-reduce[{mode.name}] -> {reduced['output']}"
+                        )
+                    else:
+                        report["summary"]["reductions_failed"] += 1
+                        print(
+                            f"{rel:50} auto-reduce[{mode.name}] failed: {reduced.get('error', 'unknown')}"
+                        )
+
         mode_statuses = [
             f"interp={interp_status:8}",
             f"jit={jit_status:8}",
@@ -511,6 +646,10 @@ def main() -> None:
     print(f"  issues:       {len(report['summary']['issues'])}")
     print(f"  regressions:  {len(report['summary']['regressions'])}")
     print(f"  trap mismatch:{len(report['summary']['trap_mismatches'])}")
+    print(
+        f"  reductions:   {report['summary']['reductions_succeeded']}/"
+        f"{report['summary']['reductions_attempted']} succeeded"
+    )
     if "jit_fault_inject" in [mode.name for mode in modes]:
         print(
             f"  fault non-pass:{report['summary']['fault_inject_non_pass']}/{len(wast_files)}"

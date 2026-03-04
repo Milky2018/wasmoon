@@ -470,6 +470,12 @@ pub fn JITModule::load_with_imports(
         }
       }
 
+      // Expose context before loading functions so per-function safepoint tables
+      // can be installed during this phase.
+      jit_module.context = Some(ctx)
+      jit_module.context_ptr = context_ptr
+      jit_module.debug_db = debug_db
+
       // Step 2: Load compiled functions and populate their pointers
       for entry in precompiled.functions {
         // Allocate executable memory directly from code array
@@ -511,11 +517,6 @@ pub fn JITModule::load_with_imports(
             )
         }
       }
-
-      // Store context in module
-      jit_module.context = Some(ctx)
-      jit_module.context_ptr = context_ptr
-      jit_module.debug_db = debug_db
 
       // Patch direct-call function address loads now that pointers are known.
       apply_func_addr_fixups(ctx, jit_module, precompiled)

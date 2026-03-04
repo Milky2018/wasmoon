@@ -145,6 +145,21 @@ fn MachineCode::emit_epilogue(
     let isa = @isaregs.current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
+    if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
+      let vmctx = @isaregs.vmctx_index()
+      let scratch = 11
+      self.x86_emit_mov_r32_m32(
+        scratch,
+        4,
+        self.debug_prev_func_idx_spill_offset,
+      )
+      self.x86_emit_mov_m32_r32(
+        vmctx,
+        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+        scratch,
+      )
+    }
+
     // Step 1: Deallocate remaining stack space (spill slots + outgoing args).
     let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
     if remaining_size > 0 {
@@ -180,6 +195,18 @@ fn MachineCode::emit_epilogue(
   }
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
+
+  if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
+    let vmctx = @isaregs.vmctx_index()
+    if self.debug_prev_func_idx_spill_offset <= 16380 {
+      self.emit_ldr_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
+    } else {
+      self.emit_load_imm64(17, self.debug_prev_func_idx_spill_offset.to_int64())
+      self.emit_add_reg(17, 31, 17)
+      self.emit_ldr_w_imm(16, 17, 0)
+    }
+    self.emit_str_w_imm(16, vmctx, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
+  }
 
   // Step 1: Deallocate remaining stack space (spill slots + outgoing args)
   let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size

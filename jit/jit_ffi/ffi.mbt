@@ -5,7 +5,7 @@
 // ============ Trap Handling ============
 
 ///|
-/// Get trap code (0 = no trap, 1 = out of bounds memory access, 9 = out of memory)
+/// Get trap code (0 = no trap, 1 = out of bounds memory access, 9 = out of memory, 10 = gc precise roots unavailable)
 pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 
 ///|

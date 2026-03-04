@@ -329,9 +329,6 @@ fn MachineCode::emit_prologue(
       self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
     }
 
-    // Best-effort: trap diagnostics debug func idx currently AArch64-only.
-    debug_func_idx |> ignore
-
     // Save callee-saved GPRs.
     for r in saved_gprs {
       self.x86_emit_push_r64(r)
@@ -351,6 +348,29 @@ fn MachineCode::emit_prologue(
     let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
     if remaining_size > 0 {
       self.emit_sp_adjust(-remaining_size)
+    }
+
+    if debug_func_idx is Some(idx) {
+      let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let scratch = 11
+      if self.debug_prev_func_idx_spill_offset >= 0 {
+        self.x86_emit_mov_r32_m32(
+          scratch,
+          vmctx_src,
+          @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+        )
+        self.x86_emit_mov_m32_r32(
+          4,
+          self.debug_prev_func_idx_spill_offset,
+          scratch,
+        )
+      }
+      self.x86_emit_mov_imm64(scratch, idx.to_int64())
+      self.x86_emit_mov_m32_r32(
+        vmctx_src,
+        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+        scratch,
+      )
     }
 
     // Cache vmctx (pinned reg) and optional cached pointers.
@@ -443,13 +463,6 @@ fn MachineCode::emit_prologue(
     self.emit_add_imm(29, 31, 0)
   }
 
-  // Best-effort: record current wasm func_idx for trap diagnostics.
-  if debug_func_idx is Some(idx) {
-    let vmctx_arg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
-    self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(16, vmctx_arg, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
-  }
-
   // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
   // Approach: handle remainder first, then reverse iterate pairs
   // This ensures save/restore order matches perfectly
@@ -502,6 +515,29 @@ fn MachineCode::emit_prologue(
   let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
   if remaining_size > 0 {
     self.emit_sp_adjust(-remaining_size)
+  }
+
+  if debug_func_idx is Some(idx) {
+    let vmctx_reg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
+    if self.debug_prev_func_idx_spill_offset >= 0 {
+      self.emit_ldr_w_imm(
+        16,
+        vmctx_reg,
+        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+      )
+      if self.debug_prev_func_idx_spill_offset <= 16380 {
+        self.emit_str_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
+      } else {
+        self.emit_load_imm64(
+          17,
+          self.debug_prev_func_idx_spill_offset.to_int64(),
+        )
+        self.emit_add_reg(17, 31, 17)
+        self.emit_str_w_imm(16, 17, 0)
+      }
+    }
+    self.emit_load_imm64(16, idx.to_int64())
+    self.emit_str_w_imm(16, vmctx_reg, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
   }
 
   // Step 5: Cache vmctx to X19 (only if function uses vmctx)
@@ -641,10 +677,17 @@ pub fn emit_function(
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
+  let num_spill_slots = func.get_num_spill_slots()
+  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
+  let total_spill_slots = if needs_debug_idx_restore {
+    num_spill_slots + 1
+  } else {
+    num_spill_slots
+  }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
-    func.get_num_spill_slots(),
+    total_spill_slots,
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
@@ -654,6 +697,11 @@ pub fn emit_function(
     has_incoming_stack_args~,
     abi_settings~,
   )
+  if needs_debug_idx_restore {
+    mc.set_debug_prev_func_idx_spill_offset(
+      stack_frame.get_spill_offset(num_spill_slots),
+    )
+  }
 
   // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
   mc.emit_prologue(
@@ -1929,10 +1977,17 @@ pub fn emit_function_with_regalloc(
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
+  let num_spill_slots = output.get_num_spillslots()
+  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
+  let total_spill_slots = if needs_debug_idx_restore {
+    num_spill_slots + 1
+  } else {
+    num_spill_slots
+  }
   let stack_frame = JITStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
-    output.get_num_spillslots(),
+    total_spill_slots,
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
     needs_vmctx~,
@@ -1942,6 +1997,11 @@ pub fn emit_function_with_regalloc(
     has_incoming_stack_args~,
     abi_settings~,
   )
+  if needs_debug_idx_restore {
+    mc.set_debug_prev_func_idx_spill_offset(
+      stack_frame.get_spill_offset(num_spill_slots),
+    )
+  }
 
   // Emit prologue.
   mc.emit_prologue_with_output(

@@ -40,6 +40,9 @@
 // 5 = invalid conversion to integer
 // 6 = integer divide by zero
 // 7 = integer overflow
+// 8 = backend trap
+// 9 = out of memory
+// 10 = GC precise roots unavailable
 // 99 = unknown trap
 
 extern __thread sigjmp_buf g_trap_jmp_buf;
