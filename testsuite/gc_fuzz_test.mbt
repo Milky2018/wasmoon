@@ -102,7 +102,7 @@ fn generate_gc_fuzz_case(seed : Int) -> String {
 
 ///|
 test "gc fuzz: directed jit/interpreter comparison" {
-  for seed in 1..<65 {
+  for seed in 1..<129 {
     let source = generate_gc_fuzz_case(seed)
     let compared = compare_jit_interp(source, "test", [])
     if !compare_result_is_match(compared) {
@@ -140,11 +140,95 @@ fn generate_gc_deep_live_case(depth : Int) -> String {
 
 ///|
 test "gc fuzz: deep live chain jit/interpreter comparison" {
-  for depth in [16, 32, 64, 96] {
+  for depth in [16, 32, 64, 96, 128, 160] {
     let source = generate_gc_deep_live_case(depth)
     let compared = compare_jit_interp(source, "test", [])
     if !compare_result_is_match(compared) {
       fail("gc deep-live mismatch (depth=\{depth}): \{compared}")
+    }
+  }
+}
+
+///|
+fn generate_gc_cycle_mix_case(seed : Int) -> String {
+  let lines : Array[String] = []
+  lines.push("(module")
+  lines.push(
+    "  (type $node (struct (field (mut i32)) (field (mut (ref null $node)))))",
+  )
+  lines.push("  (type $arr (array (mut (ref null $node))))")
+  lines.push("  (table $nodes 16 (ref null $node))")
+  lines.push("  (func (export \"test\") (result i32)")
+  lines.push("    (local $head (ref null $node))")
+  lines.push("    (local $first (ref null $node))")
+  lines.push("    (local $tmp (ref null $node))")
+  lines.push("    (local $array (ref null $arr))")
+  lines.push("    (local $sum i32)")
+  lines.push("    (local $i i32)")
+  lines.push("    (local.set $head (ref.null $node))")
+  lines.push("    (local.set $first (ref.null $node))")
+  lines.push("    (local.set $array (array.new_default $arr (i32.const 8)))")
+  lines.push("    (local.set $sum (i32.const 0))")
+  lines.push("    (local.set $i (i32.const 0))")
+  lines.push("    (loop $build")
+  lines.push(
+    "      (local.set $tmp (struct.new $node (local.get $i) (local.get $head)))",
+  )
+  lines.push("      (local.set $head (local.get $tmp))")
+  lines.push("      (if (i32.eq (local.get $i) (i32.const 0))")
+  lines.push("        (then (local.set $first (local.get $tmp)))")
+  lines.push("      )")
+  lines.push("      (local.get $array)")
+  lines.push("      (i32.and (local.get $i) (i32.const 7))")
+  lines.push("      (local.get $tmp)")
+  lines.push("      (array.set $arr)")
+  lines.push("      (table.set $nodes (local.get $i) (local.get $tmp))")
+  lines.push(
+    "      (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (local.get $tmp))))",
+  )
+  lines.push("      (local.set $i (i32.add (local.get $i) (i32.const 1)))")
+  lines.push("      (br_if $build (i32.lt_s (local.get $i) (i32.const 16)))")
+  lines.push("    )")
+  lines.push("    (local.get $head)")
+  lines.push("    (local.get $first)")
+  lines.push("    (struct.set $node 1)")
+  lines.push("    (local.get $first)")
+  lines.push("    (local.get $head)")
+  lines.push("    (struct.set $node 1)")
+
+  let (seed1, table_idx_raw) = fuzz_next_in_range(seed, 16)
+  let (_, array_idx_raw) = fuzz_next_in_range(seed1, 8)
+  lines.push(
+    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (table.get $nodes (i32.const \{table_idx_raw}))))))",
+  )
+  lines.push(
+    "    (local.set $sum (i32.add (local.get $sum) (struct.get $node 0 (array.get $arr (local.get $array) (i32.const \{array_idx_raw}))))))",
+  )
+  lines.push("    (local.set $sum")
+  lines.push("      (i32.add")
+  lines.push("        (local.get $sum)")
+  lines.push("        (if (result i32)")
+  lines.push(
+    "          (ref.eq (table.get $nodes (i32.const \{table_idx_raw})) (array.get $arr (local.get $array) (i32.const \{array_idx_raw})))",
+  )
+  lines.push("          (then (i32.const 29))")
+  lines.push("          (else (i32.const 7))")
+  lines.push("        )")
+  lines.push("      )")
+  lines.push("    )")
+  lines.push("    (local.get $sum)")
+  lines.push("  )")
+  lines.push(")")
+  lines.join("\n")
+}
+
+///|
+test "gc fuzz: cycle/table mix jit/interpreter comparison" {
+  for seed in 1..<49 {
+    let source = generate_gc_cycle_mix_case(seed)
+    let compared = compare_jit_interp(source, "test", [])
+    if !compare_result_is_match(compared) {
+      fail("gc cycle/table mismatch (seed=\{seed}): \{compared}")
     }
   }
 }

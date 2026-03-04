@@ -23,6 +23,11 @@
 // Optional runtime verification mode. Set WASMOON_GC_VERIFY=1 to enable.
 static int gc_verify_env_cached = -1;
 
+// Keep these in sync with types/types.mbt.
+#define GC_EXTERNREF_TAG 0x4000000000000000LL
+#define GC_FUNCREF_TAG   0x2000000000000000LL
+#define GC_REF_TAGS_MASK (GC_EXTERNREF_TAG | GC_FUNCREF_TAG)
+
 static int gc_is_truthy_env(const char* value) {
     if (!value) {
         return 0;
@@ -107,8 +112,26 @@ static int gc_barrier_assert_enabled(void) {
     return gc_barrier_assert_env_cached;
 }
 
-static int gc_is_ref_candidate(int64_t value) {
-    return value > 0 && ((value & 1L) == 0L);
+static int gc_try_decode_heap_ref_candidate(
+    GcHeap* heap,
+    int64_t value,
+    int32_t* out_target_gc_ref
+) {
+    if (!heap || value <= 0) {
+        return 0;
+    }
+    // i31 and tagged refs are not GC heap references.
+    if ((value & 1L) != 0L || (value & GC_REF_TAGS_MASK) != 0L) {
+        return 0;
+    }
+    int64_t target64 = value >> 1;
+    if (target64 <= 0 || target64 > heap->object_count) {
+        return 0;
+    }
+    if (out_target_gc_ref) {
+        *out_target_gc_ref = (int32_t)target64;
+    }
+    return 1;
 }
 
 // ============ Internal Helpers ============
@@ -451,7 +474,7 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
 static void gc_heap_write_barrier_slow(
     GcHeap* heap,
     int32_t owner_gc_ref,
-    int64_t written_value
+    int32_t target_gc_ref
 ) {
     heap->barrier_writes++;
     if (!gc_barrier_assert_enabled()) {
@@ -474,18 +497,6 @@ static void gc_heap_write_barrier_slow(
         );
         abort();
     }
-    int32_t target_gc_ref = (int32_t)(written_value >> 1);
-    if (target_gc_ref <= 0 || target_gc_ref > heap->object_count) {
-        fprintf(
-            stderr,
-            "[GC BARRIER] invalid written reference: owner=%d value=%lld target=%d object_count=%d\n",
-            owner_gc_ref,
-            (long long)written_value,
-            target_gc_ref,
-            heap->object_count
-        );
-        abort();
-    }
     if (heap->object_table[target_gc_ref - 1] < 0) {
         fprintf(
             stderr,
@@ -501,10 +512,11 @@ void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_v
     if (!heap) {
         return;
     }
-    if (!gc_is_ref_candidate(written_value)) {
+    int32_t target_gc_ref = 0;
+    if (!gc_try_decode_heap_ref_candidate(heap, written_value, &target_gc_ref)) {
         return;
     }
-    gc_heap_write_barrier_slow(heap, owner_gc_ref, written_value);
+    gc_heap_write_barrier_slow(heap, owner_gc_ref, target_gc_ref);
 }
 
 int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
@@ -610,10 +622,8 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
 
         for (int32_t i = 0; i < num_fields; i++) {
             int64_t value = fields[i];
-            // Check if value is a GC reference (even, non-zero)
-            // Encoding: gc_ref << 1, so decode with >> 1
-            if (value > 0 && (value & 1) == 0) {
-                int32_t ref_gc_ref = (int32_t)(value >> 1);
+            int32_t ref_gc_ref = 0;
+            if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
                 gc_heap_mark(heap, ref_gc_ref);
             }
         }
@@ -624,9 +634,8 @@ void gc_heap_mark(GcHeap* heap, int32_t gc_ref) {
 
         for (int32_t i = 0; i < len; i++) {
             int64_t value = elements[i];
-            // Check if value is a GC reference (even, non-zero)
-            if (value > 0 && (value & 1) == 0) {
-                int32_t ref_gc_ref = (int32_t)(value >> 1);
+            int32_t ref_gc_ref = 0;
+            if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
                 gc_heap_mark(heap, ref_gc_ref);
             }
         }
@@ -640,10 +649,9 @@ void gc_heap_mark_roots(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
 
     for (int32_t i = 0; i < num_roots; i++) {
         int64_t value = roots[i];
-        // Check if value is a GC reference (even, non-zero)
-        // Encoding: gc_ref << 1, so decode with >> 1
-        if (value > 0 && (value & 1) == 0) {
-            gc_heap_mark(heap, (int32_t)(value >> 1));
+        int32_t ref_gc_ref = 0;
+        if (gc_try_decode_heap_ref_candidate(heap, value, &ref_gc_ref)) {
+            gc_heap_mark(heap, ref_gc_ref);
         }
     }
 }

@@ -55,6 +55,20 @@ MODES: tuple[Mode, ...] = (
     ),
 )
 
+BARRIER_ASSERT_MODE = Mode(
+    name="jit_stress_barrier_assert",
+    runner="wasmoon",
+    no_jit=False,
+    extra_env={
+        "WASMOON_GC_STRESS": "1",
+        "WASMOON_GC_STRESS_EVERY": "1",
+        "WASMOON_GC_VERIFY": "1",
+        "WASMOON_GC_ASSERT_BARRIER": "1",
+        "WASMOON_GC_HEAP_CAPACITY": "2048",
+        "WASMOON_GC_ALLOC_DEBUG": "1",
+    },
+)
+
 WASMTIME_WAST_FLAGS: tuple[str, ...] = (
     "-W",
     "all-proposals=y",
@@ -304,6 +318,40 @@ def run_one(
     return result
 
 
+def merge_repeat_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    if len(results) == 1:
+        return results[0]
+    statuses = {result["status"] for result in results}
+    non_pass_traps = {
+        result.get("trap_signature")
+        for result in results
+        if result["status"] != "pass" and result.get("trap_signature")
+    }
+    merged = dict(results[0])
+    merged["repeat_runs"] = results
+    merged["repeat_count"] = len(results)
+    merged["repeat_pass_count"] = sum(
+        1 for result in results if result["status"] == "pass"
+    )
+    merged["repeat_flaky"] = len(statuses) > 1 or len(non_pass_traps) > 1
+    if merged["repeat_flaky"]:
+        merged["status"] = "flaky"
+        merged["trap_signature"] = None
+        sorted_statuses = ",".join(sorted(statuses))
+        trap_suffix = ""
+        if non_pass_traps:
+            trap_suffix = f"; trap signatures={','.join(sorted(non_pass_traps))}"
+        merged["error"] = (
+            f"inconsistent repeat results: statuses={sorted_statuses}{trap_suffix}"
+        )
+        merged["stdout_tail"] = "\n--- repeat split ---\n".join(
+            result.get("stdout_tail", "")
+            for result in results
+            if result.get("stdout_tail")
+        )
+    return merged
+
+
 def collect_wast_files(root: Path, recursive: bool) -> list[Path]:
     pattern = "**/*.wast" if recursive else "*.wast"
     return sorted(root.glob(pattern))
@@ -411,9 +459,20 @@ def main() -> None:
         help=f"Per-test timeout in seconds (default: {DEFAULT_TIMEOUT_SECONDS})",
     )
     parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Repeat each lane N times to detect flaky GC behavior (default: 1)",
+    )
+    parser.add_argument(
         "--with-wasmtime",
         action="store_true",
         help="Add wasmtime as an extra differential lane",
+    )
+    parser.add_argument(
+        "--with-barrier-assert",
+        action="store_true",
+        help="Add a strict write-barrier assertion lane (WASMOON_GC_ASSERT_BARRIER=1)",
     )
     parser.add_argument(
         "--fault-alloc-at",
@@ -449,6 +508,7 @@ def main() -> None:
         help="Directory to write auto-reduced reproducers",
     )
     args = parser.parse_args()
+    repeat_count = max(args.repeat, 1)
 
     repo_root = Path(__file__).resolve().parent.parent
     wasmoon_bin = repo_root / "wasmoon"
@@ -490,6 +550,7 @@ def main() -> None:
 
     report: dict[str, Any] = {
         "test_dir": str(test_dir),
+        "repeat": repeat_count,
         "files": {},
         "reductions": [],
         "summary": {
@@ -498,9 +559,11 @@ def main() -> None:
             "jit_pass": 0,
             "stress_pass": 0,
             "small_heap_pass": 0,
+            "barrier_pass": 0,
             "regressions": [],
             "issues": [],
             "trap_mismatches": [],
+            "flaky": [],
             "fault_inject_non_pass": 0,
             "reductions_attempted": 0,
             "reductions_succeeded": 0,
@@ -509,6 +572,8 @@ def main() -> None:
     }
 
     modes: list[Mode] = list(MODES)
+    if args.with_barrier_assert:
+        modes.append(BARRIER_ASSERT_MODE)
     if args.fault_alloc_at > 0 or args.fault_alloc_every > 0:
         fault_env: dict[str, str] = {}
         if args.fault_alloc_at > 0:
@@ -534,9 +599,19 @@ def main() -> None:
         rel = str(wast.relative_to(test_dir))
         file_results: dict[str, Any] = {}
         for mode in modes:
-            result = run_one(
-                repo_root, wasmoon_bin, wasmtime_bin, wast, mode, args.timeout
-            )
+            repeated_results: list[dict[str, Any]] = []
+            for _ in range(repeat_count):
+                repeated_results.append(
+                    run_one(
+                        repo_root,
+                        wasmoon_bin,
+                        wasmtime_bin,
+                        wast,
+                        mode,
+                        args.timeout,
+                    )
+                )
+            result = merge_repeat_results(repeated_results)
             file_results[mode.name] = result
         report["files"][rel] = file_results
 
@@ -544,6 +619,11 @@ def main() -> None:
         jit_status = file_results["jit"]["status"]
         stress_status = file_results["jit_stress_verify"]["status"]
         small_heap_status = file_results["jit_stress_small_heap"]["status"]
+        barrier_status = (
+            file_results["jit_stress_barrier_assert"]["status"]
+            if "jit_stress_barrier_assert" in file_results
+            else None
+        )
         if interp_status == "pass":
             report["summary"]["interp_pass"] += 1
         else:
@@ -566,12 +646,38 @@ def main() -> None:
             report["summary"]["small_heap_pass"] += 1
         else:
             report["summary"]["issues"].append(
-                {"file": rel, "mode": "jit_stress_small_heap", "status": small_heap_status}
+                {
+                    "file": rel,
+                    "mode": "jit_stress_small_heap",
+                    "status": small_heap_status,
+                }
             )
+        if barrier_status is not None:
+            if barrier_status == "pass":
+                report["summary"]["barrier_pass"] += 1
+            else:
+                report["summary"]["issues"].append(
+                    {
+                        "file": rel,
+                        "mode": "jit_stress_barrier_assert",
+                        "status": barrier_status,
+                    }
+                )
+        for mode_name, mode_result in file_results.items():
+            if mode_result.get("repeat_flaky"):
+                report["summary"]["flaky"].append({"file": rel, "mode": mode_name})
         if "jit_fault_inject" in file_results:
             fault_status = file_results["jit_fault_inject"]["status"]
             if fault_status != "pass":
                 report["summary"]["fault_inject_non_pass"] += 1
+                if fault_status in {"crash", "timeout", "error", "flaky"}:
+                    report["summary"]["issues"].append(
+                        {
+                            "file": rel,
+                            "mode": "jit_fault_inject",
+                            "status": fault_status,
+                        }
+                    )
 
         if interp_status == "pass" and jit_status != "pass":
             report["summary"]["regressions"].append(
@@ -591,6 +697,18 @@ def main() -> None:
                     "file": rel,
                     "kind": "jit_pass_small_heap_not_pass",
                     "small_heap": small_heap_status,
+                }
+            )
+        if (
+            barrier_status is not None
+            and jit_status == "pass"
+            and barrier_status != "pass"
+        ):
+            report["summary"]["regressions"].append(
+                {
+                    "file": rel,
+                    "kind": "jit_pass_barrier_not_pass",
+                    "barrier": barrier_status,
                 }
             )
 
@@ -659,6 +777,8 @@ def main() -> None:
             f"stress={stress_status:8}",
             f"small={small_heap_status:8}",
         ]
+        if barrier_status is not None:
+            mode_statuses.append(f"barrier={barrier_status:8}")
         if "jit_fault_inject" in file_results:
             mode_statuses.append(
                 f"fault={file_results['jit_fault_inject']['status']:8}"
@@ -674,10 +794,14 @@ def main() -> None:
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("\nSummary:")
+    print(f"  repeat per lane: {repeat_count}")
     print(f"  interp pass:  {report['summary']['interp_pass']}/{len(wast_files)}")
     print(f"  jit pass:     {report['summary']['jit_pass']}/{len(wast_files)}")
     print(f"  stress pass:  {report['summary']['stress_pass']}/{len(wast_files)}")
     print(f"  small pass:   {report['summary']['small_heap_pass']}/{len(wast_files)}")
+    if args.with_barrier_assert:
+        print(f"  barrier pass: {report['summary']['barrier_pass']}/{len(wast_files)}")
+    print(f"  flaky lanes:  {len(report['summary']['flaky'])}")
     print(f"  issues:       {len(report['summary']['issues'])}")
     print(f"  regressions:  {len(report['summary']['regressions'])}")
     print(f"  trap mismatch:{len(report['summary']['trap_mismatches'])}")
