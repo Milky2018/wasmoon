@@ -53,6 +53,38 @@ pub struct Store {
 } derive(Show)
 
 ///|
+/// Optional C heap initial capacity override (bytes)
+const GC_HEAP_CAPACITY_ENV : String = "WASMOON_GC_HEAP_CAPACITY"
+
+///|
+fn parse_decimal_int(value : String) -> Int? {
+  if value.length() == 0 {
+    return None
+  }
+  let mut parsed = 0
+  for codepoint in value {
+    let digit = codepoint.to_int() - b'0'.to_int()
+    if digit < 0 || digit > 9 {
+      return None
+    }
+    parsed = parsed * 10 + digit
+  }
+  Some(parsed)
+}
+
+///|
+fn c_heap_initial_capacity() -> Int {
+  match @sys.get_env_var(GC_HEAP_CAPACITY_ENV) {
+    Some(raw_value) =>
+      match parse_decimal_int(raw_value) {
+        Some(parsed) if parsed > 0 => parsed
+        _ => @types.ONE_MIB_BYTES
+      }
+    None => @types.ONE_MIB_BYTES
+  }
+}
+
+///|
 pub fn Store::new() -> Store {
   {
     funcs: [],
@@ -81,6 +113,7 @@ pub fn Store::new() -> Store {
 ///|
 /// Create a store with C heap enabled (for JIT mode)
 pub fn Store::with_c_heap() -> Store {
+  let initial_capacity = c_heap_initial_capacity()
   {
     funcs: [],
     func_types: [],
@@ -93,7 +126,7 @@ pub fn Store::with_c_heap() -> Store {
     tag_owners: [],
     exns: [],
     heap: MarkSweepHeap::new(), // Keep for fallback
-    c_heap: Some(@jit.CHeap::new()),
+    c_heap: Some(@jit.CHeap::new(capacity=initial_capacity)),
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: [],
@@ -109,7 +142,7 @@ pub fn Store::with_c_heap() -> Store {
 /// Enable C heap for this store
 pub fn Store::enable_c_heap(self : Store) -> Unit {
   if self.c_heap is None {
-    self.c_heap = Some(@jit.CHeap::new())
+    self.c_heap = Some(@jit.CHeap::new(capacity=c_heap_initial_capacity()))
   }
 }
 

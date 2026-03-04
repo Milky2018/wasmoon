@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 // Default sizes
 #define DEFAULT_HEAP_CAPACITY (1024 * 1024)  // 1MB
@@ -51,6 +52,63 @@ static void gc_heap_maybe_verify(GcHeap* heap, const char* op_name) {
         fprintf(stderr, "[GC VERIFY] invariant violation after %s\n", op_name);
         abort();
     }
+}
+
+static int gc_read_positive_env_cached(const char* name, int* cache_slot) {
+    if (*cache_slot == -2) {
+        const char* raw = getenv(name);
+        if (!raw || raw[0] == '\0') {
+            *cache_slot = 0;
+        } else {
+            char* end_ptr = NULL;
+            long parsed = strtol(raw, &end_ptr, 10);
+            if (end_ptr == raw || *end_ptr != '\0' || parsed <= 0) {
+                *cache_slot = 0;
+            } else if (parsed > INT32_MAX) {
+                *cache_slot = INT32_MAX;
+            } else {
+                *cache_slot = (int)parsed;
+            }
+        }
+    }
+    return *cache_slot;
+}
+
+static int gc_fail_alloc_at_cached = -2;
+static int gc_fail_alloc_every_cached = -2;
+static int gc_alloc_attempt_count = 0;
+
+static int gc_should_fail_allocation(void) {
+    gc_alloc_attempt_count++;
+    int fail_at = gc_read_positive_env_cached("WASMOON_GC_FAIL_ALLOC_AT", &gc_fail_alloc_at_cached);
+    if (fail_at > 0 && gc_alloc_attempt_count == fail_at) {
+        return 1;
+    }
+    int fail_every = gc_read_positive_env_cached("WASMOON_GC_FAIL_ALLOC_EVERY", &gc_fail_alloc_every_cached);
+    if (fail_every > 0 && (gc_alloc_attempt_count % fail_every) == 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
+    gc_fail_alloc_at_cached = fail_at > 0 ? fail_at : 0;
+    gc_fail_alloc_every_cached = fail_every > 0 ? fail_every : 0;
+    gc_alloc_attempt_count = 0;
+}
+
+static int gc_barrier_assert_env_cached = -1;
+
+static int gc_barrier_assert_enabled(void) {
+    if (gc_barrier_assert_env_cached < 0) {
+        const char* value = getenv("WASMOON_GC_ASSERT_BARRIER");
+        gc_barrier_assert_env_cached = gc_is_truthy_env(value) ? 1 : 0;
+    }
+    return gc_barrier_assert_env_cached;
+}
+
+static int gc_is_ref_candidate(int64_t value) {
+    return value > 0 && ((value & 1L) == 0L);
 }
 
 // ============ Internal Helpers ============
@@ -154,6 +212,7 @@ GcHeap* gc_heap_new(size_t initial_capacity) {
     heap->free_capacity = DEFAULT_FREE_CAPACITY;
     heap->total_allocations = 0;
     heap->total_collections = 0;
+    heap->barrier_writes = 0;
 
     return heap;
 }
@@ -173,6 +232,9 @@ void gc_heap_free(GcHeap* heap) {
 int32_t gc_heap_alloc_struct(GcHeap* heap, int32_t type_idx,
                               const int64_t* fields, int32_t num_fields) {
     if (!heap) {
+        return 0;
+    }
+    if (gc_should_fail_allocation()) {
         return 0;
     }
 
@@ -235,6 +297,7 @@ void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t
     }
 
     int64_t* fields = (int64_t*)data;
+    gc_heap_write_barrier(heap, gc_ref, value);
     fields[field_idx] = value;
     gc_heap_maybe_verify(heap, "struct_set");
 }
@@ -244,6 +307,9 @@ void gc_heap_struct_set(GcHeap* heap, int32_t gc_ref, int32_t field_idx, int64_t
 int32_t gc_heap_alloc_array(GcHeap* heap, int32_t type_idx,
                              int32_t len, int64_t init_value) {
     if (!heap || len < 0) {
+        return 0;
+    }
+    if (gc_should_fail_allocation()) {
         return 0;
     }
 
@@ -332,6 +398,7 @@ void gc_heap_array_set(GcHeap* heap, int32_t gc_ref, int32_t idx, int64_t value)
     }
 
     int64_t* elements = (int64_t*)(data + 8);
+    gc_heap_write_barrier(heap, gc_ref, value);
     elements[idx] = value;
     gc_heap_maybe_verify(heap, "array_set");
 }
@@ -347,6 +414,7 @@ void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
     int64_t* elements = (int64_t*)(data + 8);
 
     for (int32_t i = 0; i < count && (offset + i) < len; i++) {
+        gc_heap_write_barrier(heap, gc_ref, value);
         elements[offset + i] = value;
     }
     gc_heap_maybe_verify(heap, "array_fill");
@@ -372,14 +440,50 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
     }
 
     // Use memmove to handle overlapping regions
+    for (int32_t i = 0; i < count; i++) {
+        gc_heap_write_barrier(heap, dst_ref, src_elements[src_offset + i]);
+    }
     memmove(&dst_elements[dst_offset], &src_elements[src_offset],
             count * sizeof(int64_t));
     gc_heap_maybe_verify(heap, "array_copy");
 }
 
+void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value) {
+    if (!heap) {
+        return;
+    }
+    if (!gc_is_ref_candidate(written_value)) {
+        return;
+    }
+    heap->barrier_writes++;
+    if (!gc_barrier_assert_enabled()) {
+        return;
+    }
+    if (owner_gc_ref <= 0 || owner_gc_ref > heap->object_count) {
+        fprintf(
+            stderr,
+            "[GC BARRIER] invalid owner gc_ref: owner=%d object_count=%d\n",
+            owner_gc_ref,
+            heap->object_count
+        );
+        abort();
+    }
+    if (heap->object_table[owner_gc_ref - 1] < 0) {
+        fprintf(
+            stderr,
+            "[GC BARRIER] owner points to freed object: owner=%d\n",
+            owner_gc_ref
+        );
+        abort();
+    }
+}
+
 int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,
                                          const int64_t* values, int32_t len) {
     if (!heap || len < 0) {
+        return 0;
+    }
+    if (gc_should_fail_allocation()) {
         return 0;
     }
 
@@ -772,6 +876,10 @@ int32_t gc_heap_get_object_count(GcHeap* heap) {
     return heap ? heap->object_count : 0;
 }
 
+int32_t gc_heap_get_barrier_writes(GcHeap* heap) {
+    return heap ? heap->barrier_writes : 0;
+}
+
 void gc_heap_get_stats(GcHeap* heap, int32_t* out_total_allocations, int32_t* out_total_collections) {
     if (!heap) {
         if (out_total_allocations) *out_total_allocations = 0;
@@ -889,6 +997,10 @@ int32_t wasmoon_gc_heap_get_object_count(int64_t heap_ptr) {
     return gc_heap_get_object_count((GcHeap*)(uintptr_t)heap_ptr);
 }
 
+int32_t wasmoon_gc_heap_get_barrier_writes(int64_t heap_ptr) {
+    return gc_heap_get_barrier_writes((GcHeap*)(uintptr_t)heap_ptr);
+}
+
 int32_t wasmoon_gc_heap_get_total_allocations(int64_t heap_ptr) {
     int32_t allocations = 0;
     gc_heap_get_stats((GcHeap*)(uintptr_t)heap_ptr, &allocations, NULL);
@@ -903,4 +1015,8 @@ int32_t wasmoon_gc_heap_get_total_collections(int64_t heap_ptr) {
 
 int32_t wasmoon_gc_heap_verify(int64_t heap_ptr, int32_t verbose) {
     return gc_heap_verify((GcHeap*)(uintptr_t)heap_ptr, verbose);
+}
+
+void wasmoon_gc_heap_debug_set_fail_alloc(int32_t fail_at, int32_t fail_every) {
+    gc_set_fail_alloc_config(fail_at, fail_every);
 }

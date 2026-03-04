@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -19,22 +21,53 @@ DEFAULT_TIMEOUT_SECONDS = int(os.environ.get("WASMOON_GC_DIFF_TIMEOUT", "20"))
 @dataclass(frozen=True)
 class Mode:
     name: str
+    runner: str
     no_jit: bool
     extra_env: dict[str, str]
 
 
 MODES: tuple[Mode, ...] = (
-    Mode(name="interp", no_jit=True, extra_env={}),
-    Mode(name="jit", no_jit=False, extra_env={}),
+    Mode(name="interp", runner="wasmoon", no_jit=True, extra_env={}),
+    Mode(name="jit", runner="wasmoon", no_jit=False, extra_env={}),
     Mode(
         name="jit_stress_verify",
+        runner="wasmoon",
         no_jit=False,
-        extra_env={"WASMOON_GC_STRESS": "1", "WASMOON_GC_VERIFY": "1"},
+        extra_env={
+            "WASMOON_GC_STRESS": "1",
+            "WASMOON_GC_STRESS_EVERY": "1",
+            "WASMOON_GC_VERIFY": "1",
+            "WASMOON_GC_HEAP_CAPACITY": "4096",
+        },
     ),
 )
 
+TRAP_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"JIT Trap:\s*(.+)"),
+    re.compile(r"runtime error:\s*(.+)", re.IGNORECASE),
+    re.compile(r"trap:\s*(.+)", re.IGNORECASE),
+    re.compile(r"Error:\s*(.+)"),
+)
 
-def parse_result(output: str, return_code: int) -> dict[str, Any]:
+
+def normalize_trap_signature(raw: str) -> str:
+    stripped = raw.strip().lower()
+    stripped = re.sub(r"0x[0-9a-f]+", "0x*", stripped)
+    stripped = re.sub(r"\b\d+\b", "#", stripped)
+    stripped = re.sub(r"\s+", " ", stripped)
+    return stripped
+
+
+def extract_trap_signature(output: str) -> str | None:
+    for line in output.splitlines():
+        for pattern in TRAP_PATTERNS:
+            matched = pattern.search(line)
+            if matched:
+                return normalize_trap_signature(matched.group(1))
+    return None
+
+
+def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
     passed = 0
     failed = 0
     for line in output.splitlines():
@@ -44,27 +77,96 @@ def parse_result(output: str, return_code: int) -> dict[str, Any]:
         elif line.startswith("Failed:"):
             failed = int(line.split(":", maxsplit=1)[1].strip())
 
+    trap_signature = extract_trap_signature(output)
+
+    if runner == "wasmtime":
+        if return_code == 0:
+            return {
+                "status": "pass",
+                "passed": 1,
+                "failed": 0,
+                "error": None,
+                "trap_signature": None,
+            }
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        tail = " | ".join(lines[-3:]) if lines else f"exit {return_code}"
+        return {
+            "status": "crash",
+            "passed": 0,
+            "failed": 0,
+            "error": tail,
+            "trap_signature": trap_signature,
+        }
+
     if return_code != 0 and "Passed:" not in output:
         lines = [line.strip() for line in output.splitlines() if line.strip()]
         tail = " | ".join(lines[-3:]) if lines else f"exit {return_code}"
-        return {"status": "crash", "passed": 0, "failed": 0, "error": tail}
+        return {
+            "status": "crash",
+            "passed": 0,
+            "failed": 0,
+            "error": tail,
+            "trap_signature": trap_signature,
+        }
     if failed > 0:
-        return {"status": "fail", "passed": passed, "failed": failed, "error": None}
+        return {
+            "status": "fail",
+            "passed": passed,
+            "failed": failed,
+            "error": None,
+            "trap_signature": trap_signature,
+        }
     if return_code == 0:
-        return {"status": "pass", "passed": passed, "failed": failed, "error": None}
-    return {"status": "error", "passed": passed, "failed": failed, "error": f"exit {return_code}"}
+        return {
+            "status": "pass",
+            "passed": passed,
+            "failed": failed,
+            "error": None,
+            "trap_signature": None,
+        }
+    return {
+        "status": "error",
+        "passed": passed,
+        "failed": failed,
+        "error": f"exit {return_code}",
+        "trap_signature": trap_signature,
+    }
 
 
 def run_one(
     repo_root: Path,
     wasmoon_bin: Path,
+    wasmtime_bin: Path | None,
     wast_file: Path,
     mode: Mode,
     timeout_seconds: int,
 ) -> dict[str, Any]:
-    cmd = [str(wasmoon_bin), "test", str(wast_file)]
-    if mode.no_jit:
-        cmd.append("--no-jit")
+    if mode.runner == "wasmoon":
+        cmd = [str(wasmoon_bin), "test", str(wast_file)]
+        if mode.no_jit:
+            cmd.append("--no-jit")
+    elif mode.runner == "wasmtime":
+        if wasmtime_bin is None:
+            return {
+                "status": "skip",
+                "passed": 0,
+                "failed": 0,
+                "error": "wasmtime not found",
+                "trap_signature": None,
+            }
+        if wast_file.suffix == ".wast":
+            cmd = [str(wasmtime_bin), "wast", "-W", "gc", str(wast_file)]
+        else:
+            cmd = [str(wasmtime_bin), "run", "-W", "gc", str(wast_file)]
+    else:
+        return {
+            "status": "error",
+            "passed": 0,
+            "failed": 0,
+            "error": f"unknown runner: {mode.runner}",
+            "trap_signature": None,
+        }
+
     env = os.environ.copy()
     env.update(mode.extra_env)
     try:
@@ -77,12 +179,24 @@ def run_one(
             env=env,
         )
     except subprocess.TimeoutExpired:
-        return {"status": "timeout", "passed": 0, "failed": 0, "error": "timeout"}
+        return {
+            "status": "timeout",
+            "passed": 0,
+            "failed": 0,
+            "error": "timeout",
+            "trap_signature": None,
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"status": "error", "passed": 0, "failed": 0, "error": str(exc)}
+        return {
+            "status": "error",
+            "passed": 0,
+            "failed": 0,
+            "error": str(exc),
+            "trap_signature": None,
+        }
 
     output = completed.stdout + completed.stderr
-    result = parse_result(output, completed.returncode)
+    result = parse_result(output, completed.returncode, mode.runner)
     if result["status"] != "pass":
         result["stdout_tail"] = "\n".join(output.splitlines()[-20:])
     return result
@@ -119,6 +233,28 @@ def main() -> None:
         default=DEFAULT_TIMEOUT_SECONDS,
         help=f"Per-test timeout in seconds (default: {DEFAULT_TIMEOUT_SECONDS})",
     )
+    parser.add_argument(
+        "--with-wasmtime",
+        action="store_true",
+        help="Add wasmtime as an extra differential lane",
+    )
+    parser.add_argument(
+        "--fault-alloc-at",
+        type=int,
+        default=0,
+        help="Enable extra lane with allocation failure injected at Nth alloc",
+    )
+    parser.add_argument(
+        "--fault-alloc-every",
+        type=int,
+        default=0,
+        help="Enable extra lane with failure on every Kth allocation",
+    )
+    parser.add_argument(
+        "--wasmtime-bin",
+        default="wasmtime",
+        help="Path to wasmtime binary (default: wasmtime on PATH)",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -126,6 +262,18 @@ def main() -> None:
     if not wasmoon_bin.exists():
         print("Error: ./wasmoon not found. Run ./install.sh first.")
         sys.exit(1)
+    wasmtime_bin: Path | None = None
+    if args.with_wasmtime:
+        candidate = Path(args.wasmtime_bin)
+        if candidate.is_file():
+            wasmtime_bin = candidate
+        else:
+            resolved = shutil.which(args.wasmtime_bin)
+            if resolved:
+                wasmtime_bin = Path(resolved)
+        if wasmtime_bin is None:
+            print(f"Error: wasmtime not found: {args.wasmtime_bin}")
+            sys.exit(1)
 
     test_dir = repo_root / args.dir
     if not test_dir.exists():
@@ -157,14 +305,38 @@ def main() -> None:
             "stress_pass": 0,
             "regressions": [],
             "issues": [],
+            "trap_mismatches": [],
+            "fault_inject_non_pass": 0,
         },
     }
+
+    modes: list[Mode] = list(MODES)
+    if args.fault_alloc_at > 0 or args.fault_alloc_every > 0:
+        fault_env: dict[str, str] = {}
+        if args.fault_alloc_at > 0:
+            fault_env["WASMOON_GC_FAIL_ALLOC_AT"] = str(args.fault_alloc_at)
+        if args.fault_alloc_every > 0:
+            fault_env["WASMOON_GC_FAIL_ALLOC_EVERY"] = str(args.fault_alloc_every)
+        modes.append(
+            Mode(
+                name="jit_fault_inject",
+                runner="wasmoon",
+                no_jit=False,
+                extra_env=fault_env,
+            )
+        )
+    if args.with_wasmtime:
+        modes.append(
+            Mode(name="wasmtime", runner="wasmtime", no_jit=False, extra_env={})
+        )
 
     for wast in wast_files:
         rel = str(wast.relative_to(test_dir))
         file_results: dict[str, Any] = {}
-        for mode in MODES:
-            result = run_one(repo_root, wasmoon_bin, wast, mode, args.timeout)
+        for mode in modes:
+            result = run_one(
+                repo_root, wasmoon_bin, wasmtime_bin, wast, mode, args.timeout
+            )
             file_results[mode.name] = result
         report["files"][rel] = file_results
 
@@ -189,6 +361,10 @@ def main() -> None:
             report["summary"]["issues"].append(
                 {"file": rel, "mode": "jit_stress_verify", "status": stress_status}
             )
+        if "jit_fault_inject" in file_results:
+            fault_status = file_results["jit_fault_inject"]["status"]
+            if fault_status != "pass":
+                report["summary"]["fault_inject_non_pass"] += 1
 
         if interp_status == "pass" and jit_status != "pass":
             report["summary"]["regressions"].append(
@@ -203,9 +379,42 @@ def main() -> None:
                 }
             )
 
-        print(
-            f"{rel:50} interp={interp_status:8} jit={jit_status:8} stress={stress_status:8}"
-        )
+        if "wasmtime" in file_results:
+            wasmtime_status = file_results["wasmtime"]["status"]
+            if wasmtime_status == "pass" and jit_status != "pass":
+                report["summary"]["regressions"].append(
+                    {
+                        "file": rel,
+                        "kind": "wasmtime_pass_jit_not_pass",
+                        "jit": jit_status,
+                    }
+                )
+            jit_trap = file_results["jit"].get("trap_signature")
+            wasmtime_trap = file_results["wasmtime"].get("trap_signature")
+            if jit_status != "pass" and wasmtime_status != "pass":
+                if jit_trap and wasmtime_trap and jit_trap != wasmtime_trap:
+                    report["summary"]["trap_mismatches"].append(
+                        {
+                            "file": rel,
+                            "jit_trap": jit_trap,
+                            "wasmtime_trap": wasmtime_trap,
+                        }
+                    )
+
+        mode_statuses = [
+            f"interp={interp_status:8}",
+            f"jit={jit_status:8}",
+            f"stress={stress_status:8}",
+        ]
+        if "jit_fault_inject" in file_results:
+            mode_statuses.append(
+                f"fault={file_results['jit_fault_inject']['status']:8}"
+            )
+        if "wasmtime" in file_results:
+            mode_statuses.append(
+                f"wasmtime={file_results['wasmtime']['status']:8}"
+            )
+        print(f"{rel:50} {' '.join(mode_statuses)}")
 
     output_path = (repo_root / args.output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -217,9 +426,18 @@ def main() -> None:
     print(f"  stress pass:  {report['summary']['stress_pass']}/{len(wast_files)}")
     print(f"  issues:       {len(report['summary']['issues'])}")
     print(f"  regressions:  {len(report['summary']['regressions'])}")
+    print(f"  trap mismatch:{len(report['summary']['trap_mismatches'])}")
+    if "jit_fault_inject" in [mode.name for mode in modes]:
+        print(
+            f"  fault non-pass:{report['summary']['fault_inject_non_pass']}/{len(wast_files)}"
+        )
     print(f"  report json:  {output_path}")
 
-    if report["summary"]["regressions"] or report["summary"]["issues"]:
+    if (
+        report["summary"]["regressions"]
+        or report["summary"]["issues"]
+        or report["summary"]["trap_mismatches"]
+    ):
         sys.exit(1)
 
 

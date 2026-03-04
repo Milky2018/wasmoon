@@ -307,6 +307,34 @@ test "gc: heap verify allows non-reference immediates" {
 }
 
 ///|
+test "gc: barrier write counter tracks reference stores" {
+  let heap = CHeap::new()
+  let object0 = heap.alloc_struct(0, [@types.Value::I32(10)])
+  let object1 = heap.alloc_struct(0, [@types.Value::I32(20)])
+  let array0 = heap.alloc_array(0, 2, @types.Value::I32(0))
+
+  heap.struct_set(object0, 0, @types.Value::StructRef(object1))
+  heap.array_set(array0, 0, @types.Value::StructRef(object0))
+  inspect(heap.get_barrier_writes(), content="2")
+}
+
+///|
+test "gc: fault injection fails configured allocation attempt" {
+  gc_debug_set_fail_alloc(2)
+  let heap_ptr = @jit_ffi.c_gc_heap_new(1024L)
+  let fields = FixedArray::makei(1, fn(_) { 1L })
+
+  let first = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+  let second = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+
+  inspect(first > 0, content="true")
+  inspect(second == 0, content="true")
+
+  @jit_ffi.c_gc_heap_free(heap_ptr)
+  gc_debug_set_fail_alloc(0)
+}
+
+///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)

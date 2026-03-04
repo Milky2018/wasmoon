@@ -40,7 +40,11 @@ pub fn c_gc_heap_array_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_collect(Int64, FixedArray[Int64], Int) -> Int
 
+pub fn c_gc_heap_debug_set_fail_alloc(Int, Int) -> Unit
+
 pub fn c_gc_heap_free(Int64) -> Unit
+
+pub fn c_gc_heap_get_barrier_writes(Int64) -> Int
 
 pub fn c_gc_heap_get_base(Int64) -> Int64
 

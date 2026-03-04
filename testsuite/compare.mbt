@@ -73,6 +73,11 @@ struct CompareResult {
 }
 
 ///|
+pub fn compare_result_is_match(result : CompareResult) -> Bool {
+  result.match_
+}
+
+///|
 pub impl Show for CompareResult with output(self, logger) {
   if self.match_ {
     logger.write_string("matched")

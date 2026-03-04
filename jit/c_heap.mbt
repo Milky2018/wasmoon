@@ -180,6 +180,9 @@ pub fn CHeap::alloc_struct(
     raw_fields,
     num_fields,
   )
+  if gc_ref <= 0 {
+    abort("CHeap allocation failed: struct")
+  }
   // C heap returns 1-based gc_ref, convert to 0-based for external use
   gc_ref - 1
 }
@@ -226,6 +229,9 @@ pub fn CHeap::alloc_array(
 ) -> Int {
   let raw_init = value_to_i64(init_value)
   let gc_ref = @jit_ffi.c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
+  if gc_ref <= 0 {
+    abort("CHeap allocation failed: array")
+  }
   gc_ref - 1
 }
 
@@ -245,6 +251,9 @@ pub fn CHeap::alloc_array_from_values(
     raw_values,
     len,
   )
+  if gc_ref <= 0 {
+    abort("CHeap allocation failed: array_from_values")
+  }
   gc_ref - 1
 }
 
@@ -450,6 +459,12 @@ pub fn CHeap::get_object_count(self : CHeap) -> Int {
 }
 
 ///|
+/// Get total number of write-barrier calls recorded
+pub fn CHeap::get_barrier_writes(self : CHeap) -> Int {
+  @jit_ffi.c_gc_heap_get_barrier_writes(self.ptr)
+}
+
+///|
 /// Get total number of allocations since heap creation
 pub fn CHeap::get_total_allocations(self : CHeap) -> Int {
   @jit_ffi.c_gc_heap_get_total_allocations(self.ptr)
@@ -466,4 +481,10 @@ pub fn CHeap::get_total_collections(self : CHeap) -> Int {
 /// Default threshold is 75% of capacity
 pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
   self.get_usage_ratio() >= threshold
+}
+
+///|
+/// Configure allocation fault injection for debugging
+pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
+  @jit_ffi.c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
 }

@@ -1318,6 +1318,15 @@ pub extern "c" fn c_gc_heap_collect(
 /// Verify C heap invariants (returns 1 when valid, 0 on failure)
 pub extern "c" fn c_gc_heap_verify(heap : Int64, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
 
+///|
+/// Configure allocation fault injection:
+/// - fail_at > 0: fail exactly on Nth allocation attempt
+/// - fail_every > 0: fail on every Kth allocation attempt
+pub extern "c" fn c_gc_heap_debug_set_fail_alloc(
+  fail_at : Int,
+  fail_every : Int,
+) -> Unit = "wasmoon_gc_heap_debug_set_fail_alloc"
+
 // ============ JIT Utilities ============
 
 ///|
@@ -1339,6 +1348,10 @@ pub extern "c" fn c_gc_heap_get_capacity(heap : Int64) -> Int64 = "wasmoon_gc_he
 ///|
 /// Get number of objects in heap
 pub extern "c" fn c_gc_heap_get_object_count(heap : Int64) -> Int = "wasmoon_gc_heap_get_object_count"
+
+///|
+/// Get total number of write-barrier calls recorded
+pub extern "c" fn c_gc_heap_get_barrier_writes(heap : Int64) -> Int = "wasmoon_gc_heap_get_barrier_writes"
 
 ///|
 /// Get total number of allocations since heap creation
