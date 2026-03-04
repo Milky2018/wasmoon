@@ -15,21 +15,21 @@ test "compiled function: basic" {
 test "compiled function: derive gc safepoints from machine code" {
   let mc = @emit.MachineCode::new()
   mc.emit_nop()
-  mc.record_gc_safepoint(4)
-  mc.record_gc_safepoint(8)
+  mc.record_gc_safepoint(4) |> ignore
+  mc.record_gc_safepoint(8) |> ignore
   let func = CompiledFunction::new("gc_func", mc, 0)
   let safepoints = func.get_gc_safepoints()
   inspect(safepoints.length(), content="2")
   inspect(safepoints[0].code_offset, content="4")
   inspect(safepoints[1].code_offset, content="8")
-  inspect(func.get_gc_stackmap_blob().length(), content="0")
+  inspect(func.get_gc_stackmap_blob().length(), content="16")
 }
 
 ///|
 test "compiled function: explicit gc metadata overrides derived data" {
   let mc = @emit.MachineCode::new()
   mc.emit_nop()
-  mc.record_gc_safepoint(4)
+  mc.record_gc_safepoint(4) |> ignore
   let explicit_points : Array[GcSafepoint] = [
     { code_offset: 24, live_refs: [1, 3], metadata: 9L },
   ]

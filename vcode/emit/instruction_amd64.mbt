@@ -3301,6 +3301,7 @@ fn MachineCode::emit_instruction_x86_64(
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
+      let arg4 = 8 // r8
       let obj = isa.scratch_reg_1_index()
       let end = isa.scratch_reg_2_index()
       let tmp = 0 // rax
@@ -3355,7 +3356,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_jmp_rel32(done)
 
-      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields)
+      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields, safepoint_id)
       self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
@@ -3364,7 +3365,11 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
-      self.record_gc_safepoint(self.current_pos())
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=num_fields,
+      )
+      self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
       self.x86_emit_mov_imm64(
         end,
         @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
@@ -3383,6 +3388,7 @@ fn MachineCode::emit_instruction_x86_64(
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
       let arg3 = 1 // rcx
+      let arg4 = 8 // r8
       let obj = isa.scratch_reg_1_index()
       let end = isa.scratch_reg_2_index()
       let tmp = 0 // rax
@@ -3447,7 +3453,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_jmp_rel32(done)
 
-      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len)
+      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len, safepoint_id)
       self.define_label(slow)
       if vmctx != arg0 {
         self.x86_emit_mov_rr(arg0, vmctx)
@@ -3456,7 +3462,11 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, len.to_int64())
-      self.record_gc_safepoint(self.current_pos())
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=len,
+      )
+      self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
       self.x86_emit_mov_imm64(
         end,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),

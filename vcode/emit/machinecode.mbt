@@ -27,6 +27,8 @@ pub struct MachineCode {
   call_fixups : Array[CallFixup]
   // Offsets of allocation slow-path GC safepoints.
   gc_safepoint_offsets : Array[Int]
+  // Root slot counts for each recorded GC safepoint.
+  gc_safepoint_root_counts : Array[Int]
   // Deduplicated amd64 constant-pool entries (key -> label).
   amd64_const_labels : Map[String, Int]
   // Pending amd64 constant-pool bytes to emit at end of function.
@@ -107,6 +109,7 @@ pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
     func_addr_fixups: [],
     call_fixups: [],
     gc_safepoint_offsets: [],
+    gc_safepoint_root_counts: [],
     amd64_const_labels: {},
     amd64_const_entries: [],
     disasm: [],
@@ -292,8 +295,11 @@ pub fn MachineCode::add_call_fixup(
 pub fn MachineCode::record_gc_safepoint(
   self : MachineCode,
   offset : Int,
-) -> Unit {
+  root_count? : Int = 0,
+) -> Int {
   self.gc_safepoint_offsets.push(offset)
+  self.gc_safepoint_root_counts.push(root_count)
+  self.gc_safepoint_offsets.length() - 1
 }
 
 ///|
@@ -494,6 +500,14 @@ pub fn MachineCode::get_call_fixups(self : MachineCode) -> Array[CallFixup] {
 /// Get recorded GC safepoint offsets.
 pub fn MachineCode::get_gc_safepoint_offsets(self : MachineCode) -> Array[Int] {
   self.gc_safepoint_offsets
+}
+
+///|
+/// Get recorded GC safepoint root counts.
+pub fn MachineCode::get_gc_safepoint_root_counts(
+  self : MachineCode,
+) -> Array[Int] {
+  self.gc_safepoint_root_counts
 }
 
 ///|

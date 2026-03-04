@@ -1630,7 +1630,7 @@ fn MachineCode::emit_instruction(
       }
       self.emit_b(done_label)
 
-      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, sp, num_fields)
+      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, sp, num_fields, safepoint_id)
       self.define_label(slow_label)
       if vmctx_reg != 0 {
         self.emit_mov_reg(0, vmctx_reg)
@@ -1646,7 +1646,11 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, num_fields.to_int64())
-      self.record_gc_safepoint(self.current_pos())
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=num_fields,
+      )
+      self.emit_load_imm64(4, safepoint_id.to_int64())
       self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
       self.emit_blr(17)
       if dst != 0 {
@@ -1717,7 +1721,7 @@ fn MachineCode::emit_instruction(
       }
       self.emit_b(done_label)
 
-      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, sp, len)
+      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, sp, len, safepoint_id)
       self.define_label(slow_label)
       if vmctx_reg != 0 {
         self.emit_mov_reg(0, vmctx_reg)
@@ -1733,7 +1737,11 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, len.to_int64())
-      self.record_gc_safepoint(self.current_pos())
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=len,
+      )
+      self.emit_load_imm64(4, safepoint_id.to_int64())
       self.emit_load_imm64(
         17,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),

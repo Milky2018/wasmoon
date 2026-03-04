@@ -9,6 +9,33 @@
 // ============ Compiled Function ============
 
 ///|
+fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
+  buf.push((value & 0xFF).to_byte())
+  buf.push(((value >> 8) & 0xFF).to_byte())
+  buf.push(((value >> 16) & 0xFF).to_byte())
+  buf.push(((value >> 24) & 0xFF).to_byte())
+}
+
+///|
+/// Build a compact stackmap blob for allocation safepoints.
+/// Format v1:
+///   u32 version (=1)
+///   u32 safepoint_count
+///   u32 root_count[safepoint_count]
+fn build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
+  if root_counts.length() == 0 {
+    return b""
+  }
+  let bytes : Array[Byte] = []
+  append_u32_le(bytes, 1)
+  append_u32_le(bytes, root_counts.length())
+  for count in root_counts {
+    append_u32_le(bytes, count)
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
 /// A compiled function ready for execution
 pub struct CompiledFunction {
   // Function name or identifier
@@ -37,15 +64,27 @@ pub fn CompiledFunction::new(
   gc_safepoints? : Array[GcSafepoint] = [],
   gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledFunction {
+  let derived_root_counts = code.get_gc_safepoint_root_counts()
   let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
     0 {
     gc_safepoints
   } else {
     let derived : Array[GcSafepoint] = []
-    for offset in code.get_gc_safepoint_offsets() {
-      derived.push({ code_offset: offset, live_refs: [], metadata: 0L })
+    let offsets = code.get_gc_safepoint_offsets()
+    for i, offset in offsets {
+      let metadata = if i < derived_root_counts.length() {
+        derived_root_counts[i].to_int64()
+      } else {
+        0L
+      }
+      derived.push(GcSafepoint::new(offset, [], metadata))
     }
     derived
+  }
+  let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
+    gc_stackmap_blob
+  } else {
+    build_gc_stackmap_blob(derived_root_counts)
   }
   {
     name,
@@ -54,7 +93,7 @@ pub fn CompiledFunction::new(
     code_size: code.size(),
     frame_size,
     gc_safepoints: resolved_gc_safepoints,
-    gc_stackmap_blob,
+    gc_stackmap_blob: resolved_gc_stackmap_blob,
     valid: true,
   }
 }

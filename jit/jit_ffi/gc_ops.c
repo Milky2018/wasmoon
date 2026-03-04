@@ -89,6 +89,44 @@ static void gc_log_alloc_retry(const char *op, const gc_alloc_result_t *result) 
     );
 }
 
+static uint32_t gc_read_u32_le(const uint8_t *ptr) {
+    return ((uint32_t)ptr[0]) |
+           ((uint32_t)ptr[1] << 8) |
+           ((uint32_t)ptr[2] << 16) |
+           ((uint32_t)ptr[3] << 24);
+}
+
+static int32_t gc_lookup_safepoint_root_count(
+    jit_context_t *ctx,
+    int32_t safepoint_id,
+    int32_t fallback
+) {
+    if (!ctx || safepoint_id < 0) {
+        return fallback;
+    }
+    const wasmoon_gc_safepoint_table_t *table = ctx->gc_safepoint_table;
+    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
+        table = ctx->gc_frame_chain_head->table;
+    }
+    if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
+        return fallback;
+    }
+    const uint8_t *blob = table->stackmap_blob;
+    uint32_t version = gc_read_u32_le(blob);
+    if (version != 1u) {
+        return fallback;
+    }
+    uint32_t count = gc_read_u32_le(blob + 4);
+    if ((uint32_t)safepoint_id >= count) {
+        return fallback;
+    }
+    size_t entry_offset = 8u + ((size_t)safepoint_id * 4u);
+    if (entry_offset + 4u > table->stackmap_blob_size) {
+        return fallback;
+    }
+    return (int32_t)gc_read_u32_le(blob + entry_offset);
+}
+
 // ============ Struct Operations ============
 
 int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
@@ -423,7 +461,13 @@ int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t 
 
 // Slow path for struct allocation - called when inline check fails
 // Triggers GC if needed, grows heap, and allocates
-int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fields, int32_t num_fields) {
+int64_t gc_alloc_struct_slow(
+    jit_context_t *ctx,
+    int32_t type_idx,
+    int64_t *fields,
+    int32_t num_fields,
+    int32_t safepoint_id
+) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
@@ -456,6 +500,19 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
         }
     }
 
+    int32_t alloc_root_count =
+        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, num_fields);
+    if (alloc_root_count < 0) {
+        alloc_root_count = 0;
+    }
+    if (alloc_root_count > num_fields) {
+        alloc_root_count = num_fields;
+    }
+    const int64_t *alloc_roots = (alloc_root_count > 0 && fields) ? fields : NULL;
+    if (!alloc_roots) {
+        alloc_root_count = 0;
+    }
+
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_struct_with_retry(
         actual_ctx,
@@ -463,8 +520,8 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
         type_idx,
         actual_fields,
         actual_num_fields,
-        actual_fields,
-        actual_num_fields,
+        alloc_roots,
+        alloc_root_count,
         &alloc_result
     );
 
@@ -496,7 +553,13 @@ int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t t
 }
 
 // Slow path for array allocation
-int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, int64_t init_value) {
+int64_t gc_alloc_array_slow(
+    jit_context_t *ctx,
+    int32_t type_idx,
+    int32_t len,
+    int64_t init_value,
+    int32_t safepoint_id
+) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
@@ -504,6 +567,16 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, i
     }
 
     int64_t roots_buf[1] = { init_value };
+    int32_t alloc_root_count =
+        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, 1);
+    if (alloc_root_count < 0) {
+        alloc_root_count = 0;
+    }
+    if (alloc_root_count > 1) {
+        alloc_root_count = 1;
+    }
+    const int64_t *alloc_roots = alloc_root_count > 0 ? roots_buf : NULL;
+
     gc_alloc_result_t alloc_result = {0};
     int32_t gc_ref = gc_alloc_array_with_retry(
         actual_ctx,
@@ -511,8 +584,8 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, i
         type_idx,
         len,
         init_value,
-        roots_buf,
-        1,
+        alloc_roots,
+        alloc_root_count,
         &alloc_result
     );
     if (gc_ref == 0) {
@@ -536,12 +609,26 @@ int64_t gc_alloc_array_from_values_slow(
     jit_context_t *ctx,
     int32_t type_idx,
     int64_t *values,
-    int32_t len
+    int32_t len,
+    int32_t safepoint_id
 ) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
         return trap_unreachable_i64();
+    }
+
+    int32_t alloc_root_count =
+        gc_lookup_safepoint_root_count(actual_ctx, safepoint_id, len);
+    if (alloc_root_count < 0) {
+        alloc_root_count = 0;
+    }
+    if (alloc_root_count > len) {
+        alloc_root_count = len;
+    }
+    const int64_t *alloc_roots = (alloc_root_count > 0 && values) ? values : NULL;
+    if (!alloc_roots) {
+        alloc_root_count = 0;
     }
 
     gc_alloc_result_t alloc_result = {0};
@@ -551,8 +638,8 @@ int64_t gc_alloc_array_from_values_slow(
         type_idx,
         values,
         len,
-        values,
-        len,
+        alloc_roots,
+        alloc_root_count,
         &alloc_result
     );
     if (gc_ref == 0) {

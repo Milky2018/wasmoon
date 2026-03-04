@@ -239,10 +239,10 @@ void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
 int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
-                              int64_t *fields, int32_t num_fields);
+                              int64_t *fields, int32_t num_fields, int32_t safepoint_id);
 int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
-                             int32_t len, int64_t init_value);
+                             int32_t len, int64_t init_value, int32_t safepoint_id);
 int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
-                                         int64_t *values, int32_t len);
+                                         int64_t *values, int32_t len, int32_t safepoint_id);
 
 #endif // JIT_INTERNAL_H
