@@ -3,6 +3,7 @@
 // Implements struct.new/get/set, array.new/get/set/len/fill/copy
 
 #include "jit_internal.h"
+#include "gc_allocator.h"
 
 // ============ Value Decoding Helpers ============
 
@@ -52,6 +53,42 @@ static int64_t trap_out_of_memory_i64(void) {
     return 0;
 }
 
+static int gc_alloc_debug_cached = -1;
+
+static int gc_is_truthy_env(const char *value) {
+    if (!value) return 0;
+    return strcmp(value, "1") == 0 ||
+           strcmp(value, "true") == 0 ||
+           strcmp(value, "TRUE") == 0 ||
+           strcmp(value, "yes") == 0 ||
+           strcmp(value, "YES") == 0 ||
+           strcmp(value, "on") == 0 ||
+           strcmp(value, "ON") == 0;
+}
+
+static int gc_alloc_debug_enabled(void) {
+    if (gc_alloc_debug_cached < 0) {
+        gc_alloc_debug_cached = gc_is_truthy_env(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
+    }
+    return gc_alloc_debug_cached;
+}
+
+static void gc_log_alloc_retry(const char *op, const gc_alloc_result_t *result) {
+    if (!gc_alloc_debug_enabled() || !result) {
+        return;
+    }
+    if (result->retry_count <= 0) {
+        return;
+    }
+    fprintf(
+        stderr,
+        "[GC ALLOC] %s retries=%d collected=%d\n",
+        op,
+        result->retry_count,
+        result->collected_objects
+    );
+}
+
 // ============ Struct Operations ============
 
 int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
@@ -86,9 +123,17 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
         }
     }
 
-    // Allocate struct and return encoded reference
-    // gc_heap uses 1-based gc_ref, JIT uses (gc_ref << 1) encoding
-    int32_t gc_ref = gc_heap_alloc_struct(heap, type_idx, actual_fields, actual_num_fields);
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_struct_with_retry(
+        ctx,
+        heap,
+        type_idx,
+        actual_fields,
+        actual_num_fields,
+        actual_fields,
+        actual_num_fields,
+        &alloc_result
+    );
 
     // Free temporary default fields buffer
     if (default_fields) {
@@ -97,6 +142,13 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
 
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("struct.new", &alloc_result);
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
     }
 
     // Encode for JIT: gc_ref << 1 (1-based gc_ref stays 1-based, just shifted)
@@ -145,14 +197,33 @@ void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_
 // ============ Array Operations ============
 
 int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
-    GcHeap *heap = resolve_heap(NULL);
+    jit_context_t *ctx = resolve_ctx(NULL);
+    GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
         return trap_unreachable_i64();
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, fill);
+    int64_t roots_buf[1] = { fill };
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_with_retry(
+        ctx,
+        heap,
+        type_idx,
+        len,
+        fill,
+        roots_buf,
+        1,
+        &alloc_result
+    );
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("array.new", &alloc_result);
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
     }
 
     // Encode: gc_ref << 1 (1-based gc_ref, ensures gc_ref=1 -> value=2)
@@ -385,8 +456,17 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
         }
     }
 
-    // Try to allocate (this will grow heap if needed)
-    int32_t gc_ref = gc_heap_alloc_struct(heap, type_idx, actual_fields, actual_num_fields);
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_struct_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        actual_fields,
+        actual_num_fields,
+        actual_fields,
+        actual_num_fields,
+        &alloc_result
+    );
 
     // Free temporary default fields buffer
     if (default_fields) {
@@ -396,6 +476,7 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
     }
+    gc_log_alloc_retry("alloc_struct_slow", &alloc_result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -422,11 +503,22 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, i
         return trap_unreachable_i64();
     }
 
-    // Try to allocate (this will grow heap if needed)
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, init_value);
+    int64_t roots_buf[1] = { init_value };
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        len,
+        init_value,
+        roots_buf,
+        1,
+        &alloc_result
+    );
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
     }
+    gc_log_alloc_retry("alloc_array_slow", &alloc_result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -452,10 +544,21 @@ int64_t gc_alloc_array_from_values_slow(
         return trap_unreachable_i64();
     }
 
-    int32_t gc_ref = gc_heap_alloc_array_from_values(heap, type_idx, values, len);
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_from_values_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        values,
+        len,
+        values,
+        len,
+        &alloc_result
+    );
     if (gc_ref == 0) {
         return trap_out_of_memory_i64();
     }
+    gc_log_alloc_retry("alloc_array_from_values_slow", &alloc_result);
 
     if (actual_ctx) {
         actual_ctx->gc_heap = heap;

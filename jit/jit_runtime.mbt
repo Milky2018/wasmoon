@@ -1236,6 +1236,51 @@ pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Push a GC frame node in current JIT context.
+pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_begin_frame(self.context_ptr, frame_id)
+  }
+}
+
+///|
+/// Pop a GC frame node in current JIT context.
+pub fn JITModule::gc_end_frame(self : JITModule) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_end_frame(self.context_ptr)
+  }
+}
+
+///|
+/// Set context-local scratch roots for allocation retry collections.
+pub fn JITModule::gc_set_root_scratch(
+  self : JITModule,
+  roots : Array[Int64],
+) -> Bool {
+  if self.context_ptr == 0L {
+    return false
+  }
+  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
+  @jit_ffi.c_jit_gc_set_root_scratch(
+    self.context_ptr,
+    raw_roots,
+    roots.length(),
+  ) ==
+  1
+}
+
+///|
+/// Set safepoint metadata table pointer for current context.
+pub fn JITModule::gc_set_safepoint_table(
+  self : JITModule,
+  table_ptr : Int64,
+) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_set_safepoint_table(self.context_ptr, table_ptr)
+  }
+}
+
+///|
 /// Throw a payload-less wasm exception into the active JIT exception chain.
 /// Used by hostcall bridges that need to surface imported-callee throws.
 pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {

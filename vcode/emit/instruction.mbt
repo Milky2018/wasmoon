@@ -1646,6 +1646,7 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, num_fields.to_int64())
+      self.record_gc_safepoint(self.current_pos())
       self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
       self.emit_blr(17)
       if dst != 0 {
@@ -1732,6 +1733,7 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, len.to_int64())
+      self.record_gc_safepoint(self.current_pos())
       self.emit_load_imm64(
         17,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),

@@ -110,3 +110,41 @@ test "gc fuzz: directed jit/interpreter comparison" {
     }
   }
 }
+
+///|
+fn generate_gc_deep_live_case(depth : Int) -> String {
+  let lines : Array[String] = []
+  lines.push("(module")
+  lines.push(
+    "  (type $node (struct (field (mut i32)) (field (mut (ref null $node)))))",
+  )
+  lines.push("  (func (export \"test\") (result i32)")
+  lines.push("    (local $head (ref null $node))")
+  lines.push("    (local $i i32)")
+  lines.push("    (local.set $head (ref.null $node))")
+  lines.push("    (local.set $i (i32.const 0))")
+  lines.push("    (loop $grow")
+  lines.push(
+    "      (local.set $head (struct.new $node (local.get $i) (local.get $head)))",
+  )
+  lines.push("      (local.set $i (i32.add (local.get $i) (i32.const 1)))")
+  lines.push(
+    "      (br_if $grow (i32.lt_s (local.get $i) (i32.const \{depth})))",
+  )
+  lines.push("    )")
+  lines.push("    (struct.get $node 0 (local.get $head))")
+  lines.push("  )")
+  lines.push(")")
+  lines.join("\n")
+}
+
+///|
+test "gc fuzz: deep live chain jit/interpreter comparison" {
+  for depth in [16, 32, 64, 96] {
+    let source = generate_gc_deep_live_case(depth)
+    let compared = compare_jit_interp(source, "test", [])
+    if !compare_result_is_match(compared) {
+      fail("gc deep-live mismatch (depth=\{depth}): \{compared}")
+    }
+  }
+}

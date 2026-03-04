@@ -34,6 +34,21 @@ typedef struct {
     int is_shared;
 } wasmoon_memory_t;
 
+// GC safepoint metadata table (owned by compiler/runtime, borrowed by context).
+typedef struct wasmoon_gc_safepoint_table {
+    const uint8_t *stackmap_blob;
+    uint32_t stackmap_blob_size;
+    uint32_t safepoint_count;
+    uint32_t reserved;
+} wasmoon_gc_safepoint_table_t;
+
+// Per-call frame node for GC bookkeeping.
+typedef struct wasmoon_gc_frame {
+    struct wasmoon_gc_frame *prev;
+    uintptr_t frame_id;
+    const wasmoon_gc_safepoint_table_t *table;
+} wasmoon_gc_frame_t;
+
 // VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
 //   +0:   memory0 (wasmoon_memory_t*)  - memory 0 descriptor pointer
 //   +8:   memory0_base (uint8_t*)      - cached memory 0 base pointer (hot)
@@ -174,18 +189,28 @@ typedef struct {
     // This is intentionally *not* in the fixed-offset hot VMContext prefix since
     // JIT-generated code never accesses these fields directly; only libcalls do.
 
-    // Data segments (owned MoonBit FixedArray[Byte] payload pointers).
+    // Data segments (malloc-owned byte copies).
     uint8_t **data_segments;
     size_t *data_segment_sizes;   // number of bytes per segment
     uint8_t *data_dropped;        // 0/1 per segment
     int data_segment_count;
 
-    // Element segments (owned MoonBit FixedArray[Int64] payload pointers).
+    // Element segments (malloc-owned Int64 copies).
     // Each element segment stores pairs: (value, type_idx) for each element.
     int64_t **elem_segments;
     size_t *elem_segment_sizes;   // number of elements (not Int64 slots)
     uint8_t *elem_dropped;        // 0/1 per segment
     int elem_segment_count;
+
+    // GC safepoint/collection bookkeeping (appended to preserve existing
+    // VMContext offsets used by JIT-generated code).
+    int gc_collect_requested;
+    int gc_in_collect;
+    int64_t *gc_root_scratch;
+    int32_t gc_root_scratch_len;
+    int32_t gc_root_scratch_cap;
+    const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
+    wasmoon_gc_frame_t *gc_frame_chain_head;
 } jit_context_t;
 
 // ============ Executable Memory Functions ============

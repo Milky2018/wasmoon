@@ -40,6 +40,18 @@ MODES: tuple[Mode, ...] = (
             "WASMOON_GC_HEAP_CAPACITY": "4096",
         },
     ),
+    Mode(
+        name="jit_stress_small_heap",
+        runner="wasmoon",
+        no_jit=False,
+        extra_env={
+            "WASMOON_GC_STRESS": "1",
+            "WASMOON_GC_STRESS_EVERY": "1",
+            "WASMOON_GC_VERIFY": "1",
+            "WASMOON_GC_HEAP_CAPACITY": "2048",
+            "WASMOON_GC_ALLOC_DEBUG": "1",
+        },
+    ),
 )
 
 TRAP_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -47,6 +59,18 @@ TRAP_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"runtime error:\s*(.+)", re.IGNORECASE),
     re.compile(r"trap:\s*(.+)", re.IGNORECASE),
     re.compile(r"Error:\s*(.+)"),
+)
+
+GC_COLLECT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"\[GC COLLECT\]\s+stack_roots=(\d+)\s+store_roots=(\d+)\s+total=(\d+)\s+collected=(-?\d+)"
+    ),
+    re.compile(
+        r"\[GC COLLECT\]\s+roots=(\d+)\s+scratch=(\d+)\s+total=(\d+)\s+collected=(-?\d+)"
+    ),
+)
+GC_ALLOC_PATTERN = re.compile(
+    r"\[GC ALLOC\]\s+\S+\s+retries=(\d+)\s+collected=(-?\d+)"
 )
 
 
@@ -67,6 +91,34 @@ def extract_trap_signature(output: str) -> str | None:
     return None
 
 
+def extract_gc_metrics(output: str) -> dict[str, int]:
+    max_root_count = 0
+    collect_events = 0
+    retry_count = 0
+
+    for line in output.splitlines():
+        for collect_pattern in GC_COLLECT_PATTERNS:
+            collect_match = collect_pattern.search(line)
+            if collect_match:
+                collect_events += 1
+                total_roots = int(collect_match.group(3))
+                max_root_count = max(max_root_count, total_roots)
+                break
+        else:
+            collect_match = None
+        if collect_match:
+            continue
+        alloc_match = GC_ALLOC_PATTERN.search(line)
+        if alloc_match:
+            retry_count += int(alloc_match.group(1))
+
+    return {
+        "root_count": max_root_count,
+        "gc_collect_events": collect_events,
+        "gc_retry_count": retry_count,
+    }
+
+
 def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
     passed = 0
     failed = 0
@@ -78,6 +130,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
             failed = int(line.split(":", maxsplit=1)[1].strip())
 
     trap_signature = extract_trap_signature(output)
+    metrics = extract_gc_metrics(output)
 
     if runner == "wasmtime":
         if return_code == 0:
@@ -87,6 +140,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
                 "failed": 0,
                 "error": None,
                 "trap_signature": None,
+                **metrics,
             }
         lines = [line.strip() for line in output.splitlines() if line.strip()]
         tail = " | ".join(lines[-3:]) if lines else f"exit {return_code}"
@@ -96,6 +150,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
             "failed": 0,
             "error": tail,
             "trap_signature": trap_signature,
+            **metrics,
         }
 
     if return_code != 0 and "Passed:" not in output:
@@ -107,6 +162,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
             "failed": 0,
             "error": tail,
             "trap_signature": trap_signature,
+            **metrics,
         }
     if failed > 0:
         return {
@@ -115,6 +171,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
             "failed": failed,
             "error": None,
             "trap_signature": trap_signature,
+            **metrics,
         }
     if return_code == 0:
         return {
@@ -123,6 +180,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
             "failed": failed,
             "error": None,
             "trap_signature": None,
+            **metrics,
         }
     return {
         "status": "error",
@@ -130,6 +188,7 @@ def parse_result(output: str, return_code: int, runner: str) -> dict[str, Any]:
         "failed": failed,
         "error": f"exit {return_code}",
         "trap_signature": trap_signature,
+        **metrics,
     }
 
 
@@ -303,6 +362,7 @@ def main() -> None:
             "interp_pass": 0,
             "jit_pass": 0,
             "stress_pass": 0,
+            "small_heap_pass": 0,
             "regressions": [],
             "issues": [],
             "trap_mismatches": [],
@@ -343,6 +403,7 @@ def main() -> None:
         interp_status = file_results["interp"]["status"]
         jit_status = file_results["jit"]["status"]
         stress_status = file_results["jit_stress_verify"]["status"]
+        small_heap_status = file_results["jit_stress_small_heap"]["status"]
         if interp_status == "pass":
             report["summary"]["interp_pass"] += 1
         else:
@@ -361,6 +422,12 @@ def main() -> None:
             report["summary"]["issues"].append(
                 {"file": rel, "mode": "jit_stress_verify", "status": stress_status}
             )
+        if small_heap_status == "pass":
+            report["summary"]["small_heap_pass"] += 1
+        else:
+            report["summary"]["issues"].append(
+                {"file": rel, "mode": "jit_stress_small_heap", "status": small_heap_status}
+            )
         if "jit_fault_inject" in file_results:
             fault_status = file_results["jit_fault_inject"]["status"]
             if fault_status != "pass":
@@ -376,6 +443,14 @@ def main() -> None:
                     "file": rel,
                     "kind": "jit_pass_stress_not_pass",
                     "stress": stress_status,
+                }
+            )
+        if jit_status == "pass" and small_heap_status != "pass":
+            report["summary"]["regressions"].append(
+                {
+                    "file": rel,
+                    "kind": "jit_pass_small_heap_not_pass",
+                    "small_heap": small_heap_status,
                 }
             )
 
@@ -405,6 +480,7 @@ def main() -> None:
             f"interp={interp_status:8}",
             f"jit={jit_status:8}",
             f"stress={stress_status:8}",
+            f"small={small_heap_status:8}",
         ]
         if "jit_fault_inject" in file_results:
             mode_statuses.append(
@@ -424,6 +500,7 @@ def main() -> None:
     print(f"  interp pass:  {report['summary']['interp_pass']}/{len(wast_files)}")
     print(f"  jit pass:     {report['summary']['jit_pass']}/{len(wast_files)}")
     print(f"  stress pass:  {report['summary']['stress_pass']}/{len(wast_files)}")
+    print(f"  small pass:   {report['summary']['small_heap_pass']}/{len(wast_files)}")
     print(f"  issues:       {len(report['summary']['issues'])}")
     print(f"  regressions:  {len(report['summary']['regressions'])}")
     print(f"  trap mismatch:{len(report['summary']['trap_mismatches'])}")

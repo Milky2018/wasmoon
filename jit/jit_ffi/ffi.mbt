@@ -1111,6 +1111,42 @@ pub extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc
 pub extern "c" fn c_jit_gc_get_heap(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_gc_get_heap"
 
 ///|
+/// Push a JIT frame node for GC bookkeeping.
+pub extern "c" fn c_jit_gc_begin_frame(
+  ctx_ptr : Int64,
+  frame_id : Int64,
+) -> Unit = "wasmoon_jit_gc_begin_frame"
+
+///|
+/// Pop a JIT frame node for GC bookkeeping.
+pub extern "c" fn c_jit_gc_end_frame(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_end_frame"
+
+///|
+/// Trigger GC for allocation retry with explicit roots.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_collect_for_alloc(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_collect_for_alloc"
+
+///|
+/// Set context-local scratch roots merged by `c_jit_gc_collect_for_alloc`.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_set_root_scratch(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_set_root_scratch"
+
+///|
+/// Set safepoint metadata table pointer for current context.
+pub extern "c" fn c_jit_gc_set_safepoint_table(
+  ctx_ptr : Int64,
+  table_ptr : Int64,
+) -> Unit = "wasmoon_jit_gc_set_safepoint_table"
+
+///|
 /// Set GC heap pointer in VMContext for inline allocation
 /// This enables ctx-passing GC libcalls
 pub extern "c" fn c_jit_ctx_set_gc_heap(
@@ -1141,7 +1177,7 @@ pub extern "c" fn c_jit_ctx_init_data_segments(
 ///|
 /// Add a single data segment to a context (ownership transferred to C).
 /// is_dropped: 0/1 initial dropped flag.
-#owned(data)
+#borrow(data)
 pub extern "c" fn c_jit_ctx_add_data_segment(
   ctx_ptr : Int64,
   idx : Int,
@@ -1162,7 +1198,7 @@ pub extern "c" fn c_jit_ctx_init_elem_segments(
 /// Each segment stores pairs: (value, type_idx) for each element.
 /// size: number of elements (not Int64 slots).
 /// is_dropped: 0/1 initial dropped flag.
-#owned(data)
+#borrow(data)
 pub extern "c" fn c_jit_ctx_add_elem_segment(
   ctx_ptr : Int64,
   idx : Int,

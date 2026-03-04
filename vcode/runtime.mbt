@@ -21,6 +21,10 @@ pub struct CompiledFunction {
   code_size : Int
   // Stack frame size needed
   frame_size : Int
+  // GC safepoint metadata (per-function)
+  gc_safepoints : Array[GcSafepoint]
+  // Compact stack-map payload for GC roots
+  gc_stackmap_blob : Bytes
   // Whether this function is currently valid
   mut valid : Bool
 }
@@ -30,13 +34,27 @@ pub fn CompiledFunction::new(
   name : String,
   code : @emit.MachineCode,
   frame_size : Int,
+  gc_safepoints? : Array[GcSafepoint] = [],
+  gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledFunction {
+  let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
+    0 {
+    gc_safepoints
+  } else {
+    let derived : Array[GcSafepoint] = []
+    for offset in code.get_gc_safepoint_offsets() {
+      derived.push({ code_offset: offset, live_refs: [], metadata: 0L })
+    }
+    derived
+  }
   {
     name,
     code,
     entry_offset: 0,
     code_size: code.size(),
     frame_size,
+    gc_safepoints: resolved_gc_safepoints,
+    gc_stackmap_blob,
     valid: true,
   }
 }
@@ -76,9 +94,23 @@ pub fn CompiledFunction::get_call_fixups(
 }
 
 ///|
+/// Get GC safepoint metadata for this function.
+pub fn CompiledFunction::get_gc_safepoints(
+  self : CompiledFunction,
+) -> Array[GcSafepoint] {
+  self.gc_safepoints
+}
+
+///|
+/// Get GC stack-map payload bytes for this function.
+pub fn CompiledFunction::get_gc_stackmap_blob(self : CompiledFunction) -> Bytes {
+  self.gc_stackmap_blob
+}
+
+///|
 fn CompiledFunction::to_string(self : CompiledFunction) -> String {
   let status = if self.valid { "valid" } else { "invalid" }
-  "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, \{status})"
+  "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, safepoints=\{self.gc_safepoints.length()}, \{status})"
 }
 
 ///|

@@ -17,7 +17,7 @@ static void free_data_segments(jit_context_t *ctx) {
     if (ctx->data_segments) {
         for (int i = 0; i < ctx->data_segment_count; i++) {
             if (ctx->data_segments[i]) {
-                moonbit_decref(ctx->data_segments[i]);
+                free(ctx->data_segments[i]);
             }
         }
         free(ctx->data_segments);
@@ -34,7 +34,7 @@ static void free_elem_segments(jit_context_t *ctx) {
     if (ctx->elem_segments) {
         for (int i = 0; i < ctx->elem_segment_count; i++) {
             if (ctx->elem_segments[i]) {
-                moonbit_decref(ctx->elem_segments[i]);
+                free(ctx->elem_segments[i]);
             }
         }
         free(ctx->elem_segments);
@@ -58,7 +58,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments(int64_t ctx_ptr, int 
     ctx->data_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
 }
 
-// data: owned MoonBit FixedArray[Byte] payload pointer (may be NULL when size==0).
+// data: borrowed MoonBit FixedArray[Byte] payload pointer (may be NULL when size==0).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
     int64_t ctx_ptr,
     int idx,
@@ -68,16 +68,28 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx || !ctx->data_segments || idx < 0 || idx >= ctx->data_segment_count) {
-        if (data) moonbit_decref(data);
         return;
     }
 
     if (ctx->data_segments[idx]) {
-        moonbit_decref(ctx->data_segments[idx]);
+        free(ctx->data_segments[idx]);
+        ctx->data_segments[idx] = NULL;
     }
 
-    ctx->data_segments[idx] = data;
-    ctx->data_segment_sizes[idx] = (size_t)size;
+    size_t copy_size = size > 0 ? (size_t)size : 0;
+    if (copy_size > 0) {
+        uint8_t *copy = (uint8_t *)malloc(copy_size);
+        if (!copy) {
+            ctx->data_segment_sizes[idx] = 0;
+            ctx->data_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        memcpy(copy, data, copy_size);
+        ctx->data_segments[idx] = copy;
+        ctx->data_segment_sizes[idx] = copy_size;
+    } else {
+        ctx->data_segment_sizes[idx] = 0;
+    }
     ctx->data_dropped[idx] = is_dropped ? 1 : 0;
 }
 
@@ -94,7 +106,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments(int64_t ctx_ptr, int 
     ctx->elem_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
 }
 
-// data: owned MoonBit FixedArray[Int64] payload pointer storing pairs (value,type_idx).
+// data: borrowed MoonBit FixedArray[Int64] payload pointer storing pairs (value,type_idx).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
     int64_t ctx_ptr,
     int idx,
@@ -104,16 +116,35 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx || !ctx->elem_segments || idx < 0 || idx >= ctx->elem_segment_count) {
-        if (data) moonbit_decref(data);
         return;
     }
 
     if (ctx->elem_segments[idx]) {
-        moonbit_decref(ctx->elem_segments[idx]);
+        free(ctx->elem_segments[idx]);
+        ctx->elem_segments[idx] = NULL;
     }
 
-    ctx->elem_segments[idx] = data;
-    ctx->elem_segment_sizes[idx] = (size_t)size;
+    int64_t nelems = size > 0 ? (int64_t)size : 0;
+    int64_t nslots = nelems * 2;
+    if (nslots > 0) {
+        if ((uint64_t)nslots > (uint64_t)(SIZE_MAX / sizeof(int64_t))) {
+            ctx->elem_segment_sizes[idx] = 0;
+            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        size_t copy_bytes = (size_t)nslots * sizeof(int64_t);
+        int64_t *copy = (int64_t *)malloc(copy_bytes);
+        if (!copy) {
+            ctx->elem_segment_sizes[idx] = 0;
+            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        memcpy(copy, data, copy_bytes);
+        ctx->elem_segments[idx] = copy;
+        ctx->elem_segment_sizes[idx] = (size_t)nelems;
+    } else {
+        ctx->elem_segment_sizes[idx] = 0;
+    }
     ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
 }
 

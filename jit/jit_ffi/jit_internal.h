@@ -114,6 +114,22 @@ int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t d
 // GC heap management
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
+void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
+void ctx_gc_end_frame_internal(jit_context_t *ctx);
+void ctx_gc_set_safepoint_table_internal(
+    jit_context_t *ctx,
+    const wasmoon_gc_safepoint_table_t *table
+);
+int32_t ctx_gc_set_root_scratch_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
+int32_t gc_collect_for_alloc_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
 
 // ============ GC Type Cache (gc_type_cache.c) ============
 

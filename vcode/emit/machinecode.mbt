@@ -25,6 +25,8 @@ pub struct MachineCode {
   func_addr_fixups : Array[FuncAddrFixup]
   // Pending fixups for direct function calls (offset -> func_idx)
   call_fixups : Array[CallFixup]
+  // Offsets of allocation slow-path GC safepoints.
+  gc_safepoint_offsets : Array[Int]
   // Deduplicated amd64 constant-pool entries (key -> label).
   amd64_const_labels : Map[String, Int]
   // Pending amd64 constant-pool bytes to emit at end of function.
@@ -104,6 +106,7 @@ pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
     x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
+    gc_safepoint_offsets: [],
     amd64_const_labels: {},
     amd64_const_entries: [],
     disasm: [],
@@ -282,6 +285,15 @@ pub fn MachineCode::add_call_fixup(
   veneer_offset? : Int = -1,
 ) -> Unit {
   self.call_fixups.push({ offset, func_idx, veneer_offset })
+}
+
+///|
+/// Record a GC safepoint at current code offset.
+pub fn MachineCode::record_gc_safepoint(
+  self : MachineCode,
+  offset : Int,
+) -> Unit {
+  self.gc_safepoint_offsets.push(offset)
 }
 
 ///|
@@ -476,6 +488,12 @@ pub fn MachineCode::get_func_addr_fixups(
 /// Get direct function call fixups
 pub fn MachineCode::get_call_fixups(self : MachineCode) -> Array[CallFixup] {
   self.call_fixups
+}
+
+///|
+/// Get recorded GC safepoint offsets.
+pub fn MachineCode::get_gc_safepoint_offsets(self : MachineCode) -> Array[Int] {
+  self.gc_safepoint_offsets
 }
 
 ///|

@@ -448,13 +448,11 @@ void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
     gc_heap_maybe_verify(heap, "array_copy");
 }
 
-void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value) {
-    if (!heap) {
-        return;
-    }
-    if (!gc_is_ref_candidate(written_value)) {
-        return;
-    }
+static void gc_heap_write_barrier_slow(
+    GcHeap* heap,
+    int32_t owner_gc_ref,
+    int64_t written_value
+) {
     heap->barrier_writes++;
     if (!gc_barrier_assert_enabled()) {
         return;
@@ -476,6 +474,37 @@ void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_v
         );
         abort();
     }
+    int32_t target_gc_ref = (int32_t)(written_value >> 1);
+    if (target_gc_ref <= 0 || target_gc_ref > heap->object_count) {
+        fprintf(
+            stderr,
+            "[GC BARRIER] invalid written reference: owner=%d value=%lld target=%d object_count=%d\n",
+            owner_gc_ref,
+            (long long)written_value,
+            target_gc_ref,
+            heap->object_count
+        );
+        abort();
+    }
+    if (heap->object_table[target_gc_ref - 1] < 0) {
+        fprintf(
+            stderr,
+            "[GC BARRIER] written reference points to freed object: owner=%d target=%d\n",
+            owner_gc_ref,
+            target_gc_ref
+        );
+        abort();
+    }
+}
+
+void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value) {
+    if (!heap) {
+        return;
+    }
+    if (!gc_is_ref_candidate(written_value)) {
+        return;
+    }
+    gc_heap_write_barrier_slow(heap, owner_gc_ref, written_value);
 }
 
 int32_t gc_heap_alloc_array_from_values(GcHeap* heap, int32_t type_idx,

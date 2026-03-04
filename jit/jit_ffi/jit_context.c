@@ -4,6 +4,27 @@
 
 #include "jit_internal.h"
 
+static int gc_collect_debug_cached = -1;
+
+static int gc_collect_is_truthy_env(const char *value) {
+    if (!value) return 0;
+    return strcmp(value, "1") == 0 ||
+           strcmp(value, "true") == 0 ||
+           strcmp(value, "TRUE") == 0 ||
+           strcmp(value, "yes") == 0 ||
+           strcmp(value, "YES") == 0 ||
+           strcmp(value, "on") == 0 ||
+           strcmp(value, "ON") == 0;
+}
+
+static int gc_collect_debug_enabled(void) {
+    if (gc_collect_debug_cached < 0) {
+        gc_collect_debug_cached =
+            gc_collect_is_truthy_env(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
+    }
+    return gc_collect_debug_cached;
+}
+
 // ============ Context Allocation ============
 
 jit_context_t *alloc_context_internal(int func_count) {
@@ -50,6 +71,13 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->gc_num_funcs = 0;
     ctx->gc_func_table = NULL;
     ctx->gc_func_table_size = 0;
+    ctx->gc_collect_requested = 0;
+    ctx->gc_in_collect = 0;
+    ctx->gc_root_scratch = NULL;
+    ctx->gc_root_scratch_len = 0;
+    ctx->gc_root_scratch_cap = 0;
+    ctx->gc_safepoint_table = NULL;
+    ctx->gc_frame_chain_head = NULL;
 
     // Additional fields (not accessed by JIT code directly)
     ctx->owns_memory0 = 0;        // Default: does not own memory0
@@ -127,11 +155,11 @@ jit_context_t *alloc_context_internal(int func_count) {
 void free_context_internal(jit_context_t *ctx) {
     if (!ctx) return;
 
-    // Free per-context segment storage (owned MoonBit FixedArray payloads).
+    // Free per-context segment storage (malloc-owned copies).
     if (ctx->data_segments) {
         for (int i = 0; i < ctx->data_segment_count; i++) {
             if (ctx->data_segments[i]) {
-                moonbit_decref(ctx->data_segments[i]);
+                free(ctx->data_segments[i]);
             }
         }
         free(ctx->data_segments);
@@ -150,7 +178,7 @@ void free_context_internal(jit_context_t *ctx) {
     if (ctx->elem_segments) {
         for (int i = 0; i < ctx->elem_segment_count; i++) {
             if (ctx->elem_segments[i]) {
-                moonbit_decref(ctx->elem_segments[i]);
+                free(ctx->elem_segments[i]);
             }
         }
         free(ctx->elem_segments);
@@ -197,6 +225,15 @@ void free_context_internal(jit_context_t *ctx) {
     }
     if (ctx->gc_func_type_indices) {
         free(ctx->gc_func_type_indices);
+    }
+    if (ctx->gc_root_scratch) {
+        free(ctx->gc_root_scratch);
+        ctx->gc_root_scratch = NULL;
+    }
+    while (ctx->gc_frame_chain_head) {
+        wasmoon_gc_frame_t *prev = ctx->gc_frame_chain_head->prev;
+        free(ctx->gc_frame_chain_head);
+        ctx->gc_frame_chain_head = prev;
     }
 
     // Free exception handling state
@@ -410,4 +447,145 @@ void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx) {
     GcHeap *heap = (GcHeap *)ctx->gc_heap;
     ctx->gc_heap_ptr = heap->data + heap->size;
     ctx->gc_heap_limit = heap->data + heap->capacity;
+}
+
+void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
+    if (!ctx) return;
+    wasmoon_gc_frame_t *frame = (wasmoon_gc_frame_t *)malloc(sizeof(wasmoon_gc_frame_t));
+    if (!frame) return;
+    frame->prev = ctx->gc_frame_chain_head;
+    frame->frame_id = frame_id;
+    frame->table = ctx->gc_safepoint_table;
+    ctx->gc_frame_chain_head = frame;
+}
+
+void ctx_gc_end_frame_internal(jit_context_t *ctx) {
+    if (!ctx || !ctx->gc_frame_chain_head) return;
+    wasmoon_gc_frame_t *top = ctx->gc_frame_chain_head;
+    ctx->gc_frame_chain_head = top->prev;
+    free(top);
+}
+
+void ctx_gc_set_safepoint_table_internal(
+    jit_context_t *ctx,
+    const wasmoon_gc_safepoint_table_t *table
+) {
+    if (!ctx) return;
+    ctx->gc_safepoint_table = table;
+}
+
+int32_t ctx_gc_set_root_scratch_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+) {
+    if (!ctx) {
+        return 0;
+    }
+    if (root_count <= 0 || !roots) {
+        ctx->gc_root_scratch_len = 0;
+        return 1;
+    }
+    if (root_count > ctx->gc_root_scratch_cap) {
+        int32_t new_cap = ctx->gc_root_scratch_cap > 0 ? ctx->gc_root_scratch_cap : 16;
+        while (new_cap < root_count) {
+            if (new_cap > INT32_MAX / 2) {
+                new_cap = root_count;
+                break;
+            }
+            new_cap *= 2;
+        }
+        int64_t *new_buf = (int64_t *)realloc(ctx->gc_root_scratch, (size_t)new_cap * sizeof(int64_t));
+        if (!new_buf) {
+            return 0;
+        }
+        ctx->gc_root_scratch = new_buf;
+        ctx->gc_root_scratch_cap = new_cap;
+    }
+    memcpy(ctx->gc_root_scratch, roots, (size_t)root_count * sizeof(int64_t));
+    ctx->gc_root_scratch_len = root_count;
+    return 1;
+}
+
+int32_t gc_collect_for_alloc_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+) {
+    if (!ctx || !ctx->gc_heap) {
+        return -1;
+    }
+    if (ctx->gc_in_collect) {
+        return -1;
+    }
+
+    GcHeap *heap = (GcHeap *)ctx->gc_heap;
+    int32_t safe_root_count = root_count > 0 ? root_count : 0;
+    int32_t scratch_count = ctx->gc_root_scratch_len > 0 ? ctx->gc_root_scratch_len : 0;
+    int32_t exception_root_count = ctx->exception_value_count > 0 ? ctx->exception_value_count : 0;
+    int32_t spilled_root_count = ctx->spilled_locals_count > 0 ? ctx->spilled_locals_count : 0;
+    int32_t stack_root_count = safe_root_count + scratch_count;
+    int32_t store_root_count = exception_root_count + spilled_root_count;
+    int32_t total_roots = stack_root_count + store_root_count;
+    int32_t collected = 0;
+    size_t heap_size_before = heap->size;
+    int32_t object_count_before = heap->object_count;
+    int32_t free_count_before = heap->free_count;
+
+    ctx->gc_collect_requested = 1;
+    ctx->gc_in_collect = 1;
+
+    if (total_roots > 0) {
+        int64_t *merged = (int64_t *)malloc((size_t)total_roots * sizeof(int64_t));
+        if (!merged) {
+            ctx->gc_in_collect = 0;
+            ctx->gc_collect_requested = 0;
+            return -1;
+        }
+        int32_t at = 0;
+        if (safe_root_count > 0 && roots) {
+            memcpy(&merged[at], roots, (size_t)safe_root_count * sizeof(int64_t));
+            at += safe_root_count;
+        }
+        if (scratch_count > 0 && ctx->gc_root_scratch) {
+            memcpy(&merged[at], ctx->gc_root_scratch, (size_t)scratch_count * sizeof(int64_t));
+            at += scratch_count;
+        }
+        if (exception_root_count > 0 && ctx->exception_values) {
+            memcpy(&merged[at], ctx->exception_values, (size_t)exception_root_count * sizeof(int64_t));
+            at += exception_root_count;
+        }
+        if (spilled_root_count > 0 && ctx->spilled_locals) {
+            memcpy(&merged[at], ctx->spilled_locals, (size_t)spilled_root_count * sizeof(int64_t));
+        }
+        collected = gc_heap_collect(heap, merged, total_roots);
+        free(merged);
+    } else {
+        collected = gc_heap_collect(heap, NULL, 0);
+    }
+
+    if (gc_collect_debug_enabled()) {
+        fprintf(
+            stderr,
+            "[GC COLLECT] stack_roots=%d store_roots=%d total=%d collected=%d "
+            "heap=%zu/%zu->%zu/%zu objs=%d->%d free=%d->%d\n",
+            stack_root_count,
+            store_root_count,
+            total_roots,
+            collected,
+            heap_size_before,
+            heap->capacity,
+            heap->size,
+            heap->capacity,
+            object_count_before,
+            heap->object_count,
+            free_count_before,
+            heap->free_count
+        );
+    }
+
+    ctx->gc_in_collect = 0;
+    ctx->gc_collect_requested = 0;
+    ctx_update_gc_heap_ptr_internal(ctx);
+    return collected;
 }

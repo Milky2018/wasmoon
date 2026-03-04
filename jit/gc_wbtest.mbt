@@ -390,3 +390,39 @@ test "gc_setup: fail fast on inconsistent function table context" {
   }
   gc_teardown(ctx_ptr)
 }
+
+///|
+test "gc: collect_for_alloc keeps scratch roots alive" {
+  let heap = CHeap::new(capacity=1024)
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  gc_set_heap(ctx_ptr, heap)
+
+  let rooted = heap.alloc_struct(0, [@types.Value::I32(1)])
+  let _unrooted = heap.alloc_struct(0, [@types.Value::I32(2)])
+
+  let rooted_raw = value_to_i64(@types.Value::StructRef(rooted))
+  guard gc_set_root_scratch(ctx_ptr, [rooted_raw]) else {
+    fail("expected gc_set_root_scratch success")
+  }
+
+  let collected = gc_collect_for_alloc(ctx_ptr, [])
+  inspect(collected >= 1, content="true")
+  inspect(heap.is_valid(rooted), content="true")
+
+  gc_set_root_scratch(ctx_ptr, []) |> ignore
+  gc_clear_heap(ctx_ptr)
+}
+
+///|
+test "gc: begin/end frame API accepts nested scopes" {
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+
+  gc_begin_frame(ctx_ptr, 100L)
+  gc_begin_frame(ctx_ptr, 200L)
+  gc_end_frame(ctx_ptr)
+  gc_end_frame(ctx_ptr)
+
+  inspect(true, content="true")
+}

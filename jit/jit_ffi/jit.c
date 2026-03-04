@@ -1393,3 +1393,41 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_gc_heap(int64_t ctx_ptr, int64_t hea
     GcHeap *heap = (GcHeap *)(uintptr_t)heap_ptr;
     ctx_set_gc_heap_internal(ctx, heap);
 }
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_begin_frame(int64_t ctx_ptr, int64_t frame_id) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_gc_begin_frame_internal(ctx, (uintptr_t)frame_id);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_end_frame(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_gc_end_frame_internal(ctx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(
+    int64_t ctx_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return gc_collect_for_alloc_internal(ctx, roots, root_count);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_set_root_scratch(
+    int64_t ctx_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return ctx_gc_set_root_scratch_internal(ctx, roots, root_count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_safepoint_table(
+    int64_t ctx_ptr,
+    int64_t table_ptr
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    const wasmoon_gc_safepoint_table_t *table =
+        (const wasmoon_gc_safepoint_table_t *)(uintptr_t)table_ptr;
+    ctx_gc_set_safepoint_table_internal(ctx, table);
+}

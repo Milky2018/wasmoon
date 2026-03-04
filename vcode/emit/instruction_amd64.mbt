@@ -3364,6 +3364,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
+      self.record_gc_safepoint(self.current_pos())
       self.x86_emit_mov_imm64(
         end,
         @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
@@ -3455,6 +3456,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, len.to_int64())
+      self.record_gc_safepoint(self.current_pos())
       self.x86_emit_mov_imm64(
         end,
         @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
