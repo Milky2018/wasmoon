@@ -1,6 +1,37 @@
 // Tests for JIT runtime support
 
 ///|
+fn decode_u32_le(bytes : Array[Int], offset : Int) -> Int {
+  bytes[offset] |
+  (bytes[offset + 1] << 8) |
+  (bytes[offset + 2] << 16) |
+  (bytes[offset + 3] << 24)
+}
+
+///|
+fn decode_stackmap_root_counts(blob : Bytes) -> Array[Int] {
+  let bytes : Array[Int] = []
+  for b in blob {
+    bytes.push(b.to_int())
+  }
+  if bytes.length() < 8 {
+    return []
+  }
+  if decode_u32_le(bytes, 0) != 1 {
+    return []
+  }
+  let count = decode_u32_le(bytes, 4)
+  if bytes.length() < 8 + count * 4 {
+    return []
+  }
+  let root_counts : Array[Int] = []
+  for i in 0..<count {
+    root_counts.push(decode_u32_le(bytes, 8 + i * 4))
+  }
+  root_counts
+}
+
+///|
 test "compiled function: basic" {
   let mc = @emit.MachineCode::new()
   mc.emit_nop()
@@ -45,6 +76,27 @@ test "compiled function: explicit gc metadata overrides derived data" {
   inspect(safepoints[0].code_offset, content="24")
   inspect(safepoints[0].metadata, content="9")
   inspect(func.get_gc_stackmap_blob().length(), content="3")
+}
+
+///|
+test "compiled function: explicit safepoints build stackmap when blob missing" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  let explicit_points : Array[GcSafepoint] = [
+    GcSafepoint::new(16, [], 3L),
+    GcSafepoint::new(28, [], 1L),
+  ]
+  let func = CompiledFunction::new(
+    "gc_meta_auto",
+    mc,
+    0,
+    gc_safepoints=explicit_points,
+  )
+  inspect(func.get_gc_stackmap_blob().length(), content="16")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[3, 1]",
+  )
 }
 
 ///|

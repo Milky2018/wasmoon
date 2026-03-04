@@ -36,6 +36,18 @@ fn build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
 }
 
 ///|
+fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
+  if metadata <= 0L {
+    return 0
+  }
+  if metadata > @types.I32_MAX.to_int64() {
+    @types.I32_MAX
+  } else {
+    metadata.to_int()
+  }
+}
+
+///|
 /// A compiled function ready for execution
 pub struct CompiledFunction {
   // Function name or identifier
@@ -81,10 +93,21 @@ pub fn CompiledFunction::new(
     }
     derived
   }
+  let stackmap_root_counts = if derived_root_counts.length() > 0 {
+    derived_root_counts
+  } else if resolved_gc_safepoints.length() > 0 {
+    let counts : Array[Int] = []
+    for safepoint in resolved_gc_safepoints {
+      counts.push(safepoint_metadata_to_root_count(safepoint.metadata))
+    }
+    counts
+  } else {
+    []
+  }
   let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
     gc_stackmap_blob
   } else {
-    build_gc_stackmap_blob(derived_root_counts)
+    build_gc_stackmap_blob(stackmap_root_counts)
   }
   {
     name,
