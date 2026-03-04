@@ -38,6 +38,52 @@ static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
     return depth;
 }
 
+static int32_t gc_count_table_roots(const jit_context_t *ctx) {
+    if (!ctx) {
+        return 0;
+    }
+    size_t total = 0;
+    if (ctx->table0_base && ctx->table0_elements > 0) {
+        total += ctx->table0_elements;
+    }
+    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
+        for (int i = 1; i < ctx->table_count; i++) {
+            if (ctx->tables[i] && ctx->table_sizes[i] > 0) {
+                total += ctx->table_sizes[i];
+            }
+        }
+    }
+    if (total > (size_t)INT32_MAX) {
+        return INT32_MAX;
+    }
+    return (int32_t)total;
+}
+
+static int32_t gc_copy_table_roots(const jit_context_t *ctx, int64_t *dst) {
+    if (!ctx || !dst) {
+        return 0;
+    }
+    int32_t at = 0;
+    if (ctx->table0_base && ctx->table0_elements > 0) {
+        for (size_t i = 0; i < ctx->table0_elements; i++) {
+            dst[at++] = (int64_t)(uintptr_t)ctx->table0_base[i * 2];
+        }
+    }
+    if (ctx->tables && ctx->table_sizes && ctx->table_count > 1) {
+        for (int table_idx = 1; table_idx < ctx->table_count; table_idx++) {
+            void **table_ptr = ctx->tables[table_idx];
+            size_t table_size = ctx->table_sizes[table_idx];
+            if (!table_ptr || table_size == 0) {
+                continue;
+            }
+            for (size_t i = 0; i < table_size; i++) {
+                dst[at++] = (int64_t)(uintptr_t)table_ptr[i * 2];
+            }
+        }
+    }
+    return at;
+}
+
 // ============ Context Allocation ============
 
 jit_context_t *alloc_context_internal(int func_count) {
@@ -700,9 +746,10 @@ int32_t gc_collect_for_alloc_internal(
     int32_t scratch_count = ctx->gc_root_scratch_len > 0 ? ctx->gc_root_scratch_len : 0;
     int32_t exception_root_count = ctx->exception_value_count > 0 ? ctx->exception_value_count : 0;
     int32_t spilled_root_count = ctx->spilled_locals_count > 0 ? ctx->spilled_locals_count : 0;
+    int32_t table_root_count = gc_count_table_roots(ctx);
     int32_t stack_root_count = safe_root_count + scratch_count;
     int32_t store_root_count = exception_root_count + spilled_root_count;
-    int32_t total_roots = stack_root_count + store_root_count;
+    int32_t total_roots = stack_root_count + store_root_count + table_root_count;
     int32_t collected = 0;
     const wasmoon_gc_safepoint_table_t *active_table = ctx->gc_safepoint_table;
     if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
@@ -737,6 +784,10 @@ int32_t gc_collect_for_alloc_internal(
         }
         if (spilled_root_count > 0 && ctx->spilled_locals) {
             memcpy(&merged[at], ctx->spilled_locals, (size_t)spilled_root_count * sizeof(int64_t));
+            at += spilled_root_count;
+        }
+        if (table_root_count > 0) {
+            at += gc_copy_table_roots(ctx, &merged[at]);
         }
         collected = gc_heap_collect(heap, merged, total_roots);
         free(merged);
@@ -747,10 +798,11 @@ int32_t gc_collect_for_alloc_internal(
     if (gc_collect_debug_enabled()) {
         fprintf(
             stderr,
-            "[GC COLLECT] stack_roots=%d store_roots=%d total=%d collected=%d "
+            "[GC COLLECT] stack_roots=%d store_roots=%d table_roots=%d total=%d collected=%d "
             "heap=%zu/%zu->%zu/%zu objs=%d->%d free=%d->%d\n",
             stack_root_count,
             store_root_count,
+            table_root_count,
             total_roots,
             collected,
             heap_size_before,

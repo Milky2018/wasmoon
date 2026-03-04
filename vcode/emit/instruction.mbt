@@ -1573,6 +1573,42 @@ fn MachineCode::emit_instruction(
       let result_reg = wreg_num(inst.defs[0])
       self.emit_add_imm(result_reg, 31, 0)
     }
+    GCAllocStructSlowPrecise(type_idx, num_fields) => {
+      // Direct slow-path struct allocation with precise safepoint metadata.
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = reg_num(inst.uses[0])
+      let stack_base_off = stack_frame.outgoing_args_offset
+
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_load_imm64(1, type_idx.to_int64())
+      self.emit_add_imm(2, 31, 0)
+      if stack_base_off != 0 {
+        if stack_base_off <= 4095 {
+          self.emit_add_imm(2, 2, stack_base_off)
+        } else {
+          self.emit_load_imm64(3, stack_base_off.to_int64())
+          self.emit_add_reg(2, 2, 3)
+        }
+      }
+      self.emit_load_imm64(3, num_fields.to_int64())
+      let safepoint_root_indices : Array[Int] = []
+      for i in 0..<num_fields {
+        safepoint_root_indices.push(i)
+      }
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=num_fields,
+        root_indices=safepoint_root_indices,
+      )
+      self.emit_load_imm64(4, safepoint_id.to_int64())
+      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
+    }
     GCAllocStructInline(type_idx, num_fields) => {
       // Inline bump allocation for struct.new with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
@@ -1761,6 +1797,44 @@ fn MachineCode::emit_instruction(
         self.emit_mov_reg(dst, 0)
       }
       self.define_label(done_label)
+    }
+    GCAllocArraySlowPrecise(type_idx) => {
+      // Direct slow-path array allocation with precise safepoint metadata.
+      let dst = wreg_num(inst.defs[0])
+      let vmctx_reg = reg_num(inst.uses[0])
+      let mut len_reg = reg_num(inst.uses[1])
+      let mut init_reg = reg_num(inst.uses[2])
+
+      // Preserve sources that would be clobbered by setting call args.
+      if len_reg == 0 || len_reg == 1 || len_reg == 3 || len_reg == 4 {
+        self.emit_mov_reg(16, len_reg)
+        len_reg = 16
+      }
+      if init_reg == 0 || init_reg == 1 || init_reg == 2 || init_reg == 4 {
+        self.emit_mov_reg(17, init_reg)
+        init_reg = 17
+      }
+      if vmctx_reg != 0 {
+        self.emit_mov_reg(0, vmctx_reg)
+      }
+      self.emit_load_imm64(1, type_idx.to_int64())
+      if len_reg != 2 {
+        self.emit_mov_reg(2, len_reg)
+      }
+      if init_reg != 3 {
+        self.emit_mov_reg(3, init_reg)
+      }
+      let safepoint_id = self.record_gc_safepoint(
+        self.current_pos(),
+        root_count=1,
+        root_indices=[0],
+      )
+      self.emit_load_imm64(4, safepoint_id.to_int64())
+      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+      self.emit_blr(17)
+      if dst != 0 {
+        self.emit_mov_reg(dst, 0)
+      }
     }
     // ============ SIMD Instructions ============
     _ =>

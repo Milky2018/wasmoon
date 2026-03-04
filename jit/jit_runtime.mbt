@@ -409,6 +409,11 @@ pub fn JITModule::load_with_imports(
   match context {
     None => raise ContextAllocationFailed(total_funcs~)
     Some(ctx) => {
+      let context_ptr = ctx.ptr()
+      // Context pointer must be visible before loading functions because
+      // gc_set_func_safepoints() installs per-function tables during this phase.
+      jit_module.context_ptr = context_ptr
+
       // Install near stubs used by pseudo direct-call fixups.
       install_direct_call_stubs(jit_module)
 
@@ -508,7 +513,6 @@ pub fn JITModule::load_with_imports(
       }
 
       // Store context in module
-      let context_ptr = ctx.ptr()
       jit_module.context = Some(ctx)
       jit_module.context_ptr = context_ptr
       jit_module.debug_db = debug_db

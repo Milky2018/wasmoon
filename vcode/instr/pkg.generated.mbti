@@ -364,7 +364,9 @@ pub(all) enum VCodeOpcode {
   StoreToStack(Int)
   LoadSP
   GCAllocStructInline(Int, Int)
+  GCAllocStructSlowPrecise(Int, Int)
   GCAllocArrayFixedInline(Int, Int)
+  GCAllocArraySlowPrecise(Int)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)

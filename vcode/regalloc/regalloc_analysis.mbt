@@ -561,7 +561,9 @@ fn collect_defs_uses(
           // This pseudo-op may call a C helper on a slow path.
           @instr.TypeCheckSubtypeIndirect(_) => @instr.C
           @instr.GCAllocStructInline(_, _) => @instr.C
+          @instr.GCAllocStructSlowPrecise(_, _) => @instr.C
           @instr.GCAllocArrayFixedInline(_, _) => @instr.C
+          @instr.GCAllocArraySlowPrecise(_) => @instr.C
           _ => @instr.Wasm
         }
         result.call_points.push(

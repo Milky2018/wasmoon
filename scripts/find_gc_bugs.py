@@ -63,6 +63,9 @@ TRAP_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 GC_COLLECT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
+        r"\[GC COLLECT\]\s+stack_roots=(\d+)\s+store_roots=(\d+)\s+table_roots=(\d+)\s+total=(\d+)\s+collected=(-?\d+)"
+    ),
+    re.compile(
         r"\[GC COLLECT\]\s+stack_roots=(\d+)\s+store_roots=(\d+)\s+total=(\d+)\s+collected=(-?\d+)"
     ),
     re.compile(
@@ -101,7 +104,11 @@ def extract_gc_metrics(output: str) -> dict[str, int]:
             collect_match = collect_pattern.search(line)
             if collect_match:
                 collect_events += 1
-                total_roots = int(collect_match.group(3))
+                groups = collect_match.groups()
+                if len(groups) >= 5:
+                    total_roots = int(groups[3])
+                else:
+                    total_roots = int(groups[2])
                 max_root_count = max(max_root_count, total_roots)
                 break
         else:

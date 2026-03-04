@@ -168,12 +168,12 @@ static int32_t gc_select_alloc_roots(
     }
     if (!ctx) {
         gc_log_precise_root_failure(op, safepoint_id, "missing jit context");
-        return -1;
+        return root_count;
     }
     const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
     if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
         gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
-        return -1;
+        return root_count;
     }
     const uint8_t *blob = table->stackmap_blob;
     uint32_t version = gc_read_u32_le(blob);
@@ -702,6 +702,19 @@ int64_t gc_alloc_array_slow(
         return trap_unreachable_i64();
     }
 
+    if (gc_alloc_debug_enabled()) {
+        fprintf(
+            stderr,
+            "[GC ALLOC] alloc_array_slow enter type=%d len=%d init=%lld safepoint=%d ctx=%p actual_ctx=%p\n",
+            type_idx,
+            len,
+            (long long)init_value,
+            safepoint_id,
+            (void *)ctx,
+            (void *)actual_ctx
+        );
+    }
+
     int64_t roots_buf[1] = { init_value };
     const int64_t *alloc_roots = NULL;
     int64_t *alloc_roots_owned = NULL;
@@ -717,6 +730,9 @@ int64_t gc_alloc_array_slow(
     if (alloc_root_count < 0) {
         if (alloc_roots_owned) {
             free(alloc_roots_owned);
+        }
+        if (gc_alloc_debug_enabled()) {
+            fprintf(stderr, "[GC ALLOC] alloc_array_slow precise roots unavailable\n");
         }
         return trap_out_of_memory_i64();
     }
@@ -736,6 +752,9 @@ int64_t gc_alloc_array_slow(
         free(alloc_roots_owned);
     }
     if (gc_ref == 0) {
+        if (gc_alloc_debug_enabled()) {
+            fprintf(stderr, "[GC ALLOC] alloc_array_slow failed after retries\n");
+        }
         return trap_out_of_memory_i64();
     }
     gc_log_alloc_retry("alloc_array_slow", &alloc_result);
