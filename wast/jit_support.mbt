@@ -1281,6 +1281,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
     @runtime.RuntimeError::InvalidConversion => 5
     @runtime.RuntimeError::DivisionByZero => 6
     @runtime.RuntimeError::IntegerOverflow => 7
+    @runtime.RuntimeError::OutOfMemory => 9
     _ => 99
   }
 }

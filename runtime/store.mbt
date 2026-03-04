@@ -420,9 +420,14 @@ pub fn Store::alloc_struct(
   self : Store,
   type_idx : Int,
   fields : Array[@types.Value],
-) -> Int {
+) -> Int raise RuntimeError {
   match self.c_heap {
-    Some(heap) => heap.alloc_struct(type_idx, fields)
+    Some(heap) =>
+      heap.alloc_struct(type_idx, fields) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+      }
     None => self.heap.alloc_struct(type_idx, fields)
   }
 }
@@ -433,9 +438,14 @@ pub fn Store::alloc_array(
   self : Store,
   type_idx : Int,
   elements : Array[@types.Value],
-) -> Int {
+) -> Int raise RuntimeError {
   match self.c_heap {
-    Some(heap) => heap.alloc_array_from_values(type_idx, elements)
+    Some(heap) =>
+      heap.alloc_array_from_values(type_idx, elements) catch {
+        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+      }
     None => self.heap.alloc_array(type_idx, elements)
   }
 }
@@ -497,6 +507,7 @@ pub fn Store::array_get(
       heap.array_get(array_idx, elem_idx, elem_type) catch {
         @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
       }
     }
     None => self.heap.array_get(array_idx, elem_idx)
@@ -516,6 +527,7 @@ pub fn Store::array_set(
       heap.array_set(array_idx, elem_idx, value) catch {
         @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
       }
     None => self.heap.array_set(array_idx, elem_idx, value)
   }
@@ -535,6 +547,7 @@ pub fn Store::array_fill(
       heap.array_fill(array_idx, offset, value, count) catch {
         @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
       }
     None => self.heap.array_fill(array_idx, offset, value, count)
   }
@@ -555,6 +568,7 @@ pub fn Store::array_copy(
       heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
         @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
         @jit.CHeapError::NullReference => raise NullReference
+        @jit.CHeapError::OutOfMemory => raise OutOfMemory
       }
     None =>
       self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)

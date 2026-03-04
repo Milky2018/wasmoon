@@ -631,7 +631,7 @@ static int64_t gc_array_new_data_impl(
 
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
-        g_trap_code = 3;
+        g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
@@ -699,7 +699,7 @@ static int64_t gc_array_new_elem_impl(
 
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
-        g_trap_code = 3;
+        g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }

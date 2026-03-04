@@ -335,6 +335,18 @@ test "gc: fault injection fails configured allocation attempt" {
 }
 
 ///|
+test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
+  gc_debug_set_fail_alloc(1)
+  let heap = CHeap::new(capacity=1024)
+  let result : Result[Int, CHeapError] = try? heap.alloc_struct(0, [
+    @types.Value::I32(123),
+  ])
+  gc_debug_set_fail_alloc(0)
+
+  guard result is Err(OutOfMemory) else { fail("expected OutOfMemory") }
+}
+
+///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)

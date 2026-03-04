@@ -44,6 +44,14 @@ static void trap_unreachable_void(void) {
     }
 }
 
+static int64_t trap_out_of_memory_i64(void) {
+    g_trap_code = 9;
+    if (g_trap_active) {
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
 // ============ Struct Operations ============
 
 int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
@@ -72,7 +80,7 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
             if (!default_fields) {
-                return trap_unreachable_i64();
+                return trap_out_of_memory_i64();
             }
             actual_fields = default_fields;
         }
@@ -88,7 +96,7 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
     }
 
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
 
     // Encode for JIT: gc_ref << 1 (1-based gc_ref stays 1-based, just shifted)
@@ -144,7 +152,7 @@ int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
 
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, fill);
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
 
     // Encode: gc_ref << 1 (1-based gc_ref, ensures gc_ref=1 -> value=2)
@@ -322,7 +330,7 @@ int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t 
         int32_t *new_table =
             (int32_t *)realloc(heap->object_table, (size_t)new_capacity * sizeof(int32_t));
         if (!new_table) {
-            return trap_unreachable_i64();
+            return trap_out_of_memory_i64();
         }
         heap->object_table = new_table;
         heap->object_capacity = new_capacity;
@@ -371,7 +379,7 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
             if (!default_fields) {
-                return trap_unreachable_i64();
+                return trap_out_of_memory_i64();
             }
             actual_fields = default_fields;
         }
@@ -386,7 +394,7 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
     }
 
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
@@ -417,7 +425,7 @@ int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, i
     // Try to allocate (this will grow heap if needed)
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, init_value);
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
@@ -446,7 +454,7 @@ int64_t gc_alloc_array_from_values_slow(
 
     int32_t gc_ref = gc_heap_alloc_array_from_values(heap, type_idx, values, len);
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
 
     if (actual_ctx) {

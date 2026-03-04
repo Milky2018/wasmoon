@@ -12,6 +12,7 @@
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
+  OutOfMemory
 }
 
 // ============================================================
@@ -169,7 +170,7 @@ pub fn CHeap::alloc_struct(
   self : CHeap,
   type_idx : Int,
   fields : Array[@types.Value],
-) -> Int {
+) -> Int raise CHeapError {
   let num_fields = fields.length()
   let raw_fields = FixedArray::makei(num_fields, fn(i) {
     value_to_i64(fields[i])
@@ -181,7 +182,7 @@ pub fn CHeap::alloc_struct(
     num_fields,
   )
   if gc_ref <= 0 {
-    abort("CHeap allocation failed: struct")
+    raise OutOfMemory
   }
   // C heap returns 1-based gc_ref, convert to 0-based for external use
   gc_ref - 1
@@ -226,11 +227,11 @@ pub fn CHeap::alloc_array(
   type_idx : Int,
   len : Int,
   init_value : @types.Value,
-) -> Int {
+) -> Int raise CHeapError {
   let raw_init = value_to_i64(init_value)
   let gc_ref = @jit_ffi.c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
   if gc_ref <= 0 {
-    abort("CHeap allocation failed: array")
+    raise OutOfMemory
   }
   gc_ref - 1
 }
@@ -242,7 +243,7 @@ pub fn CHeap::alloc_array_from_values(
   self : CHeap,
   type_idx : Int,
   elements : Array[@types.Value],
-) -> Int {
+) -> Int raise CHeapError {
   let len = elements.length()
   let raw_values = FixedArray::makei(len, fn(i) { value_to_i64(elements[i]) })
   let gc_ref = @jit_ffi.c_gc_heap_alloc_array_from_values(
@@ -252,7 +253,7 @@ pub fn CHeap::alloc_array_from_values(
     len,
   )
   if gc_ref <= 0 {
-    abort("CHeap allocation failed: array_from_values")
+    raise OutOfMemory
   }
   gc_ref - 1
 }

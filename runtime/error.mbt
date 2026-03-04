@@ -12,6 +12,7 @@ pub(all) suberror RuntimeError {
   DivisionByZero
   IntegerOverflow
   InvalidConversion
+  OutOfMemory
   Unreachable
   CallStackExhausted
   UnknownImport(String, String) // Import not found: (module_name, field_name)
@@ -42,6 +43,7 @@ pub impl Show for RuntimeError with output(self, logger) {
     DivisionByZero => "integer divide by zero"
     IntegerOverflow => "integer overflow"
     InvalidConversion => "invalid conversion to integer"
+    OutOfMemory => "out of memory"
     Unreachable => "unreachable"
     CallStackExhausted => "call stack exhausted"
     UnknownImport(mod_name, field_name) =>
