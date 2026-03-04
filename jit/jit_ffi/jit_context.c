@@ -25,6 +25,19 @@ static int gc_collect_debug_enabled(void) {
     return gc_collect_debug_cached;
 }
 
+static int32_t gc_frame_chain_depth(const jit_context_t *ctx) {
+    if (!ctx) {
+        return 0;
+    }
+    int32_t depth = 0;
+    const wasmoon_gc_frame_t *cur = ctx->gc_frame_chain_head;
+    while (cur) {
+        depth++;
+        cur = cur->prev;
+    }
+    return depth;
+}
+
 // ============ Context Allocation ============
 
 jit_context_t *alloc_context_internal(int func_count) {
@@ -581,6 +594,12 @@ int32_t gc_collect_for_alloc_internal(
             heap->object_count,
             free_count_before,
             heap->free_count
+        );
+        fprintf(
+            stderr,
+            "[GC COLLECT] frame_depth=%d safepoint_table=%s\n",
+            gc_frame_chain_depth(ctx),
+            ctx->gc_safepoint_table ? "set" : "none"
         );
     }
 

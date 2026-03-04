@@ -864,6 +864,11 @@ pub fn JITModule::call_with_context(
       }
       let results : Array[Int64] = Array::make(num_result_slots, 0L)
       let mut call_error : JITTrap? = None
+      // Phase-B scaffolding: track active JIT frame for allocation-triggered GC.
+      // Safepoint table pointer is currently optional and set to null until full
+      // stackmap decode wiring lands.
+      self.gc_set_safepoint_table(0L)
+      self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
         func.exec_code.ptr(),
         args,
@@ -873,6 +878,8 @@ pub fn JITModule::call_with_context(
       ) catch {
         e => call_error = Some(e)
       }
+      self.gc_end_frame()
+      self.gc_set_safepoint_table(0L)
       self.flush_wasi_output(ctx)
       match call_error {
         Some(JITTrap(msg)) => {
