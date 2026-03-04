@@ -156,6 +156,7 @@ pub fn CompiledFunction::new(
   gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledFunction {
   let derived_root_counts = code.get_gc_safepoint_root_counts()
+  let derived_root_indices = code.get_gc_safepoint_root_indices()
   let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
     0 {
     gc_safepoints
@@ -168,7 +169,12 @@ pub fn CompiledFunction::new(
       } else {
         0L
       }
-      derived.push(GcSafepoint::new(offset, [], metadata))
+      let live_refs = if i < derived_root_indices.length() {
+        derived_root_indices[i]
+      } else {
+        []
+      }
+      derived.push(GcSafepoint::new(offset, live_refs, metadata))
     }
     derived
   }

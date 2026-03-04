@@ -3365,9 +3365,14 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
+      let safepoint_root_indices : Array[Int] = []
+      for i in 0..<num_fields {
+        safepoint_root_indices.push(i)
+      }
       let safepoint_id = self.record_gc_safepoint(
         self.current_pos(),
         root_count=num_fields,
+        root_indices=safepoint_root_indices,
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
       self.x86_emit_mov_imm64(
@@ -3462,9 +3467,14 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(arg2, 4) // rsp
       emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
       self.x86_emit_mov_imm64(arg3, len.to_int64())
+      let safepoint_root_indices : Array[Int] = []
+      for i in 0..<len {
+        safepoint_root_indices.push(i)
+      }
       let safepoint_id = self.record_gc_safepoint(
         self.current_pos(),
         root_count=len,
+        root_indices=safepoint_root_indices,
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
       self.x86_emit_mov_imm64(

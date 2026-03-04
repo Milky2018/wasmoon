@@ -29,6 +29,8 @@ pub struct MachineCode {
   gc_safepoint_offsets : Array[Int]
   // Root slot counts for each recorded GC safepoint.
   gc_safepoint_root_counts : Array[Int]
+  // Root slot indices for each recorded GC safepoint.
+  gc_safepoint_root_indices : Array[Array[Int]]
   // Deduplicated amd64 constant-pool entries (key -> label).
   amd64_const_labels : Map[String, Int]
   // Pending amd64 constant-pool bytes to emit at end of function.
@@ -110,6 +112,7 @@ pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
     call_fixups: [],
     gc_safepoint_offsets: [],
     gc_safepoint_root_counts: [],
+    gc_safepoint_root_indices: [],
     amd64_const_labels: {},
     amd64_const_entries: [],
     disasm: [],
@@ -296,9 +299,24 @@ pub fn MachineCode::record_gc_safepoint(
   self : MachineCode,
   offset : Int,
   root_count? : Int = 0,
+  root_indices? : Array[Int] = [],
 ) -> Int {
+  let sanitized_indices : Array[Int] = []
+  for idx in root_indices {
+    if idx >= 0 && idx <= @types.I32_MAX {
+      sanitized_indices.push(idx)
+    }
+  }
+  let resolved_root_count = if root_count > 0 {
+    root_count
+  } else if sanitized_indices.length() > 0 {
+    sanitized_indices.length()
+  } else {
+    0
+  }
   self.gc_safepoint_offsets.push(offset)
-  self.gc_safepoint_root_counts.push(root_count)
+  self.gc_safepoint_root_counts.push(resolved_root_count)
+  self.gc_safepoint_root_indices.push(sanitized_indices)
   self.gc_safepoint_offsets.length() - 1
 }
 
@@ -508,6 +526,14 @@ pub fn MachineCode::get_gc_safepoint_root_counts(
   self : MachineCode,
 ) -> Array[Int] {
   self.gc_safepoint_root_counts
+}
+
+///|
+/// Get recorded GC safepoint root indices.
+pub fn MachineCode::get_gc_safepoint_root_indices(
+  self : MachineCode,
+) -> Array[Array[Int]] {
+  self.gc_safepoint_root_indices
 }
 
 ///|

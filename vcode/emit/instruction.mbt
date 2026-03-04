@@ -1646,9 +1646,14 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, num_fields.to_int64())
+      let safepoint_root_indices : Array[Int] = []
+      for i in 0..<num_fields {
+        safepoint_root_indices.push(i)
+      }
       let safepoint_id = self.record_gc_safepoint(
         self.current_pos(),
         root_count=num_fields,
+        root_indices=safepoint_root_indices,
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
       self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
@@ -1737,9 +1742,14 @@ fn MachineCode::emit_instruction(
         }
       }
       self.emit_load_imm64(3, len.to_int64())
+      let safepoint_root_indices : Array[Int] = []
+      for i in 0..<len {
+        safepoint_root_indices.push(i)
+      }
       let safepoint_id = self.record_gc_safepoint(
         self.current_pos(),
         root_count=len,
+        root_indices=safepoint_root_indices,
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
       self.emit_load_imm64(

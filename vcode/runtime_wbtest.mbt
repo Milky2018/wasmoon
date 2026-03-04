@@ -127,6 +127,26 @@ test "compiled function: derive gc safepoints from machine code" {
 }
 
 ///|
+test "compiled function: machinecode root indices build v2 stackmap" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.record_gc_safepoint(4, root_count=2, root_indices=[2, 0]) |> ignore
+  let func = CompiledFunction::new("gc_func_v2", mc, 0)
+  inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[2]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
+    content="[2, 0]",
+  )
+  let safepoints = func.get_gc_safepoints()
+  inspect(safepoints.length(), content="1")
+  inspect(safepoints[0].live_refs, content="[2, 0]")
+}
+
+///|
 test "compiled function: explicit gc metadata overrides derived data" {
   let mc = @emit.MachineCode::new()
   mc.emit_nop()
