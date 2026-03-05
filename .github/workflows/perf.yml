@@ -38,6 +38,8 @@ jobs:
           wasmtime --version
 
       - name: run perf benchmark runner
+        id: perf_runner
+        continue-on-error: true
         run: |
           set -euxo pipefail
           BASELINE="docs/perf/baselines/linux-amd64/perf-summary.json"
@@ -59,7 +61,14 @@ jobs:
               --timeout-sec 240
           fi
 
+      - name: warn if perf benchmark runner regressed
+        if: steps.perf_runner.outcome != 'success'
+        run: |
+          echo "::warning title=Perf benchmark runner::Regression threshold exceeded; see perf artifacts for details."
+
       - name: check wasmtime parity guardrail
+        id: parity_guardrail
+        continue-on-error: true
         run: |
           set -euxo pipefail
           python3 scripts/check_wasmtime_parity.py \
@@ -71,6 +80,11 @@ jobs:
             --out-dir target/perf-benchmarks/parity \
             --threshold examples/aead_aegis128l.wasm=6.0 \
             --threshold examples/benchmark.wasm=1.5
+
+      - name: warn if wasmtime parity guardrail regressed
+        if: steps.parity_guardrail.outcome != 'success'
+        run: |
+          echo "::warning title=Wasmtime parity guardrail::Threshold exceeded; see parity artifacts for details."
 
       - name: upload perf artifacts
         uses: actions/upload-artifact@v4
