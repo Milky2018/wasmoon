@@ -78,6 +78,15 @@ pub(all) enum ComponentErrorFormat {
 pub impl Eq for ComponentErrorFormat
 pub impl Show for ComponentErrorFormat
 
+pub(all) enum ComponentTestErrorCode {
+  CompTestScriptError
+  CompTestRuntimeError
+  CompTestAssertFailed
+  CompTestUnsupportedCommand
+}
+pub impl Eq for ComponentTestErrorCode
+pub impl Show for ComponentTestErrorCode
+
 // Type aliases
 
 // Traits

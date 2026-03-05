@@ -8,6 +8,24 @@ pub suberror ComponentTestError {
 } derive(Show)
 
 ///|
+pub(all) enum ComponentTestErrorCode {
+  CompTestScriptError
+  CompTestRuntimeError
+  CompTestAssertFailed
+  CompTestUnsupportedCommand
+} derive(Show, Eq)
+
+///|
+fn component_test_error_code_string(code : ComponentTestErrorCode) -> String {
+  match code {
+    CompTestScriptError => "COMP_TEST_SCRIPT_ERROR"
+    CompTestRuntimeError => "COMP_TEST_RUNTIME_ERROR"
+    CompTestAssertFailed => "COMP_TEST_ASSERT_FAILED"
+    CompTestUnsupportedCommand => "COMP_TEST_UNSUPPORTED_COMMAND"
+  }
+}
+
+///|
 priv struct ScriptFile {
   commands : Array[JsonCommand]
 } derive(FromJson)
@@ -76,7 +94,7 @@ fn json_escape_string_component_test(s : String) -> String {
 ///|
 fn component_test_json(
   ok : Bool,
-  code : String?,
+  code : ComponentTestErrorCode?,
   phase : String,
   detail : String,
   result : ScriptResult?,
@@ -84,7 +102,7 @@ fn component_test_json(
   let mut line = "{\"ok\":"
   line = line + (if ok { "true" } else { "false" })
   if code is Some(code) {
-    line = line + ",\"code\":\"\{json_escape_string_component_test(code)}\""
+    line = line + ",\"code\":\"\{component_test_error_code_string(code)}\""
   }
   line = line + ",\"phase\":\"\{json_escape_string_component_test(phase)}\""
   line = line + ",\"detail\":\"\{json_escape_string_component_test(detail)}\""
@@ -465,7 +483,7 @@ pub fn run_component_script(
         println(
           component_test_json(
             false,
-            Some("COMP_TEST_SCRIPT_ERROR"),
+            Some(CompTestScriptError),
             "load-script",
             e,
             None,
@@ -483,7 +501,7 @@ pub fn run_component_script(
         println(
           component_test_json(
             false,
-            Some("COMP_TEST_SCRIPT_ERROR"),
+            Some(CompTestScriptError),
             "parse-json",
             e.to_string(),
             None,
@@ -501,7 +519,7 @@ pub fn run_component_script(
         println(
           component_test_json(
             false,
-            Some("COMP_TEST_SCRIPT_ERROR"),
+            Some(CompTestScriptError),
             "decode-json",
             e.to_string(),
             None,
@@ -530,7 +548,7 @@ pub fn run_component_script(
         println(
           component_test_json(
             false,
-            Some("COMP_TEST_RUNTIME_ERROR"),
+            Some(CompTestRuntimeError),
             "bootstrap",
             e.to_string(),
             None,
@@ -1161,9 +1179,9 @@ pub fn run_component_script(
         if ok {
           None
         } else if has_unsupported_command || result.skipped > 0 {
-          Some("COMP_TEST_UNSUPPORTED_COMMAND")
+          Some(CompTestUnsupportedCommand)
         } else {
-          Some("COMP_TEST_ASSERT_FAILED")
+          Some(CompTestAssertFailed)
         },
         "execute",
         if ok {

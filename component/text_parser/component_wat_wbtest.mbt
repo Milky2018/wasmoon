@@ -65,3 +65,21 @@ test "component text parser: core module and canon lift" {
   inspect(parsed.exports.length(), content="1")
   inspect(try? @component_model.validate_component(parsed), content="Ok(())")
 }
+
+///|
+test "component text parser: utf8 names are accepted" {
+  let text = "(component (type (record (field \"参数\" u32))))"
+  let bytes = parse_component_wat(text) catch {
+    e => {
+      inspect(e)
+      panic()
+    }
+  }
+  let parsed = @component.parse_component(bytes) catch {
+    e => {
+      inspect(e)
+      panic()
+    }
+  }
+  inspect(parsed.types.length(), content="1")
+}

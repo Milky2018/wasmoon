@@ -4,6 +4,10 @@ test "component error code mapping: enum string is stable" {
     component_error_code_string(CompUnsupported),
     content="COMP_UNSUPPORTED",
   )
+  inspect(
+    component_test_error_code_string(CompTestUnsupportedCommand),
+    content="COMP_TEST_UNSUPPORTED_COMMAND",
+  )
 }
 
 ///|
@@ -62,7 +66,7 @@ test "component-test json helper includes status fields" {
   result.add_failed("x")
   let json = component_test_json(
     false,
-    Some("COMP_TEST_ASSERT_FAILED"),
+    Some(CompTestAssertFailed),
     "execute",
     "component-test has failing commands",
     Some(result),
@@ -102,6 +106,39 @@ test "component-test returns non-zero on unsupported command" {
   }
   let status = run_component_script(path, Json)
   inspect(status, content="1")
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+}
+
+///|
+test "component-test returns non-zero on malformed script json" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component_test_bad_json.json"
+  @fs.write_string_to_file(path, "{\"commands\":[") catch {
+    IOError(e) => fail(e)
+  }
+  let status = run_component_script(path, Json)
+  inspect(status, content="1")
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+}
+
+///|
+test "component-test supports component_definition and component_instance commands" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component_test_instance.json"
+  let json = "{\"commands\":[{\"type\":\"component_definition\",\"name\":\"$c\",\"path\":\"testsuite/fixtures/minimal.component.wasm\"},{\"type\":\"component_instance\",\"name\":\"$i\",\"component\":\"$c\"}]}"
+  @fs.write_string_to_file(path, json) catch {
+    IOError(e) => fail(e)
+  }
+  let status = run_component_script(path, Json)
+  inspect(status, content="0")
   @fs.remove_file(path) catch {
     _ => ()
   }

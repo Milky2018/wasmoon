@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import shutil
@@ -12,6 +13,16 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
+
+DEFAULT_VALIDATE_TIMEOUT_SECONDS = int(
+    os.environ.get("WASMOON_COMPONENT_VALIDATE_TIMEOUT", "20")
+)
+DEFAULT_SCRIPT_TIMEOUT_SECONDS = int(
+    os.environ.get("WASMOON_COMPONENT_SCRIPT_TIMEOUT", "30")
+)
+DEFAULT_TOOLS_TIMEOUT_SECONDS = int(
+    os.environ.get("WASMOON_COMPONENT_TOOLS_TIMEOUT", "30")
+)
 
 
 def skip_line_comment(text: str, i: int) -> int:
@@ -507,11 +518,18 @@ def compile_component(
     out = tmp / f"component_{idx}.wasm"
     src.write_text(text, encoding="utf-8")
 
-    result = subprocess.run(
-        [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            None,
+            f"wasmoon-tools wat2wasm timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
+        )
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()
         return (
@@ -528,12 +546,16 @@ def probe_component_wat_support(wasmoon_tools: Path) -> bool:
         src = tmp_path / "probe_component.wat"
         out = tmp_path / "probe_component.wasm"
         src.write_text("(component)", encoding="utf-8")
-        result = subprocess.run(
-            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
-            capture_output=True,
-            text=True,
-        )
-        return result.returncode == 0 and out.exists()
+        try:
+            result = subprocess.run(
+                [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+                capture_output=True,
+                text=True,
+                timeout=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+            )
+            return result.returncode == 0 and out.exists()
+        except subprocess.TimeoutExpired:
+            return False
 
 
 def parse_component_json_result(out: str) -> Optional[dict]:
@@ -557,11 +579,15 @@ def validate_component(
     if not wit_names:
         cmd.append("--no-wit-names")
     cmd.extend(["--validate", str(component_bin)])
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_VALIDATE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "component validation timeout", "COMP_TIMEOUT"
     out = (result.stdout or "") + (result.stderr or "")
     payload = parse_component_json_result(out)
     if payload is not None:
@@ -593,11 +619,15 @@ def run_component_script(
         json.dumps(script, ensure_ascii=True, indent=2),
         encoding="utf-8",
     )
-    result = subprocess.run(
-        [str(wasmoon), "component-test", str(script_path)],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [str(wasmoon), "component-test", str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return 0, 1, 0, ["component-test timeout"], "component-test timeout", False
     out = (result.stdout or "") + (result.stderr or "")
     if not out.strip():
         out = f"(exit={result.returncode})"
@@ -739,6 +769,9 @@ def run_file(
                 comp_idx += 1
                 if comp_bin is None:
                     err_msg = err or "unknown component parse error"
+                    if "unsupported" in err_msg.lower():
+                        fail(f"assert_invalid failed due to unsupported feature: {err_msg}")
+                        continue
                     if expected_msg:
                         if expected_msg.lower() in err_msg.lower():
                             passed += 1
@@ -806,7 +839,11 @@ def run_file(
                 )
                 comp_idx += 1
                 if comp_bin is None:
-                    passed += 1
+                    err_msg = _err or "unknown component parse error"
+                    if "unsupported" in err_msg.lower():
+                        fail(f"assert_malformed failed due to unsupported feature: {err_msg}")
+                    else:
+                        passed += 1
                 else:
                     ok, msg, code = validate_component(
                         comp_bin,
