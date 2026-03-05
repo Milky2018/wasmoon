@@ -6937,10 +6937,10 @@ fn compile_component_expr_with_outer(
     let field = if field_expr is List(items) {
       items
     } else {
-      raise Unsupported("component fields must be lists")
+      raise ParseError("component fields must be lists")
     }
     if field.length() == 0 {
-      raise Unsupported("empty component field")
+      raise ParseError("empty component field")
     }
     if field[0] is Atom("import") {
       parse_import(field, state)
