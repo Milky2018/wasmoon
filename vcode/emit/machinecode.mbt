@@ -25,6 +25,12 @@ pub struct MachineCode {
   func_addr_fixups : Array[FuncAddrFixup]
   // Pending fixups for direct function calls (offset -> func_idx)
   call_fixups : Array[CallFixup]
+  // Offsets of allocation slow-path GC safepoints.
+  gc_safepoint_offsets : Array[Int]
+  // Root slot counts for each recorded GC safepoint.
+  gc_safepoint_root_counts : Array[Int]
+  // Root slot indices for each recorded GC safepoint.
+  gc_safepoint_root_indices : Array[Array[Int]]
   // Deduplicated amd64 constant-pool entries (key -> label).
   amd64_const_labels : Map[String, Int]
   // Pending amd64 constant-pool bytes to emit at end of function.
@@ -33,6 +39,9 @@ pub struct MachineCode {
   disasm : Array[(Int, String)]
   // Whether to record disassembly annotations during emission.
   record_disasm : Bool
+  // Stack spill-slot offset (from SP) used to stash caller debug_current_func_idx.
+  // -1 means disabled for this function.
+  mut debug_prev_func_idx_spill_offset : Int
 }
 
 ///|
@@ -104,11 +113,23 @@ pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
     x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
+    gc_safepoint_offsets: [],
+    gc_safepoint_root_counts: [],
+    gc_safepoint_root_indices: [],
     amd64_const_labels: {},
     amd64_const_entries: [],
     disasm: [],
     record_disasm,
+    debug_prev_func_idx_spill_offset: -1,
   }
+}
+
+///|
+pub fn MachineCode::set_debug_prev_func_idx_spill_offset(
+  self : MachineCode,
+  offset : Int,
+) -> Unit {
+  self.debug_prev_func_idx_spill_offset = offset
 }
 
 ///|
@@ -282,6 +303,33 @@ pub fn MachineCode::add_call_fixup(
   veneer_offset? : Int = -1,
 ) -> Unit {
   self.call_fixups.push({ offset, func_idx, veneer_offset })
+}
+
+///|
+/// Record a GC safepoint at current code offset.
+pub fn MachineCode::record_gc_safepoint(
+  self : MachineCode,
+  offset : Int,
+  root_count? : Int = 0,
+  root_indices? : Array[Int] = [],
+) -> Int {
+  let sanitized_indices : Array[Int] = []
+  for idx in root_indices {
+    if idx >= 0 && idx <= @types.I32_MAX {
+      sanitized_indices.push(idx)
+    }
+  }
+  let resolved_root_count = if root_count > 0 {
+    root_count
+  } else if sanitized_indices.length() > 0 {
+    sanitized_indices.length()
+  } else {
+    0
+  }
+  self.gc_safepoint_offsets.push(offset)
+  self.gc_safepoint_root_counts.push(resolved_root_count)
+  self.gc_safepoint_root_indices.push(sanitized_indices)
+  self.gc_safepoint_offsets.length() - 1
 }
 
 ///|
@@ -476,6 +524,28 @@ pub fn MachineCode::get_func_addr_fixups(
 /// Get direct function call fixups
 pub fn MachineCode::get_call_fixups(self : MachineCode) -> Array[CallFixup] {
   self.call_fixups
+}
+
+///|
+/// Get recorded GC safepoint offsets.
+pub fn MachineCode::get_gc_safepoint_offsets(self : MachineCode) -> Array[Int] {
+  self.gc_safepoint_offsets
+}
+
+///|
+/// Get recorded GC safepoint root counts.
+pub fn MachineCode::get_gc_safepoint_root_counts(
+  self : MachineCode,
+) -> Array[Int] {
+  self.gc_safepoint_root_counts
+}
+
+///|
+/// Get recorded GC safepoint root indices.
+pub fn MachineCode::get_gc_safepoint_root_indices(
+  self : MachineCode,
+) -> Array[Array[Int]] {
+  self.gc_safepoint_root_indices
 }
 
 ///|

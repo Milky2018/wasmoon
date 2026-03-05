@@ -1,6 +1,107 @@
 // Tests for JIT runtime support
 
 ///|
+fn decode_u32_le(bytes : Array[Int], offset : Int) -> Int {
+  bytes[offset] |
+  (bytes[offset + 1] << 8) |
+  (bytes[offset + 2] << 16) |
+  (bytes[offset + 3] << 24)
+}
+
+///|
+fn decode_stackmap_bytes(blob : Bytes) -> Array[Int] {
+  let bytes : Array[Int] = []
+  for b in blob {
+    bytes.push(b.to_int())
+  }
+  bytes
+}
+
+///|
+fn decode_stackmap_version(blob : Bytes) -> Int {
+  let bytes = decode_stackmap_bytes(blob)
+  if bytes.length() < 8 {
+    return 0
+  }
+  decode_u32_le(bytes, 0)
+}
+
+///|
+fn decode_stackmap_root_counts(blob : Bytes) -> Array[Int] {
+  let bytes = decode_stackmap_bytes(blob)
+  if bytes.length() < 8 {
+    return []
+  }
+  let version = decode_u32_le(bytes, 0)
+  if version != 1 && version != 2 {
+    return []
+  }
+  let count = decode_u32_le(bytes, 4)
+  let root_counts : Array[Int] = []
+  if version == 1 {
+    if bytes.length() < 8 + count * 4 {
+      return []
+    }
+    for i in 0..<count {
+      root_counts.push(decode_u32_le(bytes, 8 + i * 4))
+    }
+    return root_counts
+  }
+  let mut offset = 8
+  for _i in 0..<count {
+    if offset + 8 > bytes.length() {
+      return []
+    }
+    let root_count = decode_u32_le(bytes, offset)
+    let index_count = decode_u32_le(bytes, offset + 4)
+    root_counts.push(root_count)
+    offset = offset + 8 + index_count * 4
+    if offset > bytes.length() {
+      return []
+    }
+  }
+  root_counts
+}
+
+///|
+fn decode_stackmap_root_indices(
+  blob : Bytes,
+  safepoint_idx : Int,
+) -> Array[Int] {
+  let bytes = decode_stackmap_bytes(blob)
+  if bytes.length() < 8 {
+    return []
+  }
+  if decode_u32_le(bytes, 0) != 2 {
+    return []
+  }
+  let count = decode_u32_le(bytes, 4)
+  if safepoint_idx < 0 || safepoint_idx >= count {
+    return []
+  }
+  let mut offset = 8
+  for i in 0..<count {
+    if offset + 8 > bytes.length() {
+      return []
+    }
+    let index_count = decode_u32_le(bytes, offset + 4)
+    offset = offset + 8
+    if offset + index_count * 4 > bytes.length() {
+      return []
+    }
+    if i == safepoint_idx {
+      let indices : Array[Int] = []
+      for j in 0..<index_count {
+        indices.push(decode_u32_le(bytes, offset + j * 4))
+      }
+      return indices
+    }
+    offset = offset + index_count * 4
+  }
+  []
+}
+
+///|
 test "compiled function: basic" {
   let mc = @emit.MachineCode::new()
   mc.emit_nop()
@@ -9,6 +110,112 @@ test "compiled function: basic" {
   assert_true(func.is_valid())
   inspect(func.code_size, content="8")
   inspect(func.frame_size, content="16")
+}
+
+///|
+test "compiled function: derive gc safepoints from machine code" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.record_gc_safepoint(4) |> ignore
+  mc.record_gc_safepoint(8) |> ignore
+  let func = CompiledFunction::new("gc_func", mc, 0)
+  let safepoints = func.get_gc_safepoints()
+  inspect(safepoints.length(), content="2")
+  inspect(safepoints[0].code_offset, content="4")
+  inspect(safepoints[1].code_offset, content="8")
+  inspect(func.get_gc_stackmap_blob().length(), content="16")
+}
+
+///|
+test "compiled function: machinecode root indices build v2 stackmap" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.record_gc_safepoint(4, root_count=2, root_indices=[2, 0]) |> ignore
+  let func = CompiledFunction::new("gc_func_v2", mc, 0)
+  inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[2]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
+    content="[2, 0]",
+  )
+  let safepoints = func.get_gc_safepoints()
+  inspect(safepoints.length(), content="1")
+  inspect(safepoints[0].live_refs, content="[2, 0]")
+}
+
+///|
+test "compiled function: explicit gc metadata overrides derived data" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.record_gc_safepoint(4) |> ignore
+  let explicit_points : Array[GcSafepoint] = [
+    { code_offset: 24, live_refs: [1, 3], metadata: 9L },
+  ]
+  let func = CompiledFunction::new(
+    "gc_meta",
+    mc,
+    0,
+    gc_safepoints=explicit_points,
+    gc_stackmap_blob=b"\x01\x02\x03",
+  )
+  let safepoints = func.get_gc_safepoints()
+  inspect(safepoints.length(), content="1")
+  inspect(safepoints[0].code_offset, content="24")
+  inspect(safepoints[0].metadata, content="9")
+  inspect(func.get_gc_stackmap_blob().length(), content="3")
+}
+
+///|
+test "compiled function: explicit safepoints build stackmap when blob missing" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  let explicit_points : Array[GcSafepoint] = [
+    GcSafepoint::new(16, [], 3L),
+    GcSafepoint::new(28, [], 1L),
+  ]
+  let func = CompiledFunction::new(
+    "gc_meta_auto",
+    mc,
+    0,
+    gc_safepoints=explicit_points,
+  )
+  inspect(func.get_gc_stackmap_blob().length(), content="16")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[3, 1]",
+  )
+}
+
+///|
+test "compiled function: explicit safepoint indices build v2 stackmap" {
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  let explicit_points : Array[GcSafepoint] = [
+    GcSafepoint::new(32, [5, 1, 9], 2L),
+    GcSafepoint::new(48, [3], 1L),
+  ]
+  let func = CompiledFunction::new(
+    "gc_meta_indices",
+    mc,
+    0,
+    gc_safepoints=explicit_points,
+  )
+  inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
+  inspect(
+    decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
+    content="[2, 1]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
+    content="[5, 1]",
+  )
+  inspect(
+    decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 1),
+    content="[3]",
+  )
 }
 
 ///|

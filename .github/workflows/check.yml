@@ -146,6 +146,11 @@ jobs:
           moon build --target native --release
           ./install.sh
 
+      - name: run component-spec subset (amd64)
+        timeout-minutes: 5
+        run: |
+          python3 scripts/run_component_wast.py --dir component-spec --rec
+
       - name: run wast spec tests (amd64)
         id: wast_amd64
         timeout-minutes: 10
@@ -177,3 +182,46 @@ jobs:
       - name: fail fast if wast spec tests failed (amd64)
         if: steps.wast_amd64.outcome != 'success'
         run: exit 1
+
+  build-ubuntu-sanitizer:
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+      CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+      CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+      LDFLAGS: -fsanitize=address,undefined
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: build wasmoon (sanitizer)
+        run: |
+          moon build --target native --release
+          ./install.sh
+
+      - name: run GC differential stress matrix (sanitizer)
+        timeout-minutes: 10
+        run: |
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+
+      - name: run GC differential fault-injection lane (sanitizer)
+        timeout-minutes: 10
+        run: |
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7

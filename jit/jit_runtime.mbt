@@ -409,6 +409,11 @@ pub fn JITModule::load_with_imports(
   match context {
     None => raise ContextAllocationFailed(total_funcs~)
     Some(ctx) => {
+      let context_ptr = ctx.ptr()
+      // Context pointer must be visible before loading functions because
+      // gc_set_func_safepoints() installs per-function tables during this phase.
+      jit_module.context_ptr = context_ptr
+
       // Install near stubs used by pseudo direct-call fixups.
       install_direct_call_stubs(jit_module)
 
@@ -465,6 +470,12 @@ pub fn JITModule::load_with_imports(
         }
       }
 
+      // Expose context before loading functions so per-function safepoint tables
+      // can be installed during this phase.
+      jit_module.context = Some(ctx)
+      jit_module.context_ptr = context_ptr
+      jit_module.debug_db = debug_db
+
       // Step 2: Load compiled functions and populate their pointers
       for entry in precompiled.functions {
         // Allocate executable memory directly from code array
@@ -490,6 +501,13 @@ pub fn JITModule::load_with_imports(
             jit_module.by_name.set(entry.name, entry.func_idx)
             // Set function pointer in context's function table
             ctx.set_func(entry.func_idx, ec.ptr())
+            // Install per-function GC safepoint metadata (if present).
+            jit_module.gc_set_func_safepoints(
+              entry.func_idx,
+              entry.gc_safepoints,
+              entry.gc_stackmap_blob,
+            )
+            |> ignore
           }
           None =>
             raise FunctionCodeAllocationFailed(
@@ -499,12 +517,6 @@ pub fn JITModule::load_with_imports(
             )
         }
       }
-
-      // Store context in module
-      let context_ptr = ctx.ptr()
-      jit_module.context = Some(ctx)
-      jit_module.context_ptr = context_ptr
-      jit_module.debug_db = debug_db
 
       // Patch direct-call function address loads now that pointers are known.
       apply_func_addr_fixups(ctx, jit_module, precompiled)
@@ -840,6 +852,53 @@ pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
 }
 
 ///|
+fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
+  match ty {
+    @types.AnyRef
+    | @types.ExnRef
+    | @types.StructRef
+    | @types.ArrayRef
+    | @types.RefStruct(_)
+    | @types.RefNullStruct(_)
+    | @types.RefArray(_)
+    | @types.RefNullArray(_)
+    | @types.RefAny
+    | @types.RefEq
+    | @types.RefNullEq
+    | @types.RefI31
+    | @types.RefNullI31
+    | @types.RefStructAbs
+    | @types.RefArrayAbs
+    | @types.NullRef => true
+    _ => false
+  }
+}
+
+///|
+fn collect_gc_root_args(
+  args : Array[Int64],
+  param_types : Array[@types.ValueType],
+) -> Array[Int64] {
+  let roots : Array[Int64] = []
+  let upto = if args.length() < param_types.length() {
+    args.length()
+  } else {
+    param_types.length()
+  }
+  for i in 0..<upto {
+    let ty = param_types[i]
+    if !value_type_may_hold_gc_ref(ty) {
+      continue
+    }
+    let value = args[i]
+    if value > 0L && (value & 1L) == 0L {
+      roots.push(value)
+    }
+  }
+  roots
+}
+
+///|
 /// Call a function using the JIT context (for functions that need to call other functions)
 /// Returns Array[Int64] where each element corresponds to a return value:
 /// - For I32/I64: the value is directly in Int64
@@ -864,6 +923,10 @@ pub fn JITModule::call_with_context(
       }
       let results : Array[Int64] = Array::make(num_result_slots, 0L)
       let mut call_error : JITTrap? = None
+      let frame_roots = collect_gc_root_args(args, func.param_types)
+      self.gc_set_root_scratch(frame_roots) |> ignore
+      self.gc_use_func_safepoints(func.func_idx)
+      self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
         func.exec_code.ptr(),
         args,
@@ -873,6 +936,9 @@ pub fn JITModule::call_with_context(
       ) catch {
         e => call_error = Some(e)
       }
+      self.gc_end_frame()
+      self.gc_use_func_safepoints(-1)
+      self.gc_set_root_scratch([]) |> ignore
       self.flush_wasi_output(ctx)
       match call_error {
         Some(JITTrap(msg)) => {
@@ -1232,6 +1298,87 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
   if self.context_ptr != 0L {
     @jit_ffi.c_jit_ctx_set_gc_heap(self.context_ptr, heap_ptr)
+  }
+}
+
+///|
+/// Push a GC frame node in current JIT context.
+pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_begin_frame(self.context_ptr, frame_id)
+  }
+}
+
+///|
+/// Pop a GC frame node in current JIT context.
+pub fn JITModule::gc_end_frame(self : JITModule) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_end_frame(self.context_ptr)
+  }
+}
+
+///|
+/// Set context-local scratch roots for allocation retry collections.
+pub fn JITModule::gc_set_root_scratch(
+  self : JITModule,
+  roots : Array[Int64],
+) -> Bool {
+  if self.context_ptr == 0L {
+    return false
+  }
+  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
+  @jit_ffi.c_jit_gc_set_root_scratch(
+    self.context_ptr,
+    raw_roots,
+    roots.length(),
+  ) ==
+  1
+}
+
+///|
+/// Set safepoint metadata table pointer for current context.
+pub fn JITModule::gc_set_safepoint_table(
+  self : JITModule,
+  table_ptr : Int64,
+) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_set_safepoint_table(self.context_ptr, table_ptr)
+  }
+}
+
+///|
+/// Install a function's GC safepoint table into context-owned storage.
+pub fn JITModule::gc_set_func_safepoints(
+  self : JITModule,
+  func_idx : Int,
+  safepoints : Array[@vcode.GcSafepoint],
+  stackmap_blob : Bytes,
+) -> Bool {
+  if self.context_ptr == 0L {
+    return false
+  }
+  let offsets = FixedArray::makei(safepoints.length(), fn(i) {
+    safepoints[i].code_offset
+  })
+  @jit_ffi.c_jit_gc_set_func_safepoints(
+    self.context_ptr,
+    func_idx,
+    stackmap_blob,
+    stackmap_blob.length(),
+    offsets,
+    safepoints.length(),
+  ) ==
+  1
+}
+
+///|
+/// Select currently active function safepoint table (`func_idx < 0` clears).
+pub fn JITModule::gc_use_func_safepoints(
+  self : JITModule,
+  func_idx : Int,
+) -> Unit {
+  if self.context_ptr != 0L {
+    @jit_ffi.c_jit_gc_use_func_safepoints(self.context_ptr, func_idx)
   }
 }
 

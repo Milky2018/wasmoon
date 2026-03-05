@@ -304,3 +304,25 @@ test "gc jit: ref.func + struct.new with deep live stack values" {
   let result = compare_jit_interp(source, "test", [])
   inspect(result, content="matched")
 }
+
+///|
+test "gc jit: nested call restores caller safepoint table" {
+  let source =
+    #|(module
+    #|  (type $box (struct (field i32)))
+    #|  (type $arr (array (ref $box)))
+    #|  (func $callee
+    #|    (drop (struct.new_default $box))
+    #|  )
+    #|  (func (export "test") (result i32)
+    #|    (local $x (ref $box))
+    #|    (call $callee)
+    #|    (local.set $x (struct.new $box (i32.const 42)))
+    #|    (array.len
+    #|      (array.new $arr (local.get $x) (i32.const 1))
+    #|    )
+    #|  )
+    #|)
+  let result = compare_jit_interp(source, "test", [])
+  inspect(result, content="matched")
+}

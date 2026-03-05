@@ -3,4 +3,5 @@ import {
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/jit/jit_ffi",
   "Milky2018/wasmoon/logger",
+  "moonbitlang/x/sys",
 }

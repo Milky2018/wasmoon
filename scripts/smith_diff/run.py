@@ -71,6 +71,7 @@ def _run(
         "uninitialized element",
         "indirect call type mismatch",
         "null reference",
+        "unaligned atomic",
     ]
 
     parse_markers = [

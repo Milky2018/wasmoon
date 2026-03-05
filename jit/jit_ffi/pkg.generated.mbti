@@ -40,7 +40,11 @@ pub fn c_gc_heap_array_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_collect(Int64, FixedArray[Int64], Int) -> Int
 
+pub fn c_gc_heap_debug_set_fail_alloc(Int, Int) -> Unit
+
 pub fn c_gc_heap_free(Int64) -> Unit
+
+pub fn c_gc_heap_get_barrier_writes(Int64) -> Int
 
 pub fn c_gc_heap_get_base(Int64) -> Int64
 
@@ -73,6 +77,8 @@ pub fn c_gc_heap_struct_get(Int64, Int, Int) -> Int64
 pub fn c_gc_heap_struct_set(Int64, Int, Int, Int64) -> Unit
 
 pub fn c_gc_heap_sweep(Int64) -> Int
+
+pub fn c_gc_heap_verify(Int64, Int) -> Int
 
 pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
 
@@ -174,9 +180,15 @@ pub fn c_jit_free_shared_indirect_table(Int64) -> Unit
 
 pub fn c_jit_free_wasi_fds(Int64) -> Unit
 
+pub fn c_jit_gc_begin_frame(Int64, Int64) -> Unit
+
 pub fn c_jit_gc_clear_cache(Int64) -> Unit
 
 pub fn c_jit_gc_clear_heap(Int64) -> Unit
+
+pub fn c_jit_gc_collect_for_alloc(Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_jit_gc_end_frame(Int64) -> Unit
 
 pub fn c_jit_gc_enter_critical() -> Unit
 
@@ -186,13 +198,21 @@ pub fn c_jit_gc_leave_critical() -> Unit
 
 pub fn c_jit_gc_set_canonical_indices(Int64, FixedArray[Int], Int) -> Unit
 
+pub fn c_jit_gc_set_func_safepoints(Int64, Int, Bytes, Int, FixedArray[Int], Int) -> Int
+
 pub fn c_jit_gc_set_func_table(Int64, Int64, Int) -> Unit
 
 pub fn c_jit_gc_set_func_type_indices(Int64, FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_gc_set_heap(Int64, Int64) -> Unit
 
+pub fn c_jit_gc_set_root_scratch(Int64, FixedArray[Int64], Int) -> Int
+
+pub fn c_jit_gc_set_safepoint_table(Int64, Int64) -> Unit
+
 pub fn c_jit_gc_set_type_cache(Int64, FixedArray[Int], Int) -> Unit
+
+pub fn c_jit_gc_use_func_safepoints(Int64, Int) -> Unit
 
 pub fn c_jit_get_args_get_ptr() -> Int64
 

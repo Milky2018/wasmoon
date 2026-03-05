@@ -11,13 +11,34 @@
 // instance context (jit_context_t). JIT code never directly accesses these
 // fields; only libcalls do.
 
+static int table_debug_cached = -1;
+
+static int table_debug_enabled(void) {
+    if (table_debug_cached < 0) {
+        const char *v = getenv("WASMOON_TABLE_DEBUG");
+        table_debug_cached = (
+            v &&
+            (
+                strcmp(v, "1") == 0 ||
+                strcmp(v, "true") == 0 ||
+                strcmp(v, "TRUE") == 0 ||
+                strcmp(v, "yes") == 0 ||
+                strcmp(v, "YES") == 0 ||
+                strcmp(v, "on") == 0 ||
+                strcmp(v, "ON") == 0
+            )
+        ) ? 1 : 0;
+    }
+    return table_debug_cached;
+}
+
 static void free_data_segments(jit_context_t *ctx) {
     if (!ctx) return;
 
     if (ctx->data_segments) {
         for (int i = 0; i < ctx->data_segment_count; i++) {
             if (ctx->data_segments[i]) {
-                moonbit_decref(ctx->data_segments[i]);
+                free(ctx->data_segments[i]);
             }
         }
         free(ctx->data_segments);
@@ -34,7 +55,7 @@ static void free_elem_segments(jit_context_t *ctx) {
     if (ctx->elem_segments) {
         for (int i = 0; i < ctx->elem_segment_count; i++) {
             if (ctx->elem_segments[i]) {
-                moonbit_decref(ctx->elem_segments[i]);
+                free(ctx->elem_segments[i]);
             }
         }
         free(ctx->elem_segments);
@@ -58,7 +79,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_data_segments(int64_t ctx_ptr, int 
     ctx->data_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
 }
 
-// data: owned MoonBit FixedArray[Byte] payload pointer (may be NULL when size==0).
+// data: borrowed MoonBit FixedArray[Byte] payload pointer (may be NULL when size==0).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
     int64_t ctx_ptr,
     int idx,
@@ -68,16 +89,28 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_data_segment(
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx || !ctx->data_segments || idx < 0 || idx >= ctx->data_segment_count) {
-        if (data) moonbit_decref(data);
         return;
     }
 
     if (ctx->data_segments[idx]) {
-        moonbit_decref(ctx->data_segments[idx]);
+        free(ctx->data_segments[idx]);
+        ctx->data_segments[idx] = NULL;
     }
 
-    ctx->data_segments[idx] = data;
-    ctx->data_segment_sizes[idx] = (size_t)size;
+    size_t copy_size = size > 0 ? (size_t)size : 0;
+    if (copy_size > 0) {
+        uint8_t *copy = (uint8_t *)malloc(copy_size);
+        if (!copy) {
+            ctx->data_segment_sizes[idx] = 0;
+            ctx->data_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        memcpy(copy, data, copy_size);
+        ctx->data_segments[idx] = copy;
+        ctx->data_segment_sizes[idx] = copy_size;
+    } else {
+        ctx->data_segment_sizes[idx] = 0;
+    }
     ctx->data_dropped[idx] = is_dropped ? 1 : 0;
 }
 
@@ -94,7 +127,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_init_elem_segments(int64_t ctx_ptr, int 
     ctx->elem_dropped = (uint8_t *)calloc(count, sizeof(uint8_t));
 }
 
-// data: owned MoonBit FixedArray[Int64] payload pointer storing pairs (value,type_idx).
+// data: borrowed MoonBit FixedArray[Int64] payload pointer storing pairs (value,type_idx).
 MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
     int64_t ctx_ptr,
     int idx,
@@ -104,16 +137,35 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_add_elem_segment(
 ) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     if (!ctx || !ctx->elem_segments || idx < 0 || idx >= ctx->elem_segment_count) {
-        if (data) moonbit_decref(data);
         return;
     }
 
     if (ctx->elem_segments[idx]) {
-        moonbit_decref(ctx->elem_segments[idx]);
+        free(ctx->elem_segments[idx]);
+        ctx->elem_segments[idx] = NULL;
     }
 
-    ctx->elem_segments[idx] = data;
-    ctx->elem_segment_sizes[idx] = (size_t)size;
+    int64_t nelems = size > 0 ? (int64_t)size : 0;
+    int64_t nslots = nelems * 2;
+    if (nslots > 0) {
+        if ((uint64_t)nslots > (uint64_t)(SIZE_MAX / sizeof(int64_t))) {
+            ctx->elem_segment_sizes[idx] = 0;
+            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        size_t copy_bytes = (size_t)nslots * sizeof(int64_t);
+        int64_t *copy = (int64_t *)malloc(copy_bytes);
+        if (!copy) {
+            ctx->elem_segment_sizes[idx] = 0;
+            ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
+            return;
+        }
+        memcpy(copy, data, copy_bytes);
+        ctx->elem_segments[idx] = copy;
+        ctx->elem_segment_sizes[idx] = (size_t)nelems;
+    } else {
+        ctx->elem_segment_sizes[idx] = 0;
+    }
     ctx->elem_dropped[idx] = is_dropped ? 1 : 0;
 }
 
@@ -272,6 +324,17 @@ static void table_fill_impl(
     if (dst < 0 || len < 0 ||
         (uint64_t)table_size < (uint64_t)dst ||
         (uint64_t)table_size - (uint64_t)dst < (uint64_t)len) {
+        if (table_debug_enabled()) {
+            fprintf(
+                stderr,
+                "[TABLE FILL] trap table=%d dst=%lld len=%lld size=%zu val=%lld\n",
+                (int)table_idx,
+                (long long)dst,
+                (long long)len,
+                table_size,
+                (long long)val
+            );
+        }
         g_trap_code = 1;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return;
@@ -314,6 +377,24 @@ static void table_fill_impl(
         int64_t idx = (dst + i) * 2;
         table[idx] = (void *)(uintptr_t)val;               // value bits
         table[idx + 1] = (void *)(intptr_t)type_idx;       // type idx for funcref, -1 otherwise
+    }
+
+    if (table_debug_enabled() && table_idx == 0) {
+        int64_t max_dump = table_size < 6 ? (int64_t)table_size : 6;
+        fprintf(
+            stderr,
+            "[TABLE FILL] ok dst=%lld len=%lld val=%lld type=%lld size=%zu\n",
+            (long long)dst,
+            (long long)len,
+            (long long)val,
+            (long long)type_idx,
+            table_size
+        );
+        for (int64_t i = 0; i < max_dump; i++) {
+            int64_t raw = (int64_t)(uintptr_t)table[i * 2];
+            int64_t ty = (int64_t)(intptr_t)table[i * 2 + 1];
+            fprintf(stderr, "[TABLE FILL] table0[%lld]={raw=%lld,type=%lld}\n", (long long)i, (long long)raw, (long long)ty);
+        }
     }
 }
 
@@ -631,7 +712,7 @@ static int64_t gc_array_new_data_impl(
 
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
-        g_trap_code = 3;
+        g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }
@@ -699,7 +780,7 @@ static int64_t gc_array_new_elem_impl(
 
     int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, (int32_t)len_u32, 0);
     if (gc_ref == 0) {
-        g_trap_code = 3;
+        g_trap_code = 9;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 0;
     }

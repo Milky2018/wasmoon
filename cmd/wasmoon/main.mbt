@@ -9,6 +9,7 @@ fn main {
   let config_action_choices = @hashset.HashSet::from_array([
     "show", "path", "init",
   ])
+  let error_format_choices = @hashset.HashSet::from_array(["text", "json"])
   let parser = @clap.Parser::new(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
@@ -76,12 +77,22 @@ fn main {
           "no-wit-names": @clap.Arg::flag(
             help="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
           ),
+          "error-format": @clap.Arg::named(
+            nargs=AtMost(1),
+            choices=error_format_choices,
+            help="Component command output format: text (default) or json",
+          ),
         },
       ),
       "component-test": @clap.SubCommand::new(
         help="Run component-model test script (JSON)",
         args={
           "file": @clap.Arg::positional(help="Path to component test script"),
+          "error-format": @clap.Arg::named(
+            nargs=AtMost(1),
+            choices=error_format_choices,
+            help="component-test output format: text (default) or json",
+          ),
         },
       ),
       "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
@@ -237,12 +248,25 @@ fn main {
                   Some(true) => false
                   _ => true
                 }
-                @commands.run_component_command(
+                let error_format = match sub.args.get("error-format") {
+                  Some(arr) =>
+                    if arr.length() > 0 && arr[0] == "json" {
+                      @commands.ComponentErrorFormat::Json
+                    } else {
+                      @commands.ComponentErrorFormat::Text
+                    }
+                  None => @commands.ComponentErrorFormat::Text
+                }
+                let status = @commands.run_component_command(
                   positional[0],
                   dump,
                   validate,
                   wit_names,
+                  error_format,
                 )
+                if status != 0 {
+                  @sys.exit(status)
+                }
               } else {
                 println("Error: missing file argument")
               }
@@ -250,7 +274,22 @@ fn main {
             "component-test" => {
               let positional = sub.positional_args
               if positional.length() > 0 {
-                @commands.run_component_script(positional[0])
+                let error_format = match sub.args.get("error-format") {
+                  Some(arr) =>
+                    if arr.length() > 0 && arr[0] == "json" {
+                      @commands.ComponentErrorFormat::Json
+                    } else {
+                      @commands.ComponentErrorFormat::Text
+                    }
+                  None => @commands.ComponentErrorFormat::Text
+                }
+                let status = @commands.run_component_script(
+                  positional[0],
+                  error_format,
+                )
+                if status != 0 {
+                  @sys.exit(status)
+                }
               } else {
                 println("Error: missing file argument")
               }

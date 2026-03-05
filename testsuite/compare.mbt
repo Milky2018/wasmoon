@@ -73,6 +73,11 @@ struct CompareResult {
 }
 
 ///|
+pub fn compare_result_is_match(result : CompareResult) -> Bool {
+  result.match_
+}
+
+///|
 pub impl Show for CompareResult with output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
@@ -387,7 +392,7 @@ pub fn run_jit(
       let allocated_func = @regalloc.allocate_registers_backtracking(vcode)
 
       // Emit machine code
-      let mc = @emit.emit_function(allocated_func)
+      let mc = @emit.emit_function(allocated_func, debug_func_idx=Some(f_idx))
 
       // Add to precompiled module
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)

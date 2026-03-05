@@ -50,9 +50,21 @@ pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit
 
+pub fn gc_begin_frame(Int64, Int64) -> Unit
+
 pub fn gc_clear_heap(Int64) -> Unit
 
+pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
+
+pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
+
+pub fn gc_end_frame(Int64) -> Unit
+
 pub fn gc_set_heap(Int64, CHeap) -> Unit
+
+pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
+
+pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
 
 pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
 
@@ -236,6 +248,7 @@ pub fn value_to_i64(@types.Value) -> Int64
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
+  OutOfMemory
 }
 
 pub suberror GCSetupError {
@@ -280,9 +293,9 @@ pub struct BacktraceFrame {
 pub struct CHeap {
   ptr : Int64
 }
-pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int
-pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int
-pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
+pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
+pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
+pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
 pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
 pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
 pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
@@ -290,6 +303,7 @@ pub fn CHeap::array_len(Self, Int) -> Int
 pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
 pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
 pub fn CHeap::free(Self) -> Unit
+pub fn CHeap::get_barrier_writes(Self) -> Int
 pub fn CHeap::get_base(Self) -> Int64
 pub fn CHeap::get_capacity(Self) -> Int64
 pub fn CHeap::get_kind(Self, Int) -> Int
@@ -308,6 +322,7 @@ pub fn CHeap::new(capacity? : Int) -> Self
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
+pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
 pub impl Show for CHeap
 
 pub(all) struct CallCounter {
@@ -481,6 +496,12 @@ pub fn JITModule::clear_segments(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
+pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
+pub fn JITModule::gc_end_frame(Self) -> Unit
+pub fn JITModule::gc_set_func_safepoints(Self, Int, Array[@vcode.GcSafepoint], Bytes) -> Bool
+pub fn JITModule::gc_set_root_scratch(Self, Array[Int64]) -> Bool
+pub fn JITModule::gc_set_safepoint_table(Self, Int64) -> Unit
+pub fn JITModule::gc_use_func_safepoints(Self, Int) -> Unit
 pub fn JITModule::get_context_ptr(Self) -> Int64
 pub fn JITModule::get_func(Self, Int) -> JITFunction?
 pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?

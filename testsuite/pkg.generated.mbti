@@ -12,6 +12,8 @@ import {
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
 
+pub fn compare_result_is_match(CompareResult) -> Bool
+
 pub fn current_target_arch() -> @cwasm.TargetArch
 
 pub fn init_elem_segments(@types.Module, @jit.JITModule, Array[@runtime.GlobalInstance]) -> Unit

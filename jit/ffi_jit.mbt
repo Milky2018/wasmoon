@@ -71,6 +71,8 @@ pub fn get_last_trap_details() -> TrapDetails {
 /// 6 = integer divide by zero
 /// 7 = integer overflow
 /// 8 = backend/unknown JIT trap site
+/// 9 = out of memory
+/// 10 = gc precise roots unavailable
 /// 99 = unknown trap
 pub fn check_trap() -> Unit raise JITTrap {
   let code = @jit_ffi.c_jit_get_trap_code()
@@ -85,6 +87,8 @@ pub fn check_trap() -> Unit raise JITTrap {
       6 => "integer divide by zero"
       7 => "integer overflow"
       8 => "jit backend trap"
+      9 => "out of memory"
+      10 => "gc precise roots unavailable"
       _ => "unknown trap"
     }
     raise JITTrap(msg)
@@ -1215,6 +1219,8 @@ fn JITContext::call_multi_return(
       6 => "integer divide by zero"
       7 => "integer overflow"
       8 => "jit backend trap"
+      9 => "out of memory"
+      10 => "gc precise roots unavailable"
       _ => "unknown trap"
     }
     raise JITTrap(msg)

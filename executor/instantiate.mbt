@@ -21,6 +21,7 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.DivisionByZero => @runtime.DivisionByZero
     @runtime.IntegerOverflow => @runtime.IntegerOverflow
     @runtime.InvalidConversion => @runtime.InvalidConversion
+    @runtime.OutOfMemory => @runtime.OutOfMemory
     @runtime.Unreachable => @runtime.Unreachable
     @runtime.CallStackExhausted => @runtime.CallStackExhausted
     @runtime.UnknownImport(_, _) as err => err

@@ -3,6 +3,7 @@
 // Implements struct.new/get/set, array.new/get/set/len/fill/copy
 
 #include "jit_internal.h"
+#include "gc_allocator.h"
 
 // ============ Value Decoding Helpers ============
 
@@ -44,6 +45,242 @@ static void trap_unreachable_void(void) {
     }
 }
 
+static int64_t trap_out_of_memory_i64(void) {
+    g_trap_code = 9;
+    if (g_trap_active) {
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
+static int64_t trap_gc_precise_roots_i64(void) {
+    g_trap_code = 10;
+    if (g_trap_active) {
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
+static int gc_alloc_debug_cached = -1;
+
+static int gc_is_truthy_env(const char *value) {
+    if (!value) return 0;
+    return strcmp(value, "1") == 0 ||
+           strcmp(value, "true") == 0 ||
+           strcmp(value, "TRUE") == 0 ||
+           strcmp(value, "yes") == 0 ||
+           strcmp(value, "YES") == 0 ||
+           strcmp(value, "on") == 0 ||
+           strcmp(value, "ON") == 0;
+}
+
+static int gc_alloc_debug_enabled(void) {
+    if (gc_alloc_debug_cached < 0) {
+        gc_alloc_debug_cached = gc_is_truthy_env(getenv("WASMOON_GC_ALLOC_DEBUG")) ? 1 : 0;
+    }
+    return gc_alloc_debug_cached;
+}
+
+static void gc_log_alloc_retry(const char *op, const gc_alloc_result_t *result) {
+    if (!gc_alloc_debug_enabled() || !result) {
+        return;
+    }
+    if (result->retry_count <= 0) {
+        return;
+    }
+    fprintf(
+        stderr,
+        "[GC ALLOC] %s retries=%d collected=%d\n",
+        op,
+        result->retry_count,
+        result->collected_objects
+    );
+}
+
+static uint32_t gc_read_u32_le(const uint8_t *ptr) {
+    return ((uint32_t)ptr[0]) |
+           ((uint32_t)ptr[1] << 8) |
+           ((uint32_t)ptr[2] << 16) |
+           ((uint32_t)ptr[3] << 24);
+}
+
+static const wasmoon_gc_safepoint_table_t *gc_func_safepoint_table_for_current(
+    jit_context_t *ctx
+) {
+    if (!ctx || !ctx->gc_func_safepoint_tables) {
+        return NULL;
+    }
+    int32_t func_idx = ctx->debug_current_func_idx;
+    if (func_idx < 0 || func_idx >= ctx->gc_func_safepoint_table_count) {
+        return NULL;
+    }
+    const wasmoon_gc_safepoint_table_t *table = &ctx->gc_func_safepoint_tables[func_idx];
+    if (!table->stackmap_blob || table->stackmap_blob_size < 8) {
+        return NULL;
+    }
+    return table;
+}
+
+static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context_t *ctx) {
+    if (!ctx) {
+        return NULL;
+    }
+    const wasmoon_gc_safepoint_table_t *table = gc_func_safepoint_table_for_current(ctx);
+    if (table) {
+        return table;
+    }
+    table = ctx->gc_safepoint_table;
+    if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
+        table = ctx->gc_frame_chain_head->table;
+    }
+    return table;
+}
+
+static int gc_alloc_debug_enabled(void);
+
+static int32_t gc_clamp_root_count(int32_t root_count, int32_t fallback) {
+    if (root_count <= 0) {
+        return 0;
+    }
+    if (fallback <= 0) {
+        return 0;
+    }
+    if (root_count > fallback) {
+        return fallback;
+    }
+    return root_count;
+}
+
+static int gc_requires_precise_roots(int32_t safepoint_id) {
+    return safepoint_id >= 0;
+}
+
+static void gc_log_precise_root_failure(
+    const char *op,
+    int32_t safepoint_id,
+    const char *reason
+) {
+    if (!gc_alloc_debug_enabled()) {
+        return;
+    }
+    fprintf(
+        stderr,
+        "[GC ROOTS] %s safepoint=%d precise-root selection failed: %s\n",
+        op,
+        safepoint_id,
+        reason ? reason : "unknown"
+    );
+}
+
+static int32_t gc_select_alloc_roots(
+    const char *op,
+    jit_context_t *ctx,
+    int32_t safepoint_id,
+    const int64_t *roots,
+    int32_t fallback_root_count,
+    const int64_t **selected_roots_out,
+    int64_t **selected_roots_owned
+) {
+    if (selected_roots_out) {
+        *selected_roots_out = roots;
+    }
+    if (selected_roots_owned) {
+        *selected_roots_owned = NULL;
+    }
+    if (!roots || fallback_root_count <= 0) {
+        return 0;
+    }
+
+    int32_t root_count = gc_clamp_root_count(fallback_root_count, fallback_root_count);
+    if (!gc_requires_precise_roots(safepoint_id)) {
+        return root_count;
+    }
+    if (!ctx) {
+        gc_log_precise_root_failure(op, safepoint_id, "missing jit context");
+        return -1;
+    }
+    const wasmoon_gc_safepoint_table_t *table = gc_active_safepoint_table(ctx);
+    if (!table || !table->stackmap_blob || table->stackmap_blob_size < 8) {
+        gc_log_precise_root_failure(op, safepoint_id, "missing safepoint table");
+        return -1;
+    }
+    const uint8_t *blob = table->stackmap_blob;
+    uint32_t version = gc_read_u32_le(blob);
+    if (version != 2u) {
+        gc_log_precise_root_failure(op, safepoint_id, "stackmap v2 required");
+        return -1;
+    }
+    uint32_t count = gc_read_u32_le(blob + 4);
+    if ((uint32_t)safepoint_id >= count) {
+        gc_log_precise_root_failure(op, safepoint_id, "safepoint id out of range");
+        return -1;
+    }
+
+    size_t offset = 8u;
+    for (uint32_t i = 0; i < count; i++) {
+        if (offset + 8u > table->stackmap_blob_size) {
+            gc_log_precise_root_failure(op, safepoint_id, "truncated stackmap header");
+            return -1;
+        }
+        uint32_t encoded_root_count = gc_read_u32_le(blob + offset);
+        uint32_t index_count = gc_read_u32_le(blob + offset + 4u);
+        offset += 8u;
+        size_t index_bytes = (size_t)index_count * 4u;
+        if (offset + index_bytes > table->stackmap_blob_size) {
+            gc_log_precise_root_failure(op, safepoint_id, "truncated stackmap index list");
+            return -1;
+        }
+        if (i != (uint32_t)safepoint_id) {
+            offset += index_bytes;
+            continue;
+        }
+
+        int32_t encoded_clamped = gc_clamp_root_count((int32_t)encoded_root_count, fallback_root_count);
+        if (encoded_clamped > 0) {
+            root_count = encoded_clamped;
+        } else {
+            return 0;
+        }
+        if (index_count == 0u) {
+            gc_log_precise_root_failure(op, safepoint_id, "missing root indices");
+            return -1;
+        }
+        if (index_count < (uint32_t)root_count) {
+            gc_log_precise_root_failure(op, safepoint_id, "root index count too small");
+            return -1;
+        }
+        int64_t *selected = (int64_t *)malloc((size_t)root_count * sizeof(int64_t));
+        if (!selected) {
+            gc_log_precise_root_failure(op, safepoint_id, "out of memory while selecting roots");
+            return -1;
+        }
+        int invalid_index = 0;
+        for (int32_t j = 0; j < root_count; j++) {
+            uint32_t root_idx = gc_read_u32_le(blob + offset + ((size_t)j * 4u));
+            if (root_idx < (uint32_t)fallback_root_count) {
+                selected[j] = roots[root_idx];
+            } else {
+                invalid_index = 1;
+                break;
+            }
+        }
+        if (invalid_index) {
+            free(selected);
+            gc_log_precise_root_failure(op, safepoint_id, "root index out of bounds");
+            return -1;
+        }
+        if (selected_roots_out) {
+            *selected_roots_out = selected;
+        }
+        if (selected_roots_owned) {
+            *selected_roots_owned = selected;
+        }
+        return root_count;
+    }
+    gc_log_precise_root_failure(op, safepoint_id, "safepoint entry not found");
+    return -1;
+}
+
 // ============ Struct Operations ============
 
 int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields) {
@@ -72,15 +309,23 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
             if (!default_fields) {
-                return trap_unreachable_i64();
+                return trap_out_of_memory_i64();
             }
             actual_fields = default_fields;
         }
     }
 
-    // Allocate struct and return encoded reference
-    // gc_heap uses 1-based gc_ref, JIT uses (gc_ref << 1) encoding
-    int32_t gc_ref = gc_heap_alloc_struct(heap, type_idx, actual_fields, actual_num_fields);
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_struct_with_retry(
+        ctx,
+        heap,
+        type_idx,
+        actual_fields,
+        actual_num_fields,
+        actual_fields,
+        actual_num_fields,
+        &alloc_result
+    );
 
     // Free temporary default fields buffer
     if (default_fields) {
@@ -88,7 +333,14 @@ int64_t gc_struct_new_impl(int32_t type_idx, int64_t *fields, int32_t num_fields
     }
 
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("struct.new", &alloc_result);
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
     }
 
     // Encode for JIT: gc_ref << 1 (1-based gc_ref stays 1-based, just shifted)
@@ -137,14 +389,33 @@ void gc_struct_set_impl(int64_t ref, int32_t type_idx, int32_t field_idx, int64_
 // ============ Array Operations ============
 
 int64_t gc_array_new_impl(int32_t type_idx, int32_t len, int64_t fill) {
-    GcHeap *heap = resolve_heap(NULL);
+    jit_context_t *ctx = resolve_ctx(NULL);
+    GcHeap *heap = resolve_heap(ctx);
     if (!heap) {
         return trap_unreachable_i64();
     }
 
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, fill);
+    int64_t roots_buf[1] = { fill };
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_with_retry(
+        ctx,
+        heap,
+        type_idx,
+        len,
+        fill,
+        roots_buf,
+        1,
+        &alloc_result
+    );
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("array.new", &alloc_result);
+
+    if (ctx) {
+        ctx->gc_heap = heap;
+        ctx->gc_heap_ptr = heap->data + heap->size;
+        ctx->gc_heap_limit = heap->data + heap->capacity;
     }
 
     // Encode: gc_ref << 1 (1-based gc_ref, ensures gc_ref=1 -> value=2)
@@ -322,7 +593,7 @@ int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t 
         int32_t *new_table =
             (int32_t *)realloc(heap->object_table, (size_t)new_capacity * sizeof(int32_t));
         if (!new_table) {
-            return trap_unreachable_i64();
+            return trap_out_of_memory_i64();
         }
         heap->object_table = new_table;
         heap->object_capacity = new_capacity;
@@ -344,7 +615,13 @@ int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t 
 
 // Slow path for struct allocation - called when inline check fails
 // Triggers GC if needed, grows heap, and allocates
-int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fields, int32_t num_fields) {
+int64_t gc_alloc_struct_slow(
+    jit_context_t *ctx,
+    int32_t type_idx,
+    int64_t *fields,
+    int32_t num_fields,
+    int32_t safepoint_id
+) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
@@ -371,14 +648,47 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
             // Allocate and zero-initialize default fields
             default_fields = (int64_t *)calloc((size_t)actual_num_fields, sizeof(int64_t));
             if (!default_fields) {
-                return trap_unreachable_i64();
+                return trap_out_of_memory_i64();
             }
             actual_fields = default_fields;
         }
     }
 
-    // Try to allocate (this will grow heap if needed)
-    int32_t gc_ref = gc_heap_alloc_struct(heap, type_idx, actual_fields, actual_num_fields);
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_struct_slow",
+        actual_ctx,
+        safepoint_id,
+        fields,
+        num_fields,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        if (default_fields) {
+            free(default_fields);
+        }
+        return trap_gc_precise_roots_i64();
+    }
+
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_struct_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        actual_fields,
+        actual_num_fields,
+        alloc_roots,
+        alloc_root_count,
+        &alloc_result
+    );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
 
     // Free temporary default fields buffer
     if (default_fields) {
@@ -386,8 +696,9 @@ int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fiel
     }
 
     if (gc_ref == 0) {
-        return trap_unreachable_i64();
+        return trap_out_of_memory_i64();
     }
+    gc_log_alloc_retry("alloc_struct_slow", &alloc_result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -407,18 +718,75 @@ int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t t
 }
 
 // Slow path for array allocation
-int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, int64_t init_value) {
+int64_t gc_alloc_array_slow(
+    jit_context_t *ctx,
+    int32_t type_idx,
+    int32_t len,
+    int64_t init_value,
+    int32_t safepoint_id
+) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
     if (!heap) {
         return trap_unreachable_i64();
     }
 
-    // Try to allocate (this will grow heap if needed)
-    int32_t gc_ref = gc_heap_alloc_array(heap, type_idx, len, init_value);
-    if (gc_ref == 0) {
-        return trap_unreachable_i64();
+    if (gc_alloc_debug_enabled()) {
+        fprintf(
+            stderr,
+            "[GC ALLOC] alloc_array_slow enter type=%d len=%d init=%lld safepoint=%d ctx=%p actual_ctx=%p\n",
+            type_idx,
+            len,
+            (long long)init_value,
+            safepoint_id,
+            (void *)ctx,
+            (void *)actual_ctx
+        );
     }
+
+    int64_t roots_buf[1] = { init_value };
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_array_slow",
+        actual_ctx,
+        safepoint_id,
+        roots_buf,
+        1,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        if (gc_alloc_debug_enabled()) {
+            fprintf(stderr, "[GC ALLOC] alloc_array_slow precise roots unavailable\n");
+        }
+        return trap_gc_precise_roots_i64();
+    }
+
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        len,
+        init_value,
+        alloc_roots,
+        alloc_root_count,
+        &alloc_result
+    );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
+    if (gc_ref == 0) {
+        if (gc_alloc_debug_enabled()) {
+            fprintf(stderr, "[GC ALLOC] alloc_array_slow failed after retries\n");
+        }
+        return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("alloc_array_slow", &alloc_result);
 
     // Update VMContext heap pointers if ctx is available (heap may have grown)
     if (actual_ctx) {
@@ -436,7 +804,8 @@ int64_t gc_alloc_array_from_values_slow(
     jit_context_t *ctx,
     int32_t type_idx,
     int64_t *values,
-    int32_t len
+    int32_t len,
+    int32_t safepoint_id
 ) {
     jit_context_t *actual_ctx = resolve_ctx(ctx);
     GcHeap *heap = resolve_heap(actual_ctx);
@@ -444,10 +813,42 @@ int64_t gc_alloc_array_from_values_slow(
         return trap_unreachable_i64();
     }
 
-    int32_t gc_ref = gc_heap_alloc_array_from_values(heap, type_idx, values, len);
-    if (gc_ref == 0) {
-        return trap_unreachable_i64();
+    const int64_t *alloc_roots = NULL;
+    int64_t *alloc_roots_owned = NULL;
+    int32_t alloc_root_count = gc_select_alloc_roots(
+        "alloc_array_from_values_slow",
+        actual_ctx,
+        safepoint_id,
+        values,
+        len,
+        &alloc_roots,
+        &alloc_roots_owned
+    );
+    if (alloc_root_count < 0) {
+        if (alloc_roots_owned) {
+            free(alloc_roots_owned);
+        }
+        return trap_gc_precise_roots_i64();
     }
+
+    gc_alloc_result_t alloc_result = {0};
+    int32_t gc_ref = gc_alloc_array_from_values_with_retry(
+        actual_ctx,
+        heap,
+        type_idx,
+        values,
+        len,
+        alloc_roots,
+        alloc_root_count,
+        &alloc_result
+    );
+    if (alloc_roots_owned) {
+        free(alloc_roots_owned);
+    }
+    if (gc_ref == 0) {
+        return trap_out_of_memory_i64();
+    }
+    gc_log_alloc_retry("alloc_array_from_values_slow", &alloc_result);
 
     if (actual_ctx) {
         actual_ctx->gc_heap = heap;

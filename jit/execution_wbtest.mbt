@@ -29,6 +29,22 @@ test "exec code allocation scales beyond 1024 blocks" {
 }
 
 ///|
+test "collect_gc_root_args filters non-gc values" {
+  let args = [2L, 3L, 8L, 10L, 12L]
+  let param_types = [
+    @types.RefStruct(0),
+    @types.RefStruct(1),
+    @types.I64,
+    @types.RefArray(2),
+    @types.FuncRef,
+  ]
+  let roots = collect_gc_root_args(args, param_types)
+  inspect(roots.length(), content="2")
+  inspect(roots[0], content="2")
+  inspect(roots[1], content="10")
+}
+
+///|
 test "trap report: structured data available after jit trap" {
   let builder = @ir.IRBuilder::new("trap_div")
   let _vmctx = builder.add_param(@ir.Type::I64)

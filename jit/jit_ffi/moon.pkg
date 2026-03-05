@@ -8,6 +8,7 @@ options(
     "segment_ops.c",
     "gc_type_cache.c",
     "gc_ops.c",
+    "gc_allocator.c",
     "gc_heap.c",
     "exception.c",
     "wasi.c",

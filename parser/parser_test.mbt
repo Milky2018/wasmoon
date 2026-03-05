@@ -264,3 +264,17 @@ test "binary parse gc: rec group allows forward type refs" {
   }
   inspect(ok1, content="true")
 }
+
+///|
+test "binary parse tag section before global section" {
+  let type_section : FixedArray[Int] = [0x01, 0x04, 0x01, 0x60, 0x00, 0x00]
+  let tag_section : FixedArray[Int] = [0x0d, 0x03, 0x01, 0x00, 0x00]
+  let global_section : FixedArray[Int] = [
+    0x06, 0x06, 0x01, 0x7f, 0x00, 0x41, 0x00, 0x0b,
+  ]
+  guard parse_wasm([type_section, tag_section, global_section]) is Some(m) else {
+    return
+  }
+  inspect(m.tags.length(), content="1")
+  inspect(m.globals.length(), content="1")
+}

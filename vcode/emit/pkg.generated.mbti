@@ -108,10 +108,14 @@ pub struct MachineCode {
   x86_rel32_fixups : Array[X86Rel32Fixup]
   func_addr_fixups : Array[FuncAddrFixup]
   call_fixups : Array[CallFixup]
+  gc_safepoint_offsets : Array[Int]
+  gc_safepoint_root_counts : Array[Int]
+  gc_safepoint_root_indices : Array[Array[Int]]
   amd64_const_labels : Map[String, Int]
   amd64_const_entries : Array[Amd64ConstEntry]
   disasm : Array[(Int, String)]
   record_disasm : Bool
+  mut debug_prev_func_idx_spill_offset : Int
 }
 pub fn MachineCode::add_call_fixup(Self, Int, Int, veneer_offset? : Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
@@ -340,13 +344,18 @@ pub fn MachineCode::emit_uxth_x(Self, Int, Int) -> Unit
 pub fn MachineCode::get_bytes(Self) -> Array[Int]
 pub fn MachineCode::get_call_fixups(Self) -> Array[CallFixup]
 pub fn MachineCode::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
+pub fn MachineCode::get_gc_safepoint_offsets(Self) -> Array[Int]
+pub fn MachineCode::get_gc_safepoint_root_counts(Self) -> Array[Int]
+pub fn MachineCode::get_gc_safepoint_root_indices(Self) -> Array[Array[Int]]
 pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::intern_amd64_const(Self, Bytes, Int) -> Int
 pub fn MachineCode::intern_amd64_const_f32(Self, Int) -> Int
 pub fn MachineCode::intern_amd64_const_f64(Self, Int64) -> Int
 pub fn MachineCode::new(record_disasm? : Bool) -> Self
 pub fn MachineCode::new_internal_label(Self) -> Int
+pub fn MachineCode::record_gc_safepoint(Self, Int, root_count? : Int, root_indices? : Array[Int]) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit
+pub fn MachineCode::set_debug_prev_func_idx_spill_offset(Self, Int) -> Unit
 pub fn MachineCode::size(Self) -> Int
 pub fn MachineCode::x86_emit_add_r32_imm32(Self, Int, Int) -> Unit
 pub fn MachineCode::x86_emit_add_r32_imm8(Self, Int, Int) -> Unit

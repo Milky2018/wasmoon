@@ -11,9 +11,9 @@ pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress
 
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
-pub fn run_component_command(String, Bool, Bool, Bool) -> Unit
+pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> Int
 
-pub fn run_component_script(String) -> Unit
+pub fn run_component_script(String, ComponentErrorFormat) -> Int
 
 pub fn run_config(String) -> Unit
 
@@ -61,6 +61,31 @@ pub(all) enum CompileStage {
   Failed
 }
 pub impl Show for CompileStage
+
+pub(all) enum ComponentErrorCode {
+  CompFileNotFound
+  CompParseError
+  CompValidateError
+  CompUnsupported
+}
+pub impl Eq for ComponentErrorCode
+pub impl Show for ComponentErrorCode
+
+pub(all) enum ComponentErrorFormat {
+  Text
+  Json
+}
+pub impl Eq for ComponentErrorFormat
+pub impl Show for ComponentErrorFormat
+
+pub(all) enum ComponentTestErrorCode {
+  CompTestScriptError
+  CompTestRuntimeError
+  CompTestAssertFailed
+  CompTestUnsupportedCommand
+}
+pub impl Eq for ComponentTestErrorCode
+pub impl Show for ComponentTestErrorCode
 
 // Type aliases
 

@@ -155,6 +155,7 @@ test "all RuntimeError types have descriptive messages" {
     @runtime.DivisionByZero,
     @runtime.IntegerOverflow,
     @runtime.InvalidConversion,
+    @runtime.OutOfMemory,
     @runtime.Unreachable,
     @runtime.CallStackExhausted,
     @runtime.UnknownImport("test_mod", "test_field"),

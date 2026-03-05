@@ -81,6 +81,7 @@ typedef struct GcHeap {
     // GC statistics
     int32_t total_allocations;
     int32_t total_collections;
+    int32_t barrier_writes;
 } GcHeap;
 
 // ============ Heap Lifecycle ============
@@ -202,6 +203,12 @@ void gc_heap_array_fill(GcHeap* heap, int32_t gc_ref, int32_t offset,
 void gc_heap_array_copy(GcHeap* heap, int32_t dst_ref, int32_t dst_offset,
                         int32_t src_ref, int32_t src_offset, int32_t count);
 
+/**
+ * Write barrier hook for reference stores.
+ * Current collector is non-generational; this is a debug hook/assertion point.
+ */
+void gc_heap_write_barrier(GcHeap* heap, int32_t owner_gc_ref, int64_t written_value);
+
 // ============ Type Information ============
 
 /**
@@ -261,6 +268,14 @@ int32_t gc_heap_sweep(GcHeap* heap);
  */
 int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots);
 
+/**
+ * Verify internal heap invariants and object graph integrity.
+ * @param heap The GC heap
+ * @param verbose Print diagnostics to stderr when verification fails
+ * @return 1 if valid, 0 if invariant violation detected
+ */
+int32_t gc_heap_verify(GcHeap* heap, int32_t verbose);
+
 // ============ Utilities ============
 
 /**
@@ -298,6 +313,11 @@ size_t gc_heap_get_capacity(GcHeap* heap);
  * @return Number of objects (including freed ones in object table)
  */
 int32_t gc_heap_get_object_count(GcHeap* heap);
+
+/**
+ * Get number of write-barrier calls recorded.
+ */
+int32_t gc_heap_get_barrier_writes(GcHeap* heap);
 
 /**
  * Get GC statistics

@@ -465,9 +465,15 @@ fn ExecContext::exec_memory_misc(
       let mem_addr = self.instance.mem_addrs[memidx]
       let mem = self.store.get_mem(mem_addr)
       if mem.is_memory64() {
-        let delta = self.stack.pop_i64().to_int()
-        let result = mem.grow(delta)
-        self.stack.push(I64(result.to_int64()))
+        let delta = self.stack.pop_i64()
+        // Runtime memory grow ABI accepts at most i32 page counts today.
+        // For memory64, reject values that cannot be represented losslessly.
+        if delta < 0L || delta > 0x7FFF_FFFFL {
+          self.stack.push(I64(-1L))
+        } else {
+          let result = mem.grow(delta.to_int())
+          self.stack.push(I64(result.to_int64()))
+        }
       } else {
         let delta = self.stack.pop_i32()
         let result = mem.grow(delta)

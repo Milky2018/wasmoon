@@ -29,8 +29,10 @@ pub(all) struct CompiledEntry {
   num_results : Int
   func_addr_fixups : Array[@emit.FuncAddrFixup]
   call_fixups : Array[@emit.CallFixup]
+  gc_safepoints : Array[@vcode.GcSafepoint]
+  gc_stackmap_blob : Bytes
 }
-pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@emit.FuncAddrFixup], call_fixups? : Array[@emit.CallFixup]) -> Self
+pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@emit.FuncAddrFixup], call_fixups? : Array[@emit.CallFixup], gc_safepoints? : Array[@vcode.GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
 pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
 pub impl Show for CompiledEntry
 

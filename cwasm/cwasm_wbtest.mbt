@@ -26,7 +26,7 @@ test "compiled entry: creation" {
 ///|
 test "precompiled module: creation" {
   let mod = PrecompiledModule::new(AArch64)
-  inspect(mod.version, content="6")
+  inspect(mod.version, content="7")
   inspect(mod.target.to_string(), content="aarch64")
   inspect(mod.function_count(), content="0")
 }
@@ -90,7 +90,7 @@ test "serialize and deserialize: roundtrip" {
 
   // Deserialize
   let restored = deserialize(bytes) catch { _ => panic() }
-  inspect(restored.version, content="6")
+  inspect(restored.version, content="7")
   inspect(restored.target.to_string(), content="aarch64")
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="42")
@@ -131,7 +131,7 @@ test "deserialize: invalid magic" {
 
 ///|
 test "deserialize: unsupported version" {
-  // Valid magic but wrong versions (supported: v4/v5/v6)
+  // Valid magic but wrong versions (supported: v4/v5/v6/v7)
   let v1_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
      0x01, 0x00, 0x00, 0x00,
@@ -142,6 +142,37 @@ test "deserialize: unsupported version" {
      0x03, 0x00, 0x00, 0x00,
   ] // version 3
   inspect(try? deserialize(v3_bytes), content="Err(Unsupported version: 3)")
+}
+
+///|
+test "serialize and deserialize: preserves gc metadata" {
+  let mod = PrecompiledModule::new(AArch64)
+  let mc = @emit.MachineCode::new()
+  mc.emit_nop()
+  mc.emit_ret(30)
+  let safepoints : Array[@vcode.GcSafepoint] = [
+    @vcode.GcSafepoint::new(4, [1, 2], 9L),
+    @vcode.GcSafepoint::new(12, [], 42L),
+  ]
+  let func = @vcode.CompiledFunction::new(
+    "gc_func",
+    mc,
+    0,
+    gc_safepoints=safepoints,
+    gc_stackmap_blob=b"\xAA\xBB\xCC",
+  )
+  mod.add_function(3, "gc_func", func, 1, 0)
+
+  let restored = deserialize(mod.serialize()) catch { _ => panic() }
+  inspect(restored.functions.length(), content="1")
+  let entry = restored.functions[0]
+  inspect(entry.gc_safepoints.length(), content="2")
+  inspect(entry.gc_safepoints[0].code_offset, content="4")
+  inspect(entry.gc_safepoints[0].metadata, content="9")
+  inspect(entry.gc_safepoints[0].live_refs.length(), content="2")
+  inspect(entry.gc_safepoints[1].code_offset, content="12")
+  inspect(entry.gc_safepoints[1].metadata, content="42")
+  inspect(entry.gc_stackmap_blob.length(), content="3")
 }
 
 ///|
@@ -259,7 +290,7 @@ test "complete module: memory + data + function roundtrip" {
   let restored = deserialize(bytes) catch { _ => panic() }
 
   // Check version
-  inspect(restored.version, content="6")
+  inspect(restored.version, content="7")
 
   // Check memory
   inspect(restored.memories.length(), content="1")

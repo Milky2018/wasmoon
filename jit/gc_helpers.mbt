@@ -270,6 +270,38 @@ pub fn gc_clear_heap(ctx_ptr : Int64) -> Unit {
 }
 
 ///|
+/// Begin a GC frame scope for current JIT context.
+pub fn gc_begin_frame(ctx_ptr : Int64, frame_id : Int64) -> Unit {
+  @jit_ffi.c_jit_gc_begin_frame(ctx_ptr, frame_id)
+}
+
+///|
+/// End a GC frame scope for current JIT context.
+pub fn gc_end_frame(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_gc_end_frame(ctx_ptr)
+}
+
+///|
+/// Merge roots into context-local scratch storage for allocation retries.
+pub fn gc_set_root_scratch(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
+  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
+  @jit_ffi.c_jit_gc_set_root_scratch(ctx_ptr, raw_roots, roots.length()) == 1
+}
+
+///|
+/// Trigger a GC cycle for allocation retry.
+pub fn gc_collect_for_alloc(ctx_ptr : Int64, roots : Array[Int64]) -> Int {
+  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
+  @jit_ffi.c_jit_gc_collect_for_alloc(ctx_ptr, raw_roots, roots.length())
+}
+
+///|
+/// Set safepoint metadata table pointer for current context.
+pub fn gc_set_safepoint_table(ctx_ptr : Int64, table_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_gc_set_safepoint_table(ctx_ptr, table_ptr)
+}
+
+///|
 /// Error for invalid JIT GC setup context
 pub suberror GCSetupError {
   MissingJITContext

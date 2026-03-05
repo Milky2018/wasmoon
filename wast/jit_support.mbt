@@ -28,12 +28,18 @@ fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
 /// JIT compiler function type - compiles a module to JIT if possible
 /// Provided by the main package
 pub struct JITCompiler {
-  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> JITModuleContext?
+  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[
+    JITModuleContext,
+    String,
+  ]
 }
 
 ///|
 pub fn JITCompiler::new(
-  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> JITModuleContext?,
+  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[
+    JITModuleContext,
+    String,
+  ],
 ) -> JITCompiler {
   { compile_fn, }
 }
@@ -669,7 +675,7 @@ pub fn init_bulk_segments(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   use_subtype_indirect_check? : Bool = false,
-) -> Unit {
+) -> Unit raise @runtime.RuntimeError {
   // Precompute canonical indices for type equivalence.
   let canonical = @types.compute_canonical_type_indices(
     mod_.types,
@@ -747,9 +753,7 @@ pub fn init_bulk_segments(
         globals~,
         store=Some(store),
         types=mod_.types,
-      ) catch {
-        _ => @types.Value::Null
-      }
+      )
 
       // Encode the value to the JIT segment format (value bits + type idx for funcref).
       let mut raw = @types.NULL_REF
@@ -1281,6 +1285,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
     @runtime.RuntimeError::InvalidConversion => 5
     @runtime.RuntimeError::DivisionByZero => 6
     @runtime.RuntimeError::IntegerOverflow => 7
+    @runtime.RuntimeError::OutOfMemory => 9
     _ => 99
   }
 }

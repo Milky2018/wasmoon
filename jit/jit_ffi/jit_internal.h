@@ -40,6 +40,9 @@
 // 5 = invalid conversion to integer
 // 6 = integer divide by zero
 // 7 = integer overflow
+// 8 = backend trap
+// 9 = out of memory
+// 10 = GC precise roots unavailable
 // 99 = unknown trap
 
 extern __thread sigjmp_buf g_trap_jmp_buf;
@@ -91,13 +94,13 @@ int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
 // v3 ctx-passing (re-entrant) variants (internal implementations)
 // These operate on memory 0 (fast path, backward compatible)
-int32_t memory_grow_ctx_internal(jit_context_t *ctx, int32_t delta, int32_t max_pages);
+int32_t memory_grow_ctx_internal(jit_context_t *ctx, int64_t delta, int32_t max_pages);
 int32_t memory_size_ctx_internal(jit_context_t *ctx);
 void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size);
 void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size);
 
 // v4 multi-memory variants (with memidx parameter)
-int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t delta, int32_t max_pages);
+int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
 int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
 void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_t src_memidx,
@@ -114,6 +117,34 @@ int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t d
 // GC heap management
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
+void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
+void ctx_gc_end_frame_internal(jit_context_t *ctx);
+void ctx_gc_set_safepoint_table_internal(
+    jit_context_t *ctx,
+    const wasmoon_gc_safepoint_table_t *table
+);
+int32_t ctx_gc_set_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    const uint8_t *stackmap_blob,
+    int32_t stackmap_blob_size,
+    const int32_t *code_offsets,
+    int32_t safepoint_count
+);
+void ctx_gc_use_func_safepoints_internal(
+    jit_context_t *ctx,
+    int32_t func_idx
+);
+int32_t ctx_gc_set_root_scratch_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
+int32_t gc_collect_for_alloc_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
 
 // ============ GC Type Cache (gc_type_cache.c) ============
 
@@ -211,10 +242,10 @@ void gc_array_copy_impl(int64_t dst_ref, int32_t dst_offset,
 int64_t gc_register_struct_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_register_array_inline(jit_context_t *ctx, uint8_t *obj_ptr, int32_t total_size);
 int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx,
-                              int64_t *fields, int32_t num_fields);
+                              int64_t *fields, int32_t num_fields, int32_t safepoint_id);
 int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx,
-                             int32_t len, int64_t init_value);
+                             int32_t len, int64_t init_value, int32_t safepoint_id);
 int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx,
-                                         int64_t *values, int32_t len);
+                                         int64_t *values, int32_t len, int32_t safepoint_id);
 
 #endif // JIT_INTERNAL_H

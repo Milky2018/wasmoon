@@ -1046,7 +1046,12 @@ fn run_with_jit(
             is Some(_)
           init_jit_tables(instance, store, jm, use_subtype_indirect_check)
           // Initialize per-context data/elem segments for bulk ops (memory.init/table.init/etc).
-          @wast.init_bulk_segments(mod_, jm, instance, store)
+          @wast.init_bulk_segments(mod_, jm, instance, store) catch {
+            err => {
+              @logger.error("Failed to initialize JIT bulk segments: \{err}")
+              return exit_failure()
+            }
+          }
           let jit_ctx = @wast.JITModuleContext::new(
             jm,
             globals_ptr,
@@ -1502,7 +1507,7 @@ fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     // Stage 5: Emit machine code
-    let debug_func_idx = if debug { Some(func_idx) } else { None }
+    let debug_func_idx = Some(func_idx)
     let mc = @emit.emit_function_with_regalloc(
       vcode_ra,
       ra_output,

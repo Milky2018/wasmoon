@@ -41,7 +41,9 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// v3: Added import table for WASI/external function support
 /// v4: Added memory definitions and data segments
 /// v5: Added type signatures, globals, tables, and element segments
-const CWASM_VERSION : Int = 6
+/// v6: Added direct-call fixups
+/// v7: Added per-function GC safepoint metadata and stackmap blob
+const CWASM_VERSION : Int = 7
 
 // ============ Target Architecture ============
 
@@ -143,6 +145,10 @@ pub(all) struct CompiledEntry {
   func_addr_fixups : Array[@emit.FuncAddrFixup]
   // Direct function call fixups
   call_fixups : Array[@emit.CallFixup]
+  // GC safepoint metadata
+  gc_safepoints : Array[@vcode.GcSafepoint]
+  // Compact GC stackmap payload
+  gc_stackmap_blob : Bytes
 }
 
 ///|
@@ -156,6 +162,8 @@ pub fn CompiledEntry::new(
   num_results : Int,
   func_addr_fixups? : Array[@emit.FuncAddrFixup] = [],
   call_fixups? : Array[@emit.CallFixup] = [],
+  gc_safepoints? : Array[@vcode.GcSafepoint] = [],
+  gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledEntry {
   {
     func_idx,
@@ -167,6 +175,8 @@ pub fn CompiledEntry::new(
     num_results,
     func_addr_fixups,
     call_fixups,
+    gc_safepoints,
+    gc_stackmap_blob,
   }
 }
 
@@ -447,6 +457,8 @@ pub fn PrecompiledModule::add_function(
     num_results,
     func_addr_fixups=compiled.get_func_addr_fixups(),
     call_fixups=compiled.get_call_fixups(),
+    gc_safepoints=compiled.get_gc_safepoints(),
+    gc_stackmap_blob=compiled.get_gc_stackmap_blob(),
   )
   self.functions.push(entry)
 }
@@ -635,6 +647,21 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
       write_u32(result, fixup.func_idx)
       write_u32(result, fixup.veneer_offset)
     }
+
+    // v7: GC safepoint metadata + stackmap blob
+    write_u32(result, entry.gc_safepoints.length())
+    for safepoint in entry.gc_safepoints {
+      write_u32(result, safepoint.code_offset)
+      write_i64(result, safepoint.metadata)
+      write_u32(result, safepoint.live_refs.length())
+      for live_ref in safepoint.live_refs {
+        write_u32(result, live_ref)
+      }
+    }
+    write_u32(result, entry.gc_stackmap_blob.length())
+    for b in entry.gc_stackmap_blob {
+      result.push(b.to_int())
+    }
   }
 
   // Write number of memories
@@ -822,9 +849,9 @@ pub fn deserialize(
     }
   }
 
-  // Read version (support v4/v5/v6)
+  // Read version (support v4/v5/v6/v7)
   let version = reader.read_u32()
-  if version != 4 && version != 5 && version != 6 {
+  if version != 4 && version != 5 && version != 6 && version != 7 {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
@@ -879,6 +906,8 @@ pub fn deserialize(
     let num_results = reader.read_u32()
     let func_addr_fixups : Array[@emit.FuncAddrFixup] = []
     let call_fixups : Array[@emit.CallFixup] = []
+    let gc_safepoints : Array[@vcode.GcSafepoint] = []
+    let mut gc_stackmap_blob : Bytes = b""
     if version >= 6 {
       let func_addr_fixup_count = reader.read_u32()
       for _ in 0..<func_addr_fixup_count {
@@ -895,6 +924,28 @@ pub fn deserialize(
         call_fixups.push({ offset, func_idx: target_func_idx, veneer_offset })
       }
     }
+    if version >= 7 {
+      let safepoint_count = reader.read_u32()
+      for _ in 0..<safepoint_count {
+        let code_offset = reader.read_u32()
+        let metadata = reader.read_i64()
+        let live_ref_count = reader.read_u32()
+        let live_refs : Array[Int] = []
+        for _ in 0..<live_ref_count {
+          live_refs.push(reader.read_u32())
+        }
+        gc_safepoints.push(
+          @vcode.GcSafepoint::new(code_offset, live_refs, metadata),
+        )
+      }
+      let stackmap_blob_size = reader.read_u32()
+      let stackmap_raw = reader.read_bytes(stackmap_blob_size)
+      let stackmap_bytes : Array[Byte] = []
+      for b in stackmap_raw {
+        stackmap_bytes.push(b.to_byte())
+      }
+      gc_stackmap_blob = Bytes::from_array(stackmap_bytes)
+    }
     functions.push(
       CompiledEntry::new(
         func_idx,
@@ -906,6 +957,8 @@ pub fn deserialize(
         num_results,
         func_addr_fixups~,
         call_fixups~,
+        gc_safepoints~,
+        gc_stackmap_blob~,
       ),
     )
   }
@@ -1129,5 +1182,11 @@ pub fn CompiledEntry::to_compiled_function(
       veneer_offset=fixup.veneer_offset,
     )
   }
-  @vcode.CompiledFunction::new(self.name, mc, self.frame_size)
+  @vcode.CompiledFunction::new(
+    self.name,
+    mc,
+    self.frame_size,
+    gc_safepoints=self.gc_safepoints,
+    gc_stackmap_blob=self.gc_stackmap_blob,
+  )
 }

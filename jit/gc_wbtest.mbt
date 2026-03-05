@@ -289,6 +289,64 @@ test "gc: field access after collection" {
 }
 
 ///|
+test "gc: heap verify succeeds on valid graph" {
+  let heap = CHeap::new()
+  let leaf = heap.alloc_struct(0, [@types.Value::I32(7)])
+  let root = heap.alloc_struct(0, [@types.Value::StructRef(leaf)])
+  let _ = heap.collect([@types.Value::StructRef(root)])
+  inspect(heap.verify(), content="true")
+}
+
+///|
+test "gc: heap verify allows non-reference immediates" {
+  let heap = CHeap::new()
+  let obj = heap.alloc_struct(0, [@types.Value::I32(1)])
+  // Large even i64 payload is a valid immediate value, not necessarily a GC ref.
+  heap.struct_set(obj, 0, @types.Value::I64(2000000L))
+  inspect(heap.verify(), content="true")
+}
+
+///|
+test "gc: barrier write counter tracks reference stores" {
+  let heap = CHeap::new()
+  let object0 = heap.alloc_struct(0, [@types.Value::I32(10)])
+  let object1 = heap.alloc_struct(0, [@types.Value::I32(20)])
+  let array0 = heap.alloc_array(0, 2, @types.Value::I32(0))
+
+  heap.struct_set(object0, 0, @types.Value::StructRef(object1))
+  heap.array_set(array0, 0, @types.Value::StructRef(object0))
+  inspect(heap.get_barrier_writes(), content="2")
+}
+
+///|
+test "gc: fault injection fails configured allocation attempt" {
+  gc_debug_set_fail_alloc(2)
+  let heap_ptr = @jit_ffi.c_gc_heap_new(1024L)
+  let fields = FixedArray::makei(1, fn(_) { 1L })
+
+  let first = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+  let second = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+
+  inspect(first > 0, content="true")
+  inspect(second == 0, content="true")
+
+  @jit_ffi.c_gc_heap_free(heap_ptr)
+  gc_debug_set_fail_alloc(0)
+}
+
+///|
+test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
+  gc_debug_set_fail_alloc(1)
+  let heap = CHeap::new(capacity=1024)
+  let result : Result[Int, CHeapError] = try? heap.alloc_struct(0, [
+    @types.Value::I32(123),
+  ])
+  gc_debug_set_fail_alloc(0)
+
+  guard result is Err(OutOfMemory) else { fail("expected OutOfMemory") }
+}
+
+///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)
@@ -331,4 +389,40 @@ test "gc_setup: fail fast on inconsistent function table context" {
     fail("expected gc_setup success for zero-func module")
   }
   gc_teardown(ctx_ptr)
+}
+
+///|
+test "gc: collect_for_alloc keeps scratch roots alive" {
+  let heap = CHeap::new(capacity=1024)
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  gc_set_heap(ctx_ptr, heap)
+
+  let rooted = heap.alloc_struct(0, [@types.Value::I32(1)])
+  let _unrooted = heap.alloc_struct(0, [@types.Value::I32(2)])
+
+  let rooted_raw = value_to_i64(@types.Value::StructRef(rooted))
+  guard gc_set_root_scratch(ctx_ptr, [rooted_raw]) else {
+    fail("expected gc_set_root_scratch success")
+  }
+
+  let collected = gc_collect_for_alloc(ctx_ptr, [])
+  inspect(collected >= 1, content="true")
+  inspect(heap.is_valid(rooted), content="true")
+
+  gc_set_root_scratch(ctx_ptr, []) |> ignore
+  gc_clear_heap(ctx_ptr)
+}
+
+///|
+test "gc: begin/end frame API accepts nested scopes" {
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+
+  gc_begin_frame(ctx_ptr, 100L)
+  gc_begin_frame(ctx_ptr, 200L)
+  gc_end_frame(ctx_ptr)
+  gc_end_frame(ctx_ptr)
+
+  inspect(true, content="true")
 }

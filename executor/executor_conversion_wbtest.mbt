@@ -118,6 +118,7 @@ test "executor: normalize_runtime_error preserves runtime errors" {
     @runtime.DivisionByZero,
     @runtime.IntegerOverflow,
     @runtime.InvalidConversion,
+    @runtime.OutOfMemory,
     @runtime.Unreachable,
     @runtime.CallStackExhausted,
     @runtime.UnknownImport("test_mod", "test_field"),

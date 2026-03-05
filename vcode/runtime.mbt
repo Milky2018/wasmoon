@@ -9,6 +9,124 @@
 // ============ Compiled Function ============
 
 ///|
+fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
+  buf.push((value & 0xFF).to_byte())
+  buf.push(((value >> 8) & 0xFF).to_byte())
+  buf.push(((value >> 16) & 0xFF).to_byte())
+  buf.push(((value >> 24) & 0xFF).to_byte())
+}
+
+///|
+/// Build a compact stackmap blob for allocation safepoints.
+/// Format v1:
+///   u32 version (=1)
+///   u32 safepoint_count
+///   u32 root_count[safepoint_count]
+fn build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
+  if root_counts.length() == 0 {
+    return b""
+  }
+  let bytes : Array[Byte] = []
+  append_u32_le(bytes, 1)
+  append_u32_le(bytes, root_counts.length())
+  for count in root_counts {
+    append_u32_le(bytes, count)
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
+  if metadata <= 0L {
+    return 0
+  }
+  if metadata > @types.I32_MAX.to_int64() {
+    @types.I32_MAX
+  } else {
+    metadata.to_int()
+  }
+}
+
+///|
+fn encode_stackmap_root_count(root_count : Int) -> Int {
+  if root_count <= 0 {
+    0
+  } else if root_count > @types.I32_MAX {
+    @types.I32_MAX
+  } else {
+    root_count
+  }
+}
+
+///|
+fn has_stackmap_live_ref_indices(safepoints : Array[GcSafepoint]) -> Bool {
+  for safepoint in safepoints {
+    if safepoint.live_refs.length() > 0 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Build stackmap blob v2 with optional per-safepoint root-index lists.
+/// Format v2:
+///   u32 version (=2)
+///   u32 safepoint_count
+///   repeated safepoint_count times:
+///     u32 root_count
+///     u32 root_index_count
+///     u32 root_indices[root_index_count]
+fn build_gc_stackmap_blob_v2(
+  safepoints : Array[GcSafepoint],
+  fallback_root_counts : Array[Int],
+) -> Bytes {
+  if safepoints.length() == 0 {
+    return b""
+  }
+  let bytes : Array[Byte] = []
+  append_u32_le(bytes, 2)
+  append_u32_le(bytes, safepoints.length())
+  for i, safepoint in safepoints {
+    let fallback_root_count = if i < fallback_root_counts.length() {
+      fallback_root_counts[i]
+    } else {
+      safepoint.live_refs.length()
+    }
+    let metadata_root_count = safepoint_metadata_to_root_count(
+      safepoint.metadata,
+    )
+    let mut root_count = encode_stackmap_root_count(
+      if metadata_root_count > 0 {
+        metadata_root_count
+      } else {
+        fallback_root_count
+      },
+    )
+    let valid_indices : Array[Int] = []
+    for live_ref in safepoint.live_refs {
+      if live_ref >= 0 && live_ref <= @types.I32_MAX {
+        valid_indices.push(live_ref)
+      }
+    }
+    if valid_indices.length() > 0 {
+      if root_count <= 0 || root_count > valid_indices.length() {
+        root_count = valid_indices.length()
+      }
+      append_u32_le(bytes, root_count)
+      append_u32_le(bytes, root_count)
+      for idx in 0..<root_count {
+        append_u32_le(bytes, valid_indices[idx])
+      }
+    } else {
+      append_u32_le(bytes, root_count)
+      append_u32_le(bytes, 0)
+    }
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
 /// A compiled function ready for execution
 pub struct CompiledFunction {
   // Function name or identifier
@@ -21,6 +139,10 @@ pub struct CompiledFunction {
   code_size : Int
   // Stack frame size needed
   frame_size : Int
+  // GC safepoint metadata (per-function)
+  gc_safepoints : Array[GcSafepoint]
+  // Compact stack-map payload for GC roots
+  gc_stackmap_blob : Bytes
   // Whether this function is currently valid
   mut valid : Bool
 }
@@ -30,13 +152,58 @@ pub fn CompiledFunction::new(
   name : String,
   code : @emit.MachineCode,
   frame_size : Int,
+  gc_safepoints? : Array[GcSafepoint] = [],
+  gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledFunction {
+  let derived_root_counts = code.get_gc_safepoint_root_counts()
+  let derived_root_indices = code.get_gc_safepoint_root_indices()
+  let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
+    0 {
+    gc_safepoints
+  } else {
+    let derived : Array[GcSafepoint] = []
+    let offsets = code.get_gc_safepoint_offsets()
+    for i, offset in offsets {
+      let metadata = if i < derived_root_counts.length() {
+        derived_root_counts[i].to_int64()
+      } else {
+        0L
+      }
+      let live_refs = if i < derived_root_indices.length() {
+        derived_root_indices[i]
+      } else {
+        []
+      }
+      derived.push(GcSafepoint::new(offset, live_refs, metadata))
+    }
+    derived
+  }
+  let stackmap_root_counts = if derived_root_counts.length() > 0 {
+    derived_root_counts
+  } else if resolved_gc_safepoints.length() > 0 {
+    let counts : Array[Int] = []
+    for safepoint in resolved_gc_safepoints {
+      counts.push(safepoint_metadata_to_root_count(safepoint.metadata))
+    }
+    counts
+  } else {
+    []
+  }
+  let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
+    gc_stackmap_blob
+  } else if has_stackmap_live_ref_indices(resolved_gc_safepoints) {
+    build_gc_stackmap_blob_v2(resolved_gc_safepoints, stackmap_root_counts)
+  } else {
+    build_gc_stackmap_blob(stackmap_root_counts)
+  }
   {
     name,
     code,
     entry_offset: 0,
     code_size: code.size(),
     frame_size,
+    gc_safepoints: resolved_gc_safepoints,
+    gc_stackmap_blob: resolved_gc_stackmap_blob,
     valid: true,
   }
 }
@@ -76,9 +243,23 @@ pub fn CompiledFunction::get_call_fixups(
 }
 
 ///|
+/// Get GC safepoint metadata for this function.
+pub fn CompiledFunction::get_gc_safepoints(
+  self : CompiledFunction,
+) -> Array[GcSafepoint] {
+  self.gc_safepoints
+}
+
+///|
+/// Get GC stack-map payload bytes for this function.
+pub fn CompiledFunction::get_gc_stackmap_blob(self : CompiledFunction) -> Bytes {
+  self.gc_stackmap_blob
+}
+
+///|
 fn CompiledFunction::to_string(self : CompiledFunction) -> String {
   let status = if self.valid { "valid" } else { "invalid" }
-  "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, \{status})"
+  "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, safepoints=\{self.gc_safepoints.length()}, \{status})"
 }
 
 ///|

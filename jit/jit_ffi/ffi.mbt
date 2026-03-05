@@ -5,7 +5,7 @@
 // ============ Trap Handling ============
 
 ///|
-/// Get trap code (0 = no trap, 1 = out of bounds memory access)
+/// Get trap code (0 = no trap, 1 = out of bounds memory access, 9 = out of memory, 10 = gc precise roots unavailable)
 pub extern "c" fn c_jit_get_trap_code() -> Int = "wasmoon_jit_get_trap_code"
 
 ///|
@@ -276,7 +276,7 @@ pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_g
 
 ///|
 /// Get memory_grow function pointer for JIT (multi-memory)
-/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i32, max_pages: i32) -> i32
+/// Signature: memory_grow(ctx: *jit_context_t, memidx: i32, delta: i64, max_pages: i32) -> i32
 pub extern "c" fn c_jit_get_memory_grow_ptr() -> Int64 = "wasmoon_jit_get_memory_grow_ptr"
 
 ///|
@@ -1037,17 +1037,17 @@ pub extern "c" fn c_jit_get_gc_register_array_inline_ptr() -> Int64 = "wasmoon_j
 
 ///|
 /// Get gc_alloc_struct_slow function pointer for slow path
-/// Signature: int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fields, int32_t num_fields)
+/// Signature: int64_t gc_alloc_struct_slow(jit_context_t *ctx, int32_t type_idx, int64_t *fields, int32_t num_fields, int32_t safepoint_id)
 pub extern "c" fn c_jit_get_gc_alloc_struct_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_struct_slow_ptr"
 
 ///|
 /// Get gc_alloc_array_slow function pointer for slow path
-/// Signature: int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, int64_t init_value)
+/// Signature: int64_t gc_alloc_array_slow(jit_context_t *ctx, int32_t type_idx, int32_t len, int64_t init_value, int32_t safepoint_id)
 pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_slow_ptr"
 
 ///|
 /// Get gc_alloc_array_from_values_slow function pointer for fixed-array slow path
-/// Signature: int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx, int64_t *values, int32_t len)
+/// Signature: int64_t gc_alloc_array_from_values_slow(jit_context_t *ctx, int32_t type_idx, int64_t *values, int32_t len, int32_t safepoint_id)
 pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr"
 
 ///|
@@ -1111,6 +1111,63 @@ pub extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc
 pub extern "c" fn c_jit_gc_get_heap(ctx_ptr : Int64) -> Int64 = "wasmoon_jit_gc_get_heap"
 
 ///|
+/// Push a JIT frame node for GC bookkeeping.
+pub extern "c" fn c_jit_gc_begin_frame(
+  ctx_ptr : Int64,
+  frame_id : Int64,
+) -> Unit = "wasmoon_jit_gc_begin_frame"
+
+///|
+/// Pop a JIT frame node for GC bookkeeping.
+pub extern "c" fn c_jit_gc_end_frame(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_end_frame"
+
+///|
+/// Trigger GC for allocation retry with explicit roots.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_collect_for_alloc(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_collect_for_alloc"
+
+///|
+/// Set context-local scratch roots merged by `c_jit_gc_collect_for_alloc`.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_set_root_scratch(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_set_root_scratch"
+
+///|
+/// Set safepoint metadata table pointer for current context.
+pub extern "c" fn c_jit_gc_set_safepoint_table(
+  ctx_ptr : Int64,
+  table_ptr : Int64,
+) -> Unit = "wasmoon_jit_gc_set_safepoint_table"
+
+///|
+/// Install per-function safepoint metadata into context-owned storage.
+/// Returns 1 on success, 0 on failure.
+#borrow(stackmap_blob, code_offsets)
+pub extern "c" fn c_jit_gc_set_func_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+  stackmap_blob : Bytes,
+  stackmap_blob_size : Int,
+  code_offsets : FixedArray[Int],
+  safepoint_count : Int,
+) -> Int = "wasmoon_jit_gc_set_func_safepoints"
+
+///|
+/// Select currently active safepoint table by wasm function index.
+/// Pass func_idx < 0 to clear active table.
+pub extern "c" fn c_jit_gc_use_func_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+) -> Unit = "wasmoon_jit_gc_use_func_safepoints"
+
+///|
 /// Set GC heap pointer in VMContext for inline allocation
 /// This enables ctx-passing GC libcalls
 pub extern "c" fn c_jit_ctx_set_gc_heap(
@@ -1141,7 +1198,7 @@ pub extern "c" fn c_jit_ctx_init_data_segments(
 ///|
 /// Add a single data segment to a context (ownership transferred to C).
 /// is_dropped: 0/1 initial dropped flag.
-#owned(data)
+#borrow(data)
 pub extern "c" fn c_jit_ctx_add_data_segment(
   ctx_ptr : Int64,
   idx : Int,
@@ -1162,7 +1219,7 @@ pub extern "c" fn c_jit_ctx_init_elem_segments(
 /// Each segment stores pairs: (value, type_idx) for each element.
 /// size: number of elements (not Int64 slots).
 /// is_dropped: 0/1 initial dropped flag.
-#owned(data)
+#borrow(data)
 pub extern "c" fn c_jit_ctx_add_elem_segment(
   ctx_ptr : Int64,
   idx : Int,
@@ -1314,6 +1371,19 @@ pub extern "c" fn c_gc_heap_collect(
   num_roots : Int,
 ) -> Int = "wasmoon_gc_heap_collect"
 
+///|
+/// Verify C heap invariants (returns 1 when valid, 0 on failure)
+pub extern "c" fn c_gc_heap_verify(heap : Int64, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
+
+///|
+/// Configure allocation fault injection:
+/// - fail_at > 0: fail exactly on Nth allocation attempt
+/// - fail_every > 0: fail on every Kth allocation attempt
+pub extern "c" fn c_gc_heap_debug_set_fail_alloc(
+  fail_at : Int,
+  fail_every : Int,
+) -> Unit = "wasmoon_gc_heap_debug_set_fail_alloc"
+
 // ============ JIT Utilities ============
 
 ///|
@@ -1335,6 +1405,10 @@ pub extern "c" fn c_gc_heap_get_capacity(heap : Int64) -> Int64 = "wasmoon_gc_he
 ///|
 /// Get number of objects in heap
 pub extern "c" fn c_gc_heap_get_object_count(heap : Int64) -> Int = "wasmoon_gc_heap_get_object_count"
+
+///|
+/// Get total number of write-barrier calls recorded
+pub extern "c" fn c_gc_heap_get_barrier_writes(heap : Int64) -> Int = "wasmoon_gc_heap_get_barrier_writes"
 
 ///|
 /// Get total number of allocations since heap creation

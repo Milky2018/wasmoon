@@ -513,17 +513,25 @@ fn ByteBuf::push_sleb_i32(self : ByteBuf, value : Int) -> Unit {
 }
 
 ///|
-fn ByteBuf::push_utf8_name(
-  self : ByteBuf,
-  name : String,
-) -> Unit raise ComponentTextError {
+fn ByteBuf::push_utf8_name(self : ByteBuf, name : String) -> Unit {
   let bytes : Array[Byte] = []
   for ch in name {
-    let code = ch.to_int()
-    if code < 0 || code > 0x7f {
-      raise Unsupported("only ASCII identifiers are supported for now")
+    let cp = ch.to_int()
+    if cp < 0x80 {
+      bytes.push(cp.to_byte())
+    } else if cp < 0x800 {
+      bytes.push((0xC0 | (cp >> 6)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
+    } else if cp < 0x10000 {
+      bytes.push((0xE0 | (cp >> 12)).to_byte())
+      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
+    } else {
+      bytes.push((0xF0 | (cp >> 18)).to_byte())
+      bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
+      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
     }
-    bytes.push(code.to_byte())
   }
   self.push_uleb_u32(bytes.length())
   for byte in bytes {
@@ -1054,7 +1062,7 @@ fn parse_func_sig(
 }
 
 ///|
-fn encode_func_typedef(sig : FuncTypeSig) -> Bytes raise ComponentTextError {
+fn encode_func_typedef(sig : FuncTypeSig) -> Bytes {
   let payload = ByteBuf::new()
   payload.push_u8(if sig.is_async { 0x43 } else { 0x40 })
   payload.push_uleb_u32(sig.params.length())
@@ -1088,10 +1096,7 @@ fn add_type_entry(
 }
 
 ///|
-fn ensure_func_type(
-  state : ComponentBuildState,
-  sig : FuncTypeSig,
-) -> Int raise ComponentTextError {
+fn ensure_func_type(state : ComponentBuildState, sig : FuncTypeSig) -> Int {
   for type_index in 0..<state.types.length() {
     let entry = state.types[type_index]
     if entry.func_sig is Some(existing) && existing == sig {
@@ -2899,9 +2904,7 @@ fn parse_import(
 }
 
 ///|
-fn encode_import_decl(
-  import_item : ImportEntry,
-) -> Bytes raise ComponentTextError {
+fn encode_import_decl(import_item : ImportEntry) -> Bytes {
   let payload = ByteBuf::new()
   payload.push_u8(0x00)
   payload.push_utf8_name(import_item.name)
@@ -2977,9 +2980,7 @@ fn push_ordered_section(
 }
 
 ///|
-fn encode_core_instance_decl(
-  entry : CoreInstanceEntry,
-) -> Bytes raise ComponentTextError {
+fn encode_core_instance_decl(entry : CoreInstanceEntry) -> Bytes {
   let payload = ByteBuf::new()
   match entry.expr {
     Instantiate(module_idx, args) => {
@@ -3040,7 +3041,7 @@ fn encode_alias_core_export_decl(
   kind : Int,
   instance_idx : Int,
   name : String,
-) -> Bytes raise ComponentTextError {
+) -> Bytes {
   let payload = ByteBuf::new()
   payload.push_u8(0x00)
   payload.push_u8(kind)
@@ -6936,10 +6937,10 @@ fn compile_component_expr_with_outer(
     let field = if field_expr is List(items) {
       items
     } else {
-      raise Unsupported("component fields must be lists")
+      raise ParseError("component fields must be lists")
     }
     if field.length() == 0 {
-      raise Unsupported("empty component field")
+      raise ParseError("empty component field")
     }
     if field[0] is Atom("import") {
       parse_import(field, state)

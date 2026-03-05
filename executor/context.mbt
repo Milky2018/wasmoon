@@ -9,6 +9,61 @@
 const MAX_CALL_STACK_DEPTH : Int = 256
 
 ///|
+/// Enable forced GC after GC allocations in interpreter mode
+const GC_STRESS_ENV : String = "WASMOON_GC_STRESS"
+
+///|
+/// Collect every N GC allocations when stress mode is enabled (default 1)
+const GC_STRESS_EVERY_ENV : String = "WASMOON_GC_STRESS_EVERY"
+
+///|
+fn is_truthy_env_flag(value : String) -> Bool {
+  value == "1" ||
+  value == "true" ||
+  value == "TRUE" ||
+  value == "yes" ||
+  value == "YES" ||
+  value == "on" ||
+  value == "ON"
+}
+
+///|
+fn gc_stress_enabled() -> Bool {
+  match @sys.get_env_var(GC_STRESS_ENV) {
+    Some(v) => is_truthy_env_flag(v)
+    None => false
+  }
+}
+
+///|
+fn parse_decimal_int(value : String) -> Int? {
+  if value.length() == 0 {
+    return None
+  }
+  let mut parsed = 0
+  for codepoint in value {
+    let digit = codepoint.to_int() - b'0'.to_int()
+    if digit < 0 || digit > 9 {
+      return None
+    }
+    parsed = parsed * 10 + digit
+  }
+  Some(parsed)
+}
+
+///|
+fn gc_stress_every() -> Int {
+  match @sys.get_env_var(GC_STRESS_EVERY_ENV) {
+    Some(raw_value) =>
+      match parse_decimal_int(raw_value) {
+        Some(parsed) if parsed > 0 => parsed
+        _ => 1
+      }
+    None => 1
+  }
+}
+
+///|
 /// Label info for tracking block arity during branching
 /// is_loop: true for loops (branch goes to start, uses param arity)
 /// arity: number of values to carry when branching
@@ -28,6 +83,9 @@ struct ExecContext {
   frames : Array[@runtime.Frame]
   mut current_frame : Int
   labels : Array[LabelInfo] // Stack of labels for tracking branch arities
+  gc_stress : Bool
+  gc_stress_every : Int
+  mut gc_stress_alloc_count : Int
 } derive(Show)
 
 ///|
@@ -42,6 +100,9 @@ fn ExecContext::new(
     frames: [],
     current_frame: 0,
     labels: [],
+    gc_stress: gc_stress_enabled(),
+    gc_stress_every: gc_stress_every(),
+    gc_stress_alloc_count: 0,
   }
 }
 
@@ -143,4 +204,32 @@ fn ExecContext::make_error_context(
   @runtime.RuntimeErrorContext::new(error).with_call_stack(
     self.capture_call_stack(),
   )
+}
+
+///|
+/// Collect transient GC roots from interpreter stack and frame locals
+fn ExecContext::collect_gc_additional_roots(
+  self : ExecContext,
+) -> Array[@types.Value] {
+  let roots = self.stack.active_values()
+  for frame in self.frames {
+    for local_value in frame.locals_values() {
+      roots.push(local_value)
+    }
+  }
+  roots
+}
+
+///|
+/// In stress mode, force a GC cycle after allocation sites
+fn ExecContext::maybe_collect_gc_stress(self : ExecContext) -> Unit {
+  if !self.gc_stress {
+    return
+  }
+  self.gc_stress_alloc_count = self.gc_stress_alloc_count + 1
+  if self.gc_stress_alloc_count % self.gc_stress_every != 0 {
+    return
+  }
+  let roots = self.collect_gc_additional_roots()
+  self.store.collect_garbage(additional_roots=roots) |> ignore
 }

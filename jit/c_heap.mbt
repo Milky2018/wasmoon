@@ -12,6 +12,7 @@
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
+  OutOfMemory
 }
 
 // ============================================================
@@ -169,7 +170,7 @@ pub fn CHeap::alloc_struct(
   self : CHeap,
   type_idx : Int,
   fields : Array[@types.Value],
-) -> Int {
+) -> Int raise CHeapError {
   let num_fields = fields.length()
   let raw_fields = FixedArray::makei(num_fields, fn(i) {
     value_to_i64(fields[i])
@@ -180,6 +181,9 @@ pub fn CHeap::alloc_struct(
     raw_fields,
     num_fields,
   )
+  if gc_ref <= 0 {
+    raise OutOfMemory
+  }
   // C heap returns 1-based gc_ref, convert to 0-based for external use
   gc_ref - 1
 }
@@ -223,9 +227,12 @@ pub fn CHeap::alloc_array(
   type_idx : Int,
   len : Int,
   init_value : @types.Value,
-) -> Int {
+) -> Int raise CHeapError {
   let raw_init = value_to_i64(init_value)
   let gc_ref = @jit_ffi.c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
+  if gc_ref <= 0 {
+    raise OutOfMemory
+  }
   gc_ref - 1
 }
 
@@ -236,7 +243,7 @@ pub fn CHeap::alloc_array_from_values(
   self : CHeap,
   type_idx : Int,
   elements : Array[@types.Value],
-) -> Int {
+) -> Int raise CHeapError {
   let len = elements.length()
   let raw_values = FixedArray::makei(len, fn(i) { value_to_i64(elements[i]) })
   let gc_ref = @jit_ffi.c_gc_heap_alloc_array_from_values(
@@ -245,6 +252,9 @@ pub fn CHeap::alloc_array_from_values(
     raw_values,
     len,
   )
+  if gc_ref <= 0 {
+    raise OutOfMemory
+  }
   gc_ref - 1
 }
 
@@ -392,6 +402,12 @@ pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int {
   @jit_ffi.c_gc_heap_collect(self.ptr, raw_roots, num_roots)
 }
 
+///|
+/// Verify heap invariants (for debugging)
+pub fn CHeap::verify(self : CHeap, verbose? : Bool = false) -> Bool {
+  @jit_ffi.c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
+}
+
 // ============================================================
 // JIT Utilities
 // ============================================================
@@ -444,6 +460,12 @@ pub fn CHeap::get_object_count(self : CHeap) -> Int {
 }
 
 ///|
+/// Get total number of write-barrier calls recorded
+pub fn CHeap::get_barrier_writes(self : CHeap) -> Int {
+  @jit_ffi.c_gc_heap_get_barrier_writes(self.ptr)
+}
+
+///|
 /// Get total number of allocations since heap creation
 pub fn CHeap::get_total_allocations(self : CHeap) -> Int {
   @jit_ffi.c_gc_heap_get_total_allocations(self.ptr)
@@ -460,4 +482,10 @@ pub fn CHeap::get_total_collections(self : CHeap) -> Int {
 /// Default threshold is 75% of capacity
 pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
   self.get_usage_ratio() >= threshold
+}
+
+///|
+/// Configure allocation fault injection for debugging
+pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
+  @jit_ffi.c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
 }
