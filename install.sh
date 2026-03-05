@@ -25,13 +25,15 @@ if [ ! -f "$tools_bin" ]; then
   exit 1
 fi
 
-# Install repo-local entrypoints atomically by swapping symlinks.
-tmp_wasmoon="$(mktemp "${repo_root}/wasmoon.tmp.XXXXXX")"
-ln -sf "$main_bin" "$tmp_wasmoon"
-mv -f "$tmp_wasmoon" "${repo_root}/wasmoon"
-
-tmp_tools="$(mktemp "${repo_root}/wasmoon-tools.tmp.XXXXXX")"
-ln -sf "$tools_bin" "$tmp_tools"
-mv -f "$tmp_tools" "${repo_root}/wasmoon-tools"
+# Install repo-local entrypoints as direct binaries.
+# On macOS, running symlinked binaries from moon-install output can occasionally
+# get stuck during dynamic loader startup, so we keep a local executable copy.
+rm -f "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools"
+cp -f "$main_bin" "${repo_root}/wasmoon"
+cp -f "$tools_bin" "${repo_root}/wasmoon-tools"
+chmod +x "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools"
+if command -v xattr >/dev/null 2>&1; then
+  xattr -c "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools" 2>/dev/null || true
+fi
 
 echo "Done! You can now run ./wasmoon and ./wasmoon-tools"
