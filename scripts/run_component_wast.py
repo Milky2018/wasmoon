@@ -369,14 +369,7 @@ SUPPORTED_VALUE_TYPES = {
     "string",
 }
 
-UNSUPPORTED_ERROR_SUBSTRINGS = [
-    "unsupported component type opcode",
-    "unsupported canon opcode",
-    "unsupported component preamble",
-    "unsupported string encoding",
-    "unsupportedstringencoding",
-    "unsupportedcomponent",
-]
+UNSUPPORTED_ERROR_CODE = "COMP_UNSUPPORTED"
 
 
 def parse_component_name(node) -> Optional[str]:
@@ -543,34 +536,53 @@ def probe_component_wat_support(wasmoon_tools: Path) -> bool:
         return result.returncode == 0 and out.exists()
 
 
+def parse_component_json_result(out: str) -> Optional[dict]:
+    for raw_line in out.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and "ok" in payload:
+            return payload
+    return None
+
+
 def validate_component(
     component_bin: Path, wasmoon: Path, *, wit_names: bool
-) -> Tuple[bool, str]:
-    cmd = [str(wasmoon), "component", "--validate", str(component_bin)]
+) -> Tuple[bool, str, Optional[str]]:
+    cmd = [str(wasmoon), "component", "--error-format", "json"]
     if not wit_names:
-        cmd.insert(2, "--no-wit-names")
+        cmd.append("--no-wit-names")
+    cmd.extend(["--validate", str(component_bin)])
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
     )
     out = (result.stdout or "") + (result.stderr or "")
+    payload = parse_component_json_result(out)
+    if payload is not None:
+        ok = bool(payload.get("ok", False))
+        detail = str(payload.get("detail", "")).strip()
+        code = payload.get("code")
+        code_str = str(code) if isinstance(code, str) else None
+        if ok:
+            return True, detail or "component validated ok", None
+        return False, detail or out.strip() or "unknown validation result", code_str
     if "validate component error" in out or "parse component error" in out:
-        return False, out.strip()
+        return False, out.strip(), None
     if "component validated ok" in out:
-        return True, out.strip()
-    return False, out.strip() or "unknown validation result"
+        return True, out.strip(), None
+    return False, out.strip() or "unknown validation result", None
 
 
 def wit_names_for_path(wast_file: Path) -> bool:
     # wasm-tools' suite validates the WIT component encoding, which imposes
     # kebab-case/package-name name rules. wasmtime's suite uses arbitrary names.
     return "wasmtime" not in wast_file.parts
-
-
-def is_unsupported_error(msg: str) -> bool:
-    lower = msg.lower()
-    return any(token in lower for token in UNSUPPORTED_ERROR_SUBSTRINGS)
 
 
 def run_component_script(
@@ -673,7 +685,11 @@ def run_file(
                 if comp_bin is None:
                     fail(f"component parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
+                ok, msg, _code = validate_component(
+                    comp_bin,
+                    wasmoon,
+                    wit_names=wit_names,
+                )
                 if not ok:
                     fail(f"component validate failed: {msg}")
                     continue
@@ -727,14 +743,18 @@ def run_file(
                     else:
                         fail(f"assert_invalid parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
+                ok, msg, code = validate_component(
+                    comp_bin,
+                    wasmoon,
+                    wit_names=wit_names,
+                )
                 if ok:
                     if expected_msg:
                         fail(f"assert_invalid unexpectedly validated: {expected_msg}")
                     else:
                         fail("assert_invalid unexpectedly validated")
                     continue
-                if is_unsupported_error(msg):
+                if code == UNSUPPORTED_ERROR_CODE:
                     fail(f"assert_invalid failed due to unsupported feature: {msg}")
                     continue
                 passed += 1
@@ -782,8 +802,12 @@ def run_file(
                 if comp_bin is None:
                     passed += 1
                 else:
-                    ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
-                    if is_unsupported_error(msg):
+                    ok, msg, code = validate_component(
+                        comp_bin,
+                        wasmoon,
+                        wit_names=wit_names,
+                    )
+                    if code == UNSUPPORTED_ERROR_CODE:
                         fail(f"assert_malformed failed due to unsupported feature: {msg}")
                     else:
                         if expected_msg:
@@ -811,7 +835,11 @@ def run_file(
                 if comp_bin is None:
                     fail(f"assert_unlinkable parse failed: {err}")
                     continue
-                ok, msg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
+                ok, msg, _code = validate_component(
+                    comp_bin,
+                    wasmoon,
+                    wit_names=wit_names,
+                )
                 if not ok:
                     fail(f"assert_unlinkable validate failed: {msg}")
                     continue
@@ -901,7 +929,11 @@ def run_file(
                 if comp_bin is None:
                     fail(f"assert_trap component parse failed: {err}")
                     continue
-                ok, vmsg = validate_component(comp_bin, wasmoon, wit_names=wit_names)
+                ok, vmsg, _code = validate_component(
+                    comp_bin,
+                    wasmoon,
+                    wit_names=wit_names,
+                )
                 if not ok:
                     fail(f"assert_trap component validate failed: {vmsg}")
                     continue
