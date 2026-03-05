@@ -37,7 +37,7 @@ priv struct JsonValue {
 priv struct ScriptResult {
   mut passed : Int
   mut failed : Int
-  mut skipped : Int
+  skipped : Int
   failures : Array[String]
 }
 
@@ -55,11 +55,6 @@ fn ScriptResult::add_passed(self : ScriptResult) -> Unit {
 fn ScriptResult::add_failed(self : ScriptResult, msg : String) -> Unit {
   self.failed += 1
   self.failures.push(msg)
-}
-
-///|
-fn ScriptResult::add_skipped(self : ScriptResult) -> Unit {
-  self.skipped += 1
 }
 
 ///|
@@ -899,6 +894,7 @@ pub fn run_component_script(
   let mut last_component_name : String? = None
   let mut last_instance : @runtime_impl.ComponentInstance? = None
   let mut anon_count = 0
+  let mut has_unsupported_command = false
   for cmd in script.commands {
     match cmd.type_ {
       "component_definition" => {
@@ -1151,22 +1147,29 @@ pub fn run_component_script(
           _ => ()
         }
       }
-      _ => result.add_skipped()
+      _ => {
+        has_unsupported_command = true
+        result.add_failed("unsupported command type: \{cmd.type_}")
+      }
     }
   }
   if error_format is Json {
-    let ok = result.failed == 0
+    let ok = result.failed == 0 && result.skipped == 0
     println(
       component_test_json(
         ok,
         if ok {
           None
+        } else if has_unsupported_command || result.skipped > 0 {
+          Some("COMP_TEST_UNSUPPORTED_COMMAND")
         } else {
           Some("COMP_TEST_ASSERT_FAILED")
         },
         "execute",
         if ok {
           "component-test finished successfully"
+        } else if has_unsupported_command || result.skipped > 0 {
+          "component-test has unsupported commands"
         } else {
           "component-test has failing commands"
         },
@@ -1181,7 +1184,7 @@ pub fn run_component_script(
       println("FAIL \{f}")
     }
   }
-  if result.failed > 0 {
+  if result.failed > 0 || result.skipped > 0 {
     1
   } else {
     0

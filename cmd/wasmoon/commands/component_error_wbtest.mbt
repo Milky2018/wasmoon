@@ -89,3 +89,20 @@ test "component-test returns non-zero on failing assertions" {
     _ => ()
   }
 }
+
+///|
+test "component-test returns non-zero on unsupported command" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component_test_unsupported.json"
+  let json = "{\"commands\":[{\"type\":\"component\",\"path\":\"testsuite/fixtures/minimal.component.wasm\",\"instantiate\":true},{\"type\":\"assert_magic_typo\",\"field\":\"missing\",\"args\":[],\"expected\":[]}]}"
+  @fs.write_string_to_file(path, json) catch {
+    IOError(e) => fail(e)
+  }
+  let status = run_component_script(path, Json)
+  inspect(status, content="1")
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+}
