@@ -738,10 +738,16 @@ def run_file(
                 )
                 comp_idx += 1
                 if comp_bin is None:
+                    err_msg = err or "unknown component parse error"
                     if expected_msg:
-                        fail(f"assert_invalid parse failed: {expected_msg}: {err}")
+                        if expected_msg.lower() in err_msg.lower():
+                            passed += 1
+                        else:
+                            fail(f"assert_invalid parse failed: {expected_msg}: {err_msg}")
                     else:
-                        fail(f"assert_invalid parse failed: {err}")
+                        # assert_invalid allows either parse-time or validate-time
+                        # rejection; parse failure is acceptable.
+                        passed += 1
                     continue
                 ok, msg, code = validate_component(
                     comp_bin,

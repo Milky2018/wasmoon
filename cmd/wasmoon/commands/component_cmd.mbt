@@ -196,7 +196,7 @@ pub fn run_component_command(
   validate : Bool,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
-) -> Unit {
+) -> Int {
   let result = run_component_command_eval(file_path, validate, wit_names)
   if result.ok {
     if error_format is Json {
@@ -217,19 +217,19 @@ pub fn run_component_command(
           summary=Some(result.summary_lines),
         ),
       )
-      return
+      return 0
     }
     if dump {
       match result.parsed {
         Some(parsed) => println(parsed)
         None => println("parse component error: missing parsed component")
       }
-      return
+      return 0
     }
     for line in result.summary_lines {
       println(line)
     }
-    return
+    return 0
   }
 
   if error_format is Json {
@@ -242,7 +242,7 @@ pub fn run_component_command(
         summary=None,
       ),
     )
-    return
+    return 1
   }
   match result.phase {
     "read" => println(result.detail)
@@ -250,4 +250,5 @@ pub fn run_component_command(
     "validate" => println("validate component error: \{result.detail}")
     _ => println(result.detail)
   }
+  1
 }

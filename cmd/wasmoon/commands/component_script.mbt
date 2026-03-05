@@ -63,6 +63,53 @@ fn ScriptResult::add_skipped(self : ScriptResult) -> Unit {
 }
 
 ///|
+fn json_escape_string_component_test(s : String) -> String {
+  let buf = StringBuilder::new()
+  for c in s {
+    match c {
+      '"' => buf.write_string("\\\"")
+      '\\' => buf.write_string("\\\\")
+      '\n' => buf.write_string("\\n")
+      '\r' => buf.write_string("\\r")
+      '\t' => buf.write_string("\\t")
+      _ => buf.write_char(c)
+    }
+  }
+  buf.to_string()
+}
+
+///|
+fn component_test_json(
+  ok : Bool,
+  code : String?,
+  phase : String,
+  detail : String,
+  result : ScriptResult?,
+) -> String {
+  let mut line = "{\"ok\":"
+  line = line + (if ok { "true" } else { "false" })
+  if code is Some(code) {
+    line = line + ",\"code\":\"\{json_escape_string_component_test(code)}\""
+  }
+  line = line + ",\"phase\":\"\{json_escape_string_component_test(phase)}\""
+  line = line + ",\"detail\":\"\{json_escape_string_component_test(detail)}\""
+  if result is Some(result) {
+    line = line + ",\"passed\":\{result.passed}"
+    line = line + ",\"failed\":\{result.failed}"
+    line = line + ",\"skipped\":\{result.skipped}"
+    line = line + ",\"failures\":["
+    for i, item in result.failures {
+      if i > 0 {
+        line = line + ","
+      }
+      line = line + "\"\{json_escape_string_component_test(item)}\""
+    }
+    line = line + "]"
+  }
+  line + "}"
+}
+
+///|
 fn strip_identifier(name : String) -> String {
   if name.has_prefix("$") && name.length() > 1 {
     let view = try! name[1:]
@@ -413,23 +460,62 @@ fn make_instance(
 }
 
 ///|
-pub fn run_component_script(path : String) -> Unit {
+pub fn run_component_script(
+  path : String,
+  error_format : ComponentErrorFormat,
+) -> Int {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
-      println("component-test error: \{e}")
-      return
+      if error_format is Json {
+        println(
+          component_test_json(
+            false,
+            Some("COMP_TEST_SCRIPT_ERROR"),
+            "load-script",
+            e,
+            None,
+          ),
+        )
+      } else {
+        println("component-test error: \{e}")
+      }
+      return 1
     }
   }
   let json = @json.parse(contents) catch {
     e => {
-      println("component-test error: \{e}")
-      return
+      if error_format is Json {
+        println(
+          component_test_json(
+            false,
+            Some("COMP_TEST_SCRIPT_ERROR"),
+            "parse-json",
+            e.to_string(),
+            None,
+          ),
+        )
+      } else {
+        println("component-test error: \{e}")
+      }
+      return 1
     }
   }
   let script : ScriptFile = @json.from_json(json) catch {
     e => {
-      println("component-test error: \{e}")
-      return
+      if error_format is Json {
+        println(
+          component_test_json(
+            false,
+            Some("COMP_TEST_SCRIPT_ERROR"),
+            "decode-json",
+            e.to_string(),
+            None,
+          ),
+        )
+      } else {
+        println("component-test error: \{e}")
+      }
+      return 1
     }
   }
   let result = ScriptResult::new()
@@ -445,8 +531,20 @@ pub fn run_component_script(path : String) -> Unit {
   let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
   let simple_module = @wat.parse(simple_module_wat) catch {
     e => {
-      println("component-test error: \{e}")
-      return
+      if error_format is Json {
+        println(
+          component_test_json(
+            false,
+            Some("COMP_TEST_RUNTIME_ERROR"),
+            "bootstrap",
+            e.to_string(),
+            None,
+          ),
+        )
+      } else {
+        println("component-test error: \{e}")
+      }
+      return 1
     }
   }
   let nested_exports : Map[String, @runtime_impl.ComponentExtern] = {}
@@ -1056,10 +1154,36 @@ pub fn run_component_script(path : String) -> Unit {
       _ => result.add_skipped()
     }
   }
-  println(
-    "RESULT passed=\{result.passed} failed=\{result.failed} skipped=\{result.skipped}",
-  )
-  for f in result.failures {
-    println("FAIL \{f}")
+  if error_format is Json {
+    let ok = result.failed == 0
+    println(
+      component_test_json(
+        ok,
+        if ok {
+          None
+        } else {
+          Some("COMP_TEST_ASSERT_FAILED")
+        },
+        "execute",
+        if ok {
+          "component-test finished successfully"
+        } else {
+          "component-test has failing commands"
+        },
+        Some(result),
+      ),
+    )
+  } else {
+    println(
+      "RESULT passed=\{result.passed} failed=\{result.failed} skipped=\{result.skipped}",
+    )
+    for f in result.failures {
+      println("FAIL \{f}")
+    }
+  }
+  if result.failed > 0 {
+    1
+  } else {
+    0
   }
 }

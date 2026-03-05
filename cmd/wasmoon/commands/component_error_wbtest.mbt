@@ -54,3 +54,38 @@ test "component command eval: minimal component validates ok" {
   inspect(result.ok, content="true")
   inspect(result.code is None, content="true")
 }
+
+///|
+test "component-test json helper includes status fields" {
+  let result = ScriptResult::new()
+  result.add_passed()
+  result.add_failed("x")
+  let json = component_test_json(
+    false,
+    Some("COMP_TEST_ASSERT_FAILED"),
+    "execute",
+    "component-test has failing commands",
+    Some(result),
+  )
+  inspect(json.contains("\"ok\":false"), content="true")
+  inspect(json.contains("\"code\":\"COMP_TEST_ASSERT_FAILED\""), content="true")
+  inspect(json.contains("\"passed\":1"), content="true")
+  inspect(json.contains("\"failed\":1"), content="true")
+}
+
+///|
+test "component-test returns non-zero on failing assertions" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component_test_fail.json"
+  let json = "{\"commands\":[{\"type\":\"component\",\"path\":\"testsuite/fixtures/minimal.component.wasm\",\"instantiate\":true},{\"type\":\"assert_return\",\"field\":\"missing\",\"args\":[],\"expected\":[]}]}"
+  @fs.write_string_to_file(path, json) catch {
+    IOError(e) => fail(e)
+  }
+  let status = run_component_script(path, Json)
+  inspect(status, content="1")
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+}
