@@ -146,6 +146,11 @@ jobs:
           moon build --target native --release
           ./install.sh
 
+      - name: run component-spec subset (amd64)
+        timeout-minutes: 5
+        run: |
+          python3 scripts/run_component_wast.py --dir component-spec --rec
+
       - name: run wast spec tests (amd64)
         id: wast_amd64
         timeout-minutes: 10
