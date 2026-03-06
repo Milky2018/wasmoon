@@ -35,7 +35,7 @@ jobs:
         run: |
           curl -fsSL https://wasmtime.dev/install.sh | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-          wasmtime --version
+          "$HOME/.wasmtime/bin/wasmtime" --version
 
       - name: run perf benchmark runner
         id: perf_runner
