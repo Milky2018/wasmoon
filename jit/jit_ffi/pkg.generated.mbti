@@ -458,6 +458,8 @@ pub fn c_jit_get_trap_pc() -> Int64
 
 pub fn c_jit_get_trap_signal() -> Int
 
+pub fn c_jit_get_trap_xreg(Int) -> Int64
+
 pub fn c_jit_get_wasi_exit_code(Int64) -> Int
 
 pub fn c_jit_get_wasm_stack_top(Int64) -> Int64

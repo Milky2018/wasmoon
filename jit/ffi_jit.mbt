@@ -28,6 +28,17 @@ pub struct TrapDetails {
   fault_addr : Int64
   brk_imm : Int
   func_idx : Int
+  x0 : Int64
+  x1 : Int64
+  x2 : Int64
+  x3 : Int64
+  x6 : Int64
+  x7 : Int64
+  x8 : Int64
+  x9 : Int64
+  x10 : Int64
+  x11 : Int64
+  x15 : Int64
 }
 
 ///|
@@ -41,6 +52,17 @@ pub fn TrapDetails::new() -> TrapDetails {
     fault_addr: 0L,
     brk_imm: 0,
     func_idx: -1,
+    x0: 0L,
+    x1: 0L,
+    x2: 0L,
+    x3: 0L,
+    x6: 0L,
+    x7: 0L,
+    x8: 0L,
+    x9: 0L,
+    x10: 0L,
+    x11: 0L,
+    x15: 0L,
   }
 }
 
@@ -57,6 +79,17 @@ pub fn get_last_trap_details() -> TrapDetails {
     fault_addr: @jit_ffi.c_jit_get_trap_fault_addr(),
     brk_imm: @jit_ffi.c_jit_get_trap_brk_imm(),
     func_idx: @jit_ffi.c_jit_get_trap_func_idx(),
+    x0: @jit_ffi.c_jit_get_trap_xreg(0),
+    x1: @jit_ffi.c_jit_get_trap_xreg(1),
+    x2: @jit_ffi.c_jit_get_trap_xreg(2),
+    x3: @jit_ffi.c_jit_get_trap_xreg(3),
+    x6: @jit_ffi.c_jit_get_trap_xreg(6),
+    x7: @jit_ffi.c_jit_get_trap_xreg(7),
+    x8: @jit_ffi.c_jit_get_trap_xreg(8),
+    x9: @jit_ffi.c_jit_get_trap_xreg(9),
+    x10: @jit_ffi.c_jit_get_trap_xreg(10),
+    x11: @jit_ffi.c_jit_get_trap_xreg(11),
+    x15: @jit_ffi.c_jit_get_trap_xreg(15),
   }
 }
 

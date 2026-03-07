@@ -1336,23 +1336,10 @@ fn emit_edit_move_with_cache(
         (@regalloc.Spill(slot), @regalloc.Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let cached = slot_cache.get(slot)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          match cached {
-            Some(src_preg) if src_preg.class == class =>
-              if src_preg.index != dst.index {
-                let inst = @instr.VCodeInst::new(@instr.Move)
-                inst.add_def({ reg: @abi.Physical(dst_preg) })
-                inst.add_use(@abi.Physical(src_preg))
-                mc.emit_instruction(inst, stack_frame)
-              }
-            _ => {
-              let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
-              inst.add_def({ reg: @abi.Physical(dst_preg) })
-              mc.emit_instruction(inst, stack_frame)
-            }
-          }
-          slot_cache.set(slot, dst_preg)
+          let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
+          inst.add_def({ reg: @abi.Physical(dst_preg) })
+          mc.emit_instruction(inst, stack_frame)
         }
         (@regalloc.Reg(src), @regalloc.Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
@@ -1360,7 +1347,6 @@ fn emit_edit_move_with_cache(
           let inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
           inst.add_use(@abi.Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
-          slot_cache.set(slot, src_preg)
         }
         (@regalloc.Spill(from_slot), @regalloc.Spill(to_slot)) =>
           abort(

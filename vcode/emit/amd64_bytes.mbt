@@ -431,6 +431,17 @@ pub fn MachineCode::x86_emit_not_r32(self : MachineCode, reg : Int) -> Unit {
 }
 
 ///|
+pub fn MachineCode::x86_emit_neg_r32(self : MachineCode, reg : Int) -> Unit {
+  // neg r/m32: F7 /3
+  let b = (reg >> 3) & 1
+  if b != 0 {
+    emit_rex(self, 0, b)
+  }
+  self.emit_byte(0xF7)
+  emit_modrm(self, 3, 3, reg)
+}
+
+///|
 pub fn MachineCode::x86_emit_shl_r_cl(self : MachineCode, dst : Int) -> Unit {
   // shl r/m64, cl: REX.W + D3 /4
   let b = (dst >> 3) & 1
@@ -627,6 +638,78 @@ pub fn MachineCode::x86_emit_ror_r32_imm8(
   }
   self.emit_byte(0xC1)
   emit_modrm(self, 3, 1, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_shld_r_imm8(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+  imm : Int,
+) -> Unit {
+  // shld r/m64, r64, imm8: REX.W + 0F A4 /r ib
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0xA4)
+  emit_modrm(self, 3, src, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_shld_r32_imm8(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+  imm : Int,
+) -> Unit {
+  // shld r/m32, r32, imm8: 0F A4 /r ib
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xA4)
+  emit_modrm(self, 3, src, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_shrd_r_imm8(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+  imm : Int,
+) -> Unit {
+  // shrd r/m64, r64, imm8: REX.W + 0F AC /r ib
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  emit_rex_w(self, r, b)
+  self.emit_byte(0x0F)
+  self.emit_byte(0xAC)
+  emit_modrm(self, 3, src, dst)
+  self.emit_byte(imm & 255)
+}
+
+///|
+pub fn MachineCode::x86_emit_shrd_r32_imm8(
+  self : MachineCode,
+  dst : Int,
+  src : Int,
+  imm : Int,
+) -> Unit {
+  // shrd r/m32, r32, imm8: 0F AC /r ib
+  let r = (src >> 3) & 1
+  let b = (dst >> 3) & 1
+  if r != 0 || b != 0 {
+    emit_rex(self, r, b)
+  }
+  self.emit_byte(0x0F)
+  self.emit_byte(0xAC)
+  emit_modrm(self, 3, src, dst)
   self.emit_byte(imm & 255)
 }
 

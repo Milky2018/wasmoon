@@ -590,6 +590,17 @@ pub struct TrapDetails {
   fault_addr : Int64
   brk_imm : Int
   func_idx : Int
+  x0 : Int64
+  x1 : Int64
+  x2 : Int64
+  x3 : Int64
+  x6 : Int64
+  x7 : Int64
+  x8 : Int64
+  x9 : Int64
+  x10 : Int64
+  x11 : Int64
+  x15 : Int64
 }
 pub fn TrapDetails::new() -> Self
 

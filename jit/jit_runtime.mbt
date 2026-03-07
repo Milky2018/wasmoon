@@ -1073,6 +1073,15 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
       None => "func\{func_idx}"
     }
     let path = "target/jit-trap-\{func_idx}-\{sanitize_filename(name)}.log"
+    let mut ctx_mem0_ptr = 0L
+    let mut ctx_mem0_size = 0L
+    match self.context {
+      Some(ctx) => {
+        ctx_mem0_ptr = ctx.get_memory_ptr(0)
+        ctx_mem0_size = ctx.get_memory_size(0)
+      }
+      None => ()
+    }
     let content = "func_idx: \{func_idx}\n" +
       "name: \{name}\n" +
       "signal: \{details.signal}\n" +
@@ -1081,6 +1090,19 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
       "frame_lr: \{to_hex_u64(details.frame_lr)}\n" +
       "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
       "brk_imm: \{details.brk_imm}\n\n" +
+      "ctx_mem0_ptr: \{to_hex_u64(ctx_mem0_ptr)}\n" +
+      "ctx_mem0_size: \{ctx_mem0_size}\n\n" +
+      "x0: \{to_hex_u64(details.x0)}\n" +
+      "x1: \{to_hex_u64(details.x1)}\n" +
+      "x2: \{to_hex_u64(details.x2)}\n" +
+      "x3: \{to_hex_u64(details.x3)}\n" +
+      "x6: \{to_hex_u64(details.x6)}\n" +
+      "x7: \{to_hex_u64(details.x7)}\n" +
+      "x8: \{to_hex_u64(details.x8)}\n" +
+      "x9: \{to_hex_u64(details.x9)}\n" +
+      "x10: \{to_hex_u64(details.x10)}\n" +
+      "x11: \{to_hex_u64(details.x11)}\n" +
+      "x15: \{to_hex_u64(details.x15)}\n\n" +
       "== IR ==\n" +
       dbg.ir +
       "\n\n" +
