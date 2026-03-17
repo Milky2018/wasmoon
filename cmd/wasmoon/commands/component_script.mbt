@@ -125,7 +125,7 @@ fn component_test_json(
 ///|
 fn strip_identifier(name : String) -> String {
   if name.has_prefix("$") && name.length() > 1 {
-    let view = try! name[1:]
+    let view = name[1:]
     view.to_string()
   } else {
     name
@@ -150,10 +150,10 @@ fn parse_int_string(s : String) -> (Bool, StringView, Int) {
   let mut view : StringView = cleaned[:]
   if cleaned.has_prefix("-") {
     negative = true
-    view = try! cleaned[1:]
+    view = cleaned[1:]
   }
   if view.has_prefix("0x") || view.has_prefix("0X") {
-    (negative, try! view[2:], 16)
+    (negative, view[2:], 16)
   } else {
     (negative, view, 10)
   }

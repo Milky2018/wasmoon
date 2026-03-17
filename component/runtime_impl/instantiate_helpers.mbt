@@ -336,8 +336,8 @@ fn split_core_import_name(name : String) -> (String, String) {
     }
   }
   if sep_idx >= 0 {
-    let mod_name = try! name[0:sep_idx].to_string()
-    let field = try! name[sep_idx + 2:].to_string()
+    let mod_name = name[0:sep_idx].to_string()
+    let field = name[sep_idx + 2:].to_string()
     (mod_name, field)
   } else {
     ("", name)

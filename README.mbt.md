@@ -235,8 +235,8 @@ test "basic add" {
   let mod = @wat.parse(wat)
   let (store, instance) = @executor.instantiate_module(mod)
   let result = @executor.call_exported_func(store, instance, "add", [
-    @types.Value::I32(5),
-    @types.Value::I32(3),
+    I32(5),
+    I32(3),
   ])
   inspect(result, content="[I32(8)]")
 }
@@ -256,14 +256,9 @@ test "memory" {
     #|    local.get 0 i32.load))
   let mod = @wat.parse(wat)
   let (store, instance) = @executor.instantiate_module(mod)
-  @executor.call_exported_func(store, instance, "store", [
-    @types.Value::I32(0),
-    @types.Value::I32(42),
-  ])
+  @executor.call_exported_func(store, instance, "store", [I32(0), I32(42)])
   |> ignore
-  let result = @executor.call_exported_func(store, instance, "load", [
-    @types.Value::I32(0),
-  ])
+  let result = @executor.call_exported_func(store, instance, "load", [I32(0)])
   inspect(result, content="[I32(42)]")
 }
 ```
@@ -291,7 +286,7 @@ test "cross-module" {
     linker.get_store(),
     inst_b,
     "use_add",
-    [@types.Value::I32(3), @types.Value::I32(5)],
+    [I32(3), I32(5)],
   )
   inspect(result, content="[I32(8)]")
 }
@@ -308,13 +303,10 @@ test "host function" {
     "env",
     "double",
     fn(args) {
-      guard args[0] is @types.Value::I32(x) else { return [] }
-      [@types.Value::I32(x * 2)]
+      guard args[0] is I32(x) else { return [] }
+      [I32(x * 2)]
     },
-    func_type={
-      params: [@types.ValueType::I32],
-      results: [@types.ValueType::I32],
-    },
+    func_type={ params: [I32], results: [I32] },
   )
   let wat =
     #|(module
@@ -327,7 +319,7 @@ test "host function" {
     linker.get_store(),
     instance,
     "quadruple",
-    [@types.Value::I32(5)],
+    [I32(5)],
   )
   inspect(result, content="[I32(20)]")
 }

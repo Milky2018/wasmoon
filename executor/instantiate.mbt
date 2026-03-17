@@ -1551,7 +1551,7 @@ pub fn instantiate_module_with_imports(
             let owner = store.get_tag_owner(addr)
             let actual_type_idx = store.get_tag_type_idx(addr)
             let expected_type = mod.get_func_type(expected_type_idx)
-            let actual_type = try! store.get_tag_type(addr)
+            let actual_type = store.get_tag_type(addr)
             match owner {
               Some(o) => {
                 // Cross-module tag: check rec group membership

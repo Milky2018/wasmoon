@@ -238,7 +238,7 @@ fn parse_float32(s : String) -> Float raise WatError {
   if s.has_prefix("nan:0x") || s.has_prefix("+nan:0x") {
     // Parse payload from nan:0x...
     let payload_start = if s.has_prefix("+") { 7 } else { 6 }
-    let payload_str = try! s[payload_start:].to_string()
+    let payload_str = s[payload_start:].to_string()
     let payload = parse_hex_int(payload_str)
     // Positive NaN: 0x7f800000 | payload
     let bits = 0x7f800000 | (payload & 0x7fffff)
@@ -246,7 +246,7 @@ fn parse_float32(s : String) -> Float raise WatError {
   }
   if s.has_prefix("-nan:0x") {
     // Parse payload from -nan:0x...
-    let payload_str = try! s[7:].to_string()
+    let payload_str = s[7:].to_string()
     let payload = parse_hex_int(payload_str)
     // Negative NaN: 0xff800000 | payload = -8388608 | payload
     let bits = -8388608 | (payload & 0x7fffff)
@@ -1159,7 +1159,7 @@ fn parse_float64(s : String) -> Double raise WatError {
   if s.has_prefix("nan:0x") || s.has_prefix("+nan:0x") {
     // Parse payload from nan:0x...
     let payload_start = if s.has_prefix("+") { 7 } else { 6 }
-    let payload_str = try! s[payload_start:].to_string()
+    let payload_str = s[payload_start:].to_string()
     let payload = parse_hex_int64(payload_str)
     // Positive NaN: 0x7ff0000000000000 | payload
     let bits = 0x7ff0000000000000L | (payload & 0xfffffffffffffL)
@@ -1167,7 +1167,7 @@ fn parse_float64(s : String) -> Double raise WatError {
   }
   if s.has_prefix("-nan:0x") {
     // Parse payload from -nan:0x...
-    let payload_str = try! s[7:].to_string()
+    let payload_str = s[7:].to_string()
     let payload = parse_hex_int64(payload_str)
     // Negative NaN: 0xfff0000000000000 | payload
     let bits = 0xfff0000000000000L | (payload & 0xfffffffffffffL)

@@ -205,9 +205,9 @@ pub fn run_explore(
   if html_output {
     // Generate output path from input file: foo.wat -> foo.html
     let path = if wasm_path.has_suffix(".wat") {
-      try! (wasm_path[:wasm_path.length() - 4].to_string() + ".html")
+      wasm_path[:wasm_path.length() - 4].to_string() + ".html"
     } else if wasm_path.has_suffix(".wasm") {
-      try! (wasm_path[:wasm_path.length() - 5].to_string() + ".html")
+      wasm_path[:wasm_path.length() - 5].to_string() + ".html"
     } else {
       wasm_path + ".html"
     }
