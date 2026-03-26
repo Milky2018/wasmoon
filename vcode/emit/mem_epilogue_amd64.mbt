@@ -100,7 +100,10 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
           self.x86_emit_cmp_r32_imm32(rn, imm)
         }
       } else {
-        let scratch = isa.scratch_reg_1_index()
+        let mut scratch = isa.scratch_reg_1_index()
+        if scratch == rn {
+          scratch = isa.scratch_reg_2_index()
+        }
         self.x86_emit_mov_imm64(scratch, imm.to_int64())
         if is_64 {
           self.x86_emit_cmp_rr(rn, scratch)
@@ -117,8 +120,8 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         }
       }
     }
-    @instr.Jump(target, _args) =>
-      if next_block != Some(target) {
+    @instr.Jump(target, args) =>
+      if args.length() > 0 || next_block != Some(target) {
         self.x86_emit_jmp_rel32(target)
       }
     @instr.Trap(msg) => self.x86_emit_trap_imm16(trap_msg_to_imm16(msg))
@@ -140,18 +143,17 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       let tmp = isa.scratch_reg_2_index()
 
       // Bounds check: if index >= num_targets (unsigned), jump to default.
-      self.x86_emit_mov_imm64(tmp, num_targets.to_int64())
-      self.x86_emit_cmp_rr32(index_reg, tmp)
+      self.x86_emit_cmp_r32_imm32(index_reg, num_targets)
       self.x86_emit_jcc_rel32(@instr.Cond::Hs, default)
 
-      // tmp = &table
-      self.x86_emit_lea_r64_riprel32(base, table)
-
-      // tmp = base + index*4
+      // tmp = index*4
       // `br_table` index is i32 in Wasm; ensure zero-extension to avoid
       // accidentally using garbage in the high 32 bits.
       self.x86_emit_mov_rr32(tmp, index_reg)
       self.x86_emit_shl_r32_imm8(tmp, 2)
+      // base = &table
+      self.x86_emit_lea_r64_riprel32(base, table)
+      // tmp = base + index*4
       self.x86_emit_add_rr(tmp, base)
 
       // base = rel32 (sign-extended)

@@ -83,42 +83,6 @@ fn MachineCode::emit_instruction_x86_64(
     b
   }
 
-  ///|
-  /// Prepare a two-operand GPR instruction destination.
-  ///
-  /// Most amd64 integer ALU ops are two-operand. Our VCode does not enforce
-  /// `dst == lhs`, and `dst` may also alias the rhs operand.
-  ///
-  /// Returns the register index to use for the rhs input (either `rm` or `tmp`).
-  fn prepare_gpr_two_operand(
-    self : MachineCode,
-    rd : Int,
-    rn : Int,
-    rm : Int,
-    is_64 : Bool,
-    tmp : Int,
-  ) -> Int {
-    if rd == rn {
-      return rm
-    }
-    if rd == rm {
-      if is_64 {
-        self.x86_emit_mov_rr(tmp, rm)
-        self.x86_emit_mov_rr(rd, rn)
-      } else {
-        self.x86_emit_mov_rr32(tmp, rm)
-        self.x86_emit_mov_rr32(rd, rn)
-      }
-      return tmp
-    }
-    if is_64 {
-      self.x86_emit_mov_rr(rd, rn)
-    } else {
-      self.x86_emit_mov_rr32(rd, rn)
-    }
-    rm
-  }
-
   fn materialize_xmm_const(
     self : MachineCode,
     dst_xmm : Int,
@@ -324,10 +288,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut rhs = isa.scratch_reg_1_index()
-      if rhs == rd {
-        rhs = isa.scratch_reg_2_index()
-      }
+      let rhs = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(rd, rn)
       self.x86_emit_mov_rr32(rhs, rm)
       self.x86_emit_imul_rr(rd, rhs)
@@ -372,30 +333,42 @@ fn MachineCode::emit_instruction_x86_64(
         }
         return
       }
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
       if is_64 {
-        self.x86_emit_add_rr(rd, src)
+        self.x86_emit_mov_rr(rd, rn)
+        self.x86_emit_add_rr(rd, rm)
       } else {
-        self.x86_emit_add_rr32(rd, src)
+        self.x86_emit_mov_rr32(rd, rn)
+        self.x86_emit_add_rr32(rd, rm)
       }
     }
     @instr.Sub(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
+      if rd == rn {
+        if is_64 {
+          self.x86_emit_sub_rr(rd, rm)
+        } else {
+          self.x86_emit_sub_rr32(rd, rm)
+        }
+        return
       }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
+      if rd == rm {
+        if is_64 {
+          self.x86_emit_neg_r64(rd)
+          self.x86_emit_add_rr(rd, rn)
+        } else {
+          self.x86_emit_neg_r32(rd)
+          self.x86_emit_add_rr32(rd, rn)
+        }
+        return
+      }
       if is_64 {
-        self.x86_emit_sub_rr(rd, src)
+        self.x86_emit_mov_rr(rd, rn)
+        self.x86_emit_sub_rr(rd, rm)
       } else {
-        self.x86_emit_sub_rr32(rd, src)
+        self.x86_emit_mov_rr32(rd, rn)
+        self.x86_emit_sub_rr32(rd, rm)
       }
     }
     @instr.AddImm(imm, is_64) => {
@@ -423,7 +396,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_add_r32_imm32(rd, imm)
         }
       } else {
-        let scratch = isa.scratch_reg_1_index()
+        let scratch = pick_scratch_gpr(isa, rd, rn, -1, -1)
         self.x86_emit_mov_imm64(scratch, imm.to_int64())
         if is_64 {
           self.x86_emit_add_rr(rd, scratch)
@@ -455,7 +428,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_sub_r32_imm32(rd, imm)
         }
       } else {
-        let scratch = isa.scratch_reg_1_index()
+        let scratch = pick_scratch_gpr(isa, rd, rn, -1, -1)
         self.x86_emit_mov_imm64(scratch, imm.to_int64())
         if is_64 {
           self.x86_emit_sub_rr(rd, scratch)
@@ -614,11 +587,18 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
+      let src = if rd == rn {
+        rm
+      } else if rd == rm {
+        rn
+      } else {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+        rm
       }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
       if is_64 {
         self.x86_emit_imul_rr(rd, src)
       } else {
@@ -631,10 +611,7 @@ fn MachineCode::emit_instruction_x86_64(
       let acc = reg_num(inst.uses[0])
       let src1 = reg_num(inst.uses[1])
       let src2 = reg_num(inst.uses[2])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, acc, src1, src2)
       self.x86_emit_mov_rr(tmp, src1)
       self.x86_emit_imul_rr(tmp, src2)
       self.x86_emit_add_rr(tmp, acc)
@@ -648,10 +625,7 @@ fn MachineCode::emit_instruction_x86_64(
       let acc = reg_num(inst.uses[0])
       let src1 = reg_num(inst.uses[1])
       let src2 = reg_num(inst.uses[2])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, acc, src1, src2)
       self.x86_emit_mov_rr(tmp, src1)
       self.x86_emit_imul_rr(tmp, src2)
       if rd != acc {
@@ -664,10 +638,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let src1 = reg_num(inst.uses[0])
       let src2 = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, src1, src2, -1)
       self.x86_emit_mov_rr(tmp, src1)
       self.x86_emit_imul_rr(tmp, src2)
       self.x86_emit_neg_r64(tmp)
@@ -681,10 +652,7 @@ fn MachineCode::emit_instruction_x86_64(
       let acc = reg_num(inst.uses[0])
       let src1 = reg_num(inst.uses[1])
       let src2 = reg_num(inst.uses[2])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, acc, src1, src2)
       self.x86_emit_mov_rr32(tmp, src1)
       self.x86_emit_imul_rr32(tmp, src2)
       if rd != acc {
@@ -698,10 +666,7 @@ fn MachineCode::emit_instruction_x86_64(
       let acc = reg_num(inst.uses[0])
       let src1 = reg_num(inst.uses[1])
       let src2 = reg_num(inst.uses[2])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, acc, src1, src2)
       self.x86_emit_mov_rr32(tmp, src1)
       self.x86_emit_imul_rr32(tmp, src2)
       if rd != acc {
@@ -714,10 +679,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let src1 = reg_num(inst.uses[0])
       let src2 = reg_num(inst.uses[1])
-      let mut prod = isa.scratch_reg_1_index()
-      if prod == rd {
-        prod = isa.scratch_reg_2_index()
-      }
+      let prod = pick_scratch_gpr(isa, rd, src1, src2, -1)
       self.x86_emit_mov_rr32(prod, src1)
       self.x86_emit_imul_rr32(prod, src2)
       self.x86_emit_xor_rr32(rd, rd)
@@ -727,11 +689,18 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
+      let src = if rd == rn {
+        rm
+      } else if rd == rm {
+        rn
+      } else {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+        rm
       }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
       if is_64 {
         self.x86_emit_and_rr(rd, src)
       } else {
@@ -749,10 +718,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let mut scratch = isa.scratch_reg_1_index()
-      if scratch == rd {
-        scratch = isa.scratch_reg_2_index()
-      }
+      let scratch = pick_scratch_gpr(isa, rd, rn, -1, -1)
       self.x86_emit_mov_imm64(scratch, imm)
       if is_64 {
         self.x86_emit_and_rr(rd, scratch)
@@ -793,11 +759,18 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
+      let src = if rd == rn {
+        rm
+      } else if rd == rm {
+        rn
+      } else {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+        rm
       }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
       if is_64 {
         self.x86_emit_or_rr(rd, src)
       } else {
@@ -815,10 +788,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let mut scratch = isa.scratch_reg_1_index()
-      if scratch == rd {
-        scratch = isa.scratch_reg_2_index()
-      }
+      let scratch = pick_scratch_gpr(isa, rd, rn, -1, -1)
       self.x86_emit_mov_imm64(scratch, imm)
       if is_64 {
         self.x86_emit_or_rr(rd, scratch)
@@ -859,11 +829,18 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd {
-        tmp = isa.scratch_reg_2_index()
+      let src = if rd == rn {
+        rm
+      } else if rd == rm {
+        rn
+      } else {
+        if is_64 {
+          self.x86_emit_mov_rr(rd, rn)
+        } else {
+          self.x86_emit_mov_rr32(rd, rn)
+        }
+        rm
       }
-      let src = prepare_gpr_two_operand(self, rd, rn, rm, is_64, tmp)
       if is_64 {
         self.x86_emit_xor_rr(rd, src)
       } else {
@@ -881,10 +858,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      let mut scratch = isa.scratch_reg_1_index()
-      if scratch == rd {
-        scratch = isa.scratch_reg_2_index()
-      }
+      let scratch = pick_scratch_gpr(isa, rd, rn, -1, -1)
       self.x86_emit_mov_imm64(scratch, imm)
       if is_64 {
         self.x86_emit_xor_rr(rd, scratch)
@@ -928,13 +902,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
-      if tmp == rd || tmp == rn {
-        abort("x86_64 add_extend: no scratch register available")
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
@@ -956,13 +924,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
-      if tmp == rd || tmp == rn {
-        abort("x86_64 sub_extend: no scratch register available")
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
         @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
         @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
@@ -1010,10 +972,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr(tmp, rm)
       let sh = amount & 63
       if sh != 0 {
@@ -1052,10 +1011,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(tmp, rm)
       let sh = amount & 31
       if sh != 0 {
@@ -1074,10 +1030,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr(tmp, rm)
       let sh = amount & 63
       if sh != 0 {
@@ -1096,10 +1049,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(tmp, rm)
       let sh = amount & 31
       if sh != 0 {
@@ -1118,10 +1068,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr(tmp, rm)
       let sh = amount & 63
       if sh != 0 {
@@ -1140,10 +1087,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(tmp, rm)
       let sh = amount & 31
       if sh != 0 {
@@ -1162,10 +1106,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr(tmp, rm)
       let sh = amount & 63
       if sh != 0 {
@@ -1184,10 +1125,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(tmp, rm)
       let sh = amount & 31
       if sh != 0 {
@@ -1206,10 +1144,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr(tmp, rm)
       let sh = amount & 63
       if sh != 0 {
@@ -1228,10 +1163,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let mut tmp = isa.scratch_reg_1_index()
-      if tmp == rd || tmp == rn {
-        tmp = isa.scratch_reg_2_index()
-      }
+      let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       self.x86_emit_mov_rr32(tmp, rm)
       let sh = amount & 31
       if sh != 0 {
@@ -2655,10 +2587,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           return
         }
-        let mut idx = isa.scratch_reg_1_index()
-        if idx == base || idx == rt {
-          idx = isa.scratch_reg_2_index()
-        }
+        let idx = pick_scratch_gpr(isa, base, index, rt, -1)
         match ext {
           @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
           @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
@@ -2690,10 +2619,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let mut idx = isa.scratch_reg_1_index()
-      if idx == base || idx == rt {
-        idx = isa.scratch_reg_2_index()
-      }
+      let idx = pick_scratch_gpr(isa, base, index, rt, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()
@@ -2813,10 +2739,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
         return
       }
-      let mut idx = isa.scratch_reg_1_index()
-      if idx == base || idx == rt {
-        idx = isa.scratch_reg_2_index()
-      }
+      let idx = pick_scratch_gpr(isa, base, index, rt, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()
@@ -2983,10 +2906,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           return
         }
-        let mut idx = isa.scratch_reg_1_index()
-        if idx == base || idx == value {
-          idx = isa.scratch_reg_2_index()
-        }
+        let idx = pick_scratch_gpr(isa, base, index, value, -1)
         match ext {
           @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
           @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
@@ -3018,10 +2938,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let mut idx = isa.scratch_reg_1_index()
-      if idx == base || idx == value {
-        idx = isa.scratch_reg_2_index()
-      }
+      let idx = pick_scratch_gpr(isa, base, index, value, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()
@@ -3114,10 +3031,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
         return
       }
-      let mut idx = isa.scratch_reg_1_index()
-      if idx == base || idx == value {
-        idx = isa.scratch_reg_2_index()
-      }
+      let idx = pick_scratch_gpr(isa, base, index, value, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()

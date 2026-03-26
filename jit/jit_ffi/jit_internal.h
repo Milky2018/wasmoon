@@ -56,6 +56,17 @@ extern __thread volatile uintptr_t g_trap_frame_lr;
 extern __thread volatile uintptr_t g_trap_fault_addr;
 extern __thread volatile sig_atomic_t g_trap_brk_imm;
 extern __thread volatile sig_atomic_t g_trap_func_idx;
+extern __thread volatile uintptr_t g_trap_x0;
+extern __thread volatile uintptr_t g_trap_x1;
+extern __thread volatile uintptr_t g_trap_x2;
+extern __thread volatile uintptr_t g_trap_x3;
+extern __thread volatile uintptr_t g_trap_x6;
+extern __thread volatile uintptr_t g_trap_x7;
+extern __thread volatile uintptr_t g_trap_x8;
+extern __thread volatile uintptr_t g_trap_x9;
+extern __thread volatile uintptr_t g_trap_x10;
+extern __thread volatile uintptr_t g_trap_x11;
+extern __thread volatile uintptr_t g_trap_x15;
 extern __thread volatile uintptr_t g_trap_wasm_stack_base;
 extern __thread volatile uintptr_t g_trap_wasm_stack_top;
 

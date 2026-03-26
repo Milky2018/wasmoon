@@ -567,14 +567,15 @@ test "x86_64 and/or/xor encodings" {
 }
 
 ///|
-test "x86_64 imul/not encodings" {
+test "x86_64 imul/not/neg encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_imul_rr(0, 8) // imul rax, r8
   mc.x86_emit_not_r64(11) // not r11
   mc.x86_emit_neg_r64(11) // neg r11
+  mc.x86_emit_neg_r32(11) // neg r11d
   inspect(
     mc.get_bytes(),
-    content="[73, 15, 175, 192, 73, 247, 211, 73, 247, 219]",
+    content="[73, 15, 175, 192, 73, 247, 211, 73, 247, 219, 65, 247, 219]",
   )
 }
 
@@ -695,6 +696,19 @@ test "x86_64 shl/shr/sar/ror encodings (cl + imm8)" {
   inspect(
     mc.get_bytes(),
     content="[72, 211, 224, 73, 211, 232, 65, 211, 249, 211, 200, 72, 193, 224, 3, 73, 193, 232, 1, 65, 193, 249, 7, 193, 200, 5]",
+  )
+}
+
+///|
+test "x86_64 shld/shrd encodings (imm8)" {
+  let mc = MachineCode::new()
+  mc.x86_emit_shld_r_imm8(0, 8, 5) // shld rax, r8, 5
+  mc.x86_emit_shld_r32_imm8(9, 10, 3) // shld r9d, r10d, 3
+  mc.x86_emit_shrd_r_imm8(8, 0, 7) // shrd r8, rax, 7
+  mc.x86_emit_shrd_r32_imm8(10, 9, 1) // shrd r10d, r9d, 1
+  inspect(
+    mc.get_bytes(),
+    content="[76, 15, 164, 192, 5, 69, 15, 164, 209, 3, 73, 15, 172, 192, 7, 69, 15, 172, 202, 1]",
   )
 }
 

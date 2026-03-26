@@ -22,6 +22,39 @@
 #ifndef REG_RBP
 #define REG_RBP 10
 #endif
+#ifndef REG_RAX
+#define REG_RAX 13
+#endif
+#ifndef REG_RCX
+#define REG_RCX 14
+#endif
+#ifndef REG_RDX
+#define REG_RDX 12
+#endif
+#ifndef REG_RBX
+#define REG_RBX 11
+#endif
+#ifndef REG_RSI
+#define REG_RSI 9
+#endif
+#ifndef REG_RDI
+#define REG_RDI 8
+#endif
+#ifndef REG_R8
+#define REG_R8 0
+#endif
+#ifndef REG_R9
+#define REG_R9 1
+#endif
+#ifndef REG_R10
+#define REG_R10 2
+#endif
+#ifndef REG_R11
+#define REG_R11 3
+#endif
+#ifndef REG_R15
+#define REG_R15 7
+#endif
 #endif
 
 // ============ Trap State (Thread-Local) ============
@@ -39,6 +72,17 @@ __thread volatile uintptr_t g_trap_frame_lr = 0;
 __thread volatile uintptr_t g_trap_fault_addr = 0;
 __thread volatile sig_atomic_t g_trap_brk_imm = -1;
 __thread volatile sig_atomic_t g_trap_func_idx = -1;
+__thread volatile uintptr_t g_trap_x0 = 0;
+__thread volatile uintptr_t g_trap_x1 = 0;
+__thread volatile uintptr_t g_trap_x2 = 0;
+__thread volatile uintptr_t g_trap_x3 = 0;
+__thread volatile uintptr_t g_trap_x6 = 0;
+__thread volatile uintptr_t g_trap_x7 = 0;
+__thread volatile uintptr_t g_trap_x8 = 0;
+__thread volatile uintptr_t g_trap_x9 = 0;
+__thread volatile uintptr_t g_trap_x10 = 0;
+__thread volatile uintptr_t g_trap_x11 = 0;
+__thread volatile uintptr_t g_trap_x15 = 0;
 
 // WASM stack bounds for frame walking validation
 __thread volatile uintptr_t g_trap_wasm_stack_base = 0;
@@ -268,6 +312,17 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_frame_lr = 0;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
+        g_trap_x0 = 0;
+        g_trap_x1 = 0;
+        g_trap_x2 = 0;
+        g_trap_x3 = 0;
+        g_trap_x6 = 0;
+        g_trap_x7 = 0;
+        g_trap_x8 = 0;
+        g_trap_x9 = 0;
+        g_trap_x10 = 0;
+        g_trap_x11 = 0;
+        g_trap_x15 = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
             // Save WASM stack bounds for frame walking validation
@@ -359,6 +414,17 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
         uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
+        g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
+        g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
+        g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
+        g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
+        g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
+        g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
+        g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
+        g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
+        g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
+        g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
+        g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
         g_trap_lr = 0;
         g_trap_fp = fp;
         g_trap_frame_lr = 0;
@@ -384,6 +450,17 @@ static void trap_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         ucontext_t *uc = (ucontext_t *)ucontext;
         uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
         uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+        g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
+        g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
+        g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
+        g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
+        g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
+        g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
+        g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
+        g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
+        g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
+        g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
+        g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
         g_trap_lr = 0;
         g_trap_fp = fp;
         g_trap_frame_lr = 0;
@@ -441,6 +518,17 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         g_trap_fault_addr = (uintptr_t)fault_addr;
         g_trap_brk_imm = -1;
         g_trap_func_idx = -1;
+        g_trap_x0 = 0;
+        g_trap_x1 = 0;
+        g_trap_x2 = 0;
+        g_trap_x3 = 0;
+        g_trap_x6 = 0;
+        g_trap_x7 = 0;
+        g_trap_x8 = 0;
+        g_trap_x9 = 0;
+        g_trap_x10 = 0;
+        g_trap_x11 = 0;
+        g_trap_x15 = 0;
         if (ctx) {
             g_trap_func_idx = (sig_atomic_t)ctx->debug_current_func_idx;
             // Save WASM stack bounds for frame walking validation
@@ -476,6 +564,17 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext->__ss.__rip;
+            g_trap_x0 = (uintptr_t)uc->uc_mcontext->__ss.__rax;
+            g_trap_x1 = (uintptr_t)uc->uc_mcontext->__ss.__rcx;
+            g_trap_x2 = (uintptr_t)uc->uc_mcontext->__ss.__rdx;
+            g_trap_x3 = (uintptr_t)uc->uc_mcontext->__ss.__rbx;
+            g_trap_x6 = (uintptr_t)uc->uc_mcontext->__ss.__rsi;
+            g_trap_x7 = (uintptr_t)uc->uc_mcontext->__ss.__rdi;
+            g_trap_x8 = (uintptr_t)uc->uc_mcontext->__ss.__r8;
+            g_trap_x9 = (uintptr_t)uc->uc_mcontext->__ss.__r9;
+            g_trap_x10 = (uintptr_t)uc->uc_mcontext->__ss.__r10;
+            g_trap_x11 = (uintptr_t)uc->uc_mcontext->__ss.__r11;
+            g_trap_x15 = (uintptr_t)uc->uc_mcontext->__ss.__r15;
             // amd64 has no link register; keep LR at 0.
             g_trap_lr = 0;
             uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__rbp;
@@ -525,6 +624,17 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
         if (ucontext) {
             ucontext_t *uc = (ucontext_t *)ucontext;
             pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+            g_trap_x0 = (uintptr_t)uc->uc_mcontext.gregs[REG_RAX];
+            g_trap_x1 = (uintptr_t)uc->uc_mcontext.gregs[REG_RCX];
+            g_trap_x2 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDX];
+            g_trap_x3 = (uintptr_t)uc->uc_mcontext.gregs[REG_RBX];
+            g_trap_x6 = (uintptr_t)uc->uc_mcontext.gregs[REG_RSI];
+            g_trap_x7 = (uintptr_t)uc->uc_mcontext.gregs[REG_RDI];
+            g_trap_x8 = (uintptr_t)uc->uc_mcontext.gregs[REG_R8];
+            g_trap_x9 = (uintptr_t)uc->uc_mcontext.gregs[REG_R9];
+            g_trap_x10 = (uintptr_t)uc->uc_mcontext.gregs[REG_R10];
+            g_trap_x11 = (uintptr_t)uc->uc_mcontext.gregs[REG_R11];
+            g_trap_x15 = (uintptr_t)uc->uc_mcontext.gregs[REG_R15];
             g_trap_lr = 0;
             uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
             g_trap_fp = fp;

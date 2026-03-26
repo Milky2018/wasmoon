@@ -46,6 +46,23 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
     return (int64_t)g_trap_fault_addr;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_xreg(int idx) {
+    switch (idx) {
+        case 0: return (int64_t)g_trap_x0;
+        case 1: return (int64_t)g_trap_x1;
+        case 2: return (int64_t)g_trap_x2;
+        case 3: return (int64_t)g_trap_x3;
+        case 6: return (int64_t)g_trap_x6;
+        case 7: return (int64_t)g_trap_x7;
+        case 8: return (int64_t)g_trap_x8;
+        case 9: return (int64_t)g_trap_x9;
+        case 10: return (int64_t)g_trap_x10;
+        case 11: return (int64_t)g_trap_x11;
+        case 15: return (int64_t)g_trap_x15;
+        default: return 0;
+    }
+}
+
 // ============ Hostcall Callback Registration ============
 
 typedef int32_t (*hostcall_callback_fn)(void *closure);

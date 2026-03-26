@@ -44,6 +44,11 @@ pub extern "c" fn c_jit_get_trap_brk_imm() -> Int = "wasmoon_jit_get_trap_brk_im
 /// Get best-effort wasm func_idx at trap time, or -1 if unknown
 pub extern "c" fn c_jit_get_trap_func_idx() -> Int = "wasmoon_jit_get_trap_func_idx"
 
+///|
+/// Get best-effort captured x-register value at trap time (JIT ABI numbering).
+/// Supported indices: 0,1,2,3,6,7,8,9,10,11,15. Others return 0.
+pub extern "c" fn c_jit_get_trap_xreg(idx : Int) -> Int64 = "wasmoon_jit_get_trap_xreg"
+
 // ============ Hostcall Bridge (JIT -> Host) ============
 
 ///|
