@@ -955,7 +955,7 @@ fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
       }
       If(_, then_body, else_body) => {
         sb.write_string(instrs_to_wat(then_body, indent + 1))
-        if not(else_body.is_empty()) {
+        if !else_body.is_empty() {
           sb.write_string(indent_str)
           sb.write_string("else\n")
           sb.write_string(instrs_to_wat(else_body, indent + 1))

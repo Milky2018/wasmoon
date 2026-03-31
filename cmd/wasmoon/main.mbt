@@ -308,7 +308,7 @@ fn main {
                 let func_idx : Int? = match sub.args.get("func") {
                   Some(arr) =>
                     if arr.length() > 0 {
-                      Some(@strconv.parse_int(arr[0])) catch {
+                      Some(@string.parse_int(arr[0])) catch {
                         _ => None
                       }
                     } else {

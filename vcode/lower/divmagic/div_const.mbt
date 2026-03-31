@@ -66,7 +66,7 @@ pub fn magic_u32(d : UInt) -> MagicU32 {
       r2 = 2U * r2 + 1U
     }
     let delta = d - 1U - r2
-    if not(p < 64 && (q1 < delta || (q1 == delta && r1 == 0U))) {
+    if !(p < 64 && (q1 < delta || (q1 == delta && r1 == 0U))) {
       break
     }
   }
@@ -107,7 +107,7 @@ pub fn magic_u64(d : UInt64) -> MagicU64 {
       r2 = 2UL * r2 + 1UL
     }
     let delta = d - 1UL - r2
-    if not(p < 128 && (q1 < delta || (q1 == delta && r1 == 0UL))) {
+    if !(p < 128 && (q1 < delta || (q1 == delta && r1 == 0UL))) {
       break
     }
   }
@@ -146,7 +146,7 @@ pub fn magic_s32(d : Int) -> MagicS32 {
       r2 = r2 - ad
     }
     let delta = ad - r2
-    if not(q1 < delta || (q1 == delta && r1 == 0U)) {
+    if !(q1 < delta || (q1 == delta && r1 == 0U)) {
       break
     }
   }
@@ -190,7 +190,7 @@ pub fn magic_s64(d : Int64) -> MagicS64 {
       r2 = r2 - ad
     }
     let delta = ad - r2
-    if not(q1 < delta || (q1 == delta && r1 == 0UL)) {
+    if !(q1 < delta || (q1 == delta && r1 == 0UL)) {
       break
     }
   }

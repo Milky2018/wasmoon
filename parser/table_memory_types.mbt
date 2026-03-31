@@ -52,7 +52,7 @@ fn Parser::read_table_limits(
     LIMITS_64_NO_MAX,
     LIMITS_64_HAS_MAX,
   ]
-  if not(valid_table_flags.contains(flags)) {
+  if !valid_table_flags.contains(flags) {
     raise MalformedLimitsFlags(flags)
   }
   let has_max = (flags & LIMITS_HAS_MAX) != 0
@@ -107,7 +107,7 @@ fn Parser::read_memory_type(
     0x0D,
     0x0F,
   ]
-  if not(valid_memory_flags.contains(flags)) {
+  if !valid_memory_flags.contains(flags) {
     raise MalformedLimitsFlags(flags)
   }
 

@@ -54,7 +54,7 @@ pub fn TypeEquivalenceContext::types_equivalent(
   idx2 : Int,
 ) -> Bool {
   // Same index in same module is trivially equivalent
-  if not(self.cross_module) && idx1 == idx2 {
+  if !self.cross_module && idx1 == idx2 {
     return true
   }
   // First check rec group info - types can only be equivalent if
@@ -77,7 +77,7 @@ pub fn TypeEquivalenceContext::types_equivalent(
   }
 
   // For same-module, same rec group ID means same rec group
-  if not(self.cross_module) && rec_id1 == rec_id2 {
+  if !self.cross_module && rec_id1 == rec_id2 {
     // Same rec group, same position (since rec_info1 == rec_info2)
     return rec_info1.0 == rec_info2.0
   }
@@ -108,7 +108,7 @@ fn TypeEquivalenceContext::types_structurally_equal(
   idx2 : Int,
 ) -> Bool {
   // Same index in same module means same type
-  if not(self.cross_module) && idx1 == idx2 {
+  if !self.cross_module && idx1 == idx2 {
     return true
   }
   // Bounds check
@@ -139,13 +139,11 @@ fn TypeEquivalenceContext::types_structurally_equal(
     return false
   }
   // Check supertypes match (with proper internal/external reference handling)
-  if not(
-      self.supertypes_equal_with_context(
-        t1.supertypes,
-        t2.supertypes,
-        idx1,
-        idx2,
-      ),
+  if !self.supertypes_equal_with_context(
+      t1.supertypes,
+      t2.supertypes,
+      idx1,
+      idx2,
     ) {
     self.visited[key] = false
     return false
@@ -178,7 +176,7 @@ fn TypeEquivalenceContext::supertypes_equal_with_context(
   }
   for i, sup1 in s1 {
     // Use type_refs_equal to properly handle internal vs external references
-    if not(self.type_refs_equal(sup1, s2[i], idx1, idx2)) {
+    if !self.type_refs_equal(sup1, s2[i], idx1, idx2) {
       return false
     }
   }
@@ -218,13 +216,13 @@ fn TypeEquivalenceContext::func_types_equal(
   }
   // Compare params
   for i, p1 in t1.params {
-    if not(self.value_types_equal(p1, t2.params[i], idx1, idx2)) {
+    if !self.value_types_equal(p1, t2.params[i], idx1, idx2) {
       return false
     }
   }
   // Compare results
   for i, r1 in t1.results {
-    if not(self.value_types_equal(r1, t2.results[i], idx1, idx2)) {
+    if !self.value_types_equal(r1, t2.results[i], idx1, idx2) {
       return false
     }
   }
@@ -246,7 +244,7 @@ fn TypeEquivalenceContext::struct_types_equal(
   }
   // Each field must be equivalent
   for i, f1 in s1.fields {
-    if not(self.field_types_equal(f1, s2.fields[i], idx1, idx2)) {
+    if !self.field_types_equal(f1, s2.fields[i], idx1, idx2) {
       return false
     }
   }
@@ -498,7 +496,7 @@ pub fn compute_canonical_type_indices(
         break
       }
     }
-    if not(found) {
+    if !found {
       canonical[i] = i
       rec_group_canonical[rec_id_i] = (rec_id_i, i)
     }
@@ -549,7 +547,7 @@ fn rec_groups_equivalent(
   }
   // All types must be pairwise structurally equivalent
   for k, idx1 in types1 {
-    if not(ctx.types_structurally_equal(idx1, types2[k])) {
+    if !ctx.types_structurally_equal(idx1, types2[k]) {
       return false
     }
   }
@@ -567,12 +565,12 @@ pub fn func_types_equal(t1 : FuncType, t2 : FuncType) -> Bool {
     return false
   }
   for i, p1 in t1.params {
-    if not(value_types_simple_equal(p1, t2.params[i])) {
+    if !value_types_simple_equal(p1, t2.params[i]) {
       return false
     }
   }
   for i, r1 in t1.results {
-    if not(value_types_simple_equal(r1, t2.results[i])) {
+    if !value_types_simple_equal(r1, t2.results[i]) {
       return false
     }
   }

@@ -73,9 +73,7 @@ pub fn to_hex_u16(Int) -> String
 // Types and methods
 pub(all) struct ArrayType {
   element : FieldType
-}
-pub impl Eq for ArrayType
-pub impl Show for ArrayType
+} derive(Eq, Show)
 
 pub(all) enum BlockType {
   Empty
@@ -83,57 +81,43 @@ pub(all) enum BlockType {
   MultiValue(Array[ValueType])
   InlineType(Array[ValueType], Array[ValueType])
   TypeIndex(Int)
-}
-pub impl Eq for BlockType
-pub impl Show for BlockType
+} derive(Eq, Show)
 
 pub(all) enum CatchHandler {
   Catch(Int, Int)
   CatchRef(Int, Int)
   CatchAll(Int)
   CatchAllRef(Int)
-}
-pub impl Eq for CatchHandler
-pub impl Show for CatchHandler
+} derive(Eq, Show)
 
 pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-}
-pub impl Eq for CompositeType
-pub impl Show for CompositeType
+} derive(Eq, Show)
 
 pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
   init : Bytes
-}
-pub impl Eq for Data
-pub impl Show for Data
+} derive(Eq, Show)
 
 pub(all) enum ElemMode {
   Active(Int, Array[Instruction])
   Passive
   Declarative
-}
-pub impl Eq for ElemMode
-pub impl Show for ElemMode
+} derive(Eq, Show)
 
 pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType
   init : Array[Array[Instruction]]
-}
-pub impl Eq for Element
-pub impl Show for Element
+} derive(Eq, Show)
 
 pub(all) struct Export {
   name : String
   desc : ExportDesc
-}
-pub impl Eq for Export
-pub impl Show for Export
+} derive(Eq, Show)
 
 pub(all) enum ExportDesc {
   Func(Int)
@@ -141,54 +125,40 @@ pub(all) enum ExportDesc {
   Memory(Int)
   Global(Int)
   Tag(Int)
-}
-pub impl Eq for ExportDesc
-pub impl Show for ExportDesc
+} derive(Eq, Show)
 
 pub(all) struct FieldType {
   storage_type : StorageType
   mutable : Bool
-}
-pub impl Eq for FieldType
-pub impl Show for FieldType
+} derive(Eq, Show)
 
 pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
-}
+} derive(Eq, Show)
 pub fn FuncType::structural_hash(Self) -> Int
 pub fn FuncType::structurally_equal(Self, Self, Int, Int) -> Bool
-pub impl Eq for FuncType
-pub impl Show for FuncType
 
 pub(all) struct FunctionCode {
   locals : Array[ValueType]
   body : Array[Instruction]
-}
-pub impl Eq for FunctionCode
-pub impl Show for FunctionCode
+} derive(Eq, Show)
 
 pub(all) struct Global {
   type_ : GlobalType
   init : Array[Instruction]
-}
-pub impl Eq for Global
-pub impl Show for Global
+} derive(Eq, Show)
 
 pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
-}
-pub impl Eq for GlobalType
-pub impl Show for GlobalType
+} derive(Eq, Show)
 
 pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
-}
-pub impl Eq for Import
-pub impl Show for Import
+} derive(Eq, Show)
 
 pub(all) enum ImportDesc {
   Func(Int)
@@ -196,9 +166,7 @@ pub(all) enum ImportDesc {
   Memory(MemoryType)
   Global(GlobalType)
   Tag(Int)
-}
-pub impl Eq for ImportDesc
-pub impl Show for ImportDesc
+} derive(Eq, Show)
 
 pub(all) enum Instruction {
   Unreachable
@@ -701,25 +669,19 @@ pub(all) enum Instruction {
   I16x8RelaxedQ15mulrS
   I16x8RelaxedDotI8x16I7x16S
   I32x4RelaxedDotI8x16I7x16AddS
-}
-pub impl Eq for Instruction
-pub impl Show for Instruction
+} derive(Eq, Show)
 
 pub(all) struct Limits {
   min : Int64
   max : Int64?
-}
-pub impl Eq for Limits
-pub impl Show for Limits
+} derive(Eq, Show)
 
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
   page_size_log2 : Int
-}
+} derive(Eq, Show)
 pub fn MemoryType::addr_type(Self) -> ValueType
-pub impl Eq for MemoryType
-pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[SubType]
@@ -736,7 +698,7 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
   func_names : Map[Int, String]
-}
+} derive(Show)
 pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
@@ -746,38 +708,29 @@ pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::new() -> Self
 pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
-pub impl Show for Module
 
 pub(all) enum PackedType {
   I8
   I16
-}
-pub impl Eq for PackedType
-pub impl Show for PackedType
+} derive(Eq, Show)
 
 pub(all) enum StorageType {
   Val(ValueType)
   Packed(PackedType)
-}
-pub impl Eq for StorageType
-pub impl Show for StorageType
+} derive(Eq, Show)
 
 pub(all) struct StructType {
   fields : Array[FieldType]
-}
-pub impl Eq for StructType
-pub impl Show for StructType
+} derive(Eq, Show)
 
 pub(all) struct SubType {
   final_ : Bool
   supertypes : Array[Int]
   composite : CompositeType
-}
+} derive(Eq, Show)
 pub fn SubType::from_func(FuncType) -> Self
 pub fn SubType::func(Array[ValueType], Array[ValueType]) -> Self
 pub fn SubType::simple(CompositeType) -> Self
-pub impl Eq for SubType
-pub impl Show for SubType
 
 pub struct SubtypingContext {
   types1 : Array[SubType]
@@ -798,23 +751,17 @@ pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? :
 pub(all) struct Table {
   type_ : TableType
   init : Array[Instruction]?
-}
-pub impl Eq for Table
-pub impl Show for Table
+} derive(Eq, Show)
 
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
   is_table64 : Bool
-}
-pub impl Eq for TableType
-pub impl Show for TableType
+} derive(Eq, Show)
 
 pub(all) struct TagType {
   type_idx : Int
-}
-pub impl Eq for TagType
-pub impl Show for TagType
+} derive(Eq, Show)
 
 pub struct TypeEquivalenceContext {
   types1 : Array[SubType]
@@ -841,9 +788,7 @@ pub(all) enum Value {
   ArrayRef(Int)
   I31(Int)
   Null
-}
-pub impl Eq for Value
-pub impl Show for Value
+} derive(Eq, Show)
 
 pub(all) enum ValueType {
   I32
@@ -877,10 +822,8 @@ pub(all) enum ValueType {
   NullFuncRef
   NullExnRef
   NullExternRef
-}
+} derive(Eq, Show)
 pub fn ValueType::is_nullable(Self) -> Bool
-pub impl Eq for ValueType
-pub impl Show for ValueType
 
 // Type aliases
 

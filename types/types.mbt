@@ -928,14 +928,14 @@ pub fn FuncType::structurally_equal(
   // Check each param
   for i, p1 in self.params {
     let p2 = other.params[i]
-    if not(p1.structurally_equal(p2, self_idx, other_idx)) {
+    if !p1.structurally_equal(p2, self_idx, other_idx) {
       return false
     }
   }
   // Check each result
   for i, r1 in self.results {
     let r2 = other.results[i]
-    if not(r1.structurally_equal(r2, self_idx, other_idx)) {
+    if !r1.structurally_equal(r2, self_idx, other_idx) {
       return false
     }
   }

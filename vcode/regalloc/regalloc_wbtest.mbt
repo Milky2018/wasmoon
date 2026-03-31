@@ -606,7 +606,7 @@ fn parse_stack_offset(line : StringView) -> Int? {
           if digits.length() == 0 {
             return None
           }
-          return Some(@strconv.parse_int(digits) catch { _ => return None })
+          return Some(@string.parse_int(digits) catch { _ => return None })
         } else {
           // Unexpected char; reset.
           state = 0

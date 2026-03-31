@@ -261,7 +261,7 @@ fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
 
 ///|
 fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int) -> Unit {
-  if not(self.in_worklist[block_id]) {
+  if !self.in_worklist[block_id] {
     self.queue.push(block_id)
     self.in_worklist[block_id] = true
   }

@@ -51,8 +51,7 @@ pub struct FunctionMetrics {
   mut spill_to_spill : Int
   ir_passes : Array[IRPassMetric]
   regalloc_phases : Array[RegallocPhaseMetric]
-}
-pub impl ToJson for FunctionMetrics
+} derive(ToJson)
 
 pub struct IRPassMetric {
   name : String
@@ -63,8 +62,7 @@ pub struct IRPassMetric {
   egraph_classes : Int?
   egraph_nodes : Int?
   egraph_rule_apps : Int?
-}
-pub impl ToJson for IRPassMetric
+} derive(ToJson)
 
 #alias(PerfTick)
 type Instant
@@ -74,14 +72,12 @@ pub struct ModuleMetricsReport {
   expected_functions : Int
   mut module_compile_us : Int64
   functions : Array[FunctionMetrics]
-}
-pub impl ToJson for ModuleMetricsReport
+} derive(ToJson)
 
 pub struct RegallocPhaseMetric {
   name : String
   duration_us : Int64
-}
-pub impl ToJson for RegallocPhaseMetric
+} derive(ToJson)
 
 // Type aliases
 

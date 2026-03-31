@@ -3,6 +3,7 @@ import {
   "moonbitlang/x/sys",
   "TheWaWaR/clap",
   "moonbitlang/core/hashset",
+  "moonbitlang/core/string",
   "moonbitlang/core/strconv",
 }
 

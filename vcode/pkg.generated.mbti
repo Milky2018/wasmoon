@@ -88,16 +88,14 @@ pub struct GcCompilerConfig {
   needs_safepoints : Bool
   can_inline_alloc : Bool
   object_header_size : Int
-}
-pub impl Show for GcCompilerConfig
+} derive(Show)
 
 pub struct GcSafepoint {
   code_offset : Int
   live_refs : Array[Int]
   metadata : Int64
-}
+} derive(Show)
 pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
-pub impl Show for GcSafepoint
 
 type JITRuntime
 pub fn JITRuntime::clear(Self) -> Unit

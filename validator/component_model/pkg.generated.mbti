@@ -56,9 +56,7 @@ pub(all) suberror ComponentValidationError {
   AliasTargetMismatch(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
-}
-pub impl Eq for ComponentValidationError
-pub impl Show for ComponentValidationError
+} derive(Eq, Show)
 
 // Types and methods
 pub struct ComponentValidationConfig {

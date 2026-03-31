@@ -1207,11 +1207,11 @@ fn v128_pattern_match(
       let actual_f = Float::reinterpret_from_int(lane_bits)
       match lanes[i] {
         F32(e) =>
-          if not(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
             return false
           }
         F32CanonicalNan | F32ArithmeticNan =>
-          if not(actual_f.is_nan()) {
+          if !actual_f.is_nan() {
             return false
           }
         _ => return false
@@ -1233,11 +1233,11 @@ fn v128_pattern_match(
       let actual_f = lane_bits.reinterpret_as_double()
       match lanes[i] {
         F64(e) =>
-          if not(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
+          if !(actual_f == e || (actual_f.is_nan() && e.is_nan())) {
             return false
           }
         F64CanonicalNan | F64ArithmeticNan =>
-          if not(actual_f.is_nan()) {
+          if !actual_f.is_nan() {
             return false
           }
         _ => return false

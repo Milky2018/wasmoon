@@ -156,9 +156,9 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 ///|
 fn write_composite_type(buf : StringBuilder, st : @types.SubType) -> Unit {
   // Handle subtype wrapper
-  if not(st.final_) || st.supertypes.length() > 0 {
+  if !st.final_ || st.supertypes.length() > 0 {
     buf.write_string("(sub ")
-    if not(st.final_) {
+    if !st.final_ {
       buf.write_string("open ")
     }
     for sup in st.supertypes {
@@ -171,7 +171,7 @@ fn write_composite_type(buf : StringBuilder, st : @types.SubType) -> Unit {
     Struct(st) => write_struct_type(buf, st)
     Array(at) => write_array_type(buf, at)
   }
-  if not(st.final_) || st.supertypes.length() > 0 {
+  if !st.final_ || st.supertypes.length() > 0 {
     buf.write_string(")")
   }
 }

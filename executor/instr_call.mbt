@@ -69,7 +69,7 @@ fn ExecContext::exec_call_indirect(
       rec_groups=self.instance.type_rec_groups,
       canonical=self.instance.canonical_type_indices,
     )
-    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+    if !ctx.is_subtype(actual_type_idx, type_idx) {
       raise @runtime.IndirectCallTypeMismatch
     }
   } else {
@@ -86,7 +86,7 @@ fn ExecContext::exec_call_indirect(
           canonical1=o.canonical_type_indices,
           canonical2=self.instance.canonical_type_indices,
         )
-        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+        if !ctx.is_subtype(actual_type_idx, type_idx) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
@@ -94,7 +94,7 @@ fn ExecContext::exec_call_indirect(
         // Ownerless function (host function or directly allocated):
         // Use direct type comparison (host functions don't have subtyping)
         let actual_type = self.store.get_func_type(store_addr)
-        if not(@types.func_types_equal(expected_type, actual_type)) {
+        if !@types.func_types_equal(expected_type, actual_type) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
@@ -145,7 +145,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
       rec_groups=self.instance.type_rec_groups,
       canonical=self.instance.canonical_type_indices,
     )
-    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+    if !ctx.is_subtype(actual_type_idx, type_idx) {
       raise @runtime.IndirectCallTypeMismatch
     }
   } else {
@@ -161,14 +161,14 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
           canonical1=o.canonical_type_indices,
           canonical2=self.instance.canonical_type_indices,
         )
-        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+        if !ctx.is_subtype(actual_type_idx, type_idx) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
       None => {
         // Ownerless function: use direct type comparison
         let actual_type = self.store.get_func_type(store_addr)
-        if not(@types.func_types_equal(expected_type, actual_type)) {
+        if !@types.func_types_equal(expected_type, actual_type) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
@@ -414,7 +414,7 @@ pub fn ExecContext::exec_tail_call_indirect(
       rec_groups=self.instance.type_rec_groups,
       canonical=self.instance.canonical_type_indices,
     )
-    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+    if !ctx.is_subtype(actual_type_idx, type_idx) {
       raise @runtime.IndirectCallTypeMismatch
     }
   } else {
@@ -430,14 +430,14 @@ pub fn ExecContext::exec_tail_call_indirect(
           canonical1=o.canonical_type_indices,
           canonical2=self.instance.canonical_type_indices,
         )
-        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+        if !ctx.is_subtype(actual_type_idx, type_idx) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
       None => {
         // Ownerless function: use direct type comparison
         let actual_type = self.store.get_func_type(store_addr)
-        if not(@types.func_types_equal(expected_type, actual_type)) {
+        if !@types.func_types_equal(expected_type, actual_type) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
@@ -492,7 +492,7 @@ pub fn ExecContext::exec_tail_call_ref(
       rec_groups=self.instance.type_rec_groups,
       canonical=self.instance.canonical_type_indices,
     )
-    if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+    if !ctx.is_subtype(actual_type_idx, type_idx) {
       raise @runtime.IndirectCallTypeMismatch
     }
   } else {
@@ -508,14 +508,14 @@ pub fn ExecContext::exec_tail_call_ref(
           canonical1=o.canonical_type_indices,
           canonical2=self.instance.canonical_type_indices,
         )
-        if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+        if !ctx.is_subtype(actual_type_idx, type_idx) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }
       None => {
         // Ownerless function: use direct type comparison
         let actual_type = self.store.get_func_type(store_addr)
-        if not(@types.func_types_equal(expected_type, actual_type)) {
+        if !@types.func_types_equal(expected_type, actual_type) {
           raise @runtime.IndirectCallTypeMismatch
         }
       }

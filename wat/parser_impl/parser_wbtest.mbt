@@ -383,7 +383,7 @@ test "debug: f32 subnormal boundary values" {
 ///|
 test "debug: strconv parse_double for subnormal" {
   // What does MoonBit's strconv return for 1.4013e-45?
-  let d = @strconv.parse_double("1.4013e-45") catch { _ => fail("parse error") }
+  let d = @string.parse_double("1.4013e-45") catch { _ => fail("parse error") }
   // Convert double to float (may lose precision)
   let f = Float::from_double(d)
   inspect(f.reinterpret_as_int(), content="1")
@@ -391,7 +391,7 @@ test "debug: strconv parse_double for subnormal" {
 
 ///|
 test "debug: strconv for max subnormal" {
-  let d = @strconv.parse_double("1.1754942e-38") catch {
+  let d = @string.parse_double("1.1754942e-38") catch {
     _ => fail("parse error")
   }
   let f = Float::from_double(d)

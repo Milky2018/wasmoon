@@ -23,10 +23,10 @@ fn parse_int(s : String) -> Int raise WatError {
     }
   } else {
     // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
-    let result = @strconv.parse_int(trimmed) catch {
+    let result = @string.parse_int(trimmed) catch {
       _ => {
         // Try parsing as unsigned and reinterpret
-        let u64 = @strconv.parse_uint64(trimmed) catch {
+        let u64 = @string.parse_uint64(trimmed) catch {
           _ => raise WatError::InvalidNumber(s, default_loc())
         }
         // Check if it fits in u32 range
@@ -74,7 +74,7 @@ fn parse_u32(s : String) -> Int raise WatError {
     }
   } else {
     // Parse decimal as unsigned 64-bit first to check range
-    let u64 = @strconv.parse_uint64(trimmed) catch {
+    let u64 = @string.parse_uint64(trimmed) catch {
       _ => raise WatError::InvalidNumber(s, default_loc())
     }
     // Check if value exceeds u32 max
@@ -130,7 +130,7 @@ fn parse_u64(s : String) -> Int64 raise WatError {
     }
   } else {
     // Parse decimal as unsigned 64-bit
-    let u64 = @strconv.parse_uint64(trimmed) catch {
+    let u64 = @string.parse_uint64(trimmed) catch {
       _ => raise WatError::InvalidNumber(s, default_loc())
     }
     u64.reinterpret_as_int64()
@@ -189,10 +189,10 @@ fn parse_int64(s : String) -> Int64 raise WatError {
     }
   } else {
     // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
-    let result = @strconv.parse_int64(trimmed) catch {
+    let result = @string.parse_int64(trimmed) catch {
       _ => {
         // Try parsing as unsigned and reinterpret
-        let u64 = @strconv.parse_uint64(trimmed) catch {
+        let u64 = @string.parse_uint64(trimmed) catch {
           _ => raise WatError::InvalidNumber(s, default_loc())
         }
         u64.reinterpret_as_int64()
@@ -1182,7 +1182,7 @@ fn parse_float64(s : String) -> Double raise WatError {
     s.has_prefix("+0X") {
     return parse_hex_float64(s)
   }
-  @strconv.parse_double(s) catch {
+  @string.parse_double(s) catch {
     _ => raise WatError::InvalidNumber(s, default_loc())
   }
 }

@@ -383,7 +383,7 @@ fn run_wasi_jit_quiet(
     } else {
       None
     }
-    let mem_desc_ptr = if mem_pages > 0 && not(mod_.memories[0].is_memory64) {
+    let mem_desc_ptr = if mem_pages > 0 && !mod_.memories[0].is_memory64 {
       jm.alloc_guarded_memory(mem_pages, max_pages)
     } else if mem_size > 0L {
       @jit.alloc_memory_desc(

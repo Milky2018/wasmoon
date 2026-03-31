@@ -27,13 +27,9 @@ pub fn vector_rules() -> Array[RewriteRule]
 // Errors
 
 // Types and methods
-pub(all) struct EClassId(Int)
+pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, Show)
 #deprecated
 pub fn EClassId::inner(Self) -> Int
-pub impl Compare for EClassId
-pub impl Eq for EClassId
-pub impl Hash for EClassId
-pub impl Show for EClassId
 
 type EGraph
 pub fn EGraph::add(Self, ENode) -> EClassId
@@ -124,10 +120,7 @@ pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
-}
-pub impl Eq for ENode
-pub impl Hash for ENode
-pub impl Show for ENode
+} derive(Eq, Hash, Show)
 
 pub(all) enum EOpcode {
   Const(Int64)
@@ -193,16 +186,10 @@ pub(all) enum EOpcode {
   Splat
   Vconst(Bytes)
   Var(Int)
-}
+} derive(Eq, Hash, Show)
 pub fn EOpcode::tag(Self) -> EOpcodeTag
-pub impl Eq for EOpcode
-pub impl Hash for EOpcode
-pub impl Show for EOpcode
 
-type EOpcodeTag
-pub impl Eq for EOpcodeTag
-pub impl Hash for EOpcodeTag
-pub impl Show for EOpcodeTag
+type EOpcodeTag derive(Eq, Hash, Show)
 
 type IndexedRuleSet
 
@@ -211,12 +198,11 @@ type RewriteRule
 pub struct SaturationLimits {
   matches_limit : Int
   eclass_enode_limit : Int
-}
+} derive(Show)
 pub fn SaturationLimits::cranelift_default() -> Self
 pub fn SaturationLimits::eclass_enode_limit(Self) -> Int
 pub fn SaturationLimits::matches_limit(Self) -> Int
 pub fn SaturationLimits::new(Int, Int) -> Self
-pub impl Show for SaturationLimits
 
 // Type aliases
 

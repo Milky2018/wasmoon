@@ -55,9 +55,7 @@ pub(all) suberror ComponentRuntimeError {
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
-}
-pub impl Eq for ComponentRuntimeError
-pub impl Show for ComponentRuntimeError
+} derive(Eq, Show)
 
 // Types and methods
 pub(all) struct AsyncState {
@@ -98,19 +96,14 @@ pub(all) struct AsyncState {
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
   thread_handle_required : Map[Int, Bool]
-}
+} derive(Show)
 pub fn AsyncState::new(StreamTable) -> Self
-pub impl Show for AsyncState
 
-type CallbackTask
-pub impl Show for CallbackTask
+type CallbackTask derive(Show)
 
-type CanonResources
-pub impl Show for CanonResources
+type CanonResources derive(Show)
 
-type CanonSuspend
-pub impl Eq for CanonSuspend
-pub impl Show for CanonSuspend
+type CanonSuspend derive(Eq, Show)
 
 pub(all) struct ComponentClosure {
   component : @model.Component
@@ -198,15 +191,12 @@ pub(all) enum ComponentValue {
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
   Variant(Int, ComponentValue?)
-}
-pub impl Eq for ComponentValue
-pub impl Show for ComponentValue
+} derive(Eq, Show)
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
-}
-pub impl Show for CoreFuncRef
+} derive(Show)
 
 pub(all) struct CoreInstance {
   funcs : Map[String, CoreFuncRef]
@@ -217,90 +207,68 @@ pub(all) struct CoreInstance {
 }
 pub impl Show for CoreInstance
 
-type DecodedCallbackCode
-pub impl Show for DecodedCallbackCode
+type DecodedCallbackCode derive(Show)
 
-type FutureEndpoint
-pub impl Show for FutureEndpoint
+type FutureEndpoint derive(Show)
 
-type FutureState
-pub impl Show for FutureState
+type FutureState derive(Show)
 
-type PendingFutureRead
-pub impl Show for PendingFutureRead
+type PendingFutureRead derive(Show)
 
-type PendingFutureWrite
-pub impl Show for PendingFutureWrite
+type PendingFutureWrite derive(Show)
 
-type PendingStreamRead
-pub impl Show for PendingStreamRead
+type PendingStreamRead derive(Show)
 
-type PendingStreamWrite
-pub impl Show for PendingStreamWrite
+type PendingStreamWrite derive(Show)
 
 pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
   kind : @model.ResourceKind
-}
-pub impl Show for ResourceHandle
+} derive(Show)
 
 pub(all) struct ResourceTable {
   id : Int
   next_handle : Array[Int]
   free_handles : Array[Int]
   entries : Map[Int, ResourceHandle]
-}
+} derive(Show)
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
 pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::new() -> Self
-pub impl Show for ResourceTable
 
 pub(all) struct StreamEndpoint {
   stream_id : Int
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
-}
-pub impl Show for StreamEndpoint
+} derive(Show)
 
-type StreamState
-pub impl Show for StreamState
+type StreamState derive(Show)
 
 pub(all) struct StreamTable {
   next_stream_id : Array[Int]
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
-}
+} derive(Show)
 pub fn StreamTable::new() -> Self
-pub impl Show for StreamTable
 
-type Subtask
-pub impl Show for Subtask
+type Subtask derive(Show)
 
-type SubtaskDriver
-pub impl Show for SubtaskDriver
+type SubtaskDriver derive(Show)
 
-type SubtaskPhase
-pub impl Eq for SubtaskPhase
-pub impl Show for SubtaskPhase
+type SubtaskPhase derive(Eq, Show)
 
-type SyncLowerState
-pub impl Show for SyncLowerState
+type SyncLowerState derive(Show)
 
-type TaskStep
-pub impl Eq for TaskStep
-pub impl Show for TaskStep
+type TaskStep derive(Eq, Show)
 
-type WaitEvent
-pub impl Show for WaitEvent
+type WaitEvent derive(Show)
 
-type WaitResult
-pub impl Show for WaitResult
+type WaitResult derive(Show)
 
-type WaitableSet
-pub impl Show for WaitableSet
+type WaitableSet derive(Show)
 
 // Type aliases
 

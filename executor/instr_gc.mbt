@@ -1061,7 +1061,7 @@ fn ExecContext::exec_ref_cast(
     raise @runtime.RuntimeError::NullReference
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
-  if not(matches) {
+  if !matches {
     raise @runtime.RuntimeError::TypeMismatch
   }
   self.stack.push(val)
@@ -1080,7 +1080,7 @@ fn ExecContext::exec_ref_cast_null(
     return
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
-  if not(matches) {
+  if !matches {
     raise @runtime.RuntimeError::TypeMismatch
   }
   self.stack.push(val)
@@ -1138,7 +1138,7 @@ fn ExecContext::exec_br_on_cast_fail(
     raise BranchWith(label_idx, [val])
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
-  if not(matches) {
+  if !matches {
     // Cast failed, branch
     raise BranchWith(label_idx, [val])
   } else {
