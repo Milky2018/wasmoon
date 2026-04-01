@@ -60,13 +60,14 @@ cd wasmoon
 ./install.sh
 ```
 
-`./install.sh` uses `moon install --path ...` to install local binaries into
-`target/moon-install-bin/`, then creates/updates two symlinks in repo root:
+`./install.sh` uses `moon build --target native --release` to build local binaries
+into `target/moon-install-build/`, copies them to `target/moon-install-bin/`, and
+then refreshes two repo-root executables:
 
 - `./wasmoon`
 - `./wasmoon-tools`
 
-After code changes, re-run `./install.sh` to refresh both symlinks.
+After code changes, re-run `./install.sh` to refresh both executables.
 
 ### As Library
 
