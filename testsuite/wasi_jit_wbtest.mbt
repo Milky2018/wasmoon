@@ -556,6 +556,50 @@ test "wasi jit: path_open invalid rights returns EINVAL" {
 }
 
 ///|
+test "wasi jit: path_open write-only rights without create is writable" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_pwrite"
+    #|    (func $fd_pwrite (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_rights_open.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $fd i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 27)
+    #|      (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (drop (call $fd_close (i32.load (i32.const 100))))
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 27)
+    #|      (i32.const 0) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|      (i32.const 104)))
+    #|    (local.set $fd (i32.load (i32.const 104)))
+    #|    (i32.store (i32.const 200) (i32.const 300))
+    #|    (i32.store (i32.const 204) (i32.const 1))
+    #|    (i32.store8 (i32.const 300) (i32.const 65))
+    #|    (local.set $errno
+    #|      (call $fd_pwrite
+    #|        (local.get $fd) (i32.const 200) (i32.const 1) (i64.const 0)
+    #|        (i32.const 400)))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
+    #|    (local.get $errno)))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
 test "wasi jit: fd_readdir works on path_open directory" {
   let source =
     #|(module

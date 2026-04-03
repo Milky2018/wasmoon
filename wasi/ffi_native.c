@@ -33,6 +33,11 @@ extern "C" {
 
 #include "moonbit.h"
 
+// Internal token values used by MoonBit side. Translate to host constants
+// before calling libc APIs so behavior is consistent across platforms.
+#define WASMOON_AT_REMOVEDIR_TOKEN 0x200
+#define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
+
 // Open a file and return file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mode) {
 #ifdef _WIN32
@@ -90,6 +95,128 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_get_error_message(void) {
 // Get errno value
 MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
+}
+
+// Convert native errno value to WASI preview1 errno number.
+MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
+  switch (err) {
+    case 0: return 0;   // ESUCCESS
+#ifdef E2BIG
+    case E2BIG: return 1;
+#endif
+#ifdef EACCES
+    case EACCES: return 2;
+#endif
+#ifdef EAGAIN
+    case EAGAIN: return 6;
+#endif
+#if defined(EWOULDBLOCK) && (!defined(EAGAIN) || EWOULDBLOCK != EAGAIN)
+    case EWOULDBLOCK: return 6;
+#endif
+#ifdef EALREADY
+    case EALREADY: return 7;
+#endif
+#ifdef EBADF
+    case EBADF: return 8;
+#endif
+#ifdef EBUSY
+    case EBUSY: return 10;
+#endif
+#ifdef EEXIST
+    case EEXIST: return 20;
+#endif
+#ifdef EFAULT
+    case EFAULT: return 21;
+#endif
+#ifdef EFBIG
+    case EFBIG: return 22;
+#endif
+#ifdef EILSEQ
+    case EILSEQ: return 25;
+#endif
+#ifdef EINPROGRESS
+    case EINPROGRESS: return 26;
+#endif
+#ifdef EINTR
+    case EINTR: return 27;
+#endif
+#ifdef EINVAL
+    case EINVAL: return 28;
+#endif
+#ifdef EIO
+    case EIO: return 29;
+#endif
+#ifdef EISDIR
+    case EISDIR: return 31;
+#endif
+#ifdef ELOOP
+    case ELOOP: return 32;
+#endif
+#ifdef EMLINK
+    case EMLINK: return 34;
+#endif
+#ifdef ENAMETOOLONG
+    case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENODEV
+    case ENODEV: return 43;
+#endif
+#ifdef ENOENT
+    case ENOENT: return 44;
+#endif
+#ifdef ENOLCK
+    case ENOLCK: return 46;
+#endif
+#ifdef ENOMEM
+    case ENOMEM: return 48;
+#endif
+#ifdef ENOSPC
+    case ENOSPC: return 51;
+#endif
+#ifdef ENOSYS
+    case ENOSYS: return 52;
+#endif
+#ifdef ENOTDIR
+    case ENOTDIR: return 54;
+#endif
+#ifdef ENOTEMPTY
+    case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTSUP
+    case ENOTSUP: return 58;
+#endif
+#if defined(EOPNOTSUPP) && (!defined(ENOTSUP) || EOPNOTSUPP != ENOTSUP)
+    case EOPNOTSUPP: return 58;
+#endif
+#ifdef ENOTTY
+    case ENOTTY: return 59;
+#endif
+#ifdef ENXIO
+    case ENXIO: return 60;
+#endif
+#ifdef EOVERFLOW
+    case EOVERFLOW: return 61;
+#endif
+#ifdef EPERM
+    case EPERM: return 63;
+#endif
+#ifdef EPIPE
+    case EPIPE: return 64;
+#endif
+#ifdef EROFS
+    case EROFS: return 69;
+#endif
+#ifdef ESPIPE
+    case ESPIPE: return 70;
+#endif
+#ifdef ETXTBSY
+    case ETXTBSY: return 74;
+#endif
+#ifdef EXDEV
+    case EXDEV: return 75;
+#endif
+    default: return 29;  // EIO fallback
+  }
 }
 
 // Platform-specific open flags
@@ -223,15 +350,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fdatasync(int fd) {
 MOONBIT_FFI_EXPORT int wasmoon_wasi_unlinkat(int dirfd, moonbit_bytes_t path, int flags) {
 #ifdef _WIN32
   (void)dirfd;
-  (void)flags;
   // Windows: simple unlink for files, rmdir for directories
-  if (flags & 0x200) {  // AT_REMOVEDIR
+  if (flags & WASMOON_AT_REMOVEDIR_TOKEN) {
     return _rmdir((const char *)path);
   } else {
     return _unlink((const char *)path);
   }
 #else
-  return unlinkat(dirfd, (const char *)path, flags);
+  int native_flags = flags;
+#ifdef AT_REMOVEDIR
+  if (flags & WASMOON_AT_REMOVEDIR_TOKEN) {
+    native_flags = (native_flags & ~WASMOON_AT_REMOVEDIR_TOKEN) | AT_REMOVEDIR;
+  }
+#endif
+  return unlinkat(dirfd, (const char *)path, native_flags);
 #endif
 }
 
@@ -316,7 +448,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
     return -1;
   }
 #else
-  if (fstatat(dirfd, (const char *)path, &st, flags) != 0) {
+  int native_flags = flags;
+#ifdef AT_SYMLINK_NOFOLLOW
+  if (flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) {
+    native_flags =
+      (native_flags & ~WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) | AT_SYMLINK_NOFOLLOW;
+  }
+#endif
+  if (fstatat(dirfd, (const char *)path, &st, native_flags) != 0) {
     return -1;
   }
 #endif
@@ -446,7 +585,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_utimensat(int dirfd, moonbit_bytes_t path,
     times[1].tv_sec = 0;
   }
 
-  return utimensat(dirfd, (const char *)path, times, lookup_flags);
+  int native_lookup_flags = lookup_flags;
+#ifdef AT_SYMLINK_NOFOLLOW
+  if (lookup_flags & WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) {
+    native_lookup_flags =
+      (native_lookup_flags & ~WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN) | AT_SYMLINK_NOFOLLOW;
+  }
+#endif
+  return utimensat(dirfd, (const char *)path, times, native_lookup_flags);
 #endif
 }
 
