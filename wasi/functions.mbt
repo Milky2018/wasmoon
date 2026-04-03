@@ -1342,15 +1342,23 @@ pub fn fd_fdstat_set_flags_impl(
   fd : Int,
   flags : Int,
 ) -> Int {
-  // Get the native file descriptor
-  let native_fd = if fd < 3 {
-    // stdin/stdout/stderr map directly to native 0/1/2
-    fd
-  } else {
-    match ctx.get_file(fd) {
-      Some(file) => file.native_fd
-      None => return Errno::Badf.to_i32()
-    }
+  // Match wasmtime behavior:
+  // - only APPEND/NONBLOCK are accepted
+  // - DSYNC/RSYNC/SYNC are rejected with EINVAL
+  if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  if fd < 3 {
+    return Errno::Badf.to_i32()
+  }
+  let native_fd = match ctx.get_file(fd) {
+    Some(file) =>
+      if file.file_type is Directory {
+        return Errno::Badf.to_i32()
+      } else {
+        file.native_fd
+      }
+    None => return Errno::Badf.to_i32()
   }
   // Convert WASI fdflags to native flags
   // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
@@ -1358,17 +1366,17 @@ pub fn fd_fdstat_set_flags_impl(
   match native_flags {
     Some(current) => {
       let mut new_flags = current
-      // O_APPEND = 0x400 on Linux, 0x8 on macOS
+      let append_mask = native_o_append()
+      let nonblock_mask = native_o_nonblock()
       if (flags & 0x01) != 0 {
-        new_flags = new_flags | 0x8 // O_APPEND
+        new_flags = new_flags | append_mask
       } else {
-        new_flags = new_flags & (0x8).lnot()
+        new_flags = new_flags & append_mask.lnot()
       }
-      // O_NONBLOCK = 0x800 on Linux, 0x4 on macOS
       if (flags & 0x04) != 0 {
-        new_flags = new_flags | 0x4 // O_NONBLOCK
+        new_flags = new_flags | nonblock_mask
       } else {
-        new_flags = new_flags & (0x4).lnot()
+        new_flags = new_flags & nonblock_mask.lnot()
       }
       if native_fcntl_setfl(native_fd, new_flags) {
         Errno::Success.to_i32()
@@ -1383,13 +1391,52 @@ pub fn fd_fdstat_set_flags_impl(
 ///|
 /// fd_fdstat_set_rights - Set file descriptor rights (no-op)
 pub fn fd_fdstat_set_rights_impl(
-  _ctx : WasiContext,
-  _fd : Int,
+  ctx : WasiContext,
+  fd : Int,
   _fs_rights_base : Int64,
   _fs_rights_inheriting : Int64,
 ) -> Int {
-  // Rights management is simplified - just return success
-  Errno::Success.to_i32()
+  if !ctx.is_valid_fd(fd) {
+    return Errno::Badf.to_i32()
+  }
+  Errno::NotSup.to_i32()
+}
+
+///|
+fn preopen_fd_index(ctx : WasiContext, fd : Int) -> Int? {
+  for i in 0..<ctx.preopens.length() {
+    let (preopen_fd, _, _) = ctx.preopens[i]
+    if preopen_fd.to_int() == fd {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+fn renumber_preopen_entries(ctx : WasiContext, from : Int, to : Int) -> Unit {
+  let mut moved : (String, String)? = None
+  let new_preopens : Array[(Fd, String, String)] = []
+  for preopen in ctx.preopens {
+    let (pfd, host, guest) = preopen
+    let fd = pfd.to_int()
+    if fd == from {
+      moved = Some((host, guest))
+      continue
+    }
+    if fd == to {
+      continue
+    }
+    new_preopens.push(preopen)
+  }
+  if moved is Some(entry) {
+    let (host, guest) = entry
+    new_preopens.push((Fd(to), host, guest))
+  }
+  ctx.preopens.clear()
+  for preopen in new_preopens {
+    ctx.preopens.push(preopen)
+  }
 }
 
 ///|
@@ -1398,18 +1445,30 @@ pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
   if from < 3 || to < 3 {
     return Errno::Inval.to_i32()
   }
-  match ctx.get_file(from) {
-    Some(file) =>
-      if native_dup2(file.native_fd, to) {
-        // Close the old fd and update tracking
-        ctx.close_fd(from) |> ignore
-        // Note: In a real implementation, we'd also update ctx.open_files
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  let from_file = ctx.get_file(from)
+  if from_file is None {
+    return Errno::Badf.to_i32()
   }
+  let to_file = ctx.get_file(to)
+  if to_file is None {
+    return Errno::Badf.to_i32()
+  }
+  if from == to {
+    return Errno::Success.to_i32()
+  }
+  // Keep preopen fd mapping coherent with descriptor movement.
+  if preopen_fd_index(ctx, from) is Some(_) ||
+    preopen_fd_index(ctx, to) is Some(_) {
+    renumber_preopen_entries(ctx, from, to)
+  }
+  let src = from_file.unwrap()
+  let dst = to_file.unwrap()
+  if src.native_fd != dst.native_fd {
+    native_close(dst.native_fd) |> ignore
+  }
+  ctx.open_files.remove(from)
+  ctx.open_files.set(to, src)
+  Errno::Success.to_i32()
 }
 
 // ============================================================================

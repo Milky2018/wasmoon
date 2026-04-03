@@ -44,6 +44,7 @@
 #define WASI_ENOSYS       52
 #define WASI_ENOTDIR      54
 #define WASI_ENOTEMPTY    55
+#define WASI_ENOTSUP      58
 #define WASI_ESPIPE       70
 #define WASI_ENAMETOOLONG 37
 #define WASI_EFAULT       21
@@ -2272,10 +2273,11 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
 ) {
     (void)rights_base;
     (void)rights_inheriting;
+    if (!ctx) return WASI_EBADF;
+    if (fd >= 0 && fd < 3) return WASI_ENOTSUP;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-    // Rights system not enforced, always succeed
-    return WASI_ESUCCESS;
+    return WASI_ENOTSUP;
 }
 
 // fd_allocate: Allocate space for a file
@@ -2321,14 +2323,13 @@ static int32_t wasi_fd_renumber_impl(
 
     if (!ctx || !ctx->fd_table) return WASI_EBADF;
 
-    if (!ensure_fd_capacity(ctx, to_fd)) return WASI_ENOMEM;
-    if (fd == to_fd) return WASI_ESUCCESS;
-
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-
     int native_to_fd = get_native_fd(ctx, to_fd);
-    if (native_to_fd >= 0) {
+    if (native_to_fd < 0) return WASI_EBADF;
+    if (fd == to_fd) return WASI_ESUCCESS;
+
+    if (native_to_fd != native_fd) {
 #ifndef _WIN32
         close(native_to_fd);
 #endif
@@ -2355,24 +2356,27 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags
 ) {
+    // Match wasmtime behavior:
+    // - only APPEND/NONBLOCK are accepted
+    // - DSYNC/RSYNC/SYNC are rejected with EINVAL
+    if ((flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0) {
+        return WASI_EINVAL;
+    }
+    if (fd >= 0 && fd < 3) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    int native_flags = 0;
-    // WASI fdflags:
-    // 0x01 = APPEND
-    // 0x02 = DSYNC
-    // 0x04 = NONBLOCK
-    // 0x08 = RSYNC
-    // 0x10 = SYNC
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return errno_to_wasi(errno);
+
     if (flags & 0x01) native_flags |= O_APPEND;
-#ifdef O_DSYNC
-    if (flags & 0x02) native_flags |= O_DSYNC;
-#endif
+    else native_flags &= ~O_APPEND;
+#ifdef O_NONBLOCK
     if (flags & 0x04) native_flags |= O_NONBLOCK;
-#ifdef O_SYNC
-    if (flags & 0x10) native_flags |= O_SYNC;
+    else native_flags &= ~O_NONBLOCK;
 #endif
 
     if (fcntl(native_fd, F_SETFL, native_flags) < 0) return errno_to_wasi(errno);

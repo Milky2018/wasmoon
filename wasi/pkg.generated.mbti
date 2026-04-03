@@ -107,6 +107,10 @@ pub fn native_mkdir(String, Int) -> Bool
 
 pub fn native_nanosleep(Int64) -> Bool
 
+pub fn native_o_append() -> Int
+
+pub fn native_o_nonblock() -> Int
+
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
 pub fn native_open_read(String) -> Int?

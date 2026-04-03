@@ -1026,10 +1026,10 @@ test "wasi: fd_advise always succeeds" {
 }
 
 ///|
-test "wasi: fd_fdstat_set_rights always succeeds" {
+test "wasi: fd_fdstat_set_rights returns ENOTSUP for valid fd" {
   let ctx = WasiContextBuilder::new().build()
   let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
-  inspect(result, content="0")
+  inspect(result, content="58")
 }
 
 ///|

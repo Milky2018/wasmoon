@@ -227,6 +227,13 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_o_creat(void) { return O_CREAT; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_trunc(void) { return O_TRUNC; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_append(void) { return O_APPEND; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_excl(void) { return O_EXCL; }
+MOONBIT_FFI_EXPORT int wasmoon_wasi_o_nonblock(void) {
+#ifdef O_NONBLOCK
+  return O_NONBLOCK;
+#else
+  return 0;
+#endif
+}
 
 // Create a directory
 MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {

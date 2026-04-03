@@ -65,6 +65,9 @@ extern "c" fn c_o_append() -> Int = "wasmoon_wasi_o_append"
 extern "c" fn c_o_excl() -> Int = "wasmoon_wasi_o_excl"
 
 ///|
+extern "c" fn c_o_nonblock() -> Int = "wasmoon_wasi_o_nonblock"
+
+///|
 /// File open flags
 pub(all) enum OpenFlags {
   ReadOnly
@@ -138,6 +141,16 @@ pub fn native_open_read(path : String) -> Int? {
 /// Open a file for writing (create if not exists, truncate if exists)
 pub fn native_open_write(path : String) -> Int? {
   native_open(path, [WriteOnly, Create, Truncate], 0o644)
+}
+
+///|
+pub fn native_o_append() -> Int {
+  c_o_append()
+}
+
+///|
+pub fn native_o_nonblock() -> Int {
+  c_o_nonblock()
 }
 
 ///|

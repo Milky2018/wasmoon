@@ -197,6 +197,22 @@ fn compare_wasi_with_callback(
 }
 
 ///|
+fn wasi_errno_from_result(result : Result[Array[@types.Value], String]) -> Int {
+  match result {
+    Ok(values) =>
+      if values.length() == 1 {
+        match values[0] {
+          @types.Value::I32(errno) => errno
+          _ => -2
+        }
+      } else {
+        -3
+      }
+    Err(_) => -1
+  }
+}
+
+///|
 fn find_wasi_func_index(mod_ : @types.Module, name : String) -> Int? {
   for exp in mod_.exports {
     if exp.name == name && exp.desc is @types.ExportDesc::Func(idx) {
@@ -514,6 +530,33 @@ test "wasi jit: poll_oneoff zero subscriptions returns EINVAL" {
     #|    (call $poll_oneoff (i32.const 0) (i32.const 64) (i32.const 0)
     #|      (i32.const 80))))
   inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: poll_oneoff keeps expired realtime clock when fd is ready" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    ;; sub[0] = clock(realtime, absolute, timeout=1e17ns)
+    #|    (i64.store (i32.const 0) (i64.const 111))
+    #|    (i32.store8 (i32.const 8) (i32.const 0))
+    #|    (i32.store (i32.const 16) (i32.const 0))
+    #|    (i64.store (i32.const 24) (i64.const 100000000000000000))
+    #|    (i32.store16 (i32.const 40) (i32.const 1))
+    #|    ;; sub[1] = fd_write(stdout)
+    #|    (i64.store (i32.const 48) (i64.const 222))
+    #|    (i32.store8 (i32.const 56) (i32.const 2))
+    #|    (i32.store (i32.const 60) (i32.const 1))
+    #|    (drop (call $poll_oneoff (i32.const 0) (i32.const 96) (i32.const 2)
+    #|      (i32.const 80)))
+    #|    (i32.load (i32.const 80))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="2")
+  inspect(wasi_errno_from_result(result.jit_result), content="2")
 }
 
 ///|
@@ -1039,7 +1082,7 @@ test "wasi jit: fd_renumber stdin returns EINVAL (28)" {
 }
 
 ///|
-test "wasi jit: fd_renumber allows unused target" {
+test "wasi jit: fd_renumber rejects unused target with EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -1054,10 +1097,63 @@ test "wasi jit: fd_renumber allows unused target" {
     #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_renumber (i32.load (i32.const 100)) (i32.const 10))))
-  inspect(
-    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
-    content="matched",
-  )
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_setflags_file")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 20)
+    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 2))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_setrights_file")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 21)
+    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_fdstat_set_rights
+    #|      (i32.load (i32.const 100))
+    #|      (i64.const 0)
+    #|      (i64.const 0))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="58")
+  inspect(wasi_errno_from_result(result.jit_result), content="58")
 }
 
 ///|
