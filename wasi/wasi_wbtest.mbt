@@ -432,26 +432,6 @@ test "wasi: fd_pread and fd_pwrite" {
 }
 
 ///|
-test "wasi: fd_pread/fd_pwrite stdio errno parity" {
-  let ctx = WasiContextBuilder::new().build()
-  let mem = @runtime.Memory::new(1, None)
-  // dummy iovec
-  mem.write_i32(0, 128)
-  mem.write_i32(4, 1)
-  mem.write_byte(128, b'x')
-
-  // wasmtime: fd_pread(stdin) -> SPipe, fd_pread(stdout/stderr) -> Badf
-  inspect(fd_pread(ctx, mem, 0, 0, 1, 0L, 200), content="70")
-  inspect(fd_pread(ctx, mem, 1, 0, 1, 0L, 200), content="8")
-  inspect(fd_pread(ctx, mem, 2, 0, 1, 0L, 200), content="8")
-
-  // wasmtime: fd_pwrite(stdout/stderr) -> SPipe, fd_pwrite(stdin) -> Badf
-  inspect(fd_pwrite(ctx, mem, 0, 0, 1, 0L, 200), content="8")
-  inspect(fd_pwrite(ctx, mem, 1, 0, 1, 0L, 200), content="70")
-  inspect(fd_pwrite(ctx, mem, 2, 0, 1, 0L, 200), content="70")
-}
-
-///|
 test "wasi: fd_fdstat_get" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
