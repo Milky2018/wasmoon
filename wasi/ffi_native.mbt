@@ -39,6 +39,10 @@ extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
 extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
 
 ///|
+/// Convert native errno to WASI errno
+extern "c" fn c_errno_to_wasi(err : Int) -> Int = "wasmoon_wasi_errno_to_wasi"
+
+///|
 /// Platform-specific open flags (retrieved from C at runtime)
 extern "c" fn c_o_rdonly() -> Int = "wasmoon_wasi_o_rdonly"
 
@@ -197,6 +201,12 @@ pub fn native_get_error_message() -> String {
 /// Get the last errno value
 pub fn native_get_errno() -> Int {
   c_get_errno()
+}
+
+///|
+/// Convert current native errno to WASI errno
+pub fn native_last_errno_to_wasi() -> Int {
+  c_errno_to_wasi(c_get_errno())
 }
 
 ///|

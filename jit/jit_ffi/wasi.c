@@ -61,6 +61,8 @@
 
 // WASI rights: valid bits are 0-28
 #define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 29) - 1))
+#define WASI_RIGHT_FD_READ    (1ULL << 1)
+#define WASI_RIGHT_FD_WRITE   (1ULL << 6)
 
 // ============ Helper Functions ============
 
@@ -863,8 +865,12 @@ static int64_t wasi_path_open_impl(
     if (oflags & 0x04) flags |= O_EXCL;
     if (oflags & 0x08) flags |= O_TRUNC;
     if (fdflags & 0x01) flags |= O_APPEND;
-    if (flags == 0 || (oflags & 0x02)) flags |= O_RDONLY;
-    else flags |= O_RDWR;
+    int wants_read = (((uint64_t)rights_base) & WASI_RIGHT_FD_READ) != 0;
+    int wants_write = (((uint64_t)rights_base) & WASI_RIGHT_FD_WRITE) != 0;
+    int requires_write = wants_write || (oflags & 0x01) || (oflags & 0x08) || (fdflags & 0x01);
+    if (wants_read && requires_write) flags |= O_RDWR;
+    else if (requires_write) flags |= O_WRONLY;
+    else flags |= O_RDONLY;
 
     int native_fd = open(full_path, flags, 0644);
     if (native_fd < 0) {
@@ -1524,7 +1530,7 @@ static int32_t wasi_fd_pread_impl(
             return WASI_EFAULT;
         }
         ssize_t n = pread(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return WASI_EIO;
+        if (n < 0) return errno_to_wasi(errno);
         total += n;
         if (n < buf_len) break;
     }
@@ -1563,7 +1569,7 @@ static int32_t wasi_fd_pwrite_impl(
             return WASI_EFAULT;
         }
         ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return WASI_EIO;
+        if (n < 0) return errno_to_wasi(errno);
         total += n;
         if (n < buf_len) break;
     }

@@ -438,35 +438,48 @@ pub fn path_open(
   let resolved_path = host_path.unwrap()
   // Determine open flags
   let open_flags : Array[OpenFlags] = []
+  let has_create = (oflags & 0x01) != 0
+  let has_directory = (oflags & 0x02) != 0
+  let has_exclusive = (oflags & 0x04) != 0
+  let has_truncate = (oflags & 0x08) != 0
+  let has_append = (fdflags & 0x01) != 0
   // WASI oflags:
   // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC
-  if (oflags & 0x01) != 0 {
+  if has_create {
     open_flags.push(Create)
   }
-  if (oflags & 0x02) != 0 {
+  if has_directory {
     open_flags.push(Directory)
   }
-  if (oflags & 0x04) != 0 {
+  if has_exclusive {
     open_flags.push(Exclusive)
   }
-  if (oflags & 0x08) != 0 {
+  if has_truncate {
     open_flags.push(Truncate)
   }
   // WASI fdflags:
   // 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
-  if (fdflags & 0x01) != 0 {
+  if has_append {
     open_flags.push(Append)
   }
-  // Default to read-write if creating, read-only otherwise
-  if open_flags.is_empty() || (oflags & 0x02) != 0 {
-    open_flags.push(ReadOnly)
-  } else {
+  let allow_read = (fs_rights_base & right_fd_read) != 0L
+  let allow_write = (fs_rights_base & right_fd_write) != 0L
+  // Match wasmtime's open-mode policy:
+  // - explicit FD_WRITE implies writable open
+  // - create/truncate/append require writable host mode
+  // - otherwise default to read-only
+  let requires_write = allow_write || has_create || has_truncate || has_append
+  if allow_read && requires_write {
     open_flags.push(ReadWrite)
+  } else if requires_write {
+    open_flags.push(WriteOnly)
+  } else {
+    open_flags.push(ReadOnly)
   }
   // Open the file
   let native_fd = native_open(resolved_path, open_flags, 0o644)
   if native_fd is None {
-    return Errno::NoEnt.to_i32()
+    return native_last_errno_to_wasi()
   }
   let nfd = native_fd.unwrap()
   // Determine file type
@@ -481,7 +494,7 @@ pub fn path_open(
     file_type,
     host_path: resolved_path,
     position: 0L,
-    flags: oflags,
+    flags: fdflags,
   })
   // Write opened fd to memory
   mem.write_i32(opened_fd_ptr, wasi_fd)
@@ -596,12 +609,12 @@ pub fn fd_pread(
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   // Seek to offset
   let seek_result = native_seek(f.native_fd, offset, Set)
   if seek_result is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   // Read data
   let mut total_read = 0
@@ -613,9 +626,10 @@ pub fn fd_pread(
       let buf = FixedArray::make(buf_len, b'\x00')
       let n = native_read(f.native_fd, buf, buf_len)
       if n is None {
+        let errno = native_last_errno_to_wasi()
         // Restore position and return error
         native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
-        return Errno::IO.to_i32()
+        return errno
       }
       let bytes_read = n.unwrap()
       // Copy to WASM memory
@@ -665,12 +679,12 @@ pub fn fd_pwrite(
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   // Seek to offset
   let seek_result = native_seek(f.native_fd, offset, Set)
   if seek_result is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   // Write data
   let mut total_written = 0
@@ -686,9 +700,10 @@ pub fn fd_pwrite(
       }
       let n = native_write(f.native_fd, buf, buf_len)
       if n is None {
+        let errno = native_last_errno_to_wasi()
         // Restore position and return error
         native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
-        return Errno::IO.to_i32()
+        return errno
       }
       total_written = total_written + n.unwrap()
     }
@@ -827,7 +842,7 @@ pub fn path_create_directory(
   if native_mkdir(resolved_path, 0o755) {
     Errno::Success.to_i32()
   } else {
-    Errno::IO.to_i32()
+    native_last_errno_to_wasi()
   }
 }
 
@@ -938,16 +953,8 @@ fn read_string_from_memory(
   ptr : Int,
   len : Int,
 ) -> String {
-  let buf = StringBuilder::new()
-  for i in 0..<len {
-    let c = mem.read_byte(ptr + i).to_int()
-    if c >= 32 && c < @types.ASCII_DEL {
-      buf.write_char(c.unsafe_to_char())
-    } else if c == 0 {
-      break
-    }
-  }
-  buf.to_string()
+  let bytes = Bytes::makei(len, fn(i) { mem.read_byte(ptr + i) })
+  utf8_bytes_to_string(bytes)
 }
 
 // ============================================================================
@@ -1006,7 +1013,7 @@ pub fn path_unlink_file_impl(
       if native_unlinkat(0, resolved, 0) {
         Errno::Success.to_i32()
       } else {
-        Errno::NoEnt.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1028,7 +1035,7 @@ pub fn path_remove_directory_impl(
       if native_unlinkat(0, resolved, AT_REMOVEDIR) {
         Errno::Success.to_i32()
       } else {
-        Errno::NoEnt.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1055,7 +1062,7 @@ pub fn path_rename_impl(
       if native_renameat(0, old_resolved, 0, new_resolved) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     _ => Errno::Badf.to_i32()
   }
@@ -1172,7 +1179,7 @@ pub fn path_filestat_get_impl(
           write_filestat(mem, buf_ptr, s)
           Errno::Success.to_i32()
         }
-        None => Errno::NoEnt.to_i32()
+        None => native_last_errno_to_wasi()
       }
     }
     None => Errno::Badf.to_i32()
@@ -1488,6 +1495,17 @@ pub fn path_link_impl(
 // ============================================================================
 
 ///|
+fn clock_now_ns_by_id(clock_id : Int) -> Int64? {
+  match ClockId::from_i32(clock_id) {
+    Some(Realtime) => Some(native_clock_gettime_realtime())
+    Some(Monotonic) => Some(native_clock_gettime_monotonic())
+    Some(ProcessCPUTimeId | ThreadCPUTimeId) =>
+      Some(native_clock_gettime_monotonic())
+    None => None
+  }
+}
+
+///|
 /// poll_oneoff - Wait for events on subscriptions
 ///
 /// WASI subscription structure (48 bytes):
@@ -1533,15 +1551,17 @@ pub fn poll_oneoff_impl(
     let tag = mem.read_byte(sub_ptr + 8).to_int()
     if tag == 0 {
       // Clock subscription
+      let clock_id = mem.read_i32(sub_ptr + 16)
+      if ClockId::from_i32(clock_id) is None {
+        return Errno::Inval.to_i32()
+      }
       let timeout = mem.read_i64(sub_ptr + 24)
       let flags = mem.read_byte(sub_ptr + 40).to_int()
       let timeout_ns = if (flags & 0x01) != 0 {
-        // Absolute time - convert to relative
-        let now = native_clock_gettime_monotonic()
-        if timeout > now {
-          timeout - now
-        } else {
-          0L
+        // Absolute time - compare with the subscription's own clock id.
+        match clock_now_ns_by_id(clock_id) {
+          Some(now) => if timeout > now { timeout - now } else { 0L }
+          None => return Errno::Inval.to_i32()
         }
       } else {
         timeout
@@ -1574,6 +1594,7 @@ pub fn poll_oneoff_impl(
       }
     }
   }
+  let poll_start_monotonic = native_clock_gettime_monotonic()
   // Calculate timeout in ms
   let timeout_ms = if min_timeout_ns < 0L {
     -1 // Infinite
@@ -1588,17 +1609,13 @@ pub fn poll_oneoff_impl(
     }
   }
   // Do the poll
-  let mut clock_ready = false
   if fds.length() > 0 {
     let poll_result = native_poll(fds, events, timeout_ms)
     if poll_result is Some(result) {
-      if result.ready_count == 0 {
-        clock_ready = true
-      }
       // Write fd events
       for i, sub_idx in sub_indices {
         let revent = result.revents[i]
-        if revent != 0 {
+        if revent != 0 && events_written < nsubscriptions {
           let sub_ptr = in_ptr + sub_idx * 48
           let userdata = mem.read_i64(sub_ptr)
           let tag = mem.read_byte(sub_ptr + 8).to_int()
@@ -1625,14 +1642,30 @@ pub fn poll_oneoff_impl(
   } else if min_timeout_ns >= 0L {
     // Just sleep
     native_nanosleep(min_timeout_ns) |> ignore
-    clock_ready = true
   }
-  // Write clock events when the timeout expires.
-  if clock_ready {
-    for i in 0..<nsubscriptions {
-      let sub_ptr = in_ptr + i * 48
-      let tag = mem.read_byte(sub_ptr + 8).to_int()
-      if tag == 0 {
+  let poll_end_monotonic = native_clock_gettime_monotonic()
+  let poll_elapsed_ns = if poll_end_monotonic > poll_start_monotonic {
+    poll_end_monotonic - poll_start_monotonic
+  } else {
+    0L
+  }
+  // Emit clock events that are expired now, regardless of fd readiness.
+  for i in 0..<nsubscriptions {
+    let sub_ptr = in_ptr + i * 48
+    let tag = mem.read_byte(sub_ptr + 8).to_int()
+    if tag == 0 && events_written < nsubscriptions {
+      let clock_id = mem.read_i32(sub_ptr + 16)
+      let timeout = mem.read_i64(sub_ptr + 24)
+      let flags = mem.read_byte(sub_ptr + 40).to_int()
+      let clock_expired = if (flags & 0x01) != 0 {
+        match clock_now_ns_by_id(clock_id) {
+          Some(now) => now >= timeout
+          None => false
+        }
+      } else {
+        timeout <= poll_elapsed_ns
+      }
+      if clock_expired {
         let userdata = mem.read_i64(sub_ptr)
         let event_ptr = out_ptr + events_written * 32
         mem.write_i64(event_ptr, userdata)
