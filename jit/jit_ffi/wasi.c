@@ -1334,164 +1334,280 @@ static int64_t wasi_sched_yield_impl(
     return WASI_ESUCCESS;
 }
 
+typedef struct poll_clock_plan {
+    uint32_t sub_index;
+    int64_t deadline_ns;
+    int use_realtime_clock;
+} poll_clock_plan_t;
+
+typedef struct poll_fd_plan {
+    uint32_t sub_index;
+    uint8_t event_type;
+    int wasi_fd;
+    int native_fd;
+} poll_fd_plan_t;
+
+static int64_t monotonic_now_ns(void) {
+#ifdef _WIN32
+    return 0;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+static int64_t realtime_now_ns(void) {
+#ifdef _WIN32
+    return 0;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+static int64_t normalize_timeout_ns(int64_t timeout_ns) {
+    return timeout_ns > 0 ? timeout_ns : 0;
+}
+
+static int64_t saturating_add_ns(int64_t base, int64_t delta) {
+    const int64_t max_i64 = 9223372036854775807LL;
+    delta = normalize_timeout_ns(delta);
+    if (base > max_i64 - delta) return max_i64;
+    return base + delta;
+}
+
+static int64_t remaining_until_deadline_ns(int64_t deadline, int64_t now) {
+    return deadline > now ? (deadline - now) : 0;
+}
+
+static int is_directory_fd(jit_context_t *ctx, int wasi_fd) {
+    if (!ctx || wasi_fd < 0) return 0;
+    if (is_preopen_fd(ctx, wasi_fd)) return 1;
+    if (!ctx->fd_is_dir || wasi_fd >= ctx->fd_table_size) return 0;
+    return ctx->fd_is_dir[wasi_fd] ? 1 : 0;
+}
+
+static int get_poll_subscription_native_fd(jit_context_t *ctx, int wasi_fd) {
+    // Interpreter parity: poll_oneoff only accepts descriptors tracked in open_files.
+    // stdio and preopen directory fds are rejected with EBADF.
+    if (wasi_fd < 3) return -1;
+    if (is_preopen_fd(ctx, wasi_fd)) return -1;
+    return get_native_fd(ctx, wasi_fd);
+}
+
+static uint16_t fd_readwrite_flags_for_poll_event(jit_context_t *ctx, int wasi_fd, int native_fd) {
+#ifdef _WIN32
+    (void)ctx;
+    (void)wasi_fd;
+    (void)native_fd;
+    return 0;
+#else
+    if (native_fd < 0) return 0;
+    if (is_directory_fd(ctx, wasi_fd)) return 0;
+
+    struct stat st;
+    if (fstat(native_fd, &st) < 0) return 0;
+    if (!S_ISREG(st.st_mode)) return 0;
+
+    off_t position = lseek(native_fd, 0, SEEK_CUR);
+    if (position < 0) return 0;
+    return (uint64_t)position >= (uint64_t)st.st_size ? 0x01 : 0;
+#endif
+}
+
 // poll_oneoff: (in, out, nsubscriptions, nevents) -> errno
 static int64_t wasi_poll_oneoff_impl(
     jit_context_t *ctx,
     int64_t in_ptr, int64_t out_ptr, int64_t nsubscriptions, int64_t nevents_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+
+    uint32_t nsubscriptions_u = (uint32_t)nsubscriptions;
+    if (nsubscriptions_u == 0) return WASI_EINVAL;
+
     uint32_t in_ptr_u = (uint32_t)in_ptr;
     uint32_t out_ptr_u = (uint32_t)out_ptr;
     uint32_t nevents_ptr_u = (uint32_t)nevents_ptr;
-    uint32_t nsubscriptions_u = (uint32_t)nsubscriptions;
     if (!check_mem_range(ctx, in_ptr_u, (size_t)nsubscriptions_u * 48)) return WASI_EFAULT;
     if (!check_mem_range(ctx, out_ptr_u, (size_t)nsubscriptions_u * 32)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nevents_ptr_u, 4)) return WASI_EFAULT;
 
     uint8_t *mem = ctx->memory0->base;
-    if (nsubscriptions_u == 0) {
-        *(uint32_t *)(mem + nevents_ptr_u) = 0;
-        return WASI_ESUCCESS;
-    }
+    int64_t poll_start_monotonic = monotonic_now_ns();
+    int64_t poll_start_realtime = realtime_now_ns();
+    int64_t min_timeout_ns = -1;
 
-    int64_t min_timeout = -1;
-    int num_fds = 0;
+    int64_t retval = WASI_ESUCCESS;
+    uint32_t events_written = 0;
+    size_t clock_count = 0;
+    size_t fd_count = 0;
+
+    poll_clock_plan_t *clock_plans = calloc((size_t)nsubscriptions_u, sizeof(poll_clock_plan_t));
+    poll_fd_plan_t *fd_plans = calloc((size_t)nsubscriptions_u, sizeof(poll_fd_plan_t));
+    int *ready_by_sub = calloc((size_t)nsubscriptions_u, sizeof(int));
+    uint8_t *ready_type_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint8_t));
+    int64_t *ready_nbytes_by_sub = calloc((size_t)nsubscriptions_u, sizeof(int64_t));
+    uint16_t *ready_flags_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint16_t));
+#ifndef _WIN32
+    struct pollfd *pfds = calloc((size_t)nsubscriptions_u, sizeof(struct pollfd));
+#endif
+    if (!clock_plans || !fd_plans || !ready_by_sub || !ready_type_by_sub ||
+        !ready_nbytes_by_sub || !ready_flags_by_sub
+#ifndef _WIN32
+        || !pfds
+#endif
+    ) {
+        retval = WASI_ENOMEM;
+        goto cleanup;
+    }
 
     for (uint32_t i = 0; i < nsubscriptions_u; i++) {
         size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
         uint8_t tag = mem[sub + 8];
+
         if (tag == 0) {
+            int32_t clock_id = *(int32_t *)(mem + sub + 16);
             int64_t timeout = *(int64_t *)(mem + sub + 24);
             uint16_t flags = *(uint16_t *)(mem + sub + 40);
-            int64_t timeout_ns;
-            if (flags & 1) {
-#ifndef _WIN32
-                struct timespec ts;
-                clock_gettime(CLOCK_MONOTONIC, &ts);
-                int64_t now = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-                timeout_ns = timeout > now ? timeout - now : 0;
-#else
-                timeout_ns = 0;
-#endif
+            int is_absolute = (flags & 0x01) != 0;
+
+            if (clock_id != 0 && clock_id != 1) {
+                retval = WASI_EINVAL;
+                goto cleanup;
+            }
+
+            poll_clock_plan_t plan;
+            plan.sub_index = i;
+            plan.use_realtime_clock = (clock_id == 0 && is_absolute) ? 1 : 0;
+            if (is_absolute) {
+                plan.deadline_ns = normalize_timeout_ns(timeout);
             } else {
-                timeout_ns = timeout;
+                plan.deadline_ns = saturating_add_ns(poll_start_monotonic, timeout);
             }
-            if (min_timeout < 0 || timeout_ns < min_timeout) {
-                min_timeout = timeout_ns;
+
+            int64_t now_for_plan = plan.use_realtime_clock ? poll_start_realtime : poll_start_monotonic;
+            int64_t remaining = remaining_until_deadline_ns(plan.deadline_ns, now_for_plan);
+            if (min_timeout_ns < 0 || remaining < min_timeout_ns) {
+                min_timeout_ns = remaining;
             }
+            clock_plans[clock_count++] = plan;
         } else if (tag == 1 || tag == 2) {
             int32_t fd = *(int32_t *)(mem + sub + 12);
-            // Match interpreter: stdio fds are virtual (callbacks/buffers),
-            // so poll_oneoff should not block on them.
-            if (fd >= 0 && fd <= 2) {
-                continue;
+            int native_fd = get_poll_subscription_native_fd(ctx, fd);
+            if (native_fd < 0) {
+                retval = WASI_EBADF;
+                goto cleanup;
             }
-            int native_fd = get_native_fd(ctx, fd);
-            if (native_fd >= 0) {
-                num_fds++;
-            }
+            fd_plans[fd_count].sub_index = i;
+            fd_plans[fd_count].event_type = tag;
+            fd_plans[fd_count].wasi_fd = fd;
+            fd_plans[fd_count].native_fd = native_fd;
+#ifndef _WIN32
+            pfds[fd_count].fd = native_fd;
+            pfds[fd_count].events = (tag == 1) ? POLLIN : POLLOUT;
+            pfds[fd_count].revents = 0;
+#endif
+            fd_count++;
+        } else {
+            retval = WASI_EINVAL;
+            goto cleanup;
         }
     }
 
     int timeout_ms = -1;
-    if (min_timeout == 0) {
+    if (min_timeout_ns == 0) {
         timeout_ms = 0;
-    } else if (min_timeout > 0) {
-        int64_t ms = min_timeout / 1000000LL;
-        timeout_ms = (ms == 0) ? 1 : (int)ms;
+    } else if (min_timeout_ns > 0) {
+        int64_t ms = min_timeout_ns / 1000000LL;
+        if (ms == 0) ms = 1;
+        if (ms > 2147483647LL) ms = 2147483647LL;
+        timeout_ms = (int)ms;
     }
-
-    uint32_t events_written = 0;
-    int clock_ready = 0;
 
 #ifndef _WIN32
-    struct pollfd *pfds = NULL;
-    int *sub_indices = NULL;
-    if (num_fds > 0) {
-        pfds = calloc((size_t)num_fds, sizeof(struct pollfd));
-        sub_indices = calloc((size_t)num_fds, sizeof(int));
-        if (!pfds || !sub_indices) {
-            free(pfds);
-            free(sub_indices);
-            return WASI_ENOMEM;
+    if (fd_count > 0) {
+        int poll_result = poll(pfds, (nfds_t)fd_count, timeout_ms);
+        if (poll_result < 0) {
+            retval = WASI_EIO;
+            goto cleanup;
         }
-        int idx = 0;
-        for (uint32_t i = 0; i < nsubscriptions_u; i++) {
-            size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-            uint8_t tag = mem[sub + 8];
-            if (tag == 1 || tag == 2) {
-                int32_t fd = *(int32_t *)(mem + sub + 12);
-                if (fd >= 0 && fd <= 2) {
-                    continue;
-                }
-                int native_fd = get_native_fd(ctx, fd);
-                if (native_fd >= 0) {
-                    pfds[idx].fd = native_fd;
-                    pfds[idx].events = (tag == 1) ? POLLIN : POLLOUT;
-                    sub_indices[idx] = (int)i;
-                    idx++;
-                }
-            }
-        }
-
-        int poll_result = poll(pfds, (nfds_t)num_fds, timeout_ms);
         if (poll_result > 0) {
-            for (int i = 0; i < num_fds; i++) {
-                if (pfds[i].revents != 0 && events_written < nsubscriptions_u) {
-                    size_t sub = (size_t)in_ptr_u + (size_t)sub_indices[i] * 48;
-                    int64_t userdata = *(int64_t *)(mem + sub);
-                    uint8_t tag = mem[sub + 8];
-                    size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-
-                    *(int64_t *)(mem + evt) = userdata;
-                    *(uint16_t *)(mem + evt + 8) = 0;
-                    mem[evt + 10] = tag;
-                    memset(mem + evt + 11, 0, 5);
-                    *(int64_t *)(mem + evt + 16) = 0;
-                    *(uint16_t *)(mem + evt + 24) = 0;
-                    memset(mem + evt + 26, 0, 6);
-                    events_written++;
-                }
+            for (size_t i = 0; i < fd_count; i++) {
+                if (pfds[i].revents == 0) continue;
+                uint32_t sub_index = fd_plans[i].sub_index;
+                ready_by_sub[sub_index] = 1;
+                ready_type_by_sub[sub_index] = fd_plans[i].event_type;
+                ready_nbytes_by_sub[sub_index] = 1;
+                ready_flags_by_sub[sub_index] = fd_plans[i].event_type == 1
+                    ? fd_readwrite_flags_for_poll_event(ctx, fd_plans[i].wasi_fd, fd_plans[i].native_fd)
+                    : 0;
             }
         }
-        if (poll_result == 0) {
-            clock_ready = 1;
-        }
-        free(pfds);
-        free(sub_indices);
-    } else if (min_timeout >= 0) {
+    } else if (min_timeout_ns >= 0) {
         struct timespec ts = {
-            .tv_sec = min_timeout / 1000000000LL,
-            .tv_nsec = min_timeout % 1000000000LL
+            .tv_sec = min_timeout_ns / 1000000000LL,
+            .tv_nsec = min_timeout_ns % 1000000000LL
         };
         nanosleep(&ts, NULL);
-        clock_ready = 1;
     }
 #else
-    (void)timeout_ms;
-    if (min_timeout >= 0 && num_fds == 0) {
-        clock_ready = 1;
+    if (fd_count > 0) {
+        retval = WASI_ENOSYS;
+        goto cleanup;
+    } else if (min_timeout_ns > 0) {
+        DWORD sleep_ms = (DWORD)(min_timeout_ns / 1000000LL);
+        if (sleep_ms == 0) sleep_ms = 1;
+        Sleep(sleep_ms);
     }
 #endif
 
-    if (clock_ready) {
-        for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
-            size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-            uint8_t tag = mem[sub + 8];
-            if (tag == 0) {
-                int64_t userdata = *(int64_t *)(mem + sub);
-                size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-                *(int64_t *)(mem + evt) = userdata;
-                *(uint16_t *)(mem + evt + 8) = 0;
-                mem[evt + 10] = 0;
-                memset(mem + evt + 11, 0, 21);
-                events_written++;
+    if (clock_count > 0) {
+        int64_t now_monotonic = monotonic_now_ns();
+        int64_t now_realtime = realtime_now_ns();
+        for (size_t i = 0; i < clock_count; i++) {
+            int64_t now = clock_plans[i].use_realtime_clock ? now_realtime : now_monotonic;
+            if (clock_plans[i].deadline_ns <= now) {
+                uint32_t sub_index = clock_plans[i].sub_index;
+                ready_by_sub[sub_index] = 1;
+                ready_type_by_sub[sub_index] = 0;
+                ready_nbytes_by_sub[sub_index] = 0;
+                ready_flags_by_sub[sub_index] = 0;
             }
         }
     }
 
+    for (uint32_t i = 0; i < nsubscriptions_u; i++) {
+        if (!ready_by_sub[i]) continue;
+
+        size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
+        size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
+        int64_t userdata = *(int64_t *)(mem + sub);
+
+        *(int64_t *)(mem + evt) = userdata;
+        *(uint16_t *)(mem + evt + 8) = 0;
+        mem[evt + 10] = ready_type_by_sub[i];
+        memset(mem + evt + 11, 0, 5);
+        *(int64_t *)(mem + evt + 16) = ready_nbytes_by_sub[i];
+        *(uint16_t *)(mem + evt + 24) = ready_flags_by_sub[i];
+        memset(mem + evt + 26, 0, 6);
+        events_written++;
+    }
+
     *(uint32_t *)(mem + nevents_ptr_u) = events_written;
-    return WASI_ESUCCESS;
+
+cleanup:
+    free(clock_plans);
+    free(fd_plans);
+    free(ready_by_sub);
+    free(ready_type_by_sub);
+    free(ready_nbytes_by_sub);
+    free(ready_flags_by_sub);
+#ifndef _WIN32
+    free(pfds);
+#endif
+    return retval;
 }
 
 // ============ Additional File Operations ============
@@ -1509,13 +1625,20 @@ static int32_t wasi_fd_pread_impl(
     if (!check_mem_range(ctx, iovs_ptr_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nread_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not seekable, so pread is not supported
-    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
+    // wasmtime parity:
+    // - fd_pread(stdin) -> ESPIPE
+    // - fd_pread(stdout/stderr) -> EBADF
+    if (fd == 0) return WASI_ESPIPE;
+    if (fd == 1 || fd == 2) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || is_directory_fd(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
+    struct stat st;
+    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return WASI_EBADF;
+
     size_t total = 0;
     for (uint32_t i = 0; i < iovs_len_u; i++) {
         uint32_t buf_ptr = *(uint32_t *)(mem + iovs_ptr_u + i * 8);
@@ -1548,13 +1671,20 @@ static int32_t wasi_fd_pwrite_impl(
     if (!check_mem_range(ctx, iovs_ptr_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nwritten_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not seekable, so pwrite is not supported
-    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
+    // wasmtime parity:
+    // - fd_pwrite(stdout/stderr) -> ESPIPE
+    // - fd_pwrite(stdin) -> EBADF
+    if (fd == 1 || fd == 2) return WASI_ESPIPE;
+    if (fd == 0) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || is_directory_fd(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
+    struct stat st;
+    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return WASI_EBADF;
+
     size_t total = 0;
     for (uint32_t i = 0; i < iovs_len_u; i++) {
         uint32_t buf_ptr = *(uint32_t *)(mem + iovs_ptr_u + i * 8);
