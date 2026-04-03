@@ -242,6 +242,17 @@ pub fn args_get(
   argv_ptr : Int,
   argv_buf_ptr : Int,
 ) -> Int {
+  let argc = ctx.args.length()
+  if !check_mem_range(mem, argv_ptr, argc * 4) {
+    return Errno::Fault.to_i32()
+  }
+  let mut buf_size = 0
+  for arg in ctx.args {
+    buf_size = buf_size + arg.length() + 1
+  }
+  if !check_mem_range(mem, argv_buf_ptr, buf_size) {
+    return Errno::Fault.to_i32()
+  }
   let mut buf_offset = 0
   for i, arg in ctx.args {
     // Write pointer to this argument
@@ -271,6 +282,10 @@ pub fn environ_sizes_get(
   environc_ptr : Int,
   environ_buf_size_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, environc_ptr, 4) ||
+    !check_mem_range(mem, environ_buf_size_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
   let environc = ctx.env.length()
   let mut buf_size = 0
   for env in ctx.env {
@@ -295,6 +310,17 @@ pub fn environ_get(
   environ_ptr : Int,
   environ_buf_ptr : Int,
 ) -> Int {
+  let environc = ctx.env.length()
+  if !check_mem_range(mem, environ_ptr, environc * 4) {
+    return Errno::Fault.to_i32()
+  }
+  let mut buf_size = 0
+  for env in ctx.env {
+    buf_size = buf_size + env.length() + 1
+  }
+  if !check_mem_range(mem, environ_buf_ptr, buf_size) {
+    return Errno::Fault.to_i32()
+  }
   let mut buf_offset = 0
   for i, env in ctx.env {
     // Write pointer to this environment variable
@@ -337,6 +363,9 @@ pub fn clock_time_get(
   _precision : Int64,
   time_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, time_ptr, 8) {
+    return Errno::Fault.to_i32()
+  }
   let clock = ClockId::from_i32(clock_id)
   if clock is None {
     return Errno::Inval.to_i32()
@@ -584,6 +613,9 @@ pub fn fd_seek(
   whence : Int,
   newoffset_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, newoffset_ptr, 8) {
+    return Errno::Fault.to_i32()
+  }
   // stdin, stdout, stderr don't support seeking
   if fd < 3 {
     return Errno::SPipe.to_i32()
@@ -624,6 +656,9 @@ pub fn fd_tell(
   fd : Int,
   offset_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, offset_ptr, 8) {
+    return Errno::Fault.to_i32()
+  }
   // stdin, stdout, stderr don't support tell
   if fd < 3 {
     return Errno::SPipe.to_i32()
@@ -1023,6 +1058,9 @@ pub fn clock_res_get(
   clock_id : Int,
   resolution_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, resolution_ptr, 8) {
+    return Errno::Fault.to_i32()
+  }
   let clock = ClockId::from_i32(clock_id)
   if clock is None {
     return Errno::Inval.to_i32()
