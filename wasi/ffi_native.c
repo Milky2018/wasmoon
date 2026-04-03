@@ -122,6 +122,36 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EBUSY
     case EBUSY: return 10;
 #endif
+#ifdef ECANCELED
+    case ECANCELED: return 11;
+#endif
+#ifdef ECHILD
+    case ECHILD: return 12;
+#endif
+#ifdef ECONNABORTED
+    case ECONNABORTED: return 13;
+#endif
+#ifdef ECONNREFUSED
+    case ECONNREFUSED: return 14;
+#endif
+#ifdef ECONNRESET
+    case ECONNRESET: return 15;
+#endif
+#if defined(EDEADLK)
+    case EDEADLK: return 16;
+#endif
+#if defined(EDEADLOCK) && (!defined(EDEADLK) || EDEADLOCK != EDEADLK)
+    case EDEADLOCK: return 16;
+#endif
+#ifdef EDESTADDRREQ
+    case EDESTADDRREQ: return 17;
+#endif
+#ifdef EDOM
+    case EDOM: return 18;
+#endif
+#ifdef EDQUOT
+    case EDQUOT: return 19;
+#endif
 #ifdef EEXIST
     case EEXIST: return 20;
 #endif
@@ -146,17 +176,41 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EIO
     case EIO: return 29;
 #endif
+#ifdef EISCONN
+    case EISCONN: return 30;
+#endif
 #ifdef EISDIR
     case EISDIR: return 31;
 #endif
 #ifdef ELOOP
     case ELOOP: return 32;
 #endif
+#ifdef EMFILE
+    case EMFILE: return 33;
+#endif
 #ifdef EMLINK
     case EMLINK: return 34;
 #endif
+#ifdef EMSGSIZE
+    case EMSGSIZE: return 35;
+#endif
 #ifdef ENAMETOOLONG
     case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENETDOWN
+    case ENETDOWN: return 38;
+#endif
+#ifdef ENETRESET
+    case ENETRESET: return 39;
+#endif
+#ifdef ENETUNREACH
+    case ENETUNREACH: return 40;
+#endif
+#ifdef ENFILE
+    case ENFILE: return 41;
+#endif
+#ifdef ENOBUFS
+    case ENOBUFS: return 42;
 #endif
 #ifdef ENODEV
     case ENODEV: return 43;
@@ -164,11 +218,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef ENOENT
     case ENOENT: return 44;
 #endif
+#ifdef ENOEXEC
+    case ENOEXEC: return 45;
+#endif
 #ifdef ENOLCK
     case ENOLCK: return 46;
 #endif
 #ifdef ENOMEM
     case ENOMEM: return 48;
+#endif
+#ifdef ENOMSG
+    case ENOMSG: return 49;
+#endif
+#ifdef ENOPROTOOPT
+    case ENOPROTOOPT: return 50;
 #endif
 #ifdef ENOSPC
     case ENOSPC: return 51;
@@ -176,11 +239,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef ENOSYS
     case ENOSYS: return 52;
 #endif
+#ifdef ENOTCONN
+    case ENOTCONN: return 53;
+#endif
 #ifdef ENOTDIR
     case ENOTDIR: return 54;
 #endif
 #ifdef ENOTEMPTY
     case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTRECOVERABLE
+    case ENOTRECOVERABLE: return 56;
+#endif
+#ifdef ENOTSOCK
+    case ENOTSOCK: return 57;
 #endif
 #ifdef ENOTSUP
     case ENOTSUP: return 58;
@@ -203,11 +275,29 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EPIPE
     case EPIPE: return 64;
 #endif
+#ifdef EPROTO
+    case EPROTO: return 65;
+#endif
+#ifdef EPROTONOSUPPORT
+    case EPROTONOSUPPORT: return 66;
+#endif
+#ifdef EPROTOTYPE
+    case EPROTOTYPE: return 67;
+#endif
+#ifdef ERANGE
+    case ERANGE: return 68;
+#endif
 #ifdef EROFS
     case EROFS: return 69;
 #endif
 #ifdef ESPIPE
     case ESPIPE: return 70;
+#endif
+#ifdef ESRCH
+    case ESRCH: return 71;
+#endif
+#ifdef ETIMEDOUT
+    case ETIMEDOUT: return 73;
 #endif
 #ifdef ETXTBSY
     case ETXTBSY: return 74;

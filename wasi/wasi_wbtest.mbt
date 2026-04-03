@@ -450,18 +450,54 @@ test "wasi: fd_pread/fd_pwrite stdio errno parity" {
 test "wasi: fd_fdstat_get" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
+  let preopen_base_rights = right_path_create_directory |
+    right_path_create_file |
+    right_path_link_source |
+    right_path_link_target |
+    right_path_open |
+    right_fd_readdir |
+    right_path_readlink |
+    right_path_rename_source |
+    right_path_rename_target |
+    right_path_symlink |
+    right_path_remove_directory |
+    right_path_unlink_file |
+    right_path_filestat_get |
+    right_path_filestat_set_times |
+    right_fd_filestat_get |
+    right_fd_filestat_set_times
+  let preopen_inheriting_rights = preopen_base_rights |
+    right_fd_datasync |
+    right_fd_read |
+    right_fd_seek |
+    right_fd_fdstat_set_flags |
+    right_fd_sync |
+    right_fd_tell |
+    right_fd_write |
+    right_fd_advise |
+    right_fd_allocate |
+    right_fd_filestat_get |
+    right_fd_filestat_set_size |
+    right_fd_filestat_set_times |
+    right_poll_fd_readwrite
   // Test stdin
   let result = fd_fdstat_get(ctx, mem, 0, 0)
   inspect(result, content="0")
   inspect(mem.read_byte(0), content="b'\\x02'") // character_device
+  inspect(mem.read_i64(8) == right_fd_read, content="true")
+  inspect(mem.read_i64(16) == right_fd_read, content="true")
   // Test stdout
   let result = fd_fdstat_get(ctx, mem, 1, 0)
   inspect(result, content="0")
   inspect(mem.read_byte(0), content="b'\\x02'") // character_device
+  inspect(mem.read_i64(8) == right_fd_write, content="true")
+  inspect(mem.read_i64(16) == right_fd_write, content="true")
   // Test preopen directory
   let result = fd_fdstat_get(ctx, mem, 3, 0)
   inspect(result, content="0")
   inspect(mem.read_byte(0), content="b'\\x03'") // directory
+  inspect(mem.read_i64(8) == preopen_base_rights, content="true")
+  inspect(mem.read_i64(16) == preopen_inheriting_rights, content="true")
   // Test synthetic socket stream descriptor
   let socket_fd = ctx.alloc_fd({
     native_fd: 0,

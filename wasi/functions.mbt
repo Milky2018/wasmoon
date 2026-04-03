@@ -731,85 +731,89 @@ pub fn fd_pwrite(
 ///|
 fn fd_rights_for_stdio(fd : Int) -> Int64 {
   if fd == 0 {
-    right_fd_read | right_poll_fd_readwrite
+    right_fd_read
   } else if fd == 1 || fd == 2 {
-    right_fd_write | right_poll_fd_readwrite
+    right_fd_write
   } else {
     0L
   }
 }
 
 ///|
-fn fd_rights_for_filetype(
+fn fd_rights_for_preopen_directory_base() -> Int64 {
+  right_path_create_directory |
+  right_path_create_file |
+  right_path_link_source |
+  right_path_link_target |
+  right_path_open |
+  right_fd_readdir |
+  right_path_readlink |
+  right_path_rename_source |
+  right_path_rename_target |
+  right_path_symlink |
+  right_path_remove_directory |
+  right_path_unlink_file |
+  right_path_filestat_get |
+  right_path_filestat_set_times |
+  right_fd_filestat_get |
+  right_fd_filestat_set_times
+}
+
+///|
+fn fd_rights_for_preopen_directory_inheriting() -> Int64 {
+  let base = fd_rights_for_preopen_directory_base()
+  base |
+  right_fd_datasync |
+  right_fd_read |
+  right_fd_seek |
+  right_fd_fdstat_set_flags |
+  right_fd_sync |
+  right_fd_tell |
+  right_fd_write |
+  right_fd_advise |
+  right_fd_allocate |
+  right_fd_filestat_get |
+  right_fd_filestat_set_size |
+  right_fd_filestat_set_times |
+  right_poll_fd_readwrite
+}
+
+///|
+fn fd_rights_for_socket(can_read : Bool, can_write : Bool) -> Int64 {
+  let mut rights = right_fd_fdstat_set_flags | right_sock_shutdown
+  if can_read {
+    rights = rights | right_fd_read
+  }
+  if can_write {
+    rights = rights | right_fd_write
+  }
+  if can_read || can_write {
+    rights = rights | right_poll_fd_readwrite
+  }
+  rights
+}
+
+///|
+fn fd_rights_for_descriptor(
   file_type : FileType,
   can_read : Bool,
   can_write : Bool,
 ) -> Int64 {
-  let mut rights = 0L
-  match file_type {
-    RegularFile => {
-      rights = rights |
-        right_fd_advise |
-        right_fd_allocate |
-        right_fd_filestat_get |
-        right_fd_filestat_set_size |
-        right_fd_filestat_set_times |
-        right_fd_sync |
-        right_fd_datasync |
-        right_fd_seek |
-        right_fd_tell |
-        right_fd_fdstat_set_flags |
-        right_poll_fd_readwrite
-      if can_read {
-        rights = rights | right_fd_read
-      }
-      if can_write {
-        rights = rights | right_fd_write
-      }
-    }
-    Directory =>
-      rights = rights |
-        right_fd_filestat_get |
-        right_fd_fdstat_set_flags |
-        right_fd_readdir |
-        right_path_create_directory |
-        right_path_create_file |
-        right_path_link_source |
-        right_path_link_target |
-        right_path_open |
-        right_path_readlink |
-        right_path_rename_source |
-        right_path_rename_target |
-        right_path_filestat_get |
-        right_path_filestat_set_size |
-        right_path_filestat_set_times |
-        right_path_symlink |
-        right_path_remove_directory |
-        right_path_unlink_file
-    CharacterDevice => {
-      rights = rights | right_fd_fdstat_set_flags
-      if can_read {
-        rights = rights | right_fd_read
-      }
-      if can_write {
-        rights = rights | right_fd_write
-      }
-      if can_read || can_write {
-        rights = rights | right_poll_fd_readwrite
-      }
-    }
-    SocketStream => {
-      rights = rights | right_fd_fdstat_set_flags | right_sock_shutdown
-      if can_read {
-        rights = rights | right_fd_read
-      }
-      if can_write {
-        rights = rights | right_fd_write
-      }
-      if can_read || can_write {
-        rights = rights | right_poll_fd_readwrite
-      }
-    }
+  if file_type is SocketStream {
+    return fd_rights_for_socket(can_read, can_write)
+  }
+  let mut rights = rights_all_valid
+  if file_type is Directory {
+    rights = rights & right_fd_seek.lnot()
+    rights = rights & right_fd_filestat_set_size.lnot()
+    rights = rights & right_path_filestat_set_size.lnot()
+  }
+  if !can_read {
+    rights = rights & right_fd_read.lnot()
+    rights = rights & right_fd_readdir.lnot()
+  }
+  if !can_write {
+    rights = rights & right_fd_write.lnot()
   }
   rights
 }
@@ -872,10 +876,27 @@ pub fn fd_fdstat_get(
     // filetype=2 (character_device)
     (2, 0, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
   } else if fd == 1 || fd == 2 {
-    // stdout/stderr - character device, append
-    // filetype=2, flags=append
-    (2, 1, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
+    // stdout/stderr - character device, write-only
+    (2, 0, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
   } else {
+    // Check preopen directories first: wasmtime reports a special base/inheriting set.
+    for preopen in ctx.preopens {
+      let (preopen_fd, _, _) = preopen
+      if preopen_fd.to_int() == fd {
+        let rights_base = fd_rights_for_preopen_directory_base()
+        let rights_inheriting = fd_rights_for_preopen_directory_inheriting()
+        return {
+          mem.write_byte(fdstat_ptr, b'\x03') // fs_filetype = directory (3)
+          mem.write_byte(fdstat_ptr + 1, b'\x00') // padding
+          mem.write_byte(fdstat_ptr + 2, b'\x00') // fs_flags low byte
+          mem.write_byte(fdstat_ptr + 3, b'\x00') // fs_flags high byte
+          mem.write_i32(fdstat_ptr + 4, 0) // padding
+          mem.write_i64(fdstat_ptr + 8, rights_base)
+          mem.write_i64(fdstat_ptr + 16, rights_inheriting)
+          Errno::Success.to_i32()
+        }
+      }
+    }
     match ctx.get_file(fd) {
       Some(file) => {
         let ft = match file.file_type {
@@ -888,30 +909,14 @@ pub fn fd_fdstat_get(
           file.native_fd,
           file.file_type,
         )
-        let rights = fd_rights_for_filetype(file.file_type, can_read, can_write)
-        (ft, file.flags & 0x01, rights, rights) // preserve append flag
+        let rights = fd_rights_for_descriptor(
+          file.file_type,
+          can_read,
+          can_write,
+        )
+        (ft, file.flags & 0x1F, rights, rights)
       }
-      None => {
-        // Check if it's a preopen directory
-        for preopen in ctx.preopens {
-          let (preopen_fd, _, _) = preopen
-          if preopen_fd.to_int() == fd {
-            let rights = fd_rights_for_filetype(Directory, true, true)
-            return {
-              // It's a preopen directory
-              mem.write_byte(fdstat_ptr, b'\x03') // fs_filetype = directory (3)
-              mem.write_byte(fdstat_ptr + 1, b'\x00') // padding
-              mem.write_byte(fdstat_ptr + 2, b'\x00') // fs_flags low byte
-              mem.write_byte(fdstat_ptr + 3, b'\x00') // fs_flags high byte
-              mem.write_i32(fdstat_ptr + 4, 0) // padding
-              mem.write_i64(fdstat_ptr + 8, rights)
-              mem.write_i64(fdstat_ptr + 16, rights)
-              Errno::Success.to_i32()
-            }
-          }
-        }
-        return Errno::Badf.to_i32()
-      }
+      None => return Errno::Badf.to_i32()
     }
   }
   // Write fdstat struct

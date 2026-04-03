@@ -1193,6 +1193,51 @@ test "wasi jit: fd_fdstat_get stdin returns 0" {
 }
 
 ///|
+test "wasi jit: fd_fdstat_get stdin rights match interpreter" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_get"
+    #|    (func $fd_fdstat_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i64)
+    #|    (drop (call $fd_fdstat_get (i32.const 0) (i32.const 0)))
+    #|    (i64.load (i32.const 8))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: fd_fdstat_get preopen base rights match interpreter" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_get"
+    #|    (func $fd_fdstat_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i64)
+    #|    (drop (call $fd_fdstat_get (i32.const 3) (i32.const 0)))
+    #|    (i64.load (i32.const 8))))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
+test "wasi jit: fd_fdstat_get preopen inheriting rights match interpreter" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_get"
+    #|    (func $fd_fdstat_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i64)
+    #|    (drop (call $fd_fdstat_get (i32.const 3) (i32.const 0)))
+    #|    (i64.load (i32.const 16))))
+  inspect(
+    compare_wasi_with_options(source, "test", preopens=[("/tmp", "/")]),
+    content="matched",
+  )
+}
+
+///|
 test "wasi jit: sock_accept returns ENOTSUP (58)" {
   let source =
     #|(module

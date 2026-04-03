@@ -425,6 +425,36 @@ static int errno_to_wasi(int err) {
 #ifdef EBUSY
         case EBUSY: return 10;
 #endif
+#ifdef ECANCELED
+        case ECANCELED: return 11;
+#endif
+#ifdef ECHILD
+        case ECHILD: return 12;
+#endif
+#ifdef ECONNABORTED
+        case ECONNABORTED: return 13;
+#endif
+#ifdef ECONNREFUSED
+        case ECONNREFUSED: return 14;
+#endif
+#ifdef ECONNRESET
+        case ECONNRESET: return 15;
+#endif
+#if defined(EDEADLK)
+        case EDEADLK: return 16;
+#endif
+#if defined(EDEADLOCK) && (!defined(EDEADLK) || EDEADLOCK != EDEADLK)
+        case EDEADLOCK: return 16;
+#endif
+#ifdef EDESTADDRREQ
+        case EDESTADDRREQ: return 17;
+#endif
+#ifdef EDOM
+        case EDOM: return 18;
+#endif
+#ifdef EDQUOT
+        case EDQUOT: return 19;
+#endif
 #ifdef EEXIST
         case EEXIST: return 20;
 #endif
@@ -449,17 +479,41 @@ static int errno_to_wasi(int err) {
 #ifdef EIO
         case EIO: return 29;
 #endif
+#ifdef EISCONN
+        case EISCONN: return 30;
+#endif
 #ifdef EISDIR
         case EISDIR: return 31;
 #endif
 #ifdef ELOOP
         case ELOOP: return 32;
 #endif
+#ifdef EMFILE
+        case EMFILE: return 33;
+#endif
 #ifdef EMLINK
         case EMLINK: return 34;
 #endif
+#ifdef EMSGSIZE
+        case EMSGSIZE: return 35;
+#endif
 #ifdef ENAMETOOLONG
         case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENETDOWN
+        case ENETDOWN: return 38;
+#endif
+#ifdef ENETRESET
+        case ENETRESET: return 39;
+#endif
+#ifdef ENETUNREACH
+        case ENETUNREACH: return 40;
+#endif
+#ifdef ENFILE
+        case ENFILE: return 41;
+#endif
+#ifdef ENOBUFS
+        case ENOBUFS: return 42;
 #endif
 #ifdef ENODEV
         case ENODEV: return 43;
@@ -467,11 +521,20 @@ static int errno_to_wasi(int err) {
 #ifdef ENOENT
         case ENOENT: return 44;
 #endif
+#ifdef ENOEXEC
+        case ENOEXEC: return 45;
+#endif
 #ifdef ENOLCK
         case ENOLCK: return 46;
 #endif
 #ifdef ENOMEM
         case ENOMEM: return 48;
+#endif
+#ifdef ENOMSG
+        case ENOMSG: return 49;
+#endif
+#ifdef ENOPROTOOPT
+        case ENOPROTOOPT: return 50;
 #endif
 #ifdef ENOSPC
         case ENOSPC: return 51;
@@ -479,11 +542,20 @@ static int errno_to_wasi(int err) {
 #ifdef ENOSYS
         case ENOSYS: return 52;
 #endif
+#ifdef ENOTCONN
+        case ENOTCONN: return 53;
+#endif
 #ifdef ENOTDIR
         case ENOTDIR: return 54;
 #endif
 #ifdef ENOTEMPTY
         case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTRECOVERABLE
+        case ENOTRECOVERABLE: return 56;
+#endif
+#ifdef ENOTSOCK
+        case ENOTSOCK: return 57;
 #endif
 #ifdef ENOTSUP
         case ENOTSUP: return 58;
@@ -506,11 +578,29 @@ static int errno_to_wasi(int err) {
 #ifdef EPIPE
         case EPIPE: return 64;
 #endif
+#ifdef EPROTO
+        case EPROTO: return 65;
+#endif
+#ifdef EPROTONOSUPPORT
+        case EPROTONOSUPPORT: return 66;
+#endif
+#ifdef EPROTOTYPE
+        case EPROTOTYPE: return 67;
+#endif
+#ifdef ERANGE
+        case ERANGE: return 68;
+#endif
 #ifdef EROFS
         case EROFS: return 69;
 #endif
 #ifdef ESPIPE
         case ESPIPE: return 70;
+#endif
+#ifdef ESRCH
+        case ESRCH: return 71;
+#endif
+#ifdef ETIMEDOUT
+        case ETIMEDOUT: return 73;
 #endif
 #ifdef ETXTBSY
         case ETXTBSY: return 74;
@@ -569,6 +659,120 @@ static uint8_t mode_to_filetype(mode_t mode) {
     if (S_ISLNK(mode)) return WASI_FILETYPE_SYMBOLIC_LINK;
     if (S_ISSOCK(mode)) return WASI_FILETYPE_SOCKET_STREAM;
     return WASI_FILETYPE_UNKNOWN;
+}
+#endif
+
+static uint64_t preopen_directory_base_rights(void) {
+    return WASI_RIGHT_PATH_CREATE_DIRECTORY |
+        WASI_RIGHT_PATH_CREATE_FILE |
+        WASI_RIGHT_PATH_LINK_SOURCE |
+        WASI_RIGHT_PATH_LINK_TARGET |
+        WASI_RIGHT_PATH_OPEN |
+        WASI_RIGHT_FD_READDIR |
+        WASI_RIGHT_PATH_READLINK |
+        WASI_RIGHT_PATH_RENAME_SOURCE |
+        WASI_RIGHT_PATH_RENAME_TARGET |
+        WASI_RIGHT_PATH_SYMLINK |
+        WASI_RIGHT_PATH_REMOVE_DIRECTORY |
+        WASI_RIGHT_PATH_UNLINK_FILE |
+        WASI_RIGHT_PATH_FILESTAT_GET |
+        WASI_RIGHT_PATH_FILESTAT_SET_TIMES |
+        WASI_RIGHT_FD_FILESTAT_GET |
+        WASI_RIGHT_FD_FILESTAT_SET_TIMES;
+}
+
+static uint64_t preopen_directory_inheriting_rights(void) {
+    uint64_t base = preopen_directory_base_rights();
+    return base |
+        WASI_RIGHT_FD_DATASYNC |
+        WASI_RIGHT_FD_READ |
+        WASI_RIGHT_FD_SEEK |
+        WASI_RIGHT_FD_FDSTAT_SET_FLAGS |
+        WASI_RIGHT_FD_SYNC |
+        WASI_RIGHT_FD_TELL |
+        WASI_RIGHT_FD_WRITE |
+        WASI_RIGHT_FD_ADVISE |
+        WASI_RIGHT_FD_ALLOCATE |
+        WASI_RIGHT_FD_FILESTAT_GET |
+        WASI_RIGHT_FD_FILESTAT_SET_SIZE |
+        WASI_RIGHT_FD_FILESTAT_SET_TIMES |
+        WASI_RIGHT_POLL_FD_READWRITE;
+}
+
+static uint64_t socket_base_rights(int can_read, int can_write) {
+    uint64_t rights = WASI_RIGHT_FD_FDSTAT_SET_FLAGS | WASI_RIGHT_SOCK_SHUTDOWN;
+    if (can_read) rights |= WASI_RIGHT_FD_READ;
+    if (can_write) rights |= WASI_RIGHT_FD_WRITE;
+    if (can_read || can_write) rights |= WASI_RIGHT_POLL_FD_READWRITE;
+    return rights;
+}
+
+static uint64_t dynamic_descriptor_rights(uint8_t filetype, int can_read, int can_write) {
+    if (filetype == WASI_FILETYPE_SOCKET_STREAM) {
+        return socket_base_rights(can_read, can_write);
+    }
+
+    uint64_t rights = WASI_RIGHTS_ALL_VALID;
+    if (filetype == WASI_FILETYPE_DIRECTORY) {
+        rights &= ~WASI_RIGHT_FD_SEEK;
+        rights &= ~WASI_RIGHT_FD_FILESTAT_SET_SIZE;
+        rights &= ~WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    }
+    if (!can_read) {
+        rights &= ~WASI_RIGHT_FD_READ;
+        rights &= ~WASI_RIGHT_FD_READDIR;
+    }
+    if (!can_write) {
+        rights &= ~WASI_RIGHT_FD_WRITE;
+    }
+    return rights;
+}
+
+#ifndef _WIN32
+static uint16_t wasi_fdflags_from_native(int native_fd) {
+    uint16_t flags = 0;
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return flags;
+
+#ifdef O_APPEND
+    if (native_flags & O_APPEND) flags |= 0x01; // APPEND
+#endif
+#ifdef O_DSYNC
+    if (native_flags & O_DSYNC) flags |= 0x02; // DSYNC
+#endif
+#ifdef O_NONBLOCK
+    if (native_flags & O_NONBLOCK) flags |= 0x04; // NONBLOCK
+#endif
+#ifdef O_RSYNC
+    if (native_flags & O_RSYNC) flags |= 0x08; // RSYNC
+#endif
+#ifdef O_SYNC
+    if (native_flags & O_SYNC) flags |= 0x10; // SYNC
+#endif
+
+    return flags;
+}
+
+static void fd_access_mode_from_native(int native_fd, int *can_read, int *can_write) {
+    *can_read = 1;
+    *can_write = 1;
+
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return;
+
+#if defined(O_ACCMODE) && defined(O_WRONLY) && defined(O_RDWR)
+    int acc_mode = native_flags & O_ACCMODE;
+    if (acc_mode == O_WRONLY) {
+        *can_read = 0;
+        *can_write = 1;
+    } else if (acc_mode == O_RDWR) {
+        *can_read = 1;
+        *can_write = 1;
+    } else {
+        *can_read = 1;
+        *can_write = 0;
+    }
+#endif
 }
 #endif
 
@@ -876,25 +1080,34 @@ static int64_t wasi_fd_fdstat_get_impl(
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
 
-    // Determine file type
     uint8_t filetype;
     uint16_t flags = 0;
+    uint64_t rights_base = 0;
+    uint64_t rights_inheriting = 0;
     if (wasi_fd < 3) {
         filetype = WASI_FILETYPE_CHARACTER_DEVICE;
-        // Match interpreter: stdout/stderr are append-capable.
-        if (wasi_fd == 1 || wasi_fd == 2) flags = 1;
+        rights_base = (wasi_fd == 0) ? WASI_RIGHT_FD_READ : WASI_RIGHT_FD_WRITE;
+        rights_inheriting = rights_base;
     } else if (is_preopen_fd(ctx, wasi_fd)) {
         filetype = WASI_FILETYPE_DIRECTORY;
+        rights_base = preopen_directory_base_rights();
+        rights_inheriting = preopen_directory_inheriting_rights();
     } else {
         int native_fd = get_native_fd(ctx, wasi_fd);
         if (native_fd < 0) return WASI_EBADF;
+        int can_read = 1;
+        int can_write = 1;
 #ifndef _WIN32
         struct stat st;
         if (fstat(native_fd, &st) < 0) return errno_to_wasi(errno);
         filetype = mode_to_filetype(st.st_mode);
+        flags = wasi_fdflags_from_native(native_fd);
+        fd_access_mode_from_native(native_fd, &can_read, &can_write);
 #else
         filetype = WASI_FILETYPE_REGULAR_FILE;
 #endif
+        rights_base = dynamic_descriptor_rights(filetype, can_read, can_write);
+        rights_inheriting = rights_base;
     }
 
     // fdstat: filetype(1) + pad(1) + flags(2) + pad(4) + rights_base(8) + rights_inheriting(8)
@@ -902,8 +1115,8 @@ static int64_t wasi_fd_fdstat_get_impl(
     mem[fdstat_ptr_u + 1] = 0;
     *(uint16_t *)(mem + fdstat_ptr_u + 2) = flags;
     *(uint32_t *)(mem + fdstat_ptr_u + 4) = 0;
-    *(uint64_t *)(mem + fdstat_ptr_u + 8) = 0x1FFFFFFFULL; // all rights
-    *(uint64_t *)(mem + fdstat_ptr_u + 16) = 0x1FFFFFFFULL;
+    *(uint64_t *)(mem + fdstat_ptr_u + 8) = rights_base;
+    *(uint64_t *)(mem + fdstat_ptr_u + 16) = rights_inheriting;
     return WASI_ESUCCESS;
 }
 
