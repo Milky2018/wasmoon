@@ -111,6 +111,12 @@ pub fn native_o_append() -> Int
 
 pub fn native_o_nonblock() -> Int
 
+pub fn native_o_rdonly() -> Int
+
+pub fn native_o_rdwr() -> Int
+
+pub fn native_o_wronly() -> Int
+
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
 pub fn native_open_read(String) -> Int?
@@ -385,6 +391,7 @@ pub(all) enum FileType {
   RegularFile
   Directory
   CharacterDevice
+  SocketStream
 }
 
 pub(all) struct IoVec {

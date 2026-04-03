@@ -7,6 +7,8 @@ pub(all) enum FileType {
   Directory
   /// Stdin/Stdout/Stderr (character device)
   CharacterDevice
+  /// Stream socket
+  SocketStream
 }
 
 ///|

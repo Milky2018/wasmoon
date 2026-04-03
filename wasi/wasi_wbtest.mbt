@@ -462,6 +462,17 @@ test "wasi: fd_fdstat_get" {
   let result = fd_fdstat_get(ctx, mem, 3, 0)
   inspect(result, content="0")
   inspect(mem.read_byte(0), content="b'\\x03'") // directory
+  // Test synthetic socket stream descriptor
+  let socket_fd = ctx.alloc_fd({
+    native_fd: 0,
+    file_type: SocketStream,
+    host_path: "<socket>",
+    position: 0L,
+    flags: 0,
+  })
+  let result = fd_fdstat_get(ctx, mem, socket_fd, 0)
+  inspect(result, content="0")
+  inspect(mem.read_byte(0), content="b'\\x06'") // socket_stream
 }
 
 ///|

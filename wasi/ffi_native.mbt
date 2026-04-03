@@ -144,6 +144,21 @@ pub fn native_open_write(path : String) -> Int? {
 }
 
 ///|
+pub fn native_o_rdonly() -> Int {
+  c_o_rdonly()
+}
+
+///|
+pub fn native_o_wronly() -> Int {
+  c_o_wronly()
+}
+
+///|
+pub fn native_o_rdwr() -> Int {
+  c_o_rdwr()
+}
+
+///|
 pub fn native_o_append() -> Int {
   c_o_append()
 }

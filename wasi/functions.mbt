@@ -729,6 +729,119 @@ pub fn fd_pwrite(
 }
 
 ///|
+fn fd_rights_for_stdio(fd : Int) -> Int64 {
+  if fd == 0 {
+    right_fd_read | right_poll_fd_readwrite
+  } else if fd == 1 || fd == 2 {
+    right_fd_write | right_poll_fd_readwrite
+  } else {
+    0L
+  }
+}
+
+///|
+fn fd_rights_for_filetype(
+  file_type : FileType,
+  can_read : Bool,
+  can_write : Bool,
+) -> Int64 {
+  let mut rights = 0L
+  match file_type {
+    RegularFile => {
+      rights = rights |
+        right_fd_advise |
+        right_fd_allocate |
+        right_fd_filestat_get |
+        right_fd_filestat_set_size |
+        right_fd_filestat_set_times |
+        right_fd_sync |
+        right_fd_datasync |
+        right_fd_seek |
+        right_fd_tell |
+        right_fd_fdstat_set_flags |
+        right_poll_fd_readwrite
+      if can_read {
+        rights = rights | right_fd_read
+      }
+      if can_write {
+        rights = rights | right_fd_write
+      }
+    }
+    Directory =>
+      rights = rights |
+        right_fd_filestat_get |
+        right_fd_fdstat_set_flags |
+        right_fd_readdir |
+        right_path_create_directory |
+        right_path_create_file |
+        right_path_link_source |
+        right_path_link_target |
+        right_path_open |
+        right_path_readlink |
+        right_path_rename_source |
+        right_path_rename_target |
+        right_path_filestat_get |
+        right_path_filestat_set_size |
+        right_path_filestat_set_times |
+        right_path_symlink |
+        right_path_remove_directory |
+        right_path_unlink_file
+    CharacterDevice => {
+      rights = rights | right_fd_fdstat_set_flags
+      if can_read {
+        rights = rights | right_fd_read
+      }
+      if can_write {
+        rights = rights | right_fd_write
+      }
+      if can_read || can_write {
+        rights = rights | right_poll_fd_readwrite
+      }
+    }
+    SocketStream => {
+      rights = rights | right_fd_fdstat_set_flags | right_sock_shutdown
+      if can_read {
+        rights = rights | right_fd_read
+      }
+      if can_write {
+        rights = rights | right_fd_write
+      }
+      if can_read || can_write {
+        rights = rights | right_poll_fd_readwrite
+      }
+    }
+  }
+  rights
+}
+
+///|
+fn fd_access_mode_from_native(
+  native_fd : Int,
+  file_type : FileType,
+) -> (Bool, Bool) {
+  if file_type is Directory {
+    return (true, true)
+  }
+  let flags = native_fcntl_getfl(native_fd)
+  match flags {
+    Some(native_flags) => {
+      let rdonly = native_o_rdonly()
+      let wronly = native_o_wronly()
+      let rdwr = native_o_rdwr()
+      let acc_mode = native_flags & (rdonly | wronly | rdwr)
+      if acc_mode == wronly {
+        (false, true)
+      } else if acc_mode == rdwr {
+        (true, true)
+      } else {
+        (true, false)
+      }
+    }
+    None => (true, true)
+  }
+}
+
+///|
 /// fd_fdstat_get - Get file descriptor status
 ///
 /// Params:
@@ -749,12 +862,19 @@ pub fn fd_fdstat_get(
   fdstat_ptr : Int,
 ) -> Int {
   // Determine file type
-  let (file_type, flags) : (Int, Int) = if fd == 0 {
+  let (file_type, flags, rights_base, rights_inheriting) : (
+    Int,
+    Int,
+    Int64,
+    Int64,
+  ) = if fd == 0 {
     // stdin - character device, read-only
-    (2, 0) // filetype=2 (character_device)
+    // filetype=2 (character_device)
+    (2, 0, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
   } else if fd == 1 || fd == 2 {
     // stdout/stderr - character device, append
-    (2, 1) // filetype=2, flags=append
+    // filetype=2, flags=append
+    (2, 1, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
   } else {
     match ctx.get_file(fd) {
       Some(file) => {
@@ -762,14 +882,21 @@ pub fn fd_fdstat_get(
           RegularFile => 4 // regular_file
           Directory => 3 // directory
           CharacterDevice => 2 // character_device
+          SocketStream => 6 // socket_stream
         }
-        (ft, file.flags & 0x01) // preserve append flag
+        let (can_read, can_write) = fd_access_mode_from_native(
+          file.native_fd,
+          file.file_type,
+        )
+        let rights = fd_rights_for_filetype(file.file_type, can_read, can_write)
+        (ft, file.flags & 0x01, rights, rights) // preserve append flag
       }
       None => {
         // Check if it's a preopen directory
         for preopen in ctx.preopens {
           let (preopen_fd, _, _) = preopen
           if preopen_fd.to_int() == fd {
+            let rights = fd_rights_for_filetype(Directory, true, true)
             return {
               // It's a preopen directory
               mem.write_byte(fdstat_ptr, b'\x03') // fs_filetype = directory (3)
@@ -777,8 +904,8 @@ pub fn fd_fdstat_get(
               mem.write_byte(fdstat_ptr + 2, b'\x00') // fs_flags low byte
               mem.write_byte(fdstat_ptr + 3, b'\x00') // fs_flags high byte
               mem.write_i32(fdstat_ptr + 4, 0) // padding
-              mem.write_i64(fdstat_ptr + 8, 0x1FFFFFFFL) // fs_rights_base (all rights)
-              mem.write_i64(fdstat_ptr + 16, 0x1FFFFFFFL) // fs_rights_inheriting
+              mem.write_i64(fdstat_ptr + 8, rights)
+              mem.write_i64(fdstat_ptr + 16, rights)
               Errno::Success.to_i32()
             }
           }
@@ -793,8 +920,8 @@ pub fn fd_fdstat_get(
   mem.write_byte(fdstat_ptr + 2, (flags & 0xFF).to_byte()) // fs_flags low byte
   mem.write_byte(fdstat_ptr + 3, ((flags >> 8) & 0xFF).to_byte()) // fs_flags high byte
   mem.write_i32(fdstat_ptr + 4, 0) // padding
-  mem.write_i64(fdstat_ptr + 8, 0x1FFFFFFFL) // fs_rights_base (all rights for simplicity)
-  mem.write_i64(fdstat_ptr + 16, 0x1FFFFFFFL) // fs_rights_inheriting
+  mem.write_i64(fdstat_ptr + 8, rights_base)
+  mem.write_i64(fdstat_ptr + 16, rights_inheriting)
   Errno::Success.to_i32()
 }
 
@@ -2010,7 +2137,7 @@ pub fn sock_accept_impl(
       // Register the new socket in WASI context
       let open_file : OpenFile = {
         native_fd: new_fd,
-        file_type: CharacterDevice, // Use CharacterDevice for sockets
+        file_type: SocketStream,
         host_path: "<socket>",
         position: 0L,
         flags: 0,
