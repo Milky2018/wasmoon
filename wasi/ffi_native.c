@@ -38,6 +38,74 @@ extern "C" {
 #define WASMOON_AT_REMOVEDIR_TOKEN 0x200
 #define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
 
+#ifndef _WIN32
+static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
+  if (!base_real || !target_real) return 0;
+  if (strcmp(base_real, "/") == 0) {
+    return target_real[0] == '/';
+  }
+  size_t base_len = strlen(base_real);
+  if (strncmp(base_real, target_real, base_len) != 0) return 0;
+  char next = target_real[base_len];
+  return next == '\0' || next == '/';
+}
+
+static int wasmoon_wasi_realpath_existing_parent(const char *path, char **out_real) {
+  if (!path || !out_real) return 0;
+  *out_real = NULL;
+
+  char *scratch = strdup(path);
+  if (!scratch) return 0;
+
+  while (1) {
+    errno = 0;
+    char *resolved = realpath(scratch, NULL);
+    if (resolved) {
+      *out_real = resolved;
+      free(scratch);
+      return 1;
+    }
+
+    if (errno != ENOENT && errno != ENOTDIR) {
+      break;
+    }
+
+    char *slash = strrchr(scratch, '/');
+    if (!slash) {
+      scratch[0] = '.';
+      scratch[1] = '\0';
+    } else if (slash == scratch) {
+      scratch[1] = '\0';
+    } else {
+      *slash = '\0';
+    }
+  }
+
+  free(scratch);
+  return 0;
+}
+
+static int wasmoon_wasi_path_within_base_impl(const char *base_path, const char *target_path) {
+  if (!base_path || !target_path) return 0;
+
+  char *base_real = realpath(base_path, NULL);
+  if (!base_real) return 0;
+
+  char *target_real = realpath(target_path, NULL);
+  if (!target_real) {
+    if (!wasmoon_wasi_realpath_existing_parent(target_path, &target_real)) {
+      free(base_real);
+      return 0;
+    }
+  }
+
+  int ok = wasmoon_wasi_path_is_within_base(base_real, target_real);
+  free(base_real);
+  free(target_real);
+  return ok;
+}
+#endif
+
 // Open a file and return file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mode) {
 #ifdef _WIN32
@@ -95,6 +163,24 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_get_error_message(void) {
 // Get errno value
 MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
+}
+
+// Check whether a target path stays within the base directory after canonical
+// resolution (including symlink traversal).
+MOONBIT_FFI_EXPORT int wasmoon_wasi_path_within_base(
+  moonbit_bytes_t base_path,
+  moonbit_bytes_t target_path
+) {
+#ifdef _WIN32
+  (void)base_path;
+  (void)target_path;
+  return 1;
+#else
+  return wasmoon_wasi_path_within_base_impl(
+    (const char *)base_path,
+    (const char *)target_path
+  );
+#endif
 }
 
 // Convert native errno value to WASI preview1 errno number.

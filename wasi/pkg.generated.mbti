@@ -123,6 +123,8 @@ pub fn native_open_read(String) -> Int?
 
 pub fn native_open_write(String) -> Int?
 
+pub fn native_path_within_base(String, String) -> Bool
+
 pub fn native_poll(Array[Int], Array[Int], Int) -> PollResult?
 
 pub fn native_raise(Int) -> Bool
@@ -423,6 +425,11 @@ pub(all) struct PollResult {
   revents : Array[Int]
 }
 
+pub(all) enum ResolvePathError {
+  BadFd
+  NotCapable
+}
+
 pub(all) struct Size(Int) derive(Eq, Show)
 #deprecated
 pub fn Size::inner(Self) -> Int
@@ -455,7 +462,7 @@ pub fn WasiContext::get_preopen_host_path(Self, Int) -> String?
 pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
 pub fn WasiContext::new() -> Self
-pub fn WasiContext::resolve_path(Self, Int, String) -> String?
+pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
 
 pub(all) struct WasiContextBuilder {
   mut args : Array[String]

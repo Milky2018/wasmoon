@@ -39,6 +39,14 @@ extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
 extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
 
 ///|
+/// Check whether target path remains within base after canonicalization
+#borrow(base_path, target_path)
+extern "c" fn c_path_within_base(
+  base_path : FixedArray[Byte],
+  target_path : FixedArray[Byte],
+) -> Int = "wasmoon_wasi_path_within_base"
+
+///|
 /// Convert native errno to WASI errno
 extern "c" fn c_errno_to_wasi(err : Int) -> Int = "wasmoon_wasi_errno_to_wasi"
 
@@ -235,6 +243,17 @@ pub fn native_get_errno() -> Int {
 /// Convert current native errno to WASI errno
 pub fn native_last_errno_to_wasi() -> Int {
   c_errno_to_wasi(c_get_errno())
+}
+
+///|
+/// Check whether target path stays within base after symlink resolution
+pub fn native_path_within_base(
+  base_path : String,
+  target_path : String,
+) -> Bool {
+  let base_path_bytes = string_to_cstring(base_path)
+  let target_path_bytes = string_to_cstring(target_path)
+  c_path_within_base(base_path_bytes, target_path_bytes) != 0
 }
 
 ///|

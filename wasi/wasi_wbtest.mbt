@@ -779,6 +779,51 @@ test "wasi: path_open accepts UTF-8 non-ASCII file names" {
 }
 
 ///|
+test "wasi: path_open rejects symlink escape outside preopen" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link_name = "caplk_escape"
+  let escaped_path = "caplk_escape/etc/passwd"
+
+  for i, c in link_name {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in escaped_path {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  mem.write_byte(300, b'/')
+
+  path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+  let symlink_result = path_symlink_impl(
+    ctx,
+    mem,
+    300,
+    1,
+    3,
+    100,
+    link_name.length(),
+  )
+  inspect(symlink_result == 0 || symlink_result == 76, content="true")
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    200,
+    escaped_path.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    900,
+  )
+  inspect(open_result, content="76")
+  path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+  path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+}
+
+///|
 test "wasi: fd_readdir" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

@@ -681,6 +681,44 @@ test "wasi jit: path_open write-only rights without create is writable" {
 }
 
 ///|
+test "wasi jit: path_open rejects symlink escape outside preopen" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_remove_directory"
+    #|    (func $path_remove_directory (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_symlink"
+    #|    (func $path_symlink (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "/")
+    #|  (data (i32.const 16) "caplk_escape")
+    #|  (data (i32.const 48) "caplk_escape/etc/passwd")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|    (drop (call $path_symlink
+    #|      (i32.const 0) (i32.const 1) (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 48) (i32.const 23)
+    #|        (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|        (i32.const 120)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="76")
+  inspect(wasi_errno_from_result(result.jit_result), content="76")
+}
+
+///|
 test "wasi jit: fd_readdir works on path_open directory" {
   let source =
     #|(module

@@ -524,12 +524,10 @@ pub fn path_open(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  // Resolve the full host path
-  let host_path = ctx.resolve_path(dir_fd, path)
-  if host_path is None {
-    return Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
   }
-  let resolved_path = host_path.unwrap()
   // Determine open flags
   let open_flags : Array[OpenFlags] = []
   let has_create = (oflags & 0x01) != 0
@@ -1101,11 +1099,10 @@ pub fn path_create_directory(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  if host_path is None {
-    return Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
   }
-  let resolved_path = host_path.unwrap()
   if native_mkdir(resolved_path, 0o755) {
     Errno::Success.to_i32()
   } else {
@@ -1231,6 +1228,19 @@ fn read_string_from_memory(
   Some(utf8_bytes_to_string(bytes))
 }
 
+///|
+fn resolve_host_path(
+  ctx : WasiContext,
+  dir_fd : Int,
+  path : String,
+) -> Result[String, Int] {
+  match ctx.resolve_path(dir_fd, path) {
+    Ok(resolved) => Ok(resolved)
+    Err(BadFd) => Err(Errno::Badf.to_i32())
+    Err(NotCapable) => Err(Errno::NotCapable.to_i32())
+  }
+}
+
 // ============================================================================
 // Phase 1: Core file operations
 // ============================================================================
@@ -1284,15 +1294,14 @@ pub fn path_unlink_file_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  match host_path {
-    Some(resolved) =>
-      if native_unlinkat(0, resolved, 0) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  if native_unlinkat(0, resolved_path, 0) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1309,15 +1318,14 @@ pub fn path_remove_directory_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  match host_path {
-    Some(resolved) =>
-      if native_unlinkat(0, resolved, AT_REMOVEDIR) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  if native_unlinkat(0, resolved_path, AT_REMOVEDIR) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1343,16 +1351,18 @@ pub fn path_rename_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let old_host_path = ctx.resolve_path(old_fd, old_path)
-  let new_host_path = ctx.resolve_path(new_fd, new_path)
-  match (old_host_path, new_host_path) {
-    (Some(old_resolved), Some(new_resolved)) =>
-      if native_renameat(0, old_resolved, 0, new_resolved) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    _ => Errno::Badf.to_i32()
+  let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  let new_resolved = match resolve_host_path(ctx, new_fd, new_path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  if native_renameat(0, old_resolved, 0, new_resolved) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1461,25 +1471,19 @@ pub fn path_filestat_get_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  match host_path {
-    Some(resolved) => {
-      // Convert WASI flags to native flags
-      let native_flags = if (flags & 0x01) != 0 {
-        0
-      } else {
-        AT_SYMLINK_NOFOLLOW
-      }
-      let stat = native_fstatat(0, resolved, native_flags)
-      match stat {
-        Some(s) => {
-          write_filestat(mem, buf_ptr, s)
-          Errno::Success.to_i32()
-        }
-        None => native_last_errno_to_wasi()
-      }
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  // Convert WASI flags to native flags
+  let native_flags = if (flags & 0x01) != 0 { 0 } else { AT_SYMLINK_NOFOLLOW }
+  let stat = native_fstatat(0, resolved_path, native_flags)
+  match stat {
+    Some(s) => {
+      write_filestat(mem, buf_ptr, s)
+      Errno::Success.to_i32()
     }
-    None => Errno::Badf.to_i32()
+    None => native_last_errno_to_wasi()
   }
 }
 
@@ -1544,21 +1548,15 @@ pub fn path_filestat_set_times_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  match host_path {
-    Some(resolved) => {
-      let lookup_flags = if (flags & 0x01) != 0 {
-        0
-      } else {
-        AT_SYMLINK_NOFOLLOW
-      }
-      if native_utimensat(0, resolved, atim, mtim, fst_flags, lookup_flags) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    }
-    None => Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  let lookup_flags = if (flags & 0x01) != 0 { 0 } else { AT_SYMLINK_NOFOLLOW }
+  if native_utimensat(0, resolved_path, atim, mtim, fst_flags, lookup_flags) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1782,15 +1780,14 @@ pub fn path_symlink_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let new_host_path = ctx.resolve_path(dir_fd, new_path)
-  match new_host_path {
-    Some(resolved) =>
-      if native_symlinkat(old_path, 0, resolved) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, new_path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  if native_symlinkat(old_path, 0, resolved_path) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1814,23 +1811,21 @@ pub fn path_readlink_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let host_path = ctx.resolve_path(dir_fd, path)
-  match host_path {
-    Some(resolved) => {
-      let result = native_readlinkat(0, resolved, buf_len)
-      match result {
-        Some(link_target) => {
-          let to_write = @cmp.minimum(link_target.length(), buf_len)
-          for i in 0..<to_write {
-            mem.write_byte(buf_ptr + i, link_target.code_unit_at(i).to_byte())
-          }
-          mem.write_i32(bufused_ptr, to_write)
-          Errno::Success.to_i32()
-        }
-        None => native_last_errno_to_wasi()
+  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  let result = native_readlinkat(0, resolved_path, buf_len)
+  match result {
+    Some(link_target) => {
+      let to_write = @cmp.minimum(link_target.length(), buf_len)
+      for i in 0..<to_write {
+        mem.write_byte(buf_ptr + i, link_target.code_unit_at(i).to_byte())
       }
+      mem.write_i32(bufused_ptr, to_write)
+      Errno::Success.to_i32()
     }
-    None => Errno::Badf.to_i32()
+    None => native_last_errno_to_wasi()
   }
 }
 
@@ -1857,18 +1852,19 @@ pub fn path_link_impl(
     Some(path) => path
     None => return Errno::Fault.to_i32()
   }
-  let old_host_path = ctx.resolve_path(old_fd, old_path)
-  let new_host_path = ctx.resolve_path(new_fd, new_path)
-  match (old_host_path, new_host_path) {
-    (Some(old_resolved), Some(new_resolved)) => {
-      let flags = if (old_flags & 0x01) != 0 { 0x1000 } else { 0 } // AT_SYMLINK_FOLLOW
-      if native_linkat(0, old_resolved, 0, new_resolved, flags) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    }
-    _ => Errno::Badf.to_i32()
+  let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  let new_resolved = match resolve_host_path(ctx, new_fd, new_path) {
+    Ok(resolved) => resolved
+    Err(errno) => return errno
+  }
+  let flags = if (old_flags & 0x01) != 0 { 0x1000 } else { 0 } // AT_SYMLINK_FOLLOW
+  if native_linkat(0, old_resolved, 0, new_resolved, flags) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
