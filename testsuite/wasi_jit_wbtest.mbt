@@ -504,6 +504,19 @@ test "wasi jit: poll_oneoff stdin returns" {
 }
 
 ///|
+test "wasi jit: poll_oneoff zero subscriptions returns EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $poll_oneoff (i32.const 0) (i32.const 64) (i32.const 0)
+    #|      (i32.const 80))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
 test "wasi jit: stdin callback supplies multiple reads" {
   let source =
     #|(module
@@ -924,6 +937,32 @@ test "wasi jit: fd_pread stdin returns ESPIPE (70)" {
 }
 
 ///|
+test "wasi jit: fd_pread stdout returns EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_pread"
+    #|    (func $fd_pread (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\64\00\00\00\05\00\00\00")
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_pread (i32.const 1) (i32.const 0) (i32.const 1) (i64.const 0) (i32.const 200))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: fd_pread stderr returns EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_pread"
+    #|    (func $fd_pread (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\64\00\00\00\05\00\00\00")
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_pread (i32.const 2) (i32.const 0) (i32.const 1) (i64.const 0) (i32.const 200))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
 test "wasi jit: fd_pwrite stdout returns ESPIPE (70)" {
   let source =
     #|(module
@@ -934,6 +973,20 @@ test "wasi jit: fd_pwrite stdout returns ESPIPE (70)" {
     #|  (data (i32.const 100) "Hello")
     #|  (func (export "test") (result i32)
     #|    (call $fd_pwrite (i32.const 1) (i32.const 0) (i32.const 1) (i64.const 0) (i32.const 200))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: fd_pwrite stdin returns EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_pwrite"
+    #|    (func $fd_pwrite (param i32 i32 i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\64\00\00\00\05\00\00\00")
+    #|  (data (i32.const 100) "Hello")
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_pwrite (i32.const 0) (i32.const 0) (i32.const 1) (i64.const 0) (i32.const 200))))
   inspect(compare_wasi(source, "test"), content="matched")
 }
 

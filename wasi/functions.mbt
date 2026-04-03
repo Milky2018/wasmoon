@@ -598,14 +598,21 @@ pub fn fd_pread(
   offset : Int64,
   nread_ptr : Int,
 ) -> Int {
-  if fd < 3 {
+  if fd == 0 {
     return Errno::SPipe.to_i32()
+  }
+  if fd == 1 || fd == 2 {
+    return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
@@ -668,14 +675,21 @@ pub fn fd_pwrite(
   offset : Int64,
   nwritten_ptr : Int,
 ) -> Int {
-  if fd < 3 {
+  if fd == 1 || fd == 2 {
     return Errno::SPipe.to_i32()
+  }
+  if fd == 0 {
+    return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
@@ -1495,14 +1509,139 @@ pub fn path_link_impl(
 // ============================================================================
 
 ///|
-fn clock_now_ns_by_id(clock_id : Int) -> Int64? {
-  match ClockId::from_i32(clock_id) {
-    Some(Realtime) => Some(native_clock_gettime_realtime())
-    Some(Monotonic) => Some(native_clock_gettime_monotonic())
-    Some(ProcessCPUTimeId | ThreadCPUTimeId) =>
-      Some(native_clock_gettime_monotonic())
-    None => None
+fn poll_clock_remaining_ns(
+  clock_id : Int,
+  timeout : Int64,
+  flags : Int,
+) -> Int64? {
+  let is_absolute = (flags & 0x01) != 0
+  if is_absolute {
+    match ClockId::from_i32(clock_id) {
+      Some(Monotonic) => {
+        let now = native_clock_gettime_monotonic()
+        Some(if timeout > now { timeout - now } else { 0L })
+      }
+      Some(Realtime) => {
+        let now = native_clock_gettime_realtime()
+        Some(if timeout > now { timeout - now } else { 0L })
+      }
+      _ => None
+    }
+  } else {
+    match ClockId::from_i32(clock_id) {
+      Some(Monotonic | Realtime) => Some(timeout)
+      _ => None
+    }
   }
+}
+
+///|
+fn poll_clock_is_expired(
+  clock_id : Int,
+  timeout : Int64,
+  flags : Int,
+  poll_elapsed_ns : Int64,
+  now_monotonic : Int64,
+  now_realtime : Int64,
+) -> Bool {
+  if (flags & 0x01) != 0 {
+    match ClockId::from_i32(clock_id) {
+      Some(Monotonic) => now_monotonic >= timeout
+      Some(Realtime) => now_realtime >= timeout
+      _ => false
+    }
+  } else {
+    timeout <= poll_elapsed_ns
+  }
+}
+
+///|
+fn write_poll_event(
+  mem : @runtime.Memory,
+  event_ptr : Int,
+  userdata : Int64,
+  event_type : Int,
+  nbytes : Int64,
+  fd_flags : Int,
+) -> Unit {
+  mem.write_i64(event_ptr, userdata)
+  mem.write_byte(event_ptr + 8, b'\x00') // error = success
+  mem.write_byte(event_ptr + 9, b'\x00')
+  mem.write_byte(event_ptr + 10, event_type.to_byte()) // type
+  for j in 11..<16 {
+    mem.write_byte(event_ptr + j, b'\x00')
+  }
+  mem.write_i64(event_ptr + 16, nbytes)
+  mem.write_byte(event_ptr + 24, (fd_flags & 0xFF).to_byte())
+  mem.write_byte(event_ptr + 25, ((fd_flags >> 8) & 0xFF).to_byte())
+  for j in 26..<32 {
+    mem.write_byte(event_ptr + j, b'\x00')
+  }
+}
+
+///|
+fn fd_readwrite_flags_for_poll_event(ctx : WasiContext, fd : Int) -> Int {
+  if fd < 3 {
+    return 0
+  }
+  let file = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return 0
+  }
+  match file.file_type {
+    RegularFile => ()
+    _ => return 0
+  }
+  let stat = match native_fstat(file.native_fd) {
+    Some(stat) => stat
+    None => return 0
+  }
+  let position = match native_tell(file.native_fd) {
+    Some(position) => position
+    None => return 0
+  }
+  // WASI eventrwflags bit 0 is FD_READWRITE_HANGUP.
+  if stat.size <= position.reinterpret_as_uint64() {
+    0x01
+  } else {
+    0
+  }
+}
+
+///|
+fn poll_fd_to_native_fd(ctx : WasiContext, fd : Int, tag : Int) -> Int? {
+  if fd == 0 {
+    if tag == 1 {
+      Some(0)
+    } else {
+      None
+    }
+  } else if fd == 1 || fd == 2 {
+    if tag == 2 {
+      Some(fd)
+    } else {
+      None
+    }
+  } else {
+    let file = match ctx.get_file(fd) {
+      Some(file) => file
+      None => return None
+    }
+    match file.file_type {
+      RegularFile => Some(file.native_fd)
+      _ => None
+    }
+  }
+}
+
+///|
+fn is_clock_subscription(tag : Int) -> Bool {
+  tag == 0
+}
+
+///|
+fn is_fd_subscription(tag : Int) -> Bool {
+  tag == 1 || tag == 2
 }
 
 ///|
@@ -1540,146 +1679,144 @@ pub fn poll_oneoff_impl(
   nevents_ptr : Int,
 ) -> Int {
   if nsubscriptions == 0 {
-    mem.write_i32(nevents_ptr, 0)
-    return Errno::Success.to_i32()
+    return Errno::Inval.to_i32()
   }
-  let mut events_written = 0
+
+  let ready_by_sub : Array[Bool] = []
+  let ready_type_by_sub : Array[Int] = []
+  let ready_nbytes_by_sub : Array[Int64] = []
+  let ready_flags_by_sub : Array[Int] = []
+  for _ in 0..<nsubscriptions {
+    ready_by_sub.push(false)
+    ready_type_by_sub.push(0)
+    ready_nbytes_by_sub.push(0L)
+    ready_flags_by_sub.push(0)
+  }
+
   let mut min_timeout_ns : Int64 = -1L
-  // First pass: find minimum clock timeout
+  let clock_sub_indices : Array[Int] = []
+  let clock_ids : Array[Int] = []
+  let clock_timeouts : Array[Int64] = []
+  let clock_flags : Array[Int] = []
+  let fds : Array[Int] = []
+  let events : Array[Int] = []
+  let fd_sub_indices : Array[Int] = []
+  let fd_event_types : Array[Int] = []
+  let fd_wasi_fds : Array[Int] = []
+
   for i in 0..<nsubscriptions {
     let sub_ptr = in_ptr + i * 48
     let tag = mem.read_byte(sub_ptr + 8).to_int()
-    if tag == 0 {
-      // Clock subscription
+    if is_clock_subscription(tag) {
       let clock_id = mem.read_i32(sub_ptr + 16)
-      if ClockId::from_i32(clock_id) is None {
-        return Errno::Inval.to_i32()
-      }
       let timeout = mem.read_i64(sub_ptr + 24)
       let flags = mem.read_byte(sub_ptr + 40).to_int()
-      let timeout_ns = if (flags & 0x01) != 0 {
-        // Absolute time - compare with the subscription's own clock id.
-        match clock_now_ns_by_id(clock_id) {
-          Some(now) => if timeout > now { timeout - now } else { 0L }
-          None => return Errno::Inval.to_i32()
-        }
-      } else {
-        timeout
+      let timeout_ns = match poll_clock_remaining_ns(clock_id, timeout, flags) {
+        Some(timeout_ns) => timeout_ns
+        None => return Errno::Inval.to_i32()
       }
       if min_timeout_ns < 0L || timeout_ns < min_timeout_ns {
         min_timeout_ns = timeout_ns
       }
-    }
-  }
-  // Collect fd subscriptions
-  let fds : Array[Int] = []
-  let events : Array[Int] = []
-  let sub_indices : Array[Int] = []
-  for i in 0..<nsubscriptions {
-    let sub_ptr = in_ptr + i * 48
-    let tag = mem.read_byte(sub_ptr + 8).to_int()
-    if tag == 1 || tag == 2 {
-      // fd_read or fd_write
+      clock_sub_indices.push(i)
+      clock_ids.push(clock_id)
+      clock_timeouts.push(timeout)
+      clock_flags.push(flags)
+    } else if is_fd_subscription(tag) {
       let fd = mem.read_i32(sub_ptr + 12)
-      // Get native fd
-      let native_fd = match ctx.get_file(fd) {
-        Some(file) => file.native_fd
-        None => -1
+      let native_fd = match poll_fd_to_native_fd(ctx, fd, tag) {
+        Some(native_fd) => native_fd
+        None => return Errno::Badf.to_i32()
       }
-      if native_fd >= 0 {
-        fds.push(native_fd)
-        // POLLIN = 0x01, POLLOUT = 0x04
-        events.push(if tag == 1 { 0x01 } else { 0x04 })
-        sub_indices.push(i)
-      }
+      fds.push(native_fd)
+      events.push(if tag == 1 { 0x01 } else { 0x04 })
+      fd_sub_indices.push(i)
+      fd_event_types.push(tag)
+      fd_wasi_fds.push(fd)
+    } else {
+      return Errno::Inval.to_i32()
     }
   }
+
+  let mut events_written = 0
   let poll_start_monotonic = native_clock_gettime_monotonic()
-  // Calculate timeout in ms
   let timeout_ms = if min_timeout_ns < 0L {
-    -1 // Infinite
+    -1
   } else if min_timeout_ns == 0L {
     0
   } else {
-    let ms = (min_timeout_ns / 1000000L).to_int()
-    if ms == 0 {
+    let timeout_ms = (min_timeout_ns / 1000000L).to_int()
+    if timeout_ms == 0 {
       1
     } else {
-      ms
+      timeout_ms
     }
   }
-  // Do the poll
+
   if fds.length() > 0 {
     let poll_result = native_poll(fds, events, timeout_ms)
-    if poll_result is Some(result) {
-      // Write fd events
-      for i, sub_idx in sub_indices {
-        let revent = result.revents[i]
-        if revent != 0 && events_written < nsubscriptions {
-          let sub_ptr = in_ptr + sub_idx * 48
-          let userdata = mem.read_i64(sub_ptr)
-          let tag = mem.read_byte(sub_ptr + 8).to_int()
-          let event_ptr = out_ptr + events_written * 32
-          mem.write_i64(event_ptr, userdata)
-          mem.write_byte(event_ptr + 8, b'\x00') // error = success
-          mem.write_byte(event_ptr + 9, b'\x00')
-          mem.write_byte(event_ptr + 10, tag.to_byte()) // type
-          // padding
-          for j in 11..<16 {
-            mem.write_byte(event_ptr + j, b'\x00')
-          }
-          mem.write_i64(event_ptr + 16, 0L) // nbytes (unknown)
-          mem.write_byte(event_ptr + 24, b'\x00') // flags
-          mem.write_byte(event_ptr + 25, b'\x00')
-          // padding
-          for j in 26..<32 {
-            mem.write_byte(event_ptr + j, b'\x00')
-          }
-          events_written = events_written + 1
+    if poll_result is None {
+      return Errno::IO.to_i32()
+    }
+    let result = poll_result.unwrap()
+    for i, sub_idx in fd_sub_indices {
+      if result.revents[i] != 0 {
+        let event_type = fd_event_types[i]
+        let fd = fd_wasi_fds[i]
+        ready_by_sub[sub_idx] = true
+        ready_type_by_sub[sub_idx] = event_type
+        ready_nbytes_by_sub[sub_idx] = 1L
+        ready_flags_by_sub[sub_idx] = if event_type == 1 {
+          fd_readwrite_flags_for_poll_event(ctx, fd)
+        } else {
+          0
         }
       }
     }
   } else if min_timeout_ns >= 0L {
-    // Just sleep
     native_nanosleep(min_timeout_ns) |> ignore
   }
+
   let poll_end_monotonic = native_clock_gettime_monotonic()
   let poll_elapsed_ns = if poll_end_monotonic > poll_start_monotonic {
     poll_end_monotonic - poll_start_monotonic
   } else {
     0L
   }
-  // Emit clock events that are expired now, regardless of fd readiness.
-  for i in 0..<nsubscriptions {
-    let sub_ptr = in_ptr + i * 48
-    let tag = mem.read_byte(sub_ptr + 8).to_int()
-    if tag == 0 && events_written < nsubscriptions {
-      let clock_id = mem.read_i32(sub_ptr + 16)
-      let timeout = mem.read_i64(sub_ptr + 24)
-      let flags = mem.read_byte(sub_ptr + 40).to_int()
-      let clock_expired = if (flags & 0x01) != 0 {
-        match clock_now_ns_by_id(clock_id) {
-          Some(now) => now >= timeout
-          None => false
-        }
-      } else {
-        timeout <= poll_elapsed_ns
-      }
-      if clock_expired {
-        let userdata = mem.read_i64(sub_ptr)
-        let event_ptr = out_ptr + events_written * 32
-        mem.write_i64(event_ptr, userdata)
-        mem.write_byte(event_ptr + 8, b'\x00') // error = success
-        mem.write_byte(event_ptr + 9, b'\x00')
-        mem.write_byte(event_ptr + 10, b'\x00') // type = clock
-        // padding
-        for j in 11..<32 {
-          mem.write_byte(event_ptr + j, b'\x00')
-        }
-        events_written = events_written + 1
-      }
+
+  let now_monotonic = poll_end_monotonic
+  let now_realtime = native_clock_gettime_realtime()
+  for i, sub_idx in clock_sub_indices {
+    let clock_id = clock_ids[i]
+    let timeout = clock_timeouts[i]
+    let flags = clock_flags[i]
+    if poll_clock_is_expired(
+        clock_id, timeout, flags, poll_elapsed_ns, now_monotonic, now_realtime,
+      ) {
+      ready_by_sub[sub_idx] = true
+      ready_type_by_sub[sub_idx] = 0
+      ready_nbytes_by_sub[sub_idx] = 0L
+      ready_flags_by_sub[sub_idx] = 0
     }
   }
+
+  for i in 0..<nsubscriptions {
+    if ready_by_sub[i] && events_written < nsubscriptions {
+      let sub_ptr = in_ptr + i * 48
+      let event_ptr = out_ptr + events_written * 32
+      let userdata = mem.read_i64(sub_ptr)
+      write_poll_event(
+        mem,
+        event_ptr,
+        userdata,
+        ready_type_by_sub[i],
+        ready_nbytes_by_sub[i],
+        ready_flags_by_sub[i],
+      )
+      events_written = events_written + 1
+    }
+  }
+
   mem.write_i32(nevents_ptr, events_written)
   Errno::Success.to_i32()
 }

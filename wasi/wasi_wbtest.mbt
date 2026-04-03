@@ -432,6 +432,21 @@ test "wasi: fd_pread and fd_pwrite" {
 }
 
 ///|
+test "wasi: fd_pread/fd_pwrite stdio errno parity" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  mem.write_byte(100, b'A')
+  inspect(fd_pread(ctx, mem, 0, 0, 1, 0L, 200), content="70")
+  inspect(fd_pread(ctx, mem, 1, 0, 1, 0L, 200), content="8")
+  inspect(fd_pread(ctx, mem, 2, 0, 1, 0L, 200), content="8")
+  inspect(fd_pwrite(ctx, mem, 0, 0, 1, 0L, 200), content="8")
+  inspect(fd_pwrite(ctx, mem, 1, 0, 1, 0L, 200), content="70")
+  inspect(fd_pwrite(ctx, mem, 2, 0, 1, 0L, 200), content="70")
+}
+
+///|
 test "wasi: fd_fdstat_get" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
@@ -1170,9 +1185,7 @@ test "wasi: poll_oneoff with zero subscriptions" {
   let ctx = WasiContextBuilder::new().build()
   let mem = @runtime.Memory::new(1, None)
   let result = poll_oneoff_impl(ctx, mem, 0, 0, 0, 100)
-  inspect(result, content="0")
-  let nevents = mem.read_i32(100)
-  inspect(nevents, content="0")
+  inspect(result, content="28")
 }
 
 ///|
