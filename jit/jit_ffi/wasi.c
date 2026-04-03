@@ -376,17 +376,120 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
 static int errno_to_wasi(int err) {
     switch (err) {
         case 0: return WASI_ESUCCESS;
-        case EACCES: return WASI_EACCES;
-        case EBADF: return WASI_EBADF;
-        case EEXIST: return WASI_EEXIST;
-        case EINVAL: return WASI_EINVAL;
-        case EIO: return WASI_EIO;
-        case EISDIR: return WASI_EISDIR;
-        case ENOENT: return WASI_ENOENT;
-        case ENOSYS: return WASI_ENOSYS;
-        case ENOTDIR: return WASI_ENOTDIR;
-        case ENOTEMPTY: return WASI_ENOTEMPTY;
-        case ESPIPE: return WASI_ESPIPE;
+#ifdef E2BIG
+        case E2BIG: return 1;
+#endif
+#ifdef EACCES
+        case EACCES: return 2;
+#endif
+#ifdef EAGAIN
+        case EAGAIN: return 6;
+#endif
+#if defined(EWOULDBLOCK) && (!defined(EAGAIN) || EWOULDBLOCK != EAGAIN)
+        case EWOULDBLOCK: return 6;
+#endif
+#ifdef EALREADY
+        case EALREADY: return 7;
+#endif
+#ifdef EBADF
+        case EBADF: return 8;
+#endif
+#ifdef EBUSY
+        case EBUSY: return 10;
+#endif
+#ifdef EEXIST
+        case EEXIST: return 20;
+#endif
+#ifdef EFAULT
+        case EFAULT: return 21;
+#endif
+#ifdef EFBIG
+        case EFBIG: return 22;
+#endif
+#ifdef EILSEQ
+        case EILSEQ: return 25;
+#endif
+#ifdef EINPROGRESS
+        case EINPROGRESS: return 26;
+#endif
+#ifdef EINTR
+        case EINTR: return 27;
+#endif
+#ifdef EINVAL
+        case EINVAL: return 28;
+#endif
+#ifdef EIO
+        case EIO: return 29;
+#endif
+#ifdef EISDIR
+        case EISDIR: return 31;
+#endif
+#ifdef ELOOP
+        case ELOOP: return 32;
+#endif
+#ifdef EMLINK
+        case EMLINK: return 34;
+#endif
+#ifdef ENAMETOOLONG
+        case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENODEV
+        case ENODEV: return 43;
+#endif
+#ifdef ENOENT
+        case ENOENT: return 44;
+#endif
+#ifdef ENOLCK
+        case ENOLCK: return 46;
+#endif
+#ifdef ENOMEM
+        case ENOMEM: return 48;
+#endif
+#ifdef ENOSPC
+        case ENOSPC: return 51;
+#endif
+#ifdef ENOSYS
+        case ENOSYS: return 52;
+#endif
+#ifdef ENOTDIR
+        case ENOTDIR: return 54;
+#endif
+#ifdef ENOTEMPTY
+        case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTSUP
+        case ENOTSUP: return 58;
+#endif
+#if defined(EOPNOTSUPP) && (!defined(ENOTSUP) || EOPNOTSUPP != ENOTSUP)
+        case EOPNOTSUPP: return 58;
+#endif
+#ifdef ENOTTY
+        case ENOTTY: return 59;
+#endif
+#ifdef ENXIO
+        case ENXIO: return 60;
+#endif
+#ifdef EOVERFLOW
+        case EOVERFLOW: return 61;
+#endif
+#ifdef EPERM
+        case EPERM: return 63;
+#endif
+#ifdef EPIPE
+        case EPIPE: return 64;
+#endif
+#ifdef EROFS
+        case EROFS: return 69;
+#endif
+#ifdef ESPIPE
+        case ESPIPE: return 70;
+#endif
+#ifdef ETXTBSY
+        case ETXTBSY: return 74;
+#endif
+#ifdef EXDEV
+        case EXDEV: return 75;
+#endif
         default: return WASI_EIO;
     }
 }
@@ -705,7 +808,7 @@ static int64_t wasi_fd_sync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS; // No sync on Windows
 #else
-    if (fsync(native_fd) < 0) return WASI_EIO;
+    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #endif
 }
@@ -725,10 +828,10 @@ static int64_t wasi_fd_datasync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
-    if (fsync(native_fd) < 0) return WASI_EIO;
+    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
-    if (fdatasync(native_fd) < 0) return WASI_EIO;
+    if (fdatasync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #endif
 }
@@ -848,7 +951,7 @@ static int64_t wasi_path_open_impl(
 
     // Read path from memory
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
@@ -882,7 +985,7 @@ static int64_t wasi_path_open_impl(
     if (wasi_fd < 0) {
         close(native_fd);
         free(full_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
 
     set_fd_metadata(ctx, wasi_fd, full_path, (oflags & 0x02) != 0);
@@ -907,7 +1010,7 @@ static int64_t wasi_path_unlink_file_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
@@ -939,7 +1042,7 @@ static int64_t wasi_path_remove_directory_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
@@ -971,7 +1074,7 @@ static int64_t wasi_path_create_directory_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
@@ -1013,7 +1116,7 @@ static int64_t wasi_path_rename_impl(
     if (!old_path || !new_path) {
         free(old_path);
         free(new_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
 
     memcpy(old_path, ctx->memory0->base + old_path_ptr_u, (size_t)old_path_len_u);
@@ -1115,7 +1218,7 @@ static int64_t wasi_fd_filestat_set_size_impl(
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    if (ftruncate(native_fd, size) < 0) return WASI_EIO;
+    if (ftruncate(native_fd, size) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
@@ -1302,7 +1405,7 @@ static int64_t wasi_random_get_impl(
 
     uint8_t *mem = ctx->memory0->base;
     if (buf_len_u == 0) return WASI_ESUCCESS;
-    if (!fill_random_bytes(mem + buf_ptr_u, (size_t)buf_len_u)) return WASI_EIO;
+    if (!fill_random_bytes(mem + buf_ptr_u, (size_t)buf_len_u)) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 }
 
@@ -1858,7 +1961,7 @@ static int32_t wasi_path_filestat_get_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
@@ -1916,7 +2019,7 @@ static int32_t wasi_path_readlink_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
@@ -1952,14 +2055,14 @@ static int32_t wasi_path_symlink_impl(
 
 #ifndef _WIN32
     char *old_path = malloc((size_t)old_path_len_u + 1);
-    if (!old_path) return WASI_EIO;
+    if (!old_path) return WASI_ENOMEM;
     memcpy(old_path, mem + old_path_ptr_u, old_path_len_u);
     old_path[old_path_len_u] = '\0';
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
         free(old_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
     memcpy(new_path_tmp, mem + new_path_ptr_u, new_path_len_u);
     new_path_tmp[new_path_len_u] = '\0';
@@ -2001,14 +2104,14 @@ static int32_t wasi_path_link_impl(
 
 #ifndef _WIN32
     char *old_path_tmp = malloc((size_t)old_path_len_u + 1);
-    if (!old_path_tmp) return WASI_EIO;
+    if (!old_path_tmp) return WASI_ENOMEM;
     memcpy(old_path_tmp, mem + old_path_ptr_u, old_path_len_u);
     old_path_tmp[old_path_len_u] = '\0';
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
         free(old_path_tmp);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
     memcpy(new_path_tmp, mem + new_path_ptr_u, new_path_len_u);
     new_path_tmp[new_path_len_u] = '\0';
@@ -2080,7 +2183,7 @@ static int32_t wasi_fd_filestat_set_times_impl(
     }
 
     if (futimens(native_fd, times) != 0) {
-        return WASI_EIO;
+        return errno_to_wasi(errno);
     }
     return WASI_ESUCCESS;
 #else
@@ -2102,7 +2205,7 @@ static int32_t wasi_path_filestat_set_times_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
@@ -2190,15 +2293,15 @@ static int32_t wasi_fd_allocate_impl(
 #ifdef __linux__
     // Linux has posix_fallocate
     int result = posix_fallocate(native_fd, offset, len);
-    if (result != 0) return WASI_EIO;
+    if (result != 0) return errno_to_wasi(result);
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
     // macOS: use ftruncate as fallback if extending file
     struct stat st;
-    if (fstat(native_fd, &st) != 0) return WASI_EIO;
+    if (fstat(native_fd, &st) != 0) return errno_to_wasi(errno);
     int64_t new_size = offset + len;
     if (new_size > st.st_size) {
-        if (ftruncate(native_fd, new_size) != 0) return WASI_EIO;
+        if (ftruncate(native_fd, new_size) != 0) return errno_to_wasi(errno);
     }
     return WASI_ESUCCESS;
 #else
@@ -2218,7 +2321,7 @@ static int32_t wasi_fd_renumber_impl(
 
     if (!ctx || !ctx->fd_table) return WASI_EBADF;
 
-    if (!ensure_fd_capacity(ctx, to_fd)) return WASI_EIO;
+    if (!ensure_fd_capacity(ctx, to_fd)) return WASI_ENOMEM;
     if (fd == to_fd) return WASI_ESUCCESS;
 
     int native_fd = get_native_fd(ctx, fd);
@@ -2272,7 +2375,7 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     if (flags & 0x10) native_flags |= O_SYNC;
 #endif
 
-    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return WASI_EIO;
+    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;

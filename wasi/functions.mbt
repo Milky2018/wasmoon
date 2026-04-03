@@ -66,7 +66,7 @@ pub fn fd_write(
             Some(n) => total_written = total_written + n
             None => {
               mem.write_i32(nwritten_ptr, total_written)
-              return Errno::IO.to_i32()
+              return native_last_errno_to_wasi()
             }
           }
         }
@@ -142,7 +142,7 @@ pub fn fd_read(
             }
             None => {
               mem.write_i32(nread_ptr, total_read)
-              return Errno::IO.to_i32()
+              return native_last_errno_to_wasi()
             }
           }
         }
@@ -392,7 +392,7 @@ pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
     Errno::Success.to_i32()
   } else {
     // System random failed
-    Errno::IO.to_i32()
+    native_last_errno_to_wasi()
   }
 }
 
@@ -537,7 +537,7 @@ pub fn fd_seek(
   }
   let new_pos = native_seek(f.native_fd, offset, native_whence)
   if new_pos is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   let pos = new_pos.unwrap()
   f.position = pos
@@ -570,7 +570,7 @@ pub fn fd_tell(
   let f = file.unwrap()
   let pos = native_tell(f.native_fd)
   if pos is None {
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   let p = pos.unwrap()
   f.position = p
@@ -917,7 +917,7 @@ fn readdir_impl(
   let entries = native_readdir(dir_path)
   if entries is None {
     mem.write_i32(bufused_ptr, 0)
-    return Errno::IO.to_i32()
+    return native_last_errno_to_wasi()
   }
   let dir_entries = entries.unwrap()
   let mut offset = 0
@@ -987,7 +987,7 @@ pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
       if native_fsync(file.native_fd) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1005,7 +1005,7 @@ pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
       if native_fdatasync(file.native_fd) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1118,7 +1118,7 @@ pub fn fd_filestat_get_impl(
           write_filestat(mem, buf_ptr, s)
           Errno::Success.to_i32()
         }
-        None => Errno::IO.to_i32()
+        None => native_last_errno_to_wasi()
       }
     }
     None => {
@@ -1215,7 +1215,7 @@ pub fn fd_filestat_set_size_impl(
       if native_ftruncate(file.native_fd, size) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1238,7 +1238,7 @@ pub fn fd_filestat_set_times_impl(
       if native_futimens(file.native_fd, atim, mtim, fst_flags) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1269,7 +1269,7 @@ pub fn path_filestat_set_times_impl(
       if native_utimensat(0, resolved, atim, mtim, fst_flags, lookup_flags) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     }
     None => Errno::Badf.to_i32()
@@ -1322,13 +1322,13 @@ pub fn fd_allocate_impl(
             if native_ftruncate(file.native_fd, new_size) {
               Errno::Success.to_i32()
             } else {
-              Errno::IO.to_i32()
+              native_last_errno_to_wasi()
             }
           } else {
             Errno::Success.to_i32()
           }
         }
-        None => Errno::IO.to_i32()
+        None => native_last_errno_to_wasi()
       }
     }
     None => Errno::Badf.to_i32()
@@ -1373,10 +1373,10 @@ pub fn fd_fdstat_set_flags_impl(
       if native_fcntl_setfl(native_fd, new_flags) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     }
-    None => Errno::IO.to_i32()
+    None => native_last_errno_to_wasi()
   }
 }
 
@@ -1406,7 +1406,7 @@ pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
         // Note: In a real implementation, we'd also update ctx.open_files
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1435,7 +1435,7 @@ pub fn path_symlink_impl(
       if native_symlinkat(old_path, 0, resolved) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     None => Errno::Badf.to_i32()
   }
@@ -1467,7 +1467,7 @@ pub fn path_readlink_impl(
           mem.write_i32(bufused_ptr, to_write)
           Errno::Success.to_i32()
         }
-        None => Errno::NoEnt.to_i32()
+        None => native_last_errno_to_wasi()
       }
     }
     None => Errno::Badf.to_i32()
@@ -1497,7 +1497,7 @@ pub fn path_link_impl(
       if native_linkat(0, old_resolved, 0, new_resolved, flags) {
         Errno::Success.to_i32()
       } else {
-        Errno::IO.to_i32()
+        native_last_errno_to_wasi()
       }
     }
     _ => Errno::Badf.to_i32()
@@ -1756,7 +1756,7 @@ pub fn poll_oneoff_impl(
   if fds.length() > 0 {
     let poll_result = native_poll(fds, events, timeout_ms)
     if poll_result is None {
-      return Errno::IO.to_i32()
+      return native_last_errno_to_wasi()
     }
     let result = poll_result.unwrap()
     for i, sub_idx in fd_sub_indices {
@@ -1852,7 +1852,7 @@ pub fn sock_recv_impl(
             mem.write_i32(ro_datalen_ptr, 0)
             mem.write_byte(ro_flags_ptr, b'\x00')
             mem.write_byte(ro_flags_ptr + 1, b'\x00')
-            return Errno::IO.to_i32()
+            return native_last_errno_to_wasi()
           }
           // Copy to WASM memory
           for j in 0..<n.to_int() {
@@ -1902,7 +1902,7 @@ pub fn sock_send_impl(
               break
             }
             mem.write_i32(so_datalen_ptr, 0)
-            return Errno::IO.to_i32()
+            return native_last_errno_to_wasi()
           }
           total_sent = total_sent + n
           if n < buf_len.to_int64() {
@@ -1926,7 +1926,7 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
     if native_shutdown(file.native_fd, how) {
       Errno::Success.to_i32()
     } else {
-      Errno::IO.to_i32()
+      native_last_errno_to_wasi()
     }
   } else {
     Errno::Badf.to_i32()
@@ -1946,7 +1946,7 @@ pub fn sock_accept_impl(
     Some(file) => {
       let new_fd = native_accept(file.native_fd)
       if new_fd < 0 {
-        return Errno::IO.to_i32()
+        return native_last_errno_to_wasi()
       }
       // Register the new socket in WASI context
       let open_file : OpenFile = {
