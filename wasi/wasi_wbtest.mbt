@@ -432,6 +432,26 @@ test "wasi: fd_pread and fd_pwrite" {
 }
 
 ///|
+test "wasi: fd_pread/fd_pwrite stdio errno parity" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  // dummy iovec
+  mem.write_i32(0, 128)
+  mem.write_i32(4, 1)
+  mem.write_byte(128, b'x')
+
+  // wasmtime: fd_pread(stdin) -> SPipe, fd_pread(stdout/stderr) -> Badf
+  inspect(fd_pread(ctx, mem, 0, 0, 1, 0L, 200), content="70")
+  inspect(fd_pread(ctx, mem, 1, 0, 1, 0L, 200), content="8")
+  inspect(fd_pread(ctx, mem, 2, 0, 1, 0L, 200), content="8")
+
+  // wasmtime: fd_pwrite(stdout/stderr) -> SPipe, fd_pwrite(stdin) -> Badf
+  inspect(fd_pwrite(ctx, mem, 0, 0, 1, 0L, 200), content="8")
+  inspect(fd_pwrite(ctx, mem, 1, 0, 1, 0L, 200), content="70")
+  inspect(fd_pwrite(ctx, mem, 2, 0, 1, 0L, 200), content="70")
+}
+
+///|
 test "wasi: fd_fdstat_get" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
@@ -903,13 +923,237 @@ test "wasi: poll_oneoff with clock" {
 }
 
 ///|
+test "wasi: poll_oneoff returns fd and expired relative clock together" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+
+  let test_path = "wasmoon_poll_oneoff_fd_ready.txt"
+  for i, c in test_path {
+    mem.write_byte(1024 + i, c.to_int().to_byte())
+  }
+
+  // Create a file with one byte so fd_read is immediately pollable.
+  let open_for_write = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    1024,
+    test_path.length(),
+    9,
+    0L,
+    0L,
+    0,
+    2000,
+  )
+  if open_for_write != 0 {
+    return
+  }
+  let write_fd = mem.read_i32(2000)
+  mem.write_i32(0, 3000)
+  mem.write_i32(4, 1)
+  mem.write_byte(3000, b'x')
+  inspect(fd_write(ctx, mem, write_fd, 0, 1, 200), content="0")
+  fd_close(ctx, write_fd) |> ignore
+
+  let open_for_read = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    1024,
+    test_path.length(),
+    0,
+    0L,
+    0L,
+    0,
+    2000,
+  )
+  if open_for_read != 0 {
+    return
+  }
+  let read_fd = mem.read_i32(2000)
+
+  // Subscription 0: clock (relative 0ns, already expired)
+  mem.write_i64(0, 111L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 1) // clock_id = monotonic
+  mem.write_i64(24, 0L) // timeout = 0ns
+  mem.write_i64(32, 0L) // precision
+  mem.write_byte(40, b'\x00') // flags = relative
+  // Subscription 1: fd_read on regular file
+  mem.write_i64(48, 222L) // userdata
+  mem.write_byte(56, b'\x01') // tag = fd_read
+  mem.write_i32(60, read_fd) // fd = readable file
+
+  let result = poll_oneoff_impl(ctx, mem, 0, 256, 2, 240)
+  inspect(result, content="0")
+  let nevents = mem.read_i32(240)
+  inspect(nevents, content="2")
+
+  let mut clock_events = 0
+  let mut fd_read_events = 0
+  let mut saw_clock_userdata = false
+  let mut saw_fd_userdata = false
+  for i in 0..<nevents {
+    let event_ptr = 256 + i * 32
+    let userdata = mem.read_i64(event_ptr)
+    let event_type = mem.read_byte(event_ptr + 10).to_int()
+    if event_type == 0 {
+      clock_events = clock_events + 1
+      if userdata == 111L {
+        saw_clock_userdata = true
+      }
+    } else if event_type == 1 {
+      fd_read_events = fd_read_events + 1
+      if userdata == 222L {
+        saw_fd_userdata = true
+      }
+    }
+  }
+
+  inspect(clock_events, content="1")
+  inspect(fd_read_events, content="1")
+  inspect(saw_clock_userdata, content="true")
+  inspect(saw_fd_userdata, content="true")
+  inspect(mem.read_i64(256), content="111")
+  inspect(mem.read_byte(266), content="b'\\x00'")
+  inspect(mem.read_i64(288), content="222")
+  inspect(mem.read_byte(298), content="b'\\x01'")
+  fd_close(ctx, read_fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 1024, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: poll_oneoff honors realtime absolute clock subscriptions" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  // Build an absolute realtime deadline that is:
+  // 1) in the past for realtime clock, and
+  // 2) in the future for monotonic clock by ~200ms.
+  // A correct implementation must treat this as already expired.
+  let monotonic_now = native_clock_gettime_monotonic()
+  mem.write_i64(0, 333L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 0) // clock_id = realtime
+  mem.write_i64(24, monotonic_now + 200000000L)
+  mem.write_i64(32, 0L) // precision
+  mem.write_byte(40, b'\x01') // flags = absolute
+
+  let before = native_clock_gettime_monotonic()
+  let result = poll_oneoff_impl(ctx, mem, 0, 320, 1, 304)
+  let after = native_clock_gettime_monotonic()
+  inspect(result, content="0")
+  let nevents = mem.read_i32(304)
+  inspect(nevents, content="1")
+  inspect(mem.read_i64(320), content="333")
+  inspect(mem.read_byte(330), content="b'\\x00'") // type = clock
+  inspect(after - before < 120000000L, content="true")
+}
+
+///|
 test "wasi: poll_oneoff with zero subscriptions" {
   let ctx = WasiContextBuilder::new().build()
   let mem = @runtime.Memory::new(1, None)
   let result = poll_oneoff_impl(ctx, mem, 0, 0, 0, 100)
+  inspect(result, content="28")
+}
+
+///|
+test "wasi: poll_oneoff rejects process CPU clock subscriptions" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 999L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 2) // clock_id = process cputime id
+  mem.write_i64(24, 1000L)
+  mem.write_i64(32, 0L)
+  mem.write_byte(40, b'\x00') // relative
+  let result = poll_oneoff_impl(ctx, mem, 0, 128, 1, 120)
+  inspect(result, content="28")
+}
+
+///|
+test "wasi: poll_oneoff rejects invalid fd subscriptions" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 777L) // userdata
+  mem.write_byte(8, b'\x02') // tag = fd_write
+  mem.write_i32(12, 12345) // invalid fd
+  let result = poll_oneoff_impl(ctx, mem, 0, 128, 1, 120)
+  inspect(result, content="8")
+}
+
+///|
+test "wasi: poll_oneoff rejects invalid subscription tag" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 777L) // userdata
+  mem.write_byte(8, b'\x09') // invalid tag
+  let result = poll_oneoff_impl(ctx, mem, 0, 128, 1, 120)
+  inspect(result, content="28")
+}
+
+///|
+test "wasi: poll_oneoff fd_read EOF sets hangup flag and nbytes=1" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_poll_oneoff_eof_flag.txt"
+  for i, c in test_path {
+    mem.write_byte(700 + i, c.to_int().to_byte())
+  }
+
+  // Create/truncate empty file.
+  let open_for_write = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    700,
+    test_path.length(),
+    9,
+    0L,
+    0L,
+    0,
+    1000,
+  )
+  if open_for_write != 0 {
+    return
+  }
+  let write_fd = mem.read_i32(1000)
+  fd_close(ctx, write_fd) |> ignore
+
+  let open_for_read = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    700,
+    test_path.length(),
+    0,
+    0L,
+    0L,
+    0,
+    1000,
+  )
+  if open_for_read != 0 {
+    return
+  }
+  let read_fd = mem.read_i32(1000)
+
+  mem.write_i64(0, 555L) // userdata
+  mem.write_byte(8, b'\x01') // tag = fd_read
+  mem.write_i32(12, read_fd)
+  let result = poll_oneoff_impl(ctx, mem, 0, 256, 1, 240)
   inspect(result, content="0")
-  let nevents = mem.read_i32(100)
-  inspect(nevents, content="0")
+  inspect(mem.read_i32(240), content="1")
+  inspect(mem.read_i64(256), content="555")
+  inspect(mem.read_byte(266), content="b'\\x01'") // type = fd_read
+  inspect(mem.read_i64(272), content="1") // nbytes = 1
+  inspect(mem.read_byte(280), content="b'\\x01'") // FD_READWRITE_HANGUP
+
+  fd_close(ctx, read_fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 700, test_path.length()) |> ignore
 }
 
 ///|
