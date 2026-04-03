@@ -585,14 +585,24 @@ pub fn fd_pread(
   offset : Int64,
   nread_ptr : Int,
 ) -> Int {
-  if fd < 3 {
+  // wasmtime parity:
+  // - fd_pread(stdin) -> SPipe
+  // - fd_pread(stdout/stderr) -> Badf
+  if fd == 0 {
     return Errno::SPipe.to_i32()
+  }
+  if fd == 1 || fd == 2 {
+    return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
@@ -654,14 +664,24 @@ pub fn fd_pwrite(
   offset : Int64,
   nwritten_ptr : Int,
 ) -> Int {
-  if fd < 3 {
+  // wasmtime parity:
+  // - fd_pwrite(stdout/stderr) -> SPipe
+  // - fd_pwrite(stdin) -> Badf
+  if fd == 1 || fd == 2 {
     return Errno::SPipe.to_i32()
+  }
+  if fd == 0 {
+    return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
   if saved_pos is None {
