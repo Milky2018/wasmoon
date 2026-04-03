@@ -20,11 +20,11 @@ Last updated: 2026-04-03
 | WASIP1-005 | `wasi/functions.mbt` | Medium: interpreter `fd_fdstat_set_flags` uses hardcoded native flag constants, which is cross-platform fragile. | DONE | Interpreter now rejects `DSYNC/RSYNC/SYNC` with `EINVAL` and toggles only `APPEND/NONBLOCK` using host constants from FFI. JIT side updated to same acceptance policy and preserves existing `F_GETFL` bits. Verified by `fd_fdstat_set_flags rejects DSYNC with EINVAL (28)`. |
 | WASIP1-006 | `wasi/context.mbt`, `jit/jit_ffi/wasi.c` | Medium: preopen path confinement is lexical normalization + join, lacking capability-level symlink-safe containment. | TODO | Evidence: `wasi/context.mbt:344`, `wasi/context.mbt:391`, `jit/jit_ffi/wasi.c:203`, `jit/jit_ffi/wasi.c:303`. |
 | WASIP1-007 | `wasi/functions.mbt` | Medium: accepted sockets are tracked as `CharacterDevice`, causing filetype reporting mismatch for socket fds. | DONE | `sock_accept_impl` now registers accepted sockets as `SocketStream`, and `fd_fdstat_get` reports socket stream (`filetype=6`). Covered by `wasi/wasi_wbtest.mbt` synthetic socket fd assertion. |
-| WASIP1-008 | `wasi/functions.mbt`, `jit/jit_ffi/wasi.c` | Medium: interpreter has weaker explicit guest-memory bounds validation than JIT (`EFAULT` parity risk, trap behavior differences). | TODO | Evidence: `wasi/functions.mbt:35`, `wasi/functions.mbt:108`, `jit/jit_ffi/wasi.c:551`. |
+| WASIP1-008 | `wasi/functions.mbt`, `jit/jit_ffi/wasi.c` | Medium: interpreter has weaker explicit guest-memory bounds validation than JIT (`EFAULT` parity risk, trap behavior differences). | IN_PROGRESS | Added explicit `check_mem_range`/`check_iovecs_mem_range` validation and `EFAULT` returns for critical paths (`fd_write/read/pread/pwrite`, `poll_oneoff`, multiple path APIs, socket recv/send/accept, fdstat/filestat/prestat/random/args_sizes). Added regression tests in `wasi/wasi_wbtest.mbt` and parity tests in `testsuite/wasi_jit_wbtest.mbt`. Remaining gap: not yet every WASI entrypoint is fully audited for pointer-range parity. |
 
 ## Current Work Queue
 
 - WASIP1-002 (`IN_PROGRESS`)
 - WASIP1-003 (`IN_PROGRESS`)
 - WASIP1-006 (`TODO`)
-- WASIP1-008 (`TODO`)
+- WASIP1-008 (`IN_PROGRESS`)

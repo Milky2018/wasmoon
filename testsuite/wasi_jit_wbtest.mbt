@@ -473,6 +473,18 @@ test "wasi jit: fd_write stdout returns 0" {
 }
 
 ///|
+test "wasi jit: fd_write out-of-bounds iovec returns EFAULT" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_write (i32.const 1) (i32.const 65532) (i32.const 1) (i32.const 0))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
 test "wasi jit: stdio misuse returns EBADF" {
   let source =
     #|(module
@@ -528,6 +540,19 @@ test "wasi jit: poll_oneoff zero subscriptions returns EINVAL" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $poll_oneoff (i32.const 0) (i32.const 64) (i32.const 0)
+    #|      (i32.const 80))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: poll_oneoff out-of-bounds subscription returns EFAULT" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $poll_oneoff (i32.const 65530) (i32.const 64) (i32.const 1)
     #|      (i32.const 80))))
   inspect(compare_wasi(source, "test"), content="matched")
 }

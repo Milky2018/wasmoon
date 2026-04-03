@@ -9,6 +9,40 @@ pub(all) suberror WasiExit {
 }
 
 ///|
+fn check_mem_range(mem : @runtime.Memory, ptr : Int, len : Int) -> Bool {
+  if ptr < 0 || len < 0 {
+    return false
+  }
+  let start = ptr.to_int64()
+  let end = start + len.to_int64()
+  end >= start && end <= mem.byte_len()
+}
+
+///|
+fn check_iovecs_mem_range(
+  mem : @runtime.Memory,
+  iovs : Int,
+  iovs_len : Int,
+) -> Bool {
+  if iovs_len < 0 {
+    return false
+  }
+  let iovs_bytes = iovs_len * 8
+  if !check_mem_range(mem, iovs, iovs_bytes) {
+    return false
+  }
+  for i in 0..<iovs_len {
+    let iov_offset = iovs + i * 8
+    let buf_ptr = mem.read_i32(iov_offset)
+    let buf_len = mem.read_i32(iov_offset + 4)
+    if !check_mem_range(mem, buf_ptr, buf_len) {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// fd_write - Write data to a file descriptor using scatter/gather I/O
 ///
 /// Params:
@@ -26,6 +60,12 @@ pub fn fd_write(
   iovs_len : Int,
   nwritten_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, nwritten_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+    return Errno::Fault.to_i32()
+  }
   let fd_val = Fd(fd)
   // Handle stdout/stderr
   if fd_val == stdout || fd_val == stderr {
@@ -96,6 +136,12 @@ pub fn fd_read(
   iovs_len : Int,
   nread_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, nread_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+    return Errno::Fault.to_i32()
+  }
   // Handle stdin
   if fd == 0 {
     let input_data = (ctx.stdin_callback)()
@@ -168,6 +214,10 @@ pub fn args_sizes_get(
   argc_ptr : Int,
   argv_buf_size_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, argc_ptr, 4) ||
+    !check_mem_range(mem, argv_buf_size_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
   let argc = ctx.args.length()
   let mut buf_size = 0
   for arg in ctx.args {
@@ -313,6 +363,9 @@ pub fn fd_prestat_get(
   fd : Int,
   prestat_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, prestat_ptr, 8) {
+    return Errno::Fault.to_i32()
+  }
   // Find preopen for this fd
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
@@ -340,6 +393,9 @@ pub fn fd_prestat_dir_name(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
+  if !check_mem_range(mem, path_ptr, path_len) {
+    return Errno::Fault.to_i32()
+  }
   // Find preopen for this fd
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
@@ -381,6 +437,9 @@ pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
 pub fn random_get(mem : @runtime.Memory, buf_ptr : Int, buf_len : Int) -> Int {
   if buf_len <= 0 {
     return Errno::Success.to_i32()
+  }
+  if !check_mem_range(mem, buf_ptr, buf_len) {
+    return Errno::Fault.to_i32()
   }
   // Get random bytes from system
   let buf = FixedArray::make(buf_len, b'\x00')
@@ -424,12 +483,18 @@ pub fn path_open(
   fdflags : Int,
   opened_fd_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, opened_fd_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
   // Validate rights - only bits 0-28 are valid
   if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
     return Errno::Inval.to_i32()
   }
   // Read path from memory
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   // Resolve the full host path
   let host_path = ctx.resolve_path(dir_fd, path)
   if host_path is None {
@@ -598,6 +663,12 @@ pub fn fd_pread(
   offset : Int64,
   nread_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, nread_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+    return Errno::Fault.to_i32()
+  }
   if fd == 0 {
     return Errno::SPipe.to_i32()
   }
@@ -675,6 +746,12 @@ pub fn fd_pwrite(
   offset : Int64,
   nwritten_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, nwritten_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+    return Errno::Fault.to_i32()
+  }
   if fd == 1 || fd == 2 {
     return Errno::SPipe.to_i32()
   }
@@ -865,6 +942,9 @@ pub fn fd_fdstat_get(
   fd : Int,
   fdstat_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, fdstat_ptr, 24) {
+    return Errno::Fault.to_i32()
+  }
   // Determine file type
   let (file_type, flags, rights_base, rights_inheriting) : (
     Int,
@@ -979,7 +1059,10 @@ pub fn path_create_directory(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   if host_path is None {
     return Errno::Badf.to_i32()
@@ -1012,6 +1095,10 @@ pub fn fd_readdir(
   cookie : Int64,
   bufused_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, buf_ptr, buf_len) ||
+    !check_mem_range(mem, bufused_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
   if fd < 3 {
     return Errno::Badf.to_i32()
   }
@@ -1098,9 +1185,12 @@ fn read_string_from_memory(
   mem : @runtime.Memory,
   ptr : Int,
   len : Int,
-) -> String {
+) -> String? {
+  if !check_mem_range(mem, ptr, len) {
+    return None
+  }
   let bytes = Bytes::makei(len, fn(i) { mem.read_byte(ptr + i) })
-  utf8_bytes_to_string(bytes)
+  Some(utf8_bytes_to_string(bytes))
 }
 
 // ============================================================================
@@ -1152,7 +1242,10 @@ pub fn path_unlink_file_impl(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   match host_path {
     Some(resolved) =>
@@ -1174,7 +1267,10 @@ pub fn path_remove_directory_impl(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   match host_path {
     Some(resolved) =>
@@ -1199,8 +1295,16 @@ pub fn path_rename_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
-  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let old_path = match
+    read_string_from_memory(mem, old_path_ptr, old_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
+  let new_path = match
+    read_string_from_memory(mem, new_path_ptr, new_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let old_host_path = ctx.resolve_path(old_fd, old_path)
   let new_host_path = ctx.resolve_path(new_fd, new_path)
   match (old_host_path, new_host_path) {
@@ -1226,6 +1330,9 @@ pub fn fd_filestat_get_impl(
   fd : Int,
   buf_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, buf_ptr, 64) {
+    return Errno::Fault.to_i32()
+  }
   // Handle special fds (stdin, stdout, stderr)
   if fd < 3 {
     // Write a minimal filestat for character devices
@@ -1309,7 +1416,13 @@ pub fn path_filestat_get_impl(
   path_len : Int,
   buf_ptr : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  if !check_mem_range(mem, buf_ptr, 64) {
+    return Errno::Fault.to_i32()
+  }
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   match host_path {
     Some(resolved) => {
@@ -1389,7 +1502,10 @@ pub fn path_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   match host_path {
     Some(resolved) => {
@@ -1618,8 +1734,16 @@ pub fn path_symlink_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
-  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let old_path = match
+    read_string_from_memory(mem, old_path_ptr, old_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
+  let new_path = match
+    read_string_from_memory(mem, new_path_ptr, new_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let new_host_path = ctx.resolve_path(dir_fd, new_path)
   match new_host_path {
     Some(resolved) =>
@@ -1644,7 +1768,14 @@ pub fn path_readlink_impl(
   buf_len : Int,
   bufused_ptr : Int,
 ) -> Int {
-  let path = read_string_from_memory(mem, path_ptr, path_len)
+  if !check_mem_range(mem, buf_ptr, buf_len) ||
+    !check_mem_range(mem, bufused_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  let path = match read_string_from_memory(mem, path_ptr, path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let host_path = ctx.resolve_path(dir_fd, path)
   match host_path {
     Some(resolved) => {
@@ -1678,8 +1809,16 @@ pub fn path_link_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = read_string_from_memory(mem, old_path_ptr, old_path_len)
-  let new_path = read_string_from_memory(mem, new_path_ptr, new_path_len)
+  let old_path = match
+    read_string_from_memory(mem, old_path_ptr, old_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
+  let new_path = match
+    read_string_from_memory(mem, new_path_ptr, new_path_len) {
+    Some(path) => path
+    None => return Errno::Fault.to_i32()
+  }
   let old_host_path = ctx.resolve_path(old_fd, old_path)
   let new_host_path = ctx.resolve_path(new_fd, new_path)
   match (old_host_path, new_host_path) {
@@ -1869,8 +2008,20 @@ pub fn poll_oneoff_impl(
   nsubscriptions : Int,
   nevents_ptr : Int,
 ) -> Int {
+  if nsubscriptions < 0 {
+    return Errno::Inval.to_i32()
+  }
   if nsubscriptions == 0 {
     return Errno::Inval.to_i32()
+  }
+  if !check_mem_range(mem, nevents_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  let sub_bytes = nsubscriptions * 48
+  let event_bytes = nsubscriptions * 32
+  if !check_mem_range(mem, in_ptr, sub_bytes) ||
+    !check_mem_range(mem, out_ptr, event_bytes) {
+    return Errno::Fault.to_i32()
   }
 
   let ready_by_sub : Array[Bool] = []
@@ -2024,6 +2175,13 @@ pub fn sock_recv_impl(
   ro_datalen_ptr : Int,
   ro_flags_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, ro_datalen_ptr, 4) ||
+    !check_mem_range(mem, ro_flags_ptr, 2) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, ri_data_ptr, ri_data_len) {
+    return Errno::Fault.to_i32()
+  }
   match ctx.get_file(fd) {
     Some(file) => {
       let mut total_read = 0L
@@ -2075,6 +2233,12 @@ pub fn sock_send_impl(
   _si_flags : Int,
   so_datalen_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, so_datalen_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
+  if !check_iovecs_mem_range(mem, si_data_ptr, si_data_len) {
+    return Errno::Fault.to_i32()
+  }
   match ctx.get_file(fd) {
     Some(file) => {
       let mut total_sent = 0L
@@ -2133,6 +2297,9 @@ pub fn sock_accept_impl(
   _flags : Int,
   result_fd_ptr : Int,
 ) -> Int {
+  if !check_mem_range(mem, result_fd_ptr, 4) {
+    return Errno::Fault.to_i32()
+  }
   match ctx.get_file(fd) {
     Some(file) => {
       let new_fd = native_accept(file.native_fd)

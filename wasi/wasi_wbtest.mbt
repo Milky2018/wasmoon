@@ -26,6 +26,15 @@ test "wasi: fd_write invalid fd" {
 }
 
 ///|
+test "wasi: fd_write returns EFAULT on out-of-bounds iovec" {
+  let ctx = WasiContextBuilder::new().stdout(fn(_bytes) {  }).build()
+  let mem = @runtime.Memory::new(1, None)
+  // iovec struct (8 bytes) crosses memory end.
+  let result = fd_write(ctx, mem, 1, 65532, 1, 0)
+  inspect(result, content="21") // Errno::Fault
+}
+
+///|
 test "wasi: args_sizes_get" {
   let ctx = WasiContextBuilder::new().args(["prog", "arg1", "arg2"]).build()
   let mem = @runtime.Memory::new(1, None)
@@ -554,6 +563,14 @@ test "wasi: path_create_directory" {
     // Cleanup
     path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
   }
+}
+
+///|
+test "wasi: path_open returns EFAULT on out-of-bounds path pointer" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let result = path_open(ctx, mem, 3, 0, 65532, 8, 0, right_fd_read, 0L, 0, 0)
+  inspect(result, content="21") // Errno::Fault
 }
 
 ///|
@@ -1233,6 +1250,14 @@ test "wasi: poll_oneoff with zero subscriptions" {
   let mem = @runtime.Memory::new(1, None)
   let result = poll_oneoff_impl(ctx, mem, 0, 0, 0, 100)
   inspect(result, content="28")
+}
+
+///|
+test "wasi: poll_oneoff returns EFAULT on out-of-bounds subscription buffer" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  let result = poll_oneoff_impl(ctx, mem, 65530, 0, 1, 100)
+  inspect(result, content="21") // Errno::Fault
 }
 
 ///|
