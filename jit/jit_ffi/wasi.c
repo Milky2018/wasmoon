@@ -1494,6 +1494,9 @@ static int64_t wasi_path_open_impl(
         if (get_native_fd(ctx, dirfd_i) >= 0) return WASI_ENOTDIR;
         return WASI_EBADF;
     }
+    if (((int64_t)fdflags & 0x1A) != 0) { // DSYNC/RSYNC/SYNC
+        return WASI_ENOTSUP;
+    }
 
     // Read path from memory
     char *path = malloc((size_t)path_len_u + 1);

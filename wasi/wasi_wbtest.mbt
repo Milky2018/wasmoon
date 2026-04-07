@@ -825,7 +825,7 @@ test "wasi: path_open honors write-only rights without create flags" {
 }
 
 ///|
-test "wasi: path_open does not hard-reject sync fdflags" {
+test "wasi: path_open rejects sync fdflags with ENOTSUP" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
   let test_path = "wasmoon_sync_fdflags_open.txt"
@@ -867,10 +867,7 @@ test "wasi: path_open does not hard-reject sync fdflags" {
     0x10,
     2004,
   )
-  inspect(reopen_result, content="0")
-  if reopen_result == 0 {
-    fd_close(ctx, mem.read_i32(2004)) |> ignore
-  }
+  inspect(reopen_result, content="58")
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 

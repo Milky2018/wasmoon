@@ -639,8 +639,12 @@ pub fn path_open(
   let has_exclusive = (oflags & 0x04) != 0
   let has_truncate = (oflags & 0x08) != 0
   let has_append = (fdflags & 0x01) != 0
+  let has_sync = (fdflags & 0x1A) != 0 // 0x02 DSYNC, 0x08 RSYNC, 0x10 SYNC
   if has_directory && (has_create || has_exclusive || has_truncate) {
     return Errno::Inval.to_i32()
+  }
+  if has_sync {
+    return Errno::NotSup.to_i32()
   }
   // WASI oflags:
   // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC

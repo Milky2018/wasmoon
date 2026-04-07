@@ -793,7 +793,7 @@ test "wasi jit: path_open ignores unknown rights bits and still validates dirfd"
 }
 
 ///|
-test "wasi jit: path_open does not hard-reject sync fdflags" {
+test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -831,8 +831,8 @@ test "wasi jit: path_open does not hard-reject sync fdflags" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="0")
-  inspect(wasi_errno_from_result(result.jit_result), content="0")
+  inspect(wasi_errno_from_result(result.interp_result), content="58")
+  inspect(wasi_errno_from_result(result.jit_result), content="58")
 }
 
 ///|
