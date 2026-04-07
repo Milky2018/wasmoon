@@ -620,7 +620,13 @@ pub fn path_open(
       }
     None => return Errno::Badf.to_i32()
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let follow_symlink = (dirflags & 0x01) != 0
+  let resolved_path_result = if follow_symlink {
+    resolve_host_path(ctx, dir_fd, path)
+  } else {
+    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  }
+  let resolved_path = match resolved_path_result {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -631,7 +637,6 @@ pub fn path_open(
   let has_exclusive = (oflags & 0x04) != 0
   let has_truncate = (oflags & 0x08) != 0
   let has_append = (fdflags & 0x01) != 0
-  let follow_symlink = (dirflags & 0x01) != 0
   if has_directory && (has_create || has_exclusive || has_truncate) {
     return Errno::Inval.to_i32()
   }
@@ -1263,7 +1268,7 @@ pub fn path_create_directory(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -1481,7 +1486,21 @@ fn resolve_host_path(
     Ok(resolved) => Ok(resolved)
     Err(BadFd) => Err(Errno::Badf.to_i32())
     Err(Perm) => Err(Errno::Perm.to_i32())
-    Err(NotCapable) => Err(Errno::NotCapable.to_i32())
+    Err(NotCapable) => Err(Errno::Perm.to_i32())
+  }
+}
+
+///|
+fn resolve_host_path_nofollow_leaf(
+  ctx : WasiContext,
+  dir_fd : Int,
+  path : String,
+) -> Result[String, Int] {
+  match ctx.resolve_path_nofollow_leaf(dir_fd, path) {
+    Ok(resolved) => Ok(resolved)
+    Err(BadFd) => Err(Errno::Badf.to_i32())
+    Err(Perm) => Err(Errno::Perm.to_i32())
+    Err(NotCapable) => Err(Errno::Perm.to_i32())
   }
 }
 
@@ -1568,7 +1587,7 @@ pub fn path_unlink_file_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -1592,7 +1611,7 @@ pub fn path_remove_directory_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -1623,11 +1642,13 @@ pub fn path_rename_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
+  let old_resolved = match
+    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  let new_resolved = match resolve_host_path(ctx, new_fd, new_path) {
+  let new_resolved = match
+    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -1746,12 +1767,18 @@ pub fn path_filestat_get_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let follow_symlink = (flags & 0x01) != 0
+  let resolved_path_result = if follow_symlink {
+    resolve_host_path(ctx, dir_fd, path)
+  } else {
+    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  }
+  let resolved_path = match resolved_path_result {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
   // Convert WASI flags to native flags
-  let native_flags = if (flags & 0x01) != 0 { 0 } else { AT_SYMLINK_NOFOLLOW }
+  let native_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
   let stat = native_fstatat(0, resolved_path, native_flags)
   match stat {
     Some(s) => {
@@ -1817,11 +1844,17 @@ pub fn path_filestat_set_times_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let follow_symlink = (flags & 0x01) != 0
+  let resolved_path_result = if follow_symlink {
+    resolve_host_path(ctx, dir_fd, path)
+  } else {
+    resolve_host_path_nofollow_leaf(ctx, dir_fd, path)
+  }
+  let resolved_path = match resolved_path_result {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  let lookup_flags = if (flags & 0x01) != 0 { 0 } else { AT_SYMLINK_NOFOLLOW }
+  let lookup_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
   if native_utimensat(0, resolved_path, atim, mtim, fst_flags, lookup_flags) {
     Errno::Success.to_i32()
   } else {
@@ -2022,11 +2055,15 @@ pub fn path_symlink_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  if old_path.has_prefix("/") {
+    return Errno::Perm.to_i32()
+  }
   let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, new_path) {
+  let resolved_path = match
+    resolve_host_path_nofollow_leaf(ctx, dir_fd, new_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -2057,7 +2094,7 @@ pub fn path_readlink_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
+  let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
@@ -2096,11 +2133,13 @@ pub fn path_link_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
-  let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
+  let old_resolved = match
+    resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  let new_resolved = match resolve_host_path(ctx, new_fd, new_path) {
+  let new_resolved = match
+    resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
   }

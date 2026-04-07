@@ -807,7 +807,7 @@ test "wasi jit: path_open does not hard-reject sync fdflags" {
     #|  (func (export "test") (result i32)
     #|    (local $fd i32)
     #|    (local $errno i32)
-    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 22)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 23)))
     #|    (local.set $errno
     #|      (call $path_open
     #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 22)
@@ -1015,7 +1015,7 @@ test "wasi jit: path_open rejects symlink escape outside preopen" {
     #|  (import "wasi_snapshot_preview1" "path_open"
     #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
     #|  (memory (export "memory") 1)
-    #|  (data (i32.const 0) "/")
+    #|  (data (i32.const 0) "../")
     #|  (data (i32.const 16) "caplk_escape")
     #|  (data (i32.const 48) "caplk_escape/etc/passwd")
     #|  (func (export "test") (result i32)
@@ -1023,7 +1023,7 @@ test "wasi jit: path_open rejects symlink escape outside preopen" {
     #|    (drop (call $path_remove_directory (i32.const 3) (i32.const 16) (i32.const 12)))
     #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 16) (i32.const 12)))
     #|    (drop (call $path_symlink
-    #|      (i32.const 0) (i32.const 1) (i32.const 3) (i32.const 16) (i32.const 12)))
+    #|      (i32.const 0) (i32.const 3) (i32.const 3) (i32.const 16) (i32.const 12)))
     #|    (local.set $errno
     #|      (call $path_open
     #|        (i32.const 3) (i32.const 0) (i32.const 48) (i32.const 23)
@@ -1036,8 +1036,32 @@ test "wasi jit: path_open rejects symlink escape outside preopen" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="76")
-  inspect(wasi_errno_from_result(result.jit_result), content="76")
+  inspect(wasi_errno_from_result(result.interp_result), content="63")
+  inspect(wasi_errno_from_result(result.jit_result), content="63")
+}
+
+///|
+test "wasi jit: path_unlink_file can remove escaped symlink entry" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_symlink"
+    #|    (func $path_symlink (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "caplk_escape_unlink_jit")
+    #|  (data (i32.const 64) "../")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 22)))
+    #|    (drop (call $path_symlink
+    #|      (i32.const 64) (i32.const 3) (i32.const 3) (i32.const 0) (i32.const 23)))
+    #|    (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 23))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|
@@ -1111,6 +1135,26 @@ test "wasi jit: path_open with embedded NUL returns EINVAL" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="28")
   inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: path_symlink rejects absolute old_path with EPERM" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_symlink"
+    #|    (func $path_symlink (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "/")
+    #|  (data (i32.const 16) "wasmoon_abs_target")
+    #|  (func (export "test") (result i32)
+    #|    (call $path_symlink
+    #|      (i32.const 0) (i32.const 1) (i32.const 3) (i32.const 16) (i32.const 18))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="63")
+  inspect(wasi_errno_from_result(result.jit_result), content="63")
 }
 
 ///|

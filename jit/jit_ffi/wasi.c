@@ -435,11 +435,36 @@ static int guest_bytes_contain_nul(const uint8_t *mem, uint32_t ptr, uint32_t le
     return memchr(mem + ptr, '\0', (size_t)len) != NULL;
 }
 
+static char *path_parent_no_trailing(const char *path) {
+    if (!path) return NULL;
+    char *scratch = strdup(path);
+    if (!scratch) return NULL;
+
+    size_t len = strlen(scratch);
+    while (len > 1 && scratch[len - 1] == '/') {
+        scratch[len - 1] = '\0';
+        len--;
+    }
+
+    char *slash = strrchr(scratch, '/');
+    if (!slash) {
+        strcpy(scratch, ".");
+        return scratch;
+    }
+    if (slash == scratch) {
+        scratch[1] = '\0';
+        return scratch;
+    }
+    *slash = '\0';
+    return scratch;
+}
+
 // Resolve path relative to a directory fd and return WASI errno on failure.
 static int resolve_path_with_errno(
     jit_context_t *ctx,
     int dir_fd,
     const char *path,
+    int follow_leaf,
     char **out_path
 ) {
     if (!out_path) return WASI_EINVAL;
@@ -476,10 +501,22 @@ static int resolve_path_with_errno(
     *out_path = result;
     return WASI_ESUCCESS;
 #else
-    if (!path_within_base(base, result)) {
-        free(result);
-        return WASI_ENOTCAPABLE;
+    const char *contain_target = result;
+    char *contain_alloc = NULL;
+    if (!follow_leaf && rel_len > 0) {
+        contain_alloc = path_parent_no_trailing(result);
+        if (!contain_alloc) {
+            free(result);
+            return WASI_ENOMEM;
+        }
+        contain_target = contain_alloc;
     }
+    if (!path_within_base(base, contain_target)) {
+        free(contain_alloc);
+        free(result);
+        return WASI_EPERM;
+    }
+    free(contain_alloc);
     *out_path = result;
     return WASI_ESUCCESS;
 #endif
@@ -1378,7 +1415,13 @@ static int64_t wasi_path_open_impl(
 
     // Resolve full path
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
+    int path_errno = resolve_path_with_errno(
+        ctx,
+        (int)dir_fd,
+        path,
+        ((dirflags & 0x01) != 0),
+        &full_path
+    );
     free(path);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -1451,7 +1494,7 @@ static int64_t wasi_path_unlink_file_impl(
     path[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, 0, &full_path);
     free(path);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -1487,7 +1530,7 @@ static int64_t wasi_path_remove_directory_impl(
     path[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, 0, &full_path);
     free(path);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -1523,7 +1566,7 @@ static int64_t wasi_path_create_directory_impl(
     path[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, 0, &full_path);
     free(path);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -1574,9 +1617,9 @@ static int64_t wasi_path_rename_impl(
     new_path[new_path_len_u] = '\0';
 
     char *old_full = NULL;
-    int old_errno = resolve_path_with_errno(ctx, (int)old_fd, old_path, &old_full);
+    int old_errno = resolve_path_with_errno(ctx, (int)old_fd, old_path, 0, &old_full);
     char *new_full = NULL;
-    int new_errno = resolve_path_with_errno(ctx, (int)new_fd, new_path, &new_full);
+    int new_errno = resolve_path_with_errno(ctx, (int)new_fd, new_path, 0, &new_full);
     free(old_path);
     free(new_path);
 
@@ -2581,7 +2624,13 @@ static int32_t wasi_path_filestat_get_impl(
     path_tmp[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
+    int path_errno = resolve_path_with_errno(
+        ctx,
+        dir_fd,
+        path_tmp,
+        ((flags & 1) != 0),
+        &full_path
+    );
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -2641,7 +2690,7 @@ static int32_t wasi_path_readlink_impl(
     path_tmp[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, 0, &full_path);
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
@@ -2680,6 +2729,10 @@ static int32_t wasi_path_symlink_impl(
     if (!old_path) return WASI_ENOMEM;
     memcpy(old_path, mem + old_path_ptr_u, old_path_len_u);
     old_path[old_path_len_u] = '\0';
+    if (old_path[0] == '/') {
+        free(old_path);
+        return WASI_EPERM;
+    }
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
@@ -2690,7 +2743,7 @@ static int32_t wasi_path_symlink_impl(
     new_path_tmp[new_path_len_u] = '\0';
 
     char *full_new_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, dir_fd, new_path_tmp, &full_new_path);
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, new_path_tmp, 0, &full_new_path);
     free(new_path_tmp);
     if (path_errno != WASI_ESUCCESS) {
         free(old_path);
@@ -2744,7 +2797,7 @@ static int32_t wasi_path_link_impl(
     new_path_tmp[new_path_len_u] = '\0';
 
     char *full_old_path = NULL;
-    int old_errno = resolve_path_with_errno(ctx, old_fd, old_path_tmp, &full_old_path);
+    int old_errno = resolve_path_with_errno(ctx, old_fd, old_path_tmp, 0, &full_old_path);
     free(old_path_tmp);
     if (old_errno != WASI_ESUCCESS) {
         free(new_path_tmp);
@@ -2752,7 +2805,7 @@ static int32_t wasi_path_link_impl(
     }
 
     char *full_new_path = NULL;
-    int new_errno = resolve_path_with_errno(ctx, new_fd, new_path_tmp, &full_new_path);
+    int new_errno = resolve_path_with_errno(ctx, new_fd, new_path_tmp, 0, &full_new_path);
     free(new_path_tmp);
     if (new_errno != WASI_ESUCCESS) {
         free(full_old_path);
@@ -2842,7 +2895,13 @@ static int32_t wasi_path_filestat_set_times_impl(
     path_tmp[path_len_u] = '\0';
 
     char *full_path = NULL;
-    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
+    int path_errno = resolve_path_with_errno(
+        ctx,
+        dir_fd,
+        path_tmp,
+        ((flags & 1) != 0),
+        &full_path
+    );
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 

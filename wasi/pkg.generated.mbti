@@ -476,6 +476,7 @@ pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
 pub fn WasiContext::new() -> Self
 pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
+pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int, String) -> Result[String, ResolvePathError]
 
 pub(all) struct WasiContextBuilder {
   mut args : Array[String]

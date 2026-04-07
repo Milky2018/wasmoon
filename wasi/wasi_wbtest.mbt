@@ -1224,6 +1224,7 @@ test "wasi: path_open rejects symlink escape outside preopen" {
   let mem = @runtime.Memory::new(1, None)
   let link_name = "caplk_escape"
   let escaped_path = "caplk_escape/etc/passwd"
+  let rel_outside = "../"
 
   for i, c in link_name {
     mem.write_byte(100 + i, c.to_int().to_byte())
@@ -1231,7 +1232,9 @@ test "wasi: path_open rejects symlink escape outside preopen" {
   for i, c in escaped_path {
     mem.write_byte(200 + i, c.to_int().to_byte())
   }
-  mem.write_byte(300, b'/')
+  for i, c in rel_outside {
+    mem.write_byte(300 + i, c.to_int().to_byte())
+  }
 
   path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
@@ -1239,12 +1242,12 @@ test "wasi: path_open rejects symlink escape outside preopen" {
     ctx,
     mem,
     300,
-    1,
+    rel_outside.length(),
     3,
     100,
     link_name.length(),
   )
-  inspect(symlink_result == 0 || symlink_result == 76, content="true")
+  inspect(symlink_result, content="0")
   let open_result = path_open(
     ctx,
     mem,
@@ -1258,9 +1261,40 @@ test "wasi: path_open rejects symlink escape outside preopen" {
     0,
     900,
   )
-  inspect(open_result, content="76")
+  inspect(open_result, content="63")
   path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
   path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+}
+
+///|
+test "wasi: path_unlink_file can remove escaped symlink entry" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link_name = "caplk_escape_unlink"
+  let rel_outside = "../"
+  for i, c in link_name {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in rel_outside {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+  inspect(
+    path_symlink_impl(
+      ctx,
+      mem,
+      200,
+      rel_outside.length(),
+      3,
+      100,
+      link_name.length(),
+    ),
+    content="0",
+  )
+  inspect(
+    path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()),
+    content="0",
+  )
 }
 
 ///|
@@ -1961,6 +1995,23 @@ test "wasi: path_symlink and path_readlink" {
   }
   inspect(read_target, content="symlink_target.txt")
   // Cleanup
+  path_unlink_file_impl(ctx, mem, 3, 200, link.length()) |> ignore
+}
+
+///|
+test "wasi: path_symlink rejects absolute old_path with EPERM" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link = "wasmoon_abs_target_link"
+  mem.write_byte(100, b'/')
+  for i, c in link {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 200, link.length()) |> ignore
+  inspect(
+    path_symlink_impl(ctx, mem, 100, 1, 3, 200, link.length()),
+    content="63",
+  )
   path_unlink_file_impl(ctx, mem, 3, 200, link.length()) |> ignore
 }
 
