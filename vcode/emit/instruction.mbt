@@ -1532,10 +1532,25 @@ fn MachineCode::emit_instruction(
       }
     }
     LoadSP => {
-      // Load stack pointer into result register
-      // Uses ADD Xd, SP, #0 because MOV with SP has encoding issues
+      // Load outgoing-args base into result register.
+      // StoreToStack writes to [SP + outgoing_args_offset + off], so LoadSP must
+      // return the same base address to keep pointer-based runtime helpers
+      // (hostcall/exception/GC) coherent.
+      //
+      // Uses ADD Xd, SP, #0 because MOV with SP has encoding issues.
       let result_reg = wreg_num(inst.defs[0])
       self.emit_add_imm(result_reg, 31, 0)
+      let mut base_off = stack_frame.outgoing_args_offset
+      while base_off > 0 {
+        let chunk = if base_off > 4095 { 4095 } else { base_off }
+        self.emit_add_imm(result_reg, result_reg, chunk)
+        base_off = base_off - chunk
+      }
+      while base_off < 0 {
+        let chunk = if base_off < -4095 { 4095 } else { -base_off }
+        self.emit_sub_imm(result_reg, result_reg, chunk)
+        base_off = base_off + chunk
+      }
     }
     GCAllocStructSlowPrecise(type_idx, num_fields) => {
       // Direct slow-path struct allocation with precise safepoint metadata.

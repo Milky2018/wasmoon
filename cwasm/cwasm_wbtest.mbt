@@ -131,7 +131,7 @@ test "deserialize: invalid magic" {
 
 ///|
 test "deserialize: unsupported version" {
-  // Valid magic but wrong versions (supported: v4/v5/v6/v7)
+  // Valid magic but wrong versions (current format only)
   let v1_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
      0x01, 0x00, 0x00, 0x00,

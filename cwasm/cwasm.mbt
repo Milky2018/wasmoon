@@ -849,9 +849,9 @@ pub fn deserialize(
     }
   }
 
-  // Read version (support v4/v5/v6/v7)
+  // Read version (current format only)
   let version = reader.read_u32()
-  if version != 4 && version != 5 && version != 6 && version != 7 {
+  if version != CWASM_VERSION {
     raise DeserializeError("Unsupported version: \{version}")
   }
 
@@ -908,44 +908,40 @@ pub fn deserialize(
     let call_fixups : Array[@emit.CallFixup] = []
     let gc_safepoints : Array[@vcode.GcSafepoint] = []
     let mut gc_stackmap_blob : Bytes = b""
-    if version >= 6 {
-      let func_addr_fixup_count = reader.read_u32()
-      for _ in 0..<func_addr_fixup_count {
-        let offset = reader.read_u32()
-        let target_func_idx = reader.read_u32()
-        let reg = reader.read_u32()
-        func_addr_fixups.push({ offset, func_idx: target_func_idx, reg })
-      }
-      let call_fixup_count = reader.read_u32()
-      for _ in 0..<call_fixup_count {
-        let offset = reader.read_u32()
-        let target_func_idx = reader.read_u32()
-        let veneer_offset = reader.read_u32()
-        call_fixups.push({ offset, func_idx: target_func_idx, veneer_offset })
-      }
+    let func_addr_fixup_count = reader.read_u32()
+    for _ in 0..<func_addr_fixup_count {
+      let offset = reader.read_u32()
+      let target_func_idx = reader.read_u32()
+      let reg = reader.read_u32()
+      func_addr_fixups.push({ offset, func_idx: target_func_idx, reg })
     }
-    if version >= 7 {
-      let safepoint_count = reader.read_u32()
-      for _ in 0..<safepoint_count {
-        let code_offset = reader.read_u32()
-        let metadata = reader.read_i64()
-        let live_ref_count = reader.read_u32()
-        let live_refs : Array[Int] = []
-        for _ in 0..<live_ref_count {
-          live_refs.push(reader.read_u32())
-        }
-        gc_safepoints.push(
-          @vcode.GcSafepoint::new(code_offset, live_refs, metadata),
-        )
-      }
-      let stackmap_blob_size = reader.read_u32()
-      let stackmap_raw = reader.read_bytes(stackmap_blob_size)
-      let stackmap_bytes : Array[Byte] = []
-      for b in stackmap_raw {
-        stackmap_bytes.push(b.to_byte())
-      }
-      gc_stackmap_blob = Bytes::from_array(stackmap_bytes)
+    let call_fixup_count = reader.read_u32()
+    for _ in 0..<call_fixup_count {
+      let offset = reader.read_u32()
+      let target_func_idx = reader.read_u32()
+      let veneer_offset = reader.read_u32()
+      call_fixups.push({ offset, func_idx: target_func_idx, veneer_offset })
     }
+    let safepoint_count = reader.read_u32()
+    for _ in 0..<safepoint_count {
+      let code_offset = reader.read_u32()
+      let metadata = reader.read_i64()
+      let live_ref_count = reader.read_u32()
+      let live_refs : Array[Int] = []
+      for _ in 0..<live_ref_count {
+        live_refs.push(reader.read_u32())
+      }
+      gc_safepoints.push(
+        @vcode.GcSafepoint::new(code_offset, live_refs, metadata),
+      )
+    }
+    let stackmap_blob_size = reader.read_u32()
+    let stackmap_raw = reader.read_bytes(stackmap_blob_size)
+    let stackmap_bytes : Array[Byte] = []
+    for b in stackmap_raw {
+      stackmap_bytes.push(b.to_byte())
+    }
+    gc_stackmap_blob = Bytes::from_array(stackmap_bytes)
     functions.push(
       CompiledEntry::new(
         func_idx,
@@ -984,65 +980,64 @@ pub fn deserialize(
     data_segments.push(DataEntry::new(memory_idx, offset, data))
   }
 
-  // v5 sections (only present if version >= 5)
+  // Read type/global/table/element/start sections
   let types : Array[TypeEntry] = []
   let globals : Array[GlobalDef] = []
   let tables : Array[TableDef] = []
   let elements : Array[ElemEntry] = []
   let mut start_func : Int? = None
-  if version >= 5 {
-    // Read types
-    let type_count = reader.read_u32()
-    for _ in 0..<type_count {
-      let param_count = reader.read_u32()
-      let param_types : Array[Int] = []
-      for _ in 0..<param_count {
-        param_types.push(reader.read_u32())
-      }
-      let result_count = reader.read_u32()
-      let result_types : Array[Int] = []
-      for _ in 0..<result_count {
-        result_types.push(reader.read_u32())
-      }
-      types.push(TypeEntry::new(param_types, result_types))
+  // Read types
+  let type_count = reader.read_u32()
+  for _ in 0..<type_count {
+    let param_count = reader.read_u32()
+    let param_types : Array[Int] = []
+    for _ in 0..<param_count {
+      param_types.push(reader.read_u32())
     }
-
-    // Read globals
-    let global_count = reader.read_u32()
-    for _ in 0..<global_count {
-      let value_type = reader.read_u32()
-      let mutable = reader.read_byte() != 0
-      let init_value = reader.read_i64()
-      globals.push(GlobalDef::new(value_type, mutable, init_value))
+    let result_count = reader.read_u32()
+    let result_types : Array[Int] = []
+    for _ in 0..<result_count {
+      result_types.push(reader.read_u32())
     }
-
-    // Read tables
-    let table_count = reader.read_u32()
-    for _ in 0..<table_count {
-      let elem_type = reader.read_u32()
-      let min_size = reader.read_u32()
-      let max_raw = reader.read_u32()
-      let max_size : Int? = if max_raw == -1 { None } else { Some(max_raw) }
-      tables.push(TableDef::new(elem_type, min_size, max_size))
-    }
-
-    // Read elements
-    let elem_count = reader.read_u32()
-    for _ in 0..<elem_count {
-      let table_idx = reader.read_u32()
-      let offset = reader.read_u32()
-      let func_count = reader.read_u32()
-      let func_indices : Array[Int] = []
-      for _ in 0..<func_count {
-        func_indices.push(reader.read_u32())
-      }
-      elements.push(ElemEntry::new(table_idx, offset, func_indices))
-    }
-
-    // Read start function
-    let start_raw = reader.read_u32()
-    start_func = if start_raw == -1 { None } else { Some(start_raw) }
+    types.push(TypeEntry::new(param_types, result_types))
   }
+
+  // Read globals
+  let global_count = reader.read_u32()
+  for _ in 0..<global_count {
+    let value_type = reader.read_u32()
+    let mutable = reader.read_byte() != 0
+    let init_value = reader.read_i64()
+    globals.push(GlobalDef::new(value_type, mutable, init_value))
+  }
+
+  // Read tables
+  let table_count = reader.read_u32()
+  for _ in 0..<table_count {
+    let elem_type = reader.read_u32()
+    let min_size = reader.read_u32()
+    let max_raw = reader.read_u32()
+    let max_size : Int? = if max_raw == -1 { None } else { Some(max_raw) }
+    tables.push(TableDef::new(elem_type, min_size, max_size))
+  }
+
+  // Read elements
+  let elem_count = reader.read_u32()
+  for _ in 0..<elem_count {
+    let table_idx = reader.read_u32()
+    let offset = reader.read_u32()
+    let func_count = reader.read_u32()
+    let func_indices : Array[Int] = []
+    for _ in 0..<func_count {
+      func_indices.push(reader.read_u32())
+    }
+    elements.push(ElemEntry::new(table_idx, offset, func_indices))
+  }
+
+  // Read start function
+  let start_raw = reader.read_u32()
+  start_func = if start_raw == -1 { None } else { Some(start_raw) }
+
   {
     version: CWASM_VERSION,
     target,
