@@ -919,6 +919,62 @@ test "wasi: path_open rejects unknown dirflags bits with EINVAL" {
 }
 
 ///|
+test "wasi: path_open rejects unknown oflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_unknown_oflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      test_path.length(),
+      0x10,
+      right_fd_read,
+      0L,
+      0,
+      2000,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open rejects unknown fdflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_unknown_fdflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      test_path.length(),
+      0,
+      right_fd_read,
+      0L,
+      0x20,
+      2000,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
 test "wasi: path_open with non-directory dirfd returns NOTDIR" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

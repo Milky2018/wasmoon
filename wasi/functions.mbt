@@ -603,6 +603,14 @@ pub fn path_open(
   if lookupflags_check != Errno::Success.to_i32() {
     return lookupflags_check
   }
+  let known_oflags_mask = 0x0F
+  if (oflags & known_oflags_mask.lnot()) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let known_fdflags_mask = 0x1F
+  if (fdflags & known_fdflags_mask.lnot()) != 0 {
+    return Errno::Inval.to_i32()
+  }
   ignore(fs_rights_inheriting)
   // Read path from memory
   let path = match read_path_from_memory(mem, path_ptr, path_len) {

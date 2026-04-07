@@ -1473,6 +1473,8 @@ static int64_t wasi_path_open_impl(
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     (void)rights_inh;
     if (invalid_lookupflags((int32_t)dirflags)) return WASI_EINVAL;
+    if ((oflags & ~0x0f) != 0) return WASI_EINVAL;
+    if ((fdflags & ~0x1f) != 0) return WASI_EINVAL;
     if ((oflags & 0x02) && ((oflags & 0x01) || (oflags & 0x04) || (oflags & 0x08))) {
         return WASI_EINVAL;
     }

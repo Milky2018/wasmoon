@@ -879,6 +879,62 @@ test "wasi jit: path_open rejects unknown dirflags bits with EINVAL" {
 }
 
 ///|
+test "wasi jit: path_open rejects unknown oflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_unknown_oflags.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 26)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 26)
+    #|        (i32.const 16) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|        (i32.const 100)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 26)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: path_open rejects unknown fdflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_unknown_fdflags.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 27)
+    #|        (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 32)
+    #|        (i32.const 100)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 27)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: path_open with non-directory dirfd returns NOTDIR" {
   let source =
     #|(module
