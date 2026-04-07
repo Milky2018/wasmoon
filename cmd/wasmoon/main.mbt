@@ -284,7 +284,7 @@ fn main {
                     }
                   None => @commands.ComponentErrorFormat::Text
                 }
-                let status = @commands.run_component_script(
+                let status = @commands.run_component_script_cli(
                   positional[0],
                   error_format,
                 )
