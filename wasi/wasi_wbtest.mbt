@@ -2344,6 +2344,38 @@ test "wasi: fd_fdstat_set_rights returns ENOTSUP for valid fd" {
 }
 
 ///|
+test "wasi: fd_fdstat_set_flags rejects unknown fdflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_setflags_unknown.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_fdstat_set_flags_impl(ctx, fd, 0x20), content="28")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
 test "wasi: path_symlink and path_readlink" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

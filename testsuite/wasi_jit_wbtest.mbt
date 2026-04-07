@@ -2324,6 +2324,30 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
 }
 
 ///|
+test "wasi jit: fd_fdstat_set_flags rejects unknown bits with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_setflags_unknown")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 23)
+    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 32))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
   let source =
     #|(module

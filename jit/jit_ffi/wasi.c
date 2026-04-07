@@ -3227,6 +3227,9 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags
 ) {
+    if ((flags & ~0x1f) != 0) {
+        return WASI_EINVAL;
+    }
     // Match wasmtime behavior:
     // - only APPEND/NONBLOCK are accepted
     // - DSYNC/RSYNC/SYNC are rejected with EINVAL

@@ -2106,6 +2106,10 @@ pub fn fd_fdstat_set_flags_impl(
   fd : Int,
   flags : Int,
 ) -> Int {
+  let known_fdflags_mask = 0x1F
+  if (flags & known_fdflags_mask.lnot()) != 0 {
+    return Errno::Inval.to_i32()
+  }
   // Match wasmtime behavior:
   // - only APPEND/NONBLOCK are accepted
   // - DSYNC/RSYNC/SYNC are rejected with EINVAL
