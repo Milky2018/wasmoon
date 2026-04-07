@@ -2060,6 +2060,21 @@ test "wasi jit: proc_raise returns ENOTSUP (58)" {
 }
 
 ///|
+test "wasi jit: proc_raise rejects invalid signal with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "proc_raise"
+    #|    (func $proc_raise (param i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $proc_raise (i32.const 255))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: fd_seek stdin returns ESPIPE (70)" {
   let source =
     #|(module

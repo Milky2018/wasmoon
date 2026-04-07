@@ -2323,6 +2323,7 @@ test "wasi: fd_renumber allows identity stdio and rejects moving stdio" {
 ///|
 test "wasi: proc_raise returns ENOTSUP" {
   inspect(proc_raise_impl(2), content="58")
+  inspect(proc_raise_impl(255), content="28")
 }
 
 ///|

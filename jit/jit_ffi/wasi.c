@@ -1106,6 +1106,10 @@ static int invalid_sock_shutdown_sdflags(int32_t how) {
     return (how & ~0x03) != 0;
 }
 
+static int invalid_proc_raise_signal(int64_t sig) {
+    return sig < 0 || sig > 30;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -2083,7 +2087,7 @@ static int64_t wasi_proc_raise_impl(
     jit_context_t *ctx, int64_t sig
 ) {
     (void)ctx;
-    (void)sig;
+    if (invalid_proc_raise_signal(sig)) return WASI_EINVAL;
     return WASI_ENOTSUP;
 }
 

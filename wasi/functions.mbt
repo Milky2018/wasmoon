@@ -1648,6 +1648,16 @@ fn validate_sock_shutdown_sdflags(how : Int) -> Int {
 }
 
 ///|
+fn validate_proc_raise_signal(signal : Int) -> Int {
+  // WITX `signal` is an enum with valid tags in range [0, 30].
+  if signal < 0 || signal > 30 {
+    Errno::Inval.to_i32()
+  } else {
+    Errno::Success.to_i32()
+  }
+}
+
+///|
 fn resolve_host_path(
   ctx : WasiContext,
   dir_fd : Int,
@@ -2863,6 +2873,9 @@ pub fn sock_accept_impl(
 ///|
 /// proc_raise - Send a signal to the process
 pub fn proc_raise_impl(signal : Int) -> Int {
-  ignore(signal)
+  let signal_check = validate_proc_raise_signal(signal)
+  if signal_check != Errno::Success.to_i32() {
+    return signal_check
+  }
   Errno::NotSup.to_i32()
 }
