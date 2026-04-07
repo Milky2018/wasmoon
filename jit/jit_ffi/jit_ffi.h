@@ -140,16 +140,20 @@ typedef struct {
     void *wasm_stack_guard;       // Guard page address (low end, triggers SIGSEGV on overflow)
     size_t guard_page_size;       // Size of guard page (typically one page)
 
-    // WASI file descriptor table
-    // fd 0-2 are stdin/stdout/stderr (mapped to native 0-2)
-    // fd 3+ are preopened directories and opened files
+    // WASI file descriptor table (all descriptors, including stdio mappings).
     int *fd_table;                // Maps WASI fd -> native fd (-1 = not open)
     int fd_table_size;            // Size of fd_table
     int fd_next;                  // Next available fd slot
 
+    // WASI stdio descriptor routing (fd_renumber can move these to arbitrary fds)
+    int stdin_fd;                 // Descriptor currently bound to stdin stream
+    int stdout_fd;                // Descriptor currently bound to stdout stream
+    int stderr_fd;                // Descriptor currently bound to stderr stream
+
     // Preopened directories
     char **preopen_paths;         // Host paths for preopened dirs
     char **preopen_guest_paths;   // Guest paths for preopened dirs
+    int *preopen_fds;             // WASI descriptor for each preopen entry
     int preopen_count;            // Number of preopened dirs
     int preopen_base_fd;          // First preopen fd (typically 3)
 

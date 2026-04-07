@@ -2355,6 +2355,58 @@ test "wasi jit: fd_renumber allows stdio to preopen target (0)" {
 }
 
 ///|
+test "wasi jit: fd_renumber remaps stdio routing semantics" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_renumber"
+    #|    (func $fd_renumber (param i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_get"
+    #|    (func $fd_fdstat_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (i32.store (i32.const 0) (i32.const 100))
+    #|    (i32.store (i32.const 4) (i32.const 8))
+    #|    (local.set $errno
+    #|      (call $fd_renumber (i32.const 0) (i32.const 3)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (i32.const 100))))
+    #|    (local.set $errno
+    #|      (call $fd_read (i32.const 3) (i32.const 0) (i32.const 1) (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (i32.const 101))))
+    #|    (if (i32.ne (i32.load (i32.const 200)) (i32.const 0))
+    #|      (then (return (i32.const 102))))
+    #|    (local.set $errno
+    #|      (call $fd_read (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 204)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 8))
+    #|      (then (return (i32.const 103))))
+    #|    (local.set $errno
+    #|      (call $fd_renumber (i32.const 1) (i32.const 3)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (i32.const 104))))
+    #|    (local.set $errno
+    #|      (call $fd_fdstat_get (i32.const 3) (i32.const 300)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (i32.const 105))))
+    #|    (if (i64.ne (i64.load (i32.const 308)) (i64.const 64))
+    #|      (then (return (i32.const 106))))
+    #|    (local.set $errno
+    #|      (call $fd_fdstat_get (i32.const 1) (i32.const 300)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 8))
+    #|      (then (return (i32.const 107))))
+    #|    (i32.const 0)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
+}
+
+///|
 test "wasi jit: fd_renumber rejects unused target with EBADF (8)" {
   let source =
     #|(module
