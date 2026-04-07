@@ -2268,6 +2268,31 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
 }
 
 ///|
+test "wasi jit: fd_advise rejects invalid advice enum with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_advise"
+    #|    (func $fd_advise (param i32 i64 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_advise_invalid")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 22)
+    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_advise
+    #|      (i32.load (i32.const 100)) (i64.const 0) (i64.const 16) (i32.const 123))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: fd_renumber stdin to missing target returns EBADF (8)" {
   let source =
     #|(module

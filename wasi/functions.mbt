@@ -2077,8 +2077,11 @@ pub fn fd_advise_impl(
   fd : Int,
   _offset : Int64,
   _len : Int64,
-  _advice : Int,
+  advice : Int,
 ) -> Int {
+  if advice < 0 || advice > 5 {
+    return Errno::Inval.to_i32()
+  }
   if regular_file_native_fd(ctx, fd) is None {
     return Errno::Badf.to_i32()
   }

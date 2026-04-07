@@ -2143,6 +2143,7 @@ test "wasi: fd_filestat_set_size" {
 test "wasi: fd_advise is file-only" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
+  inspect(fd_advise_impl(ctx, 0, 0L, 100L, 123), content="28")
   // stdio and preopen directory should return BADF.
   inspect(fd_advise_impl(ctx, 0, 0L, 100L, 0), content="8")
   inspect(fd_advise_impl(ctx, 3, 0L, 100L, 0), content="8")
@@ -2169,6 +2170,7 @@ test "wasi: fd_advise is file-only" {
     return
   }
   let fd = mem.read_i32(200)
+  inspect(fd_advise_impl(ctx, fd, 0L, 100L, 123), content="28")
   inspect(fd_advise_impl(ctx, fd, 0L, 100L, 0), content="0")
   fd_close(ctx, fd) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore

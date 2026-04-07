@@ -3150,7 +3150,7 @@ static int32_t wasi_fd_advise_impl(
 ) {
     (void)offset;
     (void)len;
-    (void)advice;
+    if (advice < 0 || advice > 5) return WASI_EINVAL;
     int native_fd = -1;
     int err = get_regular_file_native_fd(ctx, fd, &native_fd);
     if (err != WASI_ESUCCESS) return err;
