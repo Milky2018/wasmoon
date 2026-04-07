@@ -1618,6 +1618,36 @@ fn validate_lookupflags(flags : Int) -> Int {
 }
 
 ///|
+fn validate_sock_accept_fdflags(flags : Int) -> Int {
+  let known_mask = 0x1F
+  if (flags & known_mask.lnot()) != 0 {
+    Errno::Inval.to_i32()
+  } else {
+    Errno::Success.to_i32()
+  }
+}
+
+///|
+fn validate_sock_recv_riflags(ri_flags : Int) -> Int {
+  let known_mask = 0x03
+  if (ri_flags & known_mask.lnot()) != 0 {
+    Errno::Inval.to_i32()
+  } else {
+    Errno::Success.to_i32()
+  }
+}
+
+///|
+fn validate_sock_shutdown_sdflags(how : Int) -> Int {
+  let known_mask = 0x03
+  if (how & known_mask.lnot()) != 0 {
+    Errno::Inval.to_i32()
+  } else {
+    Errno::Success.to_i32()
+  }
+}
+
+///|
 fn resolve_host_path(
   ctx : WasiContext,
   dir_fd : Int,
@@ -2758,7 +2788,10 @@ pub fn sock_recv_impl(
   if !check_iovecs_mem_range(mem, ri_data_ptr, ri_data_len) {
     return Errno::Fault.to_i32()
   }
-  ignore(ri_flags)
+  let riflags_check = validate_sock_recv_riflags(ri_flags)
+  if riflags_check != Errno::Success.to_i32() {
+    return riflags_check
+  }
   if is_valid_descriptor_for_sock(ctx, fd) {
     Errno::NotSock.to_i32()
   } else {
@@ -2793,7 +2826,10 @@ pub fn sock_send_impl(
 ///|
 /// sock_shutdown - Shutdown socket
 pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
-  ignore(how)
+  let sdflags_check = validate_sock_shutdown_sdflags(how)
+  if sdflags_check != Errno::Success.to_i32() {
+    return sdflags_check
+  }
   if is_valid_descriptor_for_sock(ctx, fd) {
     Errno::NotSock.to_i32()
   } else {
@@ -2807,11 +2843,15 @@ pub fn sock_accept_impl(
   ctx : WasiContext,
   mem : @runtime.Memory,
   fd : Int,
-  _flags : Int,
+  flags : Int,
   result_fd_ptr : Int,
 ) -> Int {
   if !check_mem_range(mem, result_fd_ptr, 4) {
     return Errno::Fault.to_i32()
+  }
+  let fdflags_check = validate_sock_accept_fdflags(flags)
+  if fdflags_check != Errno::Success.to_i32() {
+    return fdflags_check
   }
   if is_valid_descriptor_for_sock(ctx, fd) {
     Errno::NotSock.to_i32()

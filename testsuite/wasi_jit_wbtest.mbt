@@ -2567,3 +2567,65 @@ test "wasi jit: sock_shutdown on valid descriptor returns ENOTSOCK (57)" {
   inspect(wasi_errno_from_result(result.interp_result), content="57")
   inspect(wasi_errno_from_result(result.jit_result), content="57")
 }
+
+///|
+test "wasi jit: sock_accept rejects unknown fdflags bits with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_accept"
+    #|    (func $sock_accept (param i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $sock_accept (i32.const 0) (i32.const 0x20) (i32.const 0))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: sock_recv rejects unknown riflags bits with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_recv"
+    #|    (func $sock_recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\20\00\00\00\04\00\00\00")
+    #|  (func (export "test") (result i32)
+    #|    (call $sock_recv (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 0x04) (i32.const 16) (i32.const 20))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: sock_shutdown rejects unknown sdflags bits with EINVAL (28)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_shutdown"
+    #|    (func $sock_shutdown (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $sock_shutdown (i32.const 0) (i32.const 0x04))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: sock_send nonzero siflags still returns ENOTSOCK (57)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "sock_send"
+    #|    (func $sock_send (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\20\00\00\00\04\00\00\00")
+    #|  (func (export "test") (result i32)
+    #|    (call $sock_send (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 1) (i32.const 16))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="57")
+  inspect(wasi_errno_from_result(result.jit_result), content="57")
+}

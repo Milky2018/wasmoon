@@ -1094,6 +1094,18 @@ static int invalid_lookupflags(int32_t flags) {
     return (flags & ~0x01) != 0;
 }
 
+static int invalid_sock_accept_fdflags(int32_t flags) {
+    return (flags & ~0x1f) != 0;
+}
+
+static int invalid_sock_recv_riflags(int32_t ri_flags) {
+    return (ri_flags & ~0x03) != 0;
+}
+
+static int invalid_sock_shutdown_sdflags(int32_t how) {
+    return (how & ~0x03) != 0;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -3323,10 +3335,10 @@ static int32_t wasi_sock_accept_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags, int32_t result_fd_ptr
 ) {
-    (void)flags; // WASI doesn't use flags for accept yet
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint32_t result_fd_ptr_u = (uint32_t)result_fd_ptr;
     if (!check_mem_range(ctx, result_fd_ptr_u, 4)) return WASI_EFAULT;
+    if (invalid_sock_accept_fdflags(flags)) return WASI_EINVAL;
 
     if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
     return WASI_ENOTSOCK;
@@ -3351,7 +3363,8 @@ static int32_t wasi_sock_recv_impl(
     uint32_t ro_flags_ptr_u = (uint32_t)ro_flags_ptr;
     if (!check_mem_range(ctx, ri_data_u, (size_t)ri_data_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, ro_datalen_ptr_u, 4)) return WASI_EFAULT;
-    if (!check_mem_range(ctx, ro_flags_ptr_u, 4)) return WASI_EFAULT;
+    if (!check_mem_range(ctx, ro_flags_ptr_u, 2)) return WASI_EFAULT;
+    if (invalid_sock_recv_riflags(ri_flags)) return WASI_EINVAL;
 
     (void)ri_data_u;
     (void)ri_data_len_u;
@@ -3396,7 +3409,8 @@ static int32_t wasi_sock_shutdown_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t how
 ) {
-    (void)how;
+    if (!ctx) return WASI_EBADF;
+    if (invalid_sock_shutdown_sdflags(how)) return WASI_EINVAL;
     if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
     return WASI_ENOTSOCK;
 }

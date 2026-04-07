@@ -2339,6 +2339,18 @@ test "wasi: sock APIs return NOTSOCK for valid descriptors" {
 }
 
 ///|
+test "wasi: sock APIs reject invalid flags before descriptor-kind check" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  inspect(sock_accept_impl(ctx, mem, 0, 0x20, 200), content="28")
+  inspect(sock_recv_impl(ctx, mem, 0, 0, 1, 0x04, 204, 208), content="28")
+  inspect(sock_shutdown_impl(ctx, 0, 0x04), content="28")
+  inspect(sock_send_impl(ctx, mem, 0, 0, 1, 1, 212), content="57")
+}
+
+///|
 test "wasi: fd_fdstat_set_rights returns ENOTSUP for valid fd" {
   let ctx = WasiContextBuilder::new().build()
   let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
