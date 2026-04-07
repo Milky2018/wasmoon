@@ -1947,6 +1947,21 @@ pub fn fd_filestat_set_size_impl(
 }
 
 ///|
+fn validate_fst_flags_for_set_times(fst_flags : Int) -> Int {
+  // Match wasmtime's systimespec validation:
+  // - reject unknown bits
+  // - reject conflicting ATIM/ATIM_NOW and MTIM/MTIM_NOW
+  let known_mask = 0x0F
+  if (fst_flags & known_mask.lnot()) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  if (fst_flags & 0x03) == 0x03 || (fst_flags & 0x0C) == 0x0C {
+    return Errno::Inval.to_i32()
+  }
+  Errno::Success.to_i32()
+}
+
+///|
 /// fd_filestat_set_times - Set file times via fd
 pub fn fd_filestat_set_times_impl(
   ctx : WasiContext,
@@ -1955,6 +1970,10 @@ pub fn fd_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
+  let fst_flags_check = validate_fst_flags_for_set_times(fst_flags)
+  if fst_flags_check != Errno::Success.to_i32() {
+    return fst_flags_check
+  }
   let native_fd = match non_stdio_descriptor_native_fd(ctx, fd) {
     Some(native_fd) => native_fd
     None => return Errno::Badf.to_i32()
@@ -1979,6 +1998,10 @@ pub fn path_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
+  let fst_flags_check = validate_fst_flags_for_set_times(fst_flags)
+  if fst_flags_check != Errno::Success.to_i32() {
+    return fst_flags_check
+  }
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno

@@ -1238,6 +1238,68 @@ test "wasi jit: path_filestat_set_times trailing slash on regular file returns E
 }
 
 ///|
+test "wasi jit: path_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_filestat_set_times"
+    #|    (func $path_filestat_set_times (param i32 i32 i32 i32 i64 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_path_settimes_conflict.txt")
+    #|  (func (export "test_atim") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 35)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 35)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_set_times
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 35)
+    #|        (i64.const 0) (i64.const 0) (i32.const 3)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 35)))
+    #|    (local.get $errno))
+    #|  (func (export "test_mtim") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 35)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 35)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_set_times
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 35)
+    #|        (i64.const 0) (i64.const 0) (i32.const 12)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 35)))
+    #|    (local.get $errno)))
+  let atim_result = compare_wasi_with_options(source, "test_atim", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(atim_result.match_, content="true")
+  inspect(wasi_errno_from_result(atim_result.interp_result), content="28")
+  inspect(wasi_errno_from_result(atim_result.jit_result), content="28")
+  let mtim_result = compare_wasi_with_options(source, "test_mtim", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(mtim_result.match_, content="true")
+  inspect(wasi_errno_from_result(mtim_result.interp_result), content="28")
+  inspect(wasi_errno_from_result(mtim_result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: path_open trailing slash can open symlinked directory with nofollow" {
   let source =
     #|(module
@@ -1895,6 +1957,66 @@ test "wasi jit: fd_filestat_set_times stdin returns EBADF (8)" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="8")
   inspect(wasi_errno_from_result(result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: fd_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_filestat_set_times"
+    #|    (func $fd_filestat_set_times (param i32 i64 i64 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_fd_settimes_conflict.txt")
+    #|  (func (export "test_atim") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 33)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 33)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 100)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $errno
+    #|      (call $fd_filestat_set_times
+    #|        (i32.load (i32.const 100)) (i64.const 0) (i64.const 0) (i32.const 3)))
+    #|    (drop (call $fd_close (i32.load (i32.const 100))))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 33)))
+    #|    (local.get $errno))
+    #|  (func (export "test_mtim") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 33)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 33)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 100)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $errno
+    #|      (call $fd_filestat_set_times
+    #|        (i32.load (i32.const 100)) (i64.const 0) (i64.const 0) (i32.const 12)))
+    #|    (drop (call $fd_close (i32.load (i32.const 100))))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 33)))
+    #|    (local.get $errno)))
+  let atim_result = compare_wasi_with_options(source, "test_atim", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(atim_result.match_, content="true")
+  inspect(wasi_errno_from_result(atim_result.interp_result), content="28")
+  inspect(wasi_errno_from_result(atim_result.jit_result), content="28")
+  let mtim_result = compare_wasi_with_options(source, "test_mtim", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(mtim_result.match_, content="true")
+  inspect(wasi_errno_from_result(mtim_result.interp_result), content="28")
+  inspect(wasi_errno_from_result(mtim_result.jit_result), content="28")
 }
 
 ///|

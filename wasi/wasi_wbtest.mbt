@@ -1290,6 +1290,64 @@ test "wasi: path_filestat_set_times trailing slash on regular file returns ENOEN
 }
 
 ///|
+test "wasi: path_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_path_settimes_conflict.txt"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0x03,
+    ),
+    content="28",
+  )
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0x0C,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
 test "wasi: path_open trailing slash can open symlinked directory with nofollow" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
@@ -2059,6 +2117,39 @@ test "wasi: fd_filestat_set_times rejects stdio descriptors" {
   inspect(fd_filestat_set_times_impl(ctx, 0, 0L, 0L, 0), content="8")
   inspect(fd_filestat_set_times_impl(ctx, 1, 0L, 0L, 0), content="8")
   inspect(fd_filestat_set_times_impl(ctx, 2, 0L, 0L, 0), content="8")
+}
+
+///|
+test "wasi: fd_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_fd_settimes_conflict.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_filestat_set_times_impl(ctx, fd, 0L, 0L, 0x03), content="28")
+  inspect(fd_filestat_set_times_impl(ctx, fd, 0L, 0L, 0x0C), content="28")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 
 ///|

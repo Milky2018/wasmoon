@@ -2987,10 +2987,18 @@ static int32_t wasi_path_link_impl(
 }
 
 // fd_filestat_set_times: Set file timestamps
+static int invalid_fst_flags_for_set_times(int32_t fst_flags) {
+    if ((fst_flags & ~0x0f) != 0) return 1;
+    if ((fst_flags & 0x03) == 0x03) return 1;
+    if ((fst_flags & 0x0c) == 0x0c) return 1;
+    return 0;
+}
+
 static int32_t wasi_fd_filestat_set_times_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
+    if (invalid_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     int native_fd = -1;
     int err = get_non_stdio_native_fd(ctx, fd, &native_fd);
     if (err != WASI_ESUCCESS) return err;
@@ -3037,6 +3045,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
     int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
+    if (invalid_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint8_t *mem = ctx->memory0->base;
     uint32_t path_ptr_u = (uint32_t)path_ptr;
