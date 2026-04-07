@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -12,7 +13,11 @@ DEFAULT_TEST_TIMEOUT_SECONDS = int(os.environ.get("WASMOON_WAST_TIMEOUT", "20"))
 
 
 def run_test(
-    repo_root: Path, wasmoon_bin: Path, wast_file: Path, use_jit: bool
+    repo_root: Path,
+    wasmoon_bin: Path,
+    wast_file: Path,
+    use_jit: bool,
+    timeout_sec: int,
 ) -> Tuple[Optional[int], Optional[int], Optional[str]]:
     """Run a single wast test and return (passed, failed, error)."""
     cmd = [str(wasmoon_bin), "test", str(wast_file)]
@@ -20,22 +25,38 @@ def run_test(
         cmd.append("--no-jit")
 
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=repo_root,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=DEFAULT_TEST_TIMEOUT_SECONDS,
+            start_new_session=True,
         )
-        output = result.stdout + result.stderr
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_sec)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                proc.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                # Keep moving even if the kernel keeps the process in
+                # uninterruptible sleep for a while (possible under emulation).
+                pass
+            return None, None, f"Timeout ({timeout_sec}s)"
+
+        output = (stdout or "") + (stderr or "")
 
         # Check for crash (non-zero exit code without proper output)
-        if result.returncode != 0 and "Passed:" not in output:
+        if proc.returncode != 0 and "Passed:" not in output:
             lines = [line.strip() for line in output.split("\n") if line.strip()]
             if lines:
                 tail = " | ".join(lines[-3:])
-                return None, None, f"Crash (exit {result.returncode}): {tail}"
-            return None, None, f"Crash (exit {result.returncode})"
+                return None, None, f"Crash (exit {proc.returncode}): {tail}"
+            return None, None, f"Crash (exit {proc.returncode})"
 
         if "Error" in output and "Passed:" not in output:
             # Parse error
@@ -53,17 +74,33 @@ def run_test(
                 failed = int(line.split(":")[1].strip())
 
         return passed, failed, None
-    except subprocess.TimeoutExpired:
-        return None, None, "Timeout"
     except Exception as e:
         return None, None, str(e)
 
 
-def run_tests_for_mode(repo_root: Path, wasmoon_bin: Path, wast_files: list[Path], test_dir: Path, use_jit: bool) -> dict:
+def detect_qemu_tcg() -> bool:
+    cpuinfo = Path("/proc/cpuinfo")
+    if not cpuinfo.exists():
+        return False
+    try:
+        text = cpuinfo.read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        return False
+    return "qemu tcg" in text or "qemu virtual cpu" in text
+
+
+def run_tests_for_mode(
+    repo_root: Path,
+    wasmoon_bin: Path,
+    wast_files: list[Path],
+    test_dir: Path,
+    use_jit: bool,
+    timeout_sec: int,
+) -> dict:
     """Run all tests for a specific mode and return results."""
     mode_name = "JIT" if use_jit else "Interpreter"
     print(f"\n{'='*60}")
-    print(f"Running {len(wast_files)} tests with {mode_name} mode...")
+    print(f"Running {len(wast_files)} tests with {mode_name} mode (timeout={timeout_sec}s)...")
     print("="*60 + "\n")
 
     total_passed = 0
@@ -74,7 +111,13 @@ def run_tests_for_mode(repo_root: Path, wasmoon_bin: Path, wast_files: list[Path
 
     for wast_file in wast_files:
         name = str(wast_file.relative_to(test_dir))
-        passed, failed, error = run_test(repo_root, wasmoon_bin, wast_file, use_jit)
+        passed, failed, error = run_test(
+            repo_root,
+            wasmoon_bin,
+            wast_file,
+            use_jit,
+            timeout_sec,
+        )
 
         if error or passed is None or failed is None:
             status = f"ERROR: {error[:50] if error else 'Unknown error'}"
@@ -158,6 +201,29 @@ def main() -> None:
         action="store_true",
         help="Print full lists of failed/error files",
     )
+    parser.add_argument(
+        "--timeout-sec",
+        type=int,
+        default=None,
+        help="Per-file timeout in seconds (default from WASMOON_WAST_TIMEOUT or 20)",
+    )
+    parser.add_argument(
+        "--qemu-timeout-multiplier",
+        type=float,
+        default=4.0,
+        help="Interpreter timeout multiplier for local QEMU TCG runs",
+    )
+    parser.add_argument(
+        "--qemu-jit-timeout-multiplier",
+        type=float,
+        default=24.0,
+        help="JIT timeout multiplier for local QEMU TCG runs",
+    )
+    parser.add_argument(
+        "--no-qemu-relax",
+        action="store_true",
+        help="Disable automatic timeout multiplier on local QEMU TCG runs",
+    )
     args = parser.parse_args()
 
     # Validate mutually exclusive options
@@ -189,7 +255,28 @@ def main() -> None:
         print(f"No .wast files found in '{test_dir}'")
         return
 
+    base_timeout = (
+        args.timeout_sec if args.timeout_sec is not None else DEFAULT_TEST_TIMEOUT_SECONDS
+    )
+    running_in_ci = os.getenv("CI", "").strip().lower() in {"1", "true", "yes"}
+    running_on_qemu_tcg = detect_qemu_tcg()
+    relax_timeout = (
+        running_on_qemu_tcg
+        and not running_in_ci
+        and not args.no_qemu_relax
+        and args.qemu_timeout_multiplier > 1.0
+    )
+    interp_multiplier = args.qemu_timeout_multiplier if relax_timeout else 1.0
+    jit_multiplier = args.qemu_jit_timeout_multiplier if relax_timeout else 1.0
+    interp_timeout_sec = int(max(1, round(base_timeout * interp_multiplier)))
+    jit_timeout_sec = int(max(1, round(base_timeout * jit_multiplier)))
+
     print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
+    print(
+        "Timeout settings: "
+        f"base={base_timeout}s, interp={interp_timeout_sec}s, jit={jit_timeout_sec}s, "
+        f"qemu_tcg={running_on_qemu_tcg}, ci={running_in_ci}, relax={relax_timeout}"
+    )
 
     interp_results = None
     jit_results = None
@@ -197,11 +284,25 @@ def main() -> None:
     # Run tests based on mode selection
     if not args.only_jit:
         # Run tests with interpreter (--no-jit)
-        interp_results = run_tests_for_mode(repo_root, wasmoon_bin, wast_files, test_dir, use_jit=False)
+        interp_results = run_tests_for_mode(
+            repo_root,
+            wasmoon_bin,
+            wast_files,
+            test_dir,
+            use_jit=False,
+            timeout_sec=interp_timeout_sec,
+        )
 
     if not args.only_interp:
         # Run tests with JIT
-        jit_results = run_tests_for_mode(repo_root, wasmoon_bin, wast_files, test_dir, use_jit=True)
+        jit_results = run_tests_for_mode(
+            repo_root,
+            wasmoon_bin,
+            wast_files,
+            test_dir,
+            use_jit=True,
+            timeout_sec=jit_timeout_sec,
+        )
 
     # Print combined summary
     print("\n" + "=" * 60)

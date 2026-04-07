@@ -473,7 +473,7 @@ pub fn run_wasm(
     }
   }
   // Load main module
-  let mod_ = load_module_from_path(wasm_path) catch {
+  let (mod_, wasm_binary) = load_module_with_binary_from_path(wasm_path) catch {
     e => {
       @logger.error("loading main module: \{e}")
       exit_failure()
@@ -565,7 +565,7 @@ pub fn run_wasm(
       let jit_stdin_data = if inherit_stdin { None } else { Some(b"") }
       let jit_results = run_with_jit(
         mod_, instance, store, func_name, args, debug, dump_on_trap, jit_args, jit_envs,
-        jit_preopens, jit_stdin_data, opt_level, enable_dwarf,
+        jit_preopens, jit_stdin_data, wasm_binary, opt_level, enable_dwarf,
       )
       if jit_results.length() > 0 {
         // Print all results separated by spaces
@@ -751,6 +751,194 @@ fn find_exported_func_type(
 }
 
 ///|
+/// Find the index of an exported function
+fn find_exported_func_idx(mod_ : @types.Module, func_name : String) -> Int? {
+  for exp in mod_.exports {
+    if exp.name == func_name && exp.desc is Func(idx) {
+      return Some(idx)
+    }
+  }
+  None
+}
+
+///|
+fn build_run_compile_mask(
+  mod_ : @types.Module,
+  entry_func_idx : Int,
+) -> Array[Bool]? {
+  let total_local_funcs = mod_.codes.length()
+  if total_local_funcs == 0 {
+    return None
+  }
+  let num_imports = count_func_imports(mod_.imports)
+  let compile_mask : Array[Bool] = []
+  for _ in 0..<total_local_funcs {
+    compile_mask.push(false)
+  }
+  let pending_locals : Array[Int] = []
+
+  mark_wast_reachable_local_func(
+    entry_func_idx, num_imports, compile_mask, pending_locals,
+  )
+  if mod_.start is Some(func_idx) {
+    mark_wast_reachable_local_func(
+      func_idx, num_imports, compile_mask, pending_locals,
+    )
+  }
+  for global in mod_.globals {
+    collect_wast_reachable_from_instrs(
+      global.init,
+      num_imports,
+      compile_mask,
+      pending_locals,
+    )
+  }
+  for elem in mod_.elems {
+    if elem.mode is @types.ElemMode::Active(_, offset_expr) {
+      collect_wast_reachable_from_instrs(
+        offset_expr, num_imports, compile_mask, pending_locals,
+      )
+    }
+    for expr in elem.init {
+      collect_wast_reachable_from_instrs(
+        expr, num_imports, compile_mask, pending_locals,
+      )
+    }
+  }
+
+  for cursor = 0; cursor < pending_locals.length(); {
+    let local_idx = pending_locals[cursor]
+    collect_wast_reachable_from_instrs(
+      mod_.codes[local_idx].body,
+      num_imports,
+      compile_mask,
+      pending_locals,
+    )
+    continue cursor + 1
+  }
+
+  let selected = count_true(compile_mask)
+  if selected == 0 || selected >= total_local_funcs {
+    None
+  } else {
+    Some(compile_mask)
+  }
+}
+
+///|
+fn hash_run_compile_mask(mask : Array[Bool]?) -> Int {
+  match mask {
+    None => 0
+    Some(bits) => {
+      let mut h = 5381
+      for bit in bits {
+        let v = if bit { 1 } else { 0 }
+        h = h * 33 + v
+      }
+      h
+    }
+  }
+}
+
+///|
+fn bytes_to_int_array(bytes : Bytes) -> Array[Int] {
+  let ints : Array[Int] = []
+  for b in bytes {
+    ints.push(b.to_int())
+  }
+  ints
+}
+
+///|
+fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
+  let bytes : Array[Byte] = []
+  for value in ints {
+    bytes.push(value.to_byte())
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn run_jit_cache_arch_tag() -> String {
+  match @isa.ISA::current() {
+    @isa.AArch64 => "aarch64"
+    @isa.AMD64 => "x86_64"
+  }
+}
+
+///|
+fn run_jit_cache_dir() -> String {
+  match @sys.get_env_var("WASMOON_JIT_CACHE_DIR") {
+    Some(dir) if dir.length() > 0 => dir
+    _ => "/tmp/wasmoon-jit-cache"
+  }
+}
+
+///|
+fn run_jit_cache_file(
+  cache_dir : String,
+  wasm_binary : Bytes,
+  func_name : String,
+  opt_level : Int,
+  enable_dwarf : Bool,
+  local_compile_mask : Array[Bool]?,
+) -> String {
+  let module_hash = wasm_binary.hash()
+  let func_hash = func_name.hash()
+  let mask_hash = hash_run_compile_mask(local_compile_mask)
+  let dwarf_tag = if enable_dwarf { 1 } else { 0 }
+  let file_name = "v1-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
+  if cache_dir.has_suffix("/") {
+    "\{cache_dir}\{file_name}"
+  } else {
+    "\{cache_dir}/\{file_name}"
+  }
+}
+
+///|
+fn ensure_run_jit_cache_dir(cache_dir : String) -> Bool {
+  if @fs.path_exists(cache_dir) {
+    @fs.is_dir(cache_dir) catch {
+      _ => false
+    }
+  } else {
+    @fs.create_dir(cache_dir) catch {
+      _ => return false
+    }
+    true
+  }
+}
+
+///|
+fn load_run_jit_cache(cache_file : String) -> @cwasm.PrecompiledModule? {
+  if !@fs.path_exists(cache_file) {
+    return None
+  }
+  let bytes = @fs.read_file_to_bytes(cache_file) catch { _ => return None }
+  let ints = bytes_to_int_array(bytes)
+  let precompiled = @cwasm.deserialize(ints) catch {
+    _ => {
+      @fs.remove_file(cache_file) catch {
+        _ => ()
+      }
+      return None
+    }
+  }
+  Some(precompiled)
+}
+
+///|
+fn save_run_jit_cache(
+  cache_file : String,
+  precompiled : @cwasm.PrecompiledModule,
+) -> Unit {
+  let bytes = int_array_to_bytes(precompiled.serialize())
+  @fs.write_bytes_to_file(cache_file, bytes) catch {
+    _ => ()
+  }
+}
+
+///|
 /// Count function imports
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
@@ -844,7 +1032,7 @@ fn init_jit_globals(
           Some(func_idx) => {
             let func_ptr = jit_module.get_func_ptr(func_idx)
             if func_ptr == 0L {
-              @types.NULL_REF
+              @jit.encode_funcref_idx(func_idx)
             } else {
               @jit.tag_funcref_ptr(func_ptr)
             }
@@ -953,6 +1141,7 @@ fn run_with_jit(
   wasi_envs : Array[String],
   wasi_preopens : Array[(String, String)],
   wasi_stdin_data : Bytes?,
+  wasm_binary : Bytes?,
   opt_level : Int,
   enable_dwarf : Bool,
 ) -> Array[@types.Value] {
@@ -968,21 +1157,56 @@ fn run_with_jit(
   } else {
     None
   }
-  // Compile module to precompiled format in memory
-  let compiled = compile_module_to_jit(
-    mod_,
-    debug,
-    dump_on_trap,
-    actual_memory_max~,
-    opt_level,
-    enable_dwarf,
-  )
+  let local_compile_mask = match find_exported_func_idx(mod_, func_name) {
+    Some(func_idx) => build_run_compile_mask(mod_, func_idx)
+    None => None
+  }
+  let mut cache_path : String? = None
+  let mut cache_precompiled : @cwasm.PrecompiledModule? = None
+  if !dump_on_trap {
+    match wasm_binary {
+      Some(binary) => {
+        let cache_dir = run_jit_cache_dir()
+        if ensure_run_jit_cache_dir(cache_dir) {
+          let path = run_jit_cache_file(
+            cache_dir, binary, func_name, opt_level, enable_dwarf, local_compile_mask,
+          )
+          cache_path = Some(path)
+          cache_precompiled = load_run_jit_cache(path)
+          if cache_precompiled is Some(_) && debug {
+            @logger.debug("JIT: cache hit \{path}")
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  // Compile module to precompiled format in memory on cache miss.
+  let compiled = match cache_precompiled {
+    Some(precompiled) => Some((precompiled, None))
+    None =>
+      compile_module_to_jit(
+        mod_,
+        debug,
+        dump_on_trap,
+        actual_memory_max~,
+        opt_level,
+        enable_dwarf,
+        local_compile_mask~,
+      )
+  }
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
       return exit_failure()
     }
     Some((pc, debug_db)) => {
+      if cache_precompiled is None && cache_path is Some(path) {
+        if debug {
+          @logger.debug("JIT: cache write \{path}")
+        }
+        save_run_jit_cache(path, pc)
+      }
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
       let external_imports = @wast.build_external_imports_for_jit(
@@ -1273,14 +1497,12 @@ fn compile_module_to_jit(
   enable_dwarf : Bool,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
   compile_start? : @perf.PerfTick? = None,
+  local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
 ) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-  if perf_on {
-    @perf.reset_module(mod_.codes.length())
-  }
   let isa = @isa.ISA::current()
   let target_arch : @cwasm.TargetArch = match isa {
     @isa.AArch64 => @cwasm.AArch64
@@ -1293,6 +1515,40 @@ fn compile_module_to_jit(
     None
   }
   let num_imports = count_func_imports(mod_.imports)
+  let compile_mask = match local_compile_mask {
+    Some(mask) =>
+      if mask.length() == mod_.codes.length() {
+        let mut enabled_count = 0
+        for enabled in mask {
+          if enabled {
+            enabled_count = enabled_count + 1
+          }
+        }
+        if enabled_count > 0 {
+          Some(mask)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    None => None
+  }
+  let total_compile_funcs = match compile_mask {
+    Some(mask) => {
+      let mut count = 0
+      for enabled in mask {
+        if enabled {
+          count = count + 1
+        }
+      }
+      count
+    }
+    None => mod_.codes.length()
+  }
+  if perf_on {
+    @perf.reset_module(total_compile_funcs)
+  }
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod_.types,
     type_rec_groups=mod_.type_rec_groups,
@@ -1365,7 +1621,15 @@ fn compile_module_to_jit(
     }
   }
   // Compile each function
+  let mut compiled_count = 0
   for i, _ in mod_.codes {
+    let should_compile = match compile_mask {
+      Some(mask) => mask[i]
+      None => true
+    }
+    if !should_compile {
+      continue
+    }
     let func_idx = num_imports + i
     let type_idx = mod_.funcs[i]
     let func_type = mod_.get_func_type(type_idx)
@@ -1374,8 +1638,8 @@ fn compile_module_to_jit(
       on_progress,
       Translate,
       progress_start,
-      mod_.codes.length(),
-      i,
+      total_compile_funcs,
+      compiled_count,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1415,8 +1679,8 @@ fn compile_module_to_jit(
       on_progress,
       Optimize,
       progress_start,
-      mod_.codes.length(),
-      i,
+      total_compile_funcs,
+      compiled_count,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1446,8 +1710,8 @@ fn compile_module_to_jit(
       on_progress,
       Lower,
       progress_start,
-      mod_.codes.length(),
-      i,
+      total_compile_funcs,
+      compiled_count,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1471,8 +1735,8 @@ fn compile_module_to_jit(
       on_progress,
       Regalloc,
       progress_start,
-      mod_.codes.length(),
-      i,
+      total_compile_funcs,
+      compiled_count,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1501,8 +1765,8 @@ fn compile_module_to_jit(
       on_progress,
       Codegen,
       progress_start,
-      mod_.codes.length(),
-      i,
+      total_compile_funcs,
+      compiled_count,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1534,8 +1798,8 @@ fn compile_module_to_jit(
       on_progress,
       Link,
       progress_start,
-      mod_.codes.length(),
-      i + 1,
+      total_compile_funcs,
+      compiled_count + 1,
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
@@ -1554,10 +1818,13 @@ fn compile_module_to_jit(
         ),
       )
     }
+    compiled_count = compiled_count + 1
     if @logger.is_debug_enabled() &&
-      mod_.codes.length() > 10 &&
-      ((i + 1) % 10 == 0 || i + 1 == mod_.codes.length()) {
-      @logger.debug("JIT: Compiled \{i + 1}/\{mod_.codes.length()} functions")
+      total_compile_funcs > 10 &&
+      (compiled_count % 10 == 0 || compiled_count == total_compile_funcs) {
+      @logger.debug(
+        "JIT: Compiled \{compiled_count}/\{total_compile_funcs} functions",
+      )
     }
   }
   if module_tick is Some(tick) {
@@ -1578,8 +1845,8 @@ fn compile_module_to_jit(
     on_progress,
     Done,
     progress_start,
-    mod_.codes.length(),
-    mod_.codes.length(),
+    total_compile_funcs,
+    compiled_count,
   )
   Some((precompiled, debug_db))
 }

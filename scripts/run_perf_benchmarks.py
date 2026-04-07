@@ -32,6 +32,17 @@ def _sanitize_name(path: str) -> str:
     return path.replace("/", "__").replace("\\", "__")
 
 
+def _resolve_workload_path(workload: str) -> str:
+    path = Path(workload)
+    if path.exists():
+        return workload
+    if workload.startswith("examples/"):
+        alt = Path("examples/algorithms") / path.name
+        if alt.exists():
+            return str(alt)
+    return workload
+
+
 def _parse_metrics(metrics_file: Path) -> Tuple[int | None, int | None]:
     if not metrics_file.exists():
         return None, None
@@ -67,27 +78,37 @@ def _run_one(
     env["WASMOON_PERF_METRICS"] = "1"
     env["WASMOON_PERF_METRICS_FILE"] = str(metrics_file)
 
-    cmd = [wasmoon_bin, subcommand, workload]
+    resolved_workload = _resolve_workload_path(workload)
+    cmd = [wasmoon_bin, subcommand, resolved_workload]
     started = time.time()
+    exit_code: int
+    timeout_hit = False
     with stdout_file.open("w", encoding="utf-8") as stdout, stderr_file.open(
         "w", encoding="utf-8"
     ) as stderr:
-        proc = subprocess.run(
-            cmd,
-            env=env,
-            stdout=stdout,
-            stderr=stderr,
-            timeout=timeout_sec,
-            check=False,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+                timeout=timeout_sec,
+                check=False,
+            )
+            exit_code = proc.returncode
+        except subprocess.TimeoutExpired:
+            timeout_hit = True
+            exit_code = 124
     elapsed_ms = int((time.time() - started) * 1000)
     compile_us, total_code_size = _parse_metrics(metrics_file)
 
     return {
         "workload": workload,
+        "resolved_workload": resolved_workload,
         "run_id": run_id,
         "warmup": warmup,
-        "exit_code": proc.returncode,
+        "exit_code": exit_code,
+        "timed_out": timeout_hit,
         "elapsed_ms": elapsed_ms,
         "module_compile_us": compile_us,
         "total_code_size": total_code_size,
@@ -299,20 +320,8 @@ def main() -> int:
     collection_failures: List[str] = []
     for workload in workloads:
         raw_runs: List[Dict[str, Any]] = []
+        warmup_failed = False
         for run_id in range(args.warmup):
-            raw_runs.append(
-                _run_one(
-                    args.wasmoon,
-                    args.subcommand,
-                    workload,
-                    out_dir,
-                    args.timeout_sec,
-                    run_id,
-                    warmup=True,
-                )
-            )
-        measured_runs: List[Dict[str, Any]] = []
-        for run_id in range(args.iterations):
             run = _run_one(
                 args.wasmoon,
                 args.subcommand,
@@ -320,22 +329,44 @@ def main() -> int:
                 out_dir,
                 args.timeout_sec,
                 run_id,
-                warmup=False,
+                warmup=True,
             )
             raw_runs.append(run)
-            measured_runs.append(run)
-            if run["exit_code"] != 0 or not run["metrics_present"]:
+            if run["exit_code"] != 0:
+                warmup_failed = True
                 collection_failures.append(
-                    f"{workload}: run {run_id} failed (exit={run['exit_code']}, metrics={run['metrics_present']})"
+                    f"{workload}: warmup {run_id} failed (exit={run['exit_code']}, metrics={run['metrics_present']})"
                 )
+                break
+        measured_runs: List[Dict[str, Any]] = []
+        if not warmup_failed:
+            for run_id in range(args.iterations):
+                run = _run_one(
+                    args.wasmoon,
+                    args.subcommand,
+                    workload,
+                    out_dir,
+                    args.timeout_sec,
+                    run_id,
+                    warmup=False,
+                )
+                raw_runs.append(run)
+                measured_runs.append(run)
+                if run["exit_code"] != 0 or not run["metrics_present"]:
+                    collection_failures.append(
+                        f"{workload}: run {run_id} failed (exit={run['exit_code']}, metrics={run['metrics_present']})"
+                    )
+                    break
         workload_rows.append(
             {
                 "workload": workload,
                 "num_runs": args.iterations,
-                "num_failed_runs": sum(
-                    1
-                    for r in measured_runs
-                    if r["exit_code"] != 0 or not r["metrics_present"]
+                "num_failed_runs": (
+                    sum(
+                        1
+                        for r in measured_runs
+                        if r["exit_code"] != 0 or not r["metrics_present"]
+                    ) + (1 if warmup_failed else 0)
                 ),
                 "aggregates": _aggregate_runs(measured_runs),
                 "runs": raw_runs,

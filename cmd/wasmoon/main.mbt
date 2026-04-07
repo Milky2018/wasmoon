@@ -175,6 +175,7 @@ fn main {
                     }
                   None => None
                 }
+                // CLI `run` uses balanced optimization for better steady-state runtime.
                 let opt_level = 2
                 // Get function arguments from --arg option (for invoked function)
                 let func_args : Array[String] = match sub.args.get("arg") {

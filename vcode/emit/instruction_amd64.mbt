@@ -152,6 +152,90 @@ fn MachineCode::emit_instruction_x86_64(
     )
   }
 
+  ///|
+  /// Fallback for integer indexed loads when both reserved scratch registers are
+  /// occupied by explicit operands.
+  ///
+  /// We can safely reuse the integer destination register (`rt`) as the
+  /// temporary index value when `rt != base`, because the load overwrites `rt`
+  /// at the end of the sequence.
+  fn try_emit_int_load_with_dst_tmp(
+    self : MachineCode,
+    ty : @instr.MemType,
+    rt : Int,
+    base : Int,
+    index : Int,
+    ext : @instr.IndexExtend,
+    shift : Int,
+    offset : Int,
+    can_use_scaled_amode : Bool,
+  ) -> Bool {
+    if rt == base {
+      return false
+    }
+    match ty {
+      @instr.MemType::I32 | @instr.MemType::I64 => {
+        match ext {
+          @instr.IndexExtend::None =>
+            if rt != index {
+              self.x86_emit_mov_rr(rt, index)
+            }
+          @instr.IndexExtend::Uxtw =>
+            if rt != index {
+              self.x86_emit_mov_rr32(rt, index)
+            } else {
+              self.x86_emit_mov_rr32(rt, rt)
+            }
+          @instr.IndexExtend::Sxtw =>
+            if rt != index {
+              self.x86_emit_movsxd_r64_r32(rt, index)
+            } else {
+              self.x86_emit_movsxd_r64_r32(rt, rt)
+            }
+        }
+        if can_use_scaled_amode && (rt & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, rt, shift, offset,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, rt, shift, offset,
+              )
+            _ => ()
+          }
+          return true
+        }
+        if shift > 0 {
+          self.x86_emit_shl_r_imm8(rt, shift)
+        }
+        if (rt & 7) != 4 {
+          match ty {
+            @instr.MemType::I32 =>
+              self.x86_emit_mov_r32_m32_base_index_scale_disp(
+                rt, base, rt, 0, offset,
+              )
+            @instr.MemType::I64 =>
+              self.x86_emit_mov_r64_m64_base_index_scale_disp(
+                rt, base, rt, 0, offset,
+              )
+            _ => ()
+          }
+          return true
+        }
+        self.x86_emit_add_rr(rt, base)
+        match ty {
+          @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rt, offset)
+          @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rt, offset)
+          _ => ()
+        }
+        true
+      }
+      _ => false
+    }
+  }
+
   fn emit_amd64_abort(msg : String) -> Unit {
     println("wasmoon amd64 emit: \{msg}")
     abort(msg)
@@ -2531,6 +2615,20 @@ fn MachineCode::emit_instruction_x86_64(
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let can_use_scaled_amode = shift >= 0 && shift <= 3
+      let rt_gpr_avoid = match ty {
+        @instr.MemType::I32 | @instr.MemType::I64 => rt
+        _ => -1
+      }
+      let s1 = isa.scratch_reg_1_index()
+      let s2 = isa.scratch_reg_2_index()
+      let scratch_blocked = (s1 == base || s1 == index || s1 == rt_gpr_avoid) &&
+        (s2 == base || s2 == index || s2 == rt_gpr_avoid)
+      if scratch_blocked &&
+        try_emit_int_load_with_dst_tmp(
+          self, ty, rt, base, index, ext, shift, offset, can_use_scaled_amode,
+        ) {
+        return
+      }
       if can_use_scaled_amode {
         if ext is @instr.IndexExtend::None && (index & 7) != 4 {
           match ty {
@@ -2587,7 +2685,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           return
         }
-        let idx = pick_scratch_gpr(isa, base, index, rt, -1)
+        let idx = pick_scratch_gpr(isa, base, index, rt_gpr_avoid, -1)
         match ext {
           @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
           @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
@@ -2619,7 +2717,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let idx = pick_scratch_gpr(isa, base, index, rt, -1)
+      let idx = pick_scratch_gpr(isa, base, index, rt_gpr_avoid, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()
@@ -2851,6 +2949,10 @@ fn MachineCode::emit_instruction_x86_64(
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
+      let value_gpr_avoid = match ty {
+        @instr.MemType::I32 | @instr.MemType::I64 => value
+        _ => -1
+      }
       let can_use_scaled_amode = shift >= 0 && shift <= 3
       if can_use_scaled_amode {
         if ext is @instr.IndexExtend::None && (index & 7) != 4 {
@@ -2906,7 +3008,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           return
         }
-        let idx = pick_scratch_gpr(isa, base, index, value, -1)
+        let idx = pick_scratch_gpr(isa, base, index, value_gpr_avoid, -1)
         match ext {
           @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
           @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
@@ -2938,7 +3040,7 @@ fn MachineCode::emit_instruction_x86_64(
           return
         }
       }
-      let idx = pick_scratch_gpr(isa, base, index, value, -1)
+      let idx = pick_scratch_gpr(isa, base, index, value_gpr_avoid, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
         @instr.IndexExtend::None => ()

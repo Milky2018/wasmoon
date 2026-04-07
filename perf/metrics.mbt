@@ -24,6 +24,23 @@ pub fn enabled() -> Bool {
 }
 
 ///|
+/// Detailed pass/phase metrics can be very large on big modules and may
+/// significantly increase memory pressure under emulation.
+///
+/// Default: disabled (compact mode).
+/// Enable explicitly with WASMOON_PERF_METRICS_DETAIL=1/true/full.
+let perf_detail_metrics_enabled : Bool = match
+  @sys.get_env_var("WASMOON_PERF_METRICS_DETAIL") {
+  Some(v) => is_truthy_env(v) || v == "full" || v == "FULL"
+  None => false
+}
+
+///|
+fn detail_enabled() -> Bool {
+  perf_detail_metrics_enabled
+}
+
+///|
 pub type PerfTick = Instant
 
 ///|
@@ -174,6 +191,7 @@ pub fn record_ir_pass(
   egraph_rule_apps? : Int? = None,
 ) -> Unit {
   guard enabled() else { return }
+  guard detail_enabled() else { return }
   if current_function_state.val is Some(m) {
     m.ir_passes.push({
       name: pass_name,
@@ -208,6 +226,7 @@ pub fn record_regalloc_phase_us(
   duration_us : Int64,
 ) -> Unit {
   guard enabled() else { return }
+  guard detail_enabled() else { return }
   if current_function_state.val is Some(m) {
     m.regalloc_phases.push({ name: phase_name, duration_us })
   }

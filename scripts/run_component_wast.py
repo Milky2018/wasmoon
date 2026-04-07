@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import shutil
@@ -14,15 +15,89 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
-DEFAULT_VALIDATE_TIMEOUT_SECONDS = int(
+BASE_VALIDATE_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_VALIDATE_TIMEOUT", "20")
 )
-DEFAULT_SCRIPT_TIMEOUT_SECONDS = int(
+BASE_SCRIPT_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_SCRIPT_TIMEOUT", "30")
 )
-DEFAULT_TOOLS_TIMEOUT_SECONDS = int(
+BASE_TOOLS_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_TOOLS_TIMEOUT", "30")
 )
+
+
+def detect_qemu_tcg() -> bool:
+    cpuinfo = Path("/proc/cpuinfo")
+    if not cpuinfo.exists():
+        return False
+    try:
+        text = cpuinfo.read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        return False
+    return "qemu tcg" in text or "qemu virtual cpu" in text
+
+
+def running_in_ci() -> bool:
+    return os.getenv("CI", "").strip().lower() in {"1", "true", "yes"}
+
+
+QEMU_TIMEOUT_MULTIPLIER = float(
+    os.environ.get("WASMOON_COMPONENT_QEMU_TIMEOUT_MULTIPLIER", "3.0")
+)
+RELAX_TIMEOUT_FOR_QEMU = (
+    detect_qemu_tcg()
+    and not running_in_ci()
+    and QEMU_TIMEOUT_MULTIPLIER > 1.0
+)
+
+
+def scale_timeout(base: int) -> int:
+    multiplier = QEMU_TIMEOUT_MULTIPLIER if RELAX_TIMEOUT_FOR_QEMU else 1.0
+    return int(max(1, round(base * multiplier)))
+
+
+DEFAULT_VALIDATE_TIMEOUT_SECONDS = scale_timeout(BASE_VALIDATE_TIMEOUT_SECONDS)
+DEFAULT_SCRIPT_TIMEOUT_SECONDS = scale_timeout(BASE_SCRIPT_TIMEOUT_SECONDS)
+DEFAULT_TOOLS_TIMEOUT_SECONDS = scale_timeout(BASE_TOOLS_TIMEOUT_SECONDS)
+
+
+def run_command(
+    cmd: list[str],
+    *,
+    timeout_sec: Optional[int] = None,
+    cwd: Optional[Path] = None,
+) -> tuple[int, str, str, bool]:
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd) if cwd is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+    except OSError as err:
+        return 127, "", str(err), False
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            # Keep moving even if the process is briefly stuck in uninterruptible
+            # sleep under emulation.
+            pass
+        return 124, "", "", True
+
+    return proc.returncode, (stdout or ""), (stderr or ""), False
 
 
 def skip_line_comment(text: str, i: int) -> int:
@@ -518,20 +593,17 @@ def compile_component(
     out = tmp / f"component_{idx}.wasm"
     src.write_text(text, encoding="utf-8")
 
-    try:
-        result = subprocess.run(
-            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_TOOLS_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
+    returncode, stdout, stderr, timed_out = run_command(
+        [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+        timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+    )
+    if timed_out:
         return (
             None,
             f"wasmoon-tools wat2wasm timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
         )
-    if result.returncode != 0:
-        err = (result.stderr or result.stdout or "").strip()
+    if returncode != 0:
+        err = (stderr or stdout).strip()
         return (
             None,
             "wasmoon-tools wat2wasm failed: " + (err or "unknown error"),
@@ -546,16 +618,13 @@ def probe_component_wat_support(wasmoon_tools: Path) -> bool:
         src = tmp_path / "probe_component.wat"
         out = tmp_path / "probe_component.wasm"
         src.write_text("(component)", encoding="utf-8")
-        try:
-            result = subprocess.run(
-                [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
-                capture_output=True,
-                text=True,
-                timeout=DEFAULT_TOOLS_TIMEOUT_SECONDS,
-            )
-            return result.returncode == 0 and out.exists()
-        except subprocess.TimeoutExpired:
+        returncode, _stdout, _stderr, timed_out = run_command(
+            [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+            timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+        )
+        if timed_out:
             return False
+        return returncode == 0 and out.exists()
 
 
 def parse_component_json_result(out: str) -> Optional[dict]:
@@ -579,16 +648,13 @@ def validate_component(
     if not wit_names:
         cmd.append("--no-wit-names")
     cmd.extend(["--validate", str(component_bin)])
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_VALIDATE_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
+    returncode, stdout, stderr, timed_out = run_command(
+        cmd,
+        timeout_sec=DEFAULT_VALIDATE_TIMEOUT_SECONDS,
+    )
+    if timed_out:
         return False, "component validation timeout", "COMP_TIMEOUT"
-    out = (result.stdout or "") + (result.stderr or "")
+    out = stdout + stderr
     payload = parse_component_json_result(out)
     if payload is not None:
         ok = bool(payload.get("ok", False))
@@ -619,18 +685,15 @@ def run_component_script(
         json.dumps(script, ensure_ascii=True, indent=2),
         encoding="utf-8",
     )
-    try:
-        result = subprocess.run(
-            [str(wasmoon), "component-test", str(script_path)],
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
+    returncode, stdout, stderr, timed_out = run_command(
+        [str(wasmoon), "component-test", str(script_path)],
+        timeout_sec=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
+    )
+    if timed_out:
         return 0, 1, 0, ["component-test timeout"], "component-test timeout", False
-    out = (result.stdout or "") + (result.stderr or "")
+    out = stdout + stderr
     if not out.strip():
-        out = f"(exit={result.returncode})"
+        out = f"(exit={returncode})"
     passed = failed = skipped = 0
     failures: list[str] = []
     saw_result = False
@@ -812,12 +875,14 @@ def run_file(
                         wasm_path = tmp_path / f"module_{comp_idx}.wasm"
                         comp_idx += 1
                         wasm_path.write_bytes(data)
-                        result = subprocess.run(
+                        returncode, _stdout, _stderr, timed_out = run_command(
                             [str(wasmoon), "run", str(wasm_path)],
-                            capture_output=True,
-                            text=True,
+                            timeout_sec=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
                         )
-                        if result.returncode != 0:
+                        if timed_out:
+                            fail("assert_malformed timed out")
+                            continue
+                        if returncode != 0:
                             passed += 1
                         else:
                             if expected_msg:
@@ -1109,6 +1174,13 @@ def main() -> int:
         return 1
 
     print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
+    print(
+        "Timeout settings: "
+        f"validate={DEFAULT_VALIDATE_TIMEOUT_SECONDS}s(base {BASE_VALIDATE_TIMEOUT_SECONDS}s), "
+        f"script={DEFAULT_SCRIPT_TIMEOUT_SECONDS}s(base {BASE_SCRIPT_TIMEOUT_SECONDS}s), "
+        f"tools={DEFAULT_TOOLS_TIMEOUT_SECONDS}s(base {BASE_TOOLS_TIMEOUT_SECONDS}s), "
+        f"qemu_relax={RELAX_TIMEOUT_FOR_QEMU}"
+    )
 
     total_passed = total_failed = total_skipped = 0
     files_ok = files_failed = 0
