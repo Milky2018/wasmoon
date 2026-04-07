@@ -2288,37 +2288,30 @@ test "wasi: fd_filestat_set_times rejects conflicting fst_flags with EINVAL" {
 ///|
 test "wasi: fd_renumber allows stdio moves when endpoints are valid" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
-  let mem = @runtime.Memory::new(1, None)
   inspect(fd_renumber_impl(ctx, 0, 0), content="0")
   inspect(fd_renumber_impl(ctx, 0, 10), content="8")
   inspect(fd_renumber_impl(ctx, 1, 3), content="0")
   inspect(fd_renumber_impl(ctx, 3, 0), content="0")
+}
 
-  let test_path = "wasmoon_renumber_gate.txt"
-  for i, c in test_path {
-    mem.write_byte(100 + i, c.to_int().to_byte())
-  }
-  let open_result = path_open(
-    ctx,
-    mem,
-    3,
-    0,
-    100,
-    test_path.length(),
-    9,
-    right_fd_read | right_fd_write,
-    0L,
-    0,
-    200,
-  )
-  inspect(open_result, content="0")
-  if open_result != 0 {
-    return
-  }
-  let fd = mem.read_i32(200)
-  inspect(fd_renumber_impl(ctx, fd, 127), content="8")
-  fd_close(ctx, fd) |> ignore
-  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+///|
+test "wasi: fd_renumber updates stdio descriptor routing" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+
+  // Move stdin to preopen slot.
+  inspect(fd_renumber_impl(ctx, 0, 3), content="0")
+  mem.write_i32(0, 100) // iov.buf
+  mem.write_i32(4, 8) // iov.buf_len
+  inspect(fd_read(ctx, mem, 3, 0, 1, 200), content="0")
+  inspect(mem.read_i32(200), content="0")
+  inspect(fd_read(ctx, mem, 0, 0, 1, 204), content="8")
+
+  // Move stdout to the old preopen slot and verify fdstat/write rights move too.
+  inspect(fd_renumber_impl(ctx, 1, 3), content="0")
+  inspect(fd_fdstat_get(ctx, mem, 3, 300), content="0")
+  inspect(mem.read_i64(308), content="64")
+  inspect(fd_fdstat_get(ctx, mem, 1, 300), content="8")
 }
 
 ///|

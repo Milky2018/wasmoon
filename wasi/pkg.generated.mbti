@@ -466,6 +466,9 @@ pub(all) struct WasiContext {
   mut stdin_open : Bool
   mut stdout_open : Bool
   mut stderr_open : Bool
+  mut stdin_fd : Int
+  mut stdout_fd : Int
+  mut stderr_fd : Int
 }
 pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
 pub fn WasiContext::close_fd(Self, Int) -> Bool

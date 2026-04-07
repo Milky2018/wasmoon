@@ -44,50 +44,95 @@ fn check_iovecs_mem_range(
 
 ///|
 fn is_stdio_open(ctx : WasiContext, fd : Int) -> Bool {
-  if fd == 0 {
-    ctx.stdin_open
-  } else if fd == 1 {
-    ctx.stdout_open
-  } else if fd == 2 {
-    ctx.stderr_open
+  match stdio_slot_for_fd(ctx, fd) {
+    Some(0) => ctx.stdin_open
+    Some(1) => ctx.stdout_open
+    Some(2) => ctx.stderr_open
+    _ => false
+  }
+}
+
+///|
+fn stdio_slot_for_fd(ctx : WasiContext, fd : Int) -> Int? {
+  if fd == ctx.stdin_fd {
+    Some(0)
+  } else if fd == ctx.stdout_fd {
+    Some(1)
+  } else if fd == ctx.stderr_fd {
+    Some(2)
   } else {
-    false
+    None
+  }
+}
+
+///|
+fn is_stdio_descriptor(ctx : WasiContext, fd : Int) -> Bool {
+  stdio_slot_for_fd(ctx, fd) is Some(_)
+}
+
+///|
+fn clear_stdio_slot(ctx : WasiContext, slot : Int) -> Unit {
+  if slot == 0 {
+    ctx.stdin_open = false
+    ctx.stdin_fd = -1
+  } else if slot == 1 {
+    ctx.stdout_open = false
+    ctx.stdout_fd = -1
+  } else if slot == 2 {
+    ctx.stderr_open = false
+    ctx.stderr_fd = -1
+  }
+}
+
+///|
+fn move_stdio_slot_to_fd(ctx : WasiContext, slot : Int, fd : Int) -> Unit {
+  if slot == 0 {
+    ctx.stdin_fd = fd
+    ctx.stdin_open = true
+  } else if slot == 1 {
+    ctx.stdout_fd = fd
+    ctx.stdout_open = true
+  } else if slot == 2 {
+    ctx.stderr_fd = fd
+    ctx.stderr_open = true
   }
 }
 
 ///|
 fn close_stdio_fd(ctx : WasiContext, fd : Int) -> Bool {
-  if fd == 0 {
-    if !ctx.stdin_open {
-      return false
-    }
-    ctx.stdin_open = false
-    true
-  } else if fd == 1 {
-    if !ctx.stdout_open {
-      return false
-    }
-    ctx.stdout_open = false
-    true
-  } else if fd == 2 {
-    if !ctx.stderr_open {
-      return false
-    }
-    ctx.stderr_open = false
-    true
-  } else {
-    false
+  match stdio_slot_for_fd(ctx, fd) {
+    Some(0) =>
+      if !ctx.stdin_open {
+        false
+      } else {
+        clear_stdio_slot(ctx, 0)
+        true
+      }
+    Some(1) =>
+      if !ctx.stdout_open {
+        false
+      } else {
+        clear_stdio_slot(ctx, 1)
+        true
+      }
+    Some(2) =>
+      if !ctx.stderr_open {
+        false
+      } else {
+        clear_stdio_slot(ctx, 2)
+        true
+      }
+    _ => false
   }
 }
 
 ///|
 fn stdio_filetype(ctx : WasiContext, fd : Int) -> Int {
-  if (fd == 0 && ctx.stdin_is_native && native_isatty(0)) ||
-    (fd == 1 && ctx.stdout_is_native && native_isatty(1)) ||
-    (fd == 2 && ctx.stderr_is_native && native_isatty(2)) {
-    2 // character_device
-  } else {
-    0 // unknown
+  match stdio_slot_for_fd(ctx, fd) {
+    Some(0) => if ctx.stdin_is_native && native_isatty(0) { 2 } else { 0 }
+    Some(1) => if ctx.stdout_is_native && native_isatty(1) { 2 } else { 0 }
+    Some(2) => if ctx.stderr_is_native && native_isatty(2) { 2 } else { 0 }
+    _ => 0
   }
 }
 
@@ -142,10 +187,12 @@ pub fn fd_write(
   if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
-  let fd_val = Fd(fd)
-  // Handle stdout/stderr
-  if fd_val == stdout || fd_val == stderr {
+  // Handle stdio streams
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    if slot == 0 {
       return Errno::Badf.to_i32()
     }
     let mut total_written = 0
@@ -155,7 +202,7 @@ pub fn fd_write(
         return Errno::Fault.to_i32()
       }
       let data = mem.read_bytes(buf_ptr, buf_len)
-      if fd_val == stdout {
+      if slot == 1 {
         (ctx.stdout_callback)(data)
       } else {
         (ctx.stderr_callback)(data)
@@ -222,9 +269,12 @@ pub fn fd_read(
   if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
-  // Handle stdin
-  if fd == 0 {
+  // Handle stdio streams
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    if slot != 0 {
       return Errno::Badf.to_i32()
     }
     let input_data = (ctx.stdin_callback)()
@@ -529,7 +579,7 @@ pub fn fd_prestat_dir_name(
 ///
 /// Returns: errno
 pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
-  if fd >= 0 && fd < 3 {
+  if is_stdio_descriptor(ctx, fd) {
     if close_stdio_fd(ctx, fd) {
       return Errno::Success.to_i32()
     }
@@ -619,7 +669,7 @@ pub fn path_open(
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
-  if dir_fd >= 0 && dir_fd < 3 {
+  if is_stdio_descriptor(ctx, dir_fd) {
     if !is_stdio_open(ctx, dir_fd) {
       return Errno::Badf.to_i32()
     }
@@ -758,8 +808,8 @@ pub fn fd_seek(
   if !check_mem_range(mem, newoffset_ptr, 8) {
     return Errno::Fault.to_i32()
   }
-  // stdin, stdout, stderr don't support seeking
-  if fd >= 0 && fd < 3 {
+  // stdio streams don't support seeking
+  if is_stdio_descriptor(ctx, fd) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
@@ -808,8 +858,8 @@ pub fn fd_tell(
   if !check_mem_range(mem, offset_ptr, 8) {
     return Errno::Fault.to_i32()
   }
-  // stdin, stdout, stderr don't support tell
-  if fd >= 0 && fd < 3 {
+  // stdio streams don't support tell
+  if is_stdio_descriptor(ctx, fd) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
@@ -860,15 +910,12 @@ pub fn fd_pread(
   if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
-  if fd == 0 {
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
-    return Errno::SPipe.to_i32()
-  }
-  if fd == 1 || fd == 2 {
-    if !is_stdio_open(ctx, fd) {
-      return Errno::Badf.to_i32()
+    if slot == 0 {
+      return Errno::SPipe.to_i32()
     }
     return Errno::Badf.to_i32()
   }
@@ -946,17 +993,14 @@ pub fn fd_pwrite(
   if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
-  if fd == 1 || fd == 2 {
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    if slot == 0 {
       return Errno::Badf.to_i32()
     }
     return Errno::SPipe.to_i32()
-  }
-  if fd == 0 {
-    if !is_stdio_open(ctx, fd) {
-      return Errno::Badf.to_i32()
-    }
-    return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
@@ -1006,10 +1050,10 @@ pub fn fd_pwrite(
 }
 
 ///|
-fn fd_rights_for_stdio(fd : Int) -> Int64 {
-  if fd == 0 {
+fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
+  if slot == 0 {
     right_fd_read
-  } else if fd == 1 || fd == 2 {
+  } else if slot == 1 || slot == 2 {
     right_fd_write
   } else {
     0L
@@ -1151,25 +1195,15 @@ pub fn fd_fdstat_get(
     Int,
     Int64,
     Int64,
-  ) = if fd == 0 {
+  ) = if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
     (
       stdio_filetype(ctx, fd),
       0,
-      fd_rights_for_stdio(fd),
-      fd_rights_for_stdio(fd),
-    )
-  } else if fd == 1 || fd == 2 {
-    if !is_stdio_open(ctx, fd) {
-      return Errno::Badf.to_i32()
-    }
-    (
-      stdio_filetype(ctx, fd),
-      0,
-      fd_rights_for_stdio(fd),
-      fd_rights_for_stdio(fd),
+      fd_rights_for_stdio_slot(slot),
+      fd_rights_for_stdio_slot(slot),
     )
   } else {
     // Check preopen directories first: wasmtime reports a special base/inheriting set.
@@ -1330,7 +1364,7 @@ pub fn fd_readdir(
     !check_mem_range(mem, bufused_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if fd >= 0 && fd < 3 {
+  if is_stdio_descriptor(ctx, fd) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
@@ -1696,7 +1730,7 @@ fn resolve_host_path_nofollow_leaf(
 ///
 /// Returns `None` for stdio, directories, sockets, and invalid fds.
 fn regular_file_native_fd(ctx : WasiContext, fd : Int) -> Int? {
-  if fd < 3 {
+  if is_stdio_descriptor(ctx, fd) {
     return None
   }
   match ctx.get_file(fd) {
@@ -1715,7 +1749,7 @@ fn regular_file_native_fd(ctx : WasiContext, fd : Int) -> Int? {
 ///
 /// Returns `None` for stdio and invalid fds.
 fn non_stdio_descriptor_native_fd(ctx : WasiContext, fd : Int) -> Int? {
-  if fd < 3 {
+  if is_stdio_descriptor(ctx, fd) {
     return None
   }
   match ctx.get_file(fd) {
@@ -1861,8 +1895,8 @@ pub fn fd_filestat_get_impl(
   if !check_mem_range(mem, buf_ptr, 64) {
     return Errno::Fault.to_i32()
   }
-  // Handle special fds (stdin, stdout, stderr)
-  if fd >= 0 && fd < 3 {
+  // Handle stdio descriptors.
+  if is_stdio_descriptor(ctx, fd) {
     if !is_stdio_open(ctx, fd) {
       return Errno::Badf.to_i32()
     }
@@ -2159,7 +2193,7 @@ pub fn fd_fdstat_set_flags_impl(
   if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
     return Errno::Inval.to_i32()
   }
-  if fd < 3 {
+  if is_stdio_descriptor(ctx, fd) {
     return Errno::Badf.to_i32()
   }
   let native_fd = match ctx.get_file(fd) {
@@ -2262,17 +2296,14 @@ pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
   if from == to {
     return Errno::Success.to_i32()
   }
-  // Match wasmtime's syscall-level behavior: if both endpoints are valid,
-  // stdio-participating renumber requests succeed.
-  //
-  // Full descriptor remap semantics for moved stdio streams are tracked
-  // separately in WASIP1-051 follow-up work.
-  if from < 3 || to < 3 {
-    return Errno::Success.to_i32()
+  let from_slot = stdio_slot_for_fd(ctx, from)
+  let to_slot = stdio_slot_for_fd(ctx, to)
+  let from_file = if from_slot is Some(_) { None } else { ctx.get_file(from) }
+  let to_file = if to_slot is Some(_) { None } else { ctx.get_file(to) }
+  if from_slot is None && from_file is None {
+    return Errno::Badf.to_i32()
   }
-  let from_file = ctx.get_file(from)
-  let to_file = ctx.get_file(to)
-  if from_file is None || to_file is None {
+  if to_slot is None && to_file is None {
     return Errno::Badf.to_i32()
   }
   // Keep preopen fd mapping coherent with descriptor movement.
@@ -2280,13 +2311,28 @@ pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
     preopen_fd_index(ctx, to) is Some(_) {
     renumber_preopen_entries(ctx, from, to)
   }
-  let src = from_file.unwrap()
-  let dst = to_file.unwrap()
-  if src.native_fd != dst.native_fd {
-    native_close(dst.native_fd) |> ignore
+  // Closing the destination follows WASI renumber semantics.
+  if to_slot is Some(slot) {
+    clear_stdio_slot(ctx, slot)
+  } else {
+    let dst = to_file.unwrap()
+    let same_native = match from_file {
+      Some(src) => src.native_fd == dst.native_fd
+      None => false
+    }
+    if !same_native {
+      native_close(dst.native_fd) |> ignore
+    }
+    ctx.open_files.remove(to)
   }
-  ctx.open_files.remove(from)
-  ctx.open_files.set(to, src)
+  // Move source descriptor to destination.
+  if from_slot is Some(slot) {
+    move_stdio_slot_to_fd(ctx, slot, to)
+  } else {
+    let src = from_file.unwrap()
+    ctx.open_files.remove(from)
+    ctx.open_files.set(to, src)
+  }
   Errno::Success.to_i32()
 }
 
@@ -2493,11 +2539,11 @@ fn write_poll_event(
 
 ///|
 fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
-  if fd == 0 {
-    // Match wasmtime p1 stdio stream behavior for read polling.
-    return (1L, 0)
-  }
-  if fd < 3 {
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
+    if slot == 0 {
+      // Match wasmtime p1 stdio stream behavior for read polling.
+      return (1L, 0)
+    }
     return (1L, 0)
   }
   let file = match ctx.get_file(fd) {
@@ -2527,21 +2573,22 @@ fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
 
 ///|
 fn poll_fd_to_native_fd(ctx : WasiContext, fd : Int, tag : Int) -> Int? {
-  if fd == 0 {
+  if stdio_slot_for_fd(ctx, fd) is Some(slot) {
     if !is_stdio_open(ctx, fd) {
       return None
     }
-    if tag == 1 {
-      Some(0)
-    } else {
-      None
-    }
-  } else if fd == 1 || fd == 2 {
-    if !is_stdio_open(ctx, fd) {
-      return None
-    }
-    if tag == 2 {
-      Some(fd)
+    if slot == 0 {
+      if tag == 1 {
+        Some(0)
+      } else {
+        None
+      }
+    } else if tag == 2 {
+      if slot == 1 {
+        Some(1)
+      } else {
+        Some(2)
+      }
     } else {
       None
     }

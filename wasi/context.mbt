@@ -60,6 +60,12 @@ pub(all) struct WasiContext {
   mut stdout_open : Bool
   /// Whether stderr descriptor is still open
   mut stderr_open : Bool
+  /// Current descriptor number bound to stdin stream (-1 if closed/none)
+  mut stdin_fd : Int
+  /// Current descriptor number bound to stdout stream (-1 if closed/none)
+  mut stdout_fd : Int
+  /// Current descriptor number bound to stderr stream (-1 if closed/none)
+  mut stderr_fd : Int
 }
 
 ///|
@@ -81,6 +87,9 @@ pub fn WasiContext::new() -> WasiContext {
     stdin_open: true,
     stdout_open: true,
     stderr_open: true,
+    stdin_fd: 0,
+    stdout_fd: 1,
+    stderr_fd: 2,
   }
 }
 
@@ -288,6 +297,9 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     stdin_open: true,
     stdout_open: true,
     stderr_open: true,
+    stdin_fd: 0,
+    stdout_fd: 1,
+    stderr_fd: 2,
   }
 }
 
@@ -335,13 +347,13 @@ pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
 ///|
 /// Check if a file descriptor is valid
 pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int) -> Bool {
-  if fd == 0 {
+  if fd == self.stdin_fd {
     return self.stdin_open
   }
-  if fd == 1 {
+  if fd == self.stdout_fd {
     return self.stdout_open
   }
-  if fd == 2 {
+  if fd == self.stderr_fd {
     return self.stderr_open
   }
   self.open_files.contains(fd)
