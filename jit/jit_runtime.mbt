@@ -1700,11 +1700,12 @@ pub fn JITModule::init_shared_tables(
       Some(idx) => {
         let ptr = self.get_func_ptr(idx)
         if ptr == 0L {
-          abort(
-            "missing func ptr for table init (table=\{table_idx}, elem=\{elem_idx}, func_idx=\{idx})",
-          )
+          // Keep ref.func semantics even when this local function is not
+          // currently compiled into a concrete machine-code pointer.
+          encode_funcref_idx(idx)
+        } else {
+          tag_funcref_ptr(ptr)
         }
-        tag_funcref_ptr(ptr)
       }
       None => @types.NULL_REF
     }

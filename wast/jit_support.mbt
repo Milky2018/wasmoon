@@ -627,30 +627,42 @@ pub fn init_elem_segments(
     jit_tables.push(jit_table)
   }
 
+  // Build store func address -> module func index map.
+  let func_addr_to_idx : Map[Int, Int] = {}
+  for i, addr in instance.func_addrs {
+    func_addr_to_idx.set(addr, i)
+  }
+
   // Initialize elements: (table_idx, elem_idx, func_idx?, canonical_type_idx)
+  // Copy from instantiated runtime table state so we preserve:
+  // - table declaration init expressions
+  // - active element segment effects
+  // - imported/exported table sharing behavior
   let elem_init : Array[(Int, Int, Int?, Int)] = []
-  for elem in mod_.elems {
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
-      let offset = eval_elem_offset_expr(offset_expr, globals)
-      for i, init_expr in elem.init {
-        let func_idx = match init_expr {
-          [RefFunc(idx)] => Some(idx)
-          [I32Const(idx)] => Some(idx)
-          [RefNull(_)] => None
-          _ => continue
+  for table_idx, table_addr in instance.table_addrs {
+    let runtime_table = store.get_table(table_addr) catch { _ => continue }
+    let max_entries = match jit_tables[table_idx] {
+      Some(t) => t.get_size()
+      None => 0
+    }
+    let size = runtime_table.size().min(max_entries)
+    for elem_idx in 0..<size {
+      let value = runtime_table.get(elem_idx) catch { _ => continue }
+      match value {
+        FuncRef(store_addr) => {
+          let func_idx = func_addr_to_idx.get(store_addr)
+          let canonical_type_idx = match func_idx {
+            Some(idx) =>
+              if idx >= 0 && idx < func_table_types.length() {
+                func_table_types[idx]
+              } else {
+                -1
+              }
+            None => -1
+          }
+          elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
         }
-        let canonical_type_idx = match func_idx {
-          Some(idx) =>
-            if idx >= 0 && idx < func_table_types.length() {
-              func_table_types[idx]
-            } else {
-              -1
-            }
-          None => -1
-        }
-        // No flattening: use actual table_idx and elem_idx
-        let elem_idx = offset + i
-        elem_init.push((table_idx, elem_idx, func_idx, canonical_type_idx))
+        _ => elem_init.push((table_idx, elem_idx, None, -1))
       }
     }
   }
@@ -771,14 +783,16 @@ pub fn init_bulk_segments(
           match func_addr_to_idx.get(store_addr) {
             Some(func_idx) => {
               let ptr = jm.get_func_ptr(func_idx)
-              if ptr != 0L {
-                raw = @jit.tag_funcref_ptr(ptr)
-                let t = if func_idx >= 0 && func_idx < func_table_types.length() {
-                  func_table_types[func_idx]
-                } else {
-                  -1
-                }
-                ty = t.to_int64()
+              let t = if func_idx >= 0 && func_idx < func_table_types.length() {
+                func_table_types[func_idx]
+              } else {
+                -1
+              }
+              ty = t.to_int64()
+              raw = if ptr != 0L {
+                @jit.tag_funcref_ptr(ptr)
+              } else {
+                @jit.encode_funcref_idx(func_idx)
               }
             }
             None => ()
@@ -1049,7 +1063,11 @@ fn encode_store_funcref_for_jit(
       match
         lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
         Some(ptr) => @jit.tag_funcref_ptr(ptr)
-        None => NULL_REF
+        None =>
+          match store_addr_to_module_func_idx(store_addr, instance) {
+            Some(func_idx) => @jit.encode_funcref_idx(func_idx)
+            None => NULL_REF
+          }
       }
     _ => NULL_REF
   }

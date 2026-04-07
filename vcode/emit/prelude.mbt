@@ -400,8 +400,132 @@ fn MachineCode::emit_prologue(
     }
 
     // Move arguments from ABI registers to allocated registers (if any).
+    // Use parallel-move resolution to avoid source clobbering when registers
+    // form cycles (e.g. rdi->rsi and rsi->rdx).
+    fn emit_parallel_moves_gpr(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_mov_rr(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_mov_rr(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 gpr): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_mov_rr(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_mov_rr(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
+    fn emit_parallel_moves_xmm(
+      self : MachineCode,
+      scratch : Int,
+      moves : Array[(Int, Int)],
+    ) -> Unit {
+      let pending = moves.copy()
+      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+        for mv in pending {
+          let (src, _) = mv
+          if src == dst {
+            return true
+          }
+        }
+        false
+      }
+
+      while !pending.is_empty() {
+        let mut idx_opt : Int? = None
+        for i in 0..<pending.length() {
+          let (_, dst) = pending[i]
+          if !dst_is_used_as_src(pending, dst) {
+            idx_opt = Some(i)
+            break
+          }
+        }
+        match idx_opt {
+          Some(i) => {
+            let (src, dst) = pending.remove(i)
+            if src != dst {
+              self.x86_emit_movaps_xmm_xmm(dst, src)
+            }
+          }
+          None => {
+            let (saved_src, hole_dst) = pending.remove(0)
+            self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
+            let mut cur_dst = saved_src
+            while cur_dst != hole_dst {
+              let mut found = -1
+              for i in 0..<pending.length() {
+                let (_, dst) = pending[i]
+                if dst == cur_dst {
+                  found = i
+                  break
+                }
+              }
+              guard found >= 0 else {
+                abort("prologue parallel move (x86 xmm): cycle")
+              }
+              let (next_src, _) = pending.remove(found)
+              if next_src != cur_dst {
+                self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
+              }
+              cur_dst = next_src
+            }
+            self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
+          }
+        }
+      }
+    }
+
     let user_gprs = isa.wasm_user_arg_gprs()
     let float_regs = isa.wasm_arg_fprs()
+    let int_moves : Array[(Int, Int)] = []
+    let fp_moves : Array[(Int, Int)] = []
     let mut int_idx = 0
     let mut float_idx = 0
     for param_idx, param in params {
@@ -421,7 +545,13 @@ fn MachineCode::emit_prologue(
             match dest_preg {
               Some(preg) =>
                 if preg.index != src {
-                  self.x86_emit_mov_rr(preg.index, src)
+                  let vmctx_dst = @isaregs.vmctx_index()
+                  let is_redundant_vmctx_move = int_idx == 0 &&
+                    stack_frame.needs_vmctx &&
+                    preg.index == vmctx_dst
+                  if !is_redundant_vmctx_move {
+                    int_moves.push((src, preg.index))
+                  }
                 }
               None => ()
             }
@@ -433,8 +563,7 @@ fn MachineCode::emit_prologue(
             match dest_preg {
               Some(preg) =>
                 if preg.index != src {
-                  // Copy full XMM reg; works for scalars and vectors.
-                  self.x86_emit_movaps_xmm_xmm(preg.index, src)
+                  fp_moves.push((src, preg.index))
                 }
               None => ()
             }
@@ -442,6 +571,8 @@ fn MachineCode::emit_prologue(
           }
       }
     }
+    emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
+    emit_parallel_moves_xmm(self, 15, fp_moves)
     return
   }
   let saved_gprs = stack_frame.saved_gprs

@@ -30,6 +30,17 @@ def _sanitize_name(path: str) -> str:
     return path.replace("/", "__").replace("\\", "__")
 
 
+def _resolve_workload_path(workload: str) -> str:
+    path = Path(workload)
+    if path.exists():
+        return workload
+    if workload.startswith("examples/"):
+        alt = Path("examples/algorithms") / path.name
+        if alt.exists():
+            return str(alt)
+    return workload
+
+
 def _run_one(
     wasmoon_bin: str,
     subcommand: str,
@@ -45,25 +56,35 @@ def _run_one(
     env["WASMOON_PERF_METRICS"] = "1"
     env["WASMOON_PERF_METRICS_FILE"] = str(metrics_file)
 
-    cmd = [wasmoon_bin, subcommand, workload]
+    resolved_workload = _resolve_workload_path(workload)
+    cmd = [wasmoon_bin, subcommand, resolved_workload]
     started = time.time()
+    exit_code: int
+    timeout_hit = False
     with stdout_file.open("w", encoding="utf-8") as stdout, stderr_file.open(
         "w", encoding="utf-8"
     ) as stderr:
-        proc = subprocess.run(
-            cmd,
-            env=env,
-            stdout=stdout,
-            stderr=stderr,
-            timeout=timeout_sec,
-            check=False,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+                timeout=timeout_sec,
+                check=False,
+            )
+            exit_code = proc.returncode
+        except subprocess.TimeoutExpired:
+            timeout_hit = True
+            exit_code = 124
     elapsed_ms = int((time.time() - started) * 1000)
 
     return {
         "workload": workload,
+        "resolved_workload": resolved_workload,
         "command": cmd,
-        "exit_code": proc.returncode,
+        "exit_code": exit_code,
+        "timed_out": timeout_hit,
         "elapsed_ms": elapsed_ms,
         "metrics_file": str(metrics_file),
         "stdout_file": str(stdout_file),

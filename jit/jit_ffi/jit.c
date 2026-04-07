@@ -681,6 +681,20 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_ctx_set_table_pointers(
 
 typedef int (*entry_trampoline_fn)(jit_context_t *vmctx, int64_t *values_vec, void *func_ptr);
 
+#if defined(__x86_64__) || defined(_M_X64)
+// ABI-safe wrapper implemented in `trampoline_call_x86_64.S`.
+// JIT-generated entry trampolines intentionally use reserved callee-saved
+// registers as pinned VMContext/cache registers and may clobber them.
+// Calling them directly from C would violate SysV guarantees and corrupt the
+// caller's state.
+extern int wasmoon_call_entry_trampoline(
+    void *trampoline_ptr,
+    void *vmctx,
+    void *values_vec,
+    void *func_ptr
+);
+#endif
+
 // Global pointer to current JIT context for guard page detection in signal handler
 // This is set before JIT execution and cleared after
 static __thread jit_context_t *g_current_jit_context = NULL;
@@ -727,8 +741,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
         return (int)g_trap_code;
     }
 
+    int result;
+#if defined(__x86_64__) || defined(_M_X64)
+    result = wasmoon_call_entry_trampoline(
+        (void *)trampoline_ptr,
+        ctx,
+        values_vec,
+        (void *)func_ptr
+    );
+#else
     entry_trampoline_fn trampoline = (entry_trampoline_fn)trampoline_ptr;
-    int result = trampoline(ctx, values_vec, (void *)func_ptr);
+    result = trampoline(ctx, values_vec, (void *)func_ptr);
+#endif
 
     g_trap_active = 0;
     exception_reset_context_state(ctx);

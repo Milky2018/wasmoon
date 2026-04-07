@@ -251,6 +251,159 @@ fn rewrite_module_alias_indices_for_jit(
 }
 
 ///|
+let wast_selective_compile_threshold : Int = 0
+
+///|
+fn mark_wast_reachable_local_func(
+  func_idx : Int,
+  num_imports : Int,
+  compile_mask : Array[Bool],
+  pending_locals : Array[Int],
+) -> Unit {
+  let local_idx = func_idx - num_imports
+  if local_idx < 0 || local_idx >= compile_mask.length() {
+    return
+  }
+  if !compile_mask[local_idx] {
+    compile_mask[local_idx] = true
+    pending_locals.push(local_idx)
+  }
+}
+
+///|
+fn collect_wast_reachable_from_instrs(
+  instrs : Array[@types.Instruction],
+  num_imports : Int,
+  compile_mask : Array[Bool],
+  pending_locals : Array[Int],
+) -> Unit {
+  for instr in instrs {
+    match instr {
+      Call(func_idx) =>
+        mark_wast_reachable_local_func(
+          func_idx, num_imports, compile_mask, pending_locals,
+        )
+      ReturnCall(func_idx) =>
+        mark_wast_reachable_local_func(
+          func_idx, num_imports, compile_mask, pending_locals,
+        )
+      RefFunc(func_idx) =>
+        mark_wast_reachable_local_func(
+          func_idx, num_imports, compile_mask, pending_locals,
+        )
+      Block(_, body) =>
+        collect_wast_reachable_from_instrs(
+          body, num_imports, compile_mask, pending_locals,
+        )
+      Loop(_, body) =>
+        collect_wast_reachable_from_instrs(
+          body, num_imports, compile_mask, pending_locals,
+        )
+      If(_, then_body, else_body) => {
+        collect_wast_reachable_from_instrs(
+          then_body, num_imports, compile_mask, pending_locals,
+        )
+        collect_wast_reachable_from_instrs(
+          else_body, num_imports, compile_mask, pending_locals,
+        )
+      }
+      TryTable(_, _, body) =>
+        collect_wast_reachable_from_instrs(
+          body, num_imports, compile_mask, pending_locals,
+        )
+      _ => ()
+    }
+  }
+}
+
+///|
+fn count_true(mask : Array[Bool]) -> Int {
+  let mut count = 0
+  for v in mask {
+    if v {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+fn build_wast_compile_mask(mod_ : @types.Module) -> Array[Bool]? {
+  let total_local_funcs = mod_.codes.length()
+  if total_local_funcs <= wast_selective_compile_threshold {
+    return None
+  }
+  let num_imports = @wast.count_func_imports(mod_.imports)
+  let compile_mask : Array[Bool] = []
+  for _ in 0..<total_local_funcs {
+    compile_mask.push(false)
+  }
+  let pending_locals : Array[Int] = []
+
+  for exp in mod_.exports {
+    if exp.desc is Func(func_idx) {
+      mark_wast_reachable_local_func(
+        func_idx, num_imports, compile_mask, pending_locals,
+      )
+    }
+  }
+  if mod_.start is Some(func_idx) {
+    mark_wast_reachable_local_func(
+      func_idx, num_imports, compile_mask, pending_locals,
+    )
+  }
+  for global in mod_.globals {
+    collect_wast_reachable_from_instrs(
+      global.init,
+      num_imports,
+      compile_mask,
+      pending_locals,
+    )
+  }
+  for elem in mod_.elems {
+    if elem.mode is @types.ElemMode::Active(_, offset_expr) {
+      collect_wast_reachable_from_instrs(
+        offset_expr, num_imports, compile_mask, pending_locals,
+      )
+    }
+    for expr in elem.init {
+      collect_wast_reachable_from_instrs(
+        expr, num_imports, compile_mask, pending_locals,
+      )
+    }
+  }
+
+  for cursor = 0; cursor < pending_locals.length(); {
+    let local_idx = pending_locals[cursor]
+    collect_wast_reachable_from_instrs(
+      mod_.codes[local_idx].body,
+      num_imports,
+      compile_mask,
+      pending_locals,
+    )
+    continue cursor + 1
+  }
+
+  let selected = count_true(compile_mask)
+  if selected == 0 || selected >= total_local_funcs {
+    None
+  } else {
+    Some(compile_mask)
+  }
+}
+
+///|
+fn module_has_wasi_import(mod_ : @types.Module) -> Bool {
+  for imp in mod_.imports {
+    if imp.mod_name == "wasi_snapshot_preview1" ||
+      imp.mod_name == "wasi_unstable" {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
 fn try_compile_jit(
   mod_ : @types.Module,
@@ -258,6 +411,11 @@ fn try_compile_jit(
   store : @runtime.Store,
 ) -> Result[@wast.JITModuleContext, String] {
   let lowered_mod = rewrite_module_alias_indices_for_jit(mod_, instance)
+  let local_compile_mask = build_wast_compile_mask(lowered_mod)
+  let compiled_local_funcs = match local_compile_mask {
+    Some(mask) => count_true(mask)
+    None => lowered_mod.codes.length()
+  }
   wast_jit_attempts.val = wast_jit_attempts.val + 1
   // Check for unsupported instructions
   if @wast.has_unsupported_instructions_for_wast(lowered_mod) {
@@ -284,6 +442,7 @@ fn try_compile_jit(
     actual_memory_max~,
     0, // Keep WAST JIT compile latency aligned with timeout-limited harness runs.
     false, // DWARF off for wast tests
+    local_compile_mask~,
     force_subtype_indirect_check=Some(true),
   )
   match compiled {
@@ -309,16 +468,17 @@ fn try_compile_jit(
         Ok(jm) => {
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
-            mod_.codes.length()
+            compiled_local_funcs
           @wast.register_instance_funcrefs_for_jit(jm, instance)
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page (1MB)
           // This provides controlled stack overflow behavior
           let _ = jm.alloc_wasm_stack(1048576L)
-          // Initialize WASI for JIT (fd_table, args, env, preopens)
-          // Use quiet mode to redirect stdout/stderr to /dev/null for testing
-          jm.init_wasi_quiet([], [], [])
+          // Initialize WASI only when the module imports it.
+          if module_has_wasi_import(lowered_mod) {
+            jm.init_wasi_quiet([], [], [])
+          }
           // Initialize all memories (multi-memory support)
           guard @wast.init_jit_memories_from_store(instance, store, jm)
             is Some(_) else {
