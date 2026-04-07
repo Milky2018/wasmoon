@@ -44,9 +44,11 @@
 #define WASI_ENOSYS       52
 #define WASI_ENOTDIR      54
 #define WASI_ENOTEMPTY    55
+#define WASI_ENOTSUP      58
 #define WASI_ESPIPE       70
 #define WASI_ENAMETOOLONG 37
 #define WASI_EFAULT       21
+#define WASI_ENOTCAPABLE  76
 #define WASI_TRAP_EXIT    100
 
 // ============ WASI File Types ============
@@ -61,8 +63,35 @@
 
 // WASI rights: valid bits are 0-28
 #define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 29) - 1))
-#define WASI_RIGHT_FD_READ    (1ULL << 1)
-#define WASI_RIGHT_FD_WRITE   (1ULL << 6)
+#define WASI_RIGHT_FD_DATASYNC          (1ULL << 0)
+#define WASI_RIGHT_FD_READ              (1ULL << 1)
+#define WASI_RIGHT_FD_SEEK              (1ULL << 2)
+#define WASI_RIGHT_FD_FDSTAT_SET_FLAGS  (1ULL << 3)
+#define WASI_RIGHT_FD_SYNC              (1ULL << 4)
+#define WASI_RIGHT_FD_TELL              (1ULL << 5)
+#define WASI_RIGHT_FD_WRITE             (1ULL << 6)
+#define WASI_RIGHT_FD_ADVISE            (1ULL << 7)
+#define WASI_RIGHT_FD_ALLOCATE          (1ULL << 8)
+#define WASI_RIGHT_PATH_CREATE_DIRECTORY (1ULL << 9)
+#define WASI_RIGHT_PATH_CREATE_FILE      (1ULL << 10)
+#define WASI_RIGHT_PATH_LINK_SOURCE      (1ULL << 11)
+#define WASI_RIGHT_PATH_LINK_TARGET      (1ULL << 12)
+#define WASI_RIGHT_PATH_OPEN             (1ULL << 13)
+#define WASI_RIGHT_FD_READDIR            (1ULL << 14)
+#define WASI_RIGHT_PATH_READLINK         (1ULL << 15)
+#define WASI_RIGHT_PATH_RENAME_SOURCE    (1ULL << 16)
+#define WASI_RIGHT_PATH_RENAME_TARGET    (1ULL << 17)
+#define WASI_RIGHT_PATH_FILESTAT_GET     (1ULL << 18)
+#define WASI_RIGHT_PATH_FILESTAT_SET_SIZE  (1ULL << 19)
+#define WASI_RIGHT_PATH_FILESTAT_SET_TIMES (1ULL << 20)
+#define WASI_RIGHT_FD_FILESTAT_GET       (1ULL << 21)
+#define WASI_RIGHT_FD_FILESTAT_SET_SIZE  (1ULL << 22)
+#define WASI_RIGHT_FD_FILESTAT_SET_TIMES (1ULL << 23)
+#define WASI_RIGHT_PATH_SYMLINK          (1ULL << 24)
+#define WASI_RIGHT_PATH_REMOVE_DIRECTORY (1ULL << 25)
+#define WASI_RIGHT_PATH_UNLINK_FILE      (1ULL << 26)
+#define WASI_RIGHT_POLL_FD_READWRITE     (1ULL << 27)
+#define WASI_RIGHT_SOCK_SHUTDOWN         (1ULL << 28)
 
 // ============ Helper Functions ============
 
@@ -267,6 +296,74 @@ static char* sanitize_guest_path(const char *path) {
     return out;
 }
 
+#ifndef _WIN32
+static int path_is_within_base(const char *base_real, const char *target_real) {
+    if (!base_real || !target_real) return 0;
+    if (strcmp(base_real, "/") == 0) {
+        return target_real[0] == '/';
+    }
+    size_t base_len = strlen(base_real);
+    if (strncmp(base_real, target_real, base_len) != 0) return 0;
+    char next = target_real[base_len];
+    return next == '\0' || next == '/';
+}
+
+static int realpath_existing_parent(const char *path, char **out_real) {
+    if (!path || !out_real) return 0;
+    *out_real = NULL;
+
+    char *scratch = strdup(path);
+    if (!scratch) return 0;
+
+    while (1) {
+        errno = 0;
+        char *resolved = realpath(scratch, NULL);
+        if (resolved) {
+            *out_real = resolved;
+            free(scratch);
+            return 1;
+        }
+
+        if (errno != ENOENT && errno != ENOTDIR) {
+            break;
+        }
+
+        char *slash = strrchr(scratch, '/');
+        if (!slash) {
+            scratch[0] = '.';
+            scratch[1] = '\0';
+        } else if (slash == scratch) {
+            scratch[1] = '\0';
+        } else {
+            *slash = '\0';
+        }
+    }
+
+    free(scratch);
+    return 0;
+}
+
+static int path_within_base(const char *base_path, const char *target_path) {
+    if (!base_path || !target_path) return 0;
+
+    char *base_real = realpath(base_path, NULL);
+    if (!base_real) return 0;
+
+    char *target_real = realpath(target_path, NULL);
+    if (!target_real) {
+        if (!realpath_existing_parent(target_path, &target_real)) {
+            free(base_real);
+            return 0;
+        }
+    }
+
+    int ok = path_is_within_base(base_real, target_real);
+    free(base_real);
+    free(target_real);
+    return ok;
+}
+#endif
+
 static int check_mem_range(jit_context_t *ctx, int64_t ptr, size_t len) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return 0;
     if (ptr < 0) return 0;
@@ -277,36 +374,53 @@ static int check_mem_range(jit_context_t *ctx, int64_t ptr, size_t len) {
     return 1;
 }
 
-// Resolve path relative to a directory fd
-static char* resolve_path(jit_context_t *ctx, int dir_fd, const char *path) {
+// Resolve path relative to a directory fd and return WASI errno on failure.
+static int resolve_path_with_errno(
+    jit_context_t *ctx,
+    int dir_fd,
+    const char *path,
+    char **out_path
+) {
+    if (!out_path) return WASI_EINVAL;
+    *out_path = NULL;
+
     const char *base = get_preopen_path(ctx, dir_fd);
     if (!base) {
         base = get_open_dir_path(ctx, dir_fd);
-        if (!base) return NULL;
+        if (!base) return WASI_EBADF;
     }
 
     char *rel = sanitize_guest_path(path);
-    if (!rel) return NULL;
-    if (rel[0] == '\0') {
-        free(rel);
-        return strdup(base);
-    }
+    if (!rel) return WASI_ENOTCAPABLE;
 
     size_t base_len = strlen(base);
     size_t rel_len = strlen(rel);
     char *result = malloc(base_len + rel_len + 2);
     if (!result) {
         free(rel);
-        return NULL;
+        return WASI_ENOMEM;
     }
 
     strcpy(result, base);
-    if (base_len > 0 && base[base_len - 1] != '/') {
-        strcat(result, "/");
+    if (rel[0] != '\0') {
+        if (base_len > 0 && base[base_len - 1] != '/') {
+            strcat(result, "/");
+        }
+        strcat(result, rel);
     }
-    strcat(result, rel);
     free(rel);
-    return result;
+
+#ifdef _WIN32
+    *out_path = result;
+    return WASI_ESUCCESS;
+#else
+    if (!path_within_base(base, result)) {
+        free(result);
+        return WASI_ENOTCAPABLE;
+    }
+    *out_path = result;
+    return WASI_ESUCCESS;
+#endif
 }
 
 // Allocate a new WASI fd
@@ -376,17 +490,210 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
 static int errno_to_wasi(int err) {
     switch (err) {
         case 0: return WASI_ESUCCESS;
-        case EACCES: return WASI_EACCES;
-        case EBADF: return WASI_EBADF;
-        case EEXIST: return WASI_EEXIST;
-        case EINVAL: return WASI_EINVAL;
-        case EIO: return WASI_EIO;
-        case EISDIR: return WASI_EISDIR;
-        case ENOENT: return WASI_ENOENT;
-        case ENOSYS: return WASI_ENOSYS;
-        case ENOTDIR: return WASI_ENOTDIR;
-        case ENOTEMPTY: return WASI_ENOTEMPTY;
-        case ESPIPE: return WASI_ESPIPE;
+#ifdef E2BIG
+        case E2BIG: return 1;
+#endif
+#ifdef EACCES
+        case EACCES: return 2;
+#endif
+#ifdef EAGAIN
+        case EAGAIN: return 6;
+#endif
+#if defined(EWOULDBLOCK) && (!defined(EAGAIN) || EWOULDBLOCK != EAGAIN)
+        case EWOULDBLOCK: return 6;
+#endif
+#ifdef EALREADY
+        case EALREADY: return 7;
+#endif
+#ifdef EBADF
+        case EBADF: return 8;
+#endif
+#ifdef EBUSY
+        case EBUSY: return 10;
+#endif
+#ifdef ECANCELED
+        case ECANCELED: return 11;
+#endif
+#ifdef ECHILD
+        case ECHILD: return 12;
+#endif
+#ifdef ECONNABORTED
+        case ECONNABORTED: return 13;
+#endif
+#ifdef ECONNREFUSED
+        case ECONNREFUSED: return 14;
+#endif
+#ifdef ECONNRESET
+        case ECONNRESET: return 15;
+#endif
+#if defined(EDEADLK)
+        case EDEADLK: return 16;
+#endif
+#if defined(EDEADLOCK) && (!defined(EDEADLK) || EDEADLOCK != EDEADLK)
+        case EDEADLOCK: return 16;
+#endif
+#ifdef EDESTADDRREQ
+        case EDESTADDRREQ: return 17;
+#endif
+#ifdef EDOM
+        case EDOM: return 18;
+#endif
+#ifdef EDQUOT
+        case EDQUOT: return 19;
+#endif
+#ifdef EEXIST
+        case EEXIST: return 20;
+#endif
+#ifdef EFAULT
+        case EFAULT: return 21;
+#endif
+#ifdef EFBIG
+        case EFBIG: return 22;
+#endif
+#ifdef EILSEQ
+        case EILSEQ: return 25;
+#endif
+#ifdef EINPROGRESS
+        case EINPROGRESS: return 26;
+#endif
+#ifdef EINTR
+        case EINTR: return 27;
+#endif
+#ifdef EINVAL
+        case EINVAL: return 28;
+#endif
+#ifdef EIO
+        case EIO: return 29;
+#endif
+#ifdef EISCONN
+        case EISCONN: return 30;
+#endif
+#ifdef EISDIR
+        case EISDIR: return 31;
+#endif
+#ifdef ELOOP
+        case ELOOP: return 32;
+#endif
+#ifdef EMFILE
+        case EMFILE: return 33;
+#endif
+#ifdef EMLINK
+        case EMLINK: return 34;
+#endif
+#ifdef EMSGSIZE
+        case EMSGSIZE: return 35;
+#endif
+#ifdef ENAMETOOLONG
+        case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENETDOWN
+        case ENETDOWN: return 38;
+#endif
+#ifdef ENETRESET
+        case ENETRESET: return 39;
+#endif
+#ifdef ENETUNREACH
+        case ENETUNREACH: return 40;
+#endif
+#ifdef ENFILE
+        case ENFILE: return 41;
+#endif
+#ifdef ENOBUFS
+        case ENOBUFS: return 42;
+#endif
+#ifdef ENODEV
+        case ENODEV: return 43;
+#endif
+#ifdef ENOENT
+        case ENOENT: return 44;
+#endif
+#ifdef ENOEXEC
+        case ENOEXEC: return 45;
+#endif
+#ifdef ENOLCK
+        case ENOLCK: return 46;
+#endif
+#ifdef ENOMEM
+        case ENOMEM: return 48;
+#endif
+#ifdef ENOMSG
+        case ENOMSG: return 49;
+#endif
+#ifdef ENOPROTOOPT
+        case ENOPROTOOPT: return 50;
+#endif
+#ifdef ENOSPC
+        case ENOSPC: return 51;
+#endif
+#ifdef ENOSYS
+        case ENOSYS: return 52;
+#endif
+#ifdef ENOTCONN
+        case ENOTCONN: return 53;
+#endif
+#ifdef ENOTDIR
+        case ENOTDIR: return 54;
+#endif
+#ifdef ENOTEMPTY
+        case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTRECOVERABLE
+        case ENOTRECOVERABLE: return 56;
+#endif
+#ifdef ENOTSOCK
+        case ENOTSOCK: return 57;
+#endif
+#ifdef ENOTSUP
+        case ENOTSUP: return 58;
+#endif
+#if defined(EOPNOTSUPP) && (!defined(ENOTSUP) || EOPNOTSUPP != ENOTSUP)
+        case EOPNOTSUPP: return 58;
+#endif
+#ifdef ENOTTY
+        case ENOTTY: return 59;
+#endif
+#ifdef ENXIO
+        case ENXIO: return 60;
+#endif
+#ifdef EOVERFLOW
+        case EOVERFLOW: return 61;
+#endif
+#ifdef EPERM
+        case EPERM: return 63;
+#endif
+#ifdef EPIPE
+        case EPIPE: return 64;
+#endif
+#ifdef EPROTO
+        case EPROTO: return 65;
+#endif
+#ifdef EPROTONOSUPPORT
+        case EPROTONOSUPPORT: return 66;
+#endif
+#ifdef EPROTOTYPE
+        case EPROTOTYPE: return 67;
+#endif
+#ifdef ERANGE
+        case ERANGE: return 68;
+#endif
+#ifdef EROFS
+        case EROFS: return 69;
+#endif
+#ifdef ESPIPE
+        case ESPIPE: return 70;
+#endif
+#ifdef ESRCH
+        case ESRCH: return 71;
+#endif
+#ifdef ETIMEDOUT
+        case ETIMEDOUT: return 73;
+#endif
+#ifdef ETXTBSY
+        case ETXTBSY: return 74;
+#endif
+#ifdef EXDEV
+        case EXDEV: return 75;
+#endif
         default: return WASI_EIO;
     }
 }
@@ -438,6 +745,120 @@ static uint8_t mode_to_filetype(mode_t mode) {
     if (S_ISLNK(mode)) return WASI_FILETYPE_SYMBOLIC_LINK;
     if (S_ISSOCK(mode)) return WASI_FILETYPE_SOCKET_STREAM;
     return WASI_FILETYPE_UNKNOWN;
+}
+#endif
+
+static uint64_t preopen_directory_base_rights(void) {
+    return WASI_RIGHT_PATH_CREATE_DIRECTORY |
+        WASI_RIGHT_PATH_CREATE_FILE |
+        WASI_RIGHT_PATH_LINK_SOURCE |
+        WASI_RIGHT_PATH_LINK_TARGET |
+        WASI_RIGHT_PATH_OPEN |
+        WASI_RIGHT_FD_READDIR |
+        WASI_RIGHT_PATH_READLINK |
+        WASI_RIGHT_PATH_RENAME_SOURCE |
+        WASI_RIGHT_PATH_RENAME_TARGET |
+        WASI_RIGHT_PATH_SYMLINK |
+        WASI_RIGHT_PATH_REMOVE_DIRECTORY |
+        WASI_RIGHT_PATH_UNLINK_FILE |
+        WASI_RIGHT_PATH_FILESTAT_GET |
+        WASI_RIGHT_PATH_FILESTAT_SET_TIMES |
+        WASI_RIGHT_FD_FILESTAT_GET |
+        WASI_RIGHT_FD_FILESTAT_SET_TIMES;
+}
+
+static uint64_t preopen_directory_inheriting_rights(void) {
+    uint64_t base = preopen_directory_base_rights();
+    return base |
+        WASI_RIGHT_FD_DATASYNC |
+        WASI_RIGHT_FD_READ |
+        WASI_RIGHT_FD_SEEK |
+        WASI_RIGHT_FD_FDSTAT_SET_FLAGS |
+        WASI_RIGHT_FD_SYNC |
+        WASI_RIGHT_FD_TELL |
+        WASI_RIGHT_FD_WRITE |
+        WASI_RIGHT_FD_ADVISE |
+        WASI_RIGHT_FD_ALLOCATE |
+        WASI_RIGHT_FD_FILESTAT_GET |
+        WASI_RIGHT_FD_FILESTAT_SET_SIZE |
+        WASI_RIGHT_FD_FILESTAT_SET_TIMES |
+        WASI_RIGHT_POLL_FD_READWRITE;
+}
+
+static uint64_t socket_base_rights(int can_read, int can_write) {
+    uint64_t rights = WASI_RIGHT_FD_FDSTAT_SET_FLAGS | WASI_RIGHT_SOCK_SHUTDOWN;
+    if (can_read) rights |= WASI_RIGHT_FD_READ;
+    if (can_write) rights |= WASI_RIGHT_FD_WRITE;
+    if (can_read || can_write) rights |= WASI_RIGHT_POLL_FD_READWRITE;
+    return rights;
+}
+
+static uint64_t dynamic_descriptor_rights(uint8_t filetype, int can_read, int can_write) {
+    if (filetype == WASI_FILETYPE_SOCKET_STREAM) {
+        return socket_base_rights(can_read, can_write);
+    }
+
+    uint64_t rights = WASI_RIGHTS_ALL_VALID;
+    if (filetype == WASI_FILETYPE_DIRECTORY) {
+        rights &= ~WASI_RIGHT_FD_SEEK;
+        rights &= ~WASI_RIGHT_FD_FILESTAT_SET_SIZE;
+        rights &= ~WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    }
+    if (!can_read) {
+        rights &= ~WASI_RIGHT_FD_READ;
+        rights &= ~WASI_RIGHT_FD_READDIR;
+    }
+    if (!can_write) {
+        rights &= ~WASI_RIGHT_FD_WRITE;
+    }
+    return rights;
+}
+
+#ifndef _WIN32
+static uint16_t wasi_fdflags_from_native(int native_fd) {
+    uint16_t flags = 0;
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return flags;
+
+#ifdef O_APPEND
+    if (native_flags & O_APPEND) flags |= 0x01; // APPEND
+#endif
+#ifdef O_DSYNC
+    if (native_flags & O_DSYNC) flags |= 0x02; // DSYNC
+#endif
+#ifdef O_NONBLOCK
+    if (native_flags & O_NONBLOCK) flags |= 0x04; // NONBLOCK
+#endif
+#ifdef O_RSYNC
+    if (native_flags & O_RSYNC) flags |= 0x08; // RSYNC
+#endif
+#ifdef O_SYNC
+    if (native_flags & O_SYNC) flags |= 0x10; // SYNC
+#endif
+
+    return flags;
+}
+
+static void fd_access_mode_from_native(int native_fd, int *can_read, int *can_write) {
+    *can_read = 1;
+    *can_write = 1;
+
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return;
+
+#if defined(O_ACCMODE) && defined(O_WRONLY) && defined(O_RDWR)
+    int acc_mode = native_flags & O_ACCMODE;
+    if (acc_mode == O_WRONLY) {
+        *can_read = 0;
+        *can_write = 1;
+    } else if (acc_mode == O_RDWR) {
+        *can_read = 1;
+        *can_write = 1;
+    } else {
+        *can_read = 1;
+        *can_write = 0;
+    }
+#endif
 }
 #endif
 
@@ -705,7 +1126,7 @@ static int64_t wasi_fd_sync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS; // No sync on Windows
 #else
-    if (fsync(native_fd) < 0) return WASI_EIO;
+    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #endif
 }
@@ -725,10 +1146,10 @@ static int64_t wasi_fd_datasync_impl(
 #ifdef _WIN32
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
-    if (fsync(native_fd) < 0) return WASI_EIO;
+    if (fsync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
-    if (fdatasync(native_fd) < 0) return WASI_EIO;
+    if (fdatasync(native_fd) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #endif
 }
@@ -745,25 +1166,34 @@ static int64_t wasi_fd_fdstat_get_impl(
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
 
-    // Determine file type
     uint8_t filetype;
     uint16_t flags = 0;
+    uint64_t rights_base = 0;
+    uint64_t rights_inheriting = 0;
     if (wasi_fd < 3) {
         filetype = WASI_FILETYPE_CHARACTER_DEVICE;
-        // Match interpreter: stdout/stderr are append-capable.
-        if (wasi_fd == 1 || wasi_fd == 2) flags = 1;
+        rights_base = (wasi_fd == 0) ? WASI_RIGHT_FD_READ : WASI_RIGHT_FD_WRITE;
+        rights_inheriting = rights_base;
     } else if (is_preopen_fd(ctx, wasi_fd)) {
         filetype = WASI_FILETYPE_DIRECTORY;
+        rights_base = preopen_directory_base_rights();
+        rights_inheriting = preopen_directory_inheriting_rights();
     } else {
         int native_fd = get_native_fd(ctx, wasi_fd);
         if (native_fd < 0) return WASI_EBADF;
+        int can_read = 1;
+        int can_write = 1;
 #ifndef _WIN32
         struct stat st;
         if (fstat(native_fd, &st) < 0) return errno_to_wasi(errno);
         filetype = mode_to_filetype(st.st_mode);
+        flags = wasi_fdflags_from_native(native_fd);
+        fd_access_mode_from_native(native_fd, &can_read, &can_write);
 #else
         filetype = WASI_FILETYPE_REGULAR_FILE;
 #endif
+        rights_base = dynamic_descriptor_rights(filetype, can_read, can_write);
+        rights_inheriting = rights_base;
     }
 
     // fdstat: filetype(1) + pad(1) + flags(2) + pad(4) + rights_base(8) + rights_inheriting(8)
@@ -771,8 +1201,8 @@ static int64_t wasi_fd_fdstat_get_impl(
     mem[fdstat_ptr_u + 1] = 0;
     *(uint16_t *)(mem + fdstat_ptr_u + 2) = flags;
     *(uint32_t *)(mem + fdstat_ptr_u + 4) = 0;
-    *(uint64_t *)(mem + fdstat_ptr_u + 8) = 0x1FFFFFFFULL; // all rights
-    *(uint64_t *)(mem + fdstat_ptr_u + 16) = 0x1FFFFFFFULL;
+    *(uint64_t *)(mem + fdstat_ptr_u + 8) = rights_base;
+    *(uint64_t *)(mem + fdstat_ptr_u + 16) = rights_inheriting;
     return WASI_ESUCCESS;
 }
 
@@ -848,14 +1278,15 @@ static int64_t wasi_path_open_impl(
 
     // Read path from memory
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
     // Resolve full path
-    char *full_path = resolve_path(ctx, (int)dir_fd, path);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
     free(path);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
     // Build open flags
@@ -882,7 +1313,7 @@ static int64_t wasi_path_open_impl(
     if (wasi_fd < 0) {
         close(native_fd);
         free(full_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
 
     set_fd_metadata(ctx, wasi_fd, full_path, (oflags & 0x02) != 0);
@@ -907,13 +1338,14 @@ static int64_t wasi_path_unlink_file_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, (int)dir_fd, path);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
     free(path);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
     int ret = unlink(full_path);
@@ -939,13 +1371,14 @@ static int64_t wasi_path_remove_directory_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, (int)dir_fd, path);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
     free(path);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
     int ret = rmdir(full_path);
@@ -971,13 +1404,14 @@ static int64_t wasi_path_create_directory_impl(
     }
 
     char *path = malloc((size_t)path_len_u + 1);
-    if (!path) return WASI_EIO;
+    if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, (int)dir_fd, path);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, (int)dir_fd, path, &full_path);
     free(path);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
     int ret = mkdir(full_path, 0755);
@@ -1013,7 +1447,7 @@ static int64_t wasi_path_rename_impl(
     if (!old_path || !new_path) {
         free(old_path);
         free(new_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
 
     memcpy(old_path, ctx->memory0->base + old_path_ptr_u, (size_t)old_path_len_u);
@@ -1021,15 +1455,18 @@ static int64_t wasi_path_rename_impl(
     memcpy(new_path, ctx->memory0->base + new_path_ptr_u, (size_t)new_path_len_u);
     new_path[new_path_len_u] = '\0';
 
-    char *old_full = resolve_path(ctx, (int)old_fd, old_path);
-    char *new_full = resolve_path(ctx, (int)new_fd, new_path);
+    char *old_full = NULL;
+    int old_errno = resolve_path_with_errno(ctx, (int)old_fd, old_path, &old_full);
+    char *new_full = NULL;
+    int new_errno = resolve_path_with_errno(ctx, (int)new_fd, new_path, &new_full);
     free(old_path);
     free(new_path);
 
-    if (!old_full || !new_full) {
+    if (old_errno != WASI_ESUCCESS || new_errno != WASI_ESUCCESS) {
         free(old_full);
         free(new_full);
-        return WASI_EBADF;
+        if (old_errno != WASI_ESUCCESS) return old_errno;
+        return new_errno;
     }
 
 #ifndef _WIN32
@@ -1115,7 +1552,7 @@ static int64_t wasi_fd_filestat_set_size_impl(
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    if (ftruncate(native_fd, size) < 0) return WASI_EIO;
+    if (ftruncate(native_fd, size) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
@@ -1302,7 +1739,7 @@ static int64_t wasi_random_get_impl(
 
     uint8_t *mem = ctx->memory0->base;
     if (buf_len_u == 0) return WASI_ESUCCESS;
-    if (!fill_random_bytes(mem + buf_ptr_u, (size_t)buf_len_u)) return WASI_EIO;
+    if (!fill_random_bytes(mem + buf_ptr_u, (size_t)buf_len_u)) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 }
 
@@ -1340,12 +1777,116 @@ static int64_t wasi_sched_yield_impl(
     return WASI_ESUCCESS;
 }
 
+typedef struct {
+    uint32_t sub_index;
+    int32_t clock_id;
+    int64_t timeout;
+    uint16_t flags;
+} wasi_clock_plan_t;
+
+typedef struct {
+    uint32_t sub_index;
+    int32_t wasi_fd;
+    uint8_t event_type;
+    int native_fd;
+    short poll_events;
+} wasi_fd_plan_t;
+
+static int64_t monotonic_now_ns(void) {
+#ifdef _WIN32
+    LARGE_INTEGER freq;
+    LARGE_INTEGER counter;
+    if (!QueryPerformanceFrequency(&freq) || !QueryPerformanceCounter(&counter) || freq.QuadPart == 0) {
+        return 0;
+    }
+    return (int64_t)((counter.QuadPart * 1000000000LL) / freq.QuadPart);
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+static int64_t realtime_now_ns(void) {
+#ifdef _WIN32
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return (int64_t)((t - 116444736000000000ULL) * 100);
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+static int poll_clock_remaining_ns(int32_t clock_id, int64_t timeout, uint16_t flags, int64_t *remaining) {
+    int absolute = (flags & 0x01) != 0;
+    if (absolute) {
+        int64_t now;
+        if (clock_id == 1) {
+            now = monotonic_now_ns();
+        } else if (clock_id == 0) {
+            now = realtime_now_ns();
+        } else {
+            return 0;
+        }
+        *remaining = timeout > now ? timeout - now : 0;
+        return 1;
+    }
+    if (clock_id == 0 || clock_id == 1) {
+        *remaining = timeout;
+        return 1;
+    }
+    return 0;
+}
+
+static int poll_clock_is_expired(
+    int32_t clock_id,
+    int64_t timeout,
+    uint16_t flags,
+    int64_t poll_elapsed_ns,
+    int64_t now_monotonic,
+    int64_t now_realtime
+) {
+    int absolute = (flags & 0x01) != 0;
+    if (absolute) {
+        if (clock_id == 1) return now_monotonic >= timeout;
+        if (clock_id == 0) return now_realtime >= timeout;
+        return 0;
+    }
+    return timeout <= poll_elapsed_ns;
+}
+
+static uint16_t poll_fd_readwrite_flags_for_event(jit_context_t *ctx, int32_t wasi_fd) {
+#ifdef _WIN32
+    (void)ctx;
+    (void)wasi_fd;
+    return 0;
+#else
+    if (wasi_fd < 3) return 0;
+    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return 0;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return 0;
+
+    struct stat st;
+    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return 0;
+
+    off_t pos = lseek(native_fd, 0, SEEK_CUR);
+    if (pos < 0) return 0;
+
+    return ((uint64_t)st.st_size <= (uint64_t)pos) ? 0x01 : 0;
+#endif
+}
+
 // poll_oneoff: (in, out, nsubscriptions, nevents) -> errno
 static int64_t wasi_poll_oneoff_impl(
     jit_context_t *ctx,
     int64_t in_ptr, int64_t out_ptr, int64_t nsubscriptions, int64_t nevents_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (nsubscriptions < 0) return WASI_EINVAL;
+
     uint32_t in_ptr_u = (uint32_t)in_ptr;
     uint32_t out_ptr_u = (uint32_t)out_ptr;
     uint32_t nevents_ptr_u = (uint32_t)nevents_ptr;
@@ -1355,149 +1896,213 @@ static int64_t wasi_poll_oneoff_impl(
     if (!check_mem_range(ctx, nevents_ptr_u, 4)) return WASI_EFAULT;
 
     uint8_t *mem = ctx->memory0->base;
-    if (nsubscriptions_u == 0) {
-        *(uint32_t *)(mem + nevents_ptr_u) = 0;
-        return WASI_ESUCCESS;
-    }
+    if (nsubscriptions_u == 0) return WASI_EINVAL;
 
-    int64_t min_timeout = -1;
-    int num_fds = 0;
+    int64_t retval = WASI_ESUCCESS;
+    int64_t min_timeout_ns = -1;
+    int64_t poll_start_monotonic = monotonic_now_ns();
+    int64_t poll_end_monotonic = poll_start_monotonic;
+    uint32_t events_written = 0;
+
+    wasi_clock_plan_t *clock_plans = calloc((size_t)nsubscriptions_u, sizeof(wasi_clock_plan_t));
+    wasi_fd_plan_t *fd_plans = calloc((size_t)nsubscriptions_u, sizeof(wasi_fd_plan_t));
+    uint8_t *ready_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint8_t));
+    uint8_t *ready_type_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint8_t));
+    uint64_t *ready_nbytes_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint64_t));
+    uint16_t *ready_flags_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint16_t));
+#ifndef _WIN32
+    struct pollfd *pfds = NULL;
+#endif
+    size_t clock_count = 0;
+    size_t fd_count = 0;
+
+    if (!clock_plans || !fd_plans || !ready_by_sub || !ready_type_by_sub || !ready_nbytes_by_sub || !ready_flags_by_sub) {
+        retval = WASI_ENOMEM;
+        goto cleanup;
+    }
 
     for (uint32_t i = 0; i < nsubscriptions_u; i++) {
         size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
         uint8_t tag = mem[sub + 8];
         if (tag == 0) {
+            int32_t clock_id = *(int32_t *)(mem + sub + 16);
             int64_t timeout = *(int64_t *)(mem + sub + 24);
             uint16_t flags = *(uint16_t *)(mem + sub + 40);
-            int64_t timeout_ns;
-            if (flags & 1) {
-#ifndef _WIN32
-                struct timespec ts;
-                clock_gettime(CLOCK_MONOTONIC, &ts);
-                int64_t now = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-                timeout_ns = timeout > now ? timeout - now : 0;
-#else
-                timeout_ns = 0;
-#endif
-            } else {
-                timeout_ns = timeout;
+            int64_t remaining_ns = 0;
+            if (!poll_clock_remaining_ns(clock_id, timeout, flags, &remaining_ns)) {
+                retval = WASI_EINVAL;
+                goto cleanup;
             }
-            if (min_timeout < 0 || timeout_ns < min_timeout) {
-                min_timeout = timeout_ns;
+            if (min_timeout_ns < 0 || remaining_ns < min_timeout_ns) {
+                min_timeout_ns = remaining_ns;
             }
-        } else if (tag == 1 || tag == 2) {
-            int32_t fd = *(int32_t *)(mem + sub + 12);
-            // Match interpreter: stdio fds are virtual (callbacks/buffers),
-            // so poll_oneoff should not block on them.
-            if (fd >= 0 && fd <= 2) {
-                continue;
-            }
-            int native_fd = get_native_fd(ctx, fd);
-            if (native_fd >= 0) {
-                num_fds++;
-            }
+            clock_plans[clock_count++] = (wasi_clock_plan_t){
+                .sub_index = i,
+                .clock_id = clock_id,
+                .timeout = timeout,
+                .flags = flags,
+            };
+            continue;
         }
+
+        if (tag == 1 || tag == 2) {
+            int32_t wasi_fd = *(int32_t *)(mem + sub + 12);
+            int native_fd = -1;
+            if (wasi_fd < 0) {
+                retval = WASI_EBADF;
+                goto cleanup;
+            }
+            if (wasi_fd == 0) {
+                if (tag != 1) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
+                native_fd = 0;
+            } else if (wasi_fd == 1 || wasi_fd == 2) {
+                if (tag != 2) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
+                native_fd = wasi_fd;
+            } else {
+                native_fd = get_native_fd(ctx, wasi_fd);
+                if (native_fd < 0) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
+                if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
+            }
+            fd_plans[fd_count++] = (wasi_fd_plan_t){
+                .sub_index = i,
+                .wasi_fd = wasi_fd,
+                .event_type = tag,
+                .native_fd = native_fd,
+                .poll_events = (tag == 1) ? POLLIN : POLLOUT,
+            };
+            continue;
+        }
+
+        retval = WASI_EINVAL;
+        goto cleanup;
     }
 
     int timeout_ms = -1;
-    if (min_timeout == 0) {
+    if (min_timeout_ns == 0) {
         timeout_ms = 0;
-    } else if (min_timeout > 0) {
-        int64_t ms = min_timeout / 1000000LL;
+    } else if (min_timeout_ns > 0) {
+        int64_t ms = min_timeout_ns / 1000000LL;
         timeout_ms = (ms == 0) ? 1 : (int)ms;
     }
 
-    uint32_t events_written = 0;
-    int clock_ready = 0;
+    poll_start_monotonic = monotonic_now_ns();
 
+    if (fd_count > 0) {
 #ifndef _WIN32
-    struct pollfd *pfds = NULL;
-    int *sub_indices = NULL;
-    if (num_fds > 0) {
-        pfds = calloc((size_t)num_fds, sizeof(struct pollfd));
-        sub_indices = calloc((size_t)num_fds, sizeof(int));
-        if (!pfds || !sub_indices) {
-            free(pfds);
-            free(sub_indices);
-            return WASI_ENOMEM;
-        }
-        int idx = 0;
-        for (uint32_t i = 0; i < nsubscriptions_u; i++) {
-            size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-            uint8_t tag = mem[sub + 8];
-            if (tag == 1 || tag == 2) {
-                int32_t fd = *(int32_t *)(mem + sub + 12);
-                if (fd >= 0 && fd <= 2) {
-                    continue;
-                }
-                int native_fd = get_native_fd(ctx, fd);
-                if (native_fd >= 0) {
-                    pfds[idx].fd = native_fd;
-                    pfds[idx].events = (tag == 1) ? POLLIN : POLLOUT;
-                    sub_indices[idx] = (int)i;
-                    idx++;
-                }
-            }
+        pfds = calloc(fd_count, sizeof(struct pollfd));
+        if (!pfds) {
+            retval = WASI_ENOMEM;
+            goto cleanup;
         }
 
-        int poll_result = poll(pfds, (nfds_t)num_fds, timeout_ms);
+        for (size_t i = 0; i < fd_count; i++) {
+            pfds[i].fd = fd_plans[i].native_fd;
+            pfds[i].events = fd_plans[i].poll_events;
+            pfds[i].revents = 0;
+        }
+
+        int poll_result = poll(pfds, (nfds_t)fd_count, timeout_ms);
+        if (poll_result < 0) {
+            retval = errno_to_wasi(errno);
+            goto cleanup;
+        }
+
         if (poll_result > 0) {
-            for (int i = 0; i < num_fds; i++) {
-                if (pfds[i].revents != 0 && events_written < nsubscriptions_u) {
-                    size_t sub = (size_t)in_ptr_u + (size_t)sub_indices[i] * 48;
-                    int64_t userdata = *(int64_t *)(mem + sub);
-                    uint8_t tag = mem[sub + 8];
-                    size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-
-                    *(int64_t *)(mem + evt) = userdata;
-                    *(uint16_t *)(mem + evt + 8) = 0;
-                    mem[evt + 10] = tag;
-                    memset(mem + evt + 11, 0, 5);
-                    *(int64_t *)(mem + evt + 16) = 0;
-                    *(uint16_t *)(mem + evt + 24) = 0;
-                    memset(mem + evt + 26, 0, 6);
-                    events_written++;
-                }
+            for (size_t i = 0; i < fd_count; i++) {
+                if (pfds[i].revents == 0) continue;
+                uint32_t sub_index = fd_plans[i].sub_index;
+                ready_by_sub[sub_index] = 1;
+                ready_type_by_sub[sub_index] = fd_plans[i].event_type;
+                ready_nbytes_by_sub[sub_index] = 1;
+                ready_flags_by_sub[sub_index] =
+                    (fd_plans[i].event_type == 1)
+                        ? poll_fd_readwrite_flags_for_event(ctx, fd_plans[i].wasi_fd)
+                        : 0;
             }
         }
-        if (poll_result == 0) {
-            clock_ready = 1;
-        }
-        free(pfds);
-        free(sub_indices);
-    } else if (min_timeout >= 0) {
+#else
+        if (timeout_ms > 0) Sleep((DWORD)timeout_ms);
+#endif
+    } else if (min_timeout_ns >= 0) {
+#ifndef _WIN32
         struct timespec ts = {
-            .tv_sec = min_timeout / 1000000000LL,
-            .tv_nsec = min_timeout % 1000000000LL
+            .tv_sec = min_timeout_ns / 1000000000LL,
+            .tv_nsec = min_timeout_ns % 1000000000LL
         };
         nanosleep(&ts, NULL);
-        clock_ready = 1;
-    }
 #else
-    (void)timeout_ms;
-    if (min_timeout >= 0 && num_fds == 0) {
-        clock_ready = 1;
-    }
+        DWORD sleep_ms = (DWORD)(min_timeout_ns / 1000000LL);
+        if (sleep_ms == 0 && min_timeout_ns > 0) sleep_ms = 1;
+        Sleep(sleep_ms);
 #endif
+    }
 
-    if (clock_ready) {
-        for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
-            size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-            uint8_t tag = mem[sub + 8];
-            if (tag == 0) {
-                int64_t userdata = *(int64_t *)(mem + sub);
-                size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-                *(int64_t *)(mem + evt) = userdata;
-                *(uint16_t *)(mem + evt + 8) = 0;
-                mem[evt + 10] = 0;
-                memset(mem + evt + 11, 0, 21);
-                events_written++;
-            }
+    poll_end_monotonic = monotonic_now_ns();
+    int64_t poll_elapsed_ns =
+        (poll_end_monotonic > poll_start_monotonic) ? (poll_end_monotonic - poll_start_monotonic) : 0;
+    int64_t now_monotonic = poll_end_monotonic;
+    int64_t now_realtime = realtime_now_ns();
+
+    for (size_t i = 0; i < clock_count; i++) {
+        wasi_clock_plan_t plan = clock_plans[i];
+        if (poll_clock_is_expired(
+                plan.clock_id,
+                plan.timeout,
+                plan.flags,
+                poll_elapsed_ns,
+                now_monotonic,
+                now_realtime)) {
+            ready_by_sub[plan.sub_index] = 1;
+            ready_type_by_sub[plan.sub_index] = 0;
+            ready_nbytes_by_sub[plan.sub_index] = 0;
+            ready_flags_by_sub[plan.sub_index] = 0;
         }
+    }
+
+    events_written = 0;
+    for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
+        if (!ready_by_sub[i]) continue;
+
+        size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
+        size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
+        int64_t userdata = *(int64_t *)(mem + sub);
+
+        *(int64_t *)(mem + evt) = userdata;
+        *(uint16_t *)(mem + evt + 8) = 0;
+        mem[evt + 10] = ready_type_by_sub[i];
+        memset(mem + evt + 11, 0, 5);
+        *(uint64_t *)(mem + evt + 16) = ready_nbytes_by_sub[i];
+        *(uint16_t *)(mem + evt + 24) = ready_flags_by_sub[i];
+        memset(mem + evt + 26, 0, 6);
+        events_written++;
     }
 
     *(uint32_t *)(mem + nevents_ptr_u) = events_written;
-    return WASI_ESUCCESS;
+    retval = WASI_ESUCCESS;
+
+cleanup:
+#ifndef _WIN32
+    free(pfds);
+#endif
+    free(clock_plans);
+    free(fd_plans);
+    free(ready_by_sub);
+    free(ready_type_by_sub);
+    free(ready_nbytes_by_sub);
+    free(ready_flags_by_sub);
+    return retval;
 }
 
 // ============ Additional File Operations ============
@@ -1515,8 +2120,12 @@ static int32_t wasi_fd_pread_impl(
     if (!check_mem_range(ctx, iovs_ptr_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nread_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not seekable, so pread is not supported
-    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
+    // Match wasmtime:
+    // - fd_pread(stdin) -> ESPIPE
+    // - fd_pread(stdout/stderr) -> EBADF
+    if (fd == 0) return WASI_ESPIPE;
+    if (fd == 1 || fd == 2) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1554,8 +2163,12 @@ static int32_t wasi_fd_pwrite_impl(
     if (!check_mem_range(ctx, iovs_ptr_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nwritten_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not seekable, so pwrite is not supported
-    if (fd >= 0 && fd < 3) return WASI_ESPIPE;
+    // Match wasmtime:
+    // - fd_pwrite(stdout/stderr) -> ESPIPE
+    // - fd_pwrite(stdin) -> EBADF
+    if (fd == 1 || fd == 2) return WASI_ESPIPE;
+    if (fd == 0) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -1682,13 +2295,14 @@ static int32_t wasi_path_filestat_get_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
     free(path_tmp);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
     struct stat st;
     int result;
@@ -1740,13 +2354,14 @@ static int32_t wasi_path_readlink_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
     free(path_tmp);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
     ssize_t n = readlink(full_path, (char *)(mem + buf_ptr_u), buf_len_u);
     free(full_path);
@@ -1776,23 +2391,24 @@ static int32_t wasi_path_symlink_impl(
 
 #ifndef _WIN32
     char *old_path = malloc((size_t)old_path_len_u + 1);
-    if (!old_path) return WASI_EIO;
+    if (!old_path) return WASI_ENOMEM;
     memcpy(old_path, mem + old_path_ptr_u, old_path_len_u);
     old_path[old_path_len_u] = '\0';
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
         free(old_path);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
     memcpy(new_path_tmp, mem + new_path_ptr_u, new_path_len_u);
     new_path_tmp[new_path_len_u] = '\0';
 
-    char *full_new_path = resolve_path(ctx, dir_fd, new_path_tmp);
+    char *full_new_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, new_path_tmp, &full_new_path);
     free(new_path_tmp);
-    if (!full_new_path) {
+    if (path_errno != WASI_ESUCCESS) {
         free(old_path);
-        return WASI_EBADF;
+        return path_errno;
     }
 
     int result = symlink(old_path, full_new_path);
@@ -1825,30 +2441,32 @@ static int32_t wasi_path_link_impl(
 
 #ifndef _WIN32
     char *old_path_tmp = malloc((size_t)old_path_len_u + 1);
-    if (!old_path_tmp) return WASI_EIO;
+    if (!old_path_tmp) return WASI_ENOMEM;
     memcpy(old_path_tmp, mem + old_path_ptr_u, old_path_len_u);
     old_path_tmp[old_path_len_u] = '\0';
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
         free(old_path_tmp);
-        return WASI_EIO;
+        return WASI_ENOMEM;
     }
     memcpy(new_path_tmp, mem + new_path_ptr_u, new_path_len_u);
     new_path_tmp[new_path_len_u] = '\0';
 
-    char *full_old_path = resolve_path(ctx, old_fd, old_path_tmp);
+    char *full_old_path = NULL;
+    int old_errno = resolve_path_with_errno(ctx, old_fd, old_path_tmp, &full_old_path);
     free(old_path_tmp);
-    if (!full_old_path) {
+    if (old_errno != WASI_ESUCCESS) {
         free(new_path_tmp);
-        return WASI_EBADF;
+        return old_errno;
     }
 
-    char *full_new_path = resolve_path(ctx, new_fd, new_path_tmp);
+    char *full_new_path = NULL;
+    int new_errno = resolve_path_with_errno(ctx, new_fd, new_path_tmp, &full_new_path);
     free(new_path_tmp);
-    if (!full_new_path) {
+    if (new_errno != WASI_ESUCCESS) {
         free(full_old_path);
-        return WASI_EBADF;
+        return new_errno;
     }
 
     int flags = (old_flags & 0x01) ? AT_SYMLINK_FOLLOW : 0;
@@ -1904,7 +2522,7 @@ static int32_t wasi_fd_filestat_set_times_impl(
     }
 
     if (futimens(native_fd, times) != 0) {
-        return WASI_EIO;
+        return errno_to_wasi(errno);
     }
     return WASI_ESUCCESS;
 #else
@@ -1926,13 +2544,14 @@ static int32_t wasi_path_filestat_set_times_impl(
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
-    if (!path_tmp) return WASI_EIO;
+    if (!path_tmp) return WASI_ENOMEM;
     memcpy(path_tmp, mem + path_ptr_u, path_len_u);
     path_tmp[path_len_u] = '\0';
 
-    char *full_path = resolve_path(ctx, dir_fd, path_tmp);
+    char *full_path = NULL;
+    int path_errno = resolve_path_with_errno(ctx, dir_fd, path_tmp, &full_path);
     free(path_tmp);
-    if (!full_path) return WASI_EBADF;
+    if (path_errno != WASI_ESUCCESS) return path_errno;
 
     struct timespec times[2];
 
@@ -1993,10 +2612,11 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
 ) {
     (void)rights_base;
     (void)rights_inheriting;
+    if (!ctx) return WASI_EBADF;
+    if (fd >= 0 && fd < 3) return WASI_ENOTSUP;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-    // Rights system not enforced, always succeed
-    return WASI_ESUCCESS;
+    return WASI_ENOTSUP;
 }
 
 // fd_allocate: Allocate space for a file
@@ -2014,15 +2634,15 @@ static int32_t wasi_fd_allocate_impl(
 #ifdef __linux__
     // Linux has posix_fallocate
     int result = posix_fallocate(native_fd, offset, len);
-    if (result != 0) return WASI_EIO;
+    if (result != 0) return errno_to_wasi(result);
     return WASI_ESUCCESS;
 #elif defined(__APPLE__)
     // macOS: use ftruncate as fallback if extending file
     struct stat st;
-    if (fstat(native_fd, &st) != 0) return WASI_EIO;
+    if (fstat(native_fd, &st) != 0) return errno_to_wasi(errno);
     int64_t new_size = offset + len;
     if (new_size > st.st_size) {
-        if (ftruncate(native_fd, new_size) != 0) return WASI_EIO;
+        if (ftruncate(native_fd, new_size) != 0) return errno_to_wasi(errno);
     }
     return WASI_ESUCCESS;
 #else
@@ -2042,14 +2662,13 @@ static int32_t wasi_fd_renumber_impl(
 
     if (!ctx || !ctx->fd_table) return WASI_EBADF;
 
-    if (!ensure_fd_capacity(ctx, to_fd)) return WASI_EIO;
-    if (fd == to_fd) return WASI_ESUCCESS;
-
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-
     int native_to_fd = get_native_fd(ctx, to_fd);
-    if (native_to_fd >= 0) {
+    if (native_to_fd < 0) return WASI_EBADF;
+    if (fd == to_fd) return WASI_ESUCCESS;
+
+    if (native_to_fd != native_fd) {
 #ifndef _WIN32
         close(native_to_fd);
 #endif
@@ -2076,27 +2695,30 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t flags
 ) {
+    // Match wasmtime behavior:
+    // - only APPEND/NONBLOCK are accepted
+    // - DSYNC/RSYNC/SYNC are rejected with EINVAL
+    if ((flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0) {
+        return WASI_EINVAL;
+    }
+    if (fd >= 0 && fd < 3) return WASI_EBADF;
+    if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    int native_flags = 0;
-    // WASI fdflags:
-    // 0x01 = APPEND
-    // 0x02 = DSYNC
-    // 0x04 = NONBLOCK
-    // 0x08 = RSYNC
-    // 0x10 = SYNC
+    int native_flags = fcntl(native_fd, F_GETFL);
+    if (native_flags < 0) return errno_to_wasi(errno);
+
     if (flags & 0x01) native_flags |= O_APPEND;
-#ifdef O_DSYNC
-    if (flags & 0x02) native_flags |= O_DSYNC;
-#endif
+    else native_flags &= ~O_APPEND;
+#ifdef O_NONBLOCK
     if (flags & 0x04) native_flags |= O_NONBLOCK;
-#ifdef O_SYNC
-    if (flags & 0x10) native_flags |= O_SYNC;
+    else native_flags &= ~O_NONBLOCK;
 #endif
 
-    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return WASI_EIO;
+    if (fcntl(native_fd, F_SETFL, native_flags) < 0) return errno_to_wasi(errno);
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;

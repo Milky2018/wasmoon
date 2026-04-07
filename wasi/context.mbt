@@ -7,6 +7,8 @@ pub(all) enum FileType {
   Directory
   /// Stdin/Stdout/Stderr (character device)
   CharacterDevice
+  /// Stream socket
+  SocketStream
 }
 
 ///|
@@ -373,37 +375,43 @@ fn sanitize_guest_path(path : String) -> String? {
 }
 
 ///|
+pub(all) enum ResolvePathError {
+  BadFd
+  NotCapable
+}
+
+///|
 /// Resolve a path relative to a directory fd
 pub fn WasiContext::resolve_path(
   self : WasiContext,
   dir_fd : Int,
   path : String,
-) -> String? {
+) -> Result[String, ResolvePathError] {
   let normalized = match sanitize_guest_path(path) {
     Some(p) => p
-    None => return None
+    None => return Err(NotCapable)
   }
-  // If dir_fd is a preopen directory, resolve relative to it
-  if self.get_preopen_host_path(dir_fd) is Some(host_path) {
-    if normalized.length() == 0 {
-      Some(host_path)
-    } else {
-      Some(host_path + "/" + normalized)
-    }
+  let base = if self.get_preopen_host_path(dir_fd) is Some(host_path) {
+    host_path
   } else {
-    // Check if it's a regular open directory
     match self.get_file(dir_fd) {
       Some(file) =>
         if file.file_type is Directory {
-          if normalized.length() == 0 {
-            Some(file.host_path)
-          } else {
-            Some(file.host_path + "/" + normalized)
-          }
+          file.host_path
         } else {
-          None
+          return Err(BadFd)
         }
-      None => None
+      None => return Err(BadFd)
     }
+  }
+  let resolved = if normalized.length() == 0 {
+    base
+  } else {
+    base + "/" + normalized
+  }
+  if native_path_within_base(base, resolved) {
+    Ok(resolved)
+  } else {
+    Err(NotCapable)
   }
 }

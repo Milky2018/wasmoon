@@ -38,6 +38,74 @@ extern "C" {
 #define WASMOON_AT_REMOVEDIR_TOKEN 0x200
 #define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
 
+#ifndef _WIN32
+static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
+  if (!base_real || !target_real) return 0;
+  if (strcmp(base_real, "/") == 0) {
+    return target_real[0] == '/';
+  }
+  size_t base_len = strlen(base_real);
+  if (strncmp(base_real, target_real, base_len) != 0) return 0;
+  char next = target_real[base_len];
+  return next == '\0' || next == '/';
+}
+
+static int wasmoon_wasi_realpath_existing_parent(const char *path, char **out_real) {
+  if (!path || !out_real) return 0;
+  *out_real = NULL;
+
+  char *scratch = strdup(path);
+  if (!scratch) return 0;
+
+  while (1) {
+    errno = 0;
+    char *resolved = realpath(scratch, NULL);
+    if (resolved) {
+      *out_real = resolved;
+      free(scratch);
+      return 1;
+    }
+
+    if (errno != ENOENT && errno != ENOTDIR) {
+      break;
+    }
+
+    char *slash = strrchr(scratch, '/');
+    if (!slash) {
+      scratch[0] = '.';
+      scratch[1] = '\0';
+    } else if (slash == scratch) {
+      scratch[1] = '\0';
+    } else {
+      *slash = '\0';
+    }
+  }
+
+  free(scratch);
+  return 0;
+}
+
+static int wasmoon_wasi_path_within_base_impl(const char *base_path, const char *target_path) {
+  if (!base_path || !target_path) return 0;
+
+  char *base_real = realpath(base_path, NULL);
+  if (!base_real) return 0;
+
+  char *target_real = realpath(target_path, NULL);
+  if (!target_real) {
+    if (!wasmoon_wasi_realpath_existing_parent(target_path, &target_real)) {
+      free(base_real);
+      return 0;
+    }
+  }
+
+  int ok = wasmoon_wasi_path_is_within_base(base_real, target_real);
+  free(base_real);
+  free(target_real);
+  return ok;
+}
+#endif
+
 // Open a file and return file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mode) {
 #ifdef _WIN32
@@ -97,6 +165,24 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
 }
 
+// Check whether a target path stays within the base directory after canonical
+// resolution (including symlink traversal).
+MOONBIT_FFI_EXPORT int wasmoon_wasi_path_within_base(
+  moonbit_bytes_t base_path,
+  moonbit_bytes_t target_path
+) {
+#ifdef _WIN32
+  (void)base_path;
+  (void)target_path;
+  return 1;
+#else
+  return wasmoon_wasi_path_within_base_impl(
+    (const char *)base_path,
+    (const char *)target_path
+  );
+#endif
+}
+
 // Convert native errno value to WASI preview1 errno number.
 MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
   switch (err) {
@@ -122,6 +208,36 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EBUSY
     case EBUSY: return 10;
 #endif
+#ifdef ECANCELED
+    case ECANCELED: return 11;
+#endif
+#ifdef ECHILD
+    case ECHILD: return 12;
+#endif
+#ifdef ECONNABORTED
+    case ECONNABORTED: return 13;
+#endif
+#ifdef ECONNREFUSED
+    case ECONNREFUSED: return 14;
+#endif
+#ifdef ECONNRESET
+    case ECONNRESET: return 15;
+#endif
+#if defined(EDEADLK)
+    case EDEADLK: return 16;
+#endif
+#if defined(EDEADLOCK) && (!defined(EDEADLK) || EDEADLOCK != EDEADLK)
+    case EDEADLOCK: return 16;
+#endif
+#ifdef EDESTADDRREQ
+    case EDESTADDRREQ: return 17;
+#endif
+#ifdef EDOM
+    case EDOM: return 18;
+#endif
+#ifdef EDQUOT
+    case EDQUOT: return 19;
+#endif
 #ifdef EEXIST
     case EEXIST: return 20;
 #endif
@@ -146,17 +262,41 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EIO
     case EIO: return 29;
 #endif
+#ifdef EISCONN
+    case EISCONN: return 30;
+#endif
 #ifdef EISDIR
     case EISDIR: return 31;
 #endif
 #ifdef ELOOP
     case ELOOP: return 32;
 #endif
+#ifdef EMFILE
+    case EMFILE: return 33;
+#endif
 #ifdef EMLINK
     case EMLINK: return 34;
 #endif
+#ifdef EMSGSIZE
+    case EMSGSIZE: return 35;
+#endif
 #ifdef ENAMETOOLONG
     case ENAMETOOLONG: return 37;
+#endif
+#ifdef ENETDOWN
+    case ENETDOWN: return 38;
+#endif
+#ifdef ENETRESET
+    case ENETRESET: return 39;
+#endif
+#ifdef ENETUNREACH
+    case ENETUNREACH: return 40;
+#endif
+#ifdef ENFILE
+    case ENFILE: return 41;
+#endif
+#ifdef ENOBUFS
+    case ENOBUFS: return 42;
 #endif
 #ifdef ENODEV
     case ENODEV: return 43;
@@ -164,11 +304,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef ENOENT
     case ENOENT: return 44;
 #endif
+#ifdef ENOEXEC
+    case ENOEXEC: return 45;
+#endif
 #ifdef ENOLCK
     case ENOLCK: return 46;
 #endif
 #ifdef ENOMEM
     case ENOMEM: return 48;
+#endif
+#ifdef ENOMSG
+    case ENOMSG: return 49;
+#endif
+#ifdef ENOPROTOOPT
+    case ENOPROTOOPT: return 50;
 #endif
 #ifdef ENOSPC
     case ENOSPC: return 51;
@@ -176,11 +325,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef ENOSYS
     case ENOSYS: return 52;
 #endif
+#ifdef ENOTCONN
+    case ENOTCONN: return 53;
+#endif
 #ifdef ENOTDIR
     case ENOTDIR: return 54;
 #endif
 #ifdef ENOTEMPTY
     case ENOTEMPTY: return 55;
+#endif
+#ifdef ENOTRECOVERABLE
+    case ENOTRECOVERABLE: return 56;
+#endif
+#ifdef ENOTSOCK
+    case ENOTSOCK: return 57;
 #endif
 #ifdef ENOTSUP
     case ENOTSUP: return 58;
@@ -203,11 +361,29 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_errno_to_wasi(int err) {
 #ifdef EPIPE
     case EPIPE: return 64;
 #endif
+#ifdef EPROTO
+    case EPROTO: return 65;
+#endif
+#ifdef EPROTONOSUPPORT
+    case EPROTONOSUPPORT: return 66;
+#endif
+#ifdef EPROTOTYPE
+    case EPROTOTYPE: return 67;
+#endif
+#ifdef ERANGE
+    case ERANGE: return 68;
+#endif
 #ifdef EROFS
     case EROFS: return 69;
 #endif
 #ifdef ESPIPE
     case ESPIPE: return 70;
+#endif
+#ifdef ESRCH
+    case ESRCH: return 71;
+#endif
+#ifdef ETIMEDOUT
+    case ETIMEDOUT: return 73;
 #endif
 #ifdef ETXTBSY
     case ETXTBSY: return 74;
@@ -227,6 +403,13 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_o_creat(void) { return O_CREAT; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_trunc(void) { return O_TRUNC; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_append(void) { return O_APPEND; }
 MOONBIT_FFI_EXPORT int wasmoon_wasi_o_excl(void) { return O_EXCL; }
+MOONBIT_FFI_EXPORT int wasmoon_wasi_o_nonblock(void) {
+#ifdef O_NONBLOCK
+  return O_NONBLOCK;
+#else
+  return 0;
+#endif
+}
 
 // Create a directory
 MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
