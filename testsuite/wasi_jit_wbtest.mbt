@@ -643,6 +643,28 @@ test "wasi jit: poll_oneoff single relative clock writes nbytes=1" {
 }
 
 ///|
+test "wasi jit: poll_oneoff rejects unknown subclockflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (i64.store (i32.const 0) (i64.const 777))
+    #|    (i32.store8 (i32.const 8) (i32.const 0))
+    #|    (i32.store (i32.const 16) (i32.const 1))
+    #|    (i64.store (i32.const 24) (i64.const 0))
+    #|    (i64.store (i32.const 32) (i64.const 0))
+    #|    (i32.store16 (i32.const 40) (i32.const 2))
+    #|    (call $poll_oneoff
+    #|      (i32.const 0) (i32.const 64) (i32.const 1) (i32.const 128))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
   let source =
     #|(module

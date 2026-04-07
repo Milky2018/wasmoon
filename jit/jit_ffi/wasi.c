@@ -2130,6 +2130,9 @@ static int64_t realtime_now_ns(void) {
 }
 
 static int poll_clock_remaining_ns(int32_t clock_id, int64_t timeout, uint16_t flags, int64_t *remaining) {
+    if ((flags & ~0x01) != 0) {
+        return 0;
+    }
     int absolute = (flags & 0x01) != 0;
     if (absolute) {
         int64_t now;
@@ -2230,6 +2233,9 @@ static int64_t wasi_poll_oneoff_impl(
         uint8_t tag = mem[in_ptr_u + 8];
         if (tag == 0) {
             uint16_t flags = *(uint16_t *)(mem + in_ptr_u + 40);
+            if ((flags & ~0x01) != 0) {
+                return WASI_EINVAL;
+            }
             if ((flags & 0x01) == 0) {
                 int64_t timeout = *(int64_t *)(mem + in_ptr_u + 24);
                 if (timeout > 0) {

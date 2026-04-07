@@ -2607,6 +2607,20 @@ test "wasi: poll_oneoff single relative cpu clock is accepted" {
 }
 
 ///|
+test "wasi: poll_oneoff rejects unknown subclockflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 67890L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 1) // monotonic
+  mem.write_i64(24, 0L) // timeout
+  mem.write_i64(32, 0L) // precision
+  mem.write_byte(40, b'\x02') // invalid subclockflags bit
+  mem.write_byte(41, b'\x00')
+  inspect(poll_oneoff_impl(ctx, mem, 0, 100, 1, 200), content="28")
+}
+
+///|
 test "wasi: poll_oneoff emits expired clock with ready fd" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

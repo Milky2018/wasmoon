@@ -2376,6 +2376,10 @@ fn poll_clock_remaining_ns(
   timeout : Int64,
   flags : Int,
 ) -> Int64? {
+  let known_subclockflags_mask = 0x01
+  if (flags & known_subclockflags_mask.lnot()) != 0 {
+    return None
+  }
   let is_absolute = (flags & 0x01) != 0
   if is_absolute {
     match ClockId::from_i32(clock_id) {
@@ -2574,6 +2578,10 @@ pub fn poll_oneoff_impl(
     if is_clock_subscription(tag) {
       let flags = mem.read_byte(in_ptr + 40).to_int() |
         (mem.read_byte(in_ptr + 41).to_int() << 8)
+      let known_subclockflags_mask = 0x01
+      if (flags & known_subclockflags_mask.lnot()) != 0 {
+        return Errno::Inval.to_i32()
+      }
       if (flags & 0x01) == 0 {
         let timeout = mem.read_i64(in_ptr + 24)
         if timeout > 0L {
