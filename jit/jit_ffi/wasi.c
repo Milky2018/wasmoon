@@ -1500,6 +1500,8 @@ static int64_t wasi_path_open_impl(
     if (!path) return WASI_ENOMEM;
     memcpy(path, ctx->memory0->base + path_ptr_u, (size_t)path_len_u);
     path[path_len_u] = '\0';
+    int has_trailing_slash = path_len_u > 0 && path[path_len_u - 1] == '/';
+    int follow_symlink = (dirflags & 0x01) != 0;
 
     // Resolve full path
     char *full_path = NULL;
@@ -1514,6 +1516,16 @@ static int64_t wasi_path_open_impl(
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
+    if (has_trailing_slash) {
+        struct stat trailing_stat;
+        int stat_flags = follow_symlink ? 0 : AT_SYMLINK_NOFOLLOW;
+        if (fstatat(AT_FDCWD, full_path, &trailing_stat, stat_flags) != 0 ||
+            !S_ISDIR(trailing_stat.st_mode)) {
+            free(full_path);
+            return WASI_ENOENT;
+        }
+    }
+
     // Build open flags
     int flags = 0;
     if (oflags & 0x01) flags |= O_CREAT;
@@ -1522,7 +1534,7 @@ static int64_t wasi_path_open_impl(
     if (oflags & 0x08) flags |= O_TRUNC;
     if (fdflags & 0x01) flags |= O_APPEND;
 #ifdef O_NOFOLLOW
-    if ((dirflags & 0x01) == 0) flags |= O_NOFOLLOW;
+    if (!follow_symlink) flags |= O_NOFOLLOW;
 #endif
     int wants_read = (((uint64_t)rights_base) & WASI_RIGHT_FD_READ) != 0;
     int wants_write = (((uint64_t)rights_base) & WASI_RIGHT_FD_WRITE) != 0;
@@ -1533,6 +1545,10 @@ static int64_t wasi_path_open_impl(
 
     int native_fd = open(full_path, flags, 0644);
     if (native_fd < 0) {
+        if (has_trailing_slash && errno == ENOTDIR) {
+            free(full_path);
+            return WASI_ENOENT;
+        }
         free(full_path);
         return errno_to_wasi(errno);
     }

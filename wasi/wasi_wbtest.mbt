@@ -1179,6 +1179,44 @@ test "wasi: path_open empty path returns ENOENT" {
 }
 
 ///|
+test "wasi: path_open trailing slash on regular file returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_trailing_path.txt"
+  let slash = "wasmoon_trailing_path.txt/"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_open(ctx, mem, 3, 0, 200, slash.length(), 0, right_fd_read, 0L, 0, 304),
+    content="44",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
 test "wasi: path_open with embedded NUL returns EINVAL" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
