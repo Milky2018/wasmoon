@@ -165,6 +165,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_wasi_isatty(int fd) {
+#ifdef _WIN32
+  return _isatty(fd);
+#else
+  return isatty(fd);
+#endif
+}
+
 // Check whether a target path stays within the base directory after canonical
 // resolution (including symlink traversal).
 MOONBIT_FFI_EXPORT int wasmoon_wasi_path_within_base(
@@ -411,6 +419,22 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_o_nonblock(void) {
 #endif
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_wasi_o_directory(void) {
+#ifdef O_DIRECTORY
+  return O_DIRECTORY;
+#else
+  return 0;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_o_nofollow(void) {
+#ifdef O_NOFOLLOW
+  return O_NOFOLLOW;
+#else
+  return 0;
+#endif
+}
+
 // Create a directory
 MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
 #ifdef _WIN32
@@ -488,6 +512,68 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
   }
 
   closedir(dir);
+  return result;
+#endif
+}
+
+MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  moonbit_bytes_t result = moonbit_make_bytes(4, 0);
+  memset(result, 0, 4);  // count = 0
+  return result;
+#else
+  int dup_fd = dup(fd);
+  if (dup_fd < 0) {
+    return NULL;
+  }
+  DIR *dir = fdopendir(dup_fd);
+  if (!dir) {
+    close(dup_fd);
+    return NULL;
+  }
+
+  int count = 0;
+  size_t total_size = 4;  // 4 bytes for count
+  struct dirent *entry;
+
+  while ((entry = readdir(dir)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+    count++;
+    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+  }
+
+  moonbit_bytes_t result = moonbit_make_bytes(total_size, 0);
+  result[0] = count & 0xFF;
+  result[1] = (count >> 8) & 0xFF;
+  result[2] = (count >> 16) & 0xFF;
+  result[3] = (count >> 24) & 0xFF;
+
+  rewinddir(dir);
+  size_t offset = 4;
+  while ((entry = readdir(dir)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
+    result[offset] = is_dir;
+    offset++;
+
+    size_t name_len = strlen(entry->d_name);
+    result[offset] = name_len & 0xFF;
+    result[offset + 1] = (name_len >> 8) & 0xFF;
+    result[offset + 2] = (name_len >> 16) & 0xFF;
+    result[offset + 3] = (name_len >> 24) & 0xFF;
+    offset += 4;
+
+    memcpy(result + offset, entry->d_name, name_len);
+    offset += name_len;
+  }
+
+  closedir(dir); // closes dup_fd too
   return result;
 #endif
 }
@@ -910,6 +996,35 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_gettime_realtime(void) {
 #else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
+  return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_getres_monotonic(void) {
+#ifdef _WIN32
+  LARGE_INTEGER freq;
+  if (!QueryPerformanceFrequency(&freq) || freq.QuadPart <= 0) {
+    return -1;
+  }
+  return (int64_t)(1000000000LL / freq.QuadPart);
+#else
+  struct timespec ts;
+  if (clock_getres(CLOCK_MONOTONIC, &ts) != 0) {
+    return -1;
+  }
+  return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_getres_realtime(void) {
+#ifdef _WIN32
+  // Windows wall clock resolution is not exposed directly. Use 1ms as fallback.
+  return 1000000;
+#else
+  struct timespec ts;
+  if (clock_getres(CLOCK_REALTIME, &ts) != 0) {
+    return -1;
+  }
   return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 #endif
 }

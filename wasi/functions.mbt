@@ -43,6 +43,82 @@ fn check_iovecs_mem_range(
 }
 
 ///|
+fn is_stdio_open(ctx : WasiContext, fd : Int) -> Bool {
+  if fd == 0 {
+    ctx.stdin_open
+  } else if fd == 1 {
+    ctx.stdout_open
+  } else if fd == 2 {
+    ctx.stderr_open
+  } else {
+    false
+  }
+}
+
+///|
+fn close_stdio_fd(ctx : WasiContext, fd : Int) -> Bool {
+  if fd == 0 {
+    if !ctx.stdin_open {
+      return false
+    }
+    ctx.stdin_open = false
+    true
+  } else if fd == 1 {
+    if !ctx.stdout_open {
+      return false
+    }
+    ctx.stdout_open = false
+    true
+  } else if fd == 2 {
+    if !ctx.stderr_open {
+      return false
+    }
+    ctx.stderr_open = false
+    true
+  } else {
+    false
+  }
+}
+
+///|
+fn stdio_filetype(ctx : WasiContext, fd : Int) -> Int {
+  if (fd == 0 && ctx.stdin_is_native && native_isatty(0)) ||
+    (fd == 1 && ctx.stdout_is_native && native_isatty(1)) ||
+    (fd == 2 && ctx.stderr_is_native && native_isatty(2)) {
+    2 // character_device
+  } else {
+    0 // unknown
+  }
+}
+
+///|
+fn open_file_type_from_native(stat_filetype : Int) -> FileType {
+  match stat_filetype {
+    3 => Directory
+    2 => CharacterDevice
+    6 => SocketStream
+    _ => RegularFile
+  }
+}
+
+///|
+fn first_non_empty_iov(
+  mem : @runtime.Memory,
+  iovs : Int,
+  iovs_len : Int,
+) -> (Int, Int)? {
+  for i in 0..<iovs_len {
+    let iov_offset = iovs + i * 8
+    let buf_ptr = mem.read_i32(iov_offset)
+    let buf_len = mem.read_i32(iov_offset + 4)
+    if buf_len > 0 {
+      return Some((buf_ptr, buf_len))
+    }
+  }
+  None
+}
+
+///|
 /// fd_write - Write data to a file descriptor using scatter/gather I/O
 ///
 /// Params:
@@ -63,26 +139,28 @@ pub fn fd_write(
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   let fd_val = Fd(fd)
   // Handle stdout/stderr
   if fd_val == stdout || fd_val == stderr {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     let mut total_written = 0
-    for i in 0..<iovs_len {
-      let iov_offset = iovs + i * 8
-      let buf_ptr = mem.read_i32(iov_offset)
-      let buf_len = mem.read_i32(iov_offset + 4)
-      if buf_len > 0 {
-        let data = mem.read_bytes(buf_ptr, buf_len)
-        if fd_val == stdout {
-          (ctx.stdout_callback)(data)
-        } else {
-          (ctx.stderr_callback)(data)
-        }
-        total_written = total_written + buf_len
+    if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+      let (buf_ptr, buf_len) = entry
+      if !check_mem_range(mem, buf_ptr, buf_len) {
+        return Errno::Fault.to_i32()
       }
+      let data = mem.read_bytes(buf_ptr, buf_len)
+      if fd_val == stdout {
+        (ctx.stdout_callback)(data)
+      } else {
+        (ctx.stderr_callback)(data)
+      }
+      total_written = buf_len
     }
     mem.write_i32(nwritten_ptr, total_written)
     return Errno::Success.to_i32()
@@ -90,24 +168,26 @@ pub fn fd_write(
   // Handle opened files
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
+      match file_entry.file_type {
+        RegularFile => ()
+        _ => return Errno::Badf.to_i32()
+      }
       let mut total_written = 0
-      for i in 0..<iovs_len {
-        let iov_offset = iovs + i * 8
-        let buf_ptr = mem.read_i32(iov_offset)
-        let buf_len = mem.read_i32(iov_offset + 4)
-        if buf_len > 0 {
-          // Create buffer and copy data
-          let buf = FixedArray::make(buf_len, b'\x00')
-          for j in 0..<buf_len {
-            buf[j] = mem.read_byte(buf_ptr + j)
-          }
-          let written = native_write(file_entry.native_fd, buf, buf_len)
-          match written {
-            Some(n) => total_written = total_written + n
-            None => {
-              mem.write_i32(nwritten_ptr, total_written)
-              return native_last_errno_to_wasi()
-            }
+      if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+        let (buf_ptr, buf_len) = entry
+        if !check_mem_range(mem, buf_ptr, buf_len) {
+          return Errno::Fault.to_i32()
+        }
+        let buf = FixedArray::make(buf_len, b'\x00')
+        for j in 0..<buf_len {
+          buf[j] = mem.read_byte(buf_ptr + j)
+        }
+        let written = native_write(file_entry.native_fd, buf, buf_len)
+        match written {
+          Some(n) => total_written = n
+          None => {
+            mem.write_i32(nwritten_ptr, total_written)
+            return native_last_errno_to_wasi()
           }
         }
       }
@@ -139,27 +219,26 @@ pub fn fd_read(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   // Handle stdin
   if fd == 0 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     let input_data = (ctx.stdin_callback)()
     let mut total_read = 0
-    let mut input_offset = 0
-    for i in 0..<iovs_len {
-      if input_offset >= input_data.length() {
-        break
+    if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+      let (buf_ptr, buf_len) = entry
+      if !check_mem_range(mem, buf_ptr, buf_len) {
+        return Errno::Fault.to_i32()
       }
-      let iov_offset = iovs + i * 8
-      let buf_ptr = mem.read_i32(iov_offset)
-      let buf_len = mem.read_i32(iov_offset + 4)
-      let to_copy = @cmp.minimum(buf_len, input_data.length() - input_offset)
+      let to_copy = @cmp.minimum(buf_len, input_data.length())
       for j in 0..<to_copy {
-        mem.write_byte(buf_ptr + j, input_data[input_offset + j])
+        mem.write_byte(buf_ptr + j, input_data[j])
       }
-      input_offset = input_offset + to_copy
-      total_read = total_read + to_copy
+      total_read = to_copy
     }
     mem.write_i32(nread_ptr, total_read)
     return Errno::Success.to_i32()
@@ -167,29 +246,27 @@ pub fn fd_read(
   // Handle opened files
   match ctx.open_files.get(fd) {
     Some(file_entry) => {
+      match file_entry.file_type {
+        RegularFile => ()
+        _ => return Errno::Badf.to_i32()
+      }
       let mut total_read = 0
-      for i in 0..<iovs_len {
-        let iov_offset = iovs + i * 8
-        let buf_ptr = mem.read_i32(iov_offset)
-        let buf_len = mem.read_i32(iov_offset + 4)
-        if buf_len > 0 {
-          let read_result = native_read_to_memory(
-            file_entry.native_fd,
-            mem,
-            buf_ptr,
-            buf_len,
-          )
-          match read_result {
-            Some(n) => {
-              total_read = total_read + n
-              if n < buf_len {
-                break // EOF or partial read
-              }
-            }
-            None => {
-              mem.write_i32(nread_ptr, total_read)
-              return native_last_errno_to_wasi()
-            }
+      if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+        let (buf_ptr, buf_len) = entry
+        if !check_mem_range(mem, buf_ptr, buf_len) {
+          return Errno::Fault.to_i32()
+        }
+        let read_result = native_read_to_memory(
+          file_entry.native_fd,
+          mem,
+          buf_ptr,
+          buf_len,
+        )
+        match read_result {
+          Some(n) => total_read = n
+          None => {
+            mem.write_i32(nread_ptr, total_read)
+            return native_last_errno_to_wasi()
           }
         }
       }
@@ -394,10 +471,13 @@ pub fn fd_prestat_get(
   if !check_mem_range(mem, prestat_ptr, 8) {
     return Errno::Fault.to_i32()
   }
+  if !ctx.is_valid_fd(fd) {
+    return Errno::Badf.to_i32()
+  }
   // Find preopen for this fd
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
-    if preopen_fd.to_int() == fd {
+    if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
       // Write prestat struct: tag (1 byte) + padding (3 bytes) + pr_name_len (4 bytes)
       mem.write_byte(prestat_ptr, b'\x00') // tag = dir
       mem.write_byte(prestat_ptr + 1, b'\x00')
@@ -424,10 +504,13 @@ pub fn fd_prestat_dir_name(
   if !check_mem_range(mem, path_ptr, path_len) {
     return Errno::Fault.to_i32()
   }
+  if !ctx.is_valid_fd(fd) {
+    return Errno::Badf.to_i32()
+  }
   // Find preopen for this fd
   for preopen in ctx.preopens {
     let (preopen_fd, _, guest_path) = preopen
-    if preopen_fd.to_int() == fd {
+    if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
       if path_len < guest_path.length() {
         return Errno::NameTooLong.to_i32()
       }
@@ -438,7 +521,7 @@ pub fn fd_prestat_dir_name(
       return Errno::Success.to_i32()
     }
   }
-  Errno::Badf.to_i32()
+  Errno::NotDir.to_i32()
 }
 
 ///|
@@ -446,8 +529,10 @@ pub fn fd_prestat_dir_name(
 ///
 /// Returns: errno
 pub fn fd_close(ctx : WasiContext, fd : Int) -> Int {
-  // stdin, stdout, stderr cannot be closed
-  if fd < 3 {
+  if fd >= 0 && fd < 3 {
+    if close_stdio_fd(ctx, fd) {
+      return Errno::Success.to_i32()
+    }
     return Errno::Badf.to_i32()
   }
   // Close the file and remove from tracking
@@ -502,7 +587,7 @@ pub fn path_open(
   ctx : WasiContext,
   mem : @runtime.Memory,
   dir_fd : Int,
-  _dirflags : Int,
+  dirflags : Int,
   path_ptr : Int,
   path_len : Int,
   oflags : Int,
@@ -514,14 +599,26 @@ pub fn path_open(
   if !check_mem_range(mem, opened_fd_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  // Validate rights - only bits 0-28 are valid
-  if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
-    return Errno::Inval.to_i32()
-  }
+  ignore(fs_rights_inheriting)
   // Read path from memory
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
+  }
+  if dir_fd >= 0 && dir_fd < 3 {
+    if !is_stdio_open(ctx, dir_fd) {
+      return Errno::Badf.to_i32()
+    }
+    return Errno::Badf.to_i32()
+  }
+  match ctx.get_file(dir_fd) {
+    Some(file) =>
+      match file.file_type {
+        Directory => ()
+        RegularFile => return Errno::NotDir.to_i32()
+        _ => return Errno::Badf.to_i32()
+      }
+    None => return Errno::Badf.to_i32()
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -534,6 +631,10 @@ pub fn path_open(
   let has_exclusive = (oflags & 0x04) != 0
   let has_truncate = (oflags & 0x08) != 0
   let has_append = (fdflags & 0x01) != 0
+  let follow_symlink = (dirflags & 0x01) != 0
+  if has_directory && (has_create || has_exclusive || has_truncate) {
+    return Errno::Inval.to_i32()
+  }
   // WASI oflags:
   // 0x01 = O_CREAT, 0x02 = O_DIRECTORY, 0x04 = O_EXCL, 0x08 = O_TRUNC
   if has_create {
@@ -552,6 +653,9 @@ pub fn path_open(
   // 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC
   if has_append {
     open_flags.push(Append)
+  }
+  if !follow_symlink {
+    open_flags.push(NoFollow)
   }
   let allow_read = (fs_rights_base & right_fd_read) != 0L
   let allow_write = (fs_rights_base & right_fd_write) != 0L
@@ -573,11 +677,20 @@ pub fn path_open(
     return native_last_errno_to_wasi()
   }
   let nfd = native_fd.unwrap()
-  // Determine file type
-  let file_type : FileType = if (oflags & 0x02) != 0 {
-    Directory
-  } else {
-    RegularFile
+  let stat = native_fstat(nfd)
+  if stat is None {
+    native_close(nfd) |> ignore
+    return native_last_errno_to_wasi()
+  }
+  let file_type = open_file_type_from_native(stat.unwrap().filetype)
+  if has_directory {
+    match file_type {
+      Directory => ()
+      _ => {
+        native_close(nfd) |> ignore
+        return Errno::NotDir.to_i32()
+      }
+    }
   }
   // Allocate WASI fd
   let wasi_fd = ctx.alloc_fd({
@@ -614,7 +727,10 @@ pub fn fd_seek(
     return Errno::Fault.to_i32()
   }
   // stdin, stdout, stderr don't support seeking
-  if fd < 3 {
+  if fd >= 0 && fd < 3 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::SPipe.to_i32()
   }
   let file = ctx.get_file(fd)
@@ -622,6 +738,10 @@ pub fn fd_seek(
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   // Convert WASI whence to native
   let native_whence : Whence = match whence {
     0 => Set
@@ -657,7 +777,10 @@ pub fn fd_tell(
     return Errno::Fault.to_i32()
   }
   // stdin, stdout, stderr don't support tell
-  if fd < 3 {
+  if fd >= 0 && fd < 3 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::SPipe.to_i32()
   }
   let file = ctx.get_file(fd)
@@ -665,6 +788,10 @@ pub fn fd_tell(
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
+  match f.file_type {
+    RegularFile => ()
+    _ => return Errno::Badf.to_i32()
+  }
   let pos = native_tell(f.native_fd)
   if pos is None {
     return native_last_errno_to_wasi()
@@ -698,13 +825,19 @@ pub fn fd_pread(
   if !check_mem_range(mem, nread_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if fd == 0 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::SPipe.to_i32()
   }
   if fd == 1 || fd == 2 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
@@ -726,31 +859,28 @@ pub fn fd_pread(
   if seek_result is None {
     return native_last_errno_to_wasi()
   }
-  // Read data
+  // Read data from the first non-empty iovec only (wasmtime parity).
   let mut total_read = 0
-  for i in 0..<iovs_len {
-    let iov_offset = iovs + i * 8
-    let buf_ptr = mem.read_i32(iov_offset)
-    let buf_len = mem.read_i32(iov_offset + 4)
-    if buf_len > 0 {
-      let buf = FixedArray::make(buf_len, b'\x00')
-      let n = native_read(f.native_fd, buf, buf_len)
-      if n is None {
-        let errno = native_last_errno_to_wasi()
-        // Restore position and return error
-        native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
-        return errno
-      }
-      let bytes_read = n.unwrap()
-      // Copy to WASM memory
-      for j in 0..<bytes_read {
-        mem.write_byte(buf_ptr + j, buf[j])
-      }
-      total_read = total_read + bytes_read
-      if bytes_read < buf_len {
-        break // EOF
-      }
+  if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+    let (buf_ptr, buf_len) = entry
+    if !check_mem_range(mem, buf_ptr, buf_len) {
+      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+      return Errno::Fault.to_i32()
     }
+    let buf = FixedArray::make(buf_len, b'\x00')
+    let n = native_read(f.native_fd, buf, buf_len)
+    if n is None {
+      let errno = native_last_errno_to_wasi()
+      // Restore position and return error
+      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+      return errno
+    }
+    let bytes_read = n.unwrap()
+    // Copy to WASM memory
+    for j in 0..<bytes_read {
+      mem.write_byte(buf_ptr + j, buf[j])
+    }
+    total_read = bytes_read
   }
   // Restore position
   native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
@@ -781,13 +911,19 @@ pub fn fd_pwrite(
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
+  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
     return Errno::Fault.to_i32()
   }
   if fd == 1 || fd == 2 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::SPipe.to_i32()
   }
   if fd == 0 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
@@ -809,27 +945,27 @@ pub fn fd_pwrite(
   if seek_result is None {
     return native_last_errno_to_wasi()
   }
-  // Write data
+  // Write data from the first non-empty iovec only (wasmtime parity).
   let mut total_written = 0
-  for i in 0..<iovs_len {
-    let iov_offset = iovs + i * 8
-    let buf_ptr = mem.read_i32(iov_offset)
-    let buf_len = mem.read_i32(iov_offset + 4)
-    if buf_len > 0 {
-      let buf = FixedArray::make(buf_len, b'\x00')
-      // Copy from WASM memory
-      for j in 0..<buf_len {
-        buf[j] = mem.read_byte(buf_ptr + j)
-      }
-      let n = native_write(f.native_fd, buf, buf_len)
-      if n is None {
-        let errno = native_last_errno_to_wasi()
-        // Restore position and return error
-        native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
-        return errno
-      }
-      total_written = total_written + n.unwrap()
+  if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
+    let (buf_ptr, buf_len) = entry
+    if !check_mem_range(mem, buf_ptr, buf_len) {
+      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+      return Errno::Fault.to_i32()
     }
+    let buf = FixedArray::make(buf_len, b'\x00')
+    // Copy from WASM memory
+    for j in 0..<buf_len {
+      buf[j] = mem.read_byte(buf_ptr + j)
+    }
+    let n = native_write(f.native_fd, buf, buf_len)
+    if n is None {
+      let errno = native_last_errno_to_wasi()
+      // Restore position and return error
+      native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
+      return errno
+    }
+    total_written = n.unwrap()
   }
   // Restore position
   native_seek(f.native_fd, saved_pos.unwrap(), Set) |> ignore
@@ -984,17 +1120,30 @@ pub fn fd_fdstat_get(
     Int64,
     Int64,
   ) = if fd == 0 {
-    // stdin - character device, read-only
-    // filetype=2 (character_device)
-    (2, 0, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    (
+      stdio_filetype(ctx, fd),
+      0,
+      fd_rights_for_stdio(fd),
+      fd_rights_for_stdio(fd),
+    )
   } else if fd == 1 || fd == 2 {
-    // stdout/stderr - character device, write-only
-    (2, 0, fd_rights_for_stdio(fd), fd_rights_for_stdio(fd))
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    (
+      stdio_filetype(ctx, fd),
+      0,
+      fd_rights_for_stdio(fd),
+      fd_rights_for_stdio(fd),
+    )
   } else {
     // Check preopen directories first: wasmtime reports a special base/inheriting set.
     for preopen in ctx.preopens {
       let (preopen_fd, _, _) = preopen
-      if preopen_fd.to_int() == fd {
+      if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
         let rights_base = fd_rights_for_preopen_directory_base()
         let rights_inheriting = fd_rights_for_preopen_directory_inheriting()
         return {
@@ -1062,12 +1211,24 @@ pub fn clock_res_get(
   if clock is None {
     return Errno::Inval.to_i32()
   }
-  match clock.unwrap() {
-    Realtime | Monotonic => {
-      // Return a reasonable resolution (1 millisecond = 1_000_000 nanoseconds).
-      mem.write_i64(resolution_ptr, 1000000L)
-      Errno::Success.to_i32()
-    }
+  let clock_value = clock.unwrap()
+  match clock_value {
+    Realtime =>
+      match native_clock_getres_realtime() {
+        Some(v) => {
+          mem.write_i64(resolution_ptr, v)
+          Errno::Success.to_i32()
+        }
+        None => native_last_errno_to_wasi()
+      }
+    Monotonic =>
+      match native_clock_getres_monotonic() {
+        Some(v) => {
+          mem.write_i64(resolution_ptr, v)
+          Errno::Success.to_i32()
+        }
+        None => native_last_errno_to_wasi()
+      }
     ProcessCPUTimeId | ThreadCPUTimeId => Errno::Badf.to_i32()
   }
 }
@@ -1098,9 +1259,9 @@ pub fn path_create_directory(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1137,41 +1298,103 @@ pub fn fd_readdir(
     !check_mem_range(mem, bufused_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if fd < 3 {
+  if fd >= 0 && fd < 3 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
     return Errno::Badf.to_i32()
   }
   let file = ctx.get_file(fd)
   if file is None {
-    // Check if it's a preopen directory
-    for preopen in ctx.preopens {
-      let (preopen_fd, host_path, _) = preopen
-      if preopen_fd.to_int() == fd {
-        return readdir_impl(
-          mem, host_path, buf_ptr, buf_len, cookie, bufused_ptr,
-        )
-      }
-    }
     return Errno::Badf.to_i32()
   }
   let f = file.unwrap()
   if f.file_type is Directory {
-    readdir_impl(mem, f.host_path, buf_ptr, buf_len, cookie, bufused_ptr)
+    readdir_impl(mem, f.native_fd, buf_ptr, buf_len, cookie, bufused_ptr)
   } else {
-    Errno::NotDir.to_i32()
+    Errno::Badf.to_i32()
   }
+}
+
+///|
+fn write_readdir_header(
+  mem : @runtime.Memory,
+  ptr : Int,
+  available : Int,
+  d_next : Int64,
+  d_ino : Int64,
+  d_namlen : Int,
+  d_type : Int,
+) -> Int {
+  let to_write = @cmp.minimum(available, 24)
+  for i in 0..<to_write {
+    let v = if i < 8 {
+      ((d_next >> (i * 8)) & 0xFFL).to_int()
+    } else if i < 16 {
+      ((d_ino >> ((i - 8) * 8)) & 0xFFL).to_int()
+    } else if i < 20 {
+      ((d_namlen.to_int64() >> ((i - 16) * 8)) & 0xFFL).to_int()
+    } else if i == 20 {
+      d_type
+    } else {
+      0
+    }
+    mem.write_byte(ptr + i, v.to_byte())
+  }
+  to_write
+}
+
+///|
+fn emit_readdir_entry(
+  mem : @runtime.Memory,
+  buf_ptr : Int,
+  buf_len : Int,
+  offset : Int,
+  entry_idx : Int64,
+  d_ino : Int64,
+  name : String,
+  is_dir : Bool,
+) -> (Int, Bool) {
+  if offset >= buf_len {
+    return (offset, false)
+  }
+  let d_next = entry_idx + 1L
+  let d_type = if is_dir { 3 } else { 4 }
+  let header_written = write_readdir_header(
+    mem,
+    buf_ptr + offset,
+    buf_len - offset,
+    d_next,
+    d_ino,
+    name.length(),
+    d_type,
+  )
+  let mut new_offset = offset + header_written
+  if header_written < 24 {
+    return (new_offset, false)
+  }
+  if new_offset >= buf_len {
+    return (new_offset, false)
+  }
+  let name_to_write = @cmp.minimum(buf_len - new_offset, name.length())
+  for i in 0..<name_to_write {
+    mem.write_byte(buf_ptr + new_offset + i, name.code_unit_at(i).to_byte())
+  }
+  new_offset = new_offset + name_to_write
+  (new_offset, name_to_write == name.length())
 }
 
 ///|
 /// Helper: Implement readdir
 fn readdir_impl(
   mem : @runtime.Memory,
-  dir_path : String,
+  dir_fd : Int,
   buf_ptr : Int,
   buf_len : Int,
   cookie : Int64,
   bufused_ptr : Int,
 ) -> Int {
-  let entries = native_readdir(dir_path)
+  let entries = native_readdir_fd(dir_fd)
   if entries is None {
     mem.write_i32(bufused_ptr, 0)
     return native_last_errno_to_wasi()
@@ -1179,39 +1402,51 @@ fn readdir_impl(
   let dir_entries = entries.unwrap()
   let mut offset = 0
   let mut entry_idx = 0L
+  let mut dir_ino = 1L
+  if native_fstat(dir_fd) is Some(stat) {
+    dir_ino = stat.ino.reinterpret_as_int64()
+  }
+  let effective_cookie = if cookie < 0L { 9223372036854775807L } else { cookie }
+  let mut keep_going = true
+  if entry_idx >= effective_cookie {
+    let (next_offset, ok) = emit_readdir_entry(
+      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, ".", true,
+    )
+    offset = next_offset
+    keep_going = ok
+  }
+  entry_idx = entry_idx + 1L
+  if keep_going && entry_idx >= effective_cookie {
+    let (next_offset, ok) = emit_readdir_entry(
+      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, "..", true,
+    )
+    offset = next_offset
+    keep_going = ok
+  }
+  entry_idx = entry_idx + 1L
+  if !keep_going {
+    mem.write_i32(bufused_ptr, offset)
+    return Errno::Success.to_i32()
+  }
   for entry in dir_entries {
     let (name, is_dir) = entry
     // Skip entries before cookie
-    if entry_idx < cookie {
+    if entry_idx < effective_cookie {
       entry_idx = entry_idx + 1L
       continue
     }
-    // dirent struct layout (24 bytes + name):
-    // - d_next: u64 (8 bytes) - cookie of next entry
-    // - d_ino: u64 (8 bytes) - inode number
-    // - d_namlen: u32 (4 bytes) - name length
-    // - d_type: u8 (1 byte) - file type
-    // - padding: 3 bytes
-    // - d_name: name bytes (variable)
-    let entry_size = 24 + name.length()
-    if offset + entry_size > buf_len {
-      break // Buffer full
+    let entry_ino = match native_fstatat(dir_fd, name, 0) {
+      Some(stat) => stat.ino.reinterpret_as_int64()
+      None => entry_idx + 1L
     }
-    // Write dirent
-    mem.write_i64(buf_ptr + offset, entry_idx + 1L) // d_next
-    mem.write_i64(buf_ptr + offset + 8, entry_idx + 1L) // d_ino (use index as fake inode)
-    mem.write_i32(buf_ptr + offset + 16, name.length()) // d_namlen
-    let file_type : Int = if is_dir { 3 } else { 4 } // 3=directory, 4=regular_file
-    mem.write_byte(buf_ptr + offset + 20, file_type.to_byte()) // d_type
-    mem.write_byte(buf_ptr + offset + 21, b'\x00') // padding
-    mem.write_byte(buf_ptr + offset + 22, b'\x00')
-    mem.write_byte(buf_ptr + offset + 23, b'\x00')
-    // Write name
-    for i in 0..<name.length() {
-      mem.write_byte(buf_ptr + offset + 24 + i, name.code_unit_at(i).to_byte())
-    }
-    offset = offset + entry_size
+    let (next_offset, ok) = emit_readdir_entry(
+      mem, buf_ptr, buf_len, offset, entry_idx, entry_ino, name, is_dir,
+    )
+    offset = next_offset
     entry_idx = entry_idx + 1L
+    if !ok {
+      break
+    }
   }
   mem.write_i32(bufused_ptr, offset)
   Errno::Success.to_i32()
@@ -1219,16 +1454,21 @@ fn readdir_impl(
 
 ///|
 /// Helper: Read a string from WASM memory
-fn read_string_from_memory(
+fn read_path_from_memory(
   mem : @runtime.Memory,
   ptr : Int,
   len : Int,
-) -> String? {
+) -> Result[String, Int] {
   if !check_mem_range(mem, ptr, len) {
-    return None
+    return Err(Errno::Fault.to_i32())
   }
   let bytes = Bytes::makei(len, fn(i) { mem.read_byte(ptr + i) })
-  Some(utf8_bytes_to_string(bytes))
+  for b in bytes {
+    if b == b'\x00' {
+      return Err(Errno::Inval.to_i32())
+    }
+  }
+  Ok(utf8_bytes_to_string(bytes))
 }
 
 ///|
@@ -1240,6 +1480,7 @@ fn resolve_host_path(
   match ctx.resolve_path(dir_fd, path) {
     Ok(resolved) => Ok(resolved)
     Err(BadFd) => Err(Errno::Badf.to_i32())
+    Err(Perm) => Err(Errno::Perm.to_i32())
     Err(NotCapable) => Err(Errno::NotCapable.to_i32())
   }
 }
@@ -1323,9 +1564,9 @@ pub fn path_unlink_file_impl(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1347,9 +1588,9 @@ pub fn path_remove_directory_impl(
   path_ptr : Int,
   path_len : Int,
 ) -> Int {
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1374,15 +1615,13 @@ pub fn path_rename_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = match
-    read_string_from_memory(mem, old_path_ptr, old_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
-  let new_path = match
-    read_string_from_memory(mem, new_path_ptr, new_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
     Ok(resolved) => resolved
@@ -1415,15 +1654,18 @@ pub fn fd_filestat_get_impl(
     return Errno::Fault.to_i32()
   }
   // Handle special fds (stdin, stdout, stderr)
-  if fd < 3 {
-    // Write a minimal filestat for character devices
+  if fd >= 0 && fd < 3 {
+    if !is_stdio_open(ctx, fd) {
+      return Errno::Badf.to_i32()
+    }
+    // Match wasmtime stdio modeling: unknown or character_device, nlink=0.
     mem.write_i64(buf_ptr, 0L) // dev
     mem.write_i64(buf_ptr + 8, 0L) // ino
-    mem.write_byte(buf_ptr + 16, b'\x02') // filetype = character_device
+    mem.write_byte(buf_ptr + 16, stdio_filetype(ctx, fd).to_byte())
     for i in 17..<24 {
       mem.write_byte(buf_ptr + i, b'\x00')
     }
-    mem.write_i64(buf_ptr + 24, 1L) // nlink
+    mem.write_i64(buf_ptr + 24, 0L) // nlink
     mem.write_i64(buf_ptr + 32, 0L) // size
     mem.write_i64(buf_ptr + 40, 0L) // atim
     mem.write_i64(buf_ptr + 48, 0L) // mtim
@@ -1500,9 +1742,9 @@ pub fn path_filestat_get_impl(
   if !check_mem_range(mem, buf_ptr, 64) {
     return Errno::Fault.to_i32()
   }
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1571,9 +1813,9 @@ pub fn path_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1689,6 +1931,9 @@ pub fn fd_fdstat_set_rights_impl(
 
 ///|
 fn preopen_fd_index(ctx : WasiContext, fd : Int) -> Int? {
+  if !ctx.open_files.contains(fd) {
+    return None
+  }
   for i in 0..<ctx.preopens.length() {
     let (preopen_fd, _, _) = ctx.preopens[i]
     if preopen_fd.to_int() == fd {
@@ -1773,15 +2018,13 @@ pub fn path_symlink_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = match
-    read_string_from_memory(mem, old_path_ptr, old_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
-  let new_path = match
-    read_string_from_memory(mem, new_path_ptr, new_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, new_path) {
     Ok(resolved) => resolved
@@ -1810,9 +2053,9 @@ pub fn path_readlink_impl(
     !check_mem_range(mem, bufused_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  let path = match read_string_from_memory(mem, path_ptr, path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let path = match read_path_from_memory(mem, path_ptr, path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let resolved_path = match resolve_host_path(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1845,15 +2088,13 @@ pub fn path_link_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
-  let old_path = match
-    read_string_from_memory(mem, old_path_ptr, old_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
-  let new_path = match
-    read_string_from_memory(mem, new_path_ptr, new_path_len) {
-    Some(path) => path
-    None => return Errno::Fault.to_i32()
+  let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
+    Ok(path) => path
+    Err(errno) => return errno
   }
   let old_resolved = match resolve_host_path(ctx, old_fd, old_path) {
     Ok(resolved) => resolved
@@ -1863,7 +2104,10 @@ pub fn path_link_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
-  let flags = if (old_flags & 0x01) != 0 { 0x1000 } else { 0 } // AT_SYMLINK_FOLLOW
+  if (old_flags & 0x01) != 0 {
+    return Errno::Inval.to_i32()
+  }
+  let flags = 0
   if native_linkat(0, old_resolved, 0, new_resolved, flags) {
     Errno::Success.to_i32()
   } else {
@@ -1947,43 +2191,54 @@ fn write_poll_event(
 }
 
 ///|
-fn fd_readwrite_flags_for_poll_event(ctx : WasiContext, fd : Int) -> Int {
+fn poll_fd_read_nbytes_and_flags(ctx : WasiContext, fd : Int) -> (Int64, Int) {
+  if fd == 0 {
+    // Match wasmtime p1 stdio stream behavior for read polling.
+    return (1L, 0)
+  }
   if fd < 3 {
-    return 0
+    return (1L, 0)
   }
   let file = match ctx.get_file(fd) {
     Some(file) => file
-    None => return 0
+    None => return (1L, 0)
   }
   match file.file_type {
     RegularFile => ()
-    _ => return 0
+    _ => return (1L, 0)
   }
   let stat = match native_fstat(file.native_fd) {
     Some(stat) => stat
-    None => return 0
+    None => return (1L, 0)
   }
   let position = match native_tell(file.native_fd) {
     Some(position) => position
-    None => return 0
+    None => return (1L, 0)
   }
+  let position_u = position.reinterpret_as_uint64()
   // WASI eventrwflags bit 0 is FD_READWRITE_HANGUP.
-  if stat.size <= position.reinterpret_as_uint64() {
-    0x01
+  if stat.size <= position_u {
+    (0L, 0x01)
   } else {
-    0
+    ((stat.size - position_u).reinterpret_as_int64(), 0)
   }
 }
 
 ///|
 fn poll_fd_to_native_fd(ctx : WasiContext, fd : Int, tag : Int) -> Int? {
   if fd == 0 {
+    if !is_stdio_open(ctx, fd) {
+      return None
+    }
     if tag == 1 {
       Some(0)
     } else {
       None
     }
   } else if fd == 1 || fd == 2 {
+    if !is_stdio_open(ctx, fd) {
+      return None
+    }
     if tag == 2 {
       Some(fd)
     } else {
@@ -2059,6 +2314,25 @@ pub fn poll_oneoff_impl(
   if !check_mem_range(mem, in_ptr, sub_bytes) ||
     !check_mem_range(mem, out_ptr, event_bytes) {
     return Errno::Fault.to_i32()
+  }
+
+  // Match wasmtime p1: special-case single relative clock sleep and emit
+  // clock event with nbytes=1.
+  if nsubscriptions == 1 {
+    let tag = mem.read_byte(in_ptr + 8).to_int()
+    if is_clock_subscription(tag) {
+      let flags = mem.read_byte(in_ptr + 40).to_int() |
+        (mem.read_byte(in_ptr + 41).to_int() << 8)
+      if (flags & 0x01) == 0 {
+        let timeout = mem.read_i64(in_ptr + 24)
+        if timeout > 0L {
+          native_nanosleep(timeout) |> ignore
+        }
+        write_poll_event(mem, out_ptr, mem.read_i64(in_ptr), 0, 1L, 0)
+        mem.write_i32(nevents_ptr, 1)
+        return Errno::Success.to_i32()
+      }
+    }
   }
 
   let ready_by_sub : Array[Bool] = []
@@ -2145,11 +2419,13 @@ pub fn poll_oneoff_impl(
         let fd = fd_wasi_fds[i]
         ready_by_sub[sub_idx] = true
         ready_type_by_sub[sub_idx] = event_type
-        ready_nbytes_by_sub[sub_idx] = 1L
-        ready_flags_by_sub[sub_idx] = if event_type == 1 {
-          fd_readwrite_flags_for_poll_event(ctx, fd)
+        if event_type == 1 {
+          let (nbytes, flags) = poll_fd_read_nbytes_and_flags(ctx, fd)
+          ready_nbytes_by_sub[sub_idx] = nbytes
+          ready_flags_by_sub[sub_idx] = flags
         } else {
-          0
+          ready_nbytes_by_sub[sub_idx] = 1L
+          ready_flags_by_sub[sub_idx] = 0
         }
       }
     }

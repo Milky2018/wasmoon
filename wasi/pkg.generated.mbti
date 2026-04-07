@@ -69,6 +69,10 @@ pub fn is_valid_rights(Int64) -> Bool
 
 pub fn native_accept(Int) -> Int
 
+pub fn native_clock_getres_monotonic() -> Int64?
+
+pub fn native_clock_getres_realtime() -> Int64?
+
 pub fn native_clock_gettime_monotonic() -> Int64
 
 pub fn native_clock_gettime_realtime() -> Int64
@@ -98,6 +102,8 @@ pub fn native_get_errno() -> Int
 pub fn native_get_error_message() -> String
 
 pub fn native_getrandom(FixedArray[Byte], Int) -> Bool
+
+pub fn native_isatty(Int) -> Bool
 
 pub fn native_last_errno_to_wasi() -> Int
 
@@ -134,6 +140,8 @@ pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
 
 pub fn native_readdir(String) -> Array[(String, Bool)]?
+
+pub fn native_readdir_fd(Int) -> Array[(String, Bool)]?
 
 pub fn native_readlinkat(Int, String, Int) -> String?
 
@@ -418,6 +426,7 @@ pub(all) enum OpenFlags {
   Append
   Exclusive
   Directory
+  NoFollow
 }
 
 pub(all) struct PollResult {
@@ -427,6 +436,7 @@ pub(all) struct PollResult {
 
 pub(all) enum ResolvePathError {
   BadFd
+  Perm
   NotCapable
 }
 
@@ -453,6 +463,9 @@ pub(all) struct WasiContext {
   stdout_is_native : Bool
   stderr_is_native : Bool
   stdin_is_native : Bool
+  mut stdin_open : Bool
+  mut stdout_open : Bool
+  mut stderr_open : Bool
 }
 pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
 pub fn WasiContext::close_fd(Self, Int) -> Bool

@@ -25,6 +25,7 @@
 #else
 #include <windows.h>
 #include <bcrypt.h>
+#include <io.h>
 #endif
 
 #include "moonbit.h"
@@ -46,6 +47,7 @@
 #define WASI_ENOTEMPTY    55
 #define WASI_ENOTSOCK     57
 #define WASI_ENOTSUP      58
+#define WASI_EPERM        63
 #define WASI_ESPIPE       70
 #define WASI_ENAMETOOLONG 37
 #define WASI_EFAULT       21
@@ -112,7 +114,8 @@ static int get_native_fd(jit_context_t *ctx, int wasi_fd) {
 static int is_preopen_fd(jit_context_t *ctx, int wasi_fd) {
     if (!ctx->preopen_paths) return 0;
     int idx = wasi_fd - ctx->preopen_base_fd;
-    return idx >= 0 && idx < ctx->preopen_count;
+    if (!(idx >= 0 && idx < ctx->preopen_count)) return 0;
+    return get_native_fd(ctx, wasi_fd) >= 0;
 }
 
 // Get preopen host path
@@ -131,8 +134,15 @@ static const char* get_open_dir_path(jit_context_t *ctx, int wasi_fd) {
 
 static int is_valid_wasi_descriptor(jit_context_t *ctx, int wasi_fd) {
     if (wasi_fd < 0) return 0;
-    if (wasi_fd < 3) return 1;
     return get_native_fd(ctx, wasi_fd) >= 0;
+}
+
+static uint8_t stdio_filetype(int fd) {
+#ifdef _WIN32
+    return _isatty(fd) ? WASI_FILETYPE_CHARACTER_DEVICE : WASI_FILETYPE_UNKNOWN;
+#else
+    return isatty(fd) ? WASI_FILETYPE_CHARACTER_DEVICE : WASI_FILETYPE_UNKNOWN;
+#endif
 }
 
 static int get_non_stdio_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
@@ -140,6 +150,7 @@ static int get_non_stdio_native_fd(jit_context_t *ctx, int wasi_fd, int *native_
     if (wasi_fd < 3) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
+    if (!ctx->fd_table || wasi_fd >= ctx->fd_table_size) return WASI_EBADF;
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
 }
@@ -261,17 +272,28 @@ static void set_fd_metadata(jit_context_t *ctx, int wasi_fd, char *host_path, in
 }
 
 // Normalize guest path and reject attempts to escape preopen root.
-static char* sanitize_guest_path(const char *path) {
+static char* sanitize_guest_path(const char *path, int *wasi_errno) {
+    if (wasi_errno) *wasi_errno = WASI_EINVAL;
     if (!path) return NULL;
-    if (path[0] == '\0') return strdup("");
-    if (path[0] == '/') return NULL;
+    if (path[0] == '\0') {
+        if (wasi_errno) *wasi_errno = WASI_ESUCCESS;
+        return strdup("");
+    }
+    if (path[0] == '/') {
+        if (wasi_errno) *wasi_errno = WASI_EPERM;
+        return NULL;
+    }
 
     size_t len = strlen(path);
     char *scratch = strdup(path);
-    if (!scratch) return NULL;
+    if (!scratch) {
+        if (wasi_errno) *wasi_errno = WASI_ENOMEM;
+        return NULL;
+    }
     char **stack = malloc((len + 1) * sizeof(char *));
     if (!stack) {
         free(scratch);
+        if (wasi_errno) *wasi_errno = WASI_ENOMEM;
         return NULL;
     }
 
@@ -288,6 +310,7 @@ static char* sanitize_guest_path(const char *path) {
                 if (sp == 0) {
                     free(stack);
                     free(scratch);
+                    if (wasi_errno) *wasi_errno = WASI_EPERM;
                     return NULL;
                 }
                 sp--;
@@ -308,6 +331,7 @@ static char* sanitize_guest_path(const char *path) {
     if (!out) {
         free(stack);
         free(scratch);
+        if (wasi_errno) *wasi_errno = WASI_ENOMEM;
         return NULL;
     }
 
@@ -324,6 +348,7 @@ static char* sanitize_guest_path(const char *path) {
 
     free(stack);
     free(scratch);
+    if (wasi_errno) *wasi_errno = WASI_ESUCCESS;
     return out;
 }
 
@@ -405,6 +430,11 @@ static int check_mem_range(jit_context_t *ctx, int64_t ptr, size_t len) {
     return 1;
 }
 
+static int guest_bytes_contain_nul(const uint8_t *mem, uint32_t ptr, uint32_t len) {
+    if (!mem || len == 0) return 0;
+    return memchr(mem + ptr, '\0', (size_t)len) != NULL;
+}
+
 // Resolve path relative to a directory fd and return WASI errno on failure.
 static int resolve_path_with_errno(
     jit_context_t *ctx,
@@ -421,8 +451,9 @@ static int resolve_path_with_errno(
         if (!base) return WASI_EBADF;
     }
 
-    char *rel = sanitize_guest_path(path);
-    if (!rel) return WASI_ENOTCAPABLE;
+    int sanitize_errno = WASI_ESUCCESS;
+    char *rel = sanitize_guest_path(path, &sanitize_errno);
+    if (!rel) return sanitize_errno;
 
     size_t base_len = strlen(base);
     size_t rel_len = strlen(rel);
@@ -917,6 +948,26 @@ static int append_output_buffer(
     return 1;
 }
 
+static int first_non_empty_iov(
+    jit_context_t *ctx,
+    uint8_t *mem,
+    uint32_t iovs_u,
+    uint32_t iovs_len_u,
+    uint32_t *buf_ptr_out,
+    uint32_t *buf_len_out
+) {
+    for (uint32_t i = 0; i < iovs_len_u; i++) {
+        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
+        uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
+        if (buf_len == 0) continue;
+        if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return -1;
+        *buf_ptr_out = buf_ptr;
+        *buf_len_out = buf_len;
+        return 1;
+    }
+    return 0;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -929,7 +980,15 @@ static int64_t wasi_fd_write_impl(
 
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
-    if (wasi_fd == 0) return WASI_EBADF;
+    if (wasi_fd == 0) {
+        if (get_native_fd(ctx, 0) < 0) return WASI_EBADF;
+        return WASI_EBADF;
+    }
+    if (wasi_fd == 1 || wasi_fd == 2) {
+        if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
+    } else if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
+        return WASI_EBADF;
+    }
     int use_stdout_capture = (wasi_fd == 1 && ctx->wasi_stdout_capture);
     int use_stderr_capture = (wasi_fd == 2 && ctx->wasi_stderr_capture);
     int native_fd = -1;
@@ -943,43 +1002,43 @@ static int64_t wasi_fd_write_impl(
     if (!check_mem_range(ctx, iovs_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nwritten_ptr_u, 4)) return WASI_EFAULT;
 
+    uint32_t buf_ptr = 0;
+    uint32_t buf_len = 0;
+    int first_iov = first_non_empty_iov(ctx, mem, iovs_u, iovs_len_u, &buf_ptr, &buf_len);
+    if (first_iov < 0) return WASI_EFAULT;
+
     uint32_t total = 0;
-    for (uint32_t i = 0; i < iovs_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
-        if (buf_len > 0) {
-            if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
-            if (use_stdout_capture) {
-                if (!append_output_buffer(
-                        &ctx->wasi_stdout_buf,
-                        &ctx->wasi_stdout_len,
-                        &ctx->wasi_stdout_cap,
-                        mem + buf_ptr,
-                        (size_t)buf_len
-                    )) {
-                    return WASI_ENOMEM;
-                }
-                total += buf_len;
-            } else if (use_stderr_capture) {
-                if (!append_output_buffer(
-                        &ctx->wasi_stderr_buf,
-                        &ctx->wasi_stderr_len,
-                        &ctx->wasi_stderr_cap,
-                        mem + buf_ptr,
-                        (size_t)buf_len
-                    )) {
-                    return WASI_ENOMEM;
-                }
-                total += buf_len;
-            } else {
-#ifdef _WIN32
-                int n = _write(native_fd, mem + buf_ptr, buf_len);
-#else
-                ssize_t n = write(native_fd, mem + buf_ptr, buf_len);
-#endif
-                if (n < 0) return errno_to_wasi(errno);
-                total += (uint32_t)n;
+    if (first_iov > 0) {
+        if (use_stdout_capture) {
+            if (!append_output_buffer(
+                    &ctx->wasi_stdout_buf,
+                    &ctx->wasi_stdout_len,
+                    &ctx->wasi_stdout_cap,
+                    mem + buf_ptr,
+                    (size_t)buf_len
+                )) {
+                return WASI_ENOMEM;
             }
+            total = buf_len;
+        } else if (use_stderr_capture) {
+            if (!append_output_buffer(
+                    &ctx->wasi_stderr_buf,
+                    &ctx->wasi_stderr_len,
+                    &ctx->wasi_stderr_cap,
+                    mem + buf_ptr,
+                    (size_t)buf_len
+                )) {
+                return WASI_ENOMEM;
+            }
+            total = buf_len;
+        } else {
+#ifdef _WIN32
+            int n = _write(native_fd, mem + buf_ptr, buf_len);
+#else
+            ssize_t n = write(native_fd, mem + buf_ptr, buf_len);
+#endif
+            if (n < 0) return errno_to_wasi(errno);
+            total = (uint32_t)n;
         }
     }
 
@@ -996,38 +1055,43 @@ static int64_t wasi_fd_read_impl(
 
     uint8_t *mem = ctx->memory0->base;
     int wasi_fd = (int)fd;
+    if (wasi_fd == 0 && get_native_fd(ctx, 0) < 0) return WASI_EBADF;
     if (wasi_fd == 1 || wasi_fd == 2) return WASI_EBADF;
+    if (wasi_fd >= 3 && (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd))) {
+        return WASI_EBADF;
+    }
     uint32_t iovs_u = (uint32_t)iovs;
     uint32_t iovs_len_u = (uint32_t)iovs_len;
     uint32_t nread_ptr_u = (uint32_t)nread_ptr;
     if (!check_mem_range(ctx, iovs_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nread_ptr_u, 4)) return WASI_EFAULT;
 
+    uint32_t buf_ptr = 0;
+    uint32_t buf_len = 0;
+    int first_iov = first_non_empty_iov(ctx, mem, iovs_u, iovs_len_u, &buf_ptr, &buf_len);
+    if (first_iov < 0) return WASI_EFAULT;
+
     uint32_t total = 0;
+    if (first_iov == 0) {
+        *(uint32_t *)(mem + nread_ptr_u) = 0;
+        return WASI_ESUCCESS;
+    }
     if (wasi_fd == 0) {
         if (ctx->wasi_stdin_use_buffer) {
             size_t available = 0;
             if (ctx->wasi_stdin_len > ctx->wasi_stdin_offset) {
                 available = ctx->wasi_stdin_len - ctx->wasi_stdin_offset;
             }
-            for (uint32_t i = 0; i < iovs_len_u && available > 0; i++) {
-                uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
-                uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
-                if (buf_len > 0) {
-                    if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
-                    size_t to_copy = available < (size_t)buf_len ? available : (size_t)buf_len;
-                    if (to_copy > 0 && ctx->wasi_stdin_buf) {
-                        memcpy(
-                            mem + buf_ptr,
-                            ctx->wasi_stdin_buf + ctx->wasi_stdin_offset,
-                            to_copy
-                        );
-                    }
-                    ctx->wasi_stdin_offset += to_copy;
-                    available -= to_copy;
-                    total += (uint32_t)to_copy;
-                }
+            size_t to_copy = available < (size_t)buf_len ? available : (size_t)buf_len;
+            if (to_copy > 0 && ctx->wasi_stdin_buf) {
+                memcpy(
+                    mem + buf_ptr,
+                    ctx->wasi_stdin_buf + ctx->wasi_stdin_offset,
+                    to_copy
+                );
             }
+            ctx->wasi_stdin_offset += to_copy;
+            total = (uint32_t)to_copy;
             *(uint32_t *)(mem + nread_ptr_u) = total;
             return WASI_ESUCCESS;
         }
@@ -1038,24 +1102,11 @@ static int64_t wasi_fd_read_impl(
             if (input) {
                 input_len = (size_t)Moonbit_array_length(input);
             }
-            size_t input_offset = 0;
-            for (uint32_t i = 0; i < iovs_len_u && input_offset < input_len; i++) {
-                uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
-                uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
-                if (buf_len > 0) {
-                    if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
-                        if (input) moonbit_decref(input);
-                        return WASI_EFAULT;
-                    }
-                    size_t remaining = input_len - input_offset;
-                    size_t to_copy = remaining < (size_t)buf_len ? remaining : (size_t)buf_len;
-                    if (to_copy > 0 && input) {
-                        memcpy(mem + buf_ptr, input + input_offset, to_copy);
-                    }
-                    input_offset += to_copy;
-                    total += (uint32_t)to_copy;
-                }
+            size_t to_copy = input_len < (size_t)buf_len ? input_len : (size_t)buf_len;
+            if (to_copy > 0 && input) {
+                memcpy(mem + buf_ptr, input, to_copy);
             }
+            total = (uint32_t)to_copy;
             *(uint32_t *)(mem + nread_ptr_u) = total;
             if (input) moonbit_decref(input);
             return WASI_ESUCCESS;
@@ -1064,20 +1115,14 @@ static int64_t wasi_fd_read_impl(
 
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
-    for (uint32_t i = 0; i < iovs_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
-        if (buf_len > 0) {
-            if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return WASI_EFAULT;
+    if (buf_len > 0) {
 #ifdef _WIN32
-            int n = _read(native_fd, mem + buf_ptr, buf_len);
+        int n = _read(native_fd, mem + buf_ptr, buf_len);
 #else
-            ssize_t n = read(native_fd, mem + buf_ptr, buf_len);
+        ssize_t n = read(native_fd, mem + buf_ptr, buf_len);
 #endif
-            if (n < 0) return errno_to_wasi(errno);
-            total += (uint32_t)n;
-            if (n < buf_len) break; // EOF or partial read
-        }
+        if (n < 0) return errno_to_wasi(errno);
+        total = (uint32_t)n;
     }
 
     *(uint32_t *)(mem + nread_ptr_u) = total;
@@ -1091,16 +1136,22 @@ static int64_t wasi_fd_close_impl(
     if (!ctx) return WASI_EBADF;
 
     int wasi_fd = (int)fd;
-    if (wasi_fd < 3) return WASI_EBADF;
+    if (wasi_fd < 0) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
 
-#ifdef _WIN32
-    _close(native_fd);
-#else
-    close(native_fd);
+    if (wasi_fd < 3) {
+#ifndef _WIN32
+        if (native_fd > 2) close(native_fd);
 #endif
+    } else {
+#ifdef _WIN32
+        _close(native_fd);
+#else
+        close(native_fd);
+#endif
+    }
     ctx->fd_table[wasi_fd] = -1;
     clear_fd_metadata(ctx, wasi_fd);
     return WASI_ESUCCESS;
@@ -1115,7 +1166,11 @@ static int64_t wasi_fd_seek_impl(
 
     int wasi_fd = (int)fd;
     if (wasi_fd < 0) return WASI_EBADF;
-    if (wasi_fd < 3) return WASI_ESPIPE; // stdio not seekable
+    if (wasi_fd < 3) {
+        if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
+        return WASI_ESPIPE; // stdio not seekable
+    }
+    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
     uint32_t newoffset_ptr_u = (uint32_t)newoffset_ptr;
@@ -1196,7 +1251,8 @@ static int64_t wasi_fd_fdstat_get_impl(
     uint64_t rights_base = 0;
     uint64_t rights_inheriting = 0;
     if (wasi_fd < 3) {
-        filetype = WASI_FILETYPE_CHARACTER_DEVICE;
+        if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
+        filetype = stdio_filetype(wasi_fd);
         rights_base = (wasi_fd == 0) ? WASI_RIGHT_FD_READ : WASI_RIGHT_FD_WRITE;
         rights_inheriting = rights_base;
     } else if (is_preopen_fd(ctx, wasi_fd)) {
@@ -1267,7 +1323,8 @@ static int64_t wasi_fd_prestat_dir_name_impl(
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
 
     int wasi_fd = (int)fd;
-    if (!is_preopen_fd(ctx, wasi_fd)) return WASI_EBADF;
+    if (!is_valid_wasi_descriptor(ctx, wasi_fd)) return WASI_EBADF;
+    if (!is_preopen_fd(ctx, wasi_fd)) return WASI_ENOTDIR;
 
     int idx = wasi_fd - ctx->preopen_base_fd;
     const char *guest_path = ctx->preopen_guest_paths[idx];
@@ -1287,10 +1344,9 @@ static int64_t wasi_path_open_impl(
     int64_t oflags, int64_t rights_base, int64_t rights_inh,
     int64_t fdflags, int64_t opened_fd_ptr
 ) {
-    (void)dirflags;
-
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
-    if (!is_valid_rights(rights_base) || !is_valid_rights(rights_inh)) {
+    (void)rights_inh;
+    if ((oflags & 0x02) && ((oflags & 0x01) || (oflags & 0x04) || (oflags & 0x08))) {
         return WASI_EINVAL;
     }
     uint32_t path_ptr_u = (uint32_t)path_ptr;
@@ -1299,7 +1355,20 @@ static int64_t wasi_path_open_impl(
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) {
         return WASI_EFAULT;
     }
+    if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EINVAL;
+    }
     if (!check_mem_range(ctx, opened_fd_ptr_u, 4)) return WASI_EFAULT;
+
+    int dirfd_i = (int)dir_fd;
+    if (dirfd_i >= 0 && dirfd_i < 3) {
+        if (get_native_fd(ctx, dirfd_i) < 0) return WASI_EBADF;
+        return WASI_EBADF;
+    }
+    if (!is_preopen_fd(ctx, dirfd_i) && !get_open_dir_path(ctx, dirfd_i)) {
+        if (get_native_fd(ctx, dirfd_i) >= 0) return WASI_ENOTDIR;
+        return WASI_EBADF;
+    }
 
     // Read path from memory
     char *path = malloc((size_t)path_len_u + 1);
@@ -1321,6 +1390,9 @@ static int64_t wasi_path_open_impl(
     if (oflags & 0x04) flags |= O_EXCL;
     if (oflags & 0x08) flags |= O_TRUNC;
     if (fdflags & 0x01) flags |= O_APPEND;
+#ifdef O_NOFOLLOW
+    if ((dirflags & 0x01) == 0) flags |= O_NOFOLLOW;
+#endif
     int wants_read = (((uint64_t)rights_base) & WASI_RIGHT_FD_READ) != 0;
     int wants_write = (((uint64_t)rights_base) & WASI_RIGHT_FD_WRITE) != 0;
     int requires_write = wants_write || (oflags & 0x01) || (oflags & 0x08) || (fdflags & 0x01);
@@ -1334,6 +1406,14 @@ static int64_t wasi_path_open_impl(
         return errno_to_wasi(errno);
     }
 
+    struct stat st;
+    if (fstat(native_fd, &st) < 0) {
+        close(native_fd);
+        free(full_path);
+        return errno_to_wasi(errno);
+    }
+    int is_dir = S_ISDIR(st.st_mode) ? 1 : 0;
+
     int wasi_fd = alloc_wasi_fd(ctx, native_fd);
     if (wasi_fd < 0) {
         close(native_fd);
@@ -1341,7 +1421,7 @@ static int64_t wasi_path_open_impl(
         return WASI_ENOMEM;
     }
 
-    set_fd_metadata(ctx, wasi_fd, full_path, (oflags & 0x02) != 0);
+    set_fd_metadata(ctx, wasi_fd, full_path, is_dir);
     *(uint32_t *)(ctx->memory0->base + opened_fd_ptr_u) = (uint32_t)wasi_fd;
     return WASI_ESUCCESS;
 #else
@@ -1360,6 +1440,9 @@ static int64_t wasi_path_unlink_file_impl(
     uint32_t path_len_u = (uint32_t)path_len;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) {
         return WASI_EFAULT;
+    }
+    if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EINVAL;
     }
 
     char *path = malloc((size_t)path_len_u + 1);
@@ -1394,6 +1477,9 @@ static int64_t wasi_path_remove_directory_impl(
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) {
         return WASI_EFAULT;
     }
+    if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EINVAL;
+    }
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1426,6 +1512,9 @@ static int64_t wasi_path_create_directory_impl(
     uint32_t path_len_u = (uint32_t)path_len;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) {
         return WASI_EFAULT;
+    }
+    if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EINVAL;
     }
 
     char *path = malloc((size_t)path_len_u + 1);
@@ -1465,6 +1554,10 @@ static int64_t wasi_path_rename_impl(
     }
     if (!check_mem_range(ctx, new_path_ptr_u, (size_t)new_path_len_u)) {
         return WASI_EFAULT;
+    }
+    if (guest_bytes_contain_nul(ctx->memory0->base, old_path_ptr_u, old_path_len_u) ||
+        guest_bytes_contain_nul(ctx->memory0->base, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EINVAL;
     }
 
     char *old_path = malloc((size_t)old_path_len_u + 1);
@@ -1521,9 +1614,10 @@ static int64_t wasi_fd_filestat_get_impl(
 
     // Handle stdio
     if (wasi_fd < 3) {
+        if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
         memset(mem + buf_ptr_u, 0, 64);
-        mem[buf_ptr_u + 16] = WASI_FILETYPE_CHARACTER_DEVICE;
-        *(uint64_t *)(mem + buf_ptr_u + 24) = 1; // nlink
+        mem[buf_ptr_u + 16] = stdio_filetype(wasi_fd);
+        *(uint64_t *)(mem + buf_ptr_u + 24) = 0; // nlink
         return WASI_ESUCCESS;
     }
 
@@ -1745,8 +1839,22 @@ static int64_t wasi_clock_res_get_impl(
     // Match wasmtime p1: CPU-time clocks return EBADF.
     if (clock_id == 2 || clock_id == 3) return WASI_EBADF;
     if (clock_id < 0 || clock_id > 3) return WASI_EINVAL;
-
-    *(int64_t *)(ctx->memory0->base + resolution_ptr_u) = 1000000; // 1ms
+#ifdef _WIN32
+    if (clock_id == 0) {
+        *(int64_t *)(ctx->memory0->base + resolution_ptr_u) = 1000000; // 1ms fallback
+        return WASI_ESUCCESS;
+    }
+    LARGE_INTEGER freq;
+    if (!QueryPerformanceFrequency(&freq) || freq.QuadPart <= 0) return errno_to_wasi(EINVAL);
+    *(int64_t *)(ctx->memory0->base + resolution_ptr_u) = (int64_t)(1000000000LL / freq.QuadPart);
+    return WASI_ESUCCESS;
+#else
+    struct timespec ts;
+    clockid_t clk = (clock_id == 0) ? CLOCK_REALTIME : CLOCK_MONOTONIC;
+    if (clock_getres(clk, &ts) != 0) return errno_to_wasi(errno);
+    *(int64_t *)(ctx->memory0->base + resolution_ptr_u) =
+        (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
     return WASI_ESUCCESS;
 }
 
@@ -1883,24 +1991,41 @@ static int poll_clock_is_expired(
     return timeout <= poll_elapsed_ns;
 }
 
-static uint16_t poll_fd_readwrite_flags_for_event(jit_context_t *ctx, int32_t wasi_fd) {
+static void poll_fd_read_nbytes_and_flags_for_event(
+    jit_context_t *ctx,
+    int32_t wasi_fd,
+    uint64_t *nbytes,
+    uint16_t *flags
+) {
+    *nbytes = 1;
+    *flags = 0;
 #ifdef _WIN32
     (void)ctx;
     (void)wasi_fd;
-    return 0;
+    return;
 #else
-    if (wasi_fd < 3) return 0;
-    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return 0;
+    if (wasi_fd == 0) return;
+    if (wasi_fd < 3) return;
+    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return;
     int native_fd = get_native_fd(ctx, wasi_fd);
-    if (native_fd < 0) return 0;
+    if (native_fd < 0) return;
 
     struct stat st;
-    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return 0;
+    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return;
 
     off_t pos = lseek(native_fd, 0, SEEK_CUR);
-    if (pos < 0) return 0;
+    if (pos < 0) return;
 
-    return ((uint64_t)st.st_size <= (uint64_t)pos) ? 0x01 : 0;
+    uint64_t size = (uint64_t)st.st_size;
+    uint64_t position = (uint64_t)pos;
+    if (size <= position) {
+        *nbytes = 0;
+        *flags = 0x01; // WASI EVENTRWFLAGS_FD_READWRITE_HANGUP
+    } else {
+        *nbytes = size - position;
+        *flags = 0;
+    }
+    return;
 #endif
 }
 
@@ -1922,6 +2047,41 @@ static int64_t wasi_poll_oneoff_impl(
 
     uint8_t *mem = ctx->memory0->base;
     if (nsubscriptions_u == 0) return WASI_EINVAL;
+
+    // Match wasmtime p1: special-case single relative clock sleep and emit
+    // clock event with nbytes=1.
+    if (nsubscriptions_u == 1) {
+        uint8_t tag = mem[in_ptr_u + 8];
+        if (tag == 0) {
+            uint16_t flags = *(uint16_t *)(mem + in_ptr_u + 40);
+            if ((flags & 0x01) == 0) {
+                int64_t timeout = *(int64_t *)(mem + in_ptr_u + 24);
+                if (timeout > 0) {
+#ifndef _WIN32
+                    struct timespec ts = {
+                        .tv_sec = timeout / 1000000000LL,
+                        .tv_nsec = timeout % 1000000000LL
+                    };
+                    nanosleep(&ts, NULL);
+#else
+                    DWORD sleep_ms = (DWORD)(timeout / 1000000LL);
+                    if (sleep_ms == 0 && timeout > 0) sleep_ms = 1;
+                    Sleep(sleep_ms);
+#endif
+                }
+                int64_t userdata = *(int64_t *)(mem + in_ptr_u);
+                *(int64_t *)(mem + out_ptr_u) = userdata;
+                *(uint16_t *)(mem + out_ptr_u + 8) = 0;
+                mem[out_ptr_u + 10] = 0;
+                memset(mem + out_ptr_u + 11, 0, 5);
+                *(uint64_t *)(mem + out_ptr_u + 16) = 1;
+                *(uint16_t *)(mem + out_ptr_u + 24) = 0;
+                memset(mem + out_ptr_u + 26, 0, 6);
+                *(uint32_t *)(mem + nevents_ptr_u) = 1;
+                return WASI_ESUCCESS;
+            }
+        }
+    }
 
     int64_t retval = WASI_ESUCCESS;
     int64_t min_timeout_ns = -1;
@@ -1982,13 +2142,21 @@ static int64_t wasi_poll_oneoff_impl(
                     retval = WASI_EBADF;
                     goto cleanup;
                 }
-                native_fd = 0;
+                native_fd = get_native_fd(ctx, 0);
+                if (native_fd < 0) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
             } else if (wasi_fd == 1 || wasi_fd == 2) {
                 if (tag != 2) {
                     retval = WASI_EBADF;
                     goto cleanup;
                 }
-                native_fd = wasi_fd;
+                native_fd = get_native_fd(ctx, wasi_fd);
+                if (native_fd < 0) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
             } else {
                 native_fd = get_native_fd(ctx, wasi_fd);
                 if (native_fd < 0) {
@@ -2057,11 +2225,17 @@ static int64_t wasi_poll_oneoff_impl(
                 uint32_t sub_index = fd_plans[i].sub_index;
                 ready_by_sub[sub_index] = 1;
                 ready_type_by_sub[sub_index] = fd_plans[i].event_type;
-                ready_nbytes_by_sub[sub_index] = 1;
-                ready_flags_by_sub[sub_index] =
-                    (fd_plans[i].event_type == 1)
-                        ? poll_fd_readwrite_flags_for_event(ctx, fd_plans[i].wasi_fd)
-                        : 0;
+                if (fd_plans[i].event_type == 1) {
+                    poll_fd_read_nbytes_and_flags_for_event(
+                        ctx,
+                        fd_plans[i].wasi_fd,
+                        &ready_nbytes_by_sub[sub_index],
+                        &ready_flags_by_sub[sub_index]
+                    );
+                } else {
+                    ready_nbytes_by_sub[sub_index] = 1;
+                    ready_flags_by_sub[sub_index] = 0;
+                }
             }
         }
 #else
@@ -2155,27 +2329,31 @@ static int32_t wasi_fd_pread_impl(
     // Match wasmtime:
     // - fd_pread(stdin) -> ESPIPE
     // - fd_pread(stdout/stderr) -> EBADF
-    if (fd == 0) return WASI_ESPIPE;
-    if (fd == 1 || fd == 2) return WASI_EBADF;
+    if (fd == 0) {
+        if (get_native_fd(ctx, 0) < 0) return WASI_EBADF;
+        return WASI_ESPIPE;
+    }
+    if (fd == 1 || fd == 2) {
+        if (get_native_fd(ctx, fd) < 0) return WASI_EBADF;
+        return WASI_EBADF;
+    }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    size_t total = 0;
-    for (uint32_t i = 0; i < iovs_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_ptr_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + iovs_ptr_u + i * 8 + 4);
-        if (buf_len > 0 && !check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
-            return WASI_EFAULT;
-        }
-        ssize_t n = pread(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return errno_to_wasi(errno);
-        total += n;
-        if (n < buf_len) break;
+    uint32_t buf_ptr = 0;
+    uint32_t buf_len = 0;
+    int first_iov = first_non_empty_iov(ctx, mem, iovs_ptr_u, iovs_len_u, &buf_ptr, &buf_len);
+    if (first_iov < 0) return WASI_EFAULT;
+    if (first_iov == 0) {
+        *(uint32_t *)(mem + nread_ptr_u) = 0;
+        return WASI_ESUCCESS;
     }
-    *(uint32_t *)(mem + nread_ptr_u) = (uint32_t)total;
+    ssize_t n = pread(native_fd, mem + buf_ptr, buf_len, offset);
+    if (n < 0) return errno_to_wasi(errno);
+    *(uint32_t *)(mem + nread_ptr_u) = (uint32_t)n;
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
@@ -2198,31 +2376,74 @@ static int32_t wasi_fd_pwrite_impl(
     // Match wasmtime:
     // - fd_pwrite(stdout/stderr) -> ESPIPE
     // - fd_pwrite(stdin) -> EBADF
-    if (fd == 1 || fd == 2) return WASI_ESPIPE;
-    if (fd == 0) return WASI_EBADF;
+    if (fd == 1 || fd == 2) {
+        if (get_native_fd(ctx, fd) < 0) return WASI_EBADF;
+        return WASI_ESPIPE;
+    }
+    if (fd == 0) {
+        if (get_native_fd(ctx, 0) < 0) return WASI_EBADF;
+        return WASI_EBADF;
+    }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
 #ifndef _WIN32
-    size_t total = 0;
-    for (uint32_t i = 0; i < iovs_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_ptr_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + iovs_ptr_u + i * 8 + 4);
-        if (buf_len > 0 && !check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
-            return WASI_EFAULT;
-        }
-        ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset + total);
-        if (n < 0) return errno_to_wasi(errno);
-        total += n;
-        if (n < buf_len) break;
+    uint32_t buf_ptr = 0;
+    uint32_t buf_len = 0;
+    int first_iov = first_non_empty_iov(ctx, mem, iovs_ptr_u, iovs_len_u, &buf_ptr, &buf_len);
+    if (first_iov < 0) return WASI_EFAULT;
+    if (first_iov == 0) {
+        *(uint32_t *)(mem + nwritten_ptr_u) = 0;
+        return WASI_ESUCCESS;
     }
-    *(uint32_t *)(mem + nwritten_ptr_u) = (uint32_t)total;
+    ssize_t n = pwrite(native_fd, mem + buf_ptr, buf_len, offset);
+    if (n < 0) return errno_to_wasi(errno);
+    *(uint32_t *)(mem + nwritten_ptr_u) = (uint32_t)n;
     return WASI_ESUCCESS;
 #else
     return WASI_ENOSYS;
 #endif
+}
+
+static uint32_t write_readdir_entry_with_truncation(
+    uint8_t *buf,
+    uint32_t buf_len,
+    uint32_t used,
+    uint64_t d_next,
+    uint64_t d_ino,
+    uint8_t d_type,
+    const char *name,
+    size_t name_len,
+    int *entry_complete
+) {
+    *entry_complete = 0;
+    if (used >= buf_len) return used;
+
+    uint8_t header[24];
+    memset(header, 0, sizeof(header));
+    uint64_t next_le = d_next;
+    uint64_t ino_le = d_ino;
+    uint32_t namelen_le = (uint32_t)name_len;
+    memcpy(header + 0, &next_le, sizeof(next_le));
+    memcpy(header + 8, &ino_le, sizeof(ino_le));
+    memcpy(header + 16, &namelen_le, sizeof(namelen_le));
+    header[20] = d_type;
+
+    uint32_t remain = buf_len - used;
+    uint32_t header_write = remain < 24 ? remain : 24;
+    memcpy(buf + used, header, header_write);
+    used += header_write;
+    if (header_write < 24) return used;
+
+    if (used >= buf_len) return used;
+    uint32_t name_cap = buf_len - used;
+    uint32_t name_write = (uint32_t)(name_len < (size_t)name_cap ? name_len : (size_t)name_cap);
+    if (name_write > 0) memcpy(buf + used, name, name_write);
+    used += name_write;
+    *entry_complete = (name_write == name_len);
+    return used;
 }
 
 // fd_readdir: Read directory entries
@@ -2241,52 +2462,70 @@ static int32_t wasi_fd_readdir_impl(
 
 #ifndef _WIN32
     DIR *dir = NULL;
-    int dir_fd = -1;
-    if (is_preopen_fd(ctx, fd)) {
-        const char *path = get_preopen_path(ctx, fd);
-        if (!path) return WASI_EBADF;
-        dir = opendir(path);
-        if (!dir) return errno_to_wasi(errno);
-    } else {
-        int native_fd = get_native_fd(ctx, fd);
-        if (native_fd < 0) return WASI_EBADF;
-        dir_fd = dup(native_fd);
-        if (dir_fd < 0) return errno_to_wasi(errno);
-        dir = fdopendir(dir_fd);
-        if (!dir) {
-            close(dir_fd);
-            return errno_to_wasi(errno);
-        }
+    if (!is_preopen_fd(ctx, fd) && !get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
+    int native_fd = get_native_fd(ctx, fd);
+    if (native_fd < 0) return WASI_EBADF;
+    int dir_fd = dup(native_fd);
+    if (dir_fd < 0) return errno_to_wasi(errno);
+    dir = fdopendir(dir_fd);
+    if (!dir) {
+        close(dir_fd);
+        return errno_to_wasi(errno);
     }
 
-    // Skip to cookie position
-    int64_t pos = 0;
-    struct dirent *entry;
-    while (pos < cookie && (entry = readdir(dir)) != NULL) {
-        pos++;
-    }
-
-    // Read entries into buffer
+    // Read entries into buffer. Match wasmtime's cookie stream:
+    // 0 => ".", 1 => "..", 2 => first real entry.
     uint8_t *buf = mem + buf_ptr_u;
     uint32_t used = 0;
+    uint64_t pos = 0;
+    uint64_t start_cookie = (uint64_t)cookie;
+    uint64_t dir_ino = 1;
+    int raw_dir_fd = dirfd(dir);
+    if (raw_dir_fd >= 0) {
+        struct stat st;
+        if (fstat(raw_dir_fd, &st) == 0) {
+            dir_ino = (uint64_t)st.st_ino;
+        }
+    }
 
+    if (pos >= start_cookie && used < buf_len_u) {
+        int complete = 0;
+        used = write_readdir_entry_with_truncation(
+            buf, buf_len_u, used, 1, dir_ino, WASI_FILETYPE_DIRECTORY, ".", 1, &complete
+        );
+        if (!complete) {
+            closedir(dir);
+            *(uint32_t *)(mem + bufused_ptr_u) = used;
+            return WASI_ESUCCESS;
+        }
+    }
+    pos++;
+
+    if (pos >= start_cookie && used < buf_len_u) {
+        int complete = 0;
+        used = write_readdir_entry_with_truncation(
+            buf, buf_len_u, used, 2, dir_ino, WASI_FILETYPE_DIRECTORY, "..", 2, &complete
+        );
+        if (!complete) {
+            closedir(dir);
+            *(uint32_t *)(mem + bufused_ptr_u) = used;
+            return WASI_ESUCCESS;
+        }
+    }
+    pos++;
+
+    struct dirent *entry;
     while ((entry = readdir(dir)) != NULL && used < buf_len_u) {
-        size_t name_len = strlen(entry->d_name);
-        size_t entry_size = 24 + name_len; // dirent header + name
-
-        if ((size_t)used + entry_size > (size_t)buf_len_u) {
-            // Not enough space, but we've read some entries
-            break;
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        if (pos < start_cookie) {
+            pos++;
+            continue;
         }
 
-        // Write dirent structure
-        // d_next: u64 (cookie for next entry)
-        *(uint64_t *)(buf + used) = pos + 1;
-        // d_ino: u64
-        *(uint64_t *)(buf + used + 8) = entry->d_ino;
-        // d_namlen: u32
-        *(uint32_t *)(buf + used + 16) = (uint32_t)name_len;
-        // d_type: u8
+        size_t name_len = strlen(entry->d_name);
         uint8_t wasi_type = WASI_FILETYPE_UNKNOWN;
         switch (entry->d_type) {
             case DT_REG: wasi_type = WASI_FILETYPE_REGULAR_FILE; break;
@@ -2296,12 +2535,21 @@ static int32_t wasi_fd_readdir_impl(
             case DT_BLK: wasi_type = WASI_FILETYPE_BLOCK_DEVICE; break;
             case DT_SOCK: wasi_type = WASI_FILETYPE_SOCKET_STREAM; break;
         }
-        *(uint8_t *)(buf + used + 20) = wasi_type;
-        // Copy name
-        memcpy(buf + used + 24, entry->d_name, name_len);
 
-        used += entry_size;
+        int complete = 0;
+        used = write_readdir_entry_with_truncation(
+            buf,
+            buf_len_u,
+            used,
+            pos + 1,
+            (uint64_t)entry->d_ino,
+            wasi_type,
+            entry->d_name,
+            name_len,
+            &complete
+        );
         pos++;
+        if (!complete) break;
     }
 
     closedir(dir);
@@ -2323,6 +2571,7 @@ static int32_t wasi_path_filestat_get_impl(
     uint32_t path_len_u = (uint32_t)path_len;
     uint32_t buf_ptr_u = (uint32_t)buf_ptr;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
+    if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!check_mem_range(ctx, buf_ptr_u, 64)) return WASI_EFAULT;
 
 #ifndef _WIN32
@@ -2381,6 +2630,7 @@ static int32_t wasi_path_readlink_impl(
     uint32_t buf_len_u = (uint32_t)buf_len;
     uint32_t bufused_ptr_u = (uint32_t)bufused_ptr;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
+    if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!check_mem_range(ctx, buf_ptr_u, (size_t)buf_len_u)) return WASI_EFAULT;
     if (!check_mem_range(ctx, bufused_ptr_u, 4)) return WASI_EFAULT;
 
@@ -2420,6 +2670,10 @@ static int32_t wasi_path_symlink_impl(
     uint32_t new_path_len_u = (uint32_t)new_path_len;
     if (!check_mem_range(ctx, old_path_ptr_u, (size_t)old_path_len_u)) return WASI_EFAULT;
     if (!check_mem_range(ctx, new_path_ptr_u, (size_t)new_path_len_u)) return WASI_EFAULT;
+    if (guest_bytes_contain_nul(mem, old_path_ptr_u, old_path_len_u) ||
+        guest_bytes_contain_nul(mem, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EINVAL;
+    }
 
 #ifndef _WIN32
     char *old_path = malloc((size_t)old_path_len_u + 1);
@@ -2470,6 +2724,10 @@ static int32_t wasi_path_link_impl(
     uint32_t new_path_len_u = (uint32_t)new_path_len;
     if (!check_mem_range(ctx, old_path_ptr_u, (size_t)old_path_len_u)) return WASI_EFAULT;
     if (!check_mem_range(ctx, new_path_ptr_u, (size_t)new_path_len_u)) return WASI_EFAULT;
+    if (guest_bytes_contain_nul(mem, old_path_ptr_u, old_path_len_u) ||
+        guest_bytes_contain_nul(mem, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EINVAL;
+    }
 
 #ifndef _WIN32
     char *old_path_tmp = malloc((size_t)old_path_len_u + 1);
@@ -2501,7 +2759,12 @@ static int32_t wasi_path_link_impl(
         return new_errno;
     }
 
-    int flags = (old_flags & 0x01) ? AT_SYMLINK_FOLLOW : 0;
+    if (old_flags & 0x01) {
+        free(full_old_path);
+        free(full_new_path);
+        return WASI_EINVAL;
+    }
+    int flags = 0;
     int result = linkat(AT_FDCWD, full_old_path, AT_FDCWD, full_new_path, flags);
     free(full_old_path);
     free(full_new_path);
@@ -2570,6 +2833,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     uint32_t path_ptr_u = (uint32_t)path_ptr;
     uint32_t path_len_u = (uint32_t)path_len;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
+    if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
