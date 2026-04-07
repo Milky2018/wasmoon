@@ -1516,16 +1516,6 @@ static int64_t wasi_path_open_impl(
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
 #ifndef _WIN32
-    if (has_trailing_slash) {
-        struct stat trailing_stat;
-        int stat_flags = follow_symlink ? 0 : AT_SYMLINK_NOFOLLOW;
-        if (fstatat(AT_FDCWD, full_path, &trailing_stat, stat_flags) != 0 ||
-            !S_ISDIR(trailing_stat.st_mode)) {
-            free(full_path);
-            return WASI_ENOENT;
-        }
-    }
-
     // Build open flags
     int flags = 0;
     if (oflags & 0x01) flags |= O_CREAT;
@@ -1543,7 +1533,23 @@ static int64_t wasi_path_open_impl(
     else if (requires_write) flags |= O_WRONLY;
     else flags |= O_RDONLY;
 
-    int native_fd = open(full_path, flags, 0644);
+    const char *open_path = full_path;
+    char *open_path_alloc = NULL;
+    if (has_trailing_slash) {
+        size_t full_len = strlen(full_path);
+        open_path_alloc = malloc(full_len + 2);
+        if (!open_path_alloc) {
+            free(full_path);
+            return WASI_ENOMEM;
+        }
+        memcpy(open_path_alloc, full_path, full_len);
+        open_path_alloc[full_len] = '/';
+        open_path_alloc[full_len + 1] = '\0';
+        open_path = open_path_alloc;
+    }
+
+    int native_fd = open(open_path, flags, 0644);
+    if (open_path_alloc) free(open_path_alloc);
     if (native_fd < 0) {
         if (has_trailing_slash && errno == ENOTDIR) {
             free(full_path);

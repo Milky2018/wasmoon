@@ -664,18 +664,6 @@ pub fn path_open(
   if !follow_symlink {
     open_flags.push(NoFollow)
   }
-  if has_trailing_slash {
-    let stat_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-    match native_fstatat(0, resolved_path, stat_flags) {
-      Some(stat) =>
-        if stat.filetype == 3 {
-          ()
-        } else {
-          return Errno::NoEnt.to_i32()
-        }
-      None => return Errno::NoEnt.to_i32()
-    }
-  }
   let allow_read = (fs_rights_base & right_fd_read) != 0L
   let allow_write = (fs_rights_base & right_fd_write) != 0L
   // Match wasmtime's open-mode policy:
@@ -691,7 +679,12 @@ pub fn path_open(
     open_flags.push(ReadOnly)
   }
   // Open the file
-  let native_fd = native_open(resolved_path, open_flags, 0o644)
+  let open_path = if has_trailing_slash {
+    resolved_path + "/"
+  } else {
+    resolved_path
+  }
+  let native_fd = native_open(open_path, open_flags, 0o644)
   if native_fd is None {
     let errno = native_last_errno_to_wasi()
     if has_trailing_slash && errno == Errno::NotDir.to_i32() {

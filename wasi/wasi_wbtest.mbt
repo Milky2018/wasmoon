@@ -1217,6 +1217,47 @@ test "wasi: path_open trailing slash on regular file returns ENOENT" {
 }
 
 ///|
+test "wasi: path_open trailing slash can open symlinked directory with nofollow" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link = "wasmoon_trailing_link_dir"
+  let link_slash = "wasmoon_trailing_link_dir/"
+  let target = "../tmp"
+  for i, c in link {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in link_slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(300 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link.length()) |> ignore
+  inspect(
+    path_symlink_impl(ctx, mem, 300, target.length(), 3, 100, link.length()),
+    content="0",
+  )
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    200,
+    link_slash.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    304,
+  )
+  inspect(open_result, content="0")
+  if open_result == 0 {
+    fd_close(ctx, mem.read_i32(304)) |> ignore
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link.length()) |> ignore
+}
+
+///|
 test "wasi: path_open with embedded NUL returns EINVAL" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
