@@ -44,6 +44,7 @@
 #define WASI_ENOSYS       52
 #define WASI_ENOTDIR      54
 #define WASI_ENOTEMPTY    55
+#define WASI_ENOTSOCK     57
 #define WASI_ENOTSUP      58
 #define WASI_ESPIPE       70
 #define WASI_ENAMETOOLONG 37
@@ -126,6 +127,36 @@ static const char* get_open_dir_path(jit_context_t *ctx, int wasi_fd) {
     if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return NULL;
     if (!ctx->fd_is_dir[wasi_fd]) return NULL;
     return ctx->fd_host_paths[wasi_fd];
+}
+
+static int is_valid_wasi_descriptor(jit_context_t *ctx, int wasi_fd) {
+    if (wasi_fd < 0) return 0;
+    if (wasi_fd < 3) return 1;
+    return get_native_fd(ctx, wasi_fd) >= 0;
+}
+
+static int get_non_stdio_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+    if (!ctx || !native_fd_out) return WASI_EBADF;
+    if (wasi_fd < 3) return WASI_EBADF;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return WASI_EBADF;
+    *native_fd_out = native_fd;
+    return WASI_ESUCCESS;
+}
+
+static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+    if (!ctx || !native_fd_out) return WASI_EBADF;
+    if (wasi_fd < 3) return WASI_EBADF;
+    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return WASI_EBADF;
+#ifndef _WIN32
+    struct stat st;
+    if (fstat(native_fd, &st) < 0) return WASI_EBADF;
+    if (!S_ISREG(st.st_mode)) return WASI_EBADF;
+#endif
+    *native_fd_out = native_fd;
+    return WASI_ESUCCESS;
 }
 
 static int ensure_fd_metadata_arrays(jit_context_t *ctx) {
@@ -1116,12 +1147,9 @@ static int64_t wasi_fd_sync_impl(
     jit_context_t *ctx, int64_t fd
 ) {
     if (!ctx) return WASI_EBADF;
-
-    // stdio fds - no-op, return success
-    if (fd >= 0 && fd < 3) return WASI_ESUCCESS;
-
-    int native_fd = get_native_fd(ctx, (int)fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int native_fd = -1;
+    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
     return WASI_ESUCCESS; // No sync on Windows
@@ -1136,12 +1164,9 @@ static int64_t wasi_fd_datasync_impl(
     jit_context_t *ctx, int64_t fd
 ) {
     if (!ctx) return WASI_EBADF;
-
-    // stdio fds - no-op, return success
-    if (fd >= 0 && fd < 3) return WASI_ESUCCESS;
-
-    int native_fd = get_native_fd(ctx, (int)fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int native_fd = -1;
+    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
     return WASI_ESUCCESS;
@@ -1544,12 +1569,9 @@ static int64_t wasi_fd_filestat_set_size_impl(
     int64_t fd, int64_t size
 ) {
     if (!ctx) return WASI_EBADF;
-
-    // stdio fds don't support truncation
-    if (fd >= 0 && fd < 3) return WASI_EINVAL;
-
-    int native_fd = get_native_fd(ctx, (int)fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int native_fd = -1;
+    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
     if (ftruncate(native_fd, size) < 0) return errno_to_wasi(errno);
@@ -1686,21 +1708,22 @@ static int64_t wasi_clock_time_get_impl(
     if (!check_mem_range(ctx, time_ptr_u, 8)) return WASI_EFAULT;
 
     int64_t time_ns = 0;
-    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
-    if (clock_id >= 0 && clock_id <= 3) {
+    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID.
+    // Match wasmtime p1: CPU-time clocks are unsupported in preview1 and return EBADF.
+    if (clock_id == 0 || clock_id == 1) {
 #ifdef _WIN32
         FILETIME ft;
         GetSystemTimeAsFileTime(&ft);
         uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
         time_ns = (int64_t)((t - 116444736000000000ULL) * 100);
 #else
-        // For CPU time clocks (2 and 3), fall back to monotonic clock
-        // since we don't have platform-specific APIs for these yet
         struct timespec ts;
         clockid_t clk = (clock_id == 0) ? CLOCK_REALTIME : CLOCK_MONOTONIC;
         clock_gettime(clk, &ts);
         time_ns = (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 #endif
+    } else if (clock_id == 2 || clock_id == 3) {
+        return WASI_EBADF;
     } else {
         return WASI_EINVAL;
     }
@@ -1718,7 +1741,9 @@ static int64_t wasi_clock_res_get_impl(
     uint32_t resolution_ptr_u = (uint32_t)resolution_ptr;
     if (!check_mem_range(ctx, resolution_ptr_u, 8)) return WASI_EFAULT;
 
-    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID
+    // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID.
+    // Match wasmtime p1: CPU-time clocks return EBADF.
+    if (clock_id == 2 || clock_id == 3) return WASI_EBADF;
     if (clock_id < 0 || clock_id > 3) return WASI_EINVAL;
 
     *(int64_t *)(ctx->memory0->base + resolution_ptr_u) = 1000000; // 1ms
@@ -1762,8 +1787,8 @@ static int64_t wasi_proc_raise_impl(
     jit_context_t *ctx, int64_t sig
 ) {
     (void)ctx;
-    if (raise((int)sig) < 0) return errno_to_wasi(errno);
-    return WASI_ESUCCESS;
+    (void)sig;
+    return WASI_ENOTSUP;
 }
 
 // sched_yield: () -> errno
@@ -1974,6 +1999,13 @@ static int64_t wasi_poll_oneoff_impl(
                     retval = WASI_EBADF;
                     goto cleanup;
                 }
+#ifndef _WIN32
+                struct stat st;
+                if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) {
+                    retval = WASI_EBADF;
+                    goto cleanup;
+                }
+#endif
             }
             fd_plans[fd_count++] = (wasi_fd_plan_t){
                 .sub_index = i,
@@ -2487,12 +2519,9 @@ static int32_t wasi_fd_filestat_set_times_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
-
-    // stdio fds don't support setting timestamps
-    if (fd >= 0 && fd < 3) return WASI_EINVAL;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int native_fd = -1;
+    int err = get_non_stdio_native_fd(ctx, fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
     struct timespec times[2];
@@ -2599,8 +2628,10 @@ static int32_t wasi_fd_advise_impl(
     (void)offset;
     (void)len;
     (void)advice;
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
+    int native_fd = -1;
+    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
+    (void)native_fd;
     // Advisory only, always succeed
     return WASI_ESUCCESS;
 }
@@ -2624,30 +2655,13 @@ static int32_t wasi_fd_allocate_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t offset, int64_t len
 ) {
-
-    // stdio fds don't support allocation
-    if (fd >= 0 && fd < 3) return WASI_EINVAL;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
-#ifdef __linux__
-    // Linux has posix_fallocate
-    int result = posix_fallocate(native_fd, offset, len);
-    if (result != 0) return errno_to_wasi(result);
-    return WASI_ESUCCESS;
-#elif defined(__APPLE__)
-    // macOS: use ftruncate as fallback if extending file
-    struct stat st;
-    if (fstat(native_fd, &st) != 0) return errno_to_wasi(errno);
-    int64_t new_size = offset + len;
-    if (new_size > st.st_size) {
-        if (ftruncate(native_fd, new_size) != 0) return errno_to_wasi(errno);
-    }
-    return WASI_ESUCCESS;
-#else
-    return WASI_ENOSYS;
-#endif
+    (void)offset;
+    (void)len;
+    int native_fd = -1;
+    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    if (err != WASI_ESUCCESS) return err;
+    (void)native_fd;
+    return WASI_ENOTSUP;
 }
 
 // fd_renumber: Renumber a file descriptor
@@ -2655,18 +2669,19 @@ static int32_t wasi_fd_renumber_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t to_fd
 ) {
-    // Cannot renumber stdio fds
-    if ((fd >= 0 && fd < 3) || (to_fd >= 0 && to_fd < 3)) {
-        return WASI_EINVAL;
-    }
-
     if (!ctx || !ctx->fd_table) return WASI_EBADF;
 
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-    int native_to_fd = get_native_fd(ctx, to_fd);
-    if (native_to_fd < 0) return WASI_EBADF;
+    int from_valid = is_valid_wasi_descriptor(ctx, fd);
+    int to_valid = is_valid_wasi_descriptor(ctx, to_fd);
+    if (!from_valid || !to_valid) return WASI_EBADF;
     if (fd == to_fd) return WASI_ESUCCESS;
+
+    // This runtime does not model stdio as movable descriptors.
+    if ((fd >= 0 && fd < 3) || (to_fd >= 0 && to_fd < 3)) return WASI_EBADF;
+
+    int native_fd = get_native_fd(ctx, fd);
+    int native_to_fd = get_native_fd(ctx, to_fd);
+    if (native_fd < 0 || native_to_fd < 0) return WASI_EBADF;
 
     if (native_to_fd != native_fd) {
 #ifndef _WIN32
@@ -2774,12 +2789,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_fdstat_set_flags_ptr(void) { retur
 
 // ============ Socket Operations ============
 
-// Helper: Check if fd is a stdio fd (not a real socket)
-// Returns true if fd is stdin/stdout/stderr
-static inline int is_stdio_fd(int32_t fd) {
-    return fd >= 0 && fd <= 2;
-}
-
 // sock_accept: Accept a connection on a socket
 // fd: The listening socket
 // flags: Desired flags for the accepted socket (currently unused)
@@ -2793,30 +2802,8 @@ static int32_t wasi_sock_accept_impl(
     uint32_t result_fd_ptr_u = (uint32_t)result_fd_ptr;
     if (!check_mem_range(ctx, result_fd_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not sockets - return EBADF to match interpreter
-    if (is_stdio_fd(fd)) return WASI_EBADF;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
-    uint8_t *mem = ctx->memory0->base;
-
-#ifndef _WIN32
-    int new_fd = accept(native_fd, NULL, NULL);
-    if (new_fd < 0) return errno_to_wasi(errno);
-
-    // Allocate a WASI fd for the new socket
-    int wasi_fd = alloc_wasi_fd(ctx, new_fd);
-    if (wasi_fd < 0) {
-        close(new_fd);
-        return WASI_ENOMEM;
-    }
-
-    *(uint32_t *)(mem + result_fd_ptr_u) = (uint32_t)wasi_fd;
-    return WASI_ESUCCESS;
-#else
-    return WASI_ENOSYS;
-#endif
+    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
+    return WASI_ENOTSOCK;
 }
 
 // sock_recv: Receive data from a socket
@@ -2840,44 +2827,13 @@ static int32_t wasi_sock_recv_impl(
     if (!check_mem_range(ctx, ro_datalen_ptr_u, 4)) return WASI_EFAULT;
     if (!check_mem_range(ctx, ro_flags_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not sockets - return EBADF to match interpreter
-    if (is_stdio_fd(fd)) return WASI_EBADF;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
-    uint8_t *mem = ctx->memory0->base;
-
-#ifndef _WIN32
-    // Convert WASI flags to native flags
-    int flags = 0;
-    if (ri_flags & 1) flags |= MSG_PEEK;
-    if (ri_flags & 2) flags |= MSG_WAITALL;
-
-    // Read into first iovec buffer (simplified implementation)
-    size_t total = 0;
-    for (uint32_t i = 0; i < ri_data_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + ri_data_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + ri_data_u + i * 8 + 4);
-        if (buf_len > 0 && !check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
-            return WASI_EFAULT;
-        }
-
-        ssize_t n = recv(native_fd, mem + buf_ptr, buf_len, flags);
-        if (n < 0) {
-            if (total > 0) break; // Return what we have
-            return errno_to_wasi(errno);
-        }
-        total += n;
-        if (n < buf_len) break; // Short read
-    }
-
-    *(uint32_t *)(mem + ro_datalen_ptr_u) = (uint32_t)total;
-    *(uint32_t *)(mem + ro_flags_ptr_u) = 0; // No output flags
-    return WASI_ESUCCESS;
-#else
-    return WASI_ENOSYS;
-#endif
+    (void)ri_data_u;
+    (void)ri_data_len_u;
+    (void)ri_flags;
+    (void)ro_datalen_ptr_u;
+    (void)ro_flags_ptr_u;
+    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
+    return WASI_ENOTSOCK;
 }
 
 // sock_send: Send data on a socket
@@ -2899,37 +2855,12 @@ static int32_t wasi_sock_send_impl(
     if (!check_mem_range(ctx, si_data_u, (size_t)si_data_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, so_datalen_ptr_u, 4)) return WASI_EFAULT;
 
-    // stdio fds are not sockets - return EBADF to match interpreter
-    if (is_stdio_fd(fd)) return WASI_EBADF;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
-    uint8_t *mem = ctx->memory0->base;
-
-#ifndef _WIN32
-    size_t total = 0;
-    for (uint32_t i = 0; i < si_data_len_u; i++) {
-        uint32_t buf_ptr = *(uint32_t *)(mem + si_data_u + i * 8);
-        uint32_t buf_len = *(uint32_t *)(mem + si_data_u + i * 8 + 4);
-        if (buf_len > 0 && !check_mem_range(ctx, buf_ptr, (size_t)buf_len)) {
-            return WASI_EFAULT;
-        }
-
-        ssize_t n = send(native_fd, mem + buf_ptr, buf_len, 0);
-        if (n < 0) {
-            if (total > 0) break; // Return what we sent
-            return errno_to_wasi(errno);
-        }
-        total += n;
-        if (n < buf_len) break; // Short write
-    }
-
-    *(uint32_t *)(mem + so_datalen_ptr_u) = (uint32_t)total;
-    return WASI_ESUCCESS;
-#else
-    return WASI_ENOSYS;
-#endif
+    (void)si_data_u;
+    (void)si_data_len_u;
+    (void)si_flags;
+    (void)so_datalen_ptr_u;
+    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
+    return WASI_ENOTSOCK;
 }
 
 // sock_shutdown: Shut down a socket
@@ -2939,29 +2870,9 @@ static int32_t wasi_sock_shutdown_impl(
     jit_context_t *ctx,
     int32_t fd, int32_t how
 ) {
-
-    // stdio fds are not sockets - return EBADF to match interpreter
-    if (is_stdio_fd(fd)) return WASI_EBADF;
-
-    int native_fd = get_native_fd(ctx, fd);
-    if (native_fd < 0) return WASI_EBADF;
-
-#ifndef _WIN32
-    int native_how;
-    switch (how) {
-        case 0: native_how = SHUT_RD; break;
-        case 1: native_how = SHUT_WR; break;
-        case 2: native_how = SHUT_RDWR; break;
-        default: return WASI_EINVAL;
-    }
-
-    if (shutdown(native_fd, native_how) < 0) {
-        return errno_to_wasi(errno);
-    }
-    return WASI_ESUCCESS;
-#else
-    return WASI_ENOSYS;
-#endif
+    (void)how;
+    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
+    return WASI_ENOTSOCK;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_impl; }

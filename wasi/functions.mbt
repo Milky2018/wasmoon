@@ -374,9 +374,8 @@ pub fn clock_time_get(
   let time_ns = match clock.unwrap() {
     Realtime => native_clock_gettime_realtime()
     Monotonic => native_clock_gettime_monotonic()
-    // For process/thread CPU time, fall back to monotonic clock
-    // since we don't have platform-specific APIs for these yet
-    ProcessCPUTimeId | ThreadCPUTimeId => native_clock_gettime_monotonic()
+    // Match wasmtime p1: CPU-time clocks are unsupported in preview1.
+    ProcessCPUTimeId | ThreadCPUTimeId => return Errno::Badf.to_i32()
   }
   mem.write_i64(time_ptr, time_ns)
   Errno::Success.to_i32()
@@ -1063,10 +1062,14 @@ pub fn clock_res_get(
   if clock is None {
     return Errno::Inval.to_i32()
   }
-  // Return a reasonable resolution (1 millisecond = 1_000_000 nanoseconds)
-  // In a real implementation, this would depend on the system clock
-  mem.write_i64(resolution_ptr, 1000000L)
-  Errno::Success.to_i32()
+  match clock.unwrap() {
+    Realtime | Monotonic => {
+      // Return a reasonable resolution (1 millisecond = 1_000_000 nanoseconds).
+      mem.write_i64(resolution_ptr, 1000000L)
+      Errno::Success.to_i32()
+    }
+    ProcessCPUTimeId | ThreadCPUTimeId => Errno::Badf.to_i32()
+  }
 }
 
 ///|
@@ -1241,6 +1244,44 @@ fn resolve_host_path(
   }
 }
 
+///|
+/// Return the native fd for file-only operations (preview1 `get_file_fd`-like).
+///
+/// Returns `None` for stdio, directories, sockets, and invalid fds.
+fn regular_file_native_fd(ctx : WasiContext, fd : Int) -> Int? {
+  if fd < 3 {
+    return None
+  }
+  match ctx.get_file(fd) {
+    Some(file) =>
+      if file.file_type is RegularFile {
+        Some(file.native_fd)
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+/// Return the native fd for non-stdio descriptor operations (preview1 `get_fd`-like).
+///
+/// Returns `None` for stdio and invalid fds.
+fn non_stdio_descriptor_native_fd(ctx : WasiContext, fd : Int) -> Int? {
+  if fd < 3 {
+    return None
+  }
+  match ctx.get_file(fd) {
+    Some(file) => Some(file.native_fd)
+    None => None
+  }
+}
+
+///|
+fn is_valid_descriptor_for_sock(ctx : WasiContext, fd : Int) -> Bool {
+  ctx.is_valid_fd(fd)
+}
+
 // ============================================================================
 // Phase 1: Core file operations
 // ============================================================================
@@ -1248,36 +1289,28 @@ fn resolve_host_path(
 ///|
 /// fd_sync - Synchronize file to disk
 pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
-  // stdin, stdout, stderr - no-op, return success
-  if fd < 3 {
-    return Errno::Success.to_i32()
+  let native_fd = match regular_file_native_fd(ctx, fd) {
+    Some(native_fd) => native_fd
+    None => return Errno::Badf.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) =>
-      if native_fsync(file.native_fd) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  if native_fsync(native_fd) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
 ///|
 /// fd_datasync - Synchronize file data to disk
 pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
-  // stdin, stdout, stderr - no-op, return success
-  if fd < 3 {
-    return Errno::Success.to_i32()
+  let native_fd = match regular_file_native_fd(ctx, fd) {
+    Some(native_fd) => native_fd
+    None => return Errno::Badf.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) =>
-      if native_fdatasync(file.native_fd) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  if native_fdatasync(native_fd) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1494,17 +1527,14 @@ pub fn fd_filestat_set_size_impl(
   fd : Int,
   size : Int64,
 ) -> Int {
-  if fd < 3 {
-    return Errno::Inval.to_i32()
+  let native_fd = match regular_file_native_fd(ctx, fd) {
+    Some(native_fd) => native_fd
+    None => return Errno::Badf.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) =>
-      if native_ftruncate(file.native_fd, size) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  if native_ftruncate(native_fd, size) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1517,17 +1547,14 @@ pub fn fd_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
-  if fd < 3 {
-    return Errno::Inval.to_i32()
+  let native_fd = match non_stdio_descriptor_native_fd(ctx, fd) {
+    Some(native_fd) => native_fd
+    None => return Errno::Badf.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) =>
-      if native_futimens(file.native_fd, atim, mtim, fst_flags) {
-        Errno::Success.to_i32()
-      } else {
-        native_last_errno_to_wasi()
-      }
-    None => Errno::Badf.to_i32()
+  if native_futimens(native_fd, atim, mtim, fst_flags) {
+    Errno::Success.to_i32()
+  } else {
+    native_last_errno_to_wasi()
   }
 }
 
@@ -1573,14 +1600,9 @@ pub fn fd_advise_impl(
   _len : Int64,
   _advice : Int,
 ) -> Int {
-  // Check fd validity - stdio fds are valid, others must be in file table
-  if fd >= 3 {
-    match ctx.get_file(fd) {
-      Some(_) => ()
-      None => return Errno::Badf.to_i32()
-    }
+  if regular_file_native_fd(ctx, fd) is None {
+    return Errno::Badf.to_i32()
   }
-  // Just return success - advice is optional
   Errno::Success.to_i32()
 }
 
@@ -1589,34 +1611,13 @@ pub fn fd_advise_impl(
 pub fn fd_allocate_impl(
   ctx : WasiContext,
   fd : Int,
-  offset : Int64,
-  len : Int64,
+  _offset : Int64,
+  _len : Int64,
 ) -> Int {
-  if fd < 3 {
-    return Errno::Inval.to_i32()
+  if regular_file_native_fd(ctx, fd) is None {
+    return Errno::Badf.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) => {
-      // Use ftruncate as fallback (extend file if needed)
-      let stat = native_fstat(file.native_fd)
-      match stat {
-        Some(s) => {
-          let new_size = offset + len
-          if new_size > s.size.reinterpret_as_int64() {
-            if native_ftruncate(file.native_fd, new_size) {
-              Errno::Success.to_i32()
-            } else {
-              native_last_errno_to_wasi()
-            }
-          } else {
-            Errno::Success.to_i32()
-          }
-        }
-        None => native_last_errno_to_wasi()
-      }
-    }
-    None => Errno::Badf.to_i32()
-  }
+  Errno::NotSup.to_i32()
 }
 
 ///|
@@ -1726,19 +1727,21 @@ fn renumber_preopen_entries(ctx : WasiContext, from : Int, to : Int) -> Unit {
 ///|
 /// fd_renumber - Renumber file descriptor
 pub fn fd_renumber_impl(ctx : WasiContext, from : Int, to : Int) -> Int {
-  if from < 3 || to < 3 {
-    return Errno::Inval.to_i32()
-  }
-  let from_file = ctx.get_file(from)
-  if from_file is None {
-    return Errno::Badf.to_i32()
-  }
-  let to_file = ctx.get_file(to)
-  if to_file is None {
+  if !ctx.is_valid_fd(from) || !ctx.is_valid_fd(to) {
     return Errno::Badf.to_i32()
   }
   if from == to {
     return Errno::Success.to_i32()
+  }
+  // wasmtime accepts fd_renumber(0, 0). For non-identity stdio renumbering,
+  // this runtime does not model stdio as movable descriptors.
+  if from < 3 || to < 3 {
+    return Errno::Badf.to_i32()
+  }
+  let from_file = ctx.get_file(from)
+  let to_file = ctx.get_file(to)
+  if from_file is None || to_file is None {
+    return Errno::Badf.to_i32()
   }
   // Keep preopen fd mapping coherent with descriptor movement.
   if preopen_fd_index(ctx, from) is Some(_) ||
@@ -2086,7 +2089,8 @@ pub fn poll_oneoff_impl(
     if is_clock_subscription(tag) {
       let clock_id = mem.read_i32(sub_ptr + 16)
       let timeout = mem.read_i64(sub_ptr + 24)
-      let flags = mem.read_byte(sub_ptr + 40).to_int()
+      let flags = mem.read_byte(sub_ptr + 40).to_int() |
+        (mem.read_byte(sub_ptr + 41).to_int() << 8)
       let timeout_ns = match poll_clock_remaining_ns(clock_id, timeout, flags) {
         Some(timeout_ns) => timeout_ns
         None => return Errno::Inval.to_i32()
@@ -2216,43 +2220,11 @@ pub fn sock_recv_impl(
   if !check_iovecs_mem_range(mem, ri_data_ptr, ri_data_len) {
     return Errno::Fault.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) => {
-      let mut total_read = 0L
-      for i in 0..<ri_data_len {
-        let iov_ptr = ri_data_ptr + i * 8
-        let buf_ptr = mem.read_i32(iov_ptr)
-        let buf_len = mem.read_i32(iov_ptr + 4)
-        if buf_len > 0 {
-          let buf = FixedArray::make(buf_len, b'\x00')
-          // Convert WASI flags to native flags
-          let native_flags = if (ri_flags & 0x01) != 0 { 0x02 } else { 0 } // MSG_PEEK
-          let n = native_recv(file.native_fd, buf, native_flags)
-          if n < 0L {
-            if total_read > 0L {
-              break
-            }
-            mem.write_i32(ro_datalen_ptr, 0)
-            mem.write_byte(ro_flags_ptr, b'\x00')
-            mem.write_byte(ro_flags_ptr + 1, b'\x00')
-            return native_last_errno_to_wasi()
-          }
-          // Copy to WASM memory
-          for j in 0..<n.to_int() {
-            mem.write_byte(buf_ptr + j, buf[j])
-          }
-          total_read = total_read + n
-          if n < buf_len.to_int64() {
-            break
-          }
-        }
-      }
-      mem.write_i32(ro_datalen_ptr, total_read.to_int())
-      mem.write_byte(ro_flags_ptr, b'\x00')
-      mem.write_byte(ro_flags_ptr + 1, b'\x00')
-      Errno::Success.to_i32()
-    }
-    None => Errno::Badf.to_i32()
+  ignore(ri_flags)
+  if is_valid_descriptor_for_sock(ctx, fd) {
+    Errno::NotSock.to_i32()
+  } else {
+    Errno::Badf.to_i32()
   }
 }
 
@@ -2273,50 +2245,19 @@ pub fn sock_send_impl(
   if !check_iovecs_mem_range(mem, si_data_ptr, si_data_len) {
     return Errno::Fault.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) => {
-      let mut total_sent = 0L
-      for i in 0..<si_data_len {
-        let iov_ptr = si_data_ptr + i * 8
-        let buf_ptr = mem.read_i32(iov_ptr)
-        let buf_len = mem.read_i32(iov_ptr + 4)
-        if buf_len > 0 {
-          let buf = FixedArray::make(buf_len, b'\x00')
-          for j in 0..<buf_len {
-            buf[j] = mem.read_byte(buf_ptr + j)
-          }
-          let n = native_send(file.native_fd, buf, buf_len, 0)
-          if n < 0L {
-            if total_sent > 0L {
-              break
-            }
-            mem.write_i32(so_datalen_ptr, 0)
-            return native_last_errno_to_wasi()
-          }
-          total_sent = total_sent + n
-          if n < buf_len.to_int64() {
-            break
-          }
-        }
-      }
-      mem.write_i32(so_datalen_ptr, total_sent.to_int())
-      Errno::Success.to_i32()
-    }
-    None => Errno::Badf.to_i32()
+  if is_valid_descriptor_for_sock(ctx, fd) {
+    Errno::NotSock.to_i32()
+  } else {
+    Errno::Badf.to_i32()
   }
 }
 
 ///|
 /// sock_shutdown - Shutdown socket
 pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
-  if ctx.get_file(fd) is Some(file) {
-    // WASI: 0=RD, 1=WR, 2=RDWR
-    // POSIX: 0=SHUT_RD, 1=SHUT_WR, 2=SHUT_RDWR
-    if native_shutdown(file.native_fd, how) {
-      Errno::Success.to_i32()
-    } else {
-      native_last_errno_to_wasi()
-    }
+  ignore(how)
+  if is_valid_descriptor_for_sock(ctx, fd) {
+    Errno::NotSock.to_i32()
   } else {
     Errno::Badf.to_i32()
   }
@@ -2334,36 +2275,16 @@ pub fn sock_accept_impl(
   if !check_mem_range(mem, result_fd_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  match ctx.get_file(fd) {
-    Some(file) => {
-      let new_fd = native_accept(file.native_fd)
-      if new_fd < 0 {
-        return native_last_errno_to_wasi()
-      }
-      // Register the new socket in WASI context
-      let open_file : OpenFile = {
-        native_fd: new_fd,
-        file_type: SocketStream,
-        host_path: "<socket>",
-        position: 0L,
-        flags: 0,
-      }
-      let wasi_fd = ctx.alloc_fd(open_file)
-      mem.write_i32(result_fd_ptr, wasi_fd)
-      Errno::Success.to_i32()
-    }
-    None => Errno::Badf.to_i32()
+  if is_valid_descriptor_for_sock(ctx, fd) {
+    Errno::NotSock.to_i32()
+  } else {
+    Errno::Badf.to_i32()
   }
 }
 
 ///|
 /// proc_raise - Send a signal to the process
 pub fn proc_raise_impl(signal : Int) -> Int {
-  // WASI signal codes (some common ones):
-  // 0 = none, 1 = HUP, 2 = INT, 3 = QUIT, 6 = ABRT, 9 = KILL, 15 = TERM
-  if native_raise(signal) {
-    Errno::Success.to_i32()
-  } else {
-    Errno::Inval.to_i32()
-  }
+  ignore(signal)
+  Errno::NotSup.to_i32()
 }

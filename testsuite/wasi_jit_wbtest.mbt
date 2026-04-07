@@ -940,6 +940,48 @@ test "wasi jit: clock_time_get returns 0" {
 }
 
 ///|
+test "wasi jit: clock_time_get process/thread cpu clocks return EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_time_get"
+    #|    (func $clock_time_get (param i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "process_clock") (result i32)
+    #|    (call $clock_time_get (i32.const 2) (i64.const 0) (i32.const 0)))
+    #|  (func (export "thread_clock") (result i32)
+    #|    (call $clock_time_get (i32.const 3) (i64.const 0) (i32.const 0))))
+  let process_result = compare_wasi(source, "process_clock")
+  inspect(process_result.match_, content="true")
+  inspect(wasi_errno_from_result(process_result.interp_result), content="8")
+  inspect(wasi_errno_from_result(process_result.jit_result), content="8")
+  let thread_result = compare_wasi(source, "thread_clock")
+  inspect(thread_result.match_, content="true")
+  inspect(wasi_errno_from_result(thread_result.interp_result), content="8")
+  inspect(wasi_errno_from_result(thread_result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: clock_res_get process/thread cpu clocks return EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_res_get"
+    #|    (func $clock_res_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "process_clock") (result i32)
+    #|    (call $clock_res_get (i32.const 2) (i32.const 0)))
+    #|  (func (export "thread_clock") (result i32)
+    #|    (call $clock_res_get (i32.const 3) (i32.const 0))))
+  let process_result = compare_wasi(source, "process_clock")
+  inspect(process_result.match_, content="true")
+  inspect(wasi_errno_from_result(process_result.interp_result), content="8")
+  inspect(wasi_errno_from_result(process_result.jit_result), content="8")
+  let thread_result = compare_wasi(source, "thread_clock")
+  inspect(thread_result.match_, content="true")
+  inspect(wasi_errno_from_result(thread_result.interp_result), content="8")
+  inspect(wasi_errno_from_result(thread_result.jit_result), content="8")
+}
+
+///|
 test "wasi jit: random_get returns 0" {
   let source =
     #|(module
@@ -1015,6 +1057,21 @@ test "wasi jit: sched_yield returns 0" {
     #|  (func (export "test") (result i32)
     #|    (call $sched_yield)))
   inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: proc_raise returns ENOTSUP (58)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "proc_raise"
+    #|    (func $proc_raise (param i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $proc_raise (i32.const 2))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="58")
+  inspect(wasi_errno_from_result(result.jit_result), content="58")
 }
 
 ///|
@@ -1097,7 +1154,7 @@ test "wasi jit: fd_pwrite stdin returns EBADF (8)" {
 }
 
 ///|
-test "wasi jit: fd_filestat_set_times stdin returns EINVAL (28)" {
+test "wasi jit: fd_filestat_set_times stdin returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_filestat_set_times"
@@ -1105,11 +1162,14 @@ test "wasi jit: fd_filestat_set_times stdin returns EINVAL (28)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_filestat_set_times (i32.const 0) (i64.const 0) (i64.const 0) (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
-test "wasi jit: fd_filestat_set_size stdin returns EINVAL (28)" {
+test "wasi jit: fd_filestat_set_size stdin returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_filestat_set_size"
@@ -1117,11 +1177,14 @@ test "wasi jit: fd_filestat_set_size stdin returns EINVAL (28)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_filestat_set_size (i32.const 0) (i64.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
-test "wasi jit: fd_allocate stdout returns EINVAL (28)" {
+test "wasi jit: fd_allocate stdout returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_allocate"
@@ -1129,11 +1192,38 @@ test "wasi jit: fd_allocate stdout returns EINVAL (28)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_allocate (i32.const 1) (i64.const 0) (i64.const 100))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
-test "wasi jit: fd_renumber stdin returns EINVAL (28)" {
+test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_allocate"
+    #|    (func $fd_allocate (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_allocate_file")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 21)
+    #|      (i32.const 9) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|      (i32.const 100)))
+    #|    (call $fd_allocate (i32.load (i32.const 100)) (i64.const 0) (i64.const 32))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="58")
+  inspect(wasi_errno_from_result(result.jit_result), content="58")
+}
+
+///|
+test "wasi jit: fd_renumber stdin to missing target returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_renumber"
@@ -1141,7 +1231,25 @@ test "wasi jit: fd_renumber stdin returns EINVAL (28)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_renumber (i32.const 0) (i32.const 10))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: fd_renumber stdin identity succeeds (0)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_renumber"
+    #|    (func $fd_renumber (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_renumber (i32.const 0) (i32.const 0))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
 }
 
 ///|
@@ -1220,7 +1328,7 @@ test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
 }
 
 ///|
-test "wasi jit: fd_sync stdin returns 0" {
+test "wasi jit: fd_sync stdin returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_sync"
@@ -1228,11 +1336,14 @@ test "wasi jit: fd_sync stdin returns 0" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_sync (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
-test "wasi jit: fd_datasync stdout returns 0" {
+test "wasi jit: fd_datasync stdout returns EBADF (8)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_datasync"
@@ -1240,7 +1351,10 @@ test "wasi jit: fd_datasync stdout returns 0" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $fd_datasync (i32.const 1))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
@@ -1301,7 +1415,7 @@ test "wasi jit: fd_fdstat_get preopen inheriting rights match interpreter" {
 }
 
 ///|
-test "wasi jit: sock_accept returns ENOTSUP (58)" {
+test "wasi jit: sock_accept on valid descriptor returns ENOTSOCK (57)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_accept"
@@ -1309,11 +1423,14 @@ test "wasi jit: sock_accept returns ENOTSUP (58)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $sock_accept (i32.const 0) (i32.const 0) (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="57")
+  inspect(wasi_errno_from_result(result.jit_result), content="57")
 }
 
 ///|
-test "wasi jit: sock_recv returns ENOTSUP (58)" {
+test "wasi jit: sock_recv on valid descriptor returns ENOTSOCK (57)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_recv"
@@ -1321,11 +1438,14 @@ test "wasi jit: sock_recv returns ENOTSUP (58)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $sock_recv (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="57")
+  inspect(wasi_errno_from_result(result.jit_result), content="57")
 }
 
 ///|
-test "wasi jit: sock_send returns ENOTSUP (58)" {
+test "wasi jit: sock_send on valid descriptor returns ENOTSOCK (57)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_send"
@@ -1333,11 +1453,14 @@ test "wasi jit: sock_send returns ENOTSUP (58)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $sock_send (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="57")
+  inspect(wasi_errno_from_result(result.jit_result), content="57")
 }
 
 ///|
-test "wasi jit: sock_shutdown returns ENOTSUP (58)" {
+test "wasi jit: sock_shutdown on valid descriptor returns ENOTSOCK (57)" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_shutdown"
@@ -1345,5 +1468,8 @@ test "wasi jit: sock_shutdown returns ENOTSUP (58)" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $sock_shutdown (i32.const 0) (i32.const 0))))
-  inspect(compare_wasi(source, "test"), content="matched")
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="57")
+  inspect(wasi_errno_from_result(result.jit_result), content="57")
 }

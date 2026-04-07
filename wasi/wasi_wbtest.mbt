@@ -77,6 +77,13 @@ test "wasi: clock_time_get invalid clock" {
 }
 
 ///|
+test "wasi: clock_time_get cpu clocks return BADF" {
+  let mem = @runtime.Memory::new(1, None)
+  inspect(clock_time_get(mem, 2, 0L, 0), content="8") // PROCESS_CPUTIME_ID
+  inspect(clock_time_get(mem, 3, 0L, 0), content="8") // THREAD_CPUTIME_ID
+}
+
+///|
 test "wasi: fd_close" {
   let ctx = WasiContextBuilder::new().build()
   // Cannot close stdin/stdout/stderr
@@ -531,6 +538,9 @@ test "wasi: clock_res_get" {
   // Test monotonic clock
   let result = clock_res_get(mem, 1, 0)
   inspect(result, content="0")
+  // CPU clocks are unsupported in preview1 and return BADF.
+  inspect(clock_res_get(mem, 2, 0), content="8")
+  inspect(clock_res_get(mem, 3, 0), content="8")
   // Test invalid clock
   let result = clock_res_get(mem, 999, 0)
   inspect(result, content="28") // Errno::Inval
@@ -868,16 +878,19 @@ test "wasi: fd_readdir" {
 }
 
 ///|
-test "wasi: fd_sync and fd_datasync" {
+test "wasi: fd_sync and fd_datasync use file-only descriptor gating" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
-  // Test on stdin/stdout/stderr - should succeed (no-op)
-  inspect(fd_sync_impl(ctx, 0), content="0")
-  inspect(fd_sync_impl(ctx, 1), content="0")
-  inspect(fd_sync_impl(ctx, 2), content="0")
-  inspect(fd_datasync_impl(ctx, 0), content="0")
-  inspect(fd_datasync_impl(ctx, 1), content="0")
-  inspect(fd_datasync_impl(ctx, 2), content="0")
+  // stdio is not a file descriptor for these operations.
+  inspect(fd_sync_impl(ctx, 0), content="8")
+  inspect(fd_sync_impl(ctx, 1), content="8")
+  inspect(fd_sync_impl(ctx, 2), content="8")
+  inspect(fd_datasync_impl(ctx, 0), content="8")
+  inspect(fd_datasync_impl(ctx, 1), content="8")
+  inspect(fd_datasync_impl(ctx, 2), content="8")
+  // preopen directory is also rejected.
+  inspect(fd_sync_impl(ctx, 3), content="8")
+  inspect(fd_datasync_impl(ctx, 3), content="8")
   // Test on opened file
   let test_path = "wasmoon_sync_test.txt"
   for i, c in test_path {
@@ -1127,11 +1140,167 @@ test "wasi: fd_filestat_set_size" {
 }
 
 ///|
-test "wasi: fd_advise always succeeds" {
+test "wasi: fd_advise is file-only" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  // stdio and preopen directory should return BADF.
+  inspect(fd_advise_impl(ctx, 0, 0L, 100L, 0), content="8")
+  inspect(fd_advise_impl(ctx, 3, 0L, 100L, 0), content="8")
+
+  let test_path = "wasmoon_advise_test.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_advise_impl(ctx, fd, 0L, 100L, 0), content="0")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_allocate returns ENOTSUP for files and BADF otherwise" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_allocate_impl(ctx, 0, 0L, 0L), content="8")
+  inspect(fd_allocate_impl(ctx, 3, 0L, 0L), content="8")
+
+  let test_path = "wasmoon_allocate_test.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_allocate_impl(ctx, fd, 0L, 100L), content="58")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_filestat_set_size uses file-only gating" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_filestat_set_size_impl(ctx, 0, 0L), content="8")
+  inspect(fd_filestat_set_size_impl(ctx, 3, 0L), content="8")
+  // Existing writable file path remains valid for set_size.
+  let test_path = "wasmoon_setsize_gate.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_filestat_set_size_impl(ctx, fd, 0L), content="0")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_filestat_set_times rejects stdio descriptors" {
   let ctx = WasiContextBuilder::new().build()
-  // fd_advise is a no-op, always returns success
-  let result = fd_advise_impl(ctx, 0, 0L, 100L, 0)
-  inspect(result, content="0")
+  inspect(fd_filestat_set_times_impl(ctx, 0, 0L, 0L, 0), content="8")
+  inspect(fd_filestat_set_times_impl(ctx, 1, 0L, 0L, 0), content="8")
+  inspect(fd_filestat_set_times_impl(ctx, 2, 0L, 0L, 0), content="8")
+}
+
+///|
+test "wasi: fd_renumber allows identity stdio and rejects moving stdio" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_renumber_impl(ctx, 0, 0), content="0")
+  inspect(fd_renumber_impl(ctx, 0, 10), content="8")
+  inspect(fd_renumber_impl(ctx, 1, 3), content="8")
+
+  let test_path = "wasmoon_renumber_gate.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_renumber_impl(ctx, fd, 127), content="8")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: proc_raise returns ENOTSUP" {
+  inspect(proc_raise_impl(2), content="58")
+}
+
+///|
+test "wasi: sock APIs return NOTSOCK for valid descriptors" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  inspect(sock_accept_impl(ctx, mem, 0, 0, 200), content="57")
+  inspect(sock_recv_impl(ctx, mem, 0, 0, 1, 0, 204, 208), content="57")
+  inspect(sock_send_impl(ctx, mem, 0, 0, 1, 0, 212), content="57")
+  inspect(sock_shutdown_impl(ctx, 0, 0), content="57")
+  inspect(sock_shutdown_impl(ctx, 999, 0), content="8")
 }
 
 ///|
