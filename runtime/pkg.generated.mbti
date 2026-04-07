@@ -73,8 +73,7 @@ pub impl Show for RuntimeError
 pub(all) struct ArrayInstance {
   type_idx : Int
   elements : Array[@types.Value]
-}
-pub impl Show for ArrayInstance
+} derive(Show)
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -84,19 +83,17 @@ pub(all) struct CallStackEntry {
 pub struct Caller {
   store : Store
   instance : ModuleInstance
-}
+} derive(Show)
 pub fn Caller::get_exported_func_addr(Self, String) -> Int?
 pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
 pub fn Caller::new(Store, ModuleInstance) -> Self
 pub fn Caller::store(Self) -> Store
-pub impl Show for Caller
 
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
-}
-pub impl Show for ExnInstance
+} derive(Show)
 
 pub(all) enum ExternVal {
   Func(Int)
@@ -106,13 +103,12 @@ pub(all) enum ExternVal {
   Tag(Int)
 }
 
-type Frame
+type Frame derive(Show)
 pub fn Frame::get_func_idx(Self) -> Int
 pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
 pub fn Frame::locals_values(Self) -> Array[@types.Value]
 pub fn Frame::new(Int, Array[@types.Value], Int) -> Self
 pub fn Frame::set_local(Self, Int, @types.Value) -> Unit raise RuntimeError
-pub impl Show for Frame
 
 pub(all) enum FuncInst {
   WasmFunc(@types.FunctionCode)
@@ -124,15 +120,12 @@ pub(all) enum FuncOwner {
   HostFunc
   Unowned
   Module(Int)
-}
-pub impl Eq for FuncOwner
-pub impl Show for FuncOwner
+} derive(Eq, Show)
 
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
-}
-pub impl Show for GCObject
+} derive(Show)
 
 pub struct GCStats {
   total_objects : Int
@@ -141,8 +134,7 @@ pub struct GCStats {
   collections : Int
   bytes_allocated : Int64
   bytes_collected : Int64
-}
-pub impl Show for GCStats
+} derive(Show)
 
 pub struct GcStats {
   total_slots : Int
@@ -151,15 +143,13 @@ pub struct GcStats {
   collections : Int
   bytes_allocated : Int64
   bytes_collected : Int64
-}
-pub impl Show for GcStats
+} derive(Show)
 
-type GlobalInstance
+type GlobalInstance derive(Show)
 pub fn GlobalInstance::get(Self) -> @types.Value
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
 pub fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
 pub fn GlobalInstance::set(Self, @types.Value) -> Unit raise RuntimeError
-pub impl Show for GlobalInstance
 
 type Imports
 pub fn Imports::add_func(Self, String, String, Int) -> Unit
@@ -192,7 +182,7 @@ pub struct MarkSweepHeap {
   mut collections : Int
   mut bytes_allocated : Int64
   mut bytes_collected : Int64
-}
+} derive(Show)
 pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
 pub fn MarkSweepHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
@@ -222,9 +212,8 @@ pub fn MarkSweepHeap::with_threshold(Int) -> Self
 pub impl GcHeap for MarkSweepHeap
 pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
-pub impl Show for MarkSweepHeap
 
-type Memory
+type Memory derive(Show)
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::desc_ptr(Self) -> Int64
@@ -269,7 +258,6 @@ pub fn Memory::store_i64_8(Self, Int, Int64) -> Unit raise RuntimeError
 pub fn Memory::write_byte(Self, Int, Byte) -> Unit
 pub fn Memory::write_i32(Self, Int, Int) -> Unit
 pub fn Memory::write_i64(Self, Int, Int64) -> Unit
-pub impl Show for Memory
 
 pub(all) struct ModuleInstance {
   types : Array[@types.SubType]
@@ -287,12 +275,11 @@ pub(all) struct ModuleInstance {
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool]
   dropped_datas : Array[Bool]
-}
+} derive(Show)
 pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub fn ModuleInstance::new() -> Self
-pub impl Show for ModuleInstance
 
 pub struct RuntimeCapabilities {
   version : String
@@ -342,7 +329,7 @@ pub(all) enum RuntimeFeature {
   Threads
 }
 
-type Stack
+type Stack derive(Show)
 pub fn Stack::active_values(Self) -> Array[@types.Value]
 pub fn Stack::clear(Self) -> Unit
 pub fn Stack::new() -> Self
@@ -357,7 +344,6 @@ pub fn Stack::pop_v128(Self) -> Bytes raise RuntimeError
 pub fn Stack::push(Self, @types.Value) -> Unit raise RuntimeError
 pub fn Stack::push_v128(Self, Bytes) -> Unit raise RuntimeError
 pub fn Stack::size(Self) -> Int
-pub impl Show for Stack
 
 pub struct Store {
   funcs : Array[FuncInst]
@@ -380,7 +366,7 @@ pub struct Store {
   jit_tables : Array[@jit.JITTable?]
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
-}
+} derive(Show)
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int
@@ -436,15 +422,13 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 pub fn Store::with_c_heap() -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value
-pub impl Show for Store
 
 pub(all) struct StructInstance {
   type_idx : Int
   fields : Array[@types.Value]
-}
-pub impl Show for StructInstance
+} derive(Show)
 
-type Table
+type Table derive(Show)
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError
@@ -455,7 +439,6 @@ pub fn Table::is_table64(Self) -> Bool
 pub fn Table::new(@types.ValueType, Int, Int?, init_value? : @types.Value, is_table64? : Bool) -> Self
 pub fn Table::set(Self, Int, @types.Value) -> Unit raise RuntimeError
 pub fn Table::size(Self) -> Int
-pub impl Show for Table
 
 // Type aliases
 

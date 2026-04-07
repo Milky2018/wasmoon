@@ -50,25 +50,19 @@ pub impl Show for ComponentParseError
 pub(all) struct Alias {
   sort : Sort
   target : AliasTarget
-}
-pub impl Eq for Alias
-pub impl Show for Alias
+} derive(Eq, Show)
 
 pub(all) enum AliasTarget {
   Export(Int, String)
   CoreExport(Int, String)
   Outer(Int, Int)
-}
-pub impl Eq for AliasTarget
-pub impl Show for AliasTarget
+} derive(Eq, Show)
 
 pub(all) enum BinaryKind {
   CoreModule
   Component
   UnknownPreamble(Int, Int)
-}
-pub impl Eq for BinaryKind
-pub impl Show for BinaryKind
+} derive(Eq, Show)
 
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int)
@@ -108,9 +102,7 @@ pub(all) enum Canon {
   ResourceNew(Int)
   ResourceDrop(Int)
   ResourceRep(Int)
-}
-pub impl Eq for Canon
-pub impl Show for Canon
+} derive(Eq, Show)
 
 pub(all) enum CanonOpt {
   StringEncoding(StringEncoding)
@@ -119,9 +111,7 @@ pub(all) enum CanonOpt {
   PostReturn(Int)
   Async
   Callback(Int)
-}
-pub impl Eq for CanonOpt
-pub impl Show for CanonOpt
+} derive(Eq, Show)
 
 pub(all) struct Component {
   binary : ComponentBinary
@@ -136,17 +126,13 @@ pub(all) struct Component {
   canons : Array[Canon]
   start : Start?
   components : Array[Component]
-}
-pub impl Eq for Component
-pub impl Show for Component
+} derive(Eq, Show)
 
 pub struct ComponentBinary {
   version : Int
   layer : Int
   sections : Array[Section]
-}
-pub impl Eq for ComponentBinary
-pub impl Show for ComponentBinary
+} derive(Eq, Show)
 
 pub(all) enum ComponentDecl {
   CoreType(Bytes)
@@ -155,51 +141,37 @@ pub(all) enum ComponentDecl {
   AliasInstanceExport(Int, Int, String)
   Import(String, ExternDesc)
   Export(String, ExternDesc)
-}
-pub impl Eq for ComponentDecl
-pub impl Show for ComponentDecl
+} derive(Eq, Show)
 
 pub(all) struct CoreInlineExport {
   name : String
   sortidx : SortIdx
-}
-pub impl Eq for CoreInlineExport
-pub impl Show for CoreInlineExport
+} derive(Eq, Show)
 
 pub(all) struct CoreInstanceDecl {
   expr : CoreInstanceExpr
-}
-pub impl Eq for CoreInstanceDecl
-pub impl Show for CoreInstanceDecl
+} derive(Eq, Show)
 
 pub(all) enum CoreInstanceExpr {
   Instantiate(Int, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
-}
-pub impl Eq for CoreInstanceExpr
-pub impl Show for CoreInstanceExpr
+} derive(Eq, Show)
 
 pub(all) struct CoreInstantiateArg {
   name : String
   sortidx : SortIdx
-}
-pub impl Eq for CoreInstantiateArg
-pub impl Show for CoreInstantiateArg
+} derive(Eq, Show)
 
 pub(all) struct Export {
   name : ExportName
   sortidx : SortIdx
   desc : ExternDesc?
-}
-pub impl Eq for Export
-pub impl Show for Export
+} derive(Eq, Show)
 
 pub(all) enum ExportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-}
-pub impl Eq for ExportName
-pub impl Show for ExportName
+} derive(Eq, Show)
 
 pub(all) enum ExternDesc {
   CoreModuleType(Int)
@@ -208,44 +180,32 @@ pub(all) enum ExternDesc {
   Type(TypeBound)
   ComponentType(Int)
   InstanceType(Int)
-}
-pub impl Eq for ExternDesc
-pub impl Show for ExternDesc
+} derive(Eq, Show)
 
 pub(all) struct FuncType {
   is_async : Bool
   params : Array[Param]
   result : ValType?
-}
-pub impl Eq for FuncType
-pub impl Show for FuncType
+} derive(Eq, Show)
 
 pub(all) struct Import {
   name : ImportName
   desc : ExternDesc
-}
-pub impl Eq for Import
-pub impl Show for Import
+} derive(Eq, Show)
 
 pub(all) enum ImportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-}
-pub impl Eq for ImportName
-pub impl Show for ImportName
+} derive(Eq, Show)
 
 pub(all) struct InlineExport {
   name : String
   sortidx : SortIdx
-}
-pub impl Eq for InlineExport
-pub impl Show for InlineExport
+} derive(Eq, Show)
 
 pub(all) struct Instance {
   expr : InstanceExpr
-}
-pub impl Eq for Instance
-pub impl Show for Instance
+} derive(Eq, Show)
 
 pub(all) enum InstanceDecl {
   CoreType(Bytes)
@@ -253,30 +213,22 @@ pub(all) enum InstanceDecl {
   AliasOuter(Int, Int, Int)
   AliasInstanceExport(Int, Int, String)
   Export(String, ExternDesc)
-}
-pub impl Eq for InstanceDecl
-pub impl Show for InstanceDecl
+} derive(Eq, Show)
 
 pub(all) enum InstanceExpr {
   Instantiate(Int, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
-}
-pub impl Eq for InstanceExpr
-pub impl Show for InstanceExpr
+} derive(Eq, Show)
 
 pub(all) struct InstantiateArg {
   name : String
   sortidx : SortIdx
-}
-pub impl Eq for InstantiateArg
-pub impl Show for InstantiateArg
+} derive(Eq, Show)
 
 pub(all) struct Param {
   label : String
   ty : ValType
-}
-pub impl Eq for Param
-pub impl Show for Param
+} derive(Eq, Show)
 
 pub(all) enum PrimValType {
   Bool
@@ -293,30 +245,22 @@ pub(all) enum PrimValType {
   Char
   String
   ErrorContext
-}
-pub impl Eq for PrimValType
-pub impl Show for PrimValType
+} derive(Eq, Show)
 
 pub(all) struct RecordField {
   label : String
   ty : ValType
-}
-pub impl Eq for RecordField
-pub impl Show for RecordField
+} derive(Eq, Show)
 
 pub(all) enum ResourceKind {
   GuestDefined
   HostDefined
-}
-pub impl Eq for ResourceKind
-pub impl Show for ResourceKind
+} derive(Eq, Show)
 
 pub struct Section {
   id : Int
   payload : Bytes
-}
-pub impl Eq for Section
-pub impl Show for Section
+} derive(Eq, Show)
 
 pub(all) enum Sort {
   Core(Int)
@@ -325,39 +269,29 @@ pub(all) enum Sort {
   Type
   Component
   Instance
-}
-pub impl Eq for Sort
-pub impl Show for Sort
+} derive(Eq, Show)
 
 pub(all) struct SortIdx {
   sort : Sort
   idx : Int
-}
-pub impl Eq for SortIdx
-pub impl Show for SortIdx
+} derive(Eq, Show)
 
 pub(all) struct Start {
   func_idx : Int
   args : Array[Int]
   results : Int
-}
-pub impl Eq for Start
-pub impl Show for Start
+} derive(Eq, Show)
 
 pub(all) enum StringEncoding {
   Utf8
   Utf16
   Latin1Utf16
-}
-pub impl Eq for StringEncoding
-pub impl Show for StringEncoding
+} derive(Eq, Show)
 
 pub(all) enum TypeBound {
   Eq(Int)
   SubResource
-}
-pub impl Eq for TypeBound
-pub impl Show for TypeBound
+} derive(Eq, Show)
 
 pub(all) enum TypeDef {
   DefValType(PrimValType)
@@ -378,31 +312,23 @@ pub(all) enum TypeDef {
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
-}
-pub impl Eq for TypeDef
-pub impl Show for TypeDef
+} derive(Eq, Show)
 
 pub(all) enum ValType {
   TypeIdx(Int)
   Prim(PrimValType)
-}
-pub impl Eq for ValType
-pub impl Show for ValType
+} derive(Eq, Show)
 
 pub(all) enum ValueBound {
   Eq(Int)
   Type(ValType)
-}
-pub impl Eq for ValueBound
-pub impl Show for ValueBound
+} derive(Eq, Show)
 
 pub(all) struct VariantCase {
   label : String
   ty : ValType?
   refines : Int?
-}
-pub impl Eq for VariantCase
-pub impl Show for VariantCase
+} derive(Eq, Show)
 
 // Type aliases
 

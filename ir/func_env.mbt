@@ -620,7 +620,7 @@ pub fn FuncEnvironment::emit_bounds_check(
   // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  if not(skip_bounds_check) {
+  if !skip_bounds_check {
     // Need runtime bounds check
     let size_val = builder.iconst(Type::I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -712,7 +712,7 @@ pub fn FuncEnvironment::translate_memory_load(
   // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  if not(skip_bounds_check) {
+  if !skip_bounds_check {
     // Need runtime bounds check
     let size_val = builder.iconst(Type::I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -813,7 +813,7 @@ pub fn FuncEnvironment::translate_memory_store(
   // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  if not(skip_bounds_check) {
+  if !skip_bounds_check {
     // Need runtime bounds check
     let size_val = builder.iconst(Type::I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -906,7 +906,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  if not(skip_bounds_check) {
+  if !skip_bounds_check {
     // Need runtime bounds check
     let size_val = builder.iconst(Type::I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
@@ -1000,7 +1000,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   // Calculate addr + offset for effective address
   let offset_val = builder.iconst(Type::I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  if not(skip_bounds_check) {
+  if !skip_bounds_check {
     // Need runtime bounds check
     let size_val = builder.iconst(Type::I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)

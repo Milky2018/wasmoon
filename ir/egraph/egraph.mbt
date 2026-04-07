@@ -508,7 +508,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     id: class_id,
     nodes: [node],
     best_node: None,
-    best_cost: @int.max_value,
+    best_cost: @int.MAX_VALUE,
     const_value: const_val,
     fconst_value: fconst_val,
   }
@@ -778,7 +778,7 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
       }
       // Invalidate best node cache
       root_class.best_node = None
-      root_class.best_cost = @int.max_value
+      root_class.best_cost = @int.MAX_VALUE
       // Merge constant caches: prefer non-None values
       if root_class.const_value is None && other_class.const_value is Some(_) {
         root_class.const_value = other_class.const_value
@@ -800,7 +800,7 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
 /// Rebuild the e-graph after merges to restore invariants
 /// This re-canonicalizes all nodes and updates the hash-cons map
 pub fn EGraph::rebuild(self : EGraph) -> Unit {
-  if not(self.dirty) {
+  if !self.dirty {
     return
   }
 
@@ -829,7 +829,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             id: EClassId(root),
             nodes,
             best_node: None,
-            best_cost: @int.max_value,
+            best_cost: @int.MAX_VALUE,
             const_value: eclass.const_value,
             fconst_value: eclass.fconst_value,
           })
@@ -875,7 +875,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             break
           }
         }
-        if not(found) {
+        if !found {
           canonical_nodes.push(canonical_node)
         }
 
@@ -919,7 +919,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       root_class.const_value = const_value
       root_class.fconst_value = fconst_value
       root_class.best_node = None
-      root_class.best_cost = @int.max_value
+      root_class.best_cost = @int.MAX_VALUE
     }
     if unions.is_empty() {
       // Finalize: commit rebuilt structures and refresh type/remat maps.
@@ -1599,7 +1599,7 @@ priv struct ExtractCost {
 
 ///|
 fn extract_cost_max_finite() -> Int {
-  @int.max_value - 1
+  @int.MAX_VALUE - 1
 }
 
 ///|
@@ -1727,7 +1727,7 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   let in_progress : @hashset.HashSet[Int] = @hashset.new()
   let (cost, node) = self.extract_impl(id, memo, in_progress)
   if cost.infinite {
-    (@int.max_value, node)
+    (@int.MAX_VALUE, node)
   } else {
     (cost.op_cost, node)
   }

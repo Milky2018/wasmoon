@@ -2,10 +2,12 @@ import {
   "Milky2018/wasmoon/types",
   "Milky2018/wasmoon/parser",
   "moonbitlang/core/buffer",
+  "moonbitlang/core/string",
   "moonbitlang/core/strconv",
 }
 
 import {
   "moonbitlang/core/buffer",
+  "moonbitlang/core/string",
   "moonbitlang/core/strconv",
 } for "wbtest"

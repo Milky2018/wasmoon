@@ -14,9 +14,7 @@ pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 pub(all) enum CallConv {
   Wasm
   C
-}
-pub impl Eq for CallConv
-pub impl Show for CallConv
+} derive(Eq, Show)
 
 pub(all) enum CallType {
   None
@@ -74,9 +72,7 @@ pub(all) enum ExceptionLibcall {
   Sigsetjmp
   SpillLocals
   GetSpilledLocal
-}
-pub impl Eq for ExceptionLibcall
-pub impl Show for ExceptionLibcall
+} derive(Eq, Show)
 
 pub(all) enum ExtendKind {
   Signed8To32
@@ -143,9 +139,7 @@ pub(all) enum GCLibcall {
   RegisterArrayInline
   AllocStructSlow
   AllocArraySlow
-}
-pub impl Eq for GCLibcall
-pub impl Show for GCLibcall
+} derive(Eq, Show)
 
 pub(all) enum IndexExtend {
   None
@@ -181,9 +175,7 @@ pub(all) enum JITLibcall {
   TableInit
   ElemDrop
   HostCall
-}
-pub impl Eq for JITLibcall
-pub impl Show for JITLibcall
+} derive(Eq, Show)
 
 pub(all) enum LaneSize {
   B8

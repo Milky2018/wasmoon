@@ -2,6 +2,7 @@ import {
   "Milky2018/wasmoon/types",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/cmp",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/hashmap",
 }
 

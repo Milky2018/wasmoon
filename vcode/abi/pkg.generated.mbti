@@ -161,8 +161,7 @@ pub(all) enum RegClass {
   Float32
   Float64
   Vector
-}
-pub impl Eq for RegClass
+} derive(Eq)
 pub impl Show for RegClass
 
 pub(all) struct VReg {

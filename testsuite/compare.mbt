@@ -426,7 +426,7 @@ pub fn run_jit(
       let pages = mem_ty.limits.min.to_int()
       let size = pages.to_int64() * 65536L
       let max_pages = mem_ty.limits.max.map(fn(m) { m.to_int() })
-      let mem_desc_ptr = if i == 0 && not(mem_ty.is_memory64) {
+      let mem_desc_ptr = if i == 0 && !mem_ty.is_memory64 {
         jm.alloc_guarded_memory(pages, max_pages)
       } else {
         @jit.alloc_memory_desc(size, max_pages, is_memory64=mem_ty.is_memory64)
@@ -436,7 +436,7 @@ pub fn run_jit(
       }
       memories.push(@jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
     }
-    if not(memories.is_empty()) {
+    if !memories.is_empty() {
       jm.set_memory_pointers(memories)
     }
 

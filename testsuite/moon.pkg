@@ -16,6 +16,7 @@ import {
   "Milky2018/wasmoon/vcode/regalloc",
   "moonbitlang/core/buffer",
   "moonbitlang/core/json",
+  "moonbitlang/core/string",
   "moonbitlang/core/strconv",
 }
 

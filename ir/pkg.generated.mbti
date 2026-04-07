@@ -123,11 +123,10 @@ pub struct Block {
   params : Array[(Value, Type)]
   instructions : Array[Inst]
   mut terminator : Terminator?
-}
+} derive(Show)
 pub fn Block::add_inst(Self, Inst) -> Unit
 pub fn Block::add_param(Self, Value, Type) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
-pub impl Show for Block
 
 pub struct CFG {
   size : Int
@@ -177,10 +176,7 @@ pub(all) enum FloatCC {
   Le
   Gt
   Ge
-}
-pub impl Eq for FloatCC
-pub impl Hash for FloatCC
-pub impl Show for FloatCC
+} derive(Eq, Hash, Show)
 
 type FuncEnvironment
 pub fn FuncEnvironment::emit_atomic_alignment_check(Self, IRBuilder, Int, Value, Int64, Int) -> Unit
@@ -207,14 +203,13 @@ pub struct Function {
   blocks : Array[Block]
   mut next_value_id : Int
   mut next_block_id : Int
-}
+} derive(Show)
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> Block
 pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::print(Self) -> String
-pub impl Show for Function
 
 type IRBuilder
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
@@ -408,13 +403,12 @@ pub struct Inst {
   results : Array[Value]
   mut opcode : Opcode
   operands : Array[Value]
-}
+} derive(Show)
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
 pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
 pub impl Eq for Inst
 pub impl Hash for Inst
-pub impl Show for Inst
 
 pub(all) enum IntCC {
   Eq
@@ -427,10 +421,7 @@ pub(all) enum IntCC {
   Ule
   Ugt
   Uge
-}
-pub impl Eq for IntCC
-pub impl Hash for IntCC
-pub impl Show for IntCC
+} derive(Eq, Hash, Show)
 
 pub struct Loop {
   header : Int
@@ -811,10 +802,7 @@ pub enum Opcode {
   V128RelaxedQ15MulrS
   V128RelaxedDot8to16S
   V128RelaxedDot8to32AddS
-}
-pub impl Eq for Opcode
-pub impl Hash for Opcode
-pub impl Show for Opcode
+} derive(Eq, Hash, Show)
 
 pub enum OptLevel {
   O0
@@ -826,15 +814,11 @@ pub fn OptLevel::from_int(Int) -> Self
 
 pub struct OptResult {
   mut changed : Bool
-}
+} derive(Eq)
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
-pub impl Eq for OptResult
 
-type RepKey
-pub impl Eq for RepKey
-pub impl Hash for RepKey
-pub impl Show for RepKey
+type RepKey derive(Eq, Hash, Show)
 
 pub enum Terminator {
   Jump(Int, Array[Value])
@@ -843,8 +827,7 @@ pub enum Terminator {
   BrTable(Value, Array[Int], Int)
   Return(Array[Value])
   Trap(String)
-}
-pub impl Show for Terminator
+} derive(Show)
 
 type Translator
 pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
@@ -859,11 +842,8 @@ pub(all) enum Type {
   V128
   FuncRef
   ExternRef
-}
+} derive(Eq, Hash, Show)
 pub fn Type::from_wasm(@types.ValueType) -> Self
-pub impl Eq for Type
-pub impl Hash for Type
-pub impl Show for Type
 
 pub struct ValidationResult {
   mut valid : Bool
@@ -874,8 +854,7 @@ pub fn ValidationResult::new() -> Self
 pub struct Value {
   id : Int
   ty : Type
-}
-pub impl Show for Value
+} derive(Show)
 
 // Type aliases
 

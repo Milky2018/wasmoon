@@ -256,22 +256,19 @@ pub suberror GCSetupError {
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
-}
-pub impl Show for GCSetupError
+} derive(Show)
 
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int)
   UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
   ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
   FunctionCodeAllocationFailed(func_idx~ : Int, func_name~ : String, code_size~ : Int)
-}
-pub impl Show for JITModuleLoadError
+} derive(Show)
 
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
-}
-pub impl Show for JITTrap
+} derive(Show)
 
 pub suberror PolycallError {
   InputNumber(Int, Int)
@@ -280,8 +277,7 @@ pub suberror PolycallError {
 }
 
 // Types and methods
-type AddressRange
-pub impl Show for AddressRange
+type AddressRange derive(Show)
 
 pub struct BacktraceFrame {
   pc : Int64
@@ -292,7 +288,7 @@ pub struct BacktraceFrame {
 
 pub struct CHeap {
   ptr : Int64
-}
+} derive(Show)
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
 pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
 pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
@@ -323,7 +319,6 @@ pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
 pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
-pub impl Show for CHeap
 
 pub(all) struct CallCounter {
   counts : Map[Int, Int]
@@ -531,7 +526,7 @@ pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 
-type JITTable
+type JITTable derive(Show)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?
@@ -539,7 +534,6 @@ pub fn JITTable::get_size(Self) -> Int
 pub fn JITTable::new(Int, Int?) -> Self?
 pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
-pub impl Show for JITTable
 
 pub struct MemoryInfo {
   ptr : Int64

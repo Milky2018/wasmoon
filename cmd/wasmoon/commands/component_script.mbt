@@ -125,7 +125,7 @@ fn component_test_json(
 ///|
 fn strip_identifier(name : String) -> String {
   if name.has_prefix("$") && name.length() > 1 {
-    let view = try! name[1:]
+    let view = name[1:]
     view.to_string()
   } else {
     name
@@ -150,10 +150,10 @@ fn parse_int_string(s : String) -> (Bool, StringView, Int) {
   let mut view : StringView = cleaned[:]
   if cleaned.has_prefix("-") {
     negative = true
-    view = try! cleaned[1:]
+    view = cleaned[1:]
   }
   if view.has_prefix("0x") || view.has_prefix("0X") {
-    (negative, try! view[2:], 16)
+    (negative, view[2:], 16)
   } else {
     (negative, view, 10)
   }
@@ -162,7 +162,7 @@ fn parse_int_string(s : String) -> (Bool, StringView, Int) {
 ///|
 fn parse_signed_int(s : String) -> Int raise ComponentTestError {
   let (negative, digits, base) = parse_int_string(s)
-  let n = @strconv.parse_int(digits, base~) catch {
+  let n = @string.parse_int(digits, base~) catch {
     e => raise ComponentTestError::ParseError(e.to_string())
   }
   if negative {
@@ -178,7 +178,7 @@ fn parse_unsigned_int(s : String) -> UInt raise ComponentTestError {
   if negative {
     raise ComponentTestError::ParseError("unsigned value cannot be negative")
   }
-  @strconv.parse_uint(digits, base~) catch {
+  @string.parse_uint(digits, base~) catch {
     e => raise ComponentTestError::ParseError(e.to_string())
   }
 }
@@ -186,7 +186,7 @@ fn parse_unsigned_int(s : String) -> UInt raise ComponentTestError {
 ///|
 fn parse_signed_int64(s : String) -> Int64 raise ComponentTestError {
   let (negative, digits, base) = parse_int_string(s)
-  let n = @strconv.parse_int64(digits, base~) catch {
+  let n = @string.parse_int64(digits, base~) catch {
     e => raise ComponentTestError::ParseError(e.to_string())
   }
   if negative {
@@ -202,7 +202,7 @@ fn parse_unsigned_int64(s : String) -> UInt64 raise ComponentTestError {
   if negative {
     raise ComponentTestError::ParseError("unsigned value cannot be negative")
   }
-  @strconv.parse_uint64(digits, base~) catch {
+  @string.parse_uint64(digits, base~) catch {
     e => raise ComponentTestError::ParseError(e.to_string())
   }
 }
@@ -245,7 +245,7 @@ fn parse_component_value(
     }
     "bool" =>
       @runtime_impl.ComponentValue::Bool(
-        @strconv.parse_bool(
+        @string.parse_bool(
           match raw {
             Some(v) => v
             None => raise ComponentTestError::ParseError("missing value")

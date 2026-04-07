@@ -454,7 +454,7 @@ fn Parser::read_instruction(
         8 => {
           // memory.init: data_idx, memory_idx
           // Requires data count section to be present
-          if not(self.has_data_count) {
+          if !self.has_data_count {
             raise DataCountRequired
           }
           let data_idx = self.read_u32()
@@ -464,7 +464,7 @@ fn Parser::read_instruction(
         9 => {
           // data.drop: data_idx
           // Requires data count section to be present
-          if not(self.has_data_count) {
+          if !self.has_data_count {
             raise DataCountRequired
           }
           let data_idx = self.read_u32()

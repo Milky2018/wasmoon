@@ -606,7 +606,7 @@ fn parse_stack_offset(line : StringView) -> Int? {
           if digits.length() == 0 {
             return None
           }
-          return Some(@strconv.parse_int(digits) catch { _ => return None })
+          return Some(@string.parse_int(digits) catch { _ => return None })
         } else {
           // Unexpected char; reset.
           state = 0
@@ -1552,7 +1552,7 @@ test "reload coalescing: call with spilled arg used twice" {
   let vmctx = func.add_param(@abi.Int)
   // Create additional live values to cause register pressure
   let live_values : Array[@abi.VReg] = []
-  for i in 0..<15 {
+  for _i in 0..<15 {
     live_values.push(func.new_vreg(@abi.Int))
   }
   let block0 = func.new_block()

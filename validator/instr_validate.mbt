@@ -875,7 +875,7 @@ fn validate_instr(
       // Check that source element type is subtype of destination element type
       let dst_table = ctx.tables[dst_idx]
       let src_table = ctx.tables[src_idx]
-      if not(is_type_subtype(src_table.elem_type, dst_table.elem_type)) {
+      if !is_type_subtype(src_table.elem_type, dst_table.elem_type) {
         raise TypeMismatch(
           "table.copy: source element type \{src_table.elem_type} is not subtype of destination element type \{dst_table.elem_type}",
         )
@@ -915,7 +915,7 @@ fn validate_instr(
       // Check elem segment type matches table element type
       let table = ctx.tables[table_idx]
       let elem_type = ctx.elems[elem_idx]
-      if not(is_type_subtype(elem_type, table.elem_type)) {
+      if !is_type_subtype(elem_type, table.elem_type) {
         raise TypeMismatch(
           "element segment type \{elem_type} is not subtype of table element type \{table.elem_type}",
         )
@@ -948,12 +948,12 @@ fn validate_instr(
       let val2 = stack.pop_any()
       let val1 = stack.pop_any()
       // Check that both operands are subtypes of eqref
-      if not(is_subtype_of_eqref(val1)) {
+      if !is_subtype_of_eqref(val1) {
         raise TypeMismatch(
           "ref.eq operand must be subtype of eqref, got \{val1}",
         )
       }
-      if not(is_subtype_of_eqref(val2)) {
+      if !is_subtype_of_eqref(val2) {
         raise TypeMismatch(
           "ref.eq operand must be subtype of eqref, got \{val2}",
         )
@@ -1167,11 +1167,9 @@ fn validate_instr(
       // (For tail calls, we return the called function's results)
       for i = 0; i < func_type.results.length(); i = i + 1 {
         if i >= ctx.returns.length() ||
-          not(
-            ctx.subtyping_ctx.value_type_subtype(
-              func_type.results[i],
-              ctx.returns[i],
-            ),
+          !ctx.subtyping_ctx.value_type_subtype(
+            func_type.results[i],
+            ctx.returns[i],
           ) {
           raise TypeMismatch("return_call result type mismatch")
         }
@@ -1215,11 +1213,9 @@ fn validate_instr(
       // Validate results match current function's return type
       for i = 0; i < func_type.results.length(); i = i + 1 {
         if i >= ctx.returns.length() ||
-          not(
-            ctx.subtyping_ctx.value_type_subtype(
-              func_type.results[i],
-              ctx.returns[i],
-            ),
+          !ctx.subtyping_ctx.value_type_subtype(
+            func_type.results[i],
+            ctx.returns[i],
           ) {
           raise TypeMismatch("return_call_indirect result type mismatch")
         }
@@ -1246,11 +1242,9 @@ fn validate_instr(
       // Validate results match current function's return type
       for i = 0; i < func_type.results.length(); i = i + 1 {
         if i >= ctx.returns.length() ||
-          not(
-            ctx.subtyping_ctx.value_type_subtype(
-              func_type.results[i],
-              ctx.returns[i],
-            ),
+          !ctx.subtyping_ctx.value_type_subtype(
+            func_type.results[i],
+            ctx.returns[i],
           ) {
           raise TypeMismatch("return_call_ref result type mismatch")
         }
@@ -1526,11 +1520,9 @@ fn validate_instr(
             }
             // Check that each tag param is a subtype of the expected label type
             for i, param_type in tag_type.params {
-              if not(
-                  ctx.subtyping_ctx.value_type_subtype(
-                    param_type,
-                    expected_types[i],
-                  ),
+              if !ctx.subtyping_ctx.value_type_subtype(
+                  param_type,
+                  expected_types[i],
                 ) {
                 raise TypeMismatch(
                   "catch handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
@@ -1564,11 +1556,9 @@ fn validate_instr(
             }
             // Check that each tag param is a subtype of the expected label type
             for i, param_type in tag_type.params {
-              if not(
-                  ctx.subtyping_ctx.value_type_subtype(
-                    param_type,
-                    expected_types[i],
-                  ),
+              if !ctx.subtyping_ctx.value_type_subtype(
+                  param_type,
+                  expected_types[i],
                 ) {
                 raise TypeMismatch(
                   "catch_ref handler type mismatch: tag param \{i} has type \{param_type}, label expects \{expected_types[i]}",
@@ -1684,7 +1674,7 @@ fn validate_instr(
       let struct_type = ctx.get_struct_type(type_idx)
       let field = struct_type.fields[field_idx]
       // Check that the field is mutable
-      if not(field.mutable) {
+      if !field.mutable {
         raise TypeMismatch("struct.set on immutable field")
       }
       stack.pop(storage_type_to_value_type(field.storage_type))
@@ -1762,7 +1752,7 @@ fn validate_instr(
       // Pop value, pop index (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
       // Check that the array element is mutable
-      if not(array_type.element.mutable) {
+      if !array_type.element.mutable {
         raise TypeMismatch("array.set on immutable array")
       }
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
@@ -1779,7 +1769,7 @@ fn validate_instr(
       // Pop n (i32), pop value, pop offset (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
       // Check that the array element is mutable
-      if not(array_type.element.mutable) {
+      if !array_type.element.mutable {
         raise TypeMismatch("array.fill on immutable array")
       }
       stack.pop(@types.ValueType::I32)
@@ -1792,7 +1782,7 @@ fn validate_instr(
       let dst_array = ctx.get_array_type(dst_type)
       let src_array = ctx.get_array_type(src_type)
       // Check that the destination array element is mutable
-      if not(dst_array.element.mutable) {
+      if !dst_array.element.mutable {
         raise TypeMismatch("array.copy to immutable array")
       }
       // Check that source element type is compatible with destination element type
@@ -1811,7 +1801,7 @@ fn validate_instr(
       // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
       // Check that the array element is mutable
-      if not(array_type.element.mutable) {
+      if !array_type.element.mutable {
         raise TypeMismatch("array.init_data on immutable array")
       }
       if !is_numeric_or_vector_storage_type(array_type.element.storage_type) {
@@ -1832,7 +1822,7 @@ fn validate_instr(
       // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
       let array_type = ctx.get_array_type(type_idx)
       // Check that the array element is mutable
-      if not(array_type.element.mutable) {
+      if !array_type.element.mutable {
         raise TypeMismatch("array.init_elem on immutable array")
       }
       // Check element segment exists and types match
@@ -1844,7 +1834,7 @@ fn validate_instr(
         array_type.element.storage_type,
       )
       // Check type compatibility - elem segment type must be subtype of array element type
-      if not(is_type_subtype(elem_type, array_elem_type)) {
+      if !is_type_subtype(elem_type, array_elem_type) {
         raise TypeMismatch(
           "array.init_elem: element segment type \{elem_type} incompatible with array element type \{array_elem_type}",
         )

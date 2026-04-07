@@ -1258,7 +1258,7 @@ fn Translator::translate_instruction(
       self.builder.try_table_end(handler_id)
 
       // Jump to continuation after try body
-      if not(self.is_unreachable) &&
+      if !self.is_unreachable &&
         self.builder.current_block() is Some(blk) &&
         blk.terminator is None {
         self.builder.jump(try_continuation, [])

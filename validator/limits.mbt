@@ -44,7 +44,7 @@ fn validate_table_limits(
 ) -> Unit raise ValidationError {
   // For table32, min and max must fit in 32 bits (< 2^32)
   let max_table32_size = 0x100000000L // 2^32
-  if not(is_table64) {
+  if !is_table64 {
     if limits.min >= max_table32_size {
       raise InvalidLimits("table size")
     }
@@ -71,7 +71,7 @@ fn validate_mem_offset(
   // For memory32, offset must fit in 32 bits (< 2^32)
   // Use unsigned comparison to handle large values like 0xFFFF_FFFF_FFFF_FFFF
   let max_offset = 0x100000000L.reinterpret_as_uint64() // 2^32
-  if not(mem.is_memory64) && offset.reinterpret_as_uint64() >= max_offset {
+  if !mem.is_memory64 && offset.reinterpret_as_uint64() >= max_offset {
     raise InvalidLimits("offset out of range")
   }
 }

@@ -202,9 +202,7 @@ pub struct ProgPoint {
   block : Int
   inst : Int
   pos : ProgPos
-}
-pub impl Eq for ProgPoint
-pub impl Hash for ProgPoint
+} derive(Eq, Hash)
 pub impl Show for ProgPoint
 
 type ProgPointRange
@@ -214,9 +212,7 @@ pub impl Show for ProgPointRange
 pub(all) enum ProgPos {
   Before
   After
-}
-pub impl Eq for ProgPos
-pub impl Hash for ProgPos
+} derive(Eq, Hash)
 
 pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]

@@ -144,12 +144,12 @@ fn bytes_to_string(bytes : Bytes) -> String {
 /// Handles both signed and unsigned representations
 fn parse_int_safe(s : String) -> Int {
   // First try parsing as unsigned (for values like 4294967295)
-  let uint_result = @strconv.parse_uint(s) catch { _ => 0U }
+  let uint_result = @string.parse_uint(s) catch { _ => 0U }
   if uint_result != 0U {
     return uint_result.reinterpret_as_int()
   }
   // Then try parsing as signed (for negative values or zero)
-  @strconv.parse_int(s) catch {
+  @string.parse_int(s) catch {
     _ => 0
   }
 }
@@ -159,12 +159,12 @@ fn parse_int_safe(s : String) -> Int {
 /// Handles both signed and unsigned representations
 fn parse_int64_safe(s : String) -> Int64 {
   // First try parsing as unsigned (for large positive values)
-  let uint_result = @strconv.parse_uint64(s) catch { _ => 0UL }
+  let uint_result = @string.parse_uint64(s) catch { _ => 0UL }
   if uint_result != 0UL {
     return uint_result.reinterpret_as_int64()
   }
   // Then try parsing as signed (for negative values or zero)
-  @strconv.parse_int64(s) catch {
+  @string.parse_int64(s) catch {
     _ => 0L
   }
 }
@@ -196,7 +196,7 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         @types.Value::F32(0.0 / 0.0) // NaN
       } else {
         // Parse as unsigned bits representation then reinterpret as float
-        let bits = @strconv.parse_uint(val) catch { _ => 0U }
+        let bits = @string.parse_uint(val) catch { _ => 0U }
         @types.Value::F32(
           Float::reinterpret_from_int(bits.reinterpret_as_int()),
         )
@@ -208,7 +208,7 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
         @types.Value::F64(0.0 / 0.0) // NaN
       } else {
         // Parse as unsigned bits representation then reinterpret as double
-        let bits = @strconv.parse_uint64(val) catch { _ => 0UL }
+        let bits = @string.parse_uint64(val) catch { _ => 0UL }
         @types.Value::F64(bits.reinterpret_as_int64().reinterpret_as_double())
       }
     "funcref" =>

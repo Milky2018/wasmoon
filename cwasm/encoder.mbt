@@ -75,7 +75,7 @@ fn BinaryWriter::write_s32(self : BinaryWriter, val : Int) -> Unit {
     v = v >> 7
     // Check if we can stop
     let sign_bit = (byte & 0x40) != 0
-    if (v == 0 && not(sign_bit)) || (v == -1 && sign_bit) {
+    if (v == 0 && !sign_bit) || (v == -1 && sign_bit) {
       self.buf.push(byte)
       break
     } else {
@@ -92,7 +92,7 @@ fn BinaryWriter::write_s64(self : BinaryWriter, val : Int64) -> Unit {
     let byte = v.to_int() & 0x7F
     v = v >> 7
     let sign_bit = (byte & 0x40) != 0
-    if (v == 0L && not(sign_bit)) || (v == -1L && sign_bit) {
+    if (v == 0L && !sign_bit) || (v == -1L && sign_bit) {
       self.buf.push(byte)
       break
     } else {
@@ -315,7 +315,7 @@ fn encode_subtype(w : BinaryWriter, st : @types.SubType) -> Unit {
   if st.supertypes.is_empty() && st.final_ {
     // Simple case: no supertypes, final
     encode_composite_type(w, st.composite)
-  } else if st.supertypes.is_empty() && not(st.final_) {
+  } else if st.supertypes.is_empty() && !st.final_ {
     // Non-final, no supertypes
     w.write_byte(0x50) // sub marker
     w.write_u32(0) // no supertypes
@@ -477,7 +477,7 @@ fn encode_instruction(w : BinaryWriter, instr : @types.Instruction) -> Unit {
       w.write_byte(0x04)
       encode_block_type(w, bt)
       encode_instructions(w, then_body)
-      if not(else_body.is_empty()) {
+      if !else_body.is_empty() {
         w.write_byte(0x05) // else
         encode_instructions(w, else_body)
       }
@@ -1479,7 +1479,7 @@ fn encode_data_section(mod : @types.Module) -> Array[Int] {
     if data.memory_idx < 0 {
       // Passive data segment
       w.write_byte(0x01)
-    } else if data.memory_idx == 0 && not(data.offset.is_empty()) {
+    } else if data.memory_idx == 0 && !data.offset.is_empty() {
       // Active data segment with memory 0
       w.write_byte(0x00)
       encode_instructions(w, data.offset)
@@ -1547,79 +1547,79 @@ pub fn encode(mod : @types.Module) -> Array[Int] {
 
   // Type section (id=1)
   let type_section = encode_type_section(mod)
-  if not(type_section.is_empty()) {
+  if !type_section.is_empty() {
     write_section(w, 1, type_section)
   }
 
   // Import section (id=2)
   let import_section = encode_import_section(mod)
-  if not(import_section.is_empty()) {
+  if !import_section.is_empty() {
     write_section(w, 2, import_section)
   }
 
   // Function section (id=3)
   let function_section = encode_function_section(mod)
-  if not(function_section.is_empty()) {
+  if !function_section.is_empty() {
     write_section(w, 3, function_section)
   }
 
   // Table section (id=4)
   let table_section = encode_table_section(mod)
-  if not(table_section.is_empty()) {
+  if !table_section.is_empty() {
     write_section(w, 4, table_section)
   }
 
   // Memory section (id=5)
   let memory_section = encode_memory_section(mod)
-  if not(memory_section.is_empty()) {
+  if !memory_section.is_empty() {
     write_section(w, 5, memory_section)
   }
 
   // Tag section (id=13)
   let tag_section = encode_tag_section(mod)
-  if not(tag_section.is_empty()) {
+  if !tag_section.is_empty() {
     write_section(w, 13, tag_section)
   }
 
   // Global section (id=6)
   let global_section = encode_global_section(mod)
-  if not(global_section.is_empty()) {
+  if !global_section.is_empty() {
     write_section(w, 6, global_section)
   }
 
   // Export section (id=7)
   let export_section = encode_export_section(mod)
-  if not(export_section.is_empty()) {
+  if !export_section.is_empty() {
     write_section(w, 7, export_section)
   }
 
   // Start section (id=8)
   let start_section = encode_start_section(mod)
-  if not(start_section.is_empty()) {
+  if !start_section.is_empty() {
     write_section(w, 8, start_section)
   }
 
   // Element section (id=9)
   let element_section = encode_element_section(mod)
-  if not(element_section.is_empty()) {
+  if !element_section.is_empty() {
     write_section(w, 9, element_section)
   }
 
   // Data count section (id=12)
   let datacount_section = encode_datacount_section(mod)
-  if not(datacount_section.is_empty()) {
+  if !datacount_section.is_empty() {
     write_section(w, 12, datacount_section)
   }
 
   // Code section (id=10)
   let code_section = encode_code_section(mod)
-  if not(code_section.is_empty()) {
+  if !code_section.is_empty() {
     write_section(w, 10, code_section)
   }
 
   // Data section (id=11)
   let data_section = encode_data_section(mod)
-  if not(data_section.is_empty()) {
+  if !data_section.is_empty() {
     write_section(w, 11, data_section)
   }
   w.to_bytes()

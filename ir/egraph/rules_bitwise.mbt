@@ -736,7 +736,7 @@ fn rule_or_add_and() -> RewriteRule {
 }
 
 ///|
-/// or(and(x, y), not(y)) = or(x, not(y))
+/// or(and(x, y), !(y)) = or(x, !(y))
 /// (x & y) | ~y = x | ~y
 fn rule_or_and_not() -> RewriteRule {
   {

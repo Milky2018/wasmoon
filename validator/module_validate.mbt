@@ -55,13 +55,13 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
         (Array(_), Array(_)) => true
         _ => false
       }
-      if not(valid_kind) {
+      if !valid_kind {
         raise TypeMismatch(
           "sub type: type \{type_idx} has incompatible kind with supertype \{super_idx}",
         )
       }
       // Validate structural subtyping: subtype's structure must be compatible with supertype
-      if not(subtyping_ctx.validate_declared_subtype(type_idx, super_idx)) {
+      if !subtyping_ctx.validate_declared_subtype(type_idx, super_idx) {
         raise TypeMismatch(
           "sub type: type \{type_idx} is not a valid structural subtype of \{super_idx}",
         )
@@ -157,7 +157,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       }
       // Check element type matches table element type
       let table_elem_type = ctx.tables[table_idx].elem_type
-      if not(is_type_subtype(elem.type_, table_elem_type)) {
+      if !is_type_subtype(elem.type_, table_elem_type) {
         raise TypeMismatch(
           "element segment type \{elem.type_} is not subtype of table element type \{table_elem_type}",
         )
@@ -307,7 +307,7 @@ pub fn validate_module_with_context(
         (Array(_), Array(_)) => true
         _ => false
       }
-      if not(valid_kind) {
+      if !valid_kind {
         raise WithContext(
           ValidationErrorContext::from_error(
             TypeMismatch(
@@ -317,7 +317,7 @@ pub fn validate_module_with_context(
         )
       }
       // Validate structural subtyping: subtype's structure must be compatible with supertype
-      if not(subtyping_ctx.validate_declared_subtype(type_idx, super_idx)) {
+      if !subtyping_ctx.validate_declared_subtype(type_idx, super_idx) {
         raise WithContext(
           ValidationErrorContext::from_error(
             TypeMismatch(
@@ -382,7 +382,7 @@ pub fn validate_module_with_context(
       }
       // Check element type matches table element type
       let table_elem_type = ctx.tables[table_idx].elem_type
-      if not(is_type_subtype(elem.type_, table_elem_type)) {
+      if !is_type_subtype(elem.type_, table_elem_type) {
         raise WithContext(
           ValidationErrorContext::from_error(
             TypeMismatch(

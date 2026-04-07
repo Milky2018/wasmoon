@@ -50,8 +50,7 @@ pub fn values_equal(@types.Value, @types.Value) -> Bool
 pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
-}
-pub impl Show for TestRunnerError
+} derive(Show)
 
 // Types and methods
 type CompareResult
@@ -62,9 +61,7 @@ pub impl Show for CompareResult
 pub(all) struct JsonValue {
   type_ : String
   value : String?
-}
-pub impl Show for JsonValue
-pub impl @json.FromJson for JsonValue
+} derive(Show, @json.FromJson)
 
 pub struct ParsedTestFile {
   source_filename : String?
@@ -74,8 +71,7 @@ pub struct ParsedTestFile {
 pub enum TestAction {
   Invoke(String?, String, Array[TestValue])
   Get(String?, String)
-}
-pub impl Show for TestAction
+} derive(Show)
 
 pub enum TestCommand {
   Module(String)
@@ -86,14 +82,12 @@ pub enum TestCommand {
   AssertUninstantiable(String, String)
   Register(String, String?)
   Action(TestAction)
-}
-pub impl Show for TestCommand
+} derive(Show)
 
 pub struct TestCommandWithLine {
   line : Int?
   command : TestCommand
-}
-pub impl Show for TestCommandWithLine
+} derive(Show)
 
 pub struct TestContext {
   store : @runtime.Store
@@ -115,18 +109,16 @@ pub(all) struct TestResult {
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String?
-}
+} derive(Show)
 pub fn TestResult::add_failed(Self, String) -> Unit
 pub fn TestResult::add_passed(Self) -> Unit
 pub fn TestResult::add_skipped(Self, String) -> Unit
 pub fn TestResult::new() -> Self
-pub impl Show for TestResult
 
 pub struct TestValue {
   type_ : String
   value : String?
-}
-pub impl Show for TestValue
+} derive(Show)
 
 // Type aliases
 

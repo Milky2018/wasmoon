@@ -13,9 +13,8 @@ type ParserError
 pub impl Show for ParserError
 
 // Types and methods
-type Parser
+type Parser derive(Show)
 pub fn Parser::new(Bytes) -> Self
-pub impl Show for Parser
 
 // Type aliases
 

@@ -110,7 +110,7 @@ fn compute_br_on_cast_fail_diff_type(
   if source_nullable && target_nullable {
     return to_non_nullable_cast_diff_type(source)
   }
-  if source_nullable && not(target_nullable) {
+  if source_nullable && !target_nullable {
     return source
   }
   source
@@ -175,7 +175,7 @@ fn is_type_subtype(
     (RefNullI31, RefNullEq) => true
 
     // Everything internal to anyref (RefAny = ref any, AnyRef = ref null any)
-    (_, RefAny) => is_internal_ref(actual) && not(actual.is_nullable())
+    (_, RefAny) => is_internal_ref(actual) && !actual.is_nullable()
     (_, AnyRef) => is_internal_ref(actual)
 
     // RefFuncTyped to funcref hierarchy

@@ -2161,7 +2161,7 @@ pub fn build_bundles_with_merging(
     let range_b = ranges.get(b)
 
     // Must be same register class
-    if not(reg_class_compatible(range_a.vreg.class, range_b.vreg.class)) {
+    if !reg_class_compatible(range_a.vreg.class, range_b.vreg.class) {
       return false
     }
     let set_a_has_fixed_def = root_has_fixed_def(

@@ -595,7 +595,7 @@ test "type-rec parsing with struct" {
     #|  (func $f (type $ft))
     #|  (global (ref $ft) (ref.func $f))
     #|)
-  let mod_ = try! parse(wat)
+  let mod_ = parse(wat)
   // Should parse successfully:
   // - Type 0 ($ft): func type () -> ()
   // - Type 1: struct placeholder () -> ()

@@ -27,9 +27,9 @@ fn get_basename(path : String) -> String {
         prev_slash = i
       }
     }
-    try! path[prev_slash + 1:last_slash].to_string()
+    path[prev_slash + 1:last_slash].to_string()
   } else {
-    try! path[last_slash + 1:].to_string()
+    path[last_slash + 1:].to_string()
   }
 }
 
@@ -1007,7 +1007,7 @@ fn run_with_jit(
           // Use a larger default than 1MB since real-world programs can have
           // large native frames after register allocation.
           let wasm_stack_ok = jm.alloc_wasm_stack(16L * 1024L * 1024L)
-          if not(wasm_stack_ok) {
+          if !wasm_stack_ok {
             @logger.warn(
               "failed to allocate WASM stack; falling back to host stack",
             )
@@ -1629,10 +1629,10 @@ fn parse_func_args(
     let arg = args[i]
     let value = match param {
       I32 => {
-        let n = @strconv.parse_int(arg) catch {
+        let n = @string.parse_int(arg) catch {
           _ => {
             // Try parsing as unsigned
-            let u = @strconv.parse_uint(arg) catch {
+            let u = @string.parse_uint(arg) catch {
               _ => raise ArgTypeError(I32, arg)
             }
             u.reinterpret_as_int()
@@ -1641,9 +1641,9 @@ fn parse_func_args(
         @types.Value::I32(n)
       }
       I64 => {
-        let n = @strconv.parse_int64(arg) catch {
+        let n = @string.parse_int64(arg) catch {
           _ => {
-            let u = @strconv.parse_uint64(arg) catch {
+            let u = @string.parse_uint64(arg) catch {
               _ => raise ArgTypeError(I64, arg)
             }
             u.reinterpret_as_int64()
@@ -1652,13 +1652,13 @@ fn parse_func_args(
         @types.Value::I64(n)
       }
       F32 => {
-        let n = @strconv.parse_double(arg) catch {
+        let n = @string.parse_double(arg) catch {
           _ => raise ArgTypeError(F32, arg)
         }
         @types.Value::F32(Float::from_double(n))
       }
       F64 => {
-        let n = @strconv.parse_double(arg) catch {
+        let n = @string.parse_double(arg) catch {
           _ => raise ArgTypeError(F64, arg)
         }
         @types.Value::F64(n)

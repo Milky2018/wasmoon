@@ -42,8 +42,7 @@ pub(all) suberror ValidationError {
   InvalidStartFunction(String)
   UndeclaredFunctionReference(Int)
   WithContext(ValidationErrorContext)
-}
-pub impl Show for ValidationError
+} derive(Show)
 
 // Types and methods
 pub(all) struct ValidationErrorContext {

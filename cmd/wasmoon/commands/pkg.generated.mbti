@@ -33,8 +33,7 @@ pub fn run_wat(String) -> Unit
 pub suberror ComponentTestError {
   ParseError(String)
   ScriptError(String)
-}
-pub impl Show for ComponentTestError
+} derive(Show)
 
 // Types and methods
 pub struct CompileProgress {
@@ -67,25 +66,19 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
-}
-pub impl Eq for ComponentErrorCode
-pub impl Show for ComponentErrorCode
+} derive(Eq, Show)
 
 pub(all) enum ComponentErrorFormat {
   Text
   Json
-}
-pub impl Eq for ComponentErrorFormat
-pub impl Show for ComponentErrorFormat
+} derive(Eq, Show)
 
 pub(all) enum ComponentTestErrorCode {
   CompTestScriptError
   CompTestRuntimeError
   CompTestAssertFailed
   CompTestUnsupportedCommand
-}
-pub impl Eq for ComponentTestErrorCode
-pub impl Show for ComponentTestErrorCode
+} derive(Eq, Show)
 
 // Type aliases
 

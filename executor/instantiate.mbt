@@ -1415,7 +1415,7 @@ pub fn instantiate_module_with_imports(
                   canonical2=canonical_import,
                 )
                 // Check if T_export <: T_import
-                if not(ctx.is_subtype(actual_type_idx, type_idx)) {
+                if !ctx.is_subtype(actual_type_idx, type_idx) {
                   raise @runtime.LinkErrorDetail(
                     "import \{imp.mod_name}.\{imp.name}: exported type is not a subtype of imported type",
                   )
@@ -1435,7 +1435,7 @@ pub fn instantiate_module_with_imports(
                   )
                 }
                 // Compare types structurally
-                if not(@types.func_types_equal(expected_type, actual_type)) {
+                if !@types.func_types_equal(expected_type, actual_type) {
                   raise @runtime.LinkErrorDetail(
                     "import \{imp.mod_name}.\{imp.name}: type mismatch; expected=\{expected_type} actual=\{actual_type}",
                   )
@@ -1551,7 +1551,7 @@ pub fn instantiate_module_with_imports(
             let owner = store.get_tag_owner(addr)
             let actual_type_idx = store.get_tag_type_idx(addr)
             let expected_type = mod.get_func_type(expected_type_idx)
-            let actual_type = try! store.get_tag_type(addr)
+            let actual_type = store.get_tag_type(addr)
             match owner {
               Some(o) => {
                 // Cross-module tag: check rec group membership
@@ -1589,10 +1589,8 @@ pub fn instantiate_module_with_imports(
                   )
                   // For tags in rec groups, types must match via canonical indices
                   // Check bidirectional subtyping for equality
-                  if not(
-                      ctx.is_subtype(actual_type_idx, expected_type_idx) &&
-                      ctx.is_subtype(expected_type_idx, actual_type_idx),
-                    ) {
+                  if !(ctx.is_subtype(actual_type_idx, expected_type_idx) &&
+                    ctx.is_subtype(expected_type_idx, actual_type_idx)) {
                     raise @runtime.LinkError
                   }
                 }

@@ -76,7 +76,7 @@ pub fn SubtypingContext::is_subtype(
   idx2 : Int,
 ) -> Bool {
   // Same index in same module means same type
-  if not(self.cross_module) && idx1 == idx2 {
+  if !self.cross_module && idx1 == idx2 {
     return true
   }
   // Bounds check
@@ -167,13 +167,13 @@ fn SubtypingContext::func_subtype(
   }
   // Contravariant params: f2.params[i] <: f1.params[i]
   for i, p2 in f2.params {
-    if not(self.value_type_subtype(p2, f1.params[i])) {
+    if !self.value_type_subtype(p2, f1.params[i]) {
       return false
     }
   }
   // Covariant results: f1.results[i] <: f2.results[i]
   for i, r1 in f1.results {
-    if not(self.value_type_subtype(r1, f2.results[i])) {
+    if !self.value_type_subtype(r1, f2.results[i]) {
       return false
     }
   }
@@ -198,7 +198,7 @@ fn SubtypingContext::struct_subtype(
   }
   // Depth: each corresponding field must satisfy field subtyping
   for i, f2 in s2.fields {
-    if not(self.field_subtype(s1.fields[i], f2, idx1, idx2)) {
+    if !self.field_subtype(s1.fields[i], f2, idx1, idx2) {
       return false
     }
   }
@@ -239,7 +239,7 @@ fn SubtypingContext::field_subtype(
   } else {
     // Immutable fields allow covariance
     // f1 can be mutable or immutable, but f1.type must be subtype of f2.type
-    not(f1.mutable) &&
+    !f1.mutable &&
     self.storage_type_subtype(f1.storage_type, f2.storage_type, idx1, idx2)
   }
 }
@@ -324,7 +324,7 @@ pub fn SubtypingContext::value_type_subtype(
     (RefI31, RefNullEq) => true
     (RefNullI31, RefNullEq) => true
     // Everything internal to anyref
-    (_, RefAny) => is_internal_ref(v1) && not(v1.is_nullable())
+    (_, RefAny) => is_internal_ref(v1) && !v1.is_nullable()
     (_, AnyRef) => is_internal_ref(v1)
     // Typed func refs to funcref
     (RefFuncTyped(_), RefFunc) => true
@@ -383,7 +383,7 @@ fn SubtypingContext::types_equivalent(
   t2 : Int,
 ) -> Bool {
   // Same index in same module
-  if not(self.cross_module) && t1 == t2 {
+  if !self.cross_module && t1 == t2 {
     return true
   }
   // Check canonical indices
@@ -432,7 +432,7 @@ pub fn SubtypingContext::validate_declared_subtype(
     (Array(_), Array(_)) => true
     _ => false
   }
-  if not(kind_matches) {
+  if !kind_matches {
     return false
   }
   // Structural subtyping must hold
