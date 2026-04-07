@@ -1169,6 +1169,16 @@ test "wasi: path_open lexical escapes return EPERM" {
 }
 
 ///|
+test "wasi: path_open empty path returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(
+    path_open(ctx, mem, 3, 0, 100, 0, 0, right_fd_read, 0L, 0, 300),
+    content="44",
+  )
+}
+
+///|
 test "wasi: path_open with embedded NUL returns EINVAL" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

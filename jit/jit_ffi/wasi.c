@@ -551,6 +551,8 @@ static int resolve_path_with_errno(
     char **out_path
 ) {
     if (!out_path) return WASI_EINVAL;
+    if (!path) return WASI_EINVAL;
+    if (path[0] == '\0') return WASI_ENOENT;
     *out_path = NULL;
 
     const char *base = get_preopen_path(ctx, dir_fd);

@@ -1099,6 +1099,26 @@ test "wasi jit: path_open lexical escapes return EPERM" {
 }
 
 ///|
+test "wasi jit: path_open empty path returns ENOENT" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 0)
+    #|      (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="44")
+  inspect(wasi_errno_from_result(result.jit_result), content="44")
+}
+
+///|
 test "wasi jit: path_open with embedded NUL returns EINVAL" {
   let source =
     #|(module

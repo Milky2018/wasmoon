@@ -1586,6 +1586,9 @@ fn resolve_host_path(
   dir_fd : Int,
   path : String,
 ) -> Result[String, Int] {
+  if path.length() == 0 {
+    return Err(Errno::NoEnt.to_i32())
+  }
   match ctx.resolve_path(dir_fd, path) {
     Ok(resolved) => Ok(resolved)
     Err(BadFd) => Err(Errno::Badf.to_i32())
@@ -1600,6 +1603,9 @@ fn resolve_host_path_nofollow_leaf(
   dir_fd : Int,
   path : String,
 ) -> Result[String, Int] {
+  if path.length() == 0 {
+    return Err(Errno::NoEnt.to_i32())
+  }
   match ctx.resolve_path_nofollow_leaf(dir_fd, path) {
     Ok(resolved) => Ok(resolved)
     Err(BadFd) => Err(Errno::Badf.to_i32())
