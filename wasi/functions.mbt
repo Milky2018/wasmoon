@@ -1458,6 +1458,107 @@ fn readdir_impl(
 }
 
 ///|
+/// Helper: UTF-8 validation for guest path bytes
+fn is_utf8_continuation_byte(b : Int) -> Bool {
+  b >= 0x80 && b <= 0xBF
+}
+
+///|
+fn is_valid_utf8_bytes(bytes : Bytes) -> Bool {
+  let len = bytes.length()
+  let mut i = 0
+  while i < len {
+    let b0 = bytes[i].to_int()
+    if b0 < 0x80 {
+      i = i + 1
+    } else if b0 >= 0xC2 && b0 <= 0xDF {
+      if i + 1 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      if !is_utf8_continuation_byte(b1) {
+        return false
+      }
+      i = i + 2
+    } else if b0 == 0xE0 {
+      if i + 2 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      if b1 < 0xA0 || b1 > 0xBF || !is_utf8_continuation_byte(b2) {
+        return false
+      }
+      i = i + 3
+    } else if (b0 >= 0xE1 && b0 <= 0xEC) || (b0 >= 0xEE && b0 <= 0xEF) {
+      if i + 2 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      if !is_utf8_continuation_byte(b1) || !is_utf8_continuation_byte(b2) {
+        return false
+      }
+      i = i + 3
+    } else if b0 == 0xED {
+      if i + 2 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      if b1 < 0x80 || b1 > 0x9F || !is_utf8_continuation_byte(b2) {
+        return false
+      }
+      i = i + 3
+    } else if b0 == 0xF0 {
+      if i + 3 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      let b3 = bytes[i + 3].to_int()
+      if b1 < 0x90 ||
+        b1 > 0xBF ||
+        !is_utf8_continuation_byte(b2) ||
+        !is_utf8_continuation_byte(b3) {
+        return false
+      }
+      i = i + 4
+    } else if b0 >= 0xF1 && b0 <= 0xF3 {
+      if i + 3 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      let b3 = bytes[i + 3].to_int()
+      if !is_utf8_continuation_byte(b1) ||
+        !is_utf8_continuation_byte(b2) ||
+        !is_utf8_continuation_byte(b3) {
+        return false
+      }
+      i = i + 4
+    } else if b0 == 0xF4 {
+      if i + 3 >= len {
+        return false
+      }
+      let b1 = bytes[i + 1].to_int()
+      let b2 = bytes[i + 2].to_int()
+      let b3 = bytes[i + 3].to_int()
+      if b1 < 0x80 ||
+        b1 > 0x8F ||
+        !is_utf8_continuation_byte(b2) ||
+        !is_utf8_continuation_byte(b3) {
+        return false
+      }
+      i = i + 4
+    } else {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Helper: Read a string from WASM memory
 fn read_path_from_memory(
   mem : @runtime.Memory,
@@ -1472,6 +1573,9 @@ fn read_path_from_memory(
     if b == b'\x00' {
       return Err(Errno::Inval.to_i32())
     }
+  }
+  if !is_valid_utf8_bytes(bytes) {
+    return Err(Errno::IlSeq.to_i32())
   }
   Ok(utf8_bytes_to_string(bytes))
 }

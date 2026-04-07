@@ -37,6 +37,7 @@
 #define WASI_EACCES       2
 #define WASI_EBADF        8
 #define WASI_EEXIST       20
+#define WASI_EILSEQ       25
 #define WASI_EINVAL       28
 #define WASI_EIO          29
 #define WASI_EISDIR       31
@@ -433,6 +434,88 @@ static int check_mem_range(jit_context_t *ctx, int64_t ptr, size_t len) {
 static int guest_bytes_contain_nul(const uint8_t *mem, uint32_t ptr, uint32_t len) {
     if (!mem || len == 0) return 0;
     return memchr(mem + ptr, '\0', (size_t)len) != NULL;
+}
+
+static int utf8_continuation(uint8_t b) {
+    return b >= 0x80 && b <= 0xBF;
+}
+
+static int guest_bytes_valid_utf8(const uint8_t *mem, uint32_t ptr, uint32_t len) {
+    if (!mem) return 0;
+    uint32_t i = 0;
+    while (i < len) {
+        uint8_t b0 = mem[ptr + i];
+        if (b0 < 0x80) {
+            i += 1;
+            continue;
+        }
+        if (b0 >= 0xC2 && b0 <= 0xDF) {
+            if (i + 1 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            if (!utf8_continuation(b1)) return 0;
+            i += 2;
+            continue;
+        }
+        if (b0 == 0xE0) {
+            if (i + 2 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            if (b1 < 0xA0 || b1 > 0xBF || !utf8_continuation(b2)) return 0;
+            i += 3;
+            continue;
+        }
+        if ((b0 >= 0xE1 && b0 <= 0xEC) || (b0 >= 0xEE && b0 <= 0xEF)) {
+            if (i + 2 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            if (!utf8_continuation(b1) || !utf8_continuation(b2)) return 0;
+            i += 3;
+            continue;
+        }
+        if (b0 == 0xED) {
+            if (i + 2 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            if (b1 < 0x80 || b1 > 0x9F || !utf8_continuation(b2)) return 0;
+            i += 3;
+            continue;
+        }
+        if (b0 == 0xF0) {
+            if (i + 3 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            uint8_t b3 = mem[ptr + i + 3];
+            if (b1 < 0x90 || b1 > 0xBF ||
+                !utf8_continuation(b2) ||
+                !utf8_continuation(b3)) return 0;
+            i += 4;
+            continue;
+        }
+        if (b0 >= 0xF1 && b0 <= 0xF3) {
+            if (i + 3 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            uint8_t b3 = mem[ptr + i + 3];
+            if (!utf8_continuation(b1) ||
+                !utf8_continuation(b2) ||
+                !utf8_continuation(b3)) return 0;
+            i += 4;
+            continue;
+        }
+        if (b0 == 0xF4) {
+            if (i + 3 >= len) return 0;
+            uint8_t b1 = mem[ptr + i + 1];
+            uint8_t b2 = mem[ptr + i + 2];
+            uint8_t b3 = mem[ptr + i + 3];
+            if (b1 < 0x80 || b1 > 0x8F ||
+                !utf8_continuation(b2) ||
+                !utf8_continuation(b3)) return 0;
+            i += 4;
+            continue;
+        }
+        return 0;
+    }
+    return 1;
 }
 
 static char *path_parent_no_trailing(const char *path) {
@@ -1395,6 +1478,9 @@ static int64_t wasi_path_open_impl(
     if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EINVAL;
     }
+    if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EILSEQ;
+    }
     if (!check_mem_range(ctx, opened_fd_ptr_u, 4)) return WASI_EFAULT;
 
     int dirfd_i = (int)dir_fd;
@@ -1487,6 +1573,9 @@ static int64_t wasi_path_unlink_file_impl(
     if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EINVAL;
     }
+    if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EILSEQ;
+    }
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1523,6 +1612,9 @@ static int64_t wasi_path_remove_directory_impl(
     if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EINVAL;
     }
+    if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EILSEQ;
+    }
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1558,6 +1650,9 @@ static int64_t wasi_path_create_directory_impl(
     }
     if (guest_bytes_contain_nul(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EINVAL;
+    }
+    if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
+        return WASI_EILSEQ;
     }
 
     char *path = malloc((size_t)path_len_u + 1);
@@ -1601,6 +1696,10 @@ static int64_t wasi_path_rename_impl(
     if (guest_bytes_contain_nul(ctx->memory0->base, old_path_ptr_u, old_path_len_u) ||
         guest_bytes_contain_nul(ctx->memory0->base, new_path_ptr_u, new_path_len_u)) {
         return WASI_EINVAL;
+    }
+    if (!guest_bytes_valid_utf8(ctx->memory0->base, old_path_ptr_u, old_path_len_u) ||
+        !guest_bytes_valid_utf8(ctx->memory0->base, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EILSEQ;
     }
 
     char *old_path = malloc((size_t)old_path_len_u + 1);
@@ -2615,6 +2714,7 @@ static int32_t wasi_path_filestat_get_impl(
     uint32_t buf_ptr_u = (uint32_t)buf_ptr;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
+    if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
     if (!check_mem_range(ctx, buf_ptr_u, 64)) return WASI_EFAULT;
 
 #ifndef _WIN32
@@ -2680,6 +2780,7 @@ static int32_t wasi_path_readlink_impl(
     uint32_t bufused_ptr_u = (uint32_t)bufused_ptr;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
+    if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
     if (!check_mem_range(ctx, buf_ptr_u, (size_t)buf_len_u)) return WASI_EFAULT;
     if (!check_mem_range(ctx, bufused_ptr_u, 4)) return WASI_EFAULT;
 
@@ -2722,6 +2823,10 @@ static int32_t wasi_path_symlink_impl(
     if (guest_bytes_contain_nul(mem, old_path_ptr_u, old_path_len_u) ||
         guest_bytes_contain_nul(mem, new_path_ptr_u, new_path_len_u)) {
         return WASI_EINVAL;
+    }
+    if (!guest_bytes_valid_utf8(mem, old_path_ptr_u, old_path_len_u) ||
+        !guest_bytes_valid_utf8(mem, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EILSEQ;
     }
 
 #ifndef _WIN32
@@ -2780,6 +2885,10 @@ static int32_t wasi_path_link_impl(
     if (guest_bytes_contain_nul(mem, old_path_ptr_u, old_path_len_u) ||
         guest_bytes_contain_nul(mem, new_path_ptr_u, new_path_len_u)) {
         return WASI_EINVAL;
+    }
+    if (!guest_bytes_valid_utf8(mem, old_path_ptr_u, old_path_len_u) ||
+        !guest_bytes_valid_utf8(mem, new_path_ptr_u, new_path_len_u)) {
+        return WASI_EILSEQ;
     }
 
 #ifndef _WIN32
@@ -2887,6 +2996,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     uint32_t path_len_u = (uint32_t)path_len;
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
+    if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);

@@ -1138,6 +1138,27 @@ test "wasi jit: path_open with embedded NUL returns EINVAL" {
 }
 
 ///|
+test "wasi jit: path_open with invalid UTF-8 returns EILSEQ" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\ff")
+    #|  (func (export "test") (result i32)
+    #|    (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 1)
+    #|      (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="25")
+  inspect(wasi_errno_from_result(result.jit_result), content="25")
+}
+
+///|
 test "wasi jit: path_symlink rejects absolute old_path with EPERM" {
   let source =
     #|(module

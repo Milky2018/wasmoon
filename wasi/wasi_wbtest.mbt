@@ -1219,6 +1219,17 @@ test "wasi: path_open with embedded NUL returns EINVAL" {
 }
 
 ///|
+test "wasi: path_open with invalid UTF-8 returns EILSEQ" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_byte(100, b'\xFF')
+  inspect(
+    path_open(ctx, mem, 3, 0, 100, 1, 0, right_fd_read, 0L, 0, 304),
+    content="25",
+  )
+}
+
+///|
 test "wasi: path_open rejects symlink escape outside preopen" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
