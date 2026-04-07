@@ -599,6 +599,10 @@ pub fn path_open(
   if !check_mem_range(mem, opened_fd_ptr, 4) {
     return Errno::Fault.to_i32()
   }
+  let lookupflags_check = validate_lookupflags(dirflags)
+  if lookupflags_check != Errno::Success.to_i32() {
+    return lookupflags_check
+  }
   ignore(fs_rights_inheriting)
   // Read path from memory
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
@@ -1596,6 +1600,16 @@ fn read_path_from_memory(
 }
 
 ///|
+fn validate_lookupflags(flags : Int) -> Int {
+  let known_mask = 0x01
+  if (flags & known_mask.lnot()) != 0 {
+    Errno::Inval.to_i32()
+  } else {
+    Errno::Success.to_i32()
+  }
+}
+
+///|
 fn resolve_host_path(
   ctx : WasiContext,
   dir_fd : Int,
@@ -1888,6 +1902,10 @@ pub fn path_filestat_get_impl(
   if !check_mem_range(mem, buf_ptr, 64) {
     return Errno::Fault.to_i32()
   }
+  let lookupflags_check = validate_lookupflags(flags)
+  if lookupflags_check != Errno::Success.to_i32() {
+    return lookupflags_check
+  }
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -1998,6 +2016,10 @@ pub fn path_filestat_set_times_impl(
   mtim : Int64,
   fst_flags : Int,
 ) -> Int {
+  let lookupflags_check = validate_lookupflags(flags)
+  if lookupflags_check != Errno::Success.to_i32() {
+    return lookupflags_check
+  }
   let fst_flags_check = validate_fst_flags_for_set_times(fst_flags)
   if fst_flags_check != Errno::Success.to_i32() {
     return fst_flags_check
@@ -2299,6 +2321,10 @@ pub fn path_link_impl(
   new_path_ptr : Int,
   new_path_len : Int,
 ) -> Int {
+  let lookupflags_check = validate_lookupflags(old_flags)
+  if lookupflags_check != Errno::Success.to_i32() {
+    return lookupflags_check
+  }
   let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
     Ok(path) => path
     Err(errno) => return errno

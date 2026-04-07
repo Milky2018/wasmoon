@@ -836,7 +836,7 @@ test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
 }
 
 ///|
-test "wasi jit: path_open ignores unknown dirflags bits" {
+test "wasi jit: path_open rejects unknown dirflags bits with EINVAL" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -874,8 +874,8 @@ test "wasi jit: path_open ignores unknown dirflags bits" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="0")
-  inspect(wasi_errno_from_result(result.jit_result), content="0")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
 }
 
 ///|
@@ -1198,6 +1198,45 @@ test "wasi jit: path_filestat_get trailing slash on regular file returns ENOENT"
 }
 
 ///|
+test "wasi jit: path_filestat_get rejects unknown lookupflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_filestat_get"
+    #|    (func $path_filestat_get (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_filestat_lookupflags.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 34)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_get
+    #|        (i32.const 3) (i32.const 2) (i32.const 0) (i32.const 34)
+    #|        (i32.const 300)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
 test "wasi jit: path_filestat_set_times trailing slash on regular file returns ENOENT" {
   let source =
     #|(module
@@ -1297,6 +1336,45 @@ test "wasi jit: path_filestat_set_times rejects conflicting fst_flags with EINVA
   inspect(mtim_result.match_, content="true")
   inspect(wasi_errno_from_result(mtim_result.interp_result), content="28")
   inspect(wasi_errno_from_result(mtim_result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: path_filestat_set_times rejects unknown lookupflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_filestat_set_times"
+    #|    (func $path_filestat_set_times (param i32 i32 i32 i32 i64 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_settimes_lookupflags.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 34)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_set_times
+    #|        (i32.const 3) (i32.const 2) (i32.const 0) (i32.const 34)
+    #|        (i64.const 0) (i64.const 0) (i32.const 0)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 34)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
 }
 
 ///|
@@ -1577,6 +1655,44 @@ test "wasi jit: path_link rejects LOOKUPFLAGS_SYMLINK_FOLLOW" {
     #|    (drop (call $fd_close (i32.load (i32.const 100))))
     #|    (call $path_link
     #|      (i32.const 3) (i32.const 1) (i32.const 0) (i32.const 19)
+    #|      (i32.const 3) (i32.const 32) (i32.const 17))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="28")
+  inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: path_link rejects unknown lookupflags bits with EINVAL" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_link"
+    #|    (func $path_link (param i32 i32 i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_link_source")
+    #|  (data (i32.const 32) "wasmoon_link_hard")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 32) (i32.const 17)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 19)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 19)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 100)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 100))))
+    #|    (call $path_link
+    #|      (i32.const 3) (i32.const 2) (i32.const 0) (i32.const 19)
     #|      (i32.const 3) (i32.const 32) (i32.const 17))))
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),

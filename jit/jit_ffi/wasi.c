@@ -1090,6 +1090,10 @@ static int first_non_empty_iov(
     return 0;
 }
 
+static int invalid_lookupflags(int32_t flags) {
+    return (flags & ~0x01) != 0;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -1468,6 +1472,7 @@ static int64_t wasi_path_open_impl(
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     (void)rights_inh;
+    if (invalid_lookupflags((int32_t)dirflags)) return WASI_EINVAL;
     if ((oflags & 0x02) && ((oflags & 0x01) || (oflags & 0x04) || (oflags & 0x08))) {
         return WASI_EINVAL;
     }
@@ -2735,6 +2740,7 @@ static int32_t wasi_path_filestat_get_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (invalid_lookupflags(flags)) return WASI_EINVAL;
     uint8_t *mem = ctx->memory0->base;
     uint32_t path_ptr_u = (uint32_t)path_ptr;
     uint32_t path_len_u = (uint32_t)path_len;
@@ -2922,6 +2928,7 @@ static int32_t wasi_path_link_impl(
     int32_t new_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (invalid_lookupflags(old_flags)) return WASI_EINVAL;
     uint8_t *mem = ctx->memory0->base;
     uint32_t old_path_ptr_u = (uint32_t)old_path_ptr;
     uint32_t old_path_len_u = (uint32_t)old_path_len;
@@ -3045,6 +3052,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
     int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
+    if (invalid_lookupflags(flags)) return WASI_EINVAL;
     if (invalid_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint8_t *mem = ctx->memory0->base;

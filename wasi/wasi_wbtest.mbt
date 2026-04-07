@@ -872,7 +872,7 @@ test "wasi: path_open rejects sync fdflags with ENOTSUP" {
 }
 
 ///|
-test "wasi: path_open ignores unknown dirflags bits" {
+test "wasi: path_open rejects unknown dirflags bits with EINVAL" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
   let test_path = "wasmoon_unknown_dirflags_open.txt"
@@ -900,7 +900,7 @@ test "wasi: path_open ignores unknown dirflags bits" {
   }
   fd_close(ctx, mem.read_i32(2000)) |> ignore
 
-  // dirflags=0x02 uses an unknown bit and should not be hard-rejected.
+  // dirflags=0x02 uses an unknown bit and should be rejected.
   let reopen_result = path_open(
     ctx,
     mem,
@@ -914,10 +914,7 @@ test "wasi: path_open ignores unknown dirflags bits" {
     0,
     2004,
   )
-  inspect(reopen_result, content="0")
-  if reopen_result == 0 {
-    fd_close(ctx, mem.read_i32(2004)) |> ignore
-  }
+  inspect(reopen_result, content="28")
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 
@@ -1080,6 +1077,40 @@ test "wasi: path_filestat_get maps ENOTDIR to NotDir" {
   )
   inspect(stat_result, content="54")
   path_unlink_file_impl(ctx, mem, 3, 100, base_file.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_get rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_filestat_lookupflags.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_get_impl(ctx, mem, 3, 0x02, 100, test_path.length(), 500),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 
 ///|
@@ -1341,6 +1372,50 @@ test "wasi: path_filestat_set_times rejects conflicting fst_flags with EINVAL" {
       0L,
       0L,
       0x0C,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_set_times rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_path_settimes_lookupflags.txt"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0x02,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0,
     ),
     content="28",
   )
@@ -2320,6 +2395,60 @@ test "wasi: path_link rejects LOOKUPFLAGS_SYMLINK_FOLLOW" {
       mem,
       3,
       1,
+      100,
+      source.length(),
+      3,
+      200,
+      target.length(),
+    ),
+    content="28",
+  )
+
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+}
+
+///|
+test "wasi: path_link rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let source = "wasmoon_link_lookupflags_src.txt"
+  let target = "wasmoon_link_lookupflags_dst.txt"
+  for i, c in source {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    source.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+
+  inspect(
+    path_link_impl(
+      ctx,
+      mem,
+      3,
+      0x02,
       100,
       source.length(),
       3,
