@@ -1158,6 +1158,86 @@ test "wasi jit: path_open trailing slash on regular file returns ENOENT" {
 }
 
 ///|
+test "wasi jit: path_filestat_get trailing slash on regular file returns ENOENT" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_filestat_get"
+    #|    (func $path_filestat_get (param i32 i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_trailing_path.txt")
+    #|  (data (i32.const 64) "wasmoon_jit_trailing_path.txt/")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 29)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_get
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 30)
+    #|        (i32.const 300)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="44")
+  inspect(wasi_errno_from_result(result.jit_result), content="44")
+}
+
+///|
+test "wasi jit: path_filestat_set_times trailing slash on regular file returns ENOENT" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_filestat_set_times"
+    #|    (func $path_filestat_set_times (param i32 i32 i32 i32 i64 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "wasmoon_jit_trailing_path.txt")
+    #|  (data (i32.const 64) "wasmoon_jit_trailing_path.txt/")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 29)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_filestat_set_times
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 30)
+    #|        (i64.const 0) (i64.const 0) (i32.const 0)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 0) (i32.const 29)))
+    #|    (local.get $errno)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="44")
+  inspect(wasi_errno_from_result(result.jit_result), content="44")
+}
+
+///|
 test "wasi jit: path_open trailing slash can open symlinked directory with nofollow" {
   let source =
     #|(module

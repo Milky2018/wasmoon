@@ -2739,6 +2739,7 @@ static int32_t wasi_path_filestat_get_impl(
     uint32_t path_ptr_u = (uint32_t)path_ptr;
     uint32_t path_len_u = (uint32_t)path_len;
     uint32_t buf_ptr_u = (uint32_t)buf_ptr;
+    int has_trailing_slash = path_len_u > 0 && mem[path_ptr_u + path_len_u - 1] == '/';
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
@@ -2761,15 +2762,34 @@ static int32_t wasi_path_filestat_get_impl(
     free(path_tmp);
     if (path_errno != WASI_ESUCCESS) return path_errno;
 
+    const char *stat_path = full_path;
+    char *stat_path_alloc = NULL;
+    if (has_trailing_slash) {
+        size_t full_len = strlen(full_path);
+        stat_path_alloc = malloc(full_len + 2);
+        if (!stat_path_alloc) {
+            free(full_path);
+            return WASI_ENOMEM;
+        }
+        memcpy(stat_path_alloc, full_path, full_len);
+        stat_path_alloc[full_len] = '/';
+        stat_path_alloc[full_len + 1] = '\0';
+        stat_path = stat_path_alloc;
+    }
+
     struct stat st;
     int result;
     if (flags & 1) { // SYMLINK_FOLLOW
-        result = stat(full_path, &st);
+        result = stat(stat_path, &st);
     } else {
-        result = lstat(full_path, &st);
+        result = lstat(stat_path, &st);
     }
+    if (stat_path_alloc) free(stat_path_alloc);
     free(full_path);
-    if (result != 0) return errno_to_wasi(errno);
+    if (result != 0) {
+        if (has_trailing_slash && errno == ENOTDIR) return WASI_ENOENT;
+        return errno_to_wasi(errno);
+    }
 
     // Write filestat structure (64 bytes)
     *(uint64_t *)(mem + buf_ptr_u + 0) = st.st_dev;
@@ -3021,6 +3041,7 @@ static int32_t wasi_path_filestat_set_times_impl(
     uint8_t *mem = ctx->memory0->base;
     uint32_t path_ptr_u = (uint32_t)path_ptr;
     uint32_t path_len_u = (uint32_t)path_len;
+    int has_trailing_slash = path_len_u > 0 && mem[path_ptr_u + path_len_u - 1] == '/';
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
@@ -3068,10 +3089,27 @@ static int32_t wasi_path_filestat_set_times_impl(
         times[1].tv_nsec = UTIME_OMIT;
     }
 
+    const char *stat_path = full_path;
+    char *stat_path_alloc = NULL;
+    if (has_trailing_slash) {
+        size_t full_len = strlen(full_path);
+        stat_path_alloc = malloc(full_len + 2);
+        if (!stat_path_alloc) {
+            free(full_path);
+            return WASI_ENOMEM;
+        }
+        memcpy(stat_path_alloc, full_path, full_len);
+        stat_path_alloc[full_len] = '/';
+        stat_path_alloc[full_len + 1] = '\0';
+        stat_path = stat_path_alloc;
+    }
+
     int at_flags = (flags & 1) ? 0 : AT_SYMLINK_NOFOLLOW;
-    int result = utimensat(AT_FDCWD, full_path, times, at_flags);
+    int result = utimensat(AT_FDCWD, stat_path, times, at_flags);
+    if (stat_path_alloc) free(stat_path_alloc);
     free(full_path);
     if (result != 0) {
+        if (has_trailing_slash && errno == ENOTDIR) return WASI_ENOENT;
         return errno_to_wasi(errno);
     }
     return WASI_ESUCCESS;

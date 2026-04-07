@@ -1892,6 +1892,8 @@ pub fn path_filestat_get_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  let has_trailing_slash = path.length() > 0 &&
+    path.code_unit_at(path.length() - 1) == '/'
   let follow_symlink = (flags & 0x01) != 0
   let resolved_path_result = if follow_symlink {
     resolve_host_path(ctx, dir_fd, path)
@@ -1902,15 +1904,27 @@ pub fn path_filestat_get_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
+  let stat_path = if has_trailing_slash {
+    resolved_path + "/"
+  } else {
+    resolved_path
+  }
   // Convert WASI flags to native flags
   let native_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  let stat = native_fstatat(0, resolved_path, native_flags)
+  let stat = native_fstatat(0, stat_path, native_flags)
   match stat {
     Some(s) => {
       write_filestat(mem, buf_ptr, s)
       Errno::Success.to_i32()
     }
-    None => native_last_errno_to_wasi()
+    None => {
+      let errno = native_last_errno_to_wasi()
+      if has_trailing_slash && errno == Errno::NotDir.to_i32() {
+        Errno::NoEnt.to_i32()
+      } else {
+        errno
+      }
+    }
   }
 }
 
@@ -1969,6 +1983,8 @@ pub fn path_filestat_set_times_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  let has_trailing_slash = path.length() > 0 &&
+    path.code_unit_at(path.length() - 1) == '/'
   let follow_symlink = (flags & 0x01) != 0
   let resolved_path_result = if follow_symlink {
     resolve_host_path(ctx, dir_fd, path)
@@ -1979,11 +1995,21 @@ pub fn path_filestat_set_times_impl(
     Ok(resolved) => resolved
     Err(errno) => return errno
   }
+  let stat_path = if has_trailing_slash {
+    resolved_path + "/"
+  } else {
+    resolved_path
+  }
   let lookup_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
-  if native_utimensat(0, resolved_path, atim, mtim, fst_flags, lookup_flags) {
+  if native_utimensat(0, stat_path, atim, mtim, fst_flags, lookup_flags) {
     Errno::Success.to_i32()
   } else {
-    native_last_errno_to_wasi()
+    let errno = native_last_errno_to_wasi()
+    if has_trailing_slash && errno == Errno::NotDir.to_i32() {
+      Errno::NoEnt.to_i32()
+    } else {
+      errno
+    }
   }
 }
 
