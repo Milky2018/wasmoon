@@ -28,6 +28,14 @@ pub fn emit_function_with_regalloc(@regalloc.VCodeFunction, @regalloc.Output, de
 
 pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int) -> MachineCode
 
+pub fn exception_libcall_fixup_idx(@instr.ExceptionLibcall) -> Int
+
+pub fn gc_libcall_fixup_idx(@instr.GCLibcall) -> Int
+
+pub fn jit_libcall_fixup_idx(@instr.JITLibcall) -> Int
+
+pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
+
 // Errors
 
 // Types and methods

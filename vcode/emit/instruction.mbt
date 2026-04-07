@@ -1438,73 +1438,37 @@ fn MachineCode::emit_instruction(
       // Load GC runtime function pointer
       // Uses: [], Defs: [result (function pointer)]
       let result_reg = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
-        RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
-        StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
-        StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
-        StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
-        ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
-        ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
-        ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
-        ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
-        ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
-        ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
-        ArrayNewData => @jit_ffi.c_jit_get_gc_array_new_data_ptr()
-        ArrayNewElem => @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
-        ArrayInitData => @jit_ffi.c_jit_get_gc_array_init_data_ptr()
-        ArrayInitElem => @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
-        TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
-        // Inline allocation support (ctx-passing)
-        RegisterStructInline =>
-          @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
-        RegisterArrayInline => @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
-        AllocStructSlow => @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
-        AllocArraySlow => @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
-      }
-      self.emit_load_imm64(result_reg, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(result_reg, 0L)
+      self.add_func_addr_fixup(
+        fixup_offset,
+        gc_libcall_fixup_idx(libcall),
+        result_reg,
+      )
     }
     LoadJITFuncPtr(libcall) => {
       // Load JIT runtime function pointer
       // Uses: [], Defs: [result (function pointer)]
       let result_reg = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
-        MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
-        MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
-        MemoryFillMem0 => @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
-        MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
-        MemoryCopyMem0 => @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
-        MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
-        DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
-        TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
-        TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
-        TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
-        TableInit => @jit_ffi.c_jit_get_table_init_ptr()
-        ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
-        HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
-      }
-      self.emit_load_imm64(result_reg, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(result_reg, 0L)
+      self.add_func_addr_fixup(
+        fixup_offset,
+        jit_libcall_fixup_idx(libcall),
+        result_reg,
+      )
     }
     LoadExceptionFuncPtr(libcall) => {
       // Load exception handling runtime function pointer
       // Uses: [], Defs: [result (function pointer)]
       let result_reg = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        TryBegin => @jit_ffi.c_jit_get_exception_try_begin_ptr()
-        TryEnd => @jit_ffi.c_jit_get_exception_try_end_ptr()
-        Throw => @jit_ffi.c_jit_get_exception_throw_ptr()
-        ThrowTag => @jit_ffi.c_jit_get_exception_throw_tag_ptr()
-        ThrowRef => @jit_ffi.c_jit_get_exception_throw_ref_ptr()
-        Delegate => @jit_ffi.c_jit_get_exception_delegate_ptr()
-        GetTag => @jit_ffi.c_jit_get_exception_get_tag_ptr()
-        GetValue => @jit_ffi.c_jit_get_exception_get_value_ptr()
-        GetValueCount => @jit_ffi.c_jit_get_exception_get_value_count_ptr()
-        Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
-        SpillLocals => @jit_ffi.c_jit_get_exception_spill_locals_ptr()
-        GetSpilledLocal => @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
-      }
-      self.emit_load_imm64(result_reg, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(result_reg, 0L)
+      self.add_func_addr_fixup(
+        fixup_offset,
+        exception_libcall_fixup_idx(libcall),
+        result_reg,
+      )
     }
     LoadFuncAddr(func_idx) => {
       // Load function address (patched at JIT load time)

@@ -45,3 +45,14 @@ test "compile api: parse failure emits failed stage" {
   let last = events[events.length() - 1]
   inspect(last.stage.to_string(), content="failed")
 }
+
+///|
+test "jit cache bytes/ints conversion keeps unsigned bytes" {
+  let source = Bytes::from_array([0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff])
+  let ints = bytes_to_int_array(source)
+  inspect(ints[0], content="0")
+  inspect(ints[3], content="128")
+  inspect(ints[4], content="254")
+  inspect(ints[5], content="255")
+  inspect(int_array_to_bytes(ints) == source, content="true")
+}

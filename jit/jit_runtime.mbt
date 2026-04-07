@@ -269,9 +269,6 @@ fn apply_func_addr_fixups(
   precompiled : @cwasm.PrecompiledModule,
 ) -> Unit {
   let func_table_ptr = ctx.get_func_table_ptr()
-  if func_table_ptr == 0L {
-    return
-  }
   for entry in precompiled.functions {
     if entry.func_addr_fixups.length() == 0 {
       continue
@@ -279,9 +276,19 @@ fn apply_func_addr_fixups(
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
       for fixup in entry.func_addr_fixups {
-        let target_ptr = c_jit_read_i64(
-          func_table_ptr + fixup.func_idx.to_int64() * 8L,
-        )
+        let target_ptr = if fixup.func_idx >= 0 {
+          if func_table_ptr == 0L {
+            abort(
+              "missing function table for func addr fixup idx \{fixup.func_idx}",
+            )
+          }
+          c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
+        } else {
+          match @emit.resolve_runtime_func_fixup_idx(fixup.func_idx) {
+            Some(ptr) => ptr
+            None => abort("unknown runtime func fixup idx \{fixup.func_idx}")
+          }
+        }
         patch_load_imm64_fixed(exec_ptr, fixup, target_ptr)
       }
     }

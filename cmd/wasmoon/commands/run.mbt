@@ -844,7 +844,7 @@ fn hash_run_compile_mask(mask : Array[Bool]?) -> Int {
 fn bytes_to_int_array(bytes : Bytes) -> Array[Int] {
   let ints : Array[Int] = []
   for b in bytes {
-    ints.push(b.to_int())
+    ints.push(b.to_int() & 0xFF)
   }
   ints
 }
@@ -853,7 +853,7 @@ fn bytes_to_int_array(bytes : Bytes) -> Array[Int] {
 fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
   let bytes : Array[Byte] = []
   for value in ints {
-    bytes.push(value.to_byte())
+    bytes.push((value & 0xFF).to_byte())
   }
   Bytes::from_array(bytes)
 }
@@ -887,7 +887,8 @@ fn run_jit_cache_file(
   let func_hash = func_name.hash()
   let mask_hash = hash_run_compile_mask(local_compile_mask)
   let dwarf_tag = if enable_dwarf { 1 } else { 0 }
-  let file_name = "v1-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
+  // Bump cache key version when generated machine code semantics change.
+  let file_name = "v2-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
