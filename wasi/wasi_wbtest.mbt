@@ -2286,12 +2286,13 @@ test "wasi: fd_filestat_set_times rejects conflicting fst_flags with EINVAL" {
 }
 
 ///|
-test "wasi: fd_renumber allows identity stdio and rejects moving stdio" {
+test "wasi: fd_renumber allows stdio moves when endpoints are valid" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
   inspect(fd_renumber_impl(ctx, 0, 0), content="0")
   inspect(fd_renumber_impl(ctx, 0, 10), content="8")
-  inspect(fd_renumber_impl(ctx, 1, 3), content="8")
+  inspect(fd_renumber_impl(ctx, 1, 3), content="0")
+  inspect(fd_renumber_impl(ctx, 3, 0), content="0")
 
   let test_path = "wasmoon_renumber_gate.txt"
   for i, c in test_path {

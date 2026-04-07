@@ -2338,6 +2338,23 @@ test "wasi jit: fd_renumber stdin identity succeeds (0)" {
 }
 
 ///|
+test "wasi jit: fd_renumber allows stdio to preopen target (0)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_renumber"
+    #|    (func $fd_renumber (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_renumber (i32.const 1) (i32.const 3))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="0")
+  inspect(wasi_errno_from_result(result.jit_result), content="0")
+}
+
+///|
 test "wasi jit: fd_renumber rejects unused target with EBADF (8)" {
   let source =
     #|(module
