@@ -1157,6 +1157,14 @@ static int invalid_proc_raise_signal(int64_t sig) {
     return sig < 0 || sig > 30;
 }
 
+static int32_t trap_invalid_wasi_abi_arg(void) {
+    if (g_trap_active) {
+        g_trap_code = 3; // unreachable
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return WASI_EINVAL;
+}
+
 // ============ WASI Trampolines ============
 // JIT ABI: X0 = vmctx, X1.. = WASM arguments.
 
@@ -1556,9 +1564,9 @@ static int64_t wasi_path_open_impl(
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     (void)rights_inh;
-    if (invalid_lookupflags((int32_t)dirflags)) return WASI_EINVAL;
-    if ((oflags & ~0x0f) != 0) return WASI_EINVAL;
-    if ((fdflags & ~0x1f) != 0) return WASI_EINVAL;
+    if (invalid_lookupflags((int32_t)dirflags)) return trap_invalid_wasi_abi_arg();
+    if ((oflags & ~0x0f) != 0) return trap_invalid_wasi_abi_arg();
+    if ((fdflags & ~0x1f) != 0) return trap_invalid_wasi_abi_arg();
     if ((oflags & 0x02) && ((oflags & 0x01) || (oflags & 0x04) || (oflags & 0x08))) {
         return WASI_EINVAL;
     }
@@ -2157,7 +2165,7 @@ static int64_t wasi_proc_raise_impl(
     jit_context_t *ctx, int64_t sig
 ) {
     (void)ctx;
-    if (invalid_proc_raise_signal(sig)) return WASI_EINVAL;
+    if (invalid_proc_raise_signal(sig)) return trap_invalid_wasi_abi_arg();
     return WASI_ENOTSUP;
 }
 
@@ -3240,7 +3248,7 @@ static int32_t wasi_fd_advise_impl(
 ) {
     (void)offset;
     (void)len;
-    if (advice < 0 || advice > 5) return WASI_EINVAL;
+    if (advice < 0 || advice > 5) return trap_invalid_wasi_abi_arg();
     int native_fd = -1;
     int err = get_regular_file_native_fd(ctx, fd, &native_fd);
     if (err != WASI_ESUCCESS) return err;
@@ -3458,7 +3466,7 @@ static int32_t wasi_sock_accept_impl(
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint32_t result_fd_ptr_u = (uint32_t)result_fd_ptr;
     if (!check_mem_range(ctx, result_fd_ptr_u, 4)) return WASI_EFAULT;
-    if (invalid_sock_accept_fdflags(flags)) return WASI_EINVAL;
+    if (invalid_sock_accept_fdflags(flags)) return trap_invalid_wasi_abi_arg();
 
     if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
     return WASI_ENOTSOCK;
