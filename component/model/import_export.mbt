@@ -250,17 +250,12 @@ pub fn parse_export_section(
 ) -> Array[Export] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let exports = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        let name = parse_exportname(reader)
-        let sortidx = parse_sortidx(reader)
-        let desc = parse_opt_externdesc(reader)
-        acc.push({ name, sortidx, desc })
-        continue (acc, i + 1)
-      }
+  let exports : Array[Export] = []
+  for _ in 0..<n {
+    let name = parse_exportname(reader)
+    let sortidx = parse_sortidx(reader)
+    let desc = parse_opt_externdesc(reader)
+    exports.push({ name, sortidx, desc })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection

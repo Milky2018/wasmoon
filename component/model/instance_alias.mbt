@@ -72,26 +72,16 @@ fn parse_instanceexpr(
   if tag == 0x00 {
     let component_idx = reader.read_leb_u32()
     let n = reader.read_leb_u32()
-    let args = loop ([], 0) {
-      (acc, i) =>
-        if i >= n {
-          acc
-        } else {
-          acc.push(parse_instantiatearg(reader))
-          continue (acc, i + 1)
-        }
+    let args : Array[InstantiateArg] = []
+    for _ in 0..<n {
+      args.push(parse_instantiatearg(reader))
     }
     Instantiate(component_idx, args)
   } else if tag == 0x01 {
     let n = reader.read_leb_u32()
-    let exports = loop ([], 0) {
-      (acc, i) =>
-        if i >= n {
-          acc
-        } else {
-          acc.push(parse_inlineexport(reader))
-          continue (acc, i + 1)
-        }
+    let exports : Array[InlineExport] = []
+    for _ in 0..<n {
+      exports.push(parse_inlineexport(reader))
     }
     InlineExports(exports)
   } else {
@@ -105,14 +95,9 @@ pub fn parse_instance_section(
 ) -> Array[Instance] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let instances = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(Instance::{ expr: parse_instanceexpr(reader) })
-        continue (acc, i + 1)
-      }
+  let instances : Array[Instance] = []
+  for _ in 0..<n {
+    instances.push(Instance::{ expr: parse_instanceexpr(reader) })
   }
   if !reader.is_eof() {
     raise InvalidInstanceSection
@@ -171,14 +156,9 @@ pub fn parse_alias_section(
 ) -> Array[Alias] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let aliases = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(parse_alias(reader))
-        continue (acc, i + 1)
-      }
+  let aliases : Array[Alias] = []
+  for _ in 0..<n {
+    aliases.push(parse_alias(reader))
   }
   if !reader.is_eof() {
     raise InvalidAliasSection

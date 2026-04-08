@@ -57,14 +57,9 @@ fn Parser::read_bytes(self : Parser, n : Int) -> Bytes raise ParserError {
   if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
   }
-  let bytes = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(self.data[self.pos + i])
-        continue (acc, i + 1)
-      }
+  let bytes : Array[Byte] = []
+  for i in 0..<n {
+    bytes.push(self.data[self.pos + i])
   }
   self.pos += n
   Bytes::from_array(bytes)

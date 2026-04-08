@@ -40,19 +40,12 @@ fn find_export_by_name(
   exports : Array[@types.Export],
   target : String,
 ) -> @types.Export? {
-  loop 0 {
-    idx =>
-      if idx >= exports.length() {
-        None
-      } else {
-        let exp = exports[idx]
-        if exp.name == target {
-          Some(exp)
-        } else {
-          continue idx + 1
-        }
-      }
+  for exp in exports {
+    if exp.name == target {
+      return Some(exp)
+    }
   }
+  None
 }
 
 ///|
