@@ -47,6 +47,16 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 }
 
 ///|
+/// Register allocation algorithm policy.
+///
+/// - Backtracking: Ion-style backtracking + eviction/splitting (better codegen).
+/// - SinglePass: no eviction/backtracking, spills earlier (faster compile).
+pub(all) enum RegallocAlgorithm {
+  Backtracking
+  SinglePass
+}
+
+///|
 /// A span with precomputed total-order keys for faster overlap tests.
 priv struct OrderedSpan {
   start : ProgPoint
@@ -254,6 +264,7 @@ pub fn BacktrackingAllocator::new(
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
+  algorithm? : RegallocAlgorithm = Backtracking,
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
   let num_blocks = func.blocks.length()
@@ -274,7 +285,7 @@ pub fn BacktrackingAllocator::new(
   // no large-function downscaling on the main allocation search.
   let split_probe_limit = 1 << 30
   let bundle_retry_limit = 1 << 30
-  let enable_backtracking = true
+  let enable_backtracking = algorithm is Backtracking
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)
     let callee_max = max_preg_index(callee_saved_int)
@@ -2519,6 +2530,7 @@ pub fn allocate_backtracking(
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
   param_precolor_strict? : Bool = true,
+  algorithm? : RegallocAlgorithm = Backtracking,
 ) -> RegAllocResult {
   let perf_on = @perf.enabled()
 
@@ -2539,7 +2551,15 @@ pub fn allocate_backtracking(
   // Phase 4: Allocate
   let tick_alloc_new = if perf_on { Some(@perf.tick_now()) } else { None }
   let allocator = BacktrackingAllocator::new(
-    func, ranges, bundles, int_regs, float_regs, vector_regs, callee_saved_int, callee_saved_float,
+    func,
+    ranges,
+    bundles,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int,
+    callee_saved_float,
+    algorithm~,
   )
   if tick_alloc_new is Some(tick) {
     @perf.record_regalloc_phase_us(

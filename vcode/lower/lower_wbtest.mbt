@@ -362,6 +362,30 @@ test "amd64 lower regoff folds base displacement" {
 }
 
 ///|
+test "amd64 lower logical const ops to immediate forms" {
+  if !(@isa.ISA::current() is @isa.AMD64) {
+    return
+  }
+  let builder = @ir.IRBuilder::new("amd64_logical_imm")
+  let x = builder.add_param(@ir.Type::I64)
+  builder.add_result(@ir.Type::I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let and_mask = builder.iconst_i64(0xDFFFFFFFFFFFFFFFL)
+  let or_mask = builder.iconst_i64(0x100000000L)
+  let xor_mask = builder.iconst_i64(0x123456789ABCDEF0L)
+  let a = builder.band(x, and_mask)
+  let b = builder.bor(a, or_mask)
+  let c = builder.bxor(b, xor_mask)
+  builder.return_([c])
+  let output = lower_function(builder.get_function()).print()
+  inspect(output.contains("and #"), content="true")
+  inspect(output.contains("or #"), content="true")
+  inspect(output.contains("xor #"), content="true")
+  inspect(output.contains("ldi"), content="false")
+}
+
+///|
 test "aarch64 keeps i32 add before uxtw regoff" {
   if !(@isa.ISA::current() is @isa.AArch64) {
     return
