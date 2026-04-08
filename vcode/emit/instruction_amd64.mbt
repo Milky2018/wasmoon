@@ -3316,8 +3316,11 @@ fn MachineCode::emit_instruction_x86_64(
       }
     }
     @instr.LoadSP => {
+      // Load outgoing-args base into result register so it matches
+      // StoreToStack's [rsp + outgoing_args_offset + off] addressing.
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_rr(rd, 4)
+      emit_add_imm_to_reg_in_chunks(self, rd, stack_frame.outgoing_args_offset)
     }
     @instr.GCAllocStructSlowPrecise(type_idx, num_fields) => {
       let dst = wreg_num(inst.defs[0])

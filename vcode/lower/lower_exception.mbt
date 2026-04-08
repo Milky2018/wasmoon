@@ -53,7 +53,7 @@ fn lower_throw(
       block.add_inst(store)
     }
 
-    // Get current stack pointer as values_ptr
+    // Get outgoing-args base as values_ptr (matches StoreToStack addressing).
     let sp_vreg = ctx.vcode_func.new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
@@ -343,7 +343,7 @@ fn lower_spill_locals_for_throw(
       block.add_inst(store)
     }
 
-    // Outgoing args area starts at current SP.
+    // Get outgoing-args base pointer.
     let sp_vreg = ctx.vcode_func.new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })

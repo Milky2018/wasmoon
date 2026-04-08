@@ -56,6 +56,35 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
+fn parse_regalloc_algorithm(value : String) -> RegallocAlgorithm? {
+  if value == "backtracking" || value == "ion" {
+    return Some(Backtracking)
+  }
+  if value == "single_pass" ||
+    value == "single-pass" ||
+    value == "fastalloc" ||
+    value == "fast" {
+    return Some(SinglePass)
+  }
+  None
+}
+
+///|
+/// Select regalloc policy from env.
+///
+/// Default keeps code-quality-first Cranelift-like behavior.
+fn selected_regalloc_algorithm() -> RegallocAlgorithm {
+  match @sys.get_env_var("WASMOON_REGALLOC_ALGORITHM") {
+    Some(value) =>
+      match parse_regalloc_algorithm(value) {
+        Some(algo) => algo
+        None => Backtracking
+      }
+    None => Backtracking
+  }
+}
+
+///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
@@ -314,10 +343,18 @@ pub fn allocate_registers_backtracking_with_isa(
 
   // Compute liveness (Phase 1)
   let liveness = compute_liveness_for_regalloc(func)
+  let algorithm = selected_regalloc_algorithm()
 
   // Use backtracking allocator (Phases 2-4)
   let alloc_result = allocate_backtracking(
-    func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
+    func,
+    liveness,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+    algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
@@ -372,6 +409,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   let perf_on = @perf.enabled()
   let tick_liveness = if perf_on { Some(@perf.tick_now()) } else { None }
   let liveness = compute_liveness_for_regalloc(func)
+  let algorithm = selected_regalloc_algorithm()
   if tick_liveness is Some(tick) {
     @perf.record_regalloc_phase_us(
       "phase_compute_liveness",
@@ -389,6 +427,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     callee_saved_int_regs,
     callee_saved_float_regs,
     param_precolor_strict=true,
+    algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
@@ -477,8 +516,16 @@ pub fn get_alloc_stats(
 
   // Count vregs
   let num_vregs = liveness.intervals.length()
+  let algorithm = selected_regalloc_algorithm()
   let alloc_result = allocate_backtracking(
-    func, liveness, int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
+    func,
+    liveness,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+    algorithm~,
   )
   process_constraints(func, alloc_result)
   let allocated = apply_allocation(func, alloc_result)

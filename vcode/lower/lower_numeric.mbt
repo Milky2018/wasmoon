@@ -1061,10 +1061,11 @@ fn lower_band(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
+  let isa = @isa.ISA::current()
 
   // Pattern: and(x, const) -> AndImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1075,7 +1076,7 @@ fn lower_band(
 
   // Pattern: and(const, x) -> AndImm (commutative).
   if get_const_value(ctx, lhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1166,10 +1167,11 @@ fn lower_bor(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
+  let isa = @isa.ISA::current()
 
   // Pattern: or(x, const) -> OrImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1180,7 +1182,7 @@ fn lower_bor(
 
   // Pattern: or(const, x) -> OrImm (commutative).
   if get_const_value(ctx, lhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1299,10 +1301,11 @@ fn lower_bxor(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is @ir.Type::I64
+  let isa = @isa.ISA::current()
 
   // Pattern: xor(x, const) -> XorImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
@@ -1313,7 +1316,7 @@ fn lower_bxor(
 
   // Pattern: xor(const, x) -> XorImm (commutative).
   if get_const_value(ctx, lhs_val) is Some(imm) &&
-    @instr.aarch64_logic_imm_enc_bits(imm, is_64) is Some(_) {
+    is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
     let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })

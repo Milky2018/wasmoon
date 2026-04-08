@@ -15,6 +15,8 @@ pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> 
 
 pub fn run_component_script(String, ComponentErrorFormat) -> Int
 
+pub fn run_component_script_cli(String, ComponentErrorFormat) -> Int
+
 pub fn run_config(String) -> Unit
 
 pub fn run_disasm(String) -> Unit

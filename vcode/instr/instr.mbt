@@ -481,9 +481,9 @@ pub(all) enum VCodeOpcode {
   // Uses: [value], Defs: []
   StoreToStack(Int)
 
-  // Load current stack pointer into a register
+  // Load outgoing-args base pointer into a register
   // LoadSP: Defs: [result], Uses: []
-  // Used for passing stack addresses to C functions
+  // Used for passing stack addresses to C helpers that consume StoreToStack data
   LoadSP
 
   // GC inline allocation helpers (fast path + C slow-path fallback)
@@ -1118,7 +1118,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
         "sub sp, sp, #\{-delta}"
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
-    LoadSP => "mov rd, sp"
+    LoadSP => "mov rd, outgoing_args_base"
     GCAllocStructInline(type_idx, num_fields) =>
       "gc_alloc_struct_inline type=\{type_idx} fields=\{num_fields}"
     GCAllocStructSlowPrecise(type_idx, num_fields) =>

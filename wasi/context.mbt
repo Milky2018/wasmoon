@@ -54,6 +54,18 @@ pub(all) struct WasiContext {
   stderr_is_native : Bool
   /// Whether stdin should use native file descriptor
   stdin_is_native : Bool
+  /// Whether stdin descriptor is still open
+  mut stdin_open : Bool
+  /// Whether stdout descriptor is still open
+  mut stdout_open : Bool
+  /// Whether stderr descriptor is still open
+  mut stderr_open : Bool
+  /// Current descriptor number bound to stdin stream (-1 if closed/none)
+  mut stdin_fd : Int
+  /// Current descriptor number bound to stdout stream (-1 if closed/none)
+  mut stdout_fd : Int
+  /// Current descriptor number bound to stderr stream (-1 if closed/none)
+  mut stderr_fd : Int
 }
 
 ///|
@@ -72,6 +84,12 @@ pub fn WasiContext::new() -> WasiContext {
     stdout_is_native: true,
     stderr_is_native: true,
     stdin_is_native: false,
+    stdin_open: true,
+    stdout_open: true,
+    stderr_open: true,
+    stdin_fd: 0,
+    stdout_fd: 1,
+    stderr_fd: 2,
   }
 }
 
@@ -276,6 +294,12 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
     stdout_is_native: self.stdout_is_native,
     stderr_is_native: self.stderr_is_native,
     stdin_is_native: self.stdin_is_native,
+    stdin_open: true,
+    stdout_open: true,
+    stderr_open: true,
+    stdin_fd: 0,
+    stdout_fd: 1,
+    stderr_fd: 2,
   }
 }
 
@@ -323,8 +347,16 @@ pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
 ///|
 /// Check if a file descriptor is valid
 pub fn WasiContext::is_valid_fd(self : WasiContext, fd : Int) -> Bool {
-  // stdin, stdout, stderr are always valid
-  fd == 0 || fd == 1 || fd == 2 || self.open_files.contains(fd)
+  if fd == self.stdin_fd {
+    return self.stdin_open
+  }
+  if fd == self.stdout_fd {
+    return self.stdout_open
+  }
+  if fd == self.stderr_fd {
+    return self.stderr_open
+  }
+  self.open_files.contains(fd)
 }
 
 ///|
@@ -333,6 +365,9 @@ pub fn WasiContext::get_preopen_host_path(
   self : WasiContext,
   fd : Int,
 ) -> String? {
+  if !self.open_files.contains(fd) {
+    return None
+  }
   for preopen in self.preopens {
     let (preopen_fd, host_path, _) = preopen
     if preopen_fd.to_int() == fd {
@@ -344,12 +379,12 @@ pub fn WasiContext::get_preopen_host_path(
 
 ///|
 /// Normalize a guest path and reject escapes from the preopen root.
-fn sanitize_guest_path(path : String) -> String? {
+fn sanitize_guest_path(path : String) -> Result[String, ResolvePathError] {
   if path.length() == 0 {
-    return Some("")
+    return Ok("")
   }
   if path.has_prefix("/") {
-    return None
+    return Err(Perm)
   }
   let parts : Array[String] = []
   let mut start = 0
@@ -361,7 +396,7 @@ fn sanitize_guest_path(path : String) -> String? {
         ()
       } else if seg == ".." {
         if parts.is_empty() {
-          return None
+          return Err(Perm)
         }
         parts.pop() |> ignore
       } else {
@@ -371,25 +406,46 @@ fn sanitize_guest_path(path : String) -> String? {
     }
     i = i + 1
   }
-  Some(parts.join("/"))
+  Ok(parts.join("/"))
 }
 
 ///|
 pub(all) enum ResolvePathError {
   BadFd
+  Perm
   NotCapable
 }
 
 ///|
-/// Resolve a path relative to a directory fd
-pub fn WasiContext::resolve_path(
+fn normalized_parent_path(normalized : String) -> String {
+  if normalized.length() == 0 {
+    return ""
+  }
+  let mut last_slash = -1
+  let mut i = 0
+  while i < normalized.length() {
+    if normalized.code_unit_at(i) == '/' {
+      last_slash = i
+    }
+    i = i + 1
+  }
+  if last_slash < 0 {
+    ""
+  } else {
+    normalized[0:last_slash].to_string()
+  }
+}
+
+///|
+fn WasiContext::resolve_path_internal(
   self : WasiContext,
   dir_fd : Int,
   path : String,
+  follow_leaf : Bool,
 ) -> Result[String, ResolvePathError] {
   let normalized = match sanitize_guest_path(path) {
-    Some(p) => p
-    None => return Err(NotCapable)
+    Ok(p) => p
+    Err(err) => return Err(err)
   }
   let base = if self.get_preopen_host_path(dir_fd) is Some(host_path) {
     host_path
@@ -409,9 +465,40 @@ pub fn WasiContext::resolve_path(
   } else {
     base + "/" + normalized
   }
-  if native_path_within_base(base, resolved) {
+  let containment_target = if follow_leaf || normalized.length() == 0 {
+    resolved
+  } else {
+    let parent_rel = normalized_parent_path(normalized)
+    if parent_rel.length() == 0 {
+      base
+    } else {
+      base + "/" + parent_rel
+    }
+  }
+  if native_path_within_base(base, containment_target) {
     Ok(resolved)
   } else {
     Err(NotCapable)
   }
+}
+
+///|
+/// Resolve a path relative to a directory fd
+pub fn WasiContext::resolve_path(
+  self : WasiContext,
+  dir_fd : Int,
+  path : String,
+) -> Result[String, ResolvePathError] {
+  self.resolve_path_internal(dir_fd, path, true)
+}
+
+///|
+/// Resolve a path while avoiding final-component symlink traversal in the
+/// containment check. Used by path operations that act on directory entries.
+pub fn WasiContext::resolve_path_nofollow_leaf(
+  self : WasiContext,
+  dir_fd : Int,
+  path : String,
+) -> Result[String, ResolvePathError] {
+  self.resolve_path_internal(dir_fd, path, false)
 }

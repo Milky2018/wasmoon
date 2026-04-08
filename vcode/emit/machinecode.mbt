@@ -103,6 +103,182 @@ pub(all) enum FixupKind {
 }
 
 ///|
+/// Reserve negative func_idx values for runtime helper pointer fixups.
+const RUNTIME_FIXUP_GC_BASE : Int = -20_000
+
+///|
+const RUNTIME_FIXUP_JIT_BASE : Int = -21_000
+
+///|
+const RUNTIME_FIXUP_EXCEPTION_BASE : Int = -22_000
+
+///|
+pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
+  let ord = match libcall {
+    @instr.RefTest => 0
+    @instr.RefCast => 1
+    @instr.StructNew => 2
+    @instr.StructGet => 3
+    @instr.StructSet => 4
+    @instr.ArrayNew => 5
+    @instr.ArrayGet => 6
+    @instr.ArraySet => 7
+    @instr.ArrayLen => 8
+    @instr.ArrayFill => 9
+    @instr.ArrayCopy => 10
+    @instr.ArrayNewData => 11
+    @instr.ArrayNewElem => 12
+    @instr.ArrayInitData => 13
+    @instr.ArrayInitElem => 14
+    @instr.TypeCheckSubtype => 15
+    @instr.RegisterStructInline => 16
+    @instr.RegisterArrayInline => 17
+    @instr.AllocStructSlow => 18
+    @instr.AllocArraySlow => 19
+  }
+  RUNTIME_FIXUP_GC_BASE - ord
+}
+
+///|
+pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
+  let ord = match libcall {
+    @instr.MemoryGrow => 0
+    @instr.MemorySize => 1
+    @instr.MemoryFill => 2
+    @instr.MemoryFillMem0 => 3
+    @instr.MemoryCopy => 4
+    @instr.MemoryCopyMem0 => 5
+    @instr.MemoryInit => 6
+    @instr.DataDrop => 7
+    @instr.TableGrow => 8
+    @instr.TableFill => 9
+    @instr.TableCopy => 10
+    @instr.TableInit => 11
+    @instr.ElemDrop => 12
+    @instr.HostCall => 13
+  }
+  RUNTIME_FIXUP_JIT_BASE - ord
+}
+
+///|
+pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
+  let ord = match libcall {
+    @instr.TryBegin => 0
+    @instr.TryEnd => 1
+    @instr.Throw => 2
+    @instr.ThrowTag => 3
+    @instr.ThrowRef => 4
+    @instr.Delegate => 5
+    @instr.GetTag => 6
+    @instr.GetValue => 7
+    @instr.GetValueCount => 8
+    @instr.Sigsetjmp => 9
+    @instr.SpillLocals => 10
+    @instr.GetSpilledLocal => 11
+  }
+  RUNTIME_FIXUP_EXCEPTION_BASE - ord
+}
+
+///|
+pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
+  match idx {
+    i if i == gc_libcall_fixup_idx(@instr.RefTest) =>
+      Some(@jit_ffi.c_jit_get_gc_ref_test_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.RefCast) =>
+      Some(@jit_ffi.c_jit_get_gc_ref_cast_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.StructNew) =>
+      Some(@jit_ffi.c_jit_get_gc_struct_new_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.StructGet) =>
+      Some(@jit_ffi.c_jit_get_gc_struct_get_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.StructSet) =>
+      Some(@jit_ffi.c_jit_get_gc_struct_set_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayNew) =>
+      Some(@jit_ffi.c_jit_get_gc_array_new_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayGet) =>
+      Some(@jit_ffi.c_jit_get_gc_array_get_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArraySet) =>
+      Some(@jit_ffi.c_jit_get_gc_array_set_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayLen) =>
+      Some(@jit_ffi.c_jit_get_gc_array_len_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayFill) =>
+      Some(@jit_ffi.c_jit_get_gc_array_fill_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayCopy) =>
+      Some(@jit_ffi.c_jit_get_gc_array_copy_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayNewData) =>
+      Some(@jit_ffi.c_jit_get_gc_array_new_data_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayNewElem) =>
+      Some(@jit_ffi.c_jit_get_gc_array_new_elem_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayInitData) =>
+      Some(@jit_ffi.c_jit_get_gc_array_init_data_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.ArrayInitElem) =>
+      Some(@jit_ffi.c_jit_get_gc_array_init_elem_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.TypeCheckSubtype) =>
+      Some(@jit_ffi.c_jit_get_gc_type_check_subtype_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.RegisterStructInline) =>
+      Some(@jit_ffi.c_jit_get_gc_register_struct_inline_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.RegisterArrayInline) =>
+      Some(@jit_ffi.c_jit_get_gc_register_array_inline_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.AllocStructSlow) =>
+      Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+    i if i == gc_libcall_fixup_idx(@instr.AllocArraySlow) =>
+      Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryGrow) =>
+      Some(@jit_ffi.c_jit_get_memory_grow_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemorySize) =>
+      Some(@jit_ffi.c_jit_get_memory_size_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryFill) =>
+      Some(@jit_ffi.c_jit_get_memory_fill_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryFillMem0) =>
+      Some(@jit_ffi.c_jit_get_memory_fill_mem0_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryCopy) =>
+      Some(@jit_ffi.c_jit_get_memory_copy_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryCopyMem0) =>
+      Some(@jit_ffi.c_jit_get_memory_copy_mem0_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.MemoryInit) =>
+      Some(@jit_ffi.c_jit_get_memory_init_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.DataDrop) =>
+      Some(@jit_ffi.c_jit_get_data_drop_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.TableGrow) =>
+      Some(@jit_ffi.c_jit_get_table_grow_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.TableFill) =>
+      Some(@jit_ffi.c_jit_get_table_fill_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.TableCopy) =>
+      Some(@jit_ffi.c_jit_get_table_copy_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.TableInit) =>
+      Some(@jit_ffi.c_jit_get_table_init_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.ElemDrop) =>
+      Some(@jit_ffi.c_jit_get_elem_drop_ptr())
+    i if i == jit_libcall_fixup_idx(@instr.HostCall) =>
+      Some(@jit_ffi.c_jit_get_hostcall_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.TryBegin) =>
+      Some(@jit_ffi.c_jit_get_exception_try_begin_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.TryEnd) =>
+      Some(@jit_ffi.c_jit_get_exception_try_end_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.Throw) =>
+      Some(@jit_ffi.c_jit_get_exception_throw_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.ThrowTag) =>
+      Some(@jit_ffi.c_jit_get_exception_throw_tag_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.ThrowRef) =>
+      Some(@jit_ffi.c_jit_get_exception_throw_ref_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.Delegate) =>
+      Some(@jit_ffi.c_jit_get_exception_delegate_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.GetTag) =>
+      Some(@jit_ffi.c_jit_get_exception_get_tag_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.GetValue) =>
+      Some(@jit_ffi.c_jit_get_exception_get_value_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.GetValueCount) =>
+      Some(@jit_ffi.c_jit_get_exception_get_value_count_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.Sigsetjmp) =>
+      Some(@jit_ffi.c_jit_get_sigsetjmp_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.SpillLocals) =>
+      Some(@jit_ffi.c_jit_get_exception_spill_locals_ptr())
+    i if i == exception_libcall_fixup_idx(@instr.GetSpilledLocal) =>
+      Some(@jit_ffi.c_jit_get_exception_get_spilled_local_ptr())
+    _ => None
+  }
+}
+
+///|
 pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
   {
     bytes: [],

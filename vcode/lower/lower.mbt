@@ -1173,6 +1173,23 @@ fn is_valid_add_sub_imm_for_isa(isa : @isa.ISA, value : Int64) -> Bool {
 }
 
 ///|
+/// Check whether a logical immediate form is worth selecting for current ISA.
+///
+/// AArch64 requires bitmask-immediate encodability.
+/// AMD64 accepts this form for all constants and handles large immediates in
+/// the emitter fallback path.
+fn is_valid_logic_imm_for_isa(
+  isa : @isa.ISA,
+  value : Int64,
+  is_64 : Bool,
+) -> Bool {
+  match isa {
+    @isa.AArch64 => @instr.aarch64_logic_imm_enc_bits(value, is_64) is Some(_)
+    @isa.AMD64 => true
+  }
+}
+
+///|
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
 /// Returns Some(val) if the value is a constant in current ISA immediate range.
 fn match_add_imm_value(ctx : LoweringContext, value : @ir.Value) -> Int64? {

@@ -35,6 +35,60 @@ test "wasi: fd_write returns EFAULT on out-of-bounds iovec" {
 }
 
 ///|
+test "wasi: fd_write uses first non-empty iovec only" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_fd_write_first_iov.txt"
+  for i, c in test_path {
+    mem.write_byte(1000 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    1000,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(2000)
+  // iovec[0] is empty, iovec[1] and iovec[2] are non-empty.
+  mem.write_i32(0, 300)
+  mem.write_i32(4, 0)
+  mem.write_i32(8, 320)
+  mem.write_i32(12, 3)
+  mem.write_i32(16, 340)
+  mem.write_i32(20, 3)
+  for i, c in "abc" {
+    mem.write_byte(320 + i, c.to_int().to_byte())
+  }
+  for i, c in "XYZ" {
+    mem.write_byte(340 + i, c.to_int().to_byte())
+  }
+  inspect(fd_write(ctx, mem, fd, 0, 3, 400), content="0")
+  inspect(mem.read_i32(400), content="3")
+  inspect(fd_seek(ctx, mem, fd, 0L, 0, 404), content="0")
+  mem.write_i32(24, 360)
+  mem.write_i32(28, 8)
+  inspect(fd_read(ctx, mem, fd, 24, 1, 412), content="0")
+  inspect(mem.read_i32(412), content="3")
+  let mut content = ""
+  for i in 0..<3 {
+    content = content +
+      mem.read_byte(360 + i).to_int().unsafe_to_char().to_string()
+  }
+  inspect(content, content="abc")
+  fd_close(ctx, fd) |> ignore
+}
+
+///|
 test "wasi: args_sizes_get" {
   let ctx = WasiContextBuilder::new().args(["prog", "arg1", "arg2"]).build()
   let mem = @runtime.Memory::new(1, None)
@@ -77,12 +131,23 @@ test "wasi: clock_time_get invalid clock" {
 }
 
 ///|
+test "wasi: clock_time_get cpu clocks return BADF" {
+  let mem = @runtime.Memory::new(1, None)
+  inspect(clock_time_get(mem, 2, 0L, 0), content="8") // PROCESS_CPUTIME_ID
+  inspect(clock_time_get(mem, 3, 0L, 0), content="8") // THREAD_CPUTIME_ID
+}
+
+///|
 test "wasi: fd_close" {
   let ctx = WasiContextBuilder::new().build()
-  // Cannot close stdin/stdout/stderr
-  inspect(fd_close(ctx, 0), content="8") // Badf
-  inspect(fd_close(ctx, 1), content="8") // Badf
-  inspect(fd_close(ctx, 2), content="8") // Badf
+  // Match wasmtime: stdio descriptors can be closed once.
+  inspect(fd_close(ctx, 0), content="0")
+  inspect(fd_close(ctx, 1), content="0")
+  inspect(fd_close(ctx, 2), content="0")
+  // Closing again returns BADF.
+  inspect(fd_close(ctx, 0), content="8")
+  inspect(fd_close(ctx, 1), content="8")
+  inspect(fd_close(ctx, 2), content="8")
   // fd 3 is not open, so it returns Badf
   inspect(fd_close(ctx, 3), content="8") // Badf (not open)
 }
@@ -114,9 +179,7 @@ test "wasi: context builder" {
 
 ///|
 test "wasi: fd_prestat_get" {
-  let ctx = WasiContextBuilder::new()
-    .preopen_dir("/host/path", "/guest/path")
-    .build()
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/guest/path").build()
   let mem = @runtime.Memory::new(1, None)
   // prestat struct is 8 bytes
   let result = fd_prestat_get(ctx, mem, 3, 0)
@@ -295,9 +358,7 @@ test "wasi: environ_get" {
 
 ///|
 test "wasi: fd_prestat_dir_name" {
-  let ctx = WasiContextBuilder::new()
-    .preopen_dir("/host/path", "/sandbox")
-    .build()
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/sandbox").build()
   let mem = @runtime.Memory::new(1, None)
   // Get prestat first to know the length
   let result = fd_prestat_get(ctx, mem, 3, 0)
@@ -313,6 +374,38 @@ test "wasi: fd_prestat_dir_name" {
     name = name + mem.read_byte(100 + i).to_int().unsafe_to_char().to_string()
   }
   inspect(name, content="/sandbox")
+}
+
+///|
+test "wasi: fd_prestat_dir_name returns NOTDIR for non-preopen descriptor" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_prestat_notdir.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    500,
+  )
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(500)
+  let result = fd_prestat_dir_name(ctx, mem, fd, 600, 8)
+  inspect(result, content="54") // Errno::NotDir
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 
 ///|
@@ -441,6 +534,69 @@ test "wasi: fd_pread and fd_pwrite" {
 }
 
 ///|
+test "wasi: fd_pread/fd_pwrite use first non-empty iovec only" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_pread_first_iov.txt"
+  for i, c in test_path {
+    mem.write_byte(1000 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    1000,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(2000)
+
+  // pwrite with multiple iovecs should use only the first non-empty one.
+  mem.write_i32(0, 300)
+  mem.write_i32(4, 0)
+  mem.write_i32(8, 320)
+  mem.write_i32(12, 3)
+  mem.write_i32(16, 340)
+  mem.write_i32(20, 3)
+  for i, c in "abc" {
+    mem.write_byte(320 + i, c.to_int().to_byte())
+  }
+  for i, c in "XYZ" {
+    mem.write_byte(340 + i, c.to_int().to_byte())
+  }
+  inspect(fd_pwrite(ctx, mem, fd, 0, 3, 0L, 500), content="0")
+  inspect(mem.read_i32(500), content="3")
+
+  // pread with multiple iovecs should fill only the first non-empty one.
+  mem.write_i32(24, 420)
+  mem.write_i32(28, 0)
+  mem.write_i32(32, 440)
+  mem.write_i32(36, 3)
+  mem.write_i32(40, 460)
+  mem.write_i32(44, 3)
+  inspect(fd_pread(ctx, mem, fd, 24, 3, 0L, 504), content="0")
+  inspect(mem.read_i32(504), content="3")
+  let mut read_back = ""
+  for i in 0..<3 {
+    read_back = read_back +
+      mem.read_byte(440 + i).to_int().unsafe_to_char().to_string()
+  }
+  inspect(read_back, content="abc")
+  // Third iovec remains untouched.
+  inspect(mem.read_byte(460).to_int(), content="0")
+
+  fd_close(ctx, fd) |> ignore
+}
+
+///|
 test "wasi: fd_pread/fd_pwrite stdio errno parity" {
   let ctx = WasiContextBuilder::new().build()
   let mem = @runtime.Memory::new(1, None)
@@ -492,13 +648,19 @@ test "wasi: fd_fdstat_get" {
   // Test stdin
   let result = fd_fdstat_get(ctx, mem, 0, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(0), content="b'\\x02'") // character_device
+  inspect(
+    mem.read_byte(0) == (if native_isatty(0) { b'\x02' } else { b'\x00' }),
+    content="true",
+  )
   inspect(mem.read_i64(8) == right_fd_read, content="true")
   inspect(mem.read_i64(16) == right_fd_read, content="true")
   // Test stdout
   let result = fd_fdstat_get(ctx, mem, 1, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(0), content="b'\\x02'") // character_device
+  inspect(
+    mem.read_byte(0) == (if native_isatty(1) { b'\x02' } else { b'\x00' }),
+    content="true",
+  )
   inspect(mem.read_i64(8) == right_fd_write, content="true")
   inspect(mem.read_i64(16) == right_fd_write, content="true")
   // Test preopen directory
@@ -531,6 +693,9 @@ test "wasi: clock_res_get" {
   // Test monotonic clock
   let result = clock_res_get(mem, 1, 0)
   inspect(result, content="0")
+  // CPU clocks are unsupported in preview1 and return BADF.
+  inspect(clock_res_get(mem, 2, 0), content="8")
+  inspect(clock_res_get(mem, 3, 0), content="8")
   // Test invalid clock
   let result = clock_res_get(mem, 999, 0)
   inspect(result, content="28") // Errno::Inval
@@ -571,6 +736,35 @@ test "wasi: path_open returns EFAULT on out-of-bounds path pointer" {
   let mem = @runtime.Memory::new(1, None)
   let result = path_open(ctx, mem, 3, 0, 65532, 8, 0, right_fd_read, 0L, 0, 0)
   inspect(result, content="21") // Errno::Fault
+}
+
+///|
+test "wasi: path_open ignores unknown rights bits on valid dirfd" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_rights_unknown_bits.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    -1L,
+    0L,
+    0,
+    2000,
+  )
+  inspect(result, content="0")
+  if result == 0 {
+    fd_close(ctx, mem.read_i32(2000)) |> ignore
+    path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  }
 }
 
 ///|
@@ -628,6 +822,206 @@ test "wasi: path_open honors write-only rights without create flags" {
   inspect(mem.read_i32(400), content="1")
   fd_close(ctx, fd) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open rejects sync fdflags with ENOTSUP" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_sync_fdflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(2000)) |> ignore
+
+  // fdflags=0x10 (SYNC)
+  let reopen_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    0,
+    right_fd_read,
+    0L,
+    0x10,
+    2004,
+  )
+  inspect(reopen_result, content="58")
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open rejects unknown dirflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_unknown_dirflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(2000)) |> ignore
+
+  // dirflags=0x02 uses an unknown bit and should be rejected.
+  let reopen_result = path_open(
+    ctx,
+    mem,
+    3,
+    0x02,
+    100,
+    test_path.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    2004,
+  )
+  inspect(reopen_result, content="28")
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open rejects unknown oflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_unknown_oflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      test_path.length(),
+      0x10,
+      right_fd_read,
+      0L,
+      0,
+      2000,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open rejects unknown fdflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_unknown_fdflags_open.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      test_path.length(),
+      0,
+      right_fd_read,
+      0L,
+      0x20,
+      2000,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: path_open with non-directory dirfd returns NOTDIR" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let file_path = "wasmoon_notdir_base.txt"
+  let child_path = "child.txt"
+  for i, c in file_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in child_path {
+    mem.write_byte(300 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, file_path.length()) |> ignore
+
+  let open_base_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    file_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  inspect(open_base_result, content="0")
+  if open_base_result != 0 {
+    return
+  }
+  let base_fd = mem.read_i32(2000)
+  let nested_open_result = path_open(
+    ctx,
+    mem,
+    base_fd,
+    0,
+    300,
+    child_path.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    2004,
+  )
+  inspect(nested_open_result, content="54")
+  fd_close(ctx, base_fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, file_path.length()) |> ignore
 }
 
 ///|
@@ -742,6 +1136,40 @@ test "wasi: path_filestat_get maps ENOTDIR to NotDir" {
 }
 
 ///|
+test "wasi: path_filestat_get rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_filestat_lookupflags.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_get_impl(ctx, mem, 3, 0x02, 100, test_path.length(), 500),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
 test "wasi: path_open accepts UTF-8 non-ASCII file names" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
@@ -779,11 +1207,386 @@ test "wasi: path_open accepts UTF-8 non-ASCII file names" {
 }
 
 ///|
+test "wasi: path_open lexical escapes return EPERM" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let abs_path = "/wasmoon_abs_path_probe"
+  let dotdot_path = "../wasmoon_escape_probe"
+  for i, c in abs_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in dotdot_path {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      abs_path.length(),
+      0,
+      right_fd_read,
+      0L,
+      0,
+      300,
+    ),
+    content="63",
+  )
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      200,
+      dotdot_path.length(),
+      0,
+      right_fd_read,
+      0L,
+      0,
+      304,
+    ),
+    content="63",
+  )
+}
+
+///|
+test "wasi: path_open empty path returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(
+    path_open(ctx, mem, 3, 0, 100, 0, 0, right_fd_read, 0L, 0, 300),
+    content="44",
+  )
+}
+
+///|
+test "wasi: path_open trailing slash on regular file returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_trailing_path.txt"
+  let slash = "wasmoon_trailing_path.txt/"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_open(ctx, mem, 3, 0, 200, slash.length(), 0, right_fd_read, 0L, 0, 304),
+    content="44",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_get trailing slash on regular file returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_trailing_stat_path.txt"
+  let slash = "wasmoon_trailing_stat_path.txt/"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_get_impl(ctx, mem, 3, 0, 200, slash.length(), 500),
+    content="44",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_set_times trailing slash on regular file returns ENOENT" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_trailing_settimes_path.txt"
+  let slash = "wasmoon_trailing_settimes_path.txt/"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_set_times_impl(ctx, mem, 3, 0, 200, slash.length(), 0L, 0L, 0),
+    content="44",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_path_settimes_conflict.txt"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0x03,
+    ),
+    content="28",
+  )
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0x0C,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_filestat_set_times rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_path_settimes_lookupflags.txt"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  inspect(
+    path_filestat_set_times_impl(
+      ctx,
+      mem,
+      3,
+      0x02,
+      100,
+      plain.length(),
+      0L,
+      0L,
+      0,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_open trailing slash can open symlinked directory with nofollow" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link = "wasmoon_trailing_link_dir"
+  let link_slash = "wasmoon_trailing_link_dir/"
+  let target = "../tmp"
+  for i, c in link {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in link_slash {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(300 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link.length()) |> ignore
+  inspect(
+    path_symlink_impl(ctx, mem, 300, target.length(), 3, 100, link.length()),
+    content="0",
+  )
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    200,
+    link_slash.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    304,
+  )
+  inspect(open_result, content="0")
+  if open_result == 0 {
+    fd_close(ctx, mem.read_i32(304)) |> ignore
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link.length()) |> ignore
+}
+
+///|
+test "wasi: path_open with embedded NUL returns EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let plain = "wasmoon_nul_path_probe.txt"
+  for i, c in plain {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  mem.write_byte(200 + plain.length(), b'\x00')
+
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    plain.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+
+  inspect(
+    path_open(
+      ctx,
+      mem,
+      3,
+      0,
+      200,
+      plain.length() + 1,
+      0,
+      right_fd_read,
+      0L,
+      0,
+      304,
+    ),
+    content="28",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 100, plain.length()) |> ignore
+}
+
+///|
+test "wasi: path_open with invalid UTF-8 returns EILSEQ" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_byte(100, b'\xFF')
+  inspect(
+    path_open(ctx, mem, 3, 0, 100, 1, 0, right_fd_read, 0L, 0, 304),
+    content="25",
+  )
+}
+
+///|
 test "wasi: path_open rejects symlink escape outside preopen" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
   let link_name = "caplk_escape"
   let escaped_path = "caplk_escape/etc/passwd"
+  let rel_outside = "../"
 
   for i, c in link_name {
     mem.write_byte(100 + i, c.to_int().to_byte())
@@ -791,7 +1594,9 @@ test "wasi: path_open rejects symlink escape outside preopen" {
   for i, c in escaped_path {
     mem.write_byte(200 + i, c.to_int().to_byte())
   }
-  mem.write_byte(300, b'/')
+  for i, c in rel_outside {
+    mem.write_byte(300 + i, c.to_int().to_byte())
+  }
 
   path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
@@ -799,12 +1604,12 @@ test "wasi: path_open rejects symlink escape outside preopen" {
     ctx,
     mem,
     300,
-    1,
+    rel_outside.length(),
     3,
     100,
     link_name.length(),
   )
-  inspect(symlink_result == 0 || symlink_result == 76, content="true")
+  inspect(symlink_result, content="0")
   let open_result = path_open(
     ctx,
     mem,
@@ -818,9 +1623,124 @@ test "wasi: path_open rejects symlink escape outside preopen" {
     0,
     900,
   )
-  inspect(open_result, content="76")
+  inspect(open_result, content="63")
   path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
   path_remove_directory_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+}
+
+///|
+test "wasi: path_unlink_file can remove escaped symlink entry" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link_name = "caplk_escape_unlink"
+  let rel_outside = "../"
+  for i, c in link_name {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in rel_outside {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()) |> ignore
+  inspect(
+    path_symlink_impl(
+      ctx,
+      mem,
+      200,
+      rel_outside.length(),
+      3,
+      100,
+      link_name.length(),
+    ),
+    content="0",
+  )
+  inspect(
+    path_unlink_file_impl(ctx, mem, 3, 100, link_name.length()),
+    content="0",
+  )
+}
+
+///|
+test "wasi: path_open respects dirflags symlink follow bit" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let target_name = "wasmoon_nofollow_target.txt"
+  let link_name = "wasmoon_nofollow_link.txt"
+  for i, c in target_name {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in link_name {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, target_name.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 200, link_name.length()) |> ignore
+
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    target_name.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+  let symlink_result = path_symlink_impl(
+    ctx,
+    mem,
+    100,
+    target_name.length(),
+    3,
+    200,
+    link_name.length(),
+  )
+  inspect(symlink_result, content="0")
+
+  let nofollow_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    200,
+    link_name.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    320,
+  )
+  inspect(nofollow_result == 32 || nofollow_result == 0, content="true")
+  if nofollow_result == 0 {
+    fd_close(ctx, mem.read_i32(320)) |> ignore
+  }
+
+  let follow_result = path_open(
+    ctx,
+    mem,
+    3,
+    1,
+    200,
+    link_name.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    340,
+  )
+  inspect(follow_result, content="0")
+  if follow_result == 0 {
+    fd_close(ctx, mem.read_i32(340)) |> ignore
+  }
+
+  path_unlink_file_impl(ctx, mem, 3, 200, link_name.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, target_name.length()) |> ignore
 }
 
 ///|
@@ -868,16 +1788,105 @@ test "wasi: fd_readdir" {
 }
 
 ///|
-test "wasi: fd_sync and fd_datasync" {
+test "wasi: fd_readdir includes dot entries and supports truncated dirent writes" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
-  // Test on stdin/stdout/stderr - should succeed (no-op)
-  inspect(fd_sync_impl(ctx, 0), content="0")
-  inspect(fd_sync_impl(ctx, 1), content="0")
-  inspect(fd_sync_impl(ctx, 2), content="0")
-  inspect(fd_datasync_impl(ctx, 0), content="0")
-  inspect(fd_datasync_impl(ctx, 1), content="0")
-  inspect(fd_datasync_impl(ctx, 2), content="0")
+  let dir_path = "wasmoon_readdir_cookie_test"
+  for i, c in dir_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
+  path_create_directory(ctx, mem, 3, 100, dir_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    dir_path.length(),
+    2,
+    0L,
+    0L,
+    0,
+    2000,
+  )
+  if open_result != 0 {
+    path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
+    return
+  }
+  let dir_fd = mem.read_i32(2000)
+
+  // cookie=0 should start at "."
+  inspect(fd_readdir(ctx, mem, dir_fd, 500, 25, 0L, 450), content="0")
+  inspect(mem.read_i32(450), content="25")
+  inspect(mem.read_i64(500), content="1")
+  inspect(mem.read_i32(516), content="1")
+  inspect(mem.read_byte(520).to_int(), content="3")
+  inspect(mem.read_byte(524).to_int(), content="46") // '.'
+
+  // cookie=1 should start at ".."
+  inspect(fd_readdir(ctx, mem, dir_fd, 700, 26, 1L, 460), content="0")
+  inspect(mem.read_i32(460), content="26")
+  inspect(mem.read_i64(700), content="2")
+  inspect(mem.read_i32(716), content="2")
+  inspect(mem.read_byte(720).to_int(), content="3")
+  inspect(mem.read_byte(724).to_int(), content="46")
+  inspect(mem.read_byte(725).to_int(), content="46")
+
+  // tiny buffer still receives partial header bytes.
+  inspect(fd_readdir(ctx, mem, dir_fd, 900, 10, 0L, 470), content="0")
+  inspect(mem.read_i32(470), content="10")
+
+  fd_close(ctx, dir_fd) |> ignore
+  path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_readdir on regular file returns BADF" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let file_path = "wasmoon_readdir_regular_file.txt"
+  for i, c in file_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, file_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    file_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(2000)
+  inspect(fd_readdir(ctx, mem, fd, 300, 64, 0L, 400), content="8")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, file_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_sync and fd_datasync use file-only descriptor gating" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  // stdio is not a file descriptor for these operations.
+  inspect(fd_sync_impl(ctx, 0), content="8")
+  inspect(fd_sync_impl(ctx, 1), content="8")
+  inspect(fd_sync_impl(ctx, 2), content="8")
+  inspect(fd_datasync_impl(ctx, 0), content="8")
+  inspect(fd_datasync_impl(ctx, 1), content="8")
+  inspect(fd_datasync_impl(ctx, 2), content="8")
+  // preopen directory is also rejected.
+  inspect(fd_sync_impl(ctx, 3), content="8")
+  inspect(fd_datasync_impl(ctx, 3), content="8")
   // Test on opened file
   let test_path = "wasmoon_sync_test.txt"
   for i, c in test_path {
@@ -996,7 +2005,11 @@ test "wasi: fd_filestat_get" {
   // Test stdin
   let result = fd_filestat_get_impl(ctx, mem, 0, 0)
   inspect(result, content="0")
-  inspect(mem.read_byte(16), content="b'\\x02'") // character_device
+  inspect(
+    mem.read_byte(16) == (if native_isatty(0) { b'\x02' } else { b'\x00' }),
+    content="true",
+  )
+  inspect(mem.read_i64(24), content="0")
   // Test preopen directory
   let result = fd_filestat_get_impl(ctx, mem, 3, 0)
   inspect(result, content="0")
@@ -1127,11 +2140,209 @@ test "wasi: fd_filestat_set_size" {
 }
 
 ///|
-test "wasi: fd_advise always succeeds" {
+test "wasi: fd_advise is file-only" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_advise_impl(ctx, 0, 0L, 100L, 123), content="28")
+  // stdio and preopen directory should return BADF.
+  inspect(fd_advise_impl(ctx, 0, 0L, 100L, 0), content="8")
+  inspect(fd_advise_impl(ctx, 3, 0L, 100L, 0), content="8")
+
+  let test_path = "wasmoon_advise_test.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_advise_impl(ctx, fd, 0L, 100L, 123), content="28")
+  inspect(fd_advise_impl(ctx, fd, 0L, 100L, 0), content="0")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_allocate returns ENOTSUP for files and BADF otherwise" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_allocate_impl(ctx, 0, 0L, 0L), content="8")
+  inspect(fd_allocate_impl(ctx, 3, 0L, 0L), content="8")
+
+  let test_path = "wasmoon_allocate_test.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_allocate_impl(ctx, fd, 0L, 100L), content="58")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_filestat_set_size uses file-only gating" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  inspect(fd_filestat_set_size_impl(ctx, 0, 0L), content="8")
+  inspect(fd_filestat_set_size_impl(ctx, 3, 0L), content="8")
+  // Existing writable file path remains valid for set_size.
+  let test_path = "wasmoon_setsize_gate.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_read | right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_filestat_set_size_impl(ctx, fd, 0L), content="0")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_filestat_set_times rejects stdio descriptors" {
   let ctx = WasiContextBuilder::new().build()
-  // fd_advise is a no-op, always returns success
-  let result = fd_advise_impl(ctx, 0, 0L, 100L, 0)
-  inspect(result, content="0")
+  inspect(fd_filestat_set_times_impl(ctx, 0, 0L, 0L, 0), content="8")
+  inspect(fd_filestat_set_times_impl(ctx, 1, 0L, 0L, 0), content="8")
+  inspect(fd_filestat_set_times_impl(ctx, 2, 0L, 0L, 0), content="8")
+}
+
+///|
+test "wasi: fd_filestat_set_times rejects conflicting fst_flags with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_fd_settimes_conflict.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_filestat_set_times_impl(ctx, fd, 0L, 0L, 0x03), content="28")
+  inspect(fd_filestat_set_times_impl(ctx, fd, 0L, 0L, 0x0C), content="28")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_renumber allows stdio moves when endpoints are valid" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  inspect(fd_renumber_impl(ctx, 0, 0), content="0")
+  inspect(fd_renumber_impl(ctx, 0, 10), content="8")
+  inspect(fd_renumber_impl(ctx, 1, 3), content="0")
+  inspect(fd_renumber_impl(ctx, 3, 0), content="0")
+}
+
+///|
+test "wasi: fd_renumber updates stdio descriptor routing" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+
+  // Move stdin to preopen slot.
+  inspect(fd_renumber_impl(ctx, 0, 3), content="0")
+  mem.write_i32(0, 100) // iov.buf
+  mem.write_i32(4, 8) // iov.buf_len
+  inspect(fd_read(ctx, mem, 3, 0, 1, 200), content="0")
+  inspect(mem.read_i32(200), content="0")
+  inspect(fd_read(ctx, mem, 0, 0, 1, 204), content="8")
+
+  // Move stdout to the old preopen slot and verify fdstat/write rights move too.
+  inspect(fd_renumber_impl(ctx, 1, 3), content="0")
+  inspect(fd_fdstat_get(ctx, mem, 3, 300), content="0")
+  inspect(mem.read_i64(308), content="64")
+  inspect(fd_fdstat_get(ctx, mem, 1, 300), content="8")
+}
+
+///|
+test "wasi: proc_raise returns ENOTSUP" {
+  inspect(proc_raise_impl(2), content="58")
+  inspect(proc_raise_impl(255), content="28")
+}
+
+///|
+test "wasi: sock APIs return NOTSOCK for valid descriptors" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  inspect(sock_accept_impl(ctx, mem, 0, 0, 200), content="57")
+  inspect(sock_recv_impl(ctx, mem, 0, 0, 1, 0, 204, 208), content="57")
+  inspect(sock_send_impl(ctx, mem, 0, 0, 1, 0, 212), content="57")
+  inspect(sock_shutdown_impl(ctx, 0, 0), content="57")
+  inspect(sock_shutdown_impl(ctx, 999, 0), content="8")
+}
+
+///|
+test "wasi: sock APIs reject invalid flags before descriptor-kind check" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  inspect(sock_accept_impl(ctx, mem, 0, 0x20, 200), content="28")
+  inspect(sock_recv_impl(ctx, mem, 0, 0, 1, 0x04, 204, 208), content="28")
+  inspect(sock_shutdown_impl(ctx, 0, 0x04), content="28")
+  inspect(sock_send_impl(ctx, mem, 0, 0, 1, 1, 212), content="57")
 }
 
 ///|
@@ -1139,6 +2350,38 @@ test "wasi: fd_fdstat_set_rights returns ENOTSUP for valid fd" {
   let ctx = WasiContextBuilder::new().build()
   let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
   inspect(result, content="58")
+}
+
+///|
+test "wasi: fd_fdstat_set_flags rejects unknown fdflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_setflags_unknown.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_fdstat_set_flags_impl(ctx, fd, 0x20), content="28")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 
 ///|
@@ -1192,6 +2435,131 @@ test "wasi: path_symlink and path_readlink" {
 }
 
 ///|
+test "wasi: path_symlink rejects absolute old_path with EPERM" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let link = "wasmoon_abs_target_link"
+  mem.write_byte(100, b'/')
+  for i, c in link {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 200, link.length()) |> ignore
+  inspect(
+    path_symlink_impl(ctx, mem, 100, 1, 3, 200, link.length()),
+    content="63",
+  )
+  path_unlink_file_impl(ctx, mem, 3, 200, link.length()) |> ignore
+}
+
+///|
+test "wasi: path_link rejects LOOKUPFLAGS_SYMLINK_FOLLOW" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let source = "wasmoon_link_source.txt"
+  let target = "wasmoon_link_target.txt"
+  for i, c in source {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    source.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+
+  inspect(
+    path_link_impl(
+      ctx,
+      mem,
+      3,
+      1,
+      100,
+      source.length(),
+      3,
+      200,
+      target.length(),
+    ),
+    content="28",
+  )
+
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+}
+
+///|
+test "wasi: path_link rejects unknown lookupflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let source = "wasmoon_link_lookupflags_src.txt"
+  let target = "wasmoon_link_lookupflags_dst.txt"
+  for i, c in source {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    source.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    300,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  fd_close(ctx, mem.read_i32(300)) |> ignore
+
+  inspect(
+    path_link_impl(
+      ctx,
+      mem,
+      3,
+      0x02,
+      100,
+      source.length(),
+      3,
+      200,
+      target.length(),
+    ),
+    content="28",
+  )
+
+  path_unlink_file_impl(ctx, mem, 3, 200, target.length()) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, source.length()) |> ignore
+}
+
+///|
 test "wasi: is_valid_rights" {
   // Valid rights (only bits 0-28 set)
   inspect(is_valid_rights(0L), content="true")
@@ -1229,6 +2597,36 @@ test "wasi: poll_oneoff with clock" {
   inspect(error, content="b'\\x00'") // Success
   let event_type = mem.read_byte(110)
   inspect(event_type, content="b'\\x00'") // clock
+  inspect(mem.read_i64(116), content="1")
+}
+
+///|
+test "wasi: poll_oneoff single relative cpu clock is accepted" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 54321L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 2) // process cpu clock id
+  mem.write_i64(24, 0L) // timeout
+  mem.write_i64(32, 0L) // precision
+  mem.write_byte(40, b'\x00') // relative
+  inspect(poll_oneoff_impl(ctx, mem, 0, 100, 1, 200), content="0")
+  inspect(mem.read_i32(200), content="1")
+  inspect(mem.read_i64(116), content="1")
+}
+
+///|
+test "wasi: poll_oneoff rejects unknown subclockflags bits with EINVAL" {
+  let ctx = WasiContextBuilder::new().build()
+  let mem = @runtime.Memory::new(1, None)
+  mem.write_i64(0, 67890L) // userdata
+  mem.write_byte(8, b'\x00') // tag = clock
+  mem.write_i32(16, 1) // monotonic
+  mem.write_i64(24, 0L) // timeout
+  mem.write_i64(32, 0L) // precision
+  mem.write_byte(40, b'\x02') // invalid subclockflags bit
+  mem.write_byte(41, b'\x00')
+  inspect(poll_oneoff_impl(ctx, mem, 0, 100, 1, 200), content="28")
 }
 
 ///|
@@ -1286,6 +2684,76 @@ test "wasi: poll_oneoff emits expired clock with ready fd" {
   )
 
   fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: poll_oneoff fd_read reports remaining file bytes" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let mem = @runtime.Memory::new(1, None)
+  let test_path = "wasmoon_poll_read_bytes.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let create_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    right_fd_write,
+    0L,
+    0,
+    2000,
+  )
+  inspect(create_result, content="0")
+  if create_result != 0 {
+    return
+  }
+  let write_fd = mem.read_i32(2000)
+  mem.write_i32(400, 300)
+  mem.write_i32(404, 3)
+  mem.write_byte(300, b'a')
+  mem.write_byte(301, b'b')
+  mem.write_byte(302, b'c')
+  inspect(fd_write(ctx, mem, write_fd, 400, 1, 500), content="0")
+  fd_close(ctx, write_fd) |> ignore
+
+  let read_open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    0,
+    right_fd_read,
+    0L,
+    0,
+    2004,
+  )
+  inspect(read_open_result, content="0")
+  if read_open_result != 0 {
+    path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+    return
+  }
+  let read_fd = mem.read_i32(2004)
+
+  mem.write_i64(0, 777L)
+  mem.write_byte(8, b'\x01') // tag = fd_read
+  mem.write_i32(12, read_fd)
+  inspect(poll_oneoff_impl(ctx, mem, 0, 1000, 1, 900), content="0")
+  inspect(mem.read_i32(900), content="1")
+  inspect(mem.read_byte(1010).to_int(), content="1")
+  inspect(mem.read_i64(1016), content="3")
+  inspect(mem.read_byte(1024).to_int(), content="0")
+  inspect(mem.read_byte(1025).to_int(), content="0")
+
+  fd_close(ctx, read_fd) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 

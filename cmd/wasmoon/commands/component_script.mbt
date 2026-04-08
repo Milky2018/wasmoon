@@ -473,60 +473,67 @@ fn make_instance(
 }
 
 ///|
-pub fn run_component_script(
+fn run_component_script_impl(
   path : String,
   error_format : ComponentErrorFormat,
+  print_output : Bool,
 ) -> Int {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
-      if error_format is Json {
-        println(
-          component_test_json(
-            false,
-            Some(CompTestScriptError),
-            "load-script",
-            e,
-            None,
-          ),
-        )
-      } else {
-        println("component-test error: \{e}")
+      if print_output {
+        if error_format is Json {
+          println(
+            component_test_json(
+              false,
+              Some(CompTestScriptError),
+              "load-script",
+              e,
+              None,
+            ),
+          )
+        } else {
+          println("component-test error: \{e}")
+        }
       }
       return 1
     }
   }
   let json = @json.parse(contents) catch {
     e => {
-      if error_format is Json {
-        println(
-          component_test_json(
-            false,
-            Some(CompTestScriptError),
-            "parse-json",
-            e.to_string(),
-            None,
-          ),
-        )
-      } else {
-        println("component-test error: \{e}")
+      if print_output {
+        if error_format is Json {
+          println(
+            component_test_json(
+              false,
+              Some(CompTestScriptError),
+              "parse-json",
+              e.to_string(),
+              None,
+            ),
+          )
+        } else {
+          println("component-test error: \{e}")
+        }
       }
       return 1
     }
   }
   let script : ScriptFile = @json.from_json(json) catch {
     e => {
-      if error_format is Json {
-        println(
-          component_test_json(
-            false,
-            Some(CompTestScriptError),
-            "decode-json",
-            e.to_string(),
-            None,
-          ),
-        )
-      } else {
-        println("component-test error: \{e}")
+      if print_output {
+        if error_format is Json {
+          println(
+            component_test_json(
+              false,
+              Some(CompTestScriptError),
+              "decode-json",
+              e.to_string(),
+              None,
+            ),
+          )
+        } else {
+          println("component-test error: \{e}")
+        }
       }
       return 1
     }
@@ -544,18 +551,20 @@ pub fn run_component_script(
   let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
   let simple_module = @wat.parse(simple_module_wat) catch {
     e => {
-      if error_format is Json {
-        println(
-          component_test_json(
-            false,
-            Some(CompTestRuntimeError),
-            "bootstrap",
-            e.to_string(),
-            None,
-          ),
-        )
-      } else {
-        println("component-test error: \{e}")
+      if print_output {
+        if error_format is Json {
+          println(
+            component_test_json(
+              false,
+              Some(CompTestRuntimeError),
+              "bootstrap",
+              e.to_string(),
+              None,
+            ),
+          )
+        } else {
+          println("component-test error: \{e}")
+        }
       }
       return 1
     }
@@ -1171,35 +1180,37 @@ pub fn run_component_script(
       }
     }
   }
-  if error_format is Json {
-    let ok = result.failed == 0 && result.skipped == 0
-    println(
-      component_test_json(
-        ok,
-        if ok {
-          None
-        } else if has_unsupported_command || result.skipped > 0 {
-          Some(CompTestUnsupportedCommand)
-        } else {
-          Some(CompTestAssertFailed)
-        },
-        "execute",
-        if ok {
-          "component-test finished successfully"
-        } else if has_unsupported_command || result.skipped > 0 {
-          "component-test has unsupported commands"
-        } else {
-          "component-test has failing commands"
-        },
-        Some(result),
-      ),
-    )
-  } else {
-    println(
-      "RESULT passed=\{result.passed} failed=\{result.failed} skipped=\{result.skipped}",
-    )
-    for f in result.failures {
-      println("FAIL \{f}")
+  if print_output {
+    if error_format is Json {
+      let ok = result.failed == 0 && result.skipped == 0
+      println(
+        component_test_json(
+          ok,
+          if ok {
+            None
+          } else if has_unsupported_command || result.skipped > 0 {
+            Some(CompTestUnsupportedCommand)
+          } else {
+            Some(CompTestAssertFailed)
+          },
+          "execute",
+          if ok {
+            "component-test finished successfully"
+          } else if has_unsupported_command || result.skipped > 0 {
+            "component-test has unsupported commands"
+          } else {
+            "component-test has failing commands"
+          },
+          Some(result),
+        ),
+      )
+    } else {
+      println(
+        "RESULT passed=\{result.passed} failed=\{result.failed} skipped=\{result.skipped}",
+      )
+      for f in result.failures {
+        println("FAIL \{f}")
+      }
     }
   }
   if result.failed > 0 || result.skipped > 0 {
@@ -1207,4 +1218,20 @@ pub fn run_component_script(
   } else {
     0
   }
+}
+
+///|
+pub fn run_component_script(
+  path : String,
+  error_format : ComponentErrorFormat,
+) -> Int {
+  run_component_script_impl(path, error_format, false)
+}
+
+///|
+pub fn run_component_script_cli(
+  path : String,
+  error_format : ComponentErrorFormat,
+) -> Int {
+  run_component_script_impl(path, error_format, true)
 }
