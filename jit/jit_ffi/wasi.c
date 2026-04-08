@@ -3376,17 +3376,17 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     if ((flags & ~0x1f) != 0) {
         return WASI_EINVAL;
     }
-    // Match wasmtime behavior:
-    // - only APPEND/NONBLOCK are accepted
-    // - DSYNC/RSYNC/SYNC are rejected with EINVAL
-    if ((flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0) {
-        return WASI_EINVAL;
-    }
     if (is_stdio_fd(ctx, fd)) return WASI_EBADF;
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
+    // Match wasmtime behavior:
+    // - unknown fdflags bits are rejected before descriptor lookup
+    // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors
+    if ((flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0) {
+        return WASI_EINVAL;
+    }
 
 #ifndef _WIN32
     int native_flags = fcntl(native_fd, F_GETFL);

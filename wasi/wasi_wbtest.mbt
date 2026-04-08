@@ -2385,6 +2385,13 @@ test "wasi: fd_fdstat_set_flags rejects unknown fdflags bits with EINVAL" {
 }
 
 ///|
+test "wasi: fd_fdstat_set_flags checks descriptor before DSYNC rejection" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  inspect(fd_fdstat_set_flags_impl(ctx, 0, 0x02), content="8")
+  inspect(fd_fdstat_set_flags_impl(ctx, 3, 0x02), content="8")
+}
+
+///|
 test "wasi: path_symlink and path_readlink" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)

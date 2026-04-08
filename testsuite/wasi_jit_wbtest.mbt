@@ -2455,6 +2455,28 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
 }
 
 ///|
+test "wasi jit: fd_fdstat_set_flags returns EBADF for non-file fd before DSYNC check" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (local.set $errno
+    #|      (call $fd_fdstat_set_flags (i32.const 0) (i32.const 2)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 8))
+    #|      (then (return (i32.const 101))))
+    #|    (call $fd_fdstat_set_flags (i32.const 3) (i32.const 2))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
+}
+
+///|
 test "wasi jit: fd_fdstat_set_flags rejects unknown bits with EINVAL (28)" {
   let source =
     #|(module
