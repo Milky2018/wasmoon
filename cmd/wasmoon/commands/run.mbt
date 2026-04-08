@@ -349,7 +349,8 @@ pub fn run_wasm(
 
   // Parse WASI options
   let mut inherit_env = false
-  let mut inherit_stdin = false
+  // Match wasmtime CLI default: stdin is inherited unless explicitly disabled.
+  let mut inherit_stdin = true
   let mut inherit_stdout = false
   let mut inherit_stderr = false
   for opt in wasi_options {
