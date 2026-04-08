@@ -54,7 +54,14 @@ pub(all) suberror ComponentValidationError {
   AliasTargetMismatch(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ComponentValidationError with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Validation knobs for component-model validation.
@@ -152,19 +159,19 @@ priv enum TypeSig {
   Enum(Array[String])
   Resource(Int)
   Other
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 priv struct TypeFieldSig {
   name : String
   ty : TypeSig
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 priv struct TypeCaseSig {
   name : String
   ty : TypeSig?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn typeidx_of_typesig(

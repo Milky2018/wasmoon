@@ -7,7 +7,7 @@
 pub struct Caller {
   store : Store
   instance : ModuleInstance
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Caller::new(store : Store, instance : ModuleInstance) -> Caller {

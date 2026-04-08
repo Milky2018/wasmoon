@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/types"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub const ASCII_DEL : Int = 0x7F
 
@@ -52,6 +56,8 @@ pub const U8_MAX : Int = 0xFF
 
 pub const WASM_PAGE_SIZE_BYTES : Int64 = 0x10000
 
+pub fn compact_show_repr(String) -> String
+
 pub fn compute_canonical_type_indices(Array[SubType], type_rec_groups? : Array[Int]) -> Array[Int]
 
 pub fn extract_func_types(Array[SubType]) -> Array[FuncType]
@@ -73,7 +79,7 @@ pub fn to_hex_u16(Int) -> String
 // Types and methods
 pub(all) struct ArrayType {
   element : FieldType
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum BlockType {
   Empty
@@ -81,43 +87,44 @@ pub(all) enum BlockType {
   MultiValue(Array[ValueType])
   InlineType(Array[ValueType], Array[ValueType])
   TypeIndex(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum CatchHandler {
   Catch(Int, Int)
   CatchRef(Int, Int)
   CatchAll(Int)
   CatchAllRef(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for CompositeType
 
 pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
   init : Bytes
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ElemMode {
   Active(Int, Array[Instruction])
   Passive
   Declarative
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType
   init : Array[Array[Instruction]]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Export {
   name : String
   desc : ExportDesc
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ExportDesc {
   Func(Int)
@@ -125,40 +132,43 @@ pub(all) enum ExportDesc {
   Memory(Int)
   Global(Int)
   Tag(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct FieldType {
   storage_type : StorageType
   mutable : Bool
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn FuncType::structural_hash(Self) -> Int
 pub fn FuncType::structurally_equal(Self, Self, Int, Int) -> Bool
+pub impl Show for FuncType
 
 pub(all) struct FunctionCode {
   locals : Array[ValueType]
   body : Array[Instruction]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for FunctionCode
 
 pub(all) struct Global {
   type_ : GlobalType
   init : Array[Instruction]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for GlobalType
 
 pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ImportDesc {
   Func(Int)
@@ -166,7 +176,7 @@ pub(all) enum ImportDesc {
   Memory(MemoryType)
   Global(GlobalType)
   Tag(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Instruction {
   Unreachable
@@ -669,19 +679,21 @@ pub(all) enum Instruction {
   I16x8RelaxedQ15mulrS
   I16x8RelaxedDotI8x16I7x16S
   I32x4RelaxedDotI8x16I7x16AddS
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Instruction
 
 pub(all) struct Limits {
   min : Int64
   max : Int64?
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool
   page_size_log2 : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn MemoryType::addr_type(Self) -> ValueType
+pub impl Show for MemoryType
 
 pub(all) struct Module {
   types : Array[SubType]
@@ -698,7 +710,7 @@ pub(all) struct Module {
   datas : Array[Data]
   tags : Array[TagType]
   func_names : Map[Int, String]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
@@ -708,29 +720,32 @@ pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
 pub fn Module::new() -> Self
 pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
+pub impl Show for Module
 
 pub(all) enum PackedType {
   I8
   I16
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum StorageType {
   Val(ValueType)
   Packed(PackedType)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for StorageType
 
 pub(all) struct StructType {
   fields : Array[FieldType]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct SubType {
   final_ : Bool
   supertypes : Array[Int]
   composite : CompositeType
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn SubType::from_func(FuncType) -> Self
 pub fn SubType::func(Array[ValueType], Array[ValueType]) -> Self
 pub fn SubType::simple(CompositeType) -> Self
+pub impl Show for SubType
 
 pub struct SubtypingContext {
   types1 : Array[SubType]
@@ -751,17 +766,18 @@ pub fn SubtypingContext::value_type_subtype(Self, ValueType, ValueType, _idx1? :
 pub(all) struct Table {
   type_ : TableType
   init : Array[Instruction]?
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
   is_table64 : Bool
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for TableType
 
 pub(all) struct TagType {
   type_idx : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub struct TypeEquivalenceContext {
   types1 : Array[SubType]
@@ -788,7 +804,8 @@ pub(all) enum Value {
   ArrayRef(Int)
   I31(Int)
   Null
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Value
 
 pub(all) enum ValueType {
   I32
@@ -822,8 +839,9 @@ pub(all) enum ValueType {
   NullFuncRef
   NullExnRef
   NullExternRef
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn ValueType::is_nullable(Self) -> Bool
+pub impl Show for ValueType
 
 // Type aliases
 

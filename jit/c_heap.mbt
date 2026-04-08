@@ -36,7 +36,7 @@ const GC_KIND_ARRAY : Int = 2
 /// The heap is automatically freed when this object is garbage collected.
 pub struct CHeap {
   ptr : Int64 // C GcHeap* pointer
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new C heap with the given initial capacity

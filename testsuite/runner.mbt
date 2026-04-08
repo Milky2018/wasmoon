@@ -6,7 +6,7 @@
 pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// JSON test file structure
@@ -42,7 +42,7 @@ priv struct JsonAction {
 pub(all) struct JsonValue {
   type_ : String
   value : String?
-} derive(FromJson(fields(type_(rename="type"))), Show)
+} derive(FromJson(fields(type_(rename="type"))), Debug)
 
 ///|
 /// Test command types from the JSON format
@@ -55,28 +55,28 @@ pub enum TestCommand {
   AssertUninstantiable(String, String) // filename, message
   Register(String, String?) // as, name
   Action(TestAction)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Test command with line number information
 pub struct TestCommandWithLine {
   line : Int?
   command : TestCommand
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Test action types
 pub enum TestAction {
   Invoke(String?, String, Array[TestValue]) // module name, field, args
   Get(String?, String) // module name, field
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Test value representation
 pub struct TestValue {
   type_ : String
   value : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Test result
@@ -87,7 +87,7 @@ pub(all) struct TestResult {
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String? // Source .wast filename for better error reporting
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn TestResult::new() -> TestResult {

@@ -13,7 +13,7 @@ pub(all) enum CallType {
 pub(all) enum CallConv {
   Wasm // Wasm calling convention: X0=vmctx, X1-X7=user_args
   C // Standard C calling convention: X0-X7=args, no vmctx
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// GC runtime library calls
@@ -39,7 +39,7 @@ pub(all) enum GCLibcall {
   RegisterArrayInline // gc_register_array_inline - register inline-allocated array
   AllocStructSlow // gc_alloc_struct_slow - slow path for struct allocation
   AllocArraySlow // gc_alloc_array_slow - slow path for array allocation
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// JIT runtime library calls
@@ -58,7 +58,7 @@ pub(all) enum JITLibcall {
   TableInit
   ElemDrop
   HostCall
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Exception handling runtime library calls
@@ -75,7 +75,29 @@ pub(all) enum ExceptionLibcall {
   Sigsetjmp // sigsetjmp(jmp_buf, savemask) - libc setjmp, returns 0 or handler_id
   SpillLocals // exception_spill_locals - save locals before throw
   GetSpilledLocal // exception_get_spilled_local - get spilled local value
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for CallConv with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for GCLibcall with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for JITLibcall with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for ExceptionLibcall with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers

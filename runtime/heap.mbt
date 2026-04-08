@@ -4,7 +4,7 @@
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
-} derive(Show)
+} derive(Debug)
 
 ///|
 const GC_OBJECT_HEADER_BYTES : Int64 = 16L
@@ -17,14 +17,31 @@ const GC_VALUE_SLOT_BYTES : Int64 = 8L
 pub(all) struct StructInstance {
   type_idx : Int // Index of the struct type in the module
   fields : Array[@types.Value] // Field values
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Array instance - stores element values and length
 pub(all) struct ArrayInstance {
   type_idx : Int // Index of the array type in the module
   elements : Array[@types.Value] // Element values
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for StructInstance with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for ArrayInstance with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for GCObject with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// GC Heap - manages all GC objects with mark-sweep garbage collection
@@ -37,7 +54,7 @@ pub struct MarkSweepHeap {
   mut collections : Int // Number of GC cycles performed
   mut bytes_allocated : Int64 // Cumulative allocated bytes
   mut bytes_collected : Int64 // Cumulative collected bytes
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// GC statistics
@@ -48,7 +65,7 @@ pub struct GCStats {
   collections : Int // Number of GC cycles performed
   bytes_allocated : Int64 // Cumulative allocated bytes
   bytes_collected : Int64 // Cumulative collected bytes
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new empty GC heap

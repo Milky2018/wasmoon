@@ -16,7 +16,14 @@ pub(all) struct ModuleInstance {
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool] // true if elem segment has been dropped
   dropped_datas : Array[Bool] // true if data segment has been dropped
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ModuleInstance with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub fn ModuleInstance::new() -> ModuleInstance {

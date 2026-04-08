@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/parser"
 
 import {
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -13,7 +14,7 @@ type ParserError
 pub impl Show for ParserError
 
 // Types and methods
-type Parser derive(Show)
+type Parser derive(@debug.Debug)
 pub fn Parser::new(Bytes) -> Self
 
 // Type aliases

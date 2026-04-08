@@ -19,7 +19,14 @@ pub(all) struct Component {
   canons : Array[Canon]
   start : Start?
   components : Array[Component]
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for Component with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub fn parse_component(bytes : Bytes) -> Component raise ComponentParseError {

@@ -7,6 +7,7 @@ import {
   "Milky2018/wasmoon/vcode/emit",
   "Milky2018/wasmoon/vcode/instr",
   "Milky2018/wasmoon/vcode/regalloc",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -88,13 +89,13 @@ pub struct GcCompilerConfig {
   needs_safepoints : Bool
   can_inline_alloc : Bool
   object_header_size : Int
-} derive(Show)
+} derive(@debug.Debug)
 
 pub struct GcSafepoint {
   code_offset : Int
   live_refs : Array[Int]
   metadata : Int64
-} derive(Show)
+} derive(@debug.Debug)
 pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
 
 type JITRuntime

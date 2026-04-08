@@ -20,7 +20,7 @@ pub enum WastCommand {
   AssertUnlinkable(WastModuleSource, String)
   Register(String, String?)
   Action(WastAction)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Module source for assert_invalid/malformed
@@ -29,14 +29,14 @@ pub enum WastModuleSource {
   Quote(Array[String])
   Inline(@types.Module)
   FailedToParse(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// WAST action (invoke or get)
 pub enum WastAction {
   Invoke(String?, String, Array[WastValue])
   Get(String?, String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// WAST value (typed constant)
@@ -65,7 +65,14 @@ pub enum WastValue {
   RefAny // (ref.any) - any reference
   // Relaxed SIMD: multiple valid results
   Either(Array[WastValue]) // (either v1 v2 ...) - any of the alternatives is valid
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for WastValue with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Lane value for V128 pattern matching
@@ -76,7 +83,7 @@ pub enum WastLaneValue {
   F32ArithmeticNan
   F64CanonicalNan
   F64ArithmeticNan
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// WAST script (collection of commands with line numbers)

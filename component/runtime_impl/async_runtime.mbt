@@ -415,7 +415,7 @@ fn waitable_set_has_event(async_state : AsyncState, ws_key : Int64) -> Bool {
 struct DecodedCallbackCode {
   tag : Int
   payload : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn decode_callback_code(code : Int) -> DecodedCallbackCode {

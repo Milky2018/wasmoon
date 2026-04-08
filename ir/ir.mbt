@@ -7,7 +7,7 @@
 pub struct Value {
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn Value::new(id : Int, ty : Type) -> Value {
@@ -24,7 +24,14 @@ pub(all) enum Type {
   V128 // SIMD 128-bit vector
   FuncRef
   ExternRef
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for Type with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Convert from WASM ValueType to IR Type
@@ -65,7 +72,7 @@ pub struct Block {
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   instructions : Array[Inst] // Instructions in this block
   mut terminator : Terminator? // How this block ends
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn Block::new(id : Int) -> Block {
@@ -96,7 +103,7 @@ pub struct Inst {
   results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
   operands : Array[Value] // Input values
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Hash for CSE/GVN - based on opcode and operand IDs (not result)
@@ -668,7 +675,12 @@ pub enum Opcode {
   V128RelaxedQ15MulrS // v128, v128 -> v128
   V128RelaxedDot8to16S // v128, v128 -> v128
   V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
+
+///|
+pub impl Show for Opcode with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Integer comparison condition codes
@@ -683,7 +695,7 @@ pub(all) enum IntCC {
   Ule // Unsigned less than or equal
   Ugt // Unsigned greater than
   Uge // Unsigned greater than or equal
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Floating point comparison condition codes
@@ -694,7 +706,7 @@ pub(all) enum FloatCC {
   Le // Less than or equal (ordered)
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
-} derive(Show, Eq, Hash)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Terminator - how a basic block ends
@@ -714,7 +726,7 @@ pub enum Terminator {
 
   // Trap/Unreachable
   Trap(String) // trap reason
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Function - a complete IR function
@@ -725,7 +737,7 @@ pub struct Function {
   blocks : Array[Block] // Basic blocks (block 0 is entry)
   mut next_value_id : Int // For generating unique value IDs
   mut next_block_id : Int // For generating unique block IDs
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Function::new(name : String) -> Function {

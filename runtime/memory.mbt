@@ -9,7 +9,7 @@ struct Memory {
   is_memory64 : Bool // true for memory64 (i64-indexed)
   page_size_log2 : Int
   page_size_bytes : Int64
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Memory::desc_ptr(self : Memory) -> Int64 {

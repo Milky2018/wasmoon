@@ -6,7 +6,7 @@ struct Table {
   mut size : Int
   max : Int?
   is_table64 : Bool // true for table64 (i64-indexed table)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Table::new(

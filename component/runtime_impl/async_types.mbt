@@ -19,13 +19,20 @@ pub(all) enum ComponentValue {
   /// Canonical ABI representation for variants/options/results.
   /// `tag` is the case index, and `payload` is the case payload (if any).
   Variant(Int, ComponentValue?)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ComponentValue with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct CanonResources {
@@ -33,7 +40,7 @@ struct CanonResources {
   realloc : CoreFuncRef?
   post_return : CoreFuncRef?
   encoding : StringEncoding
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct ResourceHandle {
@@ -41,7 +48,7 @@ pub(all) struct ResourceHandle {
   rep : Int
   dtor : CoreFuncRef?
   kind : ResourceKind
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct ResourceTable {
@@ -49,7 +56,7 @@ pub(all) struct ResourceTable {
   next_handle : Array[Int]
   free_handles : Array[Int]
   entries : Map[Int, ResourceHandle]
-} derive(Show)
+} derive(Debug)
 
 ///|
 let resource_table_id_counter : Array[Int] = [0]
@@ -106,7 +113,7 @@ pub(all) struct StreamEndpoint {
   // Set once an operation observed that the opposite end was dropped; subsequent
   // reads/writes/lifts should trap (component-spec "done" semantics).
   notified_peer_dropped : Array[Bool]
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct PendingStreamRead {
@@ -125,7 +132,7 @@ struct PendingStreamRead {
   reader_handle : Int
   // Whether we've already enqueued a STREAM_READ event for this pending read.
   event_enqueued : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct PendingStreamWrite {
@@ -144,7 +151,7 @@ struct PendingStreamWrite {
   // the write becomes fully consumed. This gives the reader a chance to drop the
   // readable end before the writer observes completion (component-spec/async/sync-streams).
   defer_complete : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct StreamState {
@@ -157,7 +164,7 @@ struct StreamState {
   pending_write : PendingStreamWrite?
   readable_dropped : Bool
   writable_dropped : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct StreamTable {
@@ -165,7 +172,7 @@ pub(all) struct StreamTable {
   // Keyed by `handle_key(component_id, local_handle)`.
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn StreamTable::new() -> StreamTable {
@@ -257,7 +264,7 @@ pub(all) struct AsyncState {
   // even for synchronous tasks (affects stream/future handle numbering in
   // component-spec/async).
   thread_handle_required : Map[Int, Bool]
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct WaitEvent {
@@ -266,7 +273,7 @@ struct WaitEvent {
   code : Int
   index : Int
   payload : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Cached `waitable-set.wait` result for replay.
@@ -279,7 +286,7 @@ struct WaitResult {
   subtask_retptr : Int
   // Scalar return value written at `subtask_retptr` (currently only used for i32 results).
   subtask_i32 : Int?
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct WaitableSet {
@@ -289,7 +296,7 @@ struct WaitableSet {
   queue : Array[WaitEvent]
   // Number of active waiters; dropping a set with waiters traps.
   waiters : Array[Int]
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct FutureEndpoint {
@@ -297,7 +304,7 @@ struct FutureEndpoint {
   is_readable : Bool
   // Component instance id where this future was created (resource_table.id).
   creator_component_id : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct PendingFutureRead {
@@ -309,7 +316,7 @@ struct PendingFutureRead {
   // The readable endpoint that initiated this pending read.
   reader_component_id : Int
   reader_handle : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct PendingFutureWrite {
@@ -318,7 +325,7 @@ struct PendingFutureWrite {
   writer_handle : Int
   // Pending write value (already loaded from memory if needed).
   val : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct FutureState {
@@ -337,27 +344,27 @@ struct FutureState {
   write_observed_readable_drop : Bool
   // True once a value has been provided via `future.write` (even if it blocked).
   wrote_value : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 enum SubtaskPhase {
   Starting
   Started
   Returned
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 enum SubtaskDriver {
   // Callback-driven: step using callback codes and waitable-set events.
   CallbackLifted(CallbackTask)
-} derive(Show)
+} derive(Debug)
 
 ///|
 enum TaskStep {
   Blocked
   Progressed
   Done
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 struct CallbackTask {
@@ -374,13 +381,13 @@ struct CallbackTask {
   // Waitable-set key (handle_key(owner_component_id, local_index)).
   waiting_set : Array[Int64?]
   cancelled : Array[Bool]
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct SyncLowerState {
   task_id : Int64
   task : CallbackTask
-} derive(Show)
+} derive(Debug)
 
 ///|
 struct Subtask {
@@ -399,7 +406,7 @@ struct Subtask {
   types : Array[TypeDef?]
   resources : CanonResources
   driver : SubtaskDriver
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn AsyncState::new(stream_table : StreamTable) -> AsyncState {

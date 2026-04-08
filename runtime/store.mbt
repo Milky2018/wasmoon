@@ -3,7 +3,7 @@
 pub struct ExnInstance {
   tag_addr : Int // Which tag was thrown
   values : Array[@types.Value] // Exception values
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Represents the ownership status of a function in the store
@@ -11,7 +11,7 @@ pub(all) enum FuncOwner {
   HostFunc // Host function - never has an owner module
   Unowned // WASM function not yet assigned to a module
   Module(Int) // WASM function owned by module at given index
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// The store contains all global runtime state
@@ -50,7 +50,7 @@ pub struct Store {
   // Opaque WASI context handle (for WAST runner to store WASI context)
   // This avoids circular dependency between runtime and wasi packages
   mut wasi_ctx_handle : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Optional C heap initial capacity override (bytes)

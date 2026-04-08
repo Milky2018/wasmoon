@@ -72,7 +72,7 @@ priv struct LabelInfo {
   is_loop : Bool
   arity : Int
   stack_height : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Execution context for running WASM code
@@ -86,7 +86,7 @@ struct ExecContext {
   gc_stress : Bool
   gc_stress_every : Int
   mut gc_stress_alloc_count : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn ExecContext::new(

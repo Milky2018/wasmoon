@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/cmd/wasmoon/commands"
 import {
   "Milky2018/wasmoon/cwasm",
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -35,7 +36,8 @@ pub fn run_wat(String) -> Unit
 pub suberror ComponentTestError {
   ParseError(String)
   ScriptError(String)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for ComponentTestError
 
 // Types and methods
 pub struct CompileProgress {
@@ -68,19 +70,22 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentErrorCode
 
 pub(all) enum ComponentErrorFormat {
   Text
   Json
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentErrorFormat
 
 pub(all) enum ComponentTestErrorCode {
   CompTestScriptError
   CompTestRuntimeError
   CompTestAssertFailed
   CompTestUnsupportedCommand
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentTestErrorCode
 
 // Type aliases
 

@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/validator"
 
 import {
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -42,7 +43,8 @@ pub(all) suberror ValidationError {
   InvalidStartFunction(String)
   UndeclaredFunctionReference(Int)
   WithContext(ValidationErrorContext)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for ValidationError
 
 // Types and methods
 pub(all) struct ValidationErrorContext {
@@ -50,7 +52,7 @@ pub(all) struct ValidationErrorContext {
   func_idx : Int?
   instr_offset : Int?
   instruction : String?
-}
+} derive(@debug.Debug)
 pub fn ValidationErrorContext::format(Self) -> String
 pub fn ValidationErrorContext::from_error(ValidationError) -> Self
 pub fn ValidationErrorContext::new(String) -> Self

@@ -12,7 +12,7 @@
 
 ///|
 /// E-class identifier (index into the e-graph's class array)
-pub(all) struct EClassId(Int) derive(Eq, Hash, Show, Compare)
+pub(all) struct EClassId(Int) derive(Eq, Hash, Debug, Compare)
 
 ///|
 /// E-node opcode for e-graph expressions
@@ -119,7 +119,19 @@ pub(all) enum EOpcode {
 
   // Variable reference (leaf node representing an IR value)
   Var(Int) // IR Value id
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for EClassId with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for EOpcode with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// E-opcode tag for indexing (ignores parameters like Const value)
@@ -203,7 +215,7 @@ enum EOpcodeTag {
   TVconst
   // Variable
   TVar
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, Debug)
 
 ///|
 /// Get the tag of an opcode (for indexing)
@@ -297,7 +309,7 @@ pub fn EOpcode::tag(self : EOpcode) -> EOpcodeTag {
 pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, Debug)
 
 ///|
 /// E-class: an equivalence class of e-nodes
@@ -1827,7 +1839,7 @@ fn EGraph::extract_impl(
 pub struct SaturationLimits {
   matches_limit : Int
   eclass_enode_limit : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn SaturationLimits::new(

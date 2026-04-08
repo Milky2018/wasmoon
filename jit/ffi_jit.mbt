@@ -12,7 +12,14 @@ pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for JITTrap with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 let wasi_exit_trap_code : Int = 100
@@ -688,7 +695,7 @@ struct JITTable {
   mut table_ptr : Int64 // Pointer to the shared C-side table
   mut size : Int
   max : Int?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new shared JIT table

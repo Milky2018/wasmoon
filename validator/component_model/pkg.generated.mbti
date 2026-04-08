@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/validator/component_model"
 
 import {
   "Milky2018/wasmoon/component/model",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -56,7 +57,8 @@ pub(all) suberror ComponentValidationError {
   AliasTargetMismatch(String)
   SectionParseError(Int, String)
   CoreModuleError(String)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentValidationError
 
 // Types and methods
 pub struct ComponentValidationConfig {

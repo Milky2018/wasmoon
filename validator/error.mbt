@@ -32,7 +32,14 @@ pub(all) suberror ValidationError {
   UndeclaredFunctionReference(Int) // ref.func used on function not declared in elem/global
   // Error with location context
   WithContext(ValidationErrorContext)
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ValidationError with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Validation error with location context for debugging
@@ -41,7 +48,7 @@ pub(all) struct ValidationErrorContext {
   func_idx : Int? // The function index where validation failed
   instr_offset : Int? // The instruction offset within the function body
   instruction : String? // The instruction that caused the error
-}
+} derive(Debug)
 
 ///|
 pub fn ValidationErrorContext::new(msg : String) -> ValidationErrorContext {

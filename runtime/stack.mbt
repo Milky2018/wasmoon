@@ -3,7 +3,7 @@
 struct Stack {
   values : Array[@types.Value]
   mut sp : Int // stack pointer
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Stack::new() -> Stack {

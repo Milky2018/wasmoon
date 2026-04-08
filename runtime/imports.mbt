@@ -10,6 +10,16 @@ pub(all) enum FuncInst {
 }
 
 ///|
+/// Keep `Debug` support for `Store` while `FuncInst` contains non-debuggable
+/// host function closures.
+pub impl Debug for FuncInst with to_repr(self) {
+  match self {
+    WasmFunc(code) => Repr::ctor("WasmFunc", [(None, to_repr(code))])
+    HostFunc(_) => Repr::ctor("HostFunc", [(None, Repr::literal("<native>"))])
+  }
+}
+
+///|
 pub impl Show for FuncInst with output(self, logger) {
   match self {
     WasmFunc(code) => logger.write_string("WasmFunc(\{code})")
