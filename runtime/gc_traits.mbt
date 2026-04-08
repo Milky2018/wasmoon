@@ -95,7 +95,7 @@ pub struct GcStats {
   bytes_allocated : Int64
   /// Total bytes collected (if tracked)
   bytes_collected : Int64
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Runtime GC coordination interface

@@ -72,7 +72,7 @@ pub(all) enum ValueType {
   NullFuncRef // bottom type for func (ref null nofunc)
   NullExnRef // bottom type for exn (ref null noexn)
   NullExternRef // bottom type for extern (ref null noextern)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Check if a reference type is nullable
@@ -107,33 +107,33 @@ pub fn ValueType::is_nullable(self : ValueType) -> Bool {
 pub(all) enum PackedType {
   I8
   I16
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Storage type for struct/array fields
 pub(all) enum StorageType {
   Val(ValueType) // unpacked value type
   Packed(PackedType) // packed i8 or i16
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Field type with mutability
 pub(all) struct FieldType {
   storage_type : StorageType
   mutable : Bool
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Struct type definition
 pub(all) struct StructType {
   fields : Array[FieldType]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Array type definition
 pub(all) struct ArrayType {
   element : FieldType
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Composite type (func, struct, or array)
@@ -141,7 +141,7 @@ pub(all) enum CompositeType {
   Func(FuncType)
   Struct(StructType)
   Array(ArrayType)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Subtype definition with optional supertype
@@ -149,7 +149,7 @@ pub(all) struct SubType {
   final_ : Bool // true if type cannot be subtyped further
   supertypes : Array[Int] // indices of supertypes (0 or 1 for MVP)
   composite : CompositeType
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Create a simple subtype without inheritance
@@ -212,7 +212,7 @@ pub(all) enum Value {
   ArrayRef(Int) // array reference (index into GC heap)
   I31(Int) // i31ref value (31-bit integer, stored directly)
   Null
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // ============================================================
 // Instructions
@@ -813,7 +813,7 @@ pub(all) enum Instruction {
   I16x8RelaxedQ15mulrS
   I16x8RelaxedDotI8x16I7x16S
   I32x4RelaxedDotI8x16I7x16AddS
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Block type
@@ -823,7 +823,7 @@ pub(all) enum BlockType {
   MultiValue(Array[ValueType]) // Multi-value results only (e.g., result i32 i64)
   InlineType(Array[ValueType], Array[ValueType]) // (params, results) for blocks with params
   TypeIndex(Int)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Catch handler for try_table instruction
@@ -832,7 +832,7 @@ pub(all) enum CatchHandler {
   CatchRef(Int, Int) // (tag_idx, label_idx) - catch specific tag with exnref
   CatchAll(Int) // (label_idx) - catch any exception
   CatchAllRef(Int) // (label_idx) - catch any exception with exnref
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // ============================================================
 // Module Structures
@@ -843,7 +843,7 @@ pub(all) enum CatchHandler {
 pub(all) struct FuncType {
   params : Array[ValueType]
   results : Array[ValueType]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Compute a hash for structural type equivalence.
@@ -1011,7 +1011,7 @@ fn ValueType::structurally_equal(
 pub(all) struct Limits {
   min : Int64
   max : Int64?
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Memory type
@@ -1019,7 +1019,7 @@ pub(all) struct MemoryType {
   limits : Limits
   is_memory64 : Bool // true for i64-indexed memory (memory64 proposal)
   page_size_log2 : Int // custom-page-sizes proposal (default: 16 for 64KiB)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Get the address type for this memory (I32 for 32-bit, I64 for 64-bit)
@@ -1037,28 +1037,28 @@ pub(all) struct TableType {
   elem_type : ValueType
   limits : Limits
   is_table64 : Bool // true for table64 (i64-indexed table)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Table definition with optional init expression
 pub(all) struct Table {
   type_ : TableType
   init : Array[Instruction]? // Optional init expression for all elements
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Global type
 pub(all) struct GlobalType {
   value_type : ValueType
   mutable : Bool
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Tag type (for exception handling)
 /// Tags define the signature of exceptions - they can only have parameters, not results
 pub(all) struct TagType {
   type_idx : Int // Index into the types array (must be a function type with no results)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Import descriptor
@@ -1068,7 +1068,7 @@ pub(all) enum ImportDesc {
   Memory(MemoryType)
   Global(GlobalType)
   Tag(Int) // type index for exception tag
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Import entry
@@ -1076,7 +1076,7 @@ pub(all) struct Import {
   mod_name : String
   name : String
   desc : ImportDesc
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Export descriptor
@@ -1086,28 +1086,28 @@ pub(all) enum ExportDesc {
   Memory(Int) // memory index
   Global(Int) // global index
   Tag(Int) // tag index
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Export entry
 pub(all) struct Export {
   name : String
   desc : ExportDesc
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Function code
 pub(all) struct FunctionCode {
   locals : Array[ValueType]
   body : Array[Instruction]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Global definition
 pub(all) struct Global {
   type_ : GlobalType
   init : Array[Instruction]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Element segment mode
@@ -1118,7 +1118,7 @@ pub(all) enum ElemMode {
   Passive
   /// Declarative segment: only for validation
   Declarative
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Element segment
@@ -1126,7 +1126,7 @@ pub(all) struct Element {
   mode : ElemMode
   type_ : ValueType // element type (funcref or externref)
   init : Array[Array[Instruction]] // init expressions (each evaluates to a ref)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Data segment
@@ -1134,7 +1134,7 @@ pub(all) struct Data {
   memory_idx : Int
   offset : Array[Instruction]
   init : Bytes
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// WebAssembly module
@@ -1158,7 +1158,171 @@ pub(all) struct Module {
   /// Function index -> internal name (e.g., 0 -> "some_func" from $some_func)
   /// Populated from WAT parsing, empty for binary modules without name section
   func_names : Map[Int, String]
-} derive(Show)
+} derive(Debug)
+
+///|
+fn is_show_whitespace(c : Char) -> Bool {
+  c == ' ' || c == '\n' || c == '\r' || c == '\t'
+}
+
+///|
+fn is_show_open_delim(c : Char) -> Bool {
+  c == '{' || c == '[' || c == '('
+}
+
+///|
+fn is_show_close_delim(c : Char) -> Bool {
+  c == '}' || c == ']' || c == ')'
+}
+
+///|
+fn should_emit_show_space(last_sig : Char?, next_char : Char) -> Bool {
+  match last_sig {
+    None => false
+    Some(last) =>
+      if is_show_open_delim(last) {
+        false
+      } else if next_char == '{' ||
+        next_char == '(' ||
+        is_show_close_delim(next_char) {
+        false
+      } else if next_char == ',' || next_char == ':' {
+        false
+      } else {
+        true
+      }
+  }
+}
+
+///|
+pub fn compact_show_repr(text : String) -> String {
+  let out = StringBuilder::new()
+  let mut in_string = false
+  let mut escaped = false
+  let mut pending_space = false
+  let mut pending_comma = false
+  let mut last_sig : Char? = None
+  for i in 0..<text.length() {
+    let c = text.code_unit_at(i).unsafe_to_char()
+    if in_string {
+      out.write_char(c)
+      if escaped {
+        escaped = false
+      } else if c == '\\' {
+        escaped = true
+      } else if c == '"' {
+        in_string = false
+      }
+      last_sig = Some(c)
+      continue
+    }
+    if is_show_whitespace(c) {
+      pending_space = true
+      continue
+    }
+    if pending_comma {
+      if !is_show_close_delim(c) {
+        out.write_char(',')
+        last_sig = Some(',')
+        pending_space = true
+      }
+      pending_comma = false
+    }
+    if c == ',' {
+      pending_comma = true
+      pending_space = true
+      continue
+    }
+    if c == ':' {
+      out.write_char(':')
+      last_sig = Some(':')
+      pending_space = true
+      continue
+    }
+    if c == '{' || c == '(' || is_show_close_delim(c) {
+      out.write_char(c)
+      last_sig = Some(c)
+      pending_space = false
+      if c == '"' {
+        in_string = true
+      }
+      continue
+    }
+    if pending_space && should_emit_show_space(last_sig, c) {
+      out.write_char(' ')
+    }
+    pending_space = false
+    out.write_char(c)
+    last_sig = Some(c)
+    if c == '"' {
+      in_string = true
+      escaped = false
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ValueType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for StorageType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for CompositeType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for SubType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for Value with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for FunctionCode with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for FuncType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for MemoryType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for TableType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for GlobalType with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for Instruction with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+pub impl Show for Module with output(self, logger) {
+  logger.write_string(compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Create an empty module with all fields set to empty arrays/None.

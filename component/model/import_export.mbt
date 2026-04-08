@@ -12,25 +12,30 @@ pub(all) enum Sort {
   Type
   Component
   Instance
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SortIdx {
   sort : Sort
   idx : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for SortIdx with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub(all) enum TypeBound {
   Eq(Int)
   SubResource
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ValueBound {
   Eq(Int)
   Type(ValType)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ExternDesc {
@@ -40,32 +45,37 @@ pub(all) enum ExternDesc {
   Type(TypeBound)
   ComponentType(Int) // typeidx
   InstanceType(Int) // typeidx
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for ExternDesc with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub(all) enum ImportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ExportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct Import {
   name : ImportName
   desc : ExternDesc
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct Export {
   name : ExportName
   sortidx : SortIdx
   desc : ExternDesc?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn parse_name_annot(reader : Reader) -> Bytes raise ComponentParseError {

@@ -28,7 +28,7 @@ struct EGraphBuilder {
 struct RepKey {
   class_id : Int
   ty : Type
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, Debug)
 
 ///|
 pub fn EGraphBuilder::new() -> EGraphBuilder {

@@ -6,7 +6,7 @@ pub(all) enum StringEncoding {
   Utf8
   Utf16
   Latin1Utf16
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum CanonOpt {
@@ -16,7 +16,7 @@ pub(all) enum CanonOpt {
   PostReturn(Int)
   Async
   Callback(Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum Canon {
@@ -57,7 +57,12 @@ pub(all) enum Canon {
   ResourceNew(Int) // typeidx
   ResourceDrop(Int) // typeidx
   ResourceRep(Int) // typeidx
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Canon with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 fn parse_context_core_valtype(
@@ -347,7 +352,12 @@ pub(all) struct Start {
   func_idx : Int
   args : Array[Int]
   results : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Start with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub fn parse_start_section(payload : Bytes) -> Start raise ComponentParseError {

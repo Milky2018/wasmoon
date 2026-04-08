@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/ir"
 import {
   "Milky2018/wasmoon/ir/egraph",
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -123,7 +124,7 @@ pub struct Block {
   params : Array[(Value, Type)]
   instructions : Array[Inst]
   mut terminator : Terminator?
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Block::add_inst(Self, Inst) -> Unit
 pub fn Block::add_param(Self, Value, Type) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
@@ -176,7 +177,7 @@ pub(all) enum FloatCC {
   Le
   Gt
   Ge
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
 
 type FuncEnvironment
 pub fn FuncEnvironment::emit_atomic_alignment_check(Self, IRBuilder, Int, Value, Int64, Int) -> Unit
@@ -203,7 +204,7 @@ pub struct Function {
   blocks : Array[Block]
   mut next_value_id : Int
   mut next_block_id : Int
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::new(String) -> Self
@@ -403,7 +404,7 @@ pub struct Inst {
   results : Array[Value]
   mut opcode : Opcode
   operands : Array[Value]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
 pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
@@ -421,7 +422,7 @@ pub(all) enum IntCC {
   Ule
   Ugt
   Uge
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
 
 pub struct Loop {
   header : Int
@@ -802,7 +803,8 @@ pub enum Opcode {
   V128RelaxedQ15MulrS
   V128RelaxedDot8to16S
   V128RelaxedDot8to32AddS
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
+pub impl Show for Opcode
 
 pub enum OptLevel {
   O0
@@ -818,7 +820,7 @@ pub struct OptResult {
 pub fn OptResult::mark_changed(Self) -> Unit
 pub fn OptResult::new() -> Self
 
-type RepKey derive(Eq, Hash, Show)
+type RepKey derive(Eq, Hash, @debug.Debug)
 
 pub enum Terminator {
   Jump(Int, Array[Value])
@@ -827,7 +829,7 @@ pub enum Terminator {
   BrTable(Value, Array[Int], Int)
   Return(Array[Value])
   Trap(String)
-} derive(Show)
+} derive(@debug.Debug)
 
 type Translator
 pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
@@ -842,8 +844,9 @@ pub(all) enum Type {
   V128
   FuncRef
   ExternRef
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
 pub fn Type::from_wasm(@types.ValueType) -> Self
+pub impl Show for Type
 
 pub struct ValidationResult {
   mut valid : Bool
@@ -854,7 +857,7 @@ pub fn ValidationResult::new() -> Self
 pub struct Value {
   id : Int
   ty : Type
-} derive(Show)
+} derive(@debug.Debug)
 
 // Type aliases
 

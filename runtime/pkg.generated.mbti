@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/runtime"
 import {
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -73,7 +74,8 @@ pub impl Show for RuntimeError
 pub(all) struct ArrayInstance {
   type_idx : Int
   elements : Array[@types.Value]
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for ArrayInstance
 
 pub(all) struct CallStackEntry {
   func_idx : Int
@@ -83,7 +85,7 @@ pub(all) struct CallStackEntry {
 pub struct Caller {
   store : Store
   instance : ModuleInstance
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Caller::get_exported_func_addr(Self, String) -> Int?
 pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
@@ -93,7 +95,7 @@ pub fn Caller::store(Self) -> Store
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
-} derive(Show)
+} derive(@debug.Debug)
 
 pub(all) enum ExternVal {
   Func(Int)
@@ -103,7 +105,7 @@ pub(all) enum ExternVal {
   Tag(Int)
 }
 
-type Frame derive(Show)
+type Frame derive(@debug.Debug)
 pub fn Frame::get_func_idx(Self) -> Int
 pub fn Frame::get_local(Self, Int) -> @types.Value raise RuntimeError
 pub fn Frame::locals_values(Self) -> Array[@types.Value]
@@ -115,17 +117,19 @@ pub(all) enum FuncInst {
   HostFunc((Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError)
 }
 pub impl Show for FuncInst
+pub impl @debug.Debug for FuncInst
 
 pub(all) enum FuncOwner {
   HostFunc
   Unowned
   Module(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum GCObject {
   Struct(StructInstance)
   Array(ArrayInstance)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for GCObject
 
 pub struct GCStats {
   total_objects : Int
@@ -134,7 +138,7 @@ pub struct GCStats {
   collections : Int
   bytes_allocated : Int64
   bytes_collected : Int64
-} derive(Show)
+} derive(@debug.Debug)
 
 pub struct GcStats {
   total_slots : Int
@@ -143,9 +147,9 @@ pub struct GcStats {
   collections : Int
   bytes_allocated : Int64
   bytes_collected : Int64
-} derive(Show)
+} derive(@debug.Debug)
 
-type GlobalInstance derive(Show)
+type GlobalInstance derive(@debug.Debug)
 pub fn GlobalInstance::get(Self) -> @types.Value
 pub fn GlobalInstance::get_type(Self) -> @types.GlobalType
 pub fn GlobalInstance::new(@types.GlobalType, @types.Value) -> Self
@@ -182,7 +186,7 @@ pub struct MarkSweepHeap {
   mut collections : Int
   mut bytes_allocated : Int64
   mut bytes_collected : Int64
-} derive(Show)
+} derive(@debug.Debug)
 pub fn MarkSweepHeap::alloc_array(Self, Int, Array[@types.Value]) -> Int
 pub fn MarkSweepHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int
 pub fn MarkSweepHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
@@ -213,7 +217,7 @@ pub impl GcHeap for MarkSweepHeap
 pub impl GcManager for MarkSweepHeap
 pub impl GcRuntime for MarkSweepHeap
 
-type Memory derive(Show)
+type Memory derive(@debug.Debug)
 pub fn Memory::byte_len(Self) -> Int64
 pub fn Memory::copy(Self, Int, Int, Int) -> Unit raise RuntimeError
 pub fn Memory::desc_ptr(Self) -> Int64
@@ -275,11 +279,12 @@ pub(all) struct ModuleInstance {
   data_segments : Array[@types.Data]
   dropped_elems : Array[Bool]
   dropped_datas : Array[Bool]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn ModuleInstance::get_array_type(Self, Int) -> @types.ArrayType
 pub fn ModuleInstance::get_func_type(Self, Int) -> @types.FuncType
 pub fn ModuleInstance::get_struct_type(Self, Int) -> @types.StructType
 pub fn ModuleInstance::new() -> Self
+pub impl Show for ModuleInstance
 
 pub struct RuntimeCapabilities {
   version : String
@@ -329,7 +334,7 @@ pub(all) enum RuntimeFeature {
   Threads
 }
 
-type Stack derive(Show)
+type Stack derive(@debug.Debug)
 pub fn Stack::active_values(Self) -> Array[@types.Value]
 pub fn Stack::clear(Self) -> Unit
 pub fn Stack::new() -> Self
@@ -366,7 +371,7 @@ pub struct Store {
   jit_tables : Array[@jit.JITTable?]
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
-} derive(Show)
+} derive(@debug.Debug)
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
 pub fn Store::alloc_exn(Self, Int, Array[@types.Value]) -> Int
 pub fn Store::alloc_func(Self, @types.FunctionCode, func_type? : @types.FuncType, type_idx? : Int) -> Int
@@ -426,9 +431,10 @@ pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value
 pub(all) struct StructInstance {
   type_idx : Int
   fields : Array[@types.Value]
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for StructInstance
 
-type Table derive(Show)
+type Table derive(@debug.Debug)
 pub fn Table::copy_from(Self, Int, Self, Int, Int) -> Unit raise RuntimeError
 pub fn Table::fill(Self, Int, @types.Value, Int) -> Unit raise RuntimeError
 pub fn Table::get(Self, Int) -> @types.Value raise RuntimeError

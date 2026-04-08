@@ -8,7 +8,7 @@ struct Parser {
   mut pos : Int
   mut has_data_count : Bool // true if data count section was seen
   types : Array[@types.SubType]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new parser from bytes

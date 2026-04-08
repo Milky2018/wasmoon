@@ -22,6 +22,15 @@ pub(all) enum ComponentFunc {
 }
 
 ///|
+pub impl Debug for ComponentFunc with to_repr(self) {
+  match self {
+    Lifted(_, _, _, _, _, _, _, _) =>
+      Repr::ctor("Lifted", [(None, Repr::literal("<lowered>"))])
+    Host(_, _, _) => Repr::ctor("Host", [(None, Repr::literal("<native>"))])
+  }
+}
+
+///|
 pub impl Show for ComponentFunc with output(self, logger) {
   match self {
     Lifted(_, _, _, _, _, _, _, _) => logger.write_string("Lifted")

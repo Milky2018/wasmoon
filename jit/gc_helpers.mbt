@@ -308,7 +308,14 @@ pub suberror GCSetupError {
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for GCSetupError with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Full GC setup for JIT: set heap and type cache

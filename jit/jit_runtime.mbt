@@ -107,7 +107,14 @@ pub suberror JITModuleLoadError {
     func_name~ : String,
     code_size~ : Int
   )
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for JITModuleLoadError with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 fn JITFunction::new(
@@ -127,7 +134,7 @@ struct AddressRange {
   start : Int64 // Function start address
   end : Int64 // Function end address (start + code_size)
   func_idx : Int // Wasm function index
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Loaded precompiled module with executable functions

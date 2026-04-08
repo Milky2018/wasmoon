@@ -6,6 +6,7 @@ import {
   "Milky2018/wasmoon/jit/jit_ffi",
   "Milky2018/wasmoon/types",
   "Milky2018/wasmoon/vcode",
+  "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
 }
 
@@ -256,19 +257,22 @@ pub suberror GCSetupError {
   InvalidFuncCount(num_funcs~ : Int)
   FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
   MissingFunctionTableContext(num_funcs~ : Int)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for GCSetupError
 
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int)
   UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
   ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
   FunctionCodeAllocationFailed(func_idx~ : Int, func_name~ : String, code_size~ : Int)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for JITModuleLoadError
 
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
-} derive(Show)
+} derive(@debug.Debug)
+pub impl Show for JITTrap
 
 pub suberror PolycallError {
   InputNumber(Int, Int)
@@ -277,7 +281,7 @@ pub suberror PolycallError {
 }
 
 // Types and methods
-type AddressRange derive(Show)
+type AddressRange derive(@debug.Debug)
 
 pub struct BacktraceFrame {
   pc : Int64
@@ -288,7 +292,7 @@ pub struct BacktraceFrame {
 
 pub struct CHeap {
   ptr : Int64
-} derive(Show)
+} derive(@debug.Debug)
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
 pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
 pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
@@ -526,7 +530,7 @@ pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
 
-type JITTable derive(Show)
+type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?

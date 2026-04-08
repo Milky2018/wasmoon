@@ -8,7 +8,7 @@ priv enum Token {
   Number(String) // numeric literals
   String_(String) // string literals
   Eof
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Source span with start and end positions
@@ -17,7 +17,7 @@ priv struct SourceSpan {
   start_column : Int
   end_line : Int
   end_column : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Token with source location and raw text
@@ -25,7 +25,19 @@ priv struct LocatedToken {
   token : Token
   span : SourceSpan
   raw : String // Original text representation
-} derive(Show)
+} derive(Debug)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+impl Show for Token with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
+
+///|
+impl Show for LocatedToken with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 fn LocatedToken::to_loc(self : LocatedToken) -> SourceLoc {

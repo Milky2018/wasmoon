@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/ir/egraph"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn get_compact_ruleset() -> IndexedRuleSet
 
@@ -27,9 +31,10 @@ pub fn vector_rules() -> Array[RewriteRule]
 // Errors
 
 // Types and methods
-pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, Show)
+pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, @debug.Debug)
 #deprecated
 pub fn EClassId::inner(Self) -> Int
+pub impl Show for EClassId
 
 type EGraph
 pub fn EGraph::add(Self, ENode) -> EClassId
@@ -120,7 +125,7 @@ pub fn EGraph::subsume(Self, EClassId, EClassId) -> EClassId
 pub(all) struct ENode {
   op : EOpcode
   children : Array[EClassId]
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) enum EOpcode {
   Const(Int64)
@@ -186,10 +191,11 @@ pub(all) enum EOpcode {
   Splat
   Vconst(Bytes)
   Var(Int)
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash, @debug.Debug)
 pub fn EOpcode::tag(Self) -> EOpcodeTag
+pub impl Show for EOpcode
 
-type EOpcodeTag derive(Eq, Hash, Show)
+type EOpcodeTag derive(Eq, Hash, @debug.Debug)
 
 type IndexedRuleSet
 
@@ -198,7 +204,7 @@ type RewriteRule
 pub struct SaturationLimits {
   matches_limit : Int
   eclass_enode_limit : Int
-} derive(Show)
+} derive(@debug.Debug)
 pub fn SaturationLimits::cranelift_default() -> Self
 pub fn SaturationLimits::eclass_enode_limit(Self) -> Int
 pub fn SaturationLimits::matches_limit(Self) -> Int

@@ -9,7 +9,12 @@ pub(all) enum BinaryKind {
   CoreModule
   Component
   UnknownPreamble(Int, Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for BinaryKind with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
@@ -40,14 +45,14 @@ pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
 pub struct Section {
   id : Int
   payload : Bytes
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub struct ComponentBinary {
   version : Int
   layer : Int
   sections : Array[Section]
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub suberror ComponentParseError {

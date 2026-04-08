@@ -5,24 +5,29 @@
 pub(all) struct InstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct InlineExport {
   name : String
   sortidx : SortIdx
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum InstanceExpr {
   Instantiate(Int, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for InstanceExpr with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub(all) struct Instance {
   expr : InstanceExpr
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn parse_inlineexport(
@@ -120,13 +125,18 @@ pub(all) enum AliasTarget {
   Export(Int, String)
   CoreExport(Int, String)
   Outer(Int, Int)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct Alias {
   sort : Sort
   target : AliasTarget
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Alias with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 fn parse_aliastarget(reader : Reader) -> AliasTarget raise ComponentParseError {

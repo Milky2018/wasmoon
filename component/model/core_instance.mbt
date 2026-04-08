@@ -5,24 +5,24 @@
 pub(all) struct CoreInstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct CoreInlineExport {
   name : String
   sortidx : SortIdx
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum CoreInstanceExpr {
   Instantiate(Int, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct CoreInstanceDecl {
   expr : CoreInstanceExpr
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 fn parse_core_inlineexport(

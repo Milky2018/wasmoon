@@ -20,13 +20,13 @@ pub(all) enum PrimValType {
   Char
   String
   ErrorContext
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ValType {
   TypeIdx(Int)
   Prim(PrimValType)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ResourceKind {
@@ -34,20 +34,20 @@ pub(all) enum ResourceKind {
   GuestDefined
   /// Resources imported from the host environment.
   HostDefined
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct Param {
   label : String
   ty : ValType
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct FuncType {
   is_async : Bool
   params : Array[Param]
   result : ValType?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A subset of instance type declarations (enough for wasmtime/component-spec).
@@ -62,7 +62,7 @@ pub(all) enum InstanceDecl {
   // `kind` is the component model external kind discriminator.
   AliasInstanceExport(Int, Int, String)
   Export(String, ExternDesc)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A subset of component type declarations (enough for WIT-encoded components).
@@ -76,7 +76,7 @@ pub(all) enum ComponentDecl {
   AliasInstanceExport(Int, Int, String)
   Import(String, ExternDesc)
   Export(String, ExternDesc)
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum TypeDef {
@@ -102,13 +102,18 @@ pub(all) enum TypeDef {
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for TypeDef with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 pub(all) struct RecordField {
   label : String
   ty : ValType
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct VariantCase {
@@ -116,7 +121,7 @@ pub(all) struct VariantCase {
   ty : ValType?
   // `refines` points at a previously defined case index.
   refines : Int?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 

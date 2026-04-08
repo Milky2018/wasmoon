@@ -2,7 +2,7 @@
 pub(all) enum ComponentErrorFormat {
   Text
   Json
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum ComponentErrorCode {
@@ -10,7 +10,17 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for ComponentErrorFormat with output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
+
+///|
+pub impl Show for ComponentErrorCode with output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
 
 ///|
 priv struct ComponentCommandEvalResult {

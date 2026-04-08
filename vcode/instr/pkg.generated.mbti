@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/vcode/instr"
 
 import {
   "Milky2018/wasmoon/vcode/abi",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -14,7 +15,8 @@ pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 pub(all) enum CallConv {
   Wasm
   C
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for CallConv
 
 pub(all) enum CallType {
   None
@@ -72,7 +74,8 @@ pub(all) enum ExceptionLibcall {
   Sigsetjmp
   SpillLocals
   GetSpilledLocal
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ExceptionLibcall
 
 pub(all) enum ExtendKind {
   Signed8To32
@@ -139,7 +142,8 @@ pub(all) enum GCLibcall {
   RegisterArrayInline
   AllocStructSlow
   AllocArraySlow
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for GCLibcall
 
 pub(all) enum IndexExtend {
   None
@@ -175,7 +179,8 @@ pub(all) enum JITLibcall {
   TableInit
   ElemDrop
   HostCall
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for JITLibcall
 
 pub(all) enum LaneSize {
   B8

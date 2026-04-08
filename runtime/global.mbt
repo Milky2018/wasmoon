@@ -3,7 +3,7 @@
 struct GlobalInstance {
   type_ : @types.GlobalType
   mut value : @types.Value
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn GlobalInstance::new(

@@ -6,6 +6,7 @@ import {
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
@@ -50,7 +51,7 @@ pub fn values_equal(@types.Value, @types.Value) -> Bool
 pub suberror TestRunnerError {
   ParseError(String)
   ModuleLoadError(String)
-} derive(Show)
+} derive(@debug.Debug)
 
 // Types and methods
 type CompareResult
@@ -61,7 +62,7 @@ pub impl Show for CompareResult
 pub(all) struct JsonValue {
   type_ : String
   value : String?
-} derive(Show, @json.FromJson)
+} derive(@debug.Debug, @json.FromJson)
 
 pub struct ParsedTestFile {
   source_filename : String?
@@ -71,7 +72,7 @@ pub struct ParsedTestFile {
 pub enum TestAction {
   Invoke(String?, String, Array[TestValue])
   Get(String?, String)
-} derive(Show)
+} derive(@debug.Debug)
 
 pub enum TestCommand {
   Module(String)
@@ -82,12 +83,12 @@ pub enum TestCommand {
   AssertUninstantiable(String, String)
   Register(String, String?)
   Action(TestAction)
-} derive(Show)
+} derive(@debug.Debug)
 
 pub struct TestCommandWithLine {
   line : Int?
   command : TestCommand
-} derive(Show)
+} derive(@debug.Debug)
 
 pub struct TestContext {
   store : @runtime.Store
@@ -109,7 +110,7 @@ pub(all) struct TestResult {
   failures : Array[String]
   skip_reasons : Array[String]
   mut source_filename : String?
-} derive(Show)
+} derive(@debug.Debug)
 pub fn TestResult::add_failed(Self, String) -> Unit
 pub fn TestResult::add_passed(Self) -> Unit
 pub fn TestResult::add_skipped(Self, String) -> Unit
@@ -118,7 +119,7 @@ pub fn TestResult::new() -> Self
 pub struct TestValue {
   type_ : String
   value : String?
-} derive(Show)
+} derive(@debug.Debug)
 
 // Type aliases
 

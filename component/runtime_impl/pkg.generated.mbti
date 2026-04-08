@@ -5,6 +5,7 @@ import {
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -55,7 +56,8 @@ pub(all) suberror ComponentRuntimeError {
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct AsyncState {
@@ -96,14 +98,14 @@ pub(all) struct AsyncState {
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
   thread_handle_required : Map[Int, Bool]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn AsyncState::new(StreamTable) -> Self
 
-type CallbackTask derive(Show)
+type CallbackTask derive(@debug.Debug)
 
-type CanonResources derive(Show)
+type CanonResources derive(@debug.Debug)
 
-type CanonSuspend derive(Eq, Show)
+type CanonSuspend derive(Eq, @debug.Debug)
 
 pub(all) struct ComponentClosure {
   component : @model.Component
@@ -133,6 +135,7 @@ pub(all) enum ComponentFunc {
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
+pub impl @debug.Debug for ComponentFunc
 
 pub(all) struct ComponentInstance {
   name : String
@@ -191,12 +194,13 @@ pub(all) enum ComponentValue {
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
   Variant(Int, ComponentValue?)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentValue
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
-} derive(Show)
+} derive(@debug.Debug)
 
 pub(all) struct CoreInstance {
   funcs : Map[String, CoreFuncRef]
@@ -207,33 +211,33 @@ pub(all) struct CoreInstance {
 }
 pub impl Show for CoreInstance
 
-type DecodedCallbackCode derive(Show)
+type DecodedCallbackCode derive(@debug.Debug)
 
-type FutureEndpoint derive(Show)
+type FutureEndpoint derive(@debug.Debug)
 
-type FutureState derive(Show)
+type FutureState derive(@debug.Debug)
 
-type PendingFutureRead derive(Show)
+type PendingFutureRead derive(@debug.Debug)
 
-type PendingFutureWrite derive(Show)
+type PendingFutureWrite derive(@debug.Debug)
 
-type PendingStreamRead derive(Show)
+type PendingStreamRead derive(@debug.Debug)
 
-type PendingStreamWrite derive(Show)
+type PendingStreamWrite derive(@debug.Debug)
 
 pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
   kind : @model.ResourceKind
-} derive(Show)
+} derive(@debug.Debug)
 
 pub(all) struct ResourceTable {
   id : Int
   next_handle : Array[Int]
   free_handles : Array[Int]
   entries : Map[Int, ResourceHandle]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
 pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
@@ -243,32 +247,32 @@ pub(all) struct StreamEndpoint {
   stream_id : Int
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
-} derive(Show)
+} derive(@debug.Debug)
 
-type StreamState derive(Show)
+type StreamState derive(@debug.Debug)
 
 pub(all) struct StreamTable {
   next_stream_id : Array[Int]
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
-} derive(Show)
+} derive(@debug.Debug)
 pub fn StreamTable::new() -> Self
 
-type Subtask derive(Show)
+type Subtask derive(@debug.Debug)
 
-type SubtaskDriver derive(Show)
+type SubtaskDriver derive(@debug.Debug)
 
-type SubtaskPhase derive(Eq, Show)
+type SubtaskPhase derive(Eq, @debug.Debug)
 
-type SyncLowerState derive(Show)
+type SyncLowerState derive(@debug.Debug)
 
-type TaskStep derive(Eq, Show)
+type TaskStep derive(Eq, @debug.Debug)
 
-type WaitEvent derive(Show)
+type WaitEvent derive(@debug.Debug)
 
-type WaitResult derive(Show)
+type WaitResult derive(@debug.Debug)
 
-type WaitableSet derive(Show)
+type WaitableSet derive(@debug.Debug)
 
 // Type aliases
 

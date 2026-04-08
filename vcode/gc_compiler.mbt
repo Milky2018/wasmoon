@@ -27,7 +27,7 @@ pub struct GcSafepoint {
   live_refs : Array[Int]
   /// Additional metadata (e.g., return address for stack unwinding)
   metadata : Int64
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn GcSafepoint::new(
@@ -51,7 +51,7 @@ pub struct GcCompilerConfig {
   can_inline_alloc : Bool
   /// Size of object header in bytes
   object_header_size : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// GC compiler interface for JIT code generation

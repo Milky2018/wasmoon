@@ -34,7 +34,14 @@ pub(all) suberror ComponentRuntimeError {
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
+/// `derive(Debug)`.
+pub impl Show for ComponentRuntimeError with output(self, logger) {
+  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+}
 
 ///|
 /// Canonical ABI host functions sometimes need to trap with a string message
@@ -53,7 +60,7 @@ fn clear_canon_trap_message() -> Unit {
 enum CanonSuspend {
   Yield
   Wait(Int64) // waitable-set key (handle_key(owner_component_id, local_index))
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// When a host intrinsic wants to suspend execution, it sets this and traps.

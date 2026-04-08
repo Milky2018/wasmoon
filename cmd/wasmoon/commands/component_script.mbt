@@ -5,7 +5,7 @@
 pub suberror ComponentTestError {
   ParseError(String)
   ScriptError(String)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) enum ComponentTestErrorCode {
@@ -13,7 +13,17 @@ pub(all) enum ComponentTestErrorCode {
   CompTestRuntimeError
   CompTestAssertFailed
   CompTestUnsupportedCommand
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for ComponentTestError with output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
+
+///|
+pub impl Show for ComponentTestErrorCode with output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
 
 ///|
 fn component_test_error_code_string(code : ComponentTestErrorCode) -> String {

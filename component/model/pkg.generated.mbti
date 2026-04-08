@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/component/model"
 
 import {
   "Milky2018/wasmoon/types",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -50,19 +51,21 @@ pub impl Show for ComponentParseError
 pub(all) struct Alias {
   sort : Sort
   target : AliasTarget
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Alias
 
 pub(all) enum AliasTarget {
   Export(Int, String)
   CoreExport(Int, String)
   Outer(Int, Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum BinaryKind {
   CoreModule
   Component
   UnknownPreamble(Int, Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for BinaryKind
 
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int)
@@ -102,7 +105,8 @@ pub(all) enum Canon {
   ResourceNew(Int)
   ResourceDrop(Int)
   ResourceRep(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Canon
 
 pub(all) enum CanonOpt {
   StringEncoding(StringEncoding)
@@ -111,7 +115,7 @@ pub(all) enum CanonOpt {
   PostReturn(Int)
   Async
   Callback(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Component {
   binary : ComponentBinary
@@ -126,13 +130,14 @@ pub(all) struct Component {
   canons : Array[Canon]
   start : Start?
   components : Array[Component]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Component
 
 pub struct ComponentBinary {
   version : Int
   layer : Int
   sections : Array[Section]
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ComponentDecl {
   CoreType(Bytes)
@@ -141,37 +146,37 @@ pub(all) enum ComponentDecl {
   AliasInstanceExport(Int, Int, String)
   Import(String, ExternDesc)
   Export(String, ExternDesc)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CoreInlineExport {
   name : String
   sortidx : SortIdx
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CoreInstanceDecl {
   expr : CoreInstanceExpr
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum CoreInstanceExpr {
   Instantiate(Int, Array[CoreInstantiateArg])
   InlineExports(Array[CoreInlineExport])
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CoreInstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Export {
   name : ExportName
   sortidx : SortIdx
   desc : ExternDesc?
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ExportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ExternDesc {
   CoreModuleType(Int)
@@ -180,32 +185,33 @@ pub(all) enum ExternDesc {
   Type(TypeBound)
   ComponentType(Int)
   InstanceType(Int)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for ExternDesc
 
 pub(all) struct FuncType {
   is_async : Bool
   params : Array[Param]
   result : ValType?
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Import {
   name : ImportName
   desc : ExternDesc
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ImportName {
   Plain(Bytes)
   WithVersion(Bytes, Bytes)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct InlineExport {
   name : String
   sortidx : SortIdx
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Instance {
   expr : InstanceExpr
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum InstanceDecl {
   CoreType(Bytes)
@@ -213,22 +219,23 @@ pub(all) enum InstanceDecl {
   AliasOuter(Int, Int, Int)
   AliasInstanceExport(Int, Int, String)
   Export(String, ExternDesc)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum InstanceExpr {
   Instantiate(Int, Array[InstantiateArg])
   InlineExports(Array[InlineExport])
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for InstanceExpr
 
 pub(all) struct InstantiateArg {
   name : String
   sortidx : SortIdx
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Param {
   label : String
   ty : ValType
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum PrimValType {
   Bool
@@ -245,22 +252,22 @@ pub(all) enum PrimValType {
   Char
   String
   ErrorContext
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct RecordField {
   label : String
   ty : ValType
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ResourceKind {
   GuestDefined
   HostDefined
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub struct Section {
   id : Int
   payload : Bytes
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Sort {
   Core(Int)
@@ -269,29 +276,31 @@ pub(all) enum Sort {
   Type
   Component
   Instance
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct SortIdx {
   sort : Sort
   idx : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for SortIdx
 
 pub(all) struct Start {
   func_idx : Int
   args : Array[Int]
   results : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Start
 
 pub(all) enum StringEncoding {
   Utf8
   Utf16
   Latin1Utf16
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum TypeBound {
   Eq(Int)
   SubResource
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum TypeDef {
   DefValType(PrimValType)
@@ -312,23 +321,24 @@ pub(all) enum TypeDef {
   ComponentType(Array[ComponentDecl])
   InstanceTypeEmpty
   InstanceType(Array[InstanceDecl])
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for TypeDef
 
 pub(all) enum ValType {
   TypeIdx(Int)
   Prim(PrimValType)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum ValueBound {
   Eq(Int)
   Type(ValType)
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct VariantCase {
   label : String
   ty : ValType?
   refines : Int?
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

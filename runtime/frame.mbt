@@ -5,7 +5,7 @@ struct Frame {
   locals : Array[@types.Value]
   ip : Int // instruction pointer
   return_arity : Int // number of return values
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub fn Frame::new(
