@@ -380,6 +380,7 @@ pub fn run_wasm(
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
+  let explicit_env_keys : Map[String, Bool] = {}
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
     match mapping {
@@ -402,6 +403,7 @@ pub fn run_wasm(
     match parsed {
       Some((key, value)) => {
         @logger.debug("Environment: \{key}=\{value}")
+        explicit_env_keys[key] = true
         wasi_builder.env(key, value) |> ignore
         jit_envs.push("\{key}=\{value}")
       }
@@ -415,11 +417,17 @@ pub fn run_wasm(
   // Handle inherit-env option
   if inherit_env {
     @logger.debug("Inheriting host environment variables")
-    // TODO: Implement environ enumeration FFI in wasi/ffi_native.c to support this.
-    // For now, use explicit --env NAME=VALUE flags to set environment variables.
-    @logger.warn(
-      "--inherit-env not yet implemented; use --env NAME=VALUE instead",
-    )
+    let host_envs = @sys.get_env_vars()
+    let mut inherited_count = 0
+    for key, value in host_envs {
+      // Keep explicit --env values authoritative when keys overlap.
+      if explicit_env_keys.get(key) is None {
+        wasi_builder.env(key, value) |> ignore
+        jit_envs.push("\{key}=\{value}")
+        inherited_count = inherited_count + 1
+      }
+    }
+    @logger.debug("Inherited \{inherited_count} host environment variables")
   }
   // Handle inherit-stdin/stdout/stderr options
   if inherit_stdin {
