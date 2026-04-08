@@ -858,7 +858,7 @@ test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
 }
 
 ///|
-test "wasi jit: path_open rejects unknown dirflags bits with EINVAL" {
+test "wasi jit: path_open traps on unknown dirflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -896,12 +896,12 @@ test "wasi jit: path_open rejects unknown dirflags bits with EINVAL" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
-test "wasi jit: path_open rejects unknown oflags bits with EINVAL" {
+test "wasi jit: path_open traps on unknown oflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -924,12 +924,12 @@ test "wasi jit: path_open rejects unknown oflags bits with EINVAL" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
-test "wasi jit: path_open rejects unknown fdflags bits with EINVAL" {
+test "wasi jit: path_open traps on unknown fdflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -952,8 +952,8 @@ test "wasi jit: path_open rejects unknown fdflags bits with EINVAL" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2060,7 +2060,7 @@ test "wasi jit: proc_raise returns ENOTSUP (58)" {
 }
 
 ///|
-test "wasi jit: proc_raise rejects invalid signal with EINVAL (28)" {
+test "wasi jit: proc_raise traps on invalid signal enum" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "proc_raise"
@@ -2070,8 +2070,8 @@ test "wasi jit: proc_raise rejects invalid signal with EINVAL (28)" {
     #|    (call $proc_raise (i32.const 255))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2283,7 +2283,7 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
 }
 
 ///|
-test "wasi jit: fd_advise rejects invalid advice enum with EINVAL (28)" {
+test "wasi jit: fd_advise traps on invalid advice enum" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -2303,8 +2303,8 @@ test "wasi jit: fd_advise rejects invalid advice enum with EINVAL (28)" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2452,6 +2452,28 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
   inspect(result.match_, content="true")
   inspect(wasi_errno_from_result(result.interp_result), content="28")
   inspect(wasi_errno_from_result(result.jit_result), content="28")
+}
+
+///|
+test "wasi jit: fd_fdstat_set_flags returns EBADF for non-file fd before DSYNC check" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (local.set $errno
+    #|      (call $fd_fdstat_set_flags (i32.const 0) (i32.const 2)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 8))
+    #|      (then (return (i32.const 101))))
+    #|    (call $fd_fdstat_set_flags (i32.const 3) (i32.const 2))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
 }
 
 ///|
@@ -2653,7 +2675,7 @@ test "wasi jit: sock_shutdown on valid descriptor returns ENOTSOCK (57)" {
 }
 
 ///|
-test "wasi jit: sock_accept rejects unknown fdflags bits with EINVAL (28)" {
+test "wasi jit: sock_accept traps on unknown fdflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_accept"
@@ -2663,8 +2685,8 @@ test "wasi jit: sock_accept rejects unknown fdflags bits with EINVAL (28)" {
     #|    (call $sock_accept (i32.const 0) (i32.const 0x20) (i32.const 0))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|

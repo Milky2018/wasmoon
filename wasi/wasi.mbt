@@ -12,6 +12,12 @@ fn make_func_type(
 }
 
 ///|
+/// Match wasmtime p1 ABI behavior: invalid enum/bitflags trap at call boundary.
+fn trap_invalid_wasi_abi_arg() -> Unit raise @runtime.RuntimeError {
+  raise @runtime.RuntimeError::Unreachable
+}
+
+///|
 /// Register all WASI snapshot preview1 functions with a linker
 pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   let store = linker.get_store()
@@ -400,7 +406,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "path_open",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -436,6 +442,18 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let opened_fd_ptr = match args[8] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_lookupflags_mask = 0x01
+      if (dirflags & known_lookupflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
+      }
+      let known_oflags_mask = 0x0F
+      if (oflags & known_oflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
+      }
+      let known_fdflags_mask = 0x1F
+      if (fdflags & known_fdflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = path_open(
@@ -832,7 +850,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "fd_advise",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -848,6 +866,9 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let advice = match args[3] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      if advice < 0 || advice > 5 {
+        trap_invalid_wasi_abi_arg()
       }
       let result = fd_advise_impl(ctx, fd, offset, len, advice)
       [@types.Value::I32(result)]
@@ -1189,10 +1210,13 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "proc_raise",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let signal = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      if signal < 0 || signal > 30 {
+        trap_invalid_wasi_abi_arg()
       }
       let result = proc_raise_impl(signal)
       [@types.Value::I32(result)]
@@ -1204,7 +1228,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "sock_accept",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -1216,6 +1240,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let result_fd_ptr = match args[2] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_sock_accept_fdflags_mask = 0x1F
+      if (flags & known_sock_accept_fdflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = sock_accept_impl(ctx, mem, fd, flags, result_fd_ptr)

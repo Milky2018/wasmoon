@@ -6,18 +6,17 @@
 fn Parser::read_expr(
   self : Parser,
 ) -> Array[@types.Instruction] raise ParserError {
-  loop [] {
-    instructions => {
-      let opcode = self.read_byte()
-      if opcode == 0x0B {
-        // end
-        instructions
-      } else {
-        instructions.push(self.read_instruction(opcode))
-        continue instructions
-      }
+  let instructions : Array[@types.Instruction] = []
+  while true {
+    let opcode = self.read_byte()
+    if opcode == 0x0B {
+      // end
+      break
+    } else {
+      instructions.push(self.read_instruction(opcode))
     }
   }
+  instructions
 }
 
 ///|
@@ -26,21 +25,23 @@ fn Parser::read_expr(
 fn Parser::read_if_then_body(
   self : Parser,
 ) -> (Array[@types.Instruction], Bool) raise ParserError {
-  loop [] {
-    instructions => {
-      let opcode = self.read_byte()
-      if opcode == 0x0B {
-        // end - no else clause
-        (instructions, false)
-      } else if opcode == 0x05 {
-        // else
-        (instructions, true)
-      } else {
-        instructions.push(self.read_instruction(opcode))
-        continue instructions
-      }
+  let instructions : Array[@types.Instruction] = []
+  let mut has_else = false
+  while true {
+    let opcode = self.read_byte()
+    if opcode == 0x0B {
+      // end - no else clause
+      has_else = false
+      break
+    } else if opcode == 0x05 {
+      // else
+      has_else = true
+      break
+    } else {
+      instructions.push(self.read_instruction(opcode))
     }
   }
+  (instructions, has_else)
 }
 
 ///|

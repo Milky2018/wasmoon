@@ -1397,14 +1397,9 @@ fn CoreTypeReader::read_bytes(
   if n < 0 || self.pos + n > self.data.length() {
     raise SectionParseError(3, "unexpected end of core type payload")
   }
-  let bytes = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(self.data[self.pos + i])
-        continue (acc, i + 1)
-      }
+  let bytes : Array[Byte] = []
+  for i in 0..<n {
+    bytes.push(self.data[self.pos + i])
   }
   self.pos += n
   Bytes::from_array(bytes)

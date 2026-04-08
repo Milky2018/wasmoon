@@ -2187,12 +2187,6 @@ pub fn fd_fdstat_set_flags_impl(
   if (flags & known_fdflags_mask.lnot()) != 0 {
     return Errno::Inval.to_i32()
   }
-  // Match wasmtime behavior:
-  // - only APPEND/NONBLOCK are accepted
-  // - DSYNC/RSYNC/SYNC are rejected with EINVAL
-  if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
-    return Errno::Inval.to_i32()
-  }
   if is_stdio_descriptor(ctx, fd) {
     return Errno::Badf.to_i32()
   }
@@ -2204,6 +2198,12 @@ pub fn fd_fdstat_set_flags_impl(
         file.native_fd
       }
     None => return Errno::Badf.to_i32()
+  }
+  // Match wasmtime behavior:
+  // - unknown fdflags bits are rejected before descriptor lookup
+  // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors
+  if (flags & 0x02) != 0 || (flags & 0x08) != 0 || (flags & 0x10) != 0 {
+    return Errno::Inval.to_i32()
   }
   // Convert WASI fdflags to native flags
   // WASI: 0x01 = APPEND, 0x02 = DSYNC, 0x04 = NONBLOCK, 0x08 = RSYNC, 0x10 = SYNC

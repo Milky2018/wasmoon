@@ -136,26 +136,21 @@ fn parse_canon_resultlist(
 ///|
 fn parse_opts(reader : Reader) -> Array[CanonOpt] raise ComponentParseError {
   let n = reader.read_leb_u32()
-  let opts = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        let tag = reader.read_u8()
-        let opt = match tag {
-          0x00 => CanonOpt::StringEncoding(Utf8)
-          0x01 => CanonOpt::StringEncoding(Utf16)
-          0x02 => CanonOpt::StringEncoding(Latin1Utf16)
-          0x03 => CanonOpt::Memory(reader.read_leb_u32())
-          0x04 => CanonOpt::Realloc(reader.read_leb_u32())
-          0x05 => CanonOpt::PostReturn(reader.read_leb_u32())
-          0x06 => CanonOpt::Async
-          0x07 => CanonOpt::Callback(reader.read_leb_u32())
-          _ => raise InvalidCanonSection
-        }
-        acc.push(opt)
-        continue (acc, i + 1)
-      }
+  let opts : Array[CanonOpt] = []
+  for _ in 0..<n {
+    let tag = reader.read_u8()
+    let opt = match tag {
+      0x00 => CanonOpt::StringEncoding(Utf8)
+      0x01 => CanonOpt::StringEncoding(Utf16)
+      0x02 => CanonOpt::StringEncoding(Latin1Utf16)
+      0x03 => CanonOpt::Memory(reader.read_leb_u32())
+      0x04 => CanonOpt::Realloc(reader.read_leb_u32())
+      0x05 => CanonOpt::PostReturn(reader.read_leb_u32())
+      0x06 => CanonOpt::Async
+      0x07 => CanonOpt::Callback(reader.read_leb_u32())
+      _ => raise InvalidCanonSection
+    }
+    opts.push(opt)
   }
   opts
 }
@@ -332,14 +327,9 @@ pub fn parse_canon_section(
 ) -> Array[Canon] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let canons = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(parse_canon(reader))
-        continue (acc, i + 1)
-      }
+  let canons : Array[Canon] = []
+  for _ in 0..<n {
+    canons.push(parse_canon(reader))
   }
   if !reader.is_eof() {
     raise InvalidCanonSection
@@ -364,14 +354,9 @@ pub fn parse_start_section(payload : Bytes) -> Start raise ComponentParseError {
   let reader = Reader::new(payload)
   let func_idx = reader.read_leb_u32()
   let n = reader.read_leb_u32()
-  let args = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(reader.read_leb_u32())
-        continue (acc, i + 1)
-      }
+  let args : Array[Int] = []
+  for _ in 0..<n {
+    args.push(reader.read_leb_u32())
   }
   let results = reader.read_leb_u32()
   if !reader.is_eof() {

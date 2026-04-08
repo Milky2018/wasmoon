@@ -130,14 +130,9 @@ fn Reader::read_bytes(
   if self.pos + n > self.data.length() {
     raise UnexpectedEndOfInput
   }
-  let bytes = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(self.data[self.pos + i])
-        continue (acc, i + 1)
-      }
+  let bytes : Array[Byte] = []
+  for i in 0..<n {
+    bytes.push(self.data[self.pos + i])
   }
   self.pos += n
   Bytes::from_array(bytes)
@@ -225,45 +220,40 @@ fn Reader::read_u16_le(self : Reader) -> Int raise ComponentParseError {
 
 ///|
 fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentParseError {
-  loop (0, 0) {
-    (result, shift) => {
-      if shift > 28 {
-        raise Leb128TooLarge
-      }
-      let byte = self.read_u8()
-      if shift == 28 && (byte & 0x7F) > 0x0F {
-        raise Leb128TooLarge
-      }
-      let new_result = result | ((byte & 0x7F) << shift)
-      if (byte & 0x80) == 0 {
-        new_result
-      } else {
-        continue (new_result, shift + 7)
-      }
+  for result = 0, shift = 0 {
+    if shift > 28 {
+      raise Leb128TooLarge
+    }
+    let byte = self.read_u8()
+    if shift == 28 && (byte & 0x7F) > 0x0F {
+      raise Leb128TooLarge
+    }
+    let new_result = result | ((byte & 0x7F) << shift)
+    if (byte & 0x80) == 0 {
+      break new_result
+    } else {
+      continue new_result, shift + 7
     }
   }
 }
 
 ///|
 fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
-  loop (0, 0) {
-    (result, shift) => {
-      if shift >= 35 {
-        raise Leb128TooLarge
-      }
-      let b = self.read_u8()
-      let low = b & 0x7F
-      let new_result = result | (low << shift)
-      if (b & 0x80) == 0 {
-        let value = if shift < 32 && (b & 0x40) != 0 {
-          new_result | (-1 << (shift + 7))
-        } else {
-          new_result
-        }
-        value
+  for result = 0, shift = 0 {
+    if shift >= 35 {
+      raise Leb128TooLarge
+    }
+    let b = self.read_u8()
+    let low = b & 0x7F
+    let new_result = result | (low << shift)
+    if (b & 0x80) == 0 {
+      if shift < 32 && (b & 0x40) != 0 {
+        break new_result | (-1 << (shift + 7))
       } else {
-        continue (new_result, shift + 7)
+        break new_result
       }
+    } else {
+      continue new_result, shift + 7
     }
   }
 }

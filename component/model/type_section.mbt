@@ -169,16 +169,11 @@ fn parse_valtype(reader : Reader) -> ValType raise ComponentParseError {
 ///|
 fn parse_paramlist(reader : Reader) -> Array[Param] raise ComponentParseError {
   let n = reader.read_leb_u32()
-  let params = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        let label = reader.read_label()
-        let ty = parse_valtype(reader)
-        acc.push(({ label, ty } : Param))
-        continue (acc, i + 1)
-      }
+  let params : Array[Param] = []
+  for _ in 0..<n {
+    let label = reader.read_label()
+    let ty = parse_valtype(reader)
+    params.push(({ label, ty } : Param))
   }
   params
 }
@@ -535,86 +530,61 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
     0x6b => Option(parse_valtype(reader))
     0x6d => {
       let n = reader.read_leb_u32()
-      let cases = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            acc.push(reader.read_label())
-            continue (acc, i + 1)
-          }
+      let cases : Array[String] = []
+      for _ in 0..<n {
+        cases.push(reader.read_label())
       }
       Enum(cases)
     }
     0x6e => {
       let n = reader.read_leb_u32()
-      let cases = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            acc.push(reader.read_label())
-            continue (acc, i + 1)
-          }
+      let cases : Array[String] = []
+      for _ in 0..<n {
+        cases.push(reader.read_label())
       }
       Flags(cases)
     }
     0x6f => {
       let n = reader.read_leb_u32()
-      let tys = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            acc.push(parse_valtype(reader))
-            continue (acc, i + 1)
-          }
+      let tys : Array[ValType] = []
+      for _ in 0..<n {
+        tys.push(parse_valtype(reader))
       }
       Tuple(tys)
     }
     0x70 => List(parse_valtype(reader))
     0x71 => {
       let n = reader.read_leb_u32()
-      let cases = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            let label = reader.read_label()
-            let has_ty = reader.read_u8()
-            let ty = if has_ty == 0x00 {
-              None
-            } else if has_ty == 0x01 {
-              Some(parse_valtype(reader))
-            } else {
-              raise InvalidTypeSection
-            }
-            let has_refines = reader.read_u8()
-            let refines = if has_refines == 0x00 {
-              None
-            } else if has_refines == 0x01 {
-              Some(reader.read_leb_u32())
-            } else {
-              raise InvalidTypeSection
-            }
-            acc.push(({ label, ty, refines } : VariantCase))
-            continue (acc, i + 1)
-          }
+      let cases : Array[VariantCase] = []
+      for _ in 0..<n {
+        let label = reader.read_label()
+        let has_ty = reader.read_u8()
+        let ty = if has_ty == 0x00 {
+          None
+        } else if has_ty == 0x01 {
+          Some(parse_valtype(reader))
+        } else {
+          raise InvalidTypeSection
+        }
+        let has_refines = reader.read_u8()
+        let refines = if has_refines == 0x00 {
+          None
+        } else if has_refines == 0x01 {
+          Some(reader.read_leb_u32())
+        } else {
+          raise InvalidTypeSection
+        }
+        cases.push(({ label, ty, refines } : VariantCase))
       }
       Variant(cases)
     }
     0x72 => {
       let n = reader.read_leb_u32()
-      let fields = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            let label = reader.read_label()
-            let ty = parse_valtype(reader)
-            acc.push(({ label, ty } : RecordField))
-            continue (acc, i + 1)
-          }
+      let fields : Array[RecordField] = []
+      for _ in 0..<n {
+        let label = reader.read_label()
+        let ty = parse_valtype(reader)
+        fields.push(({ label, ty } : RecordField))
       }
       Record(fields)
     }
@@ -634,14 +604,9 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
     0x41 => {
       // componenttype ::= 0x41 cd*:vec(<componentdecl>)
       let n = reader.read_leb_u32()
-      let decls = loop ([], 0) {
-        (acc, i) =>
-          if i >= n {
-            acc
-          } else {
-            acc.push(parse_componentdecl(reader))
-            continue (acc, i + 1)
-          }
+      let decls : Array[ComponentDecl] = []
+      for _ in 0..<n {
+        decls.push(parse_componentdecl(reader))
       }
       ComponentType(decls)
     }
@@ -651,14 +616,9 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
       if n == 0 {
         InstanceTypeEmpty
       } else {
-        let decls = loop ([], 0) {
-          (acc, i) =>
-            if i >= n {
-              acc
-            } else {
-              acc.push(parse_instancedecl(reader))
-              continue (acc, i + 1)
-            }
+        let decls : Array[InstanceDecl] = []
+        for _ in 0..<n {
+          decls.push(parse_instancedecl(reader))
         }
         InstanceType(decls)
       }
@@ -677,14 +637,9 @@ pub fn parse_type_section(
 ) -> Array[TypeDef] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let types = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(parse_typedef(reader))
-        continue (acc, i + 1)
-      }
+  let types : Array[TypeDef] = []
+  for _ in 0..<n {
+    types.push(parse_typedef(reader))
   }
   if !reader.is_eof() {
     raise InvalidTypeSection

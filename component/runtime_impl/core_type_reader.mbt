@@ -35,14 +35,9 @@ fn Reader::read_bytes(
   if self.pos + n > self.data.length() {
     raise ComponentParseError("unexpected end of input")
   }
-  let bytes = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(self.data[self.pos + i])
-        continue (acc, i + 1)
-      }
+  let bytes : Array[Byte] = []
+  for i in 0..<n {
+    bytes.push(self.data[self.pos + i])
   }
   self.pos += n
   Bytes::from_array(bytes)
@@ -128,21 +123,19 @@ fn Reader::read_label(self : Reader) -> String raise ComponentRuntimeError {
 
 ///|
 fn Reader::read_leb_u32(self : Reader) -> Int raise ComponentRuntimeError {
-  loop (0, 0) {
-    (result, shift) => {
-      if shift > 28 {
-        raise ComponentParseError("invalid leb128")
-      }
-      let byte = self.read_u8()
-      if shift == 28 && (byte & 0x7F) > 0x0F {
-        raise ComponentParseError("invalid leb128")
-      }
-      let new_result = result | ((byte & 0x7F) << shift)
-      if (byte & 0x80) == 0 {
-        new_result
-      } else {
-        continue (new_result, shift + 7)
-      }
+  for result = 0, shift = 0 {
+    if shift > 28 {
+      raise ComponentParseError("invalid leb128")
+    }
+    let byte = self.read_u8()
+    if shift == 28 && (byte & 0x7F) > 0x0F {
+      raise ComponentParseError("invalid leb128")
+    }
+    let new_result = result | ((byte & 0x7F) << shift)
+    if (byte & 0x80) == 0 {
+      break new_result
+    } else {
+      continue new_result, shift + 7
     }
   }
 }

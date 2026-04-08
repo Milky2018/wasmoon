@@ -78,36 +78,34 @@ fn ExecContext::exec_control(
         self.stack.push(v)
       }
       self.push_label(true, param_arity) // Loop branches use param arity
-      loop () {
-        _ => {
-          let result = try? self.exec_block(body)
-          match result {
-            Ok(_) => {
-              self.pop_label()
-              // Normal loop exit: keep only loop results on the outer stack.
-              let results = self.stack.pop_n(result_arity)
-              self.restore_stack_to(stack_height)
-              for v in results {
-                self.stack.push(v)
-              }
-              break () // Normal exit
+      while true {
+        let result = try? self.exec_block(body)
+        match result {
+          Ok(_) => {
+            self.pop_label()
+            // Normal loop exit: keep only loop results on the outer stack.
+            let results = self.stack.pop_n(result_arity)
+            self.restore_stack_to(stack_height)
+            for v in results {
+              self.stack.push(v)
             }
-            Err(BranchWith(0, values)) => {
-              // For loop, branch to start: restore stack and push params back
-              self.restore_stack_to(stack_height)
-              for v in values {
-                self.stack.push(v)
-              }
-              continue ()
+            break // Normal exit
+          }
+          Err(BranchWith(0, values)) => {
+            // For loop, branch to start: restore stack and push params back
+            self.restore_stack_to(stack_height)
+            for v in values {
+              self.stack.push(v)
             }
-            Err(BranchWith(n, values)) => {
-              self.pop_label()
-              raise BranchWith(n - 1, values)
-            }
-            Err(e) => {
-              self.pop_label()
-              raise e
-            }
+            continue
+          }
+          Err(BranchWith(n, values)) => {
+            self.pop_label()
+            raise BranchWith(n - 1, values)
+          }
+          Err(e) => {
+            self.pop_label()
+            raise e
           }
         }
       }

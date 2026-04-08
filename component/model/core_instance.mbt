@@ -58,26 +58,16 @@ fn parse_core_instanceexpr(
   if tag == 0x00 {
     let module_idx = reader.read_leb_u32()
     let n = reader.read_leb_u32()
-    let args = loop ([], 0) {
-      (acc, i) =>
-        if i >= n {
-          acc
-        } else {
-          acc.push(parse_core_instantiatearg(reader))
-          continue (acc, i + 1)
-        }
+    let args : Array[CoreInstantiateArg] = []
+    for _ in 0..<n {
+      args.push(parse_core_instantiatearg(reader))
     }
     Instantiate(module_idx, args)
   } else if tag == 0x01 {
     let n = reader.read_leb_u32()
-    let exports = loop ([], 0) {
-      (acc, i) =>
-        if i >= n {
-          acc
-        } else {
-          acc.push(parse_core_inlineexport(reader))
-          continue (acc, i + 1)
-        }
+    let exports : Array[CoreInlineExport] = []
+    for _ in 0..<n {
+      exports.push(parse_core_inlineexport(reader))
     }
     InlineExports(exports)
   } else {
@@ -91,14 +81,9 @@ pub fn parse_core_instance_section(
 ) -> Array[CoreInstanceDecl] raise ComponentParseError {
   let reader = Reader::new(payload)
   let n = reader.read_leb_u32()
-  let instances = loop ([], 0) {
-    (acc, i) =>
-      if i >= n {
-        acc
-      } else {
-        acc.push(CoreInstanceDecl::{ expr: parse_core_instanceexpr(reader) })
-        continue (acc, i + 1)
-      }
+  let instances : Array[CoreInstanceDecl] = []
+  for _ in 0..<n {
+    instances.push(CoreInstanceDecl::{ expr: parse_core_instanceexpr(reader) })
   }
   if !reader.is_eof() {
     raise InvalidInstanceSection
