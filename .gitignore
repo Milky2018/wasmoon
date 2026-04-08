@@ -3,8 +3,8 @@ target
 target-rosetta
 .mooncakes/
 .moonagent/
-wasmoon
-wasmoon-tools
+/wasmoon
+/wasmoon-tools
 TODO.md
 _build
 tmp/
