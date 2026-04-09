@@ -3284,7 +3284,7 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
     (void)rights_base;
     (void)rights_inheriting;
     if (!ctx) return WASI_EBADF;
-    if (is_stdio_fd(ctx, fd)) return WASI_ENOTSUP;
+    if (is_stdio_fd(ctx, fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
     return WASI_ENOTSUP;

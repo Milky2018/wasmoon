@@ -2253,6 +2253,9 @@ pub fn fd_fdstat_set_rights_impl(
   _fs_rights_base : Int64,
   _fs_rights_inheriting : Int64,
 ) -> Int {
+  if is_stdio_descriptor(ctx, fd) {
+    return Errno::Badf.to_i32()
+  }
   if !ctx.is_valid_fd(fd) {
     return Errno::Badf.to_i32()
   }

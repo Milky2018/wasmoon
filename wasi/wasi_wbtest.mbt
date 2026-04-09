@@ -2349,9 +2349,16 @@ test "wasi: sock APIs reject invalid flags before descriptor-kind check" {
 }
 
 ///|
-test "wasi: fd_fdstat_set_rights returns ENOTSUP for valid fd" {
+test "wasi: fd_fdstat_set_rights returns EBADF for stdio" {
   let ctx = WasiContextBuilder::new().build()
   let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
+  inspect(result, content="8")
+}
+
+///|
+test "wasi: fd_fdstat_set_rights returns ENOTSUP for preopen fd" {
+  let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
+  let result = fd_fdstat_set_rights_impl(ctx, 3, 0L, 0L)
   inspect(result, content="58")
 }
 

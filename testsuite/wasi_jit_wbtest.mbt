@@ -2555,6 +2555,38 @@ test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
 }
 
 ///|
+test "wasi jit: fd_fdstat_set_rights stdio returns EBADF (8)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_fdstat_set_rights (i32.const 0) (i64.const 0) (i64.const 0))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="8")
+  inspect(wasi_errno_from_result(result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: fd_fdstat_set_rights preopen returns ENOTSUP (58)" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_fdstat_set_rights (i32.const 3) (i64.const 0) (i64.const 0))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="58")
+  inspect(wasi_errno_from_result(result.jit_result), content="58")
+}
+
+///|
 test "wasi jit: fd_sync stdin returns EBADF (8)" {
   let source =
     #|(module
