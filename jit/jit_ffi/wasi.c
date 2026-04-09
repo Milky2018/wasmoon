@@ -1376,6 +1376,7 @@ static int64_t wasi_fd_seek_impl(
     int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (whence < 0 || whence > 2) return trap_invalid_wasi_abi_arg();
 
     int wasi_fd = (int)fd;
     if (wasi_fd < 0) return WASI_EBADF;
@@ -1390,7 +1391,6 @@ static int64_t wasi_fd_seek_impl(
     uint32_t newoffset_ptr_u = (uint32_t)newoffset_ptr;
     if (!check_mem_range(ctx, newoffset_ptr_u, 8)) return WASI_EFAULT;
     uint32_t whence_u = (uint32_t)whence;
-    if (whence_u > 2) return WASI_EINVAL;
 
 #ifdef _WIN32
     int64_t pos = _lseeki64(native_fd, offset, (int)whence_u);
@@ -1596,7 +1596,6 @@ static int64_t wasi_path_open_impl(
     if (((int64_t)fdflags & 0x1A) != 0) { // DSYNC/RSYNC/SYNC
         return WASI_ENOTSUP;
     }
-
     // Read path from memory
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -2068,6 +2067,7 @@ static int64_t wasi_clock_time_get_impl(
 ) {
     (void)precision;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (clock_id < 0 || clock_id > 3) return trap_invalid_wasi_abi_arg();
     uint32_t time_ptr_u = (uint32_t)time_ptr;
     if (!check_mem_range(ctx, time_ptr_u, 8)) return WASI_EFAULT;
 
@@ -2088,8 +2088,6 @@ static int64_t wasi_clock_time_get_impl(
 #endif
     } else if (clock_id == 2 || clock_id == 3) {
         return WASI_EBADF;
-    } else {
-        return WASI_EINVAL;
     }
 
     *(int64_t *)(ctx->memory0->base + time_ptr_u) = time_ns;
@@ -2102,13 +2100,13 @@ static int64_t wasi_clock_res_get_impl(
     int64_t clock_id, int64_t resolution_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
+    if (clock_id < 0 || clock_id > 3) return trap_invalid_wasi_abi_arg();
     uint32_t resolution_ptr_u = (uint32_t)resolution_ptr;
     if (!check_mem_range(ctx, resolution_ptr_u, 8)) return WASI_EFAULT;
 
     // WASI clock IDs: 0=REALTIME, 1=MONOTONIC, 2=PROCESS_CPUTIME_ID, 3=THREAD_CPUTIME_ID.
     // Match wasmtime p1: CPU-time clocks return EBADF.
     if (clock_id == 2 || clock_id == 3) return WASI_EBADF;
-    if (clock_id < 0 || clock_id > 3) return WASI_EINVAL;
 #ifdef _WIN32
     if (clock_id == 0) {
         *(int64_t *)(ctx->memory0->base + resolution_ptr_u) = 1000000; // 1ms fallback
@@ -2846,7 +2844,7 @@ static int32_t wasi_path_filestat_get_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len, int32_t buf_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
-    if (invalid_lookupflags(flags)) return WASI_EINVAL;
+    if (invalid_lookupflags(flags)) return trap_invalid_wasi_abi_arg();
     uint8_t *mem = ctx->memory0->base;
     uint32_t path_ptr_u = (uint32_t)path_ptr;
     uint32_t path_len_u = (uint32_t)path_len;
@@ -3035,7 +3033,7 @@ static int32_t wasi_path_link_impl(
     int32_t new_fd, int32_t new_path_ptr, int32_t new_path_len
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
-    if (invalid_lookupflags(old_flags)) return WASI_EINVAL;
+    if (invalid_lookupflags(old_flags)) return trap_invalid_wasi_abi_arg();
     uint8_t *mem = ctx->memory0->base;
     uint32_t old_path_ptr_u = (uint32_t)old_path_ptr;
     uint32_t old_path_len_u = (uint32_t)old_path_len;
@@ -3101,8 +3099,11 @@ static int32_t wasi_path_link_impl(
 }
 
 // fd_filestat_set_times: Set file timestamps
-static int invalid_fst_flags_for_set_times(int32_t fst_flags) {
-    if ((fst_flags & ~0x0f) != 0) return 1;
+static int unknown_fst_flags_for_set_times(int32_t fst_flags) {
+    return (fst_flags & ~0x0f) != 0;
+}
+
+static int conflicting_fst_flags_for_set_times(int32_t fst_flags) {
     if ((fst_flags & 0x03) == 0x03) return 1;
     if ((fst_flags & 0x0c) == 0x0c) return 1;
     return 0;
@@ -3112,7 +3113,8 @@ static int32_t wasi_fd_filestat_set_times_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
-    if (invalid_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
+    if (unknown_fst_flags_for_set_times(fst_flags)) return trap_invalid_wasi_abi_arg();
+    if (conflicting_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     int native_fd = -1;
     int err = get_non_stdio_native_fd(ctx, fd, &native_fd);
     if (err != WASI_ESUCCESS) return err;
@@ -3159,8 +3161,9 @@ static int32_t wasi_path_filestat_set_times_impl(
     int32_t dir_fd, int32_t flags, int32_t path_ptr, int32_t path_len,
     int64_t atim, int64_t mtim, int32_t fst_flags
 ) {
-    if (invalid_lookupflags(flags)) return WASI_EINVAL;
-    if (invalid_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
+    if (invalid_lookupflags(flags)) return trap_invalid_wasi_abi_arg();
+    if (unknown_fst_flags_for_set_times(fst_flags)) return trap_invalid_wasi_abi_arg();
+    if (conflicting_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     uint8_t *mem = ctx->memory0->base;
     uint32_t path_ptr_u = (uint32_t)path_ptr;
@@ -3281,7 +3284,7 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
     (void)rights_base;
     (void)rights_inheriting;
     if (!ctx) return WASI_EBADF;
-    if (is_stdio_fd(ctx, fd)) return WASI_ENOTSUP;
+    if (is_stdio_fd(ctx, fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
     return WASI_ENOTSUP;
@@ -3390,7 +3393,7 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
     int32_t fd, int32_t flags
 ) {
     if ((flags & ~0x1f) != 0) {
-        return WASI_EINVAL;
+        return trap_invalid_wasi_abi_arg();
     }
     if (is_stdio_fd(ctx, fd)) return WASI_EBADF;
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
@@ -3508,7 +3511,7 @@ static int32_t wasi_sock_recv_impl(
     if (!check_mem_range(ctx, ri_data_u, (size_t)ri_data_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, ro_datalen_ptr_u, 4)) return WASI_EFAULT;
     if (!check_mem_range(ctx, ro_flags_ptr_u, 2)) return WASI_EFAULT;
-    if (invalid_sock_recv_riflags(ri_flags)) return WASI_EINVAL;
+    if (invalid_sock_recv_riflags(ri_flags)) return trap_invalid_wasi_abi_arg();
 
     (void)ri_data_u;
     (void)ri_data_len_u;
@@ -3554,7 +3557,7 @@ static int32_t wasi_sock_shutdown_impl(
     int32_t fd, int32_t how
 ) {
     if (!ctx) return WASI_EBADF;
-    if (invalid_sock_shutdown_sdflags(how)) return WASI_EINVAL;
+    if (invalid_sock_shutdown_sdflags(how)) return trap_invalid_wasi_abi_arg();
     if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
     return WASI_ENOTSOCK;
 }
