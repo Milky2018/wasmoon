@@ -21,6 +21,9 @@ fn process_canon_section(
         )
       Canon::Lower(func_idx, opts) =>
         instantiate_canon_lower(func_idx, opts, state, store)
+      Canon::BackpressureSet => instantiate_canon_backpressure_set(state, store)
+      Canon::BackpressureInc => instantiate_canon_backpressure_inc(state, store)
+      Canon::BackpressureDec => instantiate_canon_backpressure_dec(state, store)
       Canon::ResourceNew(tyidx) =>
         instantiate_canon_resource_new(tyidx, state, store)
       Canon::ResourceRep(tyidx) =>
@@ -88,6 +91,12 @@ fn process_canon_section(
         instantiate_canon_future_drop_readable(_tyidx, state, store)
       Canon::FutureDropWritable(_tyidx) =>
         instantiate_canon_future_drop_writable(_tyidx, state, store)
+      Canon::ErrorContextNew(opts) =>
+        instantiate_canon_error_context_new(opts, state, store)
+      Canon::ErrorContextDebugMessage(opts) =>
+        instantiate_canon_error_context_debug_message(opts, state, store)
+      Canon::ErrorContextDrop =>
+        instantiate_canon_error_context_drop(state, store)
       Canon::ContextGet(_vt, _idx) =>
         instantiate_canon_context_get(_vt, _idx, state, store)
       Canon::ContextSet(_vt, _idx) =>

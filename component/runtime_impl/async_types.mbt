@@ -200,6 +200,8 @@ pub(all) struct AsyncState {
   // For `canon task.return`, this is the component instance where the intrinsic lives.
   task_result_owner : Map[Int64, Int]
   task_returned : Map[Int64, Bool]
+  // Set only by `canon task.cancel` (distinct from external cancellation requests).
+  task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]
   task_contexts : Map[Int64, Map[Int, @types.Value]]
   // Synthetic implicit thread handles for each running task, keyed by the
@@ -209,6 +211,12 @@ pub(all) struct AsyncState {
   // table. A single task can enter multiple component instances, so model this
   // as a per-task map.
   task_thread : Map[Int64, Map[Int, Int]]
+  // Explicit guest threads keyed by `handle_key(owner_component_id, local_handle)`.
+  threads : Map[Int64, GuestThread]
+  // Per-root-task runnable queue of explicit thread local handles.
+  thread_runnable : Map[Int64, Array[Int]]
+  // Whether the implicit/main thread is scheduled to resume for a root task.
+  main_thread_scheduled : Map[Int64, Bool]
 
   // Whether the currently executing task is allowed to block.
   task_can_block : Array[Bool]
@@ -264,6 +272,14 @@ pub(all) struct AsyncState {
   // even for synchronous tasks (affects stream/future handle numbering in
   // component-spec/async).
   thread_handle_required : Map[Int, Bool]
+
+  // Per-component backpressure counter used by `canon backpressure.*`.
+  // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
+  backpressure_by_instance : Map[Int, Int]
+
+  // Per-component local error-context handles (`canon error-context.*`).
+  next_error_context_by_component : Map[Int, Array[Int]]
+  error_contexts : Map[Int64, String]
 } derive(Debug)
 
 ///|
@@ -347,6 +363,29 @@ struct FutureState {
 } derive(Debug)
 
 ///|
+enum GuestThreadPhase {
+  NotStarted
+  Suspended
+  Completed
+} derive(Debug, Eq)
+
+///|
+struct GuestThread {
+  owner_component_id : Int
+  // Guest-visible local thread handle.
+  handle : Int
+  // Root task that owns this thread.
+  parent_task_id : Int64
+  // Internal task id used for replay/suspension of the explicit thread body.
+  task_id : Int64
+  start_func : CoreFuncRef
+  context : Int
+  phase : Array[GuestThreadPhase]
+  scheduled : Array[Bool]
+  waiting_ws : Array[Int64?]
+} derive(Debug)
+
+///|
 enum SubtaskPhase {
   Starting
   Started
@@ -420,9 +459,13 @@ pub fn AsyncState::new(stream_table : StreamTable) -> AsyncState {
     task_results: {},
     task_result_owner: {},
     task_returned: {},
+    task_self_cancelled: {},
     task_cancelled: {},
     task_contexts: {},
     task_thread: {},
+    threads: {},
+    thread_runnable: {},
+    main_thread_scheduled: {},
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
@@ -449,6 +492,9 @@ pub fn AsyncState::new(stream_table : StreamTable) -> AsyncState {
     futures: {},
     future_endpoints: {},
     thread_handle_required: {},
+    backpressure_by_instance: {},
+    next_error_context_by_component: {},
+    error_contexts: {},
   }
 }
 
@@ -1345,6 +1391,78 @@ fn alloc_shared_handle_with_source(
     let h = next[0]
     next[0] = h + 1
     (h, false)
+  }
+}
+
+///|
+fn backpressure_value_for_instance(
+  async_state : AsyncState,
+  component_id : Int,
+) -> Int {
+  match async_state.backpressure_by_instance.get(component_id) {
+    Some(v) => v
+    None => 0
+  }
+}
+
+///|
+fn set_backpressure_value_for_instance(
+  async_state : AsyncState,
+  component_id : Int,
+  value : Int,
+) -> Unit {
+  if value <= 0 {
+    async_state.backpressure_by_instance.remove(component_id)
+  } else {
+    async_state.backpressure_by_instance.set(component_id, value)
+  }
+}
+
+///|
+fn alloc_error_context_handle(
+  async_state : AsyncState,
+  component_id : Int,
+  debug_message : String,
+) -> Int {
+  let next = match
+    async_state.next_error_context_by_component.get(component_id) {
+    Some(a) => a
+    None => {
+      let a = [0]
+      async_state.next_error_context_by_component.set(component_id, a)
+      a
+    }
+  }
+  let handle = next[0]
+  next[0] = handle + 1
+  async_state.error_contexts.set(
+    handle_key(component_id, handle),
+    debug_message,
+  )
+  handle
+}
+
+///|
+fn get_error_context_message(
+  async_state : AsyncState,
+  component_id : Int,
+  handle : Int,
+) -> String? {
+  async_state.error_contexts.get(handle_key(component_id, handle))
+}
+
+///|
+fn drop_error_context_handle(
+  async_state : AsyncState,
+  component_id : Int,
+  handle : Int,
+) -> Bool {
+  let key = handle_key(component_id, handle)
+  if async_state.error_contexts.get(key) is Some(_) {
+    async_state.error_contexts.remove(key)
+    true
+  } else {
+    false
   }
 }
 

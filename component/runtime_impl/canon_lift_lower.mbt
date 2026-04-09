@@ -191,6 +191,9 @@ fn instantiate_canon_lower(
         Some(n) => n
         None => 0
       }
+      let instance_backpressure = backpressure_value_for_instance(
+        async_state, inst_id,
+      )
       let task : CallbackTask = {
         func,
         args: component_args,
@@ -208,6 +211,7 @@ fn instantiate_canon_lower(
         async_state.task_results.remove(task_id)
         async_state.task_result_owner.remove(task_id)
         async_state.task_returned.remove(task_id)
+        async_state.task_self_cancelled.remove(task_id)
         async_state.task_cancelled.remove(task_id)
         async_state.task_contexts.remove(task_id)
         drop_task_thread(async_state, task_id)
@@ -235,6 +239,10 @@ fn instantiate_canon_lower(
         if async_state.task_returned.get(from_id) is Some(v) {
           async_state.task_returned.remove(from_id)
           async_state.task_returned.set(to_id, v)
+        }
+        if async_state.task_self_cancelled.get(from_id) is Some(v) {
+          async_state.task_self_cancelled.remove(from_id)
+          async_state.task_self_cancelled.set(to_id, v)
         }
         if async_state.task_cancelled.get(from_id) is Some(v) {
           async_state.task_cancelled.remove(from_id)
@@ -267,7 +275,7 @@ fn instantiate_canon_lower(
         migrate_task_meta(async_state, from_id, to_id)
       }
 
-      if inflight == 0 {
+      if inflight == 0 && instance_backpressure == 0 {
         let is_callback = match func {
           ComponentFunc::Lifted(
             _,
@@ -528,8 +536,8 @@ fn instantiate_canon_lower(
         async_state.subtasks.set(sub_key, st)
         cache_and_advance([@types.Value::I32((sub_id << 4) | 1)]) // STARTED
       } else {
-        // Backpressure: queue in STARTING state until the in-flight
-        // subtask for this async-lowered core function completes.
+        // Backpressure/serialization: queue in STARTING state until this
+        // async-lowered call becomes eligible to start.
         let sub_id = alloc_shared_handle(async_state, caller_table.id)
         let st : Subtask = {
           id: sub_id,
@@ -610,6 +618,7 @@ fn instantiate_canon_lower(
         async_state.task_results.remove(task_id)
         async_state.task_result_owner.remove(task_id)
         async_state.task_returned.remove(task_id)
+        async_state.task_self_cancelled.remove(task_id)
         async_state.task_cancelled.remove(task_id)
         async_state.task_contexts.remove(task_id)
         drop_task_thread(async_state, task_id)
@@ -699,8 +708,28 @@ fn instantiate_canon_lower(
           ) catch {
             e => {
               pop_task(async_state)
-              trap_canon(canon_err_message(e))
-              return []
+              match e {
+                AsyncSuspendYield => {
+                  canon_suspend[0] = Some(CanonSuspend::Yield)
+                  raise @runtime.RuntimeError::Unreachable
+                }
+                AsyncSuspendWait(ws) => {
+                  canon_suspend[0] = Some(CanonSuspend::Wait(ws))
+                  raise @runtime.RuntimeError::Unreachable
+                }
+                CanonCallError(msg) =>
+                  if msg.contains("AsyncSuspendYield") {
+                    canon_suspend[0] = Some(CanonSuspend::Yield)
+                    raise @runtime.RuntimeError::Unreachable
+                  } else {
+                    trap_canon(msg)
+                    return []
+                  }
+                _ => {
+                  trap_canon(canon_err_message(e))
+                  return []
+                }
+              }
             }
           }
           pop_task(async_state)
@@ -909,7 +938,14 @@ fn instantiate_canon_lower(
           state.async_state,
         ) catch {
           e => {
-            trap_canon(canon_err_message(e))
+            let msg = canon_err_message(e)
+            if msg == "cannot block a synchronous task before returning" {
+              trap_canon(
+                "wasm trap: deadlock detected: event loop cannot make further progress",
+              )
+            } else {
+              trap_canon(msg)
+            }
             ([] : Array[ComponentValue])
           }
         }

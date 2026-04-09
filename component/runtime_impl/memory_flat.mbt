@@ -5,7 +5,14 @@ fn read_string_from_memory_with_encoding(
   len : Int,
   encoding : StringEncoding,
 ) -> String raise ComponentRuntimeError {
-  if ptr < 0 || len < 0 {
+  if ptr < 0 {
+    raise CanonCallError(
+      "string content out-of-bounds (string pointer/length out of bounds of memory)",
+    )
+  }
+  // latin1+utf16 uses the top bit of `len` as an encoding discriminator, so a
+  // valid encoded length may appear negative when represented as signed i32.
+  if encoding != StringEncoding::Latin1Utf16 && len < 0 {
     raise CanonCallError(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
@@ -168,20 +175,128 @@ fn core_valtype_size(vt : @types.ValueType) -> Int {
 }
 
 ///|
-fn layout_of_flat_types(
-  tys : Array[@types.ValueType],
+struct FlatStorageField {
+  vt : @types.ValueType
+  size : Int
+  align : Int
+} derive(Debug)
+
+///|
+fn default_flat_storage_field(vt : @types.ValueType) -> FlatStorageField {
+  { vt, size: core_valtype_size(vt), align: core_valtype_align(vt) }
+}
+
+///|
+fn append_default_flat_storage_for_valtype(
+  out : Array[FlatStorageField],
+  ty : ValType,
+  types : Array[TypeDef?],
+  mem_is_64 : Bool,
+) -> Unit raise ComponentRuntimeError {
+  for vt in core_types_for_valtype(ty, types, mem_is_64) {
+    out.push(default_flat_storage_field(vt))
+  }
+}
+
+///|
+fn append_flat_storage_for_valtype(
+  out : Array[FlatStorageField],
+  ty : ValType,
+  types : Array[TypeDef?],
+  mem_is_64 : Bool,
+) -> Unit raise ComponentRuntimeError {
+  let ptr_size = if mem_is_64 { 8 } else { 4 }
+  let ptr_vt = if mem_is_64 {
+    @types.ValueType::I64
+  } else {
+    @types.ValueType::I32
+  }
+  match resolve_valtype(ty, types) {
+    Prim(p) =>
+      match p {
+        Bool | S8 | U8 =>
+          out.push({ vt: @types.ValueType::I32, size: 1, align: 1 })
+        S16 | U16 => out.push({ vt: @types.ValueType::I32, size: 2, align: 2 })
+        S32 | U32 | Char =>
+          out.push({ vt: @types.ValueType::I32, size: 4, align: 4 })
+        S64 | U64 => out.push({ vt: @types.ValueType::I64, size: 8, align: 8 })
+        F32 => out.push({ vt: @types.ValueType::F32, size: 4, align: 4 })
+        F64 => out.push({ vt: @types.ValueType::F64, size: 8, align: 8 })
+        String | ErrorContext => {
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+        }
+      }
+    TypeIdx(ti) =>
+      match types.get(ti) {
+        Some(Some(TypeDef::Tuple(tys))) =>
+          for t in tys {
+            append_flat_storage_for_valtype(out, t, types, mem_is_64)
+          }
+        Some(Some(TypeDef::Record(fields))) =>
+          for field in fields {
+            append_flat_storage_for_valtype(out, field.ty, types, mem_is_64)
+          }
+        Some(Some(TypeDef::List(_elem_ty))) => {
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+          out.push({ vt: ptr_vt, size: ptr_size, align: ptr_size })
+        }
+        Some(Some(TypeDef::Enum(labels))) => {
+          let n = labels.length()
+          let size = if n <= 0x100 { 1 } else if n <= 0x10000 { 2 } else { 4 }
+          out.push({ vt: @types.ValueType::I32, size, align: size })
+        }
+        Some(Some(TypeDef::Flags(labels))) => {
+          let nbits = labels.length()
+          if nbits <= 8 {
+            out.push({ vt: @types.ValueType::I32, size: 1, align: 1 })
+          } else if nbits <= 16 {
+            out.push({ vt: @types.ValueType::I32, size: 2, align: 2 })
+          } else if nbits <= 32 {
+            out.push({ vt: @types.ValueType::I32, size: 4, align: 4 })
+          } else {
+            out.push({ vt: @types.ValueType::I64, size: 8, align: 8 })
+          }
+        }
+        Some(Some(TypeDef::Own(_)))
+        | Some(Some(TypeDef::Borrow(_)))
+        | Some(Some(TypeDef::ResourceType(_, _, _, _)))
+        | Some(Some(TypeDef::Stream(_)))
+        | Some(Some(TypeDef::Future(_))) =>
+          out.push({ vt: @types.ValueType::I32, size: 4, align: 4 })
+        Some(Some(TypeDef::DefValType(p))) =>
+          append_flat_storage_for_valtype(out, Prim(p), types, mem_is_64)
+        _ => append_default_flat_storage_for_valtype(out, ty, types, mem_is_64)
+      }
+  }
+}
+
+///|
+fn flat_storage_for_valtype(
+  ty : ValType,
+  types : Array[TypeDef?],
+  mem_is_64 : Bool,
+) -> Array[FlatStorageField] raise ComponentRuntimeError {
+  let out : Array[FlatStorageField] = []
+  append_flat_storage_for_valtype(out, ty, types, mem_is_64)
+  out
+}
+
+///|
+fn layout_of_flat_storage_fields(
+  fields : Array[FlatStorageField],
 ) -> (Array[Int], Int, Int) {
   let offsets : Array[Int] = []
   let mut off = 0
   let mut struct_align = 1
-  for t in tys {
-    let a = core_valtype_align(t)
+  for field in fields {
+    let a = field.align
     if a > struct_align {
       struct_align = a
     }
     off = align_to(off, a)
     offsets.push(off)
-    off += core_valtype_size(t)
+    off += field.size
   }
   (offsets, off, struct_align)
 }
@@ -221,6 +336,107 @@ fn alloc_realloc_area(
     raise CanonCallError("realloc return: beyond end of memory")
   }
   ptr
+}
+
+///|
+fn load_storage_value(
+  mem : @runtime.Memory,
+  addr : Int,
+  field : FlatStorageField,
+) -> @types.Value raise ComponentRuntimeError {
+  match field.vt {
+    @types.ValueType::I32 =>
+      if field.size == 1 {
+        @types.Value::I32(
+          mem.load_i32_8u(addr) catch {
+            e => raise CanonCallError(e.to_string())
+          },
+        )
+      } else if field.size == 2 {
+        @types.Value::I32(
+          mem.load_i32_16u(addr) catch {
+            e => raise CanonCallError(e.to_string())
+          },
+        )
+      } else {
+        @types.Value::I32(
+          mem.load_i32(addr) catch {
+            e => raise CanonCallError(e.to_string())
+          },
+        )
+      }
+    @types.ValueType::I64 =>
+      if field.size == 4 {
+        @types.Value::I64(
+          mem.load_i64_32u(addr) catch {
+            e => raise CanonCallError(e.to_string())
+          },
+        )
+      } else {
+        @types.Value::I64(
+          mem.load_i64(addr) catch {
+            e => raise CanonCallError(e.to_string())
+          },
+        )
+      }
+    @types.ValueType::F32 =>
+      @types.Value::F32(
+        mem.load_f32(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
+    @types.ValueType::F64 =>
+      @types.Value::F64(
+        mem.load_f64(addr) catch {
+          e => raise CanonCallError(e.to_string())
+        },
+      )
+    _ => load_flat_value(mem, addr, field.vt)
+  }
+}
+
+///|
+fn store_storage_value(
+  mem : @runtime.Memory,
+  addr : Int,
+  val : @types.Value,
+  field : FlatStorageField,
+) -> Unit raise ComponentRuntimeError {
+  match (field.vt, val) {
+    (@types.ValueType::I32, @types.Value::I32(n)) =>
+      if field.size == 1 {
+        mem.store_i32_8(addr, n) catch {
+          e => raise CanonCallError(e.to_string())
+        }
+      } else if field.size == 2 {
+        mem.store_i32_16(addr, n) catch {
+          e => raise CanonCallError(e.to_string())
+        }
+      } else {
+        mem.store_i32(addr, n) catch {
+          e => raise CanonCallError(e.to_string())
+        }
+      }
+    (@types.ValueType::I64, @types.Value::I64(n)) =>
+      if field.size == 4 {
+        mem.store_i64_32(addr, n) catch {
+          e => raise CanonCallError(e.to_string())
+        }
+      } else {
+        mem.store_i64(addr, n) catch {
+          e => raise CanonCallError(e.to_string())
+        }
+      }
+    (@types.ValueType::F32, @types.Value::F32(f)) =>
+      mem.store_f32(addr, f) catch {
+        e => raise CanonCallError(e.to_string())
+      }
+    (@types.ValueType::F64, @types.Value::F64(f)) =>
+      mem.store_f64(addr, f) catch {
+        e => raise CanonCallError(e.to_string())
+      }
+    _ => store_flat_value(mem, addr, val)
+  }
 }
 
 ///|

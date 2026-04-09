@@ -116,7 +116,8 @@ fn instantiate_canon_waitable_set_wait(
       if async_state.subtasks.get(sub_key) is Some(st) &&
         st.result_ty is Some(_) &&
         st.mem_addr is Some(mem_addr2) {
-        let cancelled = async_state.task_cancelled.get(sub_key) is Some(true)
+        let cancelled = async_state.task_self_cancelled.get(sub_key)
+          is Some(true)
         if cancelled {
           return
         }
@@ -190,17 +191,44 @@ fn instantiate_canon_waitable_set_wait(
 
     match args {
       [@types.Value::I32(ws), @types.Value::I32(ptr)] => {
+        let ws_key = handle_key(owner_component_id, ws)
         if !async_state.task_can_block[0] {
-          // Even if the argument is invalid (e.g. unaligned), the component-spec
-          // suite expects that synchronous tasks trap before attempting to block.
-          trap_canon("cannot block a synchronous task before returning")
-          return [@types.Value::I32(0)]
+          // Synchronous tasks generally cannot block. One exception is waiting on
+          // an existing waitable membership: drive the cooperative event loop
+          // and report deadlock if no progress is possible.
+          if !waitable_set_has_event(async_state, ws_key) {
+            let has_members = match async_state.waitable_sets.get(ws_key) {
+              Some(set) => set.members.length() > 0
+              None => false
+            }
+            if !has_members {
+              // Even if the argument is invalid (e.g. unaligned), component-spec
+              // expects synchronous tasks to trap before attempting to block.
+              trap_canon("cannot block a synchronous task before returning")
+              return [@types.Value::I32(0)]
+            }
+            while !waitable_set_has_event(async_state, ws_key) {
+              let progressed = progress_one_subtask_intrinsic(
+                async_state, store,
+              ) catch {
+                e => {
+                  trap_canon(canon_err_message(e))
+                  return [@types.Value::I32(0)]
+                }
+              }
+              if !progressed {
+                trap_canon(
+                  "wasm trap: deadlock detected: event loop cannot make further progress",
+                )
+                return [@types.Value::I32(0)]
+              }
+            }
+          }
         }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
           return [@types.Value::I32(0)]
         }
-        let ws_key = handle_key(owner_component_id, ws)
         let task_id = current_task_id(async_state)
         let cur = if async_state.wait_cursor_stack.length() == 0 {
           0

@@ -1328,6 +1328,8 @@ fn validate_canon_opts(
   let mut seen_memory = false
   let mut seen_realloc = false
   let mut seen_post_return = false
+  let mut seen_core_type = false
+  let mut seen_gc = false
   let mut seen_callback = false
   let mut seen_async = false
   for o in opts {
@@ -1355,6 +1357,18 @@ fn validate_canon_opts(
           raise DuplicateCanonOption("post-return")
         } else {
           seen_post_return = true
+        }
+      CoreType(_) =>
+        if seen_core_type {
+          raise DuplicateCanonOption("core-type")
+        } else {
+          seen_core_type = true
+        }
+      Gc =>
+        if seen_gc {
+          raise DuplicateCanonOption("gc")
+        } else {
+          seen_gc = true
         }
       Callback(_) =>
         if seen_callback {

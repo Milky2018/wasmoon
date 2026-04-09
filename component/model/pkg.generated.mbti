@@ -70,6 +70,9 @@ pub impl Show for BinaryKind
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int)
   Lower(Int, Array[CanonOpt])
+  BackpressureSet
+  BackpressureInc
+  BackpressureDec
   ContextGet(@types.ValueType, Int)
   ContextSet(@types.ValueType, Int)
   TaskReturn(ValType?, Array[CanonOpt])
@@ -102,6 +105,9 @@ pub(all) enum Canon {
   FutureCancelWrite(Int, Bool)
   FutureDropReadable(Int)
   FutureDropWritable(Int)
+  ErrorContextNew(Array[CanonOpt])
+  ErrorContextDebugMessage(Array[CanonOpt])
+  ErrorContextDrop
   ResourceNew(Int)
   ResourceDrop(Int)
   ResourceRep(Int)
@@ -113,6 +119,8 @@ pub(all) enum CanonOpt {
   Memory(Int)
   Realloc(Int)
   PostReturn(Int)
+  CoreType(Int)
+  Gc
   Async
   Callback(Int)
 } derive(Eq, @debug.Debug)

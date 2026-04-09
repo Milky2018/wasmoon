@@ -158,11 +158,6 @@ fn instantiate_canon_future_read(
         1
       out
     }
-    // Sync future.read blocks the task; the async form returns BLOCKED=-1.
-    if !is_async && !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return cache_i32(0)
-    }
     match args {
       [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
         match
@@ -170,12 +165,20 @@ fn instantiate_canon_future_read(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            trap_canon("unknown future handle index \{handle}")
+            if !is_async && !async_state.task_can_block[0] {
+              trap_canon("cannot block a synchronous task before returning")
+            } else {
+              trap_canon("unknown future handle index \{handle}")
+            }
             cache_i32(0)
           }
           Some(ep) =>
             if !ep.is_readable {
-              trap_canon("type mismatch")
+              if !is_async && !async_state.task_can_block[0] {
+                trap_canon("cannot block a synchronous task before returning")
+              } else {
+                trap_canon("type mismatch")
+              }
               cache_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -185,7 +188,22 @@ fn instantiate_canon_future_read(
                   return cache_i32(0)
                 }
               }
+              let cancelled = async_state.task_cancelled.get(task_id)
+                is Some(true)
+              let mut explicit_thread_task = false
+              for kv in async_state.threads.iter() {
+                let (_k, t) = kv
+                if t.task_id == task_id {
+                  explicit_thread_task = true
+                  break
+                }
+              }
               if st0.read_done {
+                // Explicit guest thread tasks can replay suspended reads while
+                // unwinding stackful cancellation paths.
+                if cancelled || explicit_thread_task {
+                  return cache_i32(0)
+                }
                 trap_canon(
                   "cannot read from future after previous read succeeded",
                 )
@@ -323,7 +341,12 @@ fn instantiate_canon_future_read(
                       write_observed_readable_drop: st0.write_observed_readable_drop,
                       wrote_value: st0.wrote_value,
                     })
-                    cache_i32(-1)
+                    if is_async {
+                      cache_i32(-1)
+                    } else {
+                      canon_suspend[0] = Some(CanonSuspend::Yield)
+                      raise @runtime.RuntimeError::Unreachable
+                    }
                   }
               }
             }
@@ -384,11 +407,6 @@ fn instantiate_canon_future_write(
         1
       out
     }
-    // Sync future.write blocks the task; the async form returns BLOCKED=-1.
-    if !is_async && !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return cache_i32(0)
-    }
     match args {
       [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
         match
@@ -396,12 +414,20 @@ fn instantiate_canon_future_write(
             handle_key(caller_component_id, handle),
           ) {
           None => {
-            trap_canon("unknown future handle index \{handle}")
+            if !is_async && !async_state.task_can_block[0] {
+              trap_canon("cannot block a synchronous task before returning")
+            } else {
+              trap_canon("unknown future handle index \{handle}")
+            }
             cache_i32(0)
           }
           Some(ep) =>
             if ep.is_readable {
-              trap_canon("type mismatch")
+              if !is_async && !async_state.task_can_block[0] {
+                trap_canon("cannot block a synchronous task before returning")
+              } else {
+                trap_canon("type mismatch")
+              }
               cache_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -663,7 +689,12 @@ fn instantiate_canon_future_write(
                     write_observed_readable_drop: st0.write_observed_readable_drop,
                     wrote_value: true,
                   })
-                  cache_i32(-1)
+                  if is_async {
+                    cache_i32(-1)
+                  } else {
+                    canon_suspend[0] = Some(CanonSuspend::Yield)
+                    raise @runtime.RuntimeError::Unreachable
+                  }
                 }
               }
             }
@@ -680,7 +711,7 @@ fn instantiate_canon_future_write(
 ///|
 fn instantiate_canon_future_cancel_read(
   _tyidx : Int,
-  _is_async : Bool,
+  is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
@@ -696,10 +727,6 @@ fn instantiate_canon_future_cancel_read(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    if !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return [@types.Value::I32(0)]
-    }
     match args {
       [@types.Value::I32(handle)] =>
         match
@@ -707,12 +734,20 @@ fn instantiate_canon_future_cancel_read(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            trap_canon("unknown future handle index \{handle}")
+            if !is_async_cancel && !async_state.task_can_block[0] {
+              trap_canon("cannot block a synchronous task before returning")
+            } else {
+              trap_canon("unknown future handle index \{handle}")
+            }
             [@types.Value::I32(0)]
           }
           Some(ep) =>
             if !ep.is_readable {
-              trap_canon("type mismatch")
+              if !is_async_cancel && !async_state.task_can_block[0] {
+                trap_canon("cannot block a synchronous task before returning")
+              } else {
+                trap_canon("type mismatch")
+              }
               [@types.Value::I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -722,19 +757,37 @@ fn instantiate_canon_future_cancel_read(
                   return [@types.Value::I32(0)]
                 }
               }
-              async_state.futures.set(ep.future_id, {
-                payload_ty: st0.payload_ty,
-                pending_read: None,
-                pending_write: st0.pending_write,
-                readable_dropped: st0.readable_dropped,
-                writable_dropped: st0.writable_dropped,
-                read_done: st0.read_done,
-                write_succeeded: st0.write_succeeded,
-                write_observed_readable_drop: st0.write_observed_readable_drop,
-                wrote_value: st0.wrote_value,
-              })
-              // CANCELLED=2
-              [@types.Value::I32(2)]
+              // If the read already completed, cancellation observes the terminal
+              // status instead of reporting CANCELLED.
+              if st0.read_done {
+                remove_waitable_events_for(
+                  async_state, owner_component_id, handle, 4,
+                )
+                let code = if st0.write_succeeded {
+                  0
+                } else if st0.writable_dropped {
+                  1
+                } else {
+                  2
+                }
+                [@types.Value::I32(code)]
+              } else if st0.pending_read is Some(_) {
+                async_state.futures.set(ep.future_id, {
+                  payload_ty: st0.payload_ty,
+                  pending_read: None,
+                  pending_write: st0.pending_write,
+                  readable_dropped: st0.readable_dropped,
+                  writable_dropped: st0.writable_dropped,
+                  read_done: st0.read_done,
+                  write_succeeded: st0.write_succeeded,
+                  write_observed_readable_drop: st0.write_observed_readable_drop,
+                  wrote_value: st0.wrote_value,
+                })
+                // CANCELLED=2
+                [@types.Value::I32(2)]
+              } else {
+                [@types.Value::I32(2)]
+              }
             }
         }
       _ => {
@@ -749,7 +802,7 @@ fn instantiate_canon_future_cancel_read(
 ///|
 fn instantiate_canon_future_cancel_write(
   _tyidx : Int,
-  _is_async : Bool,
+  is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
@@ -765,10 +818,6 @@ fn instantiate_canon_future_cancel_write(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    if !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return [@types.Value::I32(0)]
-    }
     match args {
       [@types.Value::I32(handle)] =>
         match
@@ -776,12 +825,20 @@ fn instantiate_canon_future_cancel_write(
             handle_key(owner_component_id, handle),
           ) {
           None => {
-            trap_canon("unknown future handle index \{handle}")
+            if !is_async_cancel && !async_state.task_can_block[0] {
+              trap_canon("cannot block a synchronous task before returning")
+            } else {
+              trap_canon("unknown future handle index \{handle}")
+            }
             [@types.Value::I32(0)]
           }
           Some(ep) =>
             if ep.is_readable {
-              trap_canon("type mismatch")
+              if !is_async_cancel && !async_state.task_can_block[0] {
+                trap_canon("cannot block a synchronous task before returning")
+              } else {
+                trap_canon("type mismatch")
+              }
               [@types.Value::I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
@@ -791,27 +848,39 @@ fn instantiate_canon_future_cancel_write(
                   return [@types.Value::I32(0)]
                 }
               }
-              let had_pending = match st0.pending_write {
-                Some(_) => true
-                None => false
+              // If the write already completed (or the readable end already
+              // dropped), cancellation observes that terminal status.
+              if st0.write_succeeded {
+                remove_waitable_events_for(
+                  async_state, owner_component_id, handle, 5,
+                )
+                [@types.Value::I32(0)]
+              } else if st0.readable_dropped || st0.write_observed_readable_drop {
+                remove_waitable_events_for(
+                  async_state, owner_component_id, handle, 5,
+                )
+                [@types.Value::I32(1)]
+              } else {
+                let had_pending = match st0.pending_write {
+                  Some(_) => true
+                  None => false
+                }
+                if had_pending {
+                  async_state.futures.set(ep.future_id, {
+                    payload_ty: st0.payload_ty,
+                    pending_read: st0.pending_read,
+                    pending_write: None,
+                    readable_dropped: st0.readable_dropped,
+                    writable_dropped: st0.writable_dropped,
+                    read_done: st0.read_done,
+                    write_succeeded: st0.write_succeeded,
+                    write_observed_readable_drop: st0.write_observed_readable_drop,
+                    // If we cancelled a pending write, treat as "no value written".
+                    wrote_value: false,
+                  })
+                }
+                [@types.Value::I32(2)]
               }
-              async_state.futures.set(ep.future_id, {
-                payload_ty: st0.payload_ty,
-                pending_read: st0.pending_read,
-                pending_write: None,
-                readable_dropped: st0.readable_dropped,
-                writable_dropped: st0.writable_dropped,
-                read_done: st0.read_done,
-                write_succeeded: st0.write_succeeded,
-                write_observed_readable_drop: st0.write_observed_readable_drop,
-                // If we cancelled a pending write, treat as "no value written".
-                wrote_value: if had_pending {
-                  false
-                } else {
-                  st0.wrote_value
-                },
-              })
-              [@types.Value::I32(2)]
             }
         }
       _ => {

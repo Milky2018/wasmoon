@@ -101,20 +101,20 @@ fn lift_component_value_from_flat(
                 _ => raise HostCallError("type mismatch")
               }
             }
-            let elem_flat_types = core_types_for_valtype(
+            let elem_storage = flat_storage_for_valtype(
               elem_ty, types, mem_is_64,
             )
-            let (offsets, elem_size, elem_align) = layout_of_flat_types(
-              elem_flat_types,
+            let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
+              elem_storage,
             )
             let stride = align_to(elem_size, elem_align)
             let items : Array[ComponentValue] = []
             for i in 0..<len {
               let base = ptr + stride * i
               let elem_vals : Array[@types.Value] = []
-              for j in 0..<elem_flat_types.length() {
+              for j in 0..<elem_storage.length() {
                 elem_vals.push(
-                  load_flat_value(m, base + offsets[j], elem_flat_types[j]),
+                  load_storage_value(m, base + offsets[j], elem_storage[j]),
                 )
               }
               items.push(
@@ -421,11 +421,11 @@ fn component_args_to_core(
                   Some(r) => r
                   None => raise MissingCanonRealloc
                 }
-                let elem_flat = core_types_for_valtype(
+                let elem_storage = flat_storage_for_valtype(
                   elem_ty, types, mem_is_64,
                 )
-                let (offsets, elem_size, elem_align) = layout_of_flat_types(
-                  elem_flat,
+                let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
+                  elem_storage,
                 )
                 let stride = align_to(elem_size, elem_align)
                 let total_size = stride * items.length()
@@ -434,12 +434,17 @@ fn component_args_to_core(
                 )
                 for i in 0..<items.length() {
                   let elem_vals = lower_value(items[i], elem_ty)
-                  if elem_vals.length() != elem_flat.length() {
+                  if elem_vals.length() != elem_storage.length() {
                     raise HostCallError("argument type mismatch")
                   }
                   let base = ptr + stride * i
                   for j in 0..<elem_vals.length() {
-                    store_flat_value(m, base + offsets[j], elem_vals[j])
+                    store_storage_value(
+                      m,
+                      base + offsets[j],
+                      elem_vals[j],
+                      elem_storage[j],
+                    )
                   }
                 }
                 let len = items.length()
@@ -689,9 +694,13 @@ fn component_args_to_core(
 
   // Determine whether we must pass a pointer to the flattened arguments.
   let flat_param_types : Array[@types.ValueType] = []
+  let flat_param_storage : Array[FlatStorageField] = []
   for p in func_type.params {
     for t in core_types_for_valtype(p.ty, types, mem_is_64) {
       flat_param_types.push(t)
+    }
+    for field in flat_storage_for_valtype(p.ty, types, mem_is_64) {
+      flat_param_storage.push(field)
     }
   }
   let indirect_params = flat_param_types.length() > 16
@@ -717,13 +726,20 @@ fn component_args_to_core(
     Some(r) => r
     None => raise MissingCanonRealloc
   }
-  let (offsets, size, struct_align) = layout_of_flat_types(flat_param_types)
+  let (offsets, size, struct_align) = layout_of_flat_storage_fields(
+    flat_param_storage,
+  )
   let ptr = alloc_realloc_area(store, m, realloc, mem_is_64, size, struct_align)
   if ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
     raise CanonCallError("unaligned pointer")
   }
   for i in 0..<flat_vals.length() {
-    store_flat_value(m, ptr + offsets[i], flat_vals[i])
+    store_storage_value(
+      m,
+      ptr + offsets[i],
+      flat_vals[i],
+      flat_param_storage[i],
+    )
   }
   if mem_is_64 {
     [@types.Value::I64(ptr.to_int64())]
@@ -903,6 +919,7 @@ fn core_results_to_component(
             None => ()
           }
           let flat_types = core_types_for_valtype(r, types, mem_is_64)
+          let flat_storage = flat_storage_for_valtype(r, types, mem_is_64)
           let flat_vals : Array[@types.Value] = if flat_types.length() == 1 {
             results
           } else if results.length() == flat_types.length() {
@@ -917,8 +934,8 @@ fn core_results_to_component(
               @types.Value::I64(n) => n.to_int()
               _ => raise HostCallError("result type mismatch")
             }
-            let (offsets, _size, struct_align) = layout_of_flat_types(
-              flat_types,
+            let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
+              flat_storage,
             )
             if struct_align > 1 &&
               ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() !=
@@ -926,8 +943,8 @@ fn core_results_to_component(
               raise CanonCallError("unaligned pointer")
             }
             let out : Array[@types.Value] = []
-            for i in 0..<flat_types.length() {
-              out.push(load_flat_value(m, ptr + offsets[i], flat_types[i]))
+            for i in 0..<flat_storage.length() {
+              out.push(load_storage_value(m, ptr + offsets[i], flat_storage[i]))
             }
             out
           } else {
@@ -1037,17 +1054,21 @@ fn core_args_to_component(
     mem = Some(m)
   }
   let flat_param_types : Array[@types.ValueType] = []
+  let flat_param_storage : Array[FlatStorageField] = []
   for p in func_type.params {
     for t in core_types_for_valtype(p.ty, types, mem_is_64) {
       flat_param_types.push(t)
     }
+    for field in flat_storage_for_valtype(p.ty, types, mem_is_64) {
+      flat_param_storage.push(field)
+    }
   }
-  let indirect_params = flat_param_types.length() > 16
   let flat_result_types : Array[@types.ValueType] = match func_type.result {
     Some(r) => core_types_for_valtype(r, types, mem_is_64)
     None => []
   }
   let indirect_result = flat_result_types.length() > 1
+  let indirect_params = flat_param_types.length() > 16
   let arg_limit = if indirect_result {
     args.length() - 1
   } else {
@@ -1066,14 +1087,16 @@ fn core_args_to_component(
       Some(m) => m
       None => raise MissingCanonMemory
     }
-    let (offsets, _size, struct_align) = layout_of_flat_types(flat_param_types)
+    let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
+      flat_param_storage,
+    )
     if struct_align > 1 &&
       ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() != 0U {
       raise CanonCallError("unaligned pointer")
     }
     let out : Array[@types.Value] = []
-    for i in 0..<flat_param_types.length() {
-      out.push(load_flat_value(m, ptr + offsets[i], flat_param_types[i]))
+    for i in 0..<flat_param_storage.length() {
+      out.push(load_storage_value(m, ptr + offsets[i], flat_param_storage[i]))
     }
     out
   } else {
@@ -1161,6 +1184,7 @@ fn component_results_to_core(
       }
       let mem_is_64 = mem.is_memory64()
       let flat_res_types = core_types_for_valtype(r, types, mem_is_64)
+      let flat_res_storage = flat_storage_for_valtype(r, types, mem_is_64)
       if flat_res_types.length() > 1 {
         if resources.mem_addr is None {
           raise MissingCanonMemory
@@ -1169,8 +1193,8 @@ fn component_results_to_core(
           Some(p) => p
           None => raise HostCallError("missing retptr")
         }
-        let (offsets, _size, struct_align) = layout_of_flat_types(
-          flat_res_types,
+        let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
+          flat_res_storage,
         )
         if struct_align > 1 &&
           out_ptr.reinterpret_as_uint() % struct_align.reinterpret_as_uint() !=
@@ -1279,7 +1303,12 @@ fn component_results_to_core(
           raise HostCallError("result type mismatch")
         }
         for i in 0..<flat_vals.length() {
-          store_flat_value(mem, out_ptr + offsets[i], flat_vals[i])
+          store_storage_value(
+            mem,
+            out_ptr + offsets[i],
+            flat_vals[i],
+            flat_res_storage[i],
+          )
         }
         return []
       }
