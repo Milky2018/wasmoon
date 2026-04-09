@@ -2876,6 +2876,7 @@ static int32_t wasi_path_filestat_get_impl(
 
     const char *stat_path = full_path;
     char *stat_path_alloc = NULL;
+
     if (has_trailing_slash) {
         size_t full_len = strlen(full_path);
         stat_path_alloc = malloc(full_len + 2);
@@ -3214,6 +3215,22 @@ static int32_t wasi_path_filestat_set_times_impl(
 
     const char *stat_path = full_path;
     char *stat_path_alloc = NULL;
+    int at_flags = (flags & 1) ? 0 : AT_SYMLINK_NOFOLLOW;
+
+    if (has_trailing_slash) {
+        // Keep parity with the interpreter path: trailing slash targets must be directories.
+        struct stat st_check;
+        if (fstatat(AT_FDCWD, full_path, &st_check, at_flags) != 0) {
+            int err = errno_to_wasi(errno);
+            free(full_path);
+            if (err == WASI_ENOTDIR) return WASI_ENOENT;
+            return err;
+        }
+        if (!S_ISDIR(st_check.st_mode)) {
+            free(full_path);
+            return WASI_ENOENT;
+        }
+    }
     if (has_trailing_slash) {
         size_t full_len = strlen(full_path);
         stat_path_alloc = malloc(full_len + 2);
@@ -3227,7 +3244,6 @@ static int32_t wasi_path_filestat_set_times_impl(
         stat_path = stat_path_alloc;
     }
 
-    int at_flags = (flags & 1) ? 0 : AT_SYMLINK_NOFOLLOW;
     int result = utimensat(AT_FDCWD, stat_path, times, at_flags);
     if (stat_path_alloc) free(stat_path_alloc);
     free(full_path);

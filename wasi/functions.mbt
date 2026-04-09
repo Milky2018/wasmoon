@@ -2128,6 +2128,18 @@ pub fn path_filestat_set_times_impl(
     resolved_path
   }
   let lookup_flags = if follow_symlink { 0 } else { AT_SYMLINK_NOFOLLOW }
+  if has_trailing_slash {
+    match native_fstatat(0, resolved_path, lookup_flags) {
+      Some(stat) => if stat.filetype != 3 { return Errno::NoEnt.to_i32() }
+      None => {
+        let errno = native_last_errno_to_wasi()
+        if errno == Errno::NotDir.to_i32() {
+          return Errno::NoEnt.to_i32()
+        }
+        return errno
+      }
+    }
+  }
   if native_utimensat(0, stat_path, atim, mtim, fst_flags, lookup_flags) {
     Errno::Success.to_i32()
   } else {
