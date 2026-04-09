@@ -29,7 +29,7 @@ test "Wasm ABI arg/ret reg counts (shape)" {
   inspect(a.wasm_ret_fprs().length(), content="8")
   let x = ISA::AMD64
   inspect(x.wasm_vmctx_arg_preg().index, content="7")
-  inspect(x.wasm_user_arg_gprs().length(), content="6")
+  inspect(x.wasm_user_arg_gprs().length(), content="5")
   inspect(x.wasm_arg_fprs().length(), content="8")
   inspect(x.wasm_ret_gprs().length(), content="8")
   inspect(x.wasm_ret_fprs().length(), content="8")

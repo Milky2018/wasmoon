@@ -47,8 +47,9 @@ pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
 ///|
 /// Internal Wasm ABI (initial amd64 design): user integer argument registers.
 ///
-/// We start with a SysV-like prefix (excluding vmctx in rdi), and add `rax` as an
-/// extra user argument register to reduce stack traffic in internal calls.
+/// Keep this aligned with SysV argument placement after vmctx in `rdi`.
+/// This is required so imported C ABI functions (for example WASI hostcalls)
+/// observe correct stack/register argument ordering.
 pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
   [
     { index: 6, class: @abi.Int }, // rsi
@@ -56,8 +57,7 @@ pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
     { index: 1, class: @abi.Int }, // rcx
     { index: 8, class: @abi.Int }, // r8
     { index: 9, class: @abi.Int }, // r9
-    { index: 0, class: @abi.Int },
-  ] // rax
+  ] // r9
 }
 
 ///|
