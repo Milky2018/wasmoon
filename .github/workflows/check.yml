@@ -21,8 +21,21 @@ jobs:
           moon update
 
       - name: moon check
+        id: moon_check
+        continue-on-error: true
         run: |
-          moon check --target native
+          set -euxo pipefail
+          moon check --target native 2>&1 | tee /tmp/moon_check_native.log
+
+      - name: dump moon check log (if any)
+        if: steps.moon_check.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          cat /tmp/moon_check_native.log || true
+
+      - name: fail fast if moon check failed
+        if: steps.moon_check.outcome != 'success'
+        run: exit 1
 
       - name: moon test
         run: |
@@ -69,8 +82,21 @@ jobs:
           moon update
 
       - name: moon check
+        id: moon_check
+        continue-on-error: true
         run: |
-          moon check --target native
+          set -euxo pipefail
+          moon check --target native 2>&1 | tee /tmp/moon_check_native.log
+
+      - name: dump moon check log (if any)
+        if: steps.moon_check.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          cat /tmp/moon_check_native.log || true
+
+      - name: fail fast if moon check failed
+        if: steps.moon_check.outcome != 'success'
+        run: exit 1
 
       - name: moon test
         id: moon_test
