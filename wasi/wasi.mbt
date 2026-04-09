@@ -191,7 +191,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "clock_time_get",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let clock_id = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -203,6 +203,9 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let time_ptr = match args[2] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      if clock_id < 0 || clock_id > 3 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = clock_time_get(mem, clock_id, precision, time_ptr)
@@ -294,7 +297,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "fd_seek",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -310,6 +313,9 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let newoffset_ptr = match args[3] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      if whence < 0 || whence > 2 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = fd_seek(ctx, mem, fd, offset, whence, newoffset_ptr)
@@ -491,7 +497,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "clock_res_get",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let clock_id = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -499,6 +505,9 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let resolution_ptr = match args[1] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      if clock_id < 0 || clock_id > 3 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = clock_res_get(mem, clock_id, resolution_ptr)
@@ -724,7 +733,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "path_filestat_get",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -744,6 +753,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let buf_ptr = match args[4] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_lookupflags_mask = 0x01
+      if (flags & known_lookupflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = path_filestat_get_impl(
@@ -777,7 +790,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "fd_filestat_set_times",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -794,6 +807,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
       }
+      let known_fstflags_mask = 0x0F
+      if (fst_flags & known_fstflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
+      }
       let result = fd_filestat_set_times_impl(ctx, fd, atim, mtim, fst_flags)
       [@types.Value::I32(result)]
     },
@@ -804,7 +821,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "path_filestat_set_times",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -832,6 +849,14 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let fst_flags = match args[6] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_lookupflags_mask = 0x01
+      if (flags & known_lookupflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
+      }
+      let known_fstflags_mask = 0x0F
+      if (fst_flags & known_fstflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = path_filestat_set_times_impl(
@@ -903,7 +928,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "fd_fdstat_set_flags",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -911,6 +936,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let flags = match args[1] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_fdflags_mask = 0x1F
+      if (flags & known_fdflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let result = fd_fdstat_set_flags_impl(ctx, fd, flags)
       [@types.Value::I32(result)]
@@ -1042,7 +1071,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "path_link",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let old_fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -1070,6 +1099,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let new_path_len = match args[6] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_lookupflags_mask = 0x01
+      if (old_flags & known_lookupflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = path_link_impl(
@@ -1119,7 +1152,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "sock_recv",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -1143,6 +1176,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let ro_flags_ptr = match args[5] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_sock_recv_riflags_mask = 0x03
+      if (ri_flags & known_sock_recv_riflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = sock_recv_impl(
@@ -1191,7 +1228,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
   linker.add_host_func(
     "wasi_snapshot_preview1",
     "sock_shutdown",
-    fn(args) {
+    fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
@@ -1199,6 +1236,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let how = match args[1] {
         I32(v) => v
         _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+      }
+      let known_sock_shutdown_sdflags_mask = 0x03
+      if (how & known_sock_shutdown_sdflags_mask.lnot()) != 0 {
+        trap_invalid_wasi_abi_arg()
       }
       let result = sock_shutdown_impl(ctx, fd, how)
       [@types.Value::I32(result)]

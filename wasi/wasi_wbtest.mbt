@@ -868,6 +868,9 @@ test "wasi: path_open rejects sync fdflags with ENOTSUP" {
     2004,
   )
   inspect(reopen_result, content="58")
+  if reopen_result == 0 {
+    fd_close(ctx, mem.read_i32(2004)) |> ignore
+  }
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }
 

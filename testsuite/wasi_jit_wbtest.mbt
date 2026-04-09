@@ -1258,7 +1258,7 @@ test "wasi jit: path_filestat_get trailing slash on regular file returns ENOENT"
 }
 
 ///|
-test "wasi jit: path_filestat_get rejects unknown lookupflags bits with EINVAL" {
+test "wasi jit: path_filestat_get traps on unknown lookupflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -1292,8 +1292,8 @@ test "wasi jit: path_filestat_get rejects unknown lookupflags bits with EINVAL" 
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -1399,7 +1399,7 @@ test "wasi jit: path_filestat_set_times rejects conflicting fst_flags with EINVA
 }
 
 ///|
-test "wasi jit: path_filestat_set_times rejects unknown lookupflags bits with EINVAL" {
+test "wasi jit: path_filestat_set_times traps on unknown lookupflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -1433,8 +1433,8 @@ test "wasi jit: path_filestat_set_times rejects unknown lookupflags bits with EI
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -1725,7 +1725,7 @@ test "wasi jit: path_link rejects LOOKUPFLAGS_SYMLINK_FOLLOW" {
 }
 
 ///|
-test "wasi jit: path_link rejects unknown lookupflags bits with EINVAL" {
+test "wasi jit: path_link traps on unknown lookupflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_unlink_file"
@@ -1758,8 +1758,8 @@ test "wasi jit: path_link rejects unknown lookupflags bits with EINVAL" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -1928,6 +1928,21 @@ test "wasi jit: clock_time_get process/thread cpu clocks return EBADF (8)" {
 }
 
 ///|
+test "wasi jit: clock_time_get traps on invalid clock id enum" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_time_get"
+    #|    (func $clock_time_get (param i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $clock_time_get (i32.const 999) (i64.const 0) (i32.const 0))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
+}
+
+///|
 test "wasi jit: clock_res_get process/thread cpu clocks return EBADF (8)" {
   let source =
     #|(module
@@ -1946,6 +1961,21 @@ test "wasi jit: clock_res_get process/thread cpu clocks return EBADF (8)" {
   inspect(thread_result.match_, content="true")
   inspect(wasi_errno_from_result(thread_result.interp_result), content="8")
   inspect(wasi_errno_from_result(thread_result.jit_result), content="8")
+}
+
+///|
+test "wasi jit: clock_res_get traps on invalid clock id enum" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_res_get"
+    #|    (func $clock_res_get (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $clock_res_get (i32.const 999) (i32.const 0))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2066,6 +2096,21 @@ test "wasi jit: fd_seek stdin returns ESPIPE (70)" {
     #|  (func (export "test") (result i32)
     #|    (call $fd_seek (i32.const 0) (i64.const 0) (i32.const 0) (i32.const 200))))
   inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: fd_seek traps on invalid whence enum" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_seek"
+    #|    (func $fd_seek (param i32 i64 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (call $fd_seek (i32.const 0) (i64.const 0) (i32.const 3) (i32.const 200))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2459,7 +2504,7 @@ test "wasi jit: fd_fdstat_set_flags returns EBADF for non-file fd before DSYNC c
 }
 
 ///|
-test "wasi jit: fd_fdstat_set_flags rejects unknown bits with EINVAL (28)" {
+test "wasi jit: fd_fdstat_set_flags traps on unknown bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -2478,8 +2523,8 @@ test "wasi jit: fd_fdstat_set_flags rejects unknown bits with EINVAL (28)" {
     ("/tmp", "/"),
   ])
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
@@ -2672,7 +2717,7 @@ test "wasi jit: sock_accept traps on unknown fdflags bits" {
 }
 
 ///|
-test "wasi jit: sock_recv rejects unknown riflags bits with EINVAL (28)" {
+test "wasi jit: sock_recv traps on unknown riflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_recv"
@@ -2683,12 +2728,12 @@ test "wasi jit: sock_recv rejects unknown riflags bits with EINVAL (28)" {
     #|    (call $sock_recv (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 0x04) (i32.const 16) (i32.const 20))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
-test "wasi jit: sock_shutdown rejects unknown sdflags bits with EINVAL (28)" {
+test "wasi jit: sock_shutdown traps on unknown sdflags bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "sock_shutdown"
@@ -2698,8 +2743,8 @@ test "wasi jit: sock_shutdown rejects unknown sdflags bits with EINVAL (28)" {
     #|    (call $sock_shutdown (i32.const 0) (i32.const 0x04))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="28")
-  inspect(wasi_errno_from_result(result.jit_result), content="28")
+  inspect(wasi_errno_from_result(result.interp_result), content="-1")
+  inspect(wasi_errno_from_result(result.jit_result), content="-1")
 }
 
 ///|
