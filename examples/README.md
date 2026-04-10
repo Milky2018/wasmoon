@@ -43,6 +43,13 @@ These examples require the `--dir` flag to grant filesystem access:
 ./wasmoon run examples/benchmark.wat
 ```
 
+### Component Model Examples
+
+```bash
+# Run component-model example suite
+python3 scripts/run_component_wast.py --dir examples/component-model --rec
+```
+
 ## Example Descriptions
 
 | File | Description |
