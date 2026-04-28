@@ -53,12 +53,13 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --locked
+          cargo install wasm-tools --version 1.243.0 --locked
+          wasm-tools --version
 
       - name: run component-spec subset
         timeout-minutes: 5
         run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec
+          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
 
       - name: run wast spec tests
         timeout-minutes: 5
@@ -178,12 +179,13 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --locked
+          cargo install wasm-tools --version 1.243.0 --locked
+          wasm-tools --version
 
       - name: run component-spec subset (amd64)
         timeout-minutes: 5
         run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec
+          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
 
       - name: run wast spec tests (amd64)
         id: wast_amd64
