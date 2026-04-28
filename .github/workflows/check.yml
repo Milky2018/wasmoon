@@ -51,6 +51,10 @@ jobs:
           moon build --target native --release
           ./install.sh
 
+      - name: install wasm-tools
+        run: |
+          cargo install wasm-tools --locked
+
       - name: run component-spec subset
         timeout-minutes: 5
         run: |
@@ -171,6 +175,10 @@ jobs:
         run: |
           moon build --target native --release
           ./install.sh
+
+      - name: install wasm-tools
+        run: |
+          cargo install wasm-tools --locked
 
       - name: run component-spec subset (amd64)
         timeout-minutes: 5
