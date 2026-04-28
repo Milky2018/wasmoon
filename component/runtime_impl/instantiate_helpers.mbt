@@ -403,3 +403,59 @@ fn core_imports_from_args(
 }
 
 ///|
+fn supplied_core_func_for_import(
+  mod_name : String,
+  field : String,
+  args : Array[CoreInstantiateArg],
+  state : BuildState,
+) -> CoreFuncRef? raise ComponentRuntimeError {
+  for arg in args {
+    match resolve_sortidx(arg.sortidx, state) {
+      ComponentExtern::CoreInstance(inst) =>
+        if arg.name == mod_name {
+          match inst.funcs.get(field) {
+            Some(f) => return Some(f)
+            None => ()
+          }
+        }
+      ComponentExtern::CoreFunc(f) => {
+        let (arg_mod, arg_field) = split_core_import_name(arg.name)
+        if arg_mod == mod_name && arg_field == field {
+          return Some(f)
+        }
+      }
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+fn validate_core_import_args(
+  module_ : @types.Module,
+  args : Array[CoreInstantiateArg],
+  state : BuildState,
+) -> Unit raise ComponentRuntimeError {
+  for imp in module_.imports {
+    match imp.desc {
+      @types.ImportDesc::Func(tyidx) => {
+        let expected = module_.get_func_type(tyidx)
+        match
+          supplied_core_func_for_import(imp.mod_name, imp.name, args, state) {
+          Some(f) => {
+            let actual = core_func_ref_type(f)
+            if actual != expected {
+              raise ImportTypeMismatch(
+                "type mismatch for export `\{imp.name}` of module instantiation argument `\{imp.mod_name}`",
+              )
+            }
+          }
+          None => ()
+        }
+      }
+      _ => ()
+    }
+  }
+}
+
+///|

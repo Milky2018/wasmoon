@@ -79,12 +79,6 @@ fn parse_context_core_valtype(
   let b = reader.read_u8()
   match b {
     0x7f => @types.ValueType::I32
-    0x7e => @types.ValueType::I64
-    0x7d => @types.ValueType::F32
-    0x7c => @types.ValueType::F64
-    0x7b => @types.ValueType::V128
-    0x70 => @types.ValueType::FuncRef
-    0x6f => @types.ValueType::ExternRef
     _ => raise InvalidCanonSection
   }
 }
@@ -205,11 +199,17 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     0x0a => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
+      if idx != 0 {
+        raise InvalidCanonSection
+      }
       Canon::ContextGet(vt, idx)
     }
     0x0b => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
+      if idx != 0 {
+        raise InvalidCanonSection
+      }
       Canon::ContextSet(vt, idx)
     }
     0x09 => {

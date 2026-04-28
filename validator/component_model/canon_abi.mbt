@@ -261,6 +261,61 @@ fn core_functype_for_component_functype(
 }
 
 ///|
+fn core_functype_for_task_return(
+  result : @component.ValType?,
+  type_table : Array[@component.TypeDef?],
+) -> @types.FuncType? {
+  let params : Array[@types.ValueType] = []
+  match result {
+    None => ()
+    Some(vt) =>
+      match core_valtypes_for_component_valtype(vt, type_table) {
+        Some(ts) =>
+          for t in ts {
+            params.push(t)
+            if params.length() > 16 {
+              return None
+            }
+          }
+        None => return None
+      }
+  }
+  Some({ params, results: [] })
+}
+
+///|
+fn core_functype_for_canon(
+  c : @component.Canon,
+  type_table : Array[@component.TypeDef?],
+) -> @types.FuncType? {
+  match c {
+    BackpressureSet => Some({ params: [@types.ValueType::I32], results: [] })
+    BackpressureInc | BackpressureDec | TaskCancel =>
+      Some({ params: [], results: [] })
+    TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
+    WaitableSetNew => Some({ params: [], results: [@types.ValueType::I32] })
+    WaitableSetWait(_, _) | WaitableSetPoll(_, _) =>
+      Some({
+        params: [@types.ValueType::I32, @types.ValueType::I32],
+        results: [@types.ValueType::I32],
+      })
+    WaitableSetDrop => Some({ params: [@types.ValueType::I32], results: [] })
+    WaitableJoin =>
+      Some({
+        params: [@types.ValueType::I32, @types.ValueType::I32],
+        results: [],
+      })
+    SubtaskDrop => Some({ params: [@types.ValueType::I32], results: [] })
+    SubtaskCancel(_) =>
+      Some({ params: [@types.ValueType::I32], results: [@types.ValueType::I32] })
+    ThreadYield(_) => Some({ params: [], results: [@types.ValueType::I32] })
+    ContextGet(vt, _) => Some({ params: [], results: [vt] })
+    ContextSet(vt, _) => Some({ params: [vt], results: [] })
+    _ => None
+  }
+}
+
+///|
 fn validate_canon(
   c : @component.Canon,
   type_table : Array[@component.TypeDef?],
@@ -493,6 +548,21 @@ fn validate_canon(
         Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
         None => ()
         Some(_) => raise SectionParseError(8, "not a resource type")
+      }
+    }
+    TaskReturn(_, opts) => {
+      validate_canon_opts(opts)
+      for opt in opts {
+        match opt {
+          @component.CanonOpt::Async => raise CanonOptionNotAllowed("async")
+          @component.CanonOpt::Callback(_) =>
+            raise CanonOptionNotAllowed("callback")
+          @component.CanonOpt::PostReturn(_) =>
+            raise CanonOptionNotAllowed("post-return")
+          @component.CanonOpt::Realloc(_) =>
+            raise CanonOptionNotAllowed("realloc")
+          _ => ()
+        }
       }
     }
     _ => ()

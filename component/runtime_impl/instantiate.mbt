@@ -49,8 +49,9 @@ fn instantiate_component(
               if module_idx < 0 || module_idx >= state.core_modules.length() {
                 raise InvalidCoreModuleIndex(module_idx)
               }
-              let imports = core_imports_from_args(args, state)
               let mod_ = state.core_modules[module_idx]
+              validate_core_import_args(mod_, args, state)
+              let imports = core_imports_from_args(args, state)
               // If this module has a start function, don't hold the reserved
               // handle: start code expects fresh resource tables.
               if mod_.start is Some(_) {
