@@ -1,13 +1,13 @@
 ;;! component_model_async = true
 
-;; backpressure.set
-(component
-  (core module $m
-    (import "" "backpressure.set" (func $backpressure-set (param i32)))
+;; backpressure.set was removed from the component-model async text format.
+;; Keep the old binary opcode in the runtime for compatibility, but the current
+;; WAT parser should reject this canonical declaration.
+(assert_malformed
+  (component quote
+    "(core func (canon backpressure.set))"
   )
-  (core func $backpressure-set (canon backpressure.set))
-  (core instance $i (instantiate $m (with "" (instance (export "backpressure.set" (func $backpressure-set))))))
-)
+  "unexpected token")
 
 ;; backpressure.inc
 (component

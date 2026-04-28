@@ -53,7 +53,7 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --version 1.243.0 --locked
+          cargo install wasm-tools --locked
           wasm-tools --version
 
       - name: run component-spec subset
@@ -179,7 +179,7 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --version 1.243.0 --locked
+          cargo install wasm-tools --locked
           wasm-tools --version
 
       - name: run component-spec subset (amd64)
