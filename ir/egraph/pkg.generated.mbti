@@ -32,8 +32,6 @@ pub fn vector_rules() -> Array[RewriteRule]
 
 // Types and methods
 pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, @debug.Debug)
-#deprecated
-pub fn EClassId::inner(Self) -> Int
 pub impl Show for EClassId
 
 type EGraph

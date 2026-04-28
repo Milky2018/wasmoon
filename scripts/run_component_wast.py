@@ -25,7 +25,6 @@ BASE_TOOLS_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_TOOLS_TIMEOUT", "30")
 )
 
-
 def detect_qemu_tcg() -> bool:
     cpuinfo = Path("/proc/cpuinfo")
     if not cpuinfo.exists():
@@ -503,6 +502,18 @@ def parse_const(node) -> Optional[dict]:
                 return None
             items.append(val)
         return {"type": "list", "items": items}
+    if head == "tuple.const":
+        items: list[dict] = []
+        for item in node[1:]:
+            val = parse_const(item)
+            if val is None:
+                return None
+            items.append(val)
+        return {"type": "tuple", "items": items}
+    if head == "enum.const":
+        if len(node) < 2 or not isinstance(node[1], StringToken):
+            return None
+        return {"type": "enum", "value": node[1].value}
     type_name = head[: -len(".const")]
     if type_name not in SUPPORTED_VALUE_TYPES:
         return None
@@ -588,6 +599,7 @@ def compile_component(
     tmp: Path,
     idx: int,
     wasmoon_tools: Path,
+    wasm_tools: Path,
 ) -> Tuple[Optional[Path], Optional[str]]:
     src = tmp / f"component_{idx}.wat"
     out = tmp / f"component_{idx}.wasm"
@@ -603,10 +615,27 @@ def compile_component(
             f"wasmoon-tools wat2wasm timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
         )
     if returncode != 0:
-        err = (stderr or stdout).strip()
+        primary_err = (stderr or stdout).strip() or "unknown error"
+        fb_code, fb_stdout, fb_stderr, fb_timed_out = run_command(
+            [str(wasm_tools), "parse", str(src), "-o", str(out)],
+            timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+        )
+        if fb_timed_out:
+            return (
+                None,
+                "wasmoon-tools wat2wasm failed: "
+                + primary_err
+                + f"; fallback wasm-tools parse timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
+            )
+        if fb_code == 0:
+            return out, None
+        fb_err = (fb_stderr or fb_stdout).strip() or "unknown error"
         return (
             None,
-            "wasmoon-tools wat2wasm failed: " + (err or "unknown error"),
+            "wasmoon-tools wat2wasm failed: "
+            + primary_err
+            + "; fallback wasm-tools parse failed: "
+            + fb_err,
         )
 
     return out, None
@@ -718,6 +747,7 @@ def run_file(
     path: Path,
     wasmoon: Path,
     wasmoon_tools: Path,
+    wasm_tools: Path,
     *,
     keep_tmp_on_failure: bool = False,
 ) -> dict:
@@ -773,6 +803,7 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
+                    wasm_tools,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -828,6 +859,7 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
+                    wasm_tools,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -901,6 +933,7 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
+                    wasm_tools,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -938,6 +971,7 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
+                    wasm_tools,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -1032,6 +1066,7 @@ def run_file(
                     tmp_path,
                     comp_idx,
                     wasmoon_tools,
+                    wasm_tools,
                 )
                 comp_idx += 1
                 if comp_bin is None:
@@ -1150,14 +1185,14 @@ def main() -> int:
         )
         return 1
 
-    supports_component_wat = probe_component_wat_support(wasmoon_tools)
-
-    if not supports_component_wat:
+    wasm_tools_bin = shutil.which("wasm-tools")
+    if wasm_tools_bin is None:
         print(
-            "Error: wasmoon-tools wat2wasm does not support component text yet; "
-            "component-spec runner requires native component text support."
+            "Error: `wasm-tools` not found on PATH. "
+            "Install wasm-tools to compile component WAT fallback forms."
         )
         return 1
+    wasm_tools = Path(wasm_tools_bin).resolve()
 
     test_dir = repo_root / args.dir
     if not test_dir.exists():
@@ -1185,16 +1220,17 @@ def main() -> int:
     total_passed = total_failed = total_skipped = 0
     files_ok = files_failed = 0
     for wast_file in wast_files:
+        name = str(wast_file.relative_to(test_dir))
         result = run_file(
             wast_file,
             wasmoon,
             wasmoon_tools,
+            wasm_tools,
             keep_tmp_on_failure=args.keep_tmp_on_failure,
         )
         total_passed += result["passed"]
         total_failed += result["failed"]
         total_skipped += result["skipped"]
-        name = str(wast_file.relative_to(test_dir))
         if result["failed"] == 0:
             status = f"[PASS] (pass={result['passed']} skip={result['skipped']})"
             files_ok += 1

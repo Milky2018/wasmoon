@@ -9,6 +9,25 @@ fn instantiate_canon_task_return(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
+  for opt in opts {
+    match opt {
+      CanonOpt::Async =>
+        raise ImportTypeMismatch(
+          "cannot specify `async` option on `task.return`",
+        )
+      CanonOpt::Callback(_) =>
+        raise ImportTypeMismatch("cannot specify callback without async")
+      CanonOpt::PostReturn(_) =>
+        raise ImportTypeMismatch(
+          "cannot specify `post-return` option on `task.return`",
+        )
+      CanonOpt::Realloc(_) =>
+        raise ImportTypeMismatch(
+          "cannot specify `realloc` option on `task.return`",
+        )
+      _ => ()
+    }
+  }
   let resources = resolve_canon_resources(opts, state)
   let core_params : Array[@types.ValueType] = match result {
     Some(vt) => core_types_for_valtype(vt, state.types, false) catch { _ => [] }
@@ -149,6 +168,7 @@ fn instantiate_canon_task_cancel(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
+    async_state.task_self_cancelled.set(task_id, true)
     async_state.task_cancelled.set(task_id, true)
     async_state.task_returned.set(task_id, true)
     set_task_result(async_state, task_id, owner_component_id, [])

@@ -69,9 +69,13 @@ pub(all) struct AsyncState {
   task_results : Map[Int64, Array[ComponentValue]]
   task_result_owner : Map[Int64, Int]
   task_returned : Map[Int64, Bool]
+  task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]
   task_contexts : Map[Int64, Map[Int, @types.Value]]
   task_thread : Map[Int64, Map[Int, Int]]
+  threads : Map[Int64, GuestThread]
+  thread_runnable : Map[Int64, Array[Int]]
+  main_thread_scheduled : Map[Int64, Bool]
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
@@ -98,6 +102,9 @@ pub(all) struct AsyncState {
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
   thread_handle_required : Map[Int, Bool]
+  backpressure_by_instance : Map[Int, Int]
+  next_error_context_by_component : Map[Int, Array[Int]]
+  error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
 pub fn AsyncState::new(StreamTable) -> Self
 
@@ -213,9 +220,15 @@ pub impl Show for CoreInstance
 
 type DecodedCallbackCode derive(@debug.Debug)
 
+type FlatStorageField derive(@debug.Debug)
+
 type FutureEndpoint derive(@debug.Debug)
 
 type FutureState derive(@debug.Debug)
+
+type GuestThread derive(@debug.Debug)
+
+type GuestThreadPhase derive(Eq, @debug.Debug)
 
 type PendingFutureRead derive(@debug.Debug)
 

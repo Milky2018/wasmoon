@@ -13,5 +13,6 @@
     "runtime"
   ],
   "description": "A slow and insecure runtime for WebAssembly",
-  "preferred-target": "native"
+  "preferred-target": "native",
+  "supported-targets": "native"
 }

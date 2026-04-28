@@ -701,34 +701,33 @@ fn step_task_once(
           let core_results = call_core_func_guarded(
             store, may_enter, core_func, core_args,
           )
-          if func_type.is_async {
-            let task_id = current_task_id(async_state)
-            // Prefer results published via `canon task.return` (async-lifted tasks often return
-            // `[]` from the core function), but fall back to direct core results.
-            match async_state.task_results.get(task_id) {
-              Some(_vals) => async_state.task_returned.set(task_id, true)
-              None => {
-                let vals = core_results_to_component(
-                  core_results, func_type, types, resources, store, callee_table,
-                )
-                match func_type.result {
-                  Some(rty) =>
-                    if vals.length() > 0 {
-                      validate_lifted_stream_future(
-                        rty,
-                        vals[0],
-                        types,
-                        async_state,
-                        callee_table.id,
-                      )
-                    } else {
-                      ()
-                    }
-                  None => ()
-                }
-                async_state.task_returned.set(task_id, true)
-                set_task_result(async_state, task_id, callee_table.id, vals)
+          let task_id = current_task_id(async_state)
+          // Prefer results published via `canon task.return` (many async-abi
+          // functions return `[]` from core and communicate via task.return),
+          // but fall back to direct core results.
+          match async_state.task_results.get(task_id) {
+            Some(_vals) => async_state.task_returned.set(task_id, true)
+            None => {
+              let vals = core_results_to_component(
+                core_results, func_type, types, resources, store, callee_table,
+              )
+              match func_type.result {
+                Some(rty) =>
+                  if vals.length() > 0 {
+                    validate_lifted_stream_future(
+                      rty,
+                      vals[0],
+                      types,
+                      async_state,
+                      callee_table.id,
+                    )
+                  } else {
+                    ()
+                  }
+                None => ()
               }
+              async_state.task_returned.set(task_id, true)
+              set_task_result(async_state, task_id, callee_table.id, vals)
             }
           }
           TaskStep::Done
@@ -750,29 +749,27 @@ fn step_task_once(
         let core_results = call_core_func_guarded(
           store, may_enter, core_func, core_args,
         )
-        if func_type.is_async {
-          let vals = core_results_to_component(
-            core_results, func_type, types, resources, store, callee_table,
-          )
-          match func_type.result {
-            Some(rty) =>
-              if vals.length() > 0 {
-                validate_lifted_stream_future(
-                  rty,
-                  vals[0],
-                  types,
-                  async_state,
-                  callee_table.id,
-                )
-              } else {
-                ()
-              }
-            None => ()
-          }
-          let task_id = current_task_id(async_state)
-          async_state.task_returned.set(task_id, true)
-          set_task_result(async_state, task_id, callee_table.id, vals)
+        let vals = core_results_to_component(
+          core_results, func_type, types, resources, store, callee_table,
+        )
+        match func_type.result {
+          Some(rty) =>
+            if vals.length() > 0 {
+              validate_lifted_stream_future(
+                rty,
+                vals[0],
+                types,
+                async_state,
+                callee_table.id,
+              )
+            } else {
+              ()
+            }
+          None => ()
         }
+        let task_id = current_task_id(async_state)
+        async_state.task_returned.set(task_id, true)
+        set_task_result(async_state, task_id, callee_table.id, vals)
         TaskStep::Done
       }
     }
@@ -873,7 +870,13 @@ fn progress_one_subtask(
     }
     if inflight == 0 && queue0.length() > 0 {
       let next_id = queue0[0]
-      if !task_on_stack(next_id) {
+      let can_start = match async_state.subtasks.get(next_id) {
+        Some(st) =>
+          backpressure_value_for_instance(async_state, st.callee_instance_id) ==
+          0
+        None => true
+      }
+      if can_start && !task_on_stack(next_id) {
         candidates.push((key, next_id))
       }
     }
@@ -973,6 +976,7 @@ fn progress_one_subtask(
           async_state.task_results.remove(task_id)
           async_state.task_result_owner.remove(task_id)
           async_state.task_returned.remove(task_id)
+          async_state.task_self_cancelled.remove(task_id)
           async_state.task_cancelled.remove(task_id)
           async_state.task_contexts.remove(task_id)
           remove_task_meta(async_state, task_id)
@@ -990,7 +994,8 @@ fn progress_one_subtask(
         // Write subtask results into the return buffer (async-lower ABI).
         // component-spec expects the return value to be materialized in memory
         // before emitting the RETURNED event.
-        let cancelled = async_state.task_cancelled.get(task_id) is Some(true)
+        let cancelled = async_state.task_self_cancelled.get(task_id)
+          is Some(true)
         match st.result_ty {
           Some(_) =>
             if st.mem_addr is Some(mem_addr) {
@@ -1061,10 +1066,17 @@ fn progress_one_subtask(
         st.phase[0] = SubtaskPhase::Returned
         async_state.inflight_by_instance.set(st.bp_key, 0)
         let owner_component_id = st.caller_table.id
+        let payload = if cancelled {
+          // CANCELLED_BEFORE_RETURNED
+          4
+        } else {
+          // RETURNED
+          2
+        }
         enqueue_waitable_event(
           async_state,
           handle_key(owner_component_id, st.id),
-          { owner_component_id, code: 1, index: st.id, payload: 2 },
+          { owner_component_id, code: 1, index: st.id, payload },
         )
         return true
       }
@@ -1161,7 +1173,7 @@ fn call_component_func_in_task(
       callee_table,
       may_enter,
       cb_opt,
-      _async_abi
+      async_abi
     ) => {
       if func_type.is_async {
         return await_component_func(
@@ -1194,12 +1206,52 @@ fn call_component_func_in_task(
           push_task(async_state, task_id, false)
           take_task_result(async_state, task_id) |> ignore
           let out = try {
-            let core_results = call_core_func_guarded(
-              store, may_enter, core_func, core_args,
-            )
-            let mut code = match core_results {
-              [@types.Value::I32(n)] => n
-              _ => raise CanonCallError("type mismatch")
+            let mut code = 0
+            while true {
+              if async_state.yield_cursor_stack.length() > 0 {
+                async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() -
+                1] = 0
+              }
+              if async_state.wait_cursor_stack.length() > 0 {
+                async_state.wait_cursor_stack[async_state.wait_cursor_stack.length() -
+                1] = 0
+              }
+              if async_state.call_cursor_stack.length() > 0 {
+                async_state.call_cursor_stack[async_state.call_cursor_stack.length() -
+                1] = 0
+              }
+              if async_state.stream_cursor_stack.length() > 0 {
+                async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
+                1] = 0
+              }
+              let core_results = call_core_func_guarded(
+                store, may_enter, core_func, core_args,
+              ) catch {
+                AsyncSuspendYield => {
+                  if !progress_one_subtask(async_state, store) {
+                    raise CanonCallError(
+                      "wasm trap: deadlock detected: event loop cannot make further progress",
+                    )
+                  }
+                  continue
+                }
+                AsyncSuspendWait(ws) => {
+                  while !waitable_set_has_event(async_state, ws) {
+                    if !progress_one_subtask(async_state, store) {
+                      raise CanonCallError(
+                        "wasm trap: deadlock detected: event loop cannot make further progress",
+                      )
+                    }
+                  }
+                  continue
+                }
+                e => raise e
+              }
+              code = match core_results {
+                [@types.Value::I32(n)] => n
+                _ => raise CanonCallError("type mismatch")
+              }
+              break
             }
             while true {
               let u = code.reinterpret_as_uint()
@@ -1285,12 +1337,59 @@ fn call_component_func_in_task(
       let core_args = component_args_to_core(
         xargs, func_type, types, resources, store, resource_table, callee_table,
       )
-      let core_results = call_core_func_guarded(
-        store, may_enter, core_func, core_args,
-      )
-      let component_results = core_results_to_component(
-        core_results, func_type, types, resources, store, callee_table,
-      )
+      // Synchronous lifts can still hit cooperative suspension points from
+      // canonical intrinsics (e.g. sync future.read/write). Drive the event
+      // loop until the call can complete or deadlock.
+      let mut core_results : Array[@types.Value] = []
+      while true {
+        let out = call_core_func_guarded(store, may_enter, core_func, core_args) catch {
+          AsyncSuspendYield => {
+            let progressed = progress_one_subtask(async_state, store) catch {
+              AsyncSuspendYield => true
+              AsyncSuspendWait(_) => true
+              e => raise e
+            }
+            if !progressed {
+              raise CanonCallError(
+                "wasm trap: deadlock detected: event loop cannot make further progress",
+              )
+            }
+            continue
+          }
+          AsyncSuspendWait(ws) => {
+            while !waitable_set_has_event(async_state, ws) {
+              let progressed = progress_one_subtask(async_state, store) catch {
+                AsyncSuspendYield => true
+                AsyncSuspendWait(_) => true
+                e => raise e
+              }
+              if !progressed {
+                raise CanonCallError(
+                  "wasm trap: deadlock detected: event loop cannot make further progress",
+                )
+              }
+            }
+            continue
+          }
+          e => raise e
+        }
+        core_results = out
+        break
+      }
+      let task_id = current_task_id(async_state)
+      let component_results = if async_abi {
+        match take_task_result(async_state, task_id) {
+          Some(v) => v
+          None =>
+            core_results_to_component(
+              core_results, func_type, types, resources, store, callee_table,
+            )
+        }
+      } else {
+        core_results_to_component(
+          core_results, func_type, types, resources, store, callee_table,
+        )
+      }
       // `canon lift` must validate stream/future handles at the point they are lifted
       // from core values (component-spec "done" semantics).
       match func_type.result {

@@ -236,6 +236,44 @@ fn parse_char_value(s : String) -> Char raise ComponentTestError {
 }
 
 ///|
+fn parse_enum_case_tag(s : String) -> Int raise ComponentTestError {
+  parse_signed_int(s) catch {
+    _ => {
+      let mut idx = 0
+      let mut acc = 0
+      for c in s {
+        if idx == 0 {
+          if c != 'E' && c != 'e' {
+            raise ComponentTestError::ParseError("unsupported enum case \{s}")
+          }
+        } else {
+          let d = match c {
+            '0' => 0
+            '1' => 1
+            '2' => 2
+            '3' => 3
+            '4' => 4
+            '5' => 5
+            '6' => 6
+            '7' => 7
+            '8' => 8
+            '9' => 9
+            _ =>
+              raise ComponentTestError::ParseError("unsupported enum case \{s}")
+          }
+          acc = acc * 10 + d
+        }
+        idx += 1
+      }
+      if idx <= 1 {
+        raise ComponentTestError::ParseError("unsupported enum case \{s}")
+      }
+      acc
+    }
+  }
+}
+
+///|
 fn parse_component_value(
   val : JsonValue,
 ) -> @runtime_impl.ComponentValue raise ComponentTestError {
@@ -253,6 +291,26 @@ fn parse_component_value(
       }
       @runtime_impl.ComponentValue::List(out)
     }
+    "tuple" => {
+      let out : Array[@runtime_impl.ComponentValue] = []
+      match val.items {
+        Some(items) =>
+          for item in items {
+            out.push(parse_component_value(item))
+          }
+        None => ()
+      }
+      @runtime_impl.ComponentValue::Tuple(out)
+    }
+    "enum" =>
+      @runtime_impl.ComponentValue::U32(
+        parse_enum_case_tag(
+          match raw {
+            Some(v) => v
+            None => raise ComponentTestError::ParseError("missing value")
+          },
+        ),
+      )
     "bool" =>
       @runtime_impl.ComponentValue::Bool(
         @string.parse_bool(
@@ -452,6 +510,30 @@ fn make_const_u32_func(value : Int) -> @runtime_impl.ComponentFunc {
 }
 
 ///|
+fn make_echo_u32_func() -> @runtime_impl.ComponentFunc {
+  let func_type : @component.FuncType = {
+    is_async: false,
+    params: [
+      { label: "p1", ty: @component.ValType::Prim(@component.PrimValType::U32) },
+    ],
+    result: Some(@component.ValType::Prim(@component.PrimValType::U32)),
+  }
+  @runtime_impl.ComponentFunc::Host(func_type, [], fn(
+    args : Array[@runtime_impl.ComponentValue],
+    _table : @runtime_impl.ResourceTable,
+  ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
+    match args {
+      [@runtime_impl.ComponentValue::U32(v)] =>
+        [@runtime_impl.ComponentValue::U32(v)]
+      _ =>
+        raise @runtime_impl.ComponentRuntimeError::HostCallError(
+          "argument type mismatch",
+        )
+    }
+  })
+}
+
+///|
 fn make_instance(
   name : String,
   store : @runtime.Store,
@@ -554,9 +636,14 @@ fn run_component_script_impl(
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)
   let return_four = make_const_u32_func(4)
+  let echo_u32 = make_echo_u32_func()
   linker.add_import(
     "host-return-two",
     @runtime_impl.ComponentExtern::Func(return_two),
+  )
+  linker.add_import(
+    "host-echo-u32",
+    @runtime_impl.ComponentExtern::Func(echo_u32),
   )
   let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
   let simple_module = @wat.parse(simple_module_wat) catch {

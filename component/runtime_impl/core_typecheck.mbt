@@ -24,6 +24,17 @@ fn core_instance_from_module(
 }
 
 ///|
+fn core_func_ref_type(
+  f : CoreFuncRef,
+) -> @types.FuncType raise ComponentRuntimeError {
+  if f.func_idx < 0 || f.func_idx >= f.instance.func_type_indices.length() {
+    raise InvalidCoreFuncIndex(f.func_idx)
+  }
+  let tyidx = f.instance.func_type_indices[f.func_idx]
+  f.instance.get_func_type(tyidx)
+}
+
+///|
 priv enum CoreExternType {
   Func(@types.FuncType)
   Table(@types.TableType)

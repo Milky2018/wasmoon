@@ -421,18 +421,42 @@ fn validate_component_inner(
             }
             @component.CoreInstanceExpr::InlineExports(inline_exports) => {
               let map : Map[String, Int] = {}
+              let type_map : Map[String, CoreExternType] = {}
               for ex in inline_exports {
                 check_sortidx(ex.sortidx, counts, type_table.length())
                 if map.get(ex.name) is Some(_) {
                   raise DuplicateExportName(ex.name)
                 }
                 match ex.sortidx.sort {
-                  @component.Sort::Core(core_sort) =>
+                  @component.Sort::Core(core_sort) => {
                     map.set(ex.name, core_sort)
+                    match core_sort {
+                      0x00 =>
+                        if ex.sortidx.idx >= 0 &&
+                          ex.sortidx.idx < core_func_types.length() {
+                          match core_func_types[ex.sortidx.idx] {
+                            Some(ft) =>
+                              type_map.set(ex.name, CoreExternType::Func(ft))
+                            None => ()
+                          }
+                        }
+                      0x02 =>
+                        if ex.sortidx.idx >= 0 &&
+                          ex.sortidx.idx < core_memory_types.length() {
+                          match core_memory_types[ex.sortidx.idx] {
+                            Some(mt) =>
+                              type_map.set(ex.name, CoreExternType::Memory(mt))
+                            None => ()
+                          }
+                        }
+                      _ => ()
+                    }
+                  }
                   _ => ()
                 }
               }
               export_map = Some(map)
+              export_types = Some(type_map)
             }
           }
           core_instance_exports.push(export_map)
@@ -819,8 +843,9 @@ fn validate_component_inner(
                 }
               }
             // All non-lift canonical items append a core function to the core-func
-            // index space, but we don't (yet) model their signatures here.
-            _ => core_func_types.push(None)
+            // index space. Model known intrinsic signatures so core module
+            // instantiation validates imports against canonical builtins.
+            _ => core_func_types.push(core_functype_for_canon(c, type_table))
           }
         }
       }

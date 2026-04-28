@@ -407,8 +407,6 @@ pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
 pub struct ExecCode(@jit_ffi.ExecCode)
-#deprecated
-pub fn ExecCode::inner(Self) -> @jit_ffi.ExecCode
 pub fn ExecCode::new(Array[Int]) -> Self?
 pub fn ExecCode::ptr(Self) -> Int64
 
@@ -564,8 +562,6 @@ pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
 pub impl Show for Profiler
 
 pub(all) struct Single[A](A)
-#deprecated
-pub fn[A] Single::inner(Self[A]) -> A
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
 

@@ -14,6 +14,8 @@ pub(all) enum CanonOpt {
   Memory(Int)
   Realloc(Int)
   PostReturn(Int)
+  CoreType(Int)
+  Gc
   Async
   Callback(Int)
 } derive(Debug, Eq)
@@ -22,6 +24,9 @@ pub(all) enum CanonOpt {
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int) // core funcidx, opts, typeidx
   Lower(Int, Array[CanonOpt]) // funcidx, opts
+  BackpressureSet
+  BackpressureInc
+  BackpressureDec
   ContextGet(@types.ValueType, Int) // valtype, context index
   ContextSet(@types.ValueType, Int) // valtype, context index
   TaskReturn(ValType?, Array[CanonOpt]) // result, opts
@@ -54,6 +59,9 @@ pub(all) enum Canon {
   FutureCancelWrite(Int, Bool) // future typeidx, async?
   FutureDropReadable(Int) // future typeidx
   FutureDropWritable(Int) // future typeidx
+  ErrorContextNew(Array[CanonOpt]) // opts
+  ErrorContextDebugMessage(Array[CanonOpt]) // opts
+  ErrorContextDrop
   ResourceNew(Int) // typeidx
   ResourceDrop(Int) // typeidx
   ResourceRep(Int) // typeidx
@@ -71,12 +79,6 @@ fn parse_context_core_valtype(
   let b = reader.read_u8()
   match b {
     0x7f => @types.ValueType::I32
-    0x7e => @types.ValueType::I64
-    0x7d => @types.ValueType::F32
-    0x7c => @types.ValueType::F64
-    0x7b => @types.ValueType::V128
-    0x70 => @types.ValueType::FuncRef
-    0x6f => @types.ValueType::ExternRef
     _ => raise InvalidCanonSection
   }
 }
@@ -146,6 +148,8 @@ fn parse_opts(reader : Reader) -> Array[CanonOpt] raise ComponentParseError {
       0x03 => CanonOpt::Memory(reader.read_leb_u32())
       0x04 => CanonOpt::Realloc(reader.read_leb_u32())
       0x05 => CanonOpt::PostReturn(reader.read_leb_u32())
+      0x08 => CanonOpt::CoreType(reader.read_leb_u32())
+      0x09 => CanonOpt::Gc
       0x06 => CanonOpt::Async
       0x07 => CanonOpt::Callback(reader.read_leb_u32())
       _ => raise InvalidCanonSection
@@ -180,6 +184,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       let opts = parse_opts(reader)
       Canon::Lower(func, opts)
     }
+    0x08 => Canon::BackpressureSet
     0x05 => Canon::TaskCancel
     0x06 => {
       let async_flag = reader.read_u8()
@@ -194,11 +199,17 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     0x0a => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
+      if idx != 0 {
+        raise InvalidCanonSection
+      }
       Canon::ContextGet(vt, idx)
     }
     0x0b => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
+      if idx != 0 {
+        raise InvalidCanonSection
+      }
       Canon::ContextSet(vt, idx)
     }
     0x09 => {
@@ -300,6 +311,15 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     }
     0x1a => Canon::FutureDropReadable(reader.read_typeidx())
     0x1b => Canon::FutureDropWritable(reader.read_typeidx())
+    0x1c => {
+      let opts = parse_opts(reader)
+      Canon::ErrorContextNew(opts)
+    }
+    0x1d => {
+      let opts = parse_opts(reader)
+      Canon::ErrorContextDebugMessage(opts)
+    }
+    0x1e => Canon::ErrorContextDrop
     0x1f => Canon::WaitableSetNew
     0x20 => {
       let flag = reader.read_u8()
@@ -317,6 +337,8 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
     }
     0x22 => Canon::WaitableSetDrop
     0x23 => Canon::WaitableJoin
+    0x24 => Canon::BackpressureInc
+    0x25 => Canon::BackpressureDec
     _ => raise UnsupportedCanonOpcode(tag)
   }
 }

@@ -64,6 +64,7 @@ fn instantiate_canon_subtask_cancel(
               // Already resolved.
               return cache_i32(0)
             }
+            async_state.task_cancelled.set(skey, true)
 
             // Mark cancellation request for callback-driven tasks.
             match st.driver {
@@ -113,7 +114,7 @@ fn instantiate_canon_subtask_cancel(
                         owner_component_id,
                         code: 1,
                         index: id,
-                        payload: 2,
+                        payload: 4,
                       })
                       // CANCELLED_BEFORE_RETURNED=4 (component-spec convention).
                       return cache_i32(4)
@@ -229,6 +230,7 @@ fn instantiate_canon_subtask_drop(
         async_state.task_results.remove(skey)
         async_state.task_result_owner.remove(skey)
         async_state.task_returned.remove(skey)
+        async_state.task_self_cancelled.remove(skey)
         async_state.task_cancelled.remove(skey)
         async_state.task_contexts.remove(skey)
         drop_task_thread(async_state, skey)

@@ -97,6 +97,11 @@ fn call_core_func(
         None => {
           // Include a tiny bit of context to make debugging easier when the trap
           // originates from core wasm (e.g. `unreachable` inside a component-spec test).
+          let trap_msg = if e.to_string() == "unreachable" {
+            "wasm `unreachable` instruction executed"
+          } else {
+            e.to_string()
+          }
           let inst_name = match
             core_instance_names.get(core_func.instance.store_idx) {
             Some(n) => n
@@ -108,11 +113,11 @@ fn call_core_func(
           }
           if inst_name == "" {
             raise CanonCallError(
-              "\{e.to_string()} (core store_idx=\{core_func.instance.store_idx} func_idx=\{core_func.func_idx})\{dbg}",
+              "\{trap_msg} (core store_idx=\{core_func.instance.store_idx} func_idx=\{core_func.func_idx})\{dbg}",
             )
           } else {
             raise CanonCallError(
-              "\{e.to_string()} (core=\{inst_name} func_idx=\{core_func.func_idx})\{dbg}",
+              "\{trap_msg} (core=\{inst_name} func_idx=\{core_func.func_idx})\{dbg}",
             )
           }
         }
