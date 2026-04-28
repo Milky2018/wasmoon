@@ -50,6 +50,12 @@ These examples require the `--dir` flag to grant filesystem access:
 python3 scripts/run_component_wast.py --dir examples/component-model --rec
 ```
 
+### Algorithm Benchmarks
+
+`examples/algorithms/` contains benchmark workloads imported from
+https://github.com/jedisct1/webassembly-benchmarks under the ISC License. See
+`examples/algorithms/UPSTREAM.md` and `examples/algorithms/LICENSE`.
+
 ## Example Descriptions
 
 | File | Description |

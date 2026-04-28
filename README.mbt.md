@@ -196,6 +196,12 @@ WIT support is still evolving. Current `wasmoon-tools wit` supports parse/resolv
 (`deps/`), JSON output, component encode/decode/importize workflows, and tested
 non-scalar/resource-related cases. Some spec corners may still be unsupported.
 
+## License
+
+Wasmoon is licensed under Apache-2.0. Some test suites, benchmark workloads,
+and generated diagnostic artifacts are imported from third-party projects under
+their own compatible licenses. See `THIRD_PARTY_NOTICES.md`.
+
 ## Validation / CI-equivalent Checks
 
 ```bash

@@ -1,0 +1,6 @@
+Unless otherwise noted in a `LICENSE` in a subdirectory, files in this directory
+that were imported from https://github.com/WebAssembly/component-model are
+licensed under Apache-2.0. See `LICENSE-APACHE`.
+
+The `wasmtime/` subdirectory contains test cases imported from Wasmtime and
+keeps its own Apache-2.0 WITH LLVM-exception license file.
