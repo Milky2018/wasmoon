@@ -86,7 +86,7 @@ test "native file operations: write and read" {
   let bytes = string_to_utf8(content)
   let buf = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
   let written = @wasi.native_write(fd, buf, buf.length())
-  inspect(written, content="Some(12)")
+  inspect(@debug.to_string(written), content="Some(12)")
 
   // Close file
   inspect(@wasi.native_close(fd), content="true")
@@ -100,7 +100,7 @@ test "native file operations: write and read" {
   // Read content
   let read_buf : FixedArray[Byte] = FixedArray::make(100, b'\x00')
   let read_count = @wasi.native_read(fd, read_buf, 100)
-  inspect(read_count, content="Some(12)")
+  inspect(@debug.to_string(read_count), content="Some(12)")
 
   // Verify content
   let read_bytes = Bytes::makei(12, fn(i) { read_buf[i] })
@@ -136,29 +136,29 @@ test "native file operations: seek and tell" {
   }
 
   // Initial position should be 0
-  inspect(@wasi.native_tell(fd), content="Some(0)")
+  inspect(@debug.to_string(@wasi.native_tell(fd)), content="Some(0)")
 
   // Seek to position 5
   let new_pos = @wasi.native_seek(fd, 5L, @wasi.Set)
-  inspect(new_pos, content="Some(5)")
+  inspect(@debug.to_string(new_pos), content="Some(5)")
 
   // Tell should return 5
-  inspect(@wasi.native_tell(fd), content="Some(5)")
+  inspect(@debug.to_string(@wasi.native_tell(fd)), content="Some(5)")
 
   // Read from position 5
   let read_buf : FixedArray[Byte] = FixedArray::make(5, b'\x00')
   let read_count = @wasi.native_read(fd, read_buf, 5)
-  inspect(read_count, content="Some(5)")
+  inspect(@debug.to_string(read_count), content="Some(5)")
   let read_bytes = Bytes::makei(5, fn(i) { read_buf[i] })
   inspect(utf8_to_string(read_bytes, 5), content="56789")
 
   // Seek relative from current position
   let new_pos = @wasi.native_seek(fd, -3L, @wasi.Cur)
-  inspect(new_pos, content="Some(7)")
+  inspect(@debug.to_string(new_pos), content="Some(7)")
 
   // Seek from end
   let new_pos = @wasi.native_seek(fd, -2L, @wasi.End)
-  inspect(new_pos, content="Some(8)")
+  inspect(@debug.to_string(new_pos), content="Some(8)")
   @wasi.native_close(fd) |> ignore
 }
 

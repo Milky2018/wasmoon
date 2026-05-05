@@ -51,7 +51,10 @@ test "validate_imports_with_diagnostics: import kind mismatch" {
     _ => fail("Expected ImportKindMismatch")
   }
   inspect(result.diagnostics[0].expected, content="func")
-  inspect(result.diagnostics[0].actual, content="Some(\"memory\")")
+  inspect(
+    @debug.to_string(result.diagnostics[0].actual),
+    content="Some(\"memory\")",
+  )
 }
 
 ///|

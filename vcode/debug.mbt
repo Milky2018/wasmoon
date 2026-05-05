@@ -22,7 +22,11 @@ pub fn dump_vcode(func : @regalloc.VCodeFunction, tag : String) -> Unit {
     for i, inst in block.insts {
       println("  [\{i}] \{inst}")
     }
-    println("  Terminator: \{block.terminator}")
+    let terminator_text = match block.terminator {
+      Some(term) => "Some(\{term})"
+      None => "None"
+    }
+    println("  Terminator: \{terminator_text}")
     println("")
   }
   println("=== End VCode Dump ===")

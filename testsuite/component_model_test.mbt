@@ -4,7 +4,7 @@ test "component_sniff_minimal_preamble" {
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
   ])
   let kind = @component.sniff_binary_kind(bytes)
-  inspect(kind, content="Some(Component)")
+  inspect(@debug.to_string(kind), content="Some(Component)")
 }
 
 ///|

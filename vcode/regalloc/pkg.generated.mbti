@@ -7,6 +7,7 @@ import {
   "Milky2018/wasmoon/vcode/block",
   "Milky2018/wasmoon/vcode/instr",
   "Milky2018/wasmoon/vcode/isa",
+  "moonbitlang/core/debug",
   "moonbitlang/core/set",
 }
 
@@ -202,7 +203,7 @@ pub struct ProgPoint {
   block : Int
   inst : Int
   pos : ProgPos
-} derive(Eq, Hash)
+} derive(Eq, Hash, @debug.Debug)
 pub impl Show for ProgPoint
 
 type ProgPointRange
@@ -212,7 +213,7 @@ pub impl Show for ProgPointRange
 pub(all) enum ProgPos {
   Before
   After
-} derive(Eq, Hash)
+} derive(Eq, Hash, @debug.Debug)
 
 pub struct RegAllocResult {
   assignments : Map[Int, @abi.PReg]

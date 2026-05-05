@@ -667,7 +667,7 @@ test "regalloc: vector spill stack slots are 16B and use v-regs" {
       if line.contains(" d") {
         saw_bad_reg_class = true
         if first_bad_line is None {
-          first_bad_line = Some(line.to_string())
+          first_bad_line = Some(line.to_owned())
         }
       }
       match parse_stack_offset(line) {
@@ -677,7 +677,7 @@ test "regalloc: vector spill stack slots are 16B and use v-regs" {
             saw_bad_offset = true
             if first_bad_offset is None {
               first_bad_offset = Some(off)
-              first_bad_line = Some(line.to_string())
+              first_bad_line = Some(line.to_owned())
             }
           }
         None => ()

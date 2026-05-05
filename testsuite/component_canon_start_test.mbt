@@ -58,7 +58,10 @@ test "component: parse_component collects canons + start" {
     e => return fail("parse failed: \{e}")
   }
   inspect(parsed.canons.length(), content="1")
-  inspect(parsed.start, content="Some({func_idx: 0, args: [], results: 0})")
+  inspect(
+    @debug.to_string(parsed.start),
+    content="Some({ func_idx: 0, args: [], results: 0 })",
+  )
 }
 
 ///|

@@ -1440,7 +1440,7 @@ test "egraph: type info is preserved through merge" {
   eg.merge(x, y) |> ignore
   eg.rebuild()
   // Type should be preserved in merged class
-  inspect(eg.get_bits(y), content="Some(32)")
+  inspect(@debug.to_string(eg.get_bits(y)), content="Some(32)")
 }
 
 ///|
@@ -1449,7 +1449,7 @@ test "egraph: add_typed sets type correctly" {
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
-  inspect(eg.get_bits(result), content="Some(32)")
+  inspect(@debug.to_string(eg.get_bits(result)), content="Some(32)")
 }
 
 ///|

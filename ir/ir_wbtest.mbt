@@ -2421,8 +2421,8 @@ test "wasm address reassociation: shared base plus immediate offsets" {
     None
   }
 
-  assert_eq(iconst_of(func.blocks[0], loads[0].operands[1]), Some(8L))
-  assert_eq(iconst_of(func.blocks[0], loads[1].operands[1]), Some(16L))
+  @debug.assert_eq(iconst_of(func.blocks[0], loads[0].operands[1]), Some(8L))
+  @debug.assert_eq(iconst_of(func.blocks[0], loads[1].operands[1]), Some(16L))
 }
 
 ///|

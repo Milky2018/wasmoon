@@ -136,7 +136,7 @@ fn component_test_json(
 fn strip_identifier(name : String) -> String {
   if name.has_prefix("$") && name.length() > 1 {
     let view = name[1:]
-    view.to_string()
+    view.to_owned()
   } else {
     name
   }
