@@ -455,6 +455,7 @@ SUPPORTED_VALUE_TYPES = {
 }
 
 UNSUPPORTED_ERROR_CODE = "COMP_UNSUPPORTED"
+PARSE_ERROR_CODE = "COMP_PARSE_ERROR"
 
 
 def parse_component_name(node) -> Optional[str]:
@@ -698,6 +699,13 @@ def validate_component(
     if "component validated ok" in out:
         return True, out.strip(), None
     return False, out.strip() or "unknown validation result", None
+
+
+def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
+    if code == PARSE_ERROR_CODE:
+        return True
+    lower = msg.lower()
+    return "parse component error" in lower or '"phase":"parse"' in lower
 
 
 def wit_names_for_path(wast_file: Path) -> bool:
@@ -950,6 +958,8 @@ def run_file(
                     )
                     if code == UNSUPPORTED_ERROR_CODE:
                         fail(f"assert_malformed failed due to unsupported feature: {msg}")
+                    elif not ok and is_parse_rejection(msg, code):
+                        passed += 1
                     else:
                         if expected_msg:
                             fail(f"assert_malformed unexpectedly parsed: {expected_msg}")
