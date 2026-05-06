@@ -82,7 +82,7 @@ test "parse memory with max" {
     #|  (memory 1 16)
     #|)
   let mod_ = parse(wat)
-  inspect(mod_.memories[0].limits.max, content="Some(16)")
+  inspect(@debug.to_string(mod_.memories[0].limits.max), content="Some(16)")
 }
 
 ///|
@@ -913,7 +913,7 @@ test "parse memory64 with max" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.memories[0].limits.min, content="1")
-  inspect(mod_.memories[0].limits.max, content="Some(16)")
+  inspect(@debug.to_string(mod_.memories[0].limits.max), content="Some(16)")
   inspect(mod_.memories[0].is_memory64, content="true")
 }
 
@@ -953,7 +953,7 @@ test "parse memory64 import" {
   if mod_.imports[0].desc is @types.ImportDesc::Memory(mem_type) {
     inspect(mem_type.is_memory64, content="true")
     inspect(mem_type.limits.min, content="1")
-    inspect(mem_type.limits.max, content="Some(2)")
+    inspect(@debug.to_string(mem_type.limits.max), content="Some(2)")
   } else {
     panic()
   }
@@ -999,7 +999,7 @@ test "parse table64 with max" {
     #|)
   let mod_ = parse(wat)
   inspect(mod_.tables[0].type_.limits.min, content="1")
-  inspect(mod_.tables[0].type_.limits.max, content="Some(10)")
+  inspect(@debug.to_string(mod_.tables[0].type_.limits.max), content="Some(10)")
   inspect(mod_.tables[0].type_.is_table64, content="true")
 }
 
@@ -1039,7 +1039,7 @@ test "parse table64 import" {
   if mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) {
     inspect(tbl_type.is_table64, content="true")
     inspect(tbl_type.limits.min, content="1")
-    inspect(tbl_type.limits.max, content="Some(10)")
+    inspect(@debug.to_string(tbl_type.limits.max), content="Some(10)")
   } else {
     panic()
   }
@@ -1113,7 +1113,7 @@ test "parse table64 with large 64-bit limits" {
   inspect(mod_.tables[0].type_.is_table64, content="true")
   // 0xffffffffffff = 281474976710655
   inspect(mod_.tables[0].type_.limits.min, content="281474976710655")
-  inspect(mod_.tables[0].type_.limits.max, content="None")
+  inspect(@debug.to_string(mod_.tables[0].type_.limits.max), content="None")
 }
 
 ///|
@@ -1128,7 +1128,10 @@ test "parse table64 with large 64-bit min and max" {
   // 0x100000000 = 4294967296 (larger than u32 max)
   inspect(mod_.tables[0].type_.limits.min, content="4294967296")
   // 0x200000000 = 8589934592
-  inspect(mod_.tables[0].type_.limits.max, content="Some(8589934592)")
+  inspect(
+    @debug.to_string(mod_.tables[0].type_.limits.max),
+    content="Some(8589934592)",
+  )
 }
 
 ///|
@@ -1146,5 +1149,8 @@ test "parse table64 import with large 64-bit limits" {
   // 0xffffffffffff = 281474976710655
   inspect(tbl_type.limits.min, content="281474976710655")
   // 0x1000000000000 = 281474976710656
-  inspect(tbl_type.limits.max, content="Some(281474976710656)")
+  inspect(
+    @debug.to_string(tbl_type.limits.max),
+    content="Some(281474976710656)",
+  )
 }

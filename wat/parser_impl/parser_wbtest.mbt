@@ -936,7 +936,7 @@ test "parse WAST inline module: start function" {
     fail("Expected Module command")
   }
   inspect(mod_.funcs.length(), content="1")
-  inspect(mod_.start, content="Some(0)")
+  inspect(@debug.to_string(mod_.start), content="Some(0)")
 }
 
 ///|

@@ -37,7 +37,8 @@ python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Compo
 - Never batch use `--update`. Treat snapshot errors seriously
 - Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
 - Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
-- Component-model runner requires `wasm-tools` on `PATH` (used to compile `.wast` `(component ...)` forms)
+- Component-model runner requires pinned `wasm-tools` 1.248.0 on `PATH` (used to compile `.wast` `(component ...)` forms):
+  `cargo install wasm-tools --version 1.248.0 --locked`
 
 ## Debugging
 

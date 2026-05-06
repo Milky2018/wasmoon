@@ -1456,5 +1456,5 @@ test "parse empty module" {
   let mod = Module::new()
   inspect(mod.types.length(), content="0")
   inspect(mod.funcs.length(), content="0")
-  inspect(mod.start, content="None")
+  inspect(@debug.to_string(mod.start), content="None")
 }

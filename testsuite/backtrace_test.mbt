@@ -216,7 +216,7 @@ fn format_backtrace_for_snapshot(info : TrapInfo) -> String {
 fn extract_trap_type(msg : String) -> String {
   for i, c in msg {
     if c == ' ' || c == '(' {
-      return msg[0:i].to_string()
+      return msg[0:i].to_owned()
     }
   }
   msg

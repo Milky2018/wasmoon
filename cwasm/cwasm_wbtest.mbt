@@ -202,22 +202,22 @@ test "memory definition: creation and roundtrip" {
   mod.add_memory(1, None)
   inspect(mod.memories.length(), content="1")
   inspect(mod.memories[0].min_pages, content="1")
-  inspect(mod.memories[0].max_pages, content="None")
+  inspect(@debug.to_string(mod.memories[0].max_pages), content="None")
 
   // Add memory with maximum
   mod.add_memory(2, Some(16))
   inspect(mod.memories.length(), content="2")
   inspect(mod.memories[1].min_pages, content="2")
-  inspect(mod.memories[1].max_pages, content="Some(16)")
+  inspect(@debug.to_string(mod.memories[1].max_pages), content="Some(16)")
 
   // Serialize and deserialize
   let bytes = mod.serialize()
   let restored = deserialize(bytes) catch { _ => panic() }
   inspect(restored.memories.length(), content="2")
   inspect(restored.memories[0].min_pages, content="1")
-  inspect(restored.memories[0].max_pages, content="None")
+  inspect(@debug.to_string(restored.memories[0].max_pages), content="None")
   inspect(restored.memories[1].min_pages, content="2")
-  inspect(restored.memories[1].max_pages, content="Some(16)")
+  inspect(@debug.to_string(restored.memories[1].max_pages), content="Some(16)")
 }
 
 ///|
@@ -295,7 +295,7 @@ test "complete module: memory + data + function roundtrip" {
   // Check memory
   inspect(restored.memories.length(), content="1")
   inspect(restored.memories[0].min_pages, content="1")
-  inspect(restored.memories[0].max_pages, content="Some(4)")
+  inspect(@debug.to_string(restored.memories[0].max_pages), content="Some(4)")
 
   // Check data segments
   inspect(restored.data_segments.length(), content="2")
@@ -340,5 +340,8 @@ test "memory definition: large pages" {
   let bytes = mod.serialize()
   let restored = deserialize(bytes) catch { _ => panic() }
   inspect(restored.memories[0].min_pages, content="256")
-  inspect(restored.memories[0].max_pages, content="Some(65536)")
+  inspect(
+    @debug.to_string(restored.memories[0].max_pages),
+    content="Some(65536)",
+  )
 }

@@ -4,6 +4,7 @@ import {
   "Milky2018/wasmoon/logger",
   "moonbitlang/x/sys",
   "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
   "moonbitlang/core/double",
   "moonbitlang/core/float",
   "moonbitlang/core/math",

@@ -44,7 +44,7 @@ test "binary parse memory32 - flag 0x00" {
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories.length(), content="1")
   inspect(m.memories[0].limits.min, content="1")
-  inspect(m.memories[0].limits.max, content="None")
+  inspect(@debug.to_string(m.memories[0].limits.max), content="None")
   inspect(m.memories[0].is_memory64, content="false")
 }
 
@@ -53,7 +53,7 @@ test "binary parse memory32 - flag 0x01" {
   let mem_section : FixedArray[Int] = [0x05, 0x04, 0x01, 0x01, 0x01, 0x04]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories[0].limits.min, content="1")
-  inspect(m.memories[0].limits.max, content="Some(4)")
+  inspect(@debug.to_string(m.memories[0].limits.max), content="Some(4)")
   inspect(m.memories[0].is_memory64, content="false")
 }
 
@@ -63,7 +63,7 @@ test "binary parse memory64 - flag 0x04" {
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories.length(), content="1")
   inspect(m.memories[0].limits.min, content="2")
-  inspect(m.memories[0].limits.max, content="None")
+  inspect(@debug.to_string(m.memories[0].limits.max), content="None")
   inspect(m.memories[0].is_memory64, content="true")
 }
 
@@ -72,7 +72,7 @@ test "binary parse memory64 - flag 0x05" {
   let mem_section : FixedArray[Int] = [0x05, 0x04, 0x01, 0x05, 0x01, 0x0A]
   guard parse_wasm([mem_section]) is Some(m) else { return }
   inspect(m.memories[0].limits.min, content="1")
-  inspect(m.memories[0].limits.max, content="Some(10)")
+  inspect(@debug.to_string(m.memories[0].limits.max), content="Some(10)")
   inspect(m.memories[0].is_memory64, content="true")
 }
 
@@ -86,7 +86,7 @@ test "binary parse table32 - flag 0x00" {
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables.length(), content="1")
   inspect(m.tables[0].type_.limits.min, content="1")
-  inspect(m.tables[0].type_.limits.max, content="None")
+  inspect(@debug.to_string(m.tables[0].type_.limits.max), content="None")
   inspect(m.tables[0].type_.is_table64, content="false")
 }
 
@@ -97,7 +97,7 @@ test "binary parse table32 - flag 0x01" {
   ]
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables[0].type_.limits.min, content="1")
-  inspect(m.tables[0].type_.limits.max, content="Some(10)")
+  inspect(@debug.to_string(m.tables[0].type_.limits.max), content="Some(10)")
   inspect(m.tables[0].type_.is_table64, content="false")
 }
 
@@ -107,7 +107,7 @@ test "binary parse table64 - flag 0x04" {
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables.length(), content="1")
   inspect(m.tables[0].type_.limits.min, content="2")
-  inspect(m.tables[0].type_.limits.max, content="None")
+  inspect(@debug.to_string(m.tables[0].type_.limits.max), content="None")
   inspect(m.tables[0].type_.is_table64, content="true")
 }
 
@@ -118,7 +118,7 @@ test "binary parse table64 - flag 0x05" {
   ]
   guard parse_wasm([table_section]) is Some(m) else { return }
   inspect(m.tables[0].type_.limits.min, content="1")
-  inspect(m.tables[0].type_.limits.max, content="Some(10)")
+  inspect(@debug.to_string(m.tables[0].type_.limits.max), content="Some(10)")
   inspect(m.tables[0].type_.is_table64, content="true")
 }
 

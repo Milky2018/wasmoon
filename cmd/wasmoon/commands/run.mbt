@@ -27,9 +27,9 @@ fn get_basename(path : String) -> String {
         prev_slash = i
       }
     }
-    path[prev_slash + 1:last_slash].to_string()
+    path[prev_slash + 1:last_slash].to_owned()
   } else {
-    path[last_slash + 1:].to_string()
+    path[last_slash + 1:].to_owned()
   }
 }
 

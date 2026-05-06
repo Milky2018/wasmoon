@@ -51,5 +51,5 @@ test "component: parse import/export sections (framing only)" {
   inspect(imports[0].desc, content="FuncType(0)")
   inspect(exports.length(), content="1")
   inspect(exports[0].sortidx, content="{sort: Func, idx: 0}")
-  inspect(exports[0].desc, content="None")
+  inspect(@debug.to_string(exports[0].desc), content="None")
 }

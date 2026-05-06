@@ -391,7 +391,7 @@ fn sanitize_guest_path(path : String) -> Result[String, ResolvePathError] {
   let mut i = 0
   while i <= path.length() {
     if i == path.length() || path.code_unit_at(i) == '/' {
-      let seg = if i == start { "" } else { path[start:i].to_string() }
+      let seg = if i == start { "" } else { path[start:i].to_owned() }
       if seg == "" || seg == "." {
         ()
       } else if seg == ".." {
@@ -432,7 +432,7 @@ fn normalized_parent_path(normalized : String) -> String {
   if last_slash < 0 {
     ""
   } else {
-    normalized[0:last_slash].to_string()
+    normalized[0:last_slash].to_owned()
   }
 }
 

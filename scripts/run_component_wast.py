@@ -58,6 +58,7 @@ def scale_timeout(base: int) -> int:
 DEFAULT_VALIDATE_TIMEOUT_SECONDS = scale_timeout(BASE_VALIDATE_TIMEOUT_SECONDS)
 DEFAULT_SCRIPT_TIMEOUT_SECONDS = scale_timeout(BASE_SCRIPT_TIMEOUT_SECONDS)
 DEFAULT_TOOLS_TIMEOUT_SECONDS = scale_timeout(BASE_TOOLS_TIMEOUT_SECONDS)
+REQUIRED_WASM_TOOLS_VERSION = "1.248.0"
 
 
 def run_command(
@@ -97,6 +98,20 @@ def run_command(
         return 124, "", "", True
 
     return proc.returncode, (stdout or ""), (stderr or ""), False
+
+
+def read_wasm_tools_version(wasm_tools: Path) -> Optional[str]:
+    returncode, stdout, stderr, timed_out = run_command(
+        [str(wasm_tools), "--version"],
+        timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
+    )
+    if timed_out or returncode != 0:
+        return None
+    out = (stdout or stderr).strip()
+    parts = out.split()
+    if len(parts) >= 2 and parts[0] == "wasm-tools":
+        return parts[1]
+    return None
 
 
 def skip_line_comment(text: str, i: int) -> int:
@@ -455,6 +470,7 @@ SUPPORTED_VALUE_TYPES = {
 }
 
 UNSUPPORTED_ERROR_CODE = "COMP_UNSUPPORTED"
+PARSE_ERROR_CODE = "COMP_PARSE_ERROR"
 
 
 def parse_component_name(node) -> Optional[str]:
@@ -698,6 +714,13 @@ def validate_component(
     if "component validated ok" in out:
         return True, out.strip(), None
     return False, out.strip() or "unknown validation result", None
+
+
+def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
+    if code == PARSE_ERROR_CODE:
+        return True
+    lower = msg.lower()
+    return "parse component error" in lower or '"phase":"parse"' in lower
 
 
 def wit_names_for_path(wast_file: Path) -> bool:
@@ -950,6 +973,8 @@ def run_file(
                     )
                     if code == UNSUPPORTED_ERROR_CODE:
                         fail(f"assert_malformed failed due to unsupported feature: {msg}")
+                    elif not ok and is_parse_rejection(msg, code):
+                        passed += 1
                     else:
                         if expected_msg:
                             fail(f"assert_malformed unexpectedly parsed: {expected_msg}")
@@ -1189,10 +1214,21 @@ def main() -> int:
     if wasm_tools_bin is None:
         print(
             "Error: `wasm-tools` not found on PATH. "
-            "Install wasm-tools to compile component WAT fallback forms."
+            "Install pinned wasm-tools with: "
+            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
         )
         return 1
     wasm_tools = Path(wasm_tools_bin).resolve()
+    wasm_tools_version = read_wasm_tools_version(wasm_tools)
+    if wasm_tools_version != REQUIRED_WASM_TOOLS_VERSION:
+        actual = wasm_tools_version or "unknown"
+        print(
+            "Error: unsupported `wasm-tools` version "
+            f"{actual} at {wasm_tools}; expected {REQUIRED_WASM_TOOLS_VERSION}. "
+            "Install the pinned version with: "
+            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
+        )
+        return 1
 
     test_dir = repo_root / args.dir
     if not test_dir.exists():

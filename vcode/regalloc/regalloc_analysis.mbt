@@ -17,14 +17,14 @@ pub struct ProgPoint {
   block : Int // Block index
   inst : Int // Instruction index within block (-1 for block params)
   pos : ProgPos // Before or after the instruction
-} derive(Eq, Hash)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Position relative to an instruction
 pub(all) enum ProgPos {
   Before // Before the instruction executes (uses happen here)
   After // After the instruction executes (defs happen here)
-} derive(Eq, Hash)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Compare two program points using a block order array
@@ -145,6 +145,22 @@ struct UseDefInfo {
 ///|
 fn UseDefInfo::new(vreg : @abi.VReg) -> UseDefInfo {
   { vreg, def_point: None, use_points: [] }
+}
+
+///|
+fn preg_option_to_string(preg : @abi.PReg?) -> String {
+  match preg {
+    Some(p) => "Some(\{p})"
+    None => "None"
+  }
+}
+
+///|
+fn def_point_to_string(def_point : (ProgPoint, @abi.PReg?)?) -> String {
+  match def_point {
+    Some((point, fixed)) => "Some((\{point}, \{preg_option_to_string(fixed)}))"
+    None => "None"
+  }
 }
 
 // ============ Liveness Analysis ============
@@ -287,7 +303,8 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
   result = result + "Use-Def Chains:\n"
   for entry in liveness.use_def {
     let (vreg_id, info) = entry
-    result = result + "  v\{vreg_id}: def=\{info.def_point}, uses=["
+    result = result +
+      "  v\{vreg_id}: def=\{def_point_to_string(info.def_point)}, uses=["
     for i, use_entry in info.use_points {
       if i > 0 {
         result = result + ", "

@@ -7,6 +7,7 @@ import {
   "Milky2018/wasmoon/vcode/instr",
   "Milky2018/wasmoon/vcode/regalloc/unionfind",
   "moonbitlang/x/sys",
+  "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
   "moonbitlang/core/math",
   "moonbitlang/core/string",
