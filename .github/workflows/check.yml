@@ -5,6 +5,9 @@ on:
     branches:
       - $default-branch
 
+env:
+  WASM_TOOLS_VERSION: "1.248.0"
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -53,7 +56,7 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --locked
+          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
           wasm-tools --version
 
       - name: run component-spec subset
@@ -179,7 +182,7 @@ jobs:
 
       - name: install wasm-tools
         run: |
-          cargo install wasm-tools --locked
+          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
           wasm-tools --version
 
       - name: run component-spec subset (amd64)
