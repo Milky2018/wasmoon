@@ -739,7 +739,7 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
   let mut wasm_offset : Int64? = None
   let wasm_frames : Array[WasmTrapFrame] = []
   let signal_name = if details.signal != 0 {
-    format_signal(details.signal)
+    @wasmoon_jit.format_signal_name(details.signal)
   } else {
     ""
   }
@@ -932,17 +932,6 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
     wasm_frames,
     host_frames: [],
     dump_path,
-  }
-}
-
-///|
-fn format_signal(sig : Int) -> String {
-  match sig {
-    5 => "SIGTRAP(5)"
-    10 => "SIGBUS(10)"
-    11 => "SIGSEGV(11)"
-    7 => "SIGBUS(7)"
-    _ => "SIG(\{sig})"
   }
 }
 

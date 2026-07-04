@@ -34,6 +34,8 @@ test "JIT trap code policy lives in wasmoon_jit" {
   inspect(jit_trap_message(99), content="unknown trap")
   inspect(is_wasi_exit_trap_code(100), content="true")
   inspect(is_wasi_exit_trap_code(1), content="false")
+  inspect(format_signal_name(11), content="SIGSEGV(11)")
+  inspect(format_signal_name(123), content="SIG(123)")
 }
 
 ///|

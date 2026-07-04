@@ -86,6 +86,17 @@ pub fn get_last_trap_details() -> TrapDetails {
 }
 
 ///|
+pub fn format_signal_name(sig : Int) -> String {
+  match sig {
+    5 => "SIGTRAP(5)"
+    10 => "SIGBUS(10)"
+    11 => "SIGSEGV(11)"
+    7 => "SIGBUS(7)"
+    _ => "SIG(\{sig})"
+  }
+}
+
+///|
 pub fn jit_trap_message(code : Int) -> String {
   match code {
     1 => "out of bounds memory access"
