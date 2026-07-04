@@ -13,11 +13,20 @@ pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
+pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
 pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan raise @machv_emit.EmitError
 
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
 
+pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
 // Errors
+pub suberror JitPipelineError {
+  PipelineFailure(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for JitPipelineError
+
 pub suberror LinkError {
   UnknownRuntimeSymbol(String)
 } derive(Eq, @debug.Debug)

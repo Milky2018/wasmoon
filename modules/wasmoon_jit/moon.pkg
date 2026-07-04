@@ -1,5 +1,8 @@
 import {
+  "Milky2018/aarch64_target",
   "Milky2018/machv",
   "Milky2018/machv_emit",
+  "Milky2018/machv_regalloc",
   "Milky2018/milkir",
+  "Milky2018/x64_target",
 }
