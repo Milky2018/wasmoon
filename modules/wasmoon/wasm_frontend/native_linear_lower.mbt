@@ -99,14 +99,35 @@ fn try_lower_linear_function(
       }
       I32Const(value) => stack.push(builder.iconst_i32(value))
       I64Const(value) => stack.push(builder.iconst_i64(value))
+      F32Const(value) => stack.push(builder.fconst_f32(value))
+      F64Const(value) => stack.push(builder.fconst_f64(value))
       I32Add | I64Add =>
         if !push_binary(stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) }) {
+          return None
+        }
+      I32Sub | I64Sub =>
+        if !push_binary(stack, fn(lhs, rhs) { builder.isub(lhs, rhs) }) {
           return None
         }
       I32Mul | I64Mul =>
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
+      F32Add | F64Add =>
+        if !push_binary(stack, fn(lhs, rhs) { builder.fadd(lhs, rhs) }) {
+          return None
+        }
+      F32Sub | F64Sub =>
+        if !push_binary(stack, fn(lhs, rhs) { builder.fsub(lhs, rhs) }) {
+          return None
+        }
+      F32Mul | F64Mul =>
+        if !push_binary(stack, fn(lhs, rhs) { builder.fmul(lhs, rhs) }) {
+          return None
+        }
+      Drop => {
+        guard pop_value(stack) is Some(_) else { return None }
+      }
       Return => {
         if !finish_linear_return(builder, stack, func_type.results.length()) {
           return None

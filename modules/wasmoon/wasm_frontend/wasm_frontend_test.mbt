@@ -70,6 +70,22 @@ test "lower linear explicit return without legacy bridge" {
 }
 
 ///|
+test "lower linear float arithmetic and drop without legacy bridge" {
+  let mod_ = @types.Module::simple(
+    [F64],
+    [F64],
+    [F64Const(99.0), Drop, LocalGet(0), F64Const(0.5), F64Sub],
+    "adjust",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("fsub"), content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower control flow into MilkIR blocks and terminators" {
   let mod_ = @types.Module::simple(
     [I32],
