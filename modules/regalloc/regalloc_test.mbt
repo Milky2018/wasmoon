@@ -642,6 +642,16 @@ test "fixed constraint edit planner emits before and after moves" {
 }
 
 ///|
+test "temp register pool prefers scratch and high-index candidates" {
+  let used = Array::make(12, false)
+  used[10] = true
+  debug_inspect(
+    plan_temp_register_pool(used, [3, 9], [1, 10, 11], [2, 8, 9]),
+    content="[3, 9, 11, 8, 1, 2]",
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

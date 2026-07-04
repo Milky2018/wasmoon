@@ -92,11 +92,6 @@ fn mark_used_reg(mask : Array[Bool], idx : Int) -> Unit {
 }
 
 ///|
-fn is_used_reg(mask : Array[Bool], idx : Int) -> Bool {
-  idx >= 0 && idx < mask.length() && mask[idx]
-}
-
-///|
 fn add_used_reg(
   used_int : Array[Bool],
   used_fp : Array[Bool],
@@ -414,87 +409,33 @@ fn build_output(
     mark_used_reg(used_int_regs, isa.extra_results_ptr_reg_index())
   }
 
-  // Temp-reg pools for local reloads/move resolution:
-  // - Always include scratch regs.
-  // - Prefer higher-index regs (avoid common arg/return regs on most ABIs).
-  fn push_temp_reg(pool : Array[Int], used : Array[Bool], idx : Int) -> Unit {
-    // Pool sizes are tiny; linear scan avoids extra dependencies.
-    let mut already = false
-    for v in pool {
-      if v == idx {
-        already = true
-      }
+  fn preg_indices(regs : Array[@abi.PReg]) -> Array[Int] {
+    let out : Array[Int] = []
+    for reg in regs {
+      out.push(reg.index)
     }
-    if !is_used_reg(used, idx) && !already {
-      pool.push(idx)
-    }
+    out
   }
 
-  let temp_int_pool : Array[Int] = []
-  for idx in env.scratch_int {
-    temp_int_pool.push(idx)
-  }
-  let int_candidates : Array[@abi.PReg] = []
-  for r in env.nonpreferred_int {
-    int_candidates.push(r)
-  }
-  for r in env.preferred_int {
-    int_candidates.push(r)
-  }
-  for r in int_candidates {
-    if r.index >= 8 {
-      push_temp_reg(temp_int_pool, used_int_regs, r.index)
-    }
-  }
-  for r in int_candidates {
-    if r.index < 8 {
-      push_temp_reg(temp_int_pool, used_int_regs, r.index)
-    }
-  }
-  let temp_fp_pool : Array[Int] = []
-  for idx in env.scratch_float {
-    temp_fp_pool.push(idx)
-  }
-  let fp_candidates : Array[@abi.PReg] = []
-  for r in env.nonpreferred_float {
-    fp_candidates.push(r)
-  }
-  for r in env.preferred_float {
-    fp_candidates.push(r)
-  }
-  for r in fp_candidates {
-    if r.index >= 8 {
-      push_temp_reg(temp_fp_pool, used_fp_regs, r.index)
-    }
-  }
-  for r in fp_candidates {
-    if r.index < 8 {
-      push_temp_reg(temp_fp_pool, used_fp_regs, r.index)
-    }
-  }
-
+  let temp_int_pool = @core_regalloc.plan_temp_register_pool(
+    used_int_regs,
+    env.scratch_int,
+    preg_indices(env.nonpreferred_int),
+    preg_indices(env.preferred_int),
+  )
+  let temp_fp_pool = @core_regalloc.plan_temp_register_pool(
+    used_fp_regs,
+    env.scratch_float,
+    preg_indices(env.nonpreferred_float),
+    preg_indices(env.preferred_float),
+  )
   // Vector temps share the same physical register bank as floats on current ISAs.
-  let temp_vec_pool : Array[Int] = []
-  for idx in env.scratch_float {
-    temp_vec_pool.push(idx)
-  }
-  let vec_candidates : Array[@abi.PReg] = []
-  for r in env.nonpreferred_vector {
-    vec_candidates.push(r)
-  }
-  for r in env.preferred_vector {
-    vec_candidates.push(r)
-  }
-  for r in vec_candidates {
-    if r.index >= 8 {
-      push_temp_reg(temp_vec_pool, used_fp_regs, r.index)
-    }
-  }
-  for r in vec_candidates {
-    if r.index < 8 {
-      push_temp_reg(temp_vec_pool, used_fp_regs, r.index)
-    }
-  }
+  let temp_vec_pool = @core_regalloc.plan_temp_register_pool(
+    used_fp_regs,
+    env.scratch_float,
+    preg_indices(env.nonpreferred_vector),
+    preg_indices(env.preferred_vector),
+  )
 
   // Helper: record a resolved RegMove list as edits at a given program point.
   fn push_resolved_moves(
