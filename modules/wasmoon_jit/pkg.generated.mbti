@@ -320,6 +320,10 @@ pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
 
 pub fn patch_call_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
 
+pub fn patch_func_addr_fixup_raw_for_target(@cwasm.TargetArch, Int64, Int, Int, Int, Int64) -> Unit
+
+pub fn patch_func_addr_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+
 pub fn patch_x64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
 
 pub fn patch_x64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit

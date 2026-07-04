@@ -169,7 +169,8 @@ fn apply_func_addr_fixups(
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
-      @wasmoon_jit.patch_aarch64_func_addr_fixups(
+      @wasmoon_jit.patch_func_addr_fixups_for_target(
+        precompiled.target,
         exec_ptr,
         entry.func_addr_fixups,
         func_table_ptr,
@@ -271,7 +272,8 @@ pub fn JITModule::load_with_imports(
                 // fixups (LoadJITFuncPtr). Patch them before first execution.
                 let func_table_ptr = ctx.get_func_table_ptr()
                 for fixup in mc.get_func_addr_fixups() {
-                  @wasmoon_jit.patch_aarch64_func_addr_fixup_raw(
+                  @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
+                    precompiled.target,
                     ec.ptr(),
                     fixup.offset,
                     fixup.reg,

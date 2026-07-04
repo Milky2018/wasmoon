@@ -1749,7 +1749,7 @@ fn compile_module_to_jit(
     )
     // TODO(ISS-022): switch production JIT compilation to the reusable
     // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
-    // function-body entry ABI, direct calls, GC stackmaps, exceptions, and
+    // function-body entry ABI, GC stackmaps, exceptions, and
     // dump-on-trap diagnostics are installed end-to-end. The fast path below
     // uses the reusable pipeline for the conservative native-frontend subset.
     let normalized_opt_level = normalize_opt_level(opt_level)
