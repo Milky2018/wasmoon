@@ -157,6 +157,53 @@ test "plan MilkIR bitcast through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR sign-extension through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64], [I64])
+  let milk = @milkir.Function::new("sext8_x64", signature)
+  let input = milk.new_value(I64)
+  let output = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Sextend8, [input], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_movsx = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xbe {
+      has_movsx = true
+    }
+  }
+  inspect(has_movsx, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR sign-extension through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64], [I64])
+  let milk = @milkir.Function::new("sext32_aarch64", signature)
+  let input = milk.new_value(I64)
+  let output = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Sextend32, [input], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_sxtw = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if (plan.object.code[i + 1] & 0x7c) == 0x7c &&
+      plan.object.code[i + 2] == 0x40 &&
+      plan.object.code[i + 3] == 0x93 {
+      has_sxtw = true
+    }
+  }
+  inspect(has_sxtw, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "plan MilkIR signed integer division through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("sdiv64", signature)

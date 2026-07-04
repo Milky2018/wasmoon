@@ -177,6 +177,32 @@ fn emit_x64_movq_xmm_r64(object : CodeObject, dst_xmm : Int, src : Int) -> Unit 
 }
 
 ///|
+fn emit_x64_movsx_r64_r8(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movsx r64, r/m8.
+  emit_x64_rex_w(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0xbe)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_movsx_r64_r16(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movsx r64, r/m16.
+  emit_x64_rex_w(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0xbf)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_movsxd_r64_r32(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movsxd r64, r/m32.
+  emit_x64_rex_w(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x63)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
 fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
   emit_x64_rex_w(object, 0, (dst >> 3) & 1)
@@ -415,6 +441,42 @@ fn emit_aarch64_fmov_w_to_s(object : CodeObject, dst : Int, src : Int) -> Unit {
   emit_u32_le(
     object,
     (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0x1e270000,
+  )
+}
+
+///|
+fn emit_aarch64_sxtb_x(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: SXTB Xd, Wn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | 0x1c) << 8) |
+    0x93400000,
+  )
+}
+
+///|
+fn emit_aarch64_sxth_x(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: SXTH Xd, Wn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | 0x3c) << 8) |
+    0x93400000,
+  )
+}
+
+///|
+fn emit_aarch64_sxtw(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: SXTW Xd, Wn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | 0x7c) << 8) |
+    0x93400000,
   )
 }
 
@@ -780,6 +842,29 @@ fn emit_aarch64_bitcast(
       raise UnsupportedOperand(
         message="bitcast requires int<->f32/f64 physical registers",
       )
+  }
+}
+
+///|
+fn emit_aarch64_sign_extend(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  from_bits : Int,
+) -> Unit raise EmitError {
+  let src = require_int_preg(
+    find_operand(inst, Use, 0, "sextend"),
+    "sextend source",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "sextend"),
+    "sextend destination",
+  )
+  // TODO(machv_emit): choose W-result encodings once MachV carries lane width.
+  match from_bits {
+    8 => emit_aarch64_sxtb_x(object, dst, src)
+    16 => emit_aarch64_sxth_x(object, dst, src)
+    32 => emit_aarch64_sxtw(object, dst, src)
+    _ => abort("unreachable sign-extension width")
   }
 }
 
@@ -1521,6 +1606,29 @@ fn emit_x64_bitcast(
 }
 
 ///|
+fn emit_x64_sign_extend(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  from_bits : Int,
+) -> Unit raise EmitError {
+  let src = require_int_preg(
+    find_operand(inst, Use, 0, "sextend"),
+    "sextend source",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "sextend"),
+    "sextend destination",
+  )
+  // TODO(machv_emit): choose 32-bit result encodings once MachV carries lane width.
+  match from_bits {
+    8 => emit_x64_movsx_r64_r8(object, dst, src)
+    16 => emit_x64_movsx_r64_r16(object, dst, src)
+    32 => emit_x64_movsxd_r64_r32(object, dst, src)
+    _ => abort("unreachable sign-extension width")
+  }
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1581,6 +1689,9 @@ fn write_aarch64_inst_bytes(
     FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
     FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
     Bitcast => emit_aarch64_bitcast(object, inst)
+    Sextend8 => emit_aarch64_sign_extend(object, inst, 8)
+    Sextend16 => emit_aarch64_sign_extend(object, inst, 16)
+    Sextend32 => emit_aarch64_sign_extend(object, inst, 32)
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -1644,6 +1755,9 @@ fn write_x64_inst_bytes(
     FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
     FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")
     Bitcast => emit_x64_bitcast(object, inst)
+    Sextend8 => emit_x64_sign_extend(object, inst, 8)
+    Sextend16 => emit_x64_sign_extend(object, inst, 16)
+    Sextend32 => emit_x64_sign_extend(object, inst, 32)
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
