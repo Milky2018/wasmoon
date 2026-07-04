@@ -679,6 +679,48 @@ fn lower_fcmp(
 }
 
 ///|
+fn lower_float_select(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+) -> Bool {
+  guard inst.args.length() == 3 && inst.results.length() == 1 else {
+    return false
+  }
+  match inst.results[0].ty {
+    F32 | F64 => {
+      let true_bits = out.new_vreg(Int)
+      let false_bits = out.new_vreg(Int)
+      let selected_bits = out.new_vreg(Int)
+      let true_cast = out.new_inst(Bitcast)
+      true_cast.add_operand(
+        @machv.Operand::use_reg(reg_for_value(inst.args[1])),
+      )
+      true_cast.add_operand(@machv.Operand::def(Virtual(true_bits)))
+      block.append(true_cast)
+      let false_cast = out.new_inst(Bitcast)
+      false_cast.add_operand(
+        @machv.Operand::use_reg(reg_for_value(inst.args[2])),
+      )
+      false_cast.add_operand(@machv.Operand::def(Virtual(false_bits)))
+      block.append(false_cast)
+      let select = out.new_inst(Select)
+      select.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+      select.add_operand(@machv.Operand::use_reg(Virtual(true_bits)))
+      select.add_operand(@machv.Operand::use_reg(Virtual(false_bits)))
+      select.add_operand(@machv.Operand::def(Virtual(selected_bits)))
+      block.append(select)
+      let result_cast = out.new_inst(Bitcast)
+      result_cast.add_operand(@machv.Operand::use_reg(Virtual(selected_bits)))
+      add_defs(result_cast, inst.results)
+      block.append(result_cast)
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 fn load_mem_type(inst : @milkir.Inst) -> @machv.MemType {
   guard inst.results.length() == 1 else { return MemI64 }
   mem_type_for_type(inst.results[0].ty)
@@ -826,6 +868,7 @@ fn lower_inst(
       lower_fcmp(out, block, inst, cc)
       return
     }
+    Select => if lower_float_select(out, block, inst) { return }
     _ => ()
   }
   let lowered = match inst.opcode {

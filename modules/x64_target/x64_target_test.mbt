@@ -103,6 +103,35 @@ test "x64 lowers popcnt through generic MachV arithmetic sequence" {
 }
 
 ///|
+test "x64 lowers floating point select through integer MachV select" {
+  let signature = @milkir.Signature::new([I32, F64, F64], [F64])
+  let func = @milkir.Function::new("select_f64", signature)
+  let cond = func.new_value(I32)
+  let true_value = func.new_value(F64)
+  let false_value = func.new_value(F64)
+  let output = func.new_value(F64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Select, [cond, true_value, false_value], [output]),
+  )
+  entry.set_terminator(Return([output]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions[0].opcode == Bitcast, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == Bitcast, content="true")
+  let select = lowered.blocks[0].instructions[2]
+  inspect(select.opcode == Select, content="true")
+  inspect(select.operands.length(), content="4")
+  let mut selects_int_bits = false
+  if select.operands[3].reg is Virtual(vreg) {
+    selects_int_bits = vreg.class == Int
+  }
+  inspect(selects_int_bits, content="true")
+  inspect(lowered.blocks[0].instructions[3].opcode == Bitcast, content="true")
+  inspect(lowered.verify(), content="()")
+}
+
+///|
 test "x64 legalizes integer division fixed-register operands" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("sdiv64", signature)
