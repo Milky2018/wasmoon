@@ -70,6 +70,8 @@ pub fn entry_trampoline_type_codes(Array[@types.ValueType]) -> Array[Int]
 
 pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
 
+pub fn format_trap_report_message(TrapReport) -> String
+
 pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit

@@ -60,6 +60,35 @@ test "legacy trap immediates are classified in wasmoon_jit" {
 }
 
 ///|
+test "trap report message formatting lives in wasmoon_jit" {
+  let report : TrapReport = {
+    trap_kind: "integer overflow",
+    message: "integer overflow",
+    signal: 11,
+    signal_name: "SIGSEGV(11)",
+    pc: 0x12L,
+    lr: 0L,
+    fp: 0L,
+    frame_lr: 0L,
+    fault_addr: 0x34L,
+    brk_imm: 5,
+    wasm_func_idx: Some(7),
+    wasm_func_name: Some("callee"),
+    wasm_offset: Some(0x20L),
+    wasm_frames: [
+      { pc: 0x12L, func_idx: 7, func_name: "callee", wasm_offset: 0x20L },
+      { pc: 0x40L, func_idx: 3, func_name: "caller", wasm_offset: 0x10L },
+    ],
+    host_frames: [],
+    dump_path: Some("/tmp/jit-trap.txt"),
+  }
+  inspect(
+    format_trap_report_message(report),
+    content="integer overflow (sig=SIGSEGV(11), pc=0x0000000000000012, addr=0x0000000000000034, brk_imm=5, wasm=7 'callee'+0x20, caller=3 'caller'+0x10, dump=/tmp/jit-trap.txt)",
+  )
+}
+
+///|
 test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()

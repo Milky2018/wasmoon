@@ -703,7 +703,7 @@ pub fn JITModule::call_with_context(
         Some(JITTrap(msg)) => {
           let report = self.build_trap_report(msg)
           self.last_trap_report = Some(report)
-          raise JITTrap(self.format_trap_report_message(report))
+          raise JITTrap(@wasmoon_jit.format_trap_report_message(report))
         }
         Some(JITExit(code)) => raise JITExit(code)
         None => ()
@@ -932,58 +932,6 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
     wasm_frames,
     host_frames: [],
     dump_path,
-  }
-}
-
-///|
-fn JITModule::format_trap_report_message(
-  _self : JITModule,
-  report : TrapReport,
-) -> String {
-  let fields : Array[String] = []
-  if report.signal != 0 {
-    fields.push("sig=\{report.signal_name}")
-  }
-  if report.pc != 0L {
-    fields.push("pc=\{to_hex_u64(report.pc)}")
-  }
-  if report.lr != 0L {
-    fields.push("lr=\{to_hex_u64(report.lr)}")
-  }
-  if report.frame_lr != 0L {
-    fields.push("frame_lr=\{to_hex_u64(report.frame_lr)}")
-  }
-  if report.fault_addr != 0L {
-    fields.push("addr=\{to_hex_u64(report.fault_addr)}")
-  }
-  if report.brk_imm >= 0 {
-    fields.push("brk_imm=\{report.brk_imm}")
-  }
-  if report.wasm_func_idx is Some(func_idx) {
-    match (report.wasm_func_name, report.wasm_offset) {
-      (Some(name), Some(offset)) =>
-        fields.push(
-          "wasm=\{func_idx} '\{name}'+0x\{@types.int_to_hex(offset.to_int())}",
-        )
-      (Some(name), None) => fields.push("wasm=\{func_idx} '\{name}'")
-      (None, Some(offset)) =>
-        fields.push("wasm=\{func_idx} +0x\{@types.int_to_hex(offset.to_int())}")
-      (None, None) => fields.push("wasm=\{func_idx}")
-    }
-  }
-  if report.wasm_frames.length() > 1 {
-    let caller = report.wasm_frames[1]
-    fields.push(
-      "caller=\{caller.func_idx} '\{caller.func_name}'+0x\{@types.int_to_hex(caller.wasm_offset.to_int())}",
-    )
-  }
-  if report.dump_path is Some(path) {
-    fields.push("dump=\{path}")
-  }
-  if fields.is_empty() {
-    report.message
-  } else {
-    report.message + " (" + fields.join(", ") + ")"
   }
 }
 
