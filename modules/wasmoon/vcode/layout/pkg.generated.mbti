@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/vcode/layout"
 
 import {
+  "Milky2018/machv",
   "Milky2018/wasmoon/vcode/regalloc",
 }
 
@@ -16,6 +17,7 @@ pub fn reorder_blocks(@regalloc.VCodeFunction, Array[Int]) -> @regalloc.VCodeFun
 
 // Types and methods
 pub struct VCodeCFG {
+  core : @machv.CFG
   size : Int
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
@@ -23,15 +25,10 @@ pub struct VCodeCFG {
 pub fn VCodeCFG::build(@regalloc.VCodeFunction) -> Self
 pub fn VCodeCFG::compute_dominators(Self) -> Array[Int]
 pub fn VCodeCFG::find_back_edges(Self) -> Array[(Int, Int)]
-pub fn VCodeCFG::find_loops(Self) -> Array[VCodeLoop]
-
-pub struct VCodeLoop {
-  header : Int
-  body : Array[Int]
-  latch : Int
-}
+pub fn VCodeCFG::find_loops(Self) -> Array[@machv.Loop]
 
 // Type aliases
+pub using @machv {type Loop as VCodeLoop}
 
 // Traits
 
