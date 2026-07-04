@@ -24,6 +24,8 @@ pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseIn
 
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
 
+pub fn plan_register_probe_order(Array[PhysicalReg], Array[PhysicalReg], Array[PhysicalReg], Bool, Int, Int, PhysicalReg?) -> Array[PhysicalReg]
+
 pub fn raise_scratch_register_unavailable(message~ : String) -> Unit raise VerifyError
 
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation

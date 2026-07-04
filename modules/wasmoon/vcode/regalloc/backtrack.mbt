@@ -22,6 +22,62 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 }
 
 ///|
+fn backtrack_core_reg_class(class : @abi.RegClass) -> @core_regalloc.RegClass {
+  match class {
+    Int => Int
+    Float32 | Float64 => Float
+    Vector => Vector
+  }
+}
+
+///|
+fn backtrack_core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+  { id: preg.index, class: backtrack_core_reg_class(preg.class) }
+}
+
+///|
+fn backtrack_core_pregs(
+  regs : Array[@abi.PReg],
+) -> Array[@core_regalloc.PhysicalReg] {
+  let out : Array[@core_regalloc.PhysicalReg] = []
+  for preg in regs {
+    out.push(backtrack_core_preg(preg))
+  }
+  out
+}
+
+///|
+fn backtrack_preg_from_probe(
+  preg : @core_regalloc.PhysicalReg,
+  fallback_class : @abi.RegClass,
+  available_regs : Array[@abi.PReg],
+  caller_saved_regs : Array[@abi.PReg],
+  callee_saved_regs : Array[@abi.PReg],
+) -> @abi.PReg {
+  fn find_in(regs : Array[@abi.PReg], id : Int) -> @abi.PReg? {
+    for candidate in regs {
+      if candidate.index == id {
+        return Some(candidate)
+      }
+    }
+    None
+  }
+
+  match find_in(available_regs, preg.id) {
+    Some(found) => found
+    None =>
+      match find_in(caller_saved_regs, preg.id) {
+        Some(found) => found
+        None =>
+          match find_in(callee_saved_regs, preg.id) {
+            Some(found) => found
+            None => { index: preg.id, class: fallback_class }
+          }
+      }
+  }
+}
+
+///|
 /// Register allocation algorithm policy.
 ///
 /// - Backtracking: Ion-style backtracking + eviction/splitting (better codegen).
@@ -347,22 +403,13 @@ fn BacktrackingAllocator::constraint_hint_preg(
     return None
   }
 
-  fn to_core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
-    let class : @core_regalloc.RegClass = match preg.class {
-      Int => Int
-      Float32 | Float64 => Float
-      Vector => Vector
-    }
-    { id: preg.index, class }
-  }
-
   fn from_core_preg(preg : @core_regalloc.PhysicalReg) -> @abi.PReg {
     { index: preg.id, class: bundle.reg_class }
   }
 
   let available : Array[@core_regalloc.PhysicalReg] = []
   for preg in avail_regs {
-    available.push(to_core_preg(preg))
+    available.push(backtrack_core_preg(preg))
   }
 
   let fixed : Array[@core_regalloc.PhysicalReg] = []
@@ -370,7 +417,7 @@ fn BacktrackingAllocator::constraint_hint_preg(
     let range = self.ranges.get(range_id)
     for use_pos in range.uses {
       if use_pos.constraint is FixedReg(preg) && preg.class == bundle.reg_class {
-        fixed.push(to_core_preg(preg))
+        fixed.push(backtrack_core_preg(preg))
       }
     }
   }
@@ -575,6 +622,54 @@ fn BacktrackingAllocator::is_reg_free(
 }
 
 ///|
+fn BacktrackingAllocator::probe_order_for_bundle(
+  self : BacktrackingAllocator,
+  bundle : Bundle,
+  available_regs : Array[@abi.PReg],
+  scan_limit : Int,
+  offset : Int,
+  skip_reg : @abi.PReg?,
+) -> Array[@abi.PReg] {
+  let (caller_saved, callee_saved, prefer) = match bundle.reg_class {
+    Int =>
+      (
+        self.int_caller_saved,
+        self.callee_saved_int,
+        self.enable_backtracking && !bundle.crosses_call(self.ranges),
+      )
+    Float32 | Float64 =>
+      (
+        self.float_caller_saved,
+        self.callee_saved_float,
+        self.enable_backtracking && !bundle.crosses_call(self.ranges),
+      )
+    Vector => ([], [], false)
+  }
+  let core_order = @core_regalloc.plan_register_probe_order(
+    backtrack_core_pregs(available_regs),
+    backtrack_core_pregs(caller_saved),
+    backtrack_core_pregs(callee_saved),
+    prefer,
+    scan_limit,
+    offset,
+    skip_reg.map(backtrack_core_preg),
+  )
+  let out : Array[@abi.PReg] = []
+  for core_preg in core_order {
+    out.push(
+      backtrack_preg_from_probe(
+        core_preg,
+        bundle.reg_class,
+        available_regs,
+        caller_saved,
+        callee_saved,
+      ),
+    )
+  }
+  out
+}
+
+///|
 /// Record allocation of a register to a bundle
 fn BacktrackingAllocator::record_allocation(
   self : BacktrackingAllocator,
@@ -703,62 +798,18 @@ fn BacktrackingAllocator::try_allocate(
   // Use cached sorted bundle spans to derive deterministic probe offset.
   // This avoids repeated per-attempt scans over bundle ranges.
   let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
-  let do_preferred_pass = self.enable_backtracking &&
-    !bundle.crosses_call(self.ranges) &&
-    (
-      bundle.reg_class is Int ||
-      bundle.reg_class is Float32 ||
-      bundle.reg_class is Float64
-    )
-  let reg_class = bundle.reg_class
-  let phase_count = if do_preferred_pass { 2 } else { 1 }
   let scan_limit = if self.split_probe_limit < n {
     self.split_probe_limit
   } else {
     n
   }
   let raw_phase_offset = bundle.id + start_inst
-  for phase in 0..<phase_count {
-    let phase_regs = if do_preferred_pass {
-      if phase == 0 {
-        match reg_class {
-          Int => self.int_caller_saved
-          Float32 | Float64 => self.float_caller_saved
-          Vector => avail_regs
-        }
-      } else {
-        match reg_class {
-          Int => self.callee_saved_int
-          Float32 | Float64 => self.callee_saved_float
-          Vector => []
-        }
-      }
-    } else {
-      avail_regs
-    }
-    let phase_n = phase_regs.length()
-    if phase_n == 0 {
-      continue
-    }
-    let phase_scan_limit = if scan_limit < phase_n {
-      scan_limit
-    } else {
-      phase_n
-    }
-    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
-    let mut scanned = 0
-    for i in 0..<phase_n {
-      if scanned >= phase_scan_limit {
-        break
-      }
-      let preg = phase_regs[(phase_offset + i) % phase_n]
-      if hint_preg is Some(hint) && preg_same_bank_and_index(preg, hint) {
-        continue
-      }
-      scanned = scanned + 1
-      if !self.has_conflict_on_preg_with_spans(spans, preg) {
-        return Some(preg)
-      }
+  for
+    preg in self.probe_order_for_bundle(
+      bundle, avail_regs, scan_limit, raw_phase_offset, hint_preg,
+    ) {
+    if !self.has_conflict_on_preg_with_spans(spans, preg) {
+      return Some(preg)
     }
   }
   None
@@ -859,15 +910,6 @@ fn BacktrackingAllocator::try_evict(
     return (None, None)
   }
   let spans = self.bundle_sorted_spans(bundle)
-  let do_preferred_pass = self.enable_backtracking &&
-    !bundle.crosses_call(self.ranges) &&
-    (
-      bundle.reg_class is Int ||
-      bundle.reg_class is Float32 ||
-      bundle.reg_class is Float64
-    )
-  let reg_class = bundle.reg_class
-  let phase_count = if do_preferred_pass { 2 } else { 1 }
   let scan_limit = if self.split_probe_limit < n {
     self.split_probe_limit
   } else {
@@ -882,105 +924,77 @@ fn BacktrackingAllocator::try_evict(
   scratch_conflicts.clear()
   let mut best_split_cost : Int? = None
   let mut best_split : (ProgPoint, @abi.PReg)? = None
-  for phase in 0..<phase_count {
-    let phase_regs = if do_preferred_pass {
-      if phase == 0 {
-        match reg_class {
-          Int => self.int_caller_saved
-          Float32 | Float64 => self.float_caller_saved
-          Vector => avail_regs
-        }
-      } else {
-        match reg_class {
-          Int => self.callee_saved_int
-          Float32 | Float64 => self.callee_saved_float
-          Vector => []
-        }
-      }
-    } else {
-      avail_regs
+  for
+    preg in self.probe_order_for_bundle(
+      bundle,
+      avail_regs,
+      scan_limit,
+      raw_phase_offset,
+      None,
+    ) {
+    // regalloc2-style high-cost cutoff:
+    // when we already have a best candidate (evict/split), stop considering
+    // higher-cost registers early.
+    let cutoff = match (best_conflict_cost, best_split_cost) {
+      (Some(a), Some(b)) => Some(if a > b { a } else { b })
+      (Some(a), None) => Some(a)
+      (None, Some(b)) => Some(b)
+      (None, None) => None
     }
-    let phase_n = phase_regs.length()
-    if phase_n == 0 {
+    let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
+      bundle, preg, spans, cutoff, scratch_conflicts,
+    )
+    if rejected {
       continue
     }
-    let phase_scan_limit = if scan_limit < phase_n {
-      scan_limit
-    } else {
-      phase_n
+    if scratch_conflicts.is_empty() {
+      return (Some(preg), None)
     }
-    let phase_offset = (raw_phase_offset % phase_n + phase_n) % phase_n
-    let mut scanned = 0
-    for i in 0..<phase_n {
-      if scanned >= phase_scan_limit {
-        break
-      }
-      let preg = phase_regs[(phase_offset + i) % phase_n]
-      scanned = scanned + 1
-      // regalloc2-style high-cost cutoff:
-      // when we already have a best candidate (evict/split), stop considering
-      // higher-cost registers early.
-      let cutoff = match (best_conflict_cost, best_split_cost) {
-        (Some(a), Some(b)) => Some(if a > b { a } else { b })
-        (Some(a), None) => Some(a)
-        (None, Some(b)) => Some(b)
-        (None, None) => None
-      }
-      let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
-        bundle, preg, spans, cutoff, scratch_conflicts,
-      )
-      if rejected {
-        continue
-      }
-      if scratch_conflicts.is_empty() {
-        return (Some(preg), None)
-      }
-      if first_conflict_point is Some(point) {
-        match (best_split_cost, best_split) {
-          (None, None) => {
+    if first_conflict_point is Some(point) {
+      match (best_split_cost, best_split) {
+        (None, None) => {
+          best_split_cost = Some(max_conflict_weight)
+          best_split = Some((point, preg))
+        }
+        (Some(existing_cost), Some((existing_point, _existing_preg))) =>
+          if max_conflict_weight < existing_cost {
+            best_split_cost = Some(max_conflict_weight)
+            best_split = Some((point, preg))
+          } else if max_conflict_weight == existing_cost &&
+            point.compare_with_order(existing_point, self.block_order) > 0 {
             best_split_cost = Some(max_conflict_weight)
             best_split = Some((point, preg))
           }
-          (Some(existing_cost), Some((existing_point, _existing_preg))) =>
-            if max_conflict_weight < existing_cost {
-              best_split_cost = Some(max_conflict_weight)
-              best_split = Some((point, preg))
-            } else if max_conflict_weight == existing_cost &&
-              point.compare_with_order(existing_point, self.block_order) > 0 {
-              best_split_cost = Some(max_conflict_weight)
-              best_split = Some((point, preg))
-            }
-          _ => ()
-        }
+        _ => ()
       }
+    }
 
-      // Keep only legal eviction candidates.
-      // Mirrors regalloc2's "lowest conflict cost" selection strategy:
-      // - reject pinned / heavier-or-equal conflicts
-      // - choose the candidate with minimum maximum conflict spill weight.
-      let mut take_candidate = false
-      match best_conflict_cost {
-        None => take_candidate = true
-        Some(existing_cost) =>
-          if max_conflict_weight < existing_cost {
+    // Keep only legal eviction candidates.
+    // Mirrors regalloc2's "lowest conflict cost" selection strategy:
+    // - reject pinned / heavier-or-equal conflicts
+    // - choose the candidate with minimum maximum conflict spill weight.
+    let mut take_candidate = false
+    match best_conflict_cost {
+      None => take_candidate = true
+      Some(existing_cost) =>
+        if max_conflict_weight < existing_cost {
+          take_candidate = true
+        } else if max_conflict_weight == existing_cost {
+          // Tie-break: prefer the hint register if one is provided.
+          if hint_preg is Some(hint) &&
+            preg_same_bank_and_index(preg, hint) &&
+            best_preg is Some(current_best) &&
+            !preg_same_bank_and_index(current_best, hint) {
             take_candidate = true
-          } else if max_conflict_weight == existing_cost {
-            // Tie-break: prefer the hint register if one is provided.
-            if hint_preg is Some(hint) &&
-              preg_same_bank_and_index(preg, hint) &&
-              best_preg is Some(current_best) &&
-              !preg_same_bank_and_index(current_best, hint) {
-              take_candidate = true
-            }
           }
-      }
-      if take_candidate {
-        best_preg = Some(preg)
-        best_conflict_cost = Some(max_conflict_weight)
-        best_conflicts.clear()
-        for conflict_id in scratch_conflicts {
-          best_conflicts.push(conflict_id)
         }
+    }
+    if take_candidate {
+      best_preg = Some(preg)
+      best_conflict_cost = Some(max_conflict_weight)
+      best_conflicts.clear()
+      for conflict_id in scratch_conflicts {
+        best_conflicts.push(conflict_id)
       }
     }
   }

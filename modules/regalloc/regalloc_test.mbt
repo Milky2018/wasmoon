@@ -424,6 +424,29 @@ test "scan conflicts rejects pinned and cutoff conflicts" {
 }
 
 ///|
+test "plan register probe order uses phased rotation and skip" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let r3 : PhysicalReg = { id: 3, class: Int }
+  let order = plan_register_probe_order(
+    [r0, r1, r2, r3],
+    [r0, r1],
+    [r2, r3],
+    true,
+    2,
+    1,
+    Some(r1),
+  )
+  debug_inspect(
+    order,
+    content="[{ id: 0, class: Int }, { id: 3, class: Int }, { id: 2, class: Int }]",
+  )
+  let flat = plan_register_probe_order([r0, r1, r2], [], [], false, 2, 2, None)
+  debug_inspect(flat, content="[{ id: 2, class: Int }, { id: 0, class: Int }]")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
