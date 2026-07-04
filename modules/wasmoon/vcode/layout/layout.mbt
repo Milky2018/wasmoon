@@ -66,94 +66,107 @@ pub fn layout_blocks(func : @regalloc.VCodeFunction) -> Array[Int] {
 }
 
 ///|
-/// Build a map from block ID to block index in the block array.
-fn build_block_index_map(func : @regalloc.VCodeFunction) -> Map[Int, Int] {
-  let block_idx_by_id : Map[Int, Int] = {}
-  for i, block in func.get_blocks() {
-    block_idx_by_id.set(block.id, i)
+fn reg_class_tag(class : @abi.RegClass) -> Int {
+  match class {
+    Int => 0
+    Float32 => 1
+    Float64 => 2
+    Vector => 3
   }
-  block_idx_by_id
 }
 
 ///|
-/// Substitute forwarded jump arguments through a block-parameter mapping.
-///
-/// Returns `None` when a forwarded virtual value is not a block parameter of
-/// the forwarded block.
-fn substitute_forwarded_args(
-  forwarded_args : Array[@abi.Reg],
-  params : Array[@abi.VReg],
-  incoming_args : Array[@abi.Reg],
-) -> Array[@abi.Reg]? {
-  let rewritten : Array[@abi.Reg] = []
-  for arg in forwarded_args {
-    match arg {
-      Physical(_) => rewritten.push(arg)
-      Virtual(vreg) => {
-        let mut mapped : @abi.Reg? = None
-        for i, param in params {
-          if param.id == vreg.id {
-            mapped = Some(incoming_args[i])
-            break
-          }
-        }
-        match mapped {
-          Some(value) => rewritten.push(value)
-          None => return None
-        }
+fn reg_class_from_tag(tag : Int) -> @abi.RegClass {
+  match tag {
+    1 => Float32
+    2 => Float64
+    3 => Vector
+    _ => Int
+  }
+}
+
+///|
+fn reg_to_thread_arg(reg : @abi.Reg) -> @core_regalloc.ThreadArg {
+  match reg {
+    Physical(preg) => PhysicalArg(preg.index, reg_class_tag(preg.class))
+    Virtual(vreg) => VirtualArg(vreg.id, reg_class_tag(vreg.class))
+  }
+}
+
+///|
+fn thread_arg_to_reg(arg : @core_regalloc.ThreadArg) -> @abi.Reg {
+  match arg {
+    PhysicalArg(index, class_tag) =>
+      Physical({ index, class: reg_class_from_tag(class_tag) })
+    VirtualArg(id, class_tag) =>
+      Virtual({ id, class: reg_class_from_tag(class_tag) })
+  }
+}
+
+///|
+fn regs_to_thread_args(
+  args : Array[@abi.Reg],
+) -> Array[@core_regalloc.ThreadArg] {
+  let out : Array[@core_regalloc.ThreadArg] = []
+  for arg in args {
+    out.push(reg_to_thread_arg(arg))
+  }
+  out
+}
+
+///|
+fn thread_args_to_regs(
+  args : Array[@core_regalloc.ThreadArg],
+) -> Array[@abi.Reg] {
+  let out : Array[@abi.Reg] = []
+  for arg in args {
+    out.push(thread_arg_to_reg(arg))
+  }
+  out
+}
+
+///|
+fn build_thread_blocks(
+  func : @regalloc.VCodeFunction,
+) -> Array[@core_regalloc.ThreadBlock] {
+  let blocks = func.get_blocks()
+  let out : Array[@core_regalloc.ThreadBlock] = []
+  for block in blocks {
+    let params : Array[Int] = []
+    for param in block.params {
+      params.push(param.id)
+    }
+    let mut target : Int? = None
+    let target_args : Array[@core_regalloc.ThreadArg] = []
+    if block.terminator is Some(Jump(next, next_args)) {
+      target = Some(next)
+      for arg in next_args {
+        target_args.push(reg_to_thread_arg(arg))
       }
     }
+    out.push({
+      id: block.id,
+      params,
+      target,
+      target_args,
+      is_empty: block.insts.length() == 0,
+    })
   }
-  Some(rewritten)
+  out
 }
 
 ///|
-/// Resolve a jump target through chains of trivial jump-only blocks.
-///
-/// A block is considered a trivial jump block iff:
-/// - it has no instructions;
-/// - its terminator is `Jump(next, next_args)`;
-/// - `next_args` can be expressed as a forwarding of this block's parameters.
-///
-/// This mirrors Cranelift MachBuffer branch-threading for empty jump blocks.
 fn resolve_threaded_jump(
   start_target : Int,
   start_args : Array[@abi.Reg],
-  func : @regalloc.VCodeFunction,
-  block_idx_by_id : Map[Int, Int],
+  thread_blocks : Array[@core_regalloc.ThreadBlock],
 ) -> (Int, Array[@abi.Reg], Bool) {
-  let mut current = start_target
-  let mut current_args = start_args.copy()
-  let visited : Map[Int, Bool] = {}
-  let blocks = func.get_blocks()
-  let mut changed = false
-  while true {
-    if visited.get(current).unwrap_or(false) {
-      // Cycle in trivial-jump chain; keep original target stable.
-      return (start_target, start_args, false)
-    }
-    visited.set(current, true)
-    match block_idx_by_id.get(current) {
-      Some(block_idx) => {
-        let block = blocks[block_idx]
-        if block.insts.length() == 0 &&
-          block.terminator is Some(Jump(next, next_args)) &&
-          next != current &&
-          block.params.length() == current_args.length() &&
-          substitute_forwarded_args(next_args, block.params, current_args)
-          is Some(mapped) {
-          current = next
-          current_args = mapped
-          changed = true
-          continue
-        }
-        return (current, current_args, changed)
-      }
-      None => return (current, current_args, changed)
-    }
-  }
-  // Unreachable, retained for exhaustiveness.
-  (start_target, start_args, false)
+  let resolved = @core_regalloc.resolve_threaded_jump(
+    thread_blocks,
+    start_target,
+    regs_to_thread_args(start_args),
+  )
+  (resolved.target, thread_args_to_regs(resolved.args), resolved.changed)
 }
 
 ///|
@@ -161,15 +174,9 @@ fn resolve_threaded_jump(
 /// are available.
 fn resolve_threaded_target(
   start_target : Int,
-  func : @regalloc.VCodeFunction,
-  block_idx_by_id : Map[Int, Int],
+  thread_blocks : Array[@core_regalloc.ThreadBlock],
 ) -> Int {
-  let (target, _, _) = resolve_threaded_jump(
-    start_target,
-    [],
-    func,
-    block_idx_by_id,
-  )
+  let (target, _, _) = resolve_threaded_jump(start_target, [], thread_blocks)
   target
 }
 
@@ -177,19 +184,18 @@ fn resolve_threaded_target(
 /// Rewrite one terminator by threading successors through trivial jump blocks.
 fn rewrite_terminator_targets(
   term : @instr.VCodeTerminator,
-  func : @regalloc.VCodeFunction,
-  block_idx_by_id : Map[Int, Int],
+  thread_blocks : Array[@core_regalloc.ThreadBlock],
 ) -> (@instr.VCodeTerminator, Bool) {
   match term {
     Jump(target, args) => {
       let (resolved_target, resolved_args, changed) = resolve_threaded_jump(
-        target, args, func, block_idx_by_id,
+        target, args, thread_blocks,
       )
       (Jump(resolved_target, resolved_args), changed)
     }
     Branch(cond, then_b, else_b) => {
-      let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
-      let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
+      let new_then = resolve_threaded_target(then_b, thread_blocks)
+      let new_else = resolve_threaded_target(else_b, thread_blocks)
       if new_then == new_else {
         (Jump(new_then, []), true)
       } else {
@@ -200,8 +206,8 @@ fn rewrite_terminator_targets(
       }
     }
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
-      let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
-      let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
+      let new_then = resolve_threaded_target(then_b, thread_blocks)
+      let new_else = resolve_threaded_target(else_b, thread_blocks)
       if new_then == new_else {
         (Jump(new_then, []), true)
       } else {
@@ -212,8 +218,8 @@ fn rewrite_terminator_targets(
       }
     }
     BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
-      let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
-      let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
+      let new_then = resolve_threaded_target(then_b, thread_blocks)
+      let new_else = resolve_threaded_target(else_b, thread_blocks)
       if new_then == new_else {
         (Jump(new_then, []), true)
       } else {
@@ -224,8 +230,8 @@ fn rewrite_terminator_targets(
       }
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
-      let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
-      let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
+      let new_then = resolve_threaded_target(then_b, thread_blocks)
+      let new_else = resolve_threaded_target(else_b, thread_blocks)
       if new_then == new_else {
         (Jump(new_then, []), true)
       } else {
@@ -239,13 +245,13 @@ fn rewrite_terminator_targets(
       let new_targets : Array[Int] = []
       let mut changed = false
       for t in targets {
-        let nt = resolve_threaded_target(t, func, block_idx_by_id)
+        let nt = resolve_threaded_target(t, thread_blocks)
         if nt != t {
           changed = true
         }
         new_targets.push(nt)
       }
-      let new_default = resolve_threaded_target(default, func, block_idx_by_id)
+      let new_default = resolve_threaded_target(default, thread_blocks)
       if new_default != default {
         changed = true
       }
@@ -282,15 +288,15 @@ fn thread_trivial_jumps(
   if blocks.length() == 0 {
     return func
   }
-  let block_idx_by_id = build_block_index_map(func)
 
   // Iterate to fixed point so newly-created jump-only blocks can be threaded too.
   for _ in 0..<blocks.length() {
+    let thread_blocks = build_thread_blocks(func)
     let mut changed = false
     for block in blocks {
       if block.terminator is Some(term) {
         let (new_term, did_change) = rewrite_terminator_targets(
-          term, func, block_idx_by_id,
+          term, thread_blocks,
         )
         if did_change {
           block.set_terminator(new_term)

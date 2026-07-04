@@ -72,6 +72,8 @@ pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
+pub fn resolve_threaded_jump(Array[ThreadBlock], Int, Array[ThreadArg]) -> ThreadedJump
+
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
 
 pub fn select_available_regs_for_bundle(RegClass, Bool, Array[PhysicalReg], Array[PhysicalReg]) -> Array[PhysicalReg]
@@ -473,6 +475,25 @@ pub(all) struct TempRegisterChoice {
   save_slot : Int?
   next_spill_slot : Int
 } derive(Eq, @debug.Debug)
+
+pub(all) enum ThreadArg {
+  PhysicalArg(Int, Int)
+  VirtualArg(Int, Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ThreadBlock {
+  id : Int
+  params : Array[Int]
+  target : Int?
+  target_args : Array[ThreadArg]
+  is_empty : Bool
+} derive(@debug.Debug)
+
+pub(all) struct ThreadedJump {
+  target : Int
+  args : Array[ThreadArg]
+  changed : Bool
+} derive(@debug.Debug)
 
 pub(all) enum UseKind {
   LiveDef
