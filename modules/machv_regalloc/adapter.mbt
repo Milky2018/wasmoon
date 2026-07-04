@@ -1122,10 +1122,10 @@ pub fn allocate_and_apply(
 ) -> ApplyResult raise @regalloc.VerifyError {
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
+  materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
   materialize_entry_param_transfers(
     func, allocation, spill_slots, physical_regs,
   )
-  materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
   { allocation, spill_slots }
 }

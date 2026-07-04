@@ -862,7 +862,7 @@ test "lower non-zero memory load store with explicit bounds check" {
 }
 
 ///|
-test "native frontend rejects memory64 load until CFG fixups are complete" {
+test "lower memory64 load with overflow-safe bounds check" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -876,7 +876,16 @@ test "native frontend rejects memory64 load until CFG fixups are complete" {
   }
   let env = EmbeddingEnvironment::new()
   let lowered = try_lower_native_function(env, mod_, 0)
-  inspect(lowered is None, content="true")
+  guard lowered is Some(func) else {
+    fail("memory64 load did not lower natively")
+  }
+  let text = func.print()
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("trap \"memory out of bounds\""), content="true")
+  inspect(text.contains("icmp.uge"), content="true")
+  inspect(text.contains("icmp.ule"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
 }
 
 ///|

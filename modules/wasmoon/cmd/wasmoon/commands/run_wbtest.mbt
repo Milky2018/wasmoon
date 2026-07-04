@@ -231,7 +231,7 @@ test "compile api: reusable pipeline lowers non-zero memory load store" {
 }
 
 ///|
-test "compile api: reusable pipeline rejects memory64 load for now" {
+test "compile api: reusable pipeline lowers memory64 load" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -244,16 +244,38 @@ test "compile api: reusable pipeline rejects memory64 load for now" {
     ],
   }
   let isa = @isa.ISA::current()
-  let compiled = try_compile_with_reusable_pipeline(
-    mod_,
-    0,
-    0,
-    mod_.get_func_type(0),
-    isa,
+  let env = @wasm_frontend.EmbeddingEnvironment::new()
+  let milk = @wasm_frontend.try_lower_native_function(env, mod_, 0) catch {
+    e => fail(e.to_string())
+  }
+  guard milk is Some(milk_func) else {
+    fail("memory64 load did not lower natively")
+  }
+  @milkir.optimize_with_level(milk_func, @milkir.OptLevel::from_int(2))
+  |> ignore
+  let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+    milk_func,
     current_emit_target(isa),
-    2,
+  ) catch {
+    e => fail(e.to_string())
+  }
+  let artifact = @wasmoon_jit.CwasmArtifact::from_jit_plan_with_signature(
+    plan,
+    @wasmoon_jit.RuntimeSymbolResolver::new(),
+    0,
+    mod_.get_func_type(0).params.length(),
+    mod_.get_func_type(0).results.length(),
+  ) catch {
+    e => fail(e.to_string())
+  }
+  let compiled = artifact.to_precompiled_module()
+  inspect(compiled.functions.length(), content="1")
+  inspect(compiled.functions[0].code.length() > 0, content="true")
+  inspect(milk_func.print().contains("wasmoon.LoadMemBase"), content="false")
+  inspect(
+    milk_func.print().contains("trap \"memory out of bounds\""),
+    content="true",
   )
-  inspect(compiled is None, content="true")
 }
 
 ///|

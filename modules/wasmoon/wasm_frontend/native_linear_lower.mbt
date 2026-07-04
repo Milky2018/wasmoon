@@ -1304,11 +1304,6 @@ fn memory_effective_addr(
   offset : Int64,
   access_size : Int,
 ) -> @milkir.Value? {
-  if memory_types[memidx].is_memory64 {
-    // TODO(ISS-023): enable memory64 load/store after machv_emit can reliably
-    // patch the multi-block overflow-check CFG produced by this frontend.
-    return None
-  }
   guard push_memory_base(builder, vmctx, memidx) is Some(base) else {
     return None
   }

@@ -1282,6 +1282,7 @@ fn lower_terminator(
   out : @machv.Function,
   block : @machv.Block,
   terminator : @milkir.Terminator,
+  block_map : Array[(Int, Int)],
   wasm_body? : Bool = false,
 ) -> Unit {
   match terminator {
@@ -1290,14 +1291,16 @@ fn lower_terminator(
       block.set_terminator(TermReturn([]))
     }
     Jump(target, values) =>
-      block.set_terminator(TermJump(target, regs_for_values(values)))
+      block.set_terminator(
+        TermJump(map_block_id(block_map, target), regs_for_values(values)),
+      )
     Branch(cond, true_target, true_args, false_target, false_args) =>
       block.set_terminator(
         TermBranch(
           reg_for_value(cond),
-          true_target,
+          map_block_id(block_map, true_target),
           regs_for_values(true_args),
-          false_target,
+          map_block_id(block_map, false_target),
           regs_for_values(false_args),
         ),
       )
@@ -1308,9 +1311,9 @@ fn lower_terminator(
           reg_for_value(cond),
           false,
           true,
-          true_target,
+          map_block_id(block_map, true_target),
           [],
-          false_target,
+          map_block_id(block_map, false_target),
           [],
         ),
       )
@@ -1320,17 +1323,32 @@ fn lower_terminator(
           reg_for_value(cond),
           true,
           true,
-          true_target,
+          map_block_id(block_map, true_target),
           [],
-          false_target,
+          map_block_id(block_map, false_target),
           [],
         ),
       )
     BrTable(index, targets, default_target) =>
       block.set_terminator(
-        TermBrTable(reg_for_value(index), targets, default_target),
+        TermBrTable(
+          reg_for_value(index),
+          targets.map(fn(target) { map_block_id(block_map, target) }),
+          map_block_id(block_map, default_target),
+        ),
       )
   }
+}
+
+///|
+fn map_block_id(block_map : Array[(Int, Int)], old_id : Int) -> Int {
+  for entry in block_map {
+    let (from, to) = entry
+    if from == old_id {
+      return to
+    }
+  }
+  abort("x64_target: unknown MilkIR block target \{old_id}")
 }
 
 ///|
@@ -1344,16 +1362,21 @@ fn lower_function_with_abi(
   for slot in func.stack_slots {
     out.new_stack_slot(slot.size, slot.align) |> ignore
   }
+  let block_map : Array[(Int, Int)] = []
   for milk_block in func.blocks {
     let block = out.new_block()
+    block_map.push((milk_block.id, block.id))
     for param in milk_block.params {
       block.add_param(vreg_for_value(param))
     }
+  }
+  for i, milk_block in func.blocks {
+    let block = out.blocks[i]
     for inst in milk_block.instructions {
       lower_inst(func, out, block, inst)
     }
     if milk_block.terminator is Some(terminator) {
-      lower_terminator(out, block, terminator, wasm_body~)
+      lower_terminator(out, block, terminator, block_map, wasm_body~)
     }
   }
   out

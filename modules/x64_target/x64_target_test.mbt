@@ -453,6 +453,30 @@ test "x64 lowers generic load and store with value widths" {
 }
 
 ///|
+test "x64 remaps sparse MilkIR block targets" {
+  let func = @milkir.Function::new_empty("sparse_blocks")
+  let cond = func.new_value(I32)
+  let entry = func.new_block([])
+  let trap = func.new_block([])
+  let exit = func.new_block([])
+  func.new_block([]) |> ignore
+  let target = func.new_block([])
+  func.blocks.remove(3) |> ignore
+  entry.append_inst(func.new_inst(Iconst(1), [], [cond]))
+  entry.set_terminator(Brnz(cond, target.id, trap.id))
+  trap.set_terminator(TrapExit("trap"))
+  exit.set_terminator(Return([]))
+  target.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  guard lowered.blocks[0].terminator
+    is Some(TermBranchZero(_, _, _, true_target, _, false_target, _)) else {
+    fail("expected branch-zero terminator")
+  }
+  inspect(true_target, content="3")
+  inspect(false_target, content="1")
+}
+
+///|
 test "x64 lowers direct calls with SystemV ABI constraints" {
   let func = @milkir.Function::new_empty("call")
   let int0 = func.new_value(I64)
