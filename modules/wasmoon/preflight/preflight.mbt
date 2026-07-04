@@ -193,9 +193,7 @@ pub fn validate_jit(
     let func_idx = num_imports + i
     let func_name = get_func_name(wasm_module, func_idx)
     try {
-      let env = @wasm_frontend.EmbeddingEnvironment::new(
-        hidden_context_type=None,
-      )
+      let env = @wasm_frontend.EmbeddingEnvironment::new()
       let milk = @wasm_frontend.lower_function(env, wasm_module, i)
       @milkir.optimize_with_level(
         milk,

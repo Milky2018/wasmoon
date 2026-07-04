@@ -32,7 +32,7 @@ test "wasmoon plans wasm function through reusable compiler infrastructure" {
     [LocalGet(0), LocalGet(1), I32Add],
     "add",
   )
-  let env = @wasm_frontend.EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = @wasm_frontend.EmbeddingEnvironment::new()
   let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
   inspect(plan.entry_symbol, content="wasm_func_0")
   debug_inspect(plan.target, content="X64")
