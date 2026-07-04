@@ -24,6 +24,8 @@ fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? 
   match ty {
     I32 => Some(builder.iconst_i32(0))
     I64 | Ref | Ptr => Some(builder.iconst_i64(0L))
+    F32 => Some(builder.fconst_f32(0.0))
+    F64 => Some(builder.fconst_f64(0.0))
     _ => None
   }
 }
@@ -898,16 +900,16 @@ fn try_lower_linear_function(
   for param in func_type.params {
     locals.push(builder.add_param(wasm_value_type_to_milkir(param)))
   }
-  for local_ty in code.locals {
-    let milk_ty = wasm_value_type_to_milkir(local_ty)
-    guard zero_value(builder, milk_ty) is Some(value) else { return None }
-    locals.push(value)
-  }
   for result in func_type.results {
     builder.add_result(wasm_value_type_to_milkir(result))
   }
   let entry = builder.create_block()
   builder.switch_to_block(entry)
+  for local_ty in code.locals {
+    let milk_ty = wasm_value_type_to_milkir(local_ty)
+    guard zero_value(builder, milk_ty) is Some(value) else { return None }
+    locals.push(value)
+  }
   let stack : Array[@milkir.Value] = []
   let mut terminated = false
   for instr in code.body {
@@ -917,6 +919,7 @@ fn try_lower_linear_function(
       return None
     }
     match instr {
+      Nop => ()
       LocalGet(idx) => {
         if idx < 0 || idx >= locals.length() {
           return None
