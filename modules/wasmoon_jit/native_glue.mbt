@@ -102,8 +102,8 @@ pub fn plan_milkir_integration_for_target(
       allocatable_regs_for_target(target),
     )
     |> ignore
-    // TODO(wasmoon_jit): teach machv_emit to encode MachV terminators so this
-    // pipeline can replace the legacy VCode JIT execution path end-to-end.
+    // TODO(wasmoon_jit): install emitted CodeObject bytes through jit_ffi and
+    // replace the legacy VCode JIT execution path end-to-end.
     plan_integration_for_target(func, machv_func, target)
   } catch {
     err => raise PipelineFailure(message=to_repr(err).to_string())

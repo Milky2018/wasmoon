@@ -454,8 +454,8 @@ fn lower_inst(
       }
     }
   }
-  // TODO(aarch64_target): replace textual target opcodes with selected AArch64
-  // machine operations, target constraints, and legalization for non-trivial memory ops.
+  // TODO(aarch64_target): expand selected AArch64 machine operations, target
+  // constraints, and legalization for non-trivial memory ops.
   block.append(lowered)
 }
 

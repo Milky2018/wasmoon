@@ -439,8 +439,8 @@ fn lower_inst(
       }
     }
   }
-  // TODO(x64_target): replace textual target opcodes with selected x64 machine
-  // operations, target constraints, and legalization for non-trivial memory ops.
+  // TODO(x64_target): expand selected x64 machine operations, target
+  // constraints, and legalization for non-trivial memory ops.
   block.append(lowered)
 }
 
