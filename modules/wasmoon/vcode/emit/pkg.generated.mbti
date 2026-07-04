@@ -68,11 +68,6 @@ pub fn CondCode::to_int(Self) -> Int
 
 type Fixup
 
-pub(all) enum FixupKind {
-  Branch26
-  Branch19
-}
-
 pub(all) struct FuncAddrFixup {
   offset : Int
   func_idx : Int
@@ -126,7 +121,7 @@ pub struct MachineCode {
   mut debug_prev_func_idx_spill_offset : Int
 }
 pub fn MachineCode::add_call_fixup(Self, Int, Int, veneer_offset? : Int) -> Unit
-pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
+pub fn MachineCode::add_fixup(Self, Int) -> Unit
 pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::add_x86_rel32_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit

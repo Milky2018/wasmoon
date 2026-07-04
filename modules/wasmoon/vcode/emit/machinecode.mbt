@@ -58,8 +58,6 @@ struct Fixup {
   offset : Int
   // Target block id
   target_block : Int
-  // Kind of fixup
-  kind : FixupKind
 }
 
 ///|
@@ -93,13 +91,6 @@ pub(all) struct CallFixup {
   func_idx : Int
   // Offset of a local call veneer (load-absolute + br), -1 when absent
   veneer_offset : Int
-}
-
-///|
-/// Kind of fixup
-pub(all) enum FixupKind {
-  Branch26 // 26-bit PC-relative branch (B, BL)
-  Branch19 // 19-bit PC-relative branch (B.cond, CBZ, CBNZ)
 }
 
 ///|
@@ -335,13 +326,9 @@ pub fn MachineCode::define_label(self : MachineCode, block_id : Int) -> Unit {
 
 ///|
 /// Add a fixup for a forward branch
-pub fn MachineCode::add_fixup(
-  self : MachineCode,
-  target_block : Int,
-  kind : FixupKind,
-) -> Unit {
+pub fn MachineCode::add_fixup(self : MachineCode, target_block : Int) -> Unit {
   // Fixup is at current position - 4 (since we already emitted the instruction)
-  self.fixups.push({ offset: self.pos - 4, target_block, kind })
+  self.fixups.push({ offset: self.pos - 4, target_block })
 }
 
 ///|
@@ -466,7 +453,6 @@ fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
 pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
   for fixup in self.fixups {
     if self.labels.get(fixup.target_block) is Some(target_offset) {
-      ignore(fixup.kind)
       @machv_emit.patch_aarch64_branch_bytes(
         self.bytes,
         fixup.offset,
