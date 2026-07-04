@@ -16,6 +16,98 @@ test "build and verify minimal MilkIR function" {
 }
 
 ///|
+test "builder prints generic SSA function" {
+  let builder = IRBuilder::new("add")
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum = builder.iadd(p0, p1)
+  builder.return_([sum])
+  inspect(
+    builder.print(),
+    content=(
+      #|function add(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  inspect(builder.get_function().verify(), content="()")
+}
+
+///|
+test "builder prints pointer operations" {
+  let builder = IRBuilder::new("load_store")
+  let addr = builder.add_param(Ptr)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let offset0 = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(I32, addr, offset0)
+  let one = builder.iconst_i32(1)
+  let added = builder.iadd(loaded, one)
+  let offset4 = builder.iconst_i64(4L)
+  builder.store_ptr(I32, addr, added, offset4)
+  builder.return_([added])
+  inspect(
+    builder.print(),
+    content=(
+      #|function load_store(v0:ptr) -> i32 {
+      #|block0:
+      #|    v1:i64 = iconst 0
+      #|    v2:i32 = load_ptr.i32 v0, v1
+      #|    v3:i32 = iconst 1
+      #|    v4:i32 = iadd v2, v3
+      #|    v5:i64 = iconst 4
+      #|    store_ptr.i32 v0, v4, v5
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "builder and CFG support branches and block params" {
+  let builder = IRBuilder::new("loop_sum")
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let loop_header = builder.create_block()
+  let loop_body = builder.create_block()
+  let exit_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let init_sum = builder.iconst_i32(0)
+  let init_counter = builder.iconst_i32(0)
+  builder.jump(loop_header, [init_sum, init_counter])
+  let sum_param = builder.add_block_param(loop_header, I32)
+  let counter_param = builder.add_block_param(loop_header, I32)
+  builder.switch_to_block(loop_header)
+  let cmp = builder.icmp_slt(counter_param, n)
+  builder.brnz(cmp, loop_body, exit_block)
+  builder.switch_to_block(loop_body)
+  let new_sum = builder.iadd(sum_param, counter_param)
+  let one = builder.iconst_i32(1)
+  let new_counter = builder.iadd(counter_param, one)
+  builder.jump(loop_header, [new_sum, new_counter])
+  builder.switch_to_block(exit_block)
+  builder.return_([sum_param])
+  let cfg = CFG::build(builder.get_function())
+  let entry_successors = cfg.get_successors(0)
+  let header_successors = cfg.get_successors(1)
+  inspect(entry_successors.length(), content="1")
+  inspect(entry_successors[0], content="1")
+  inspect(header_successors.length(), content="2")
+  inspect(header_successors[0], content="2")
+  inspect(header_successors[1], content="3")
+  inspect(cfg.dominates(1, 2), content="true")
+}
+
+///|
 test "verify catches missing terminator" {
   let func = Function::new("bad", Signature::new([], []))
   func.new_block([]) |> ignore
@@ -23,5 +115,20 @@ test "verify catches missing terminator" {
     err => inspect(err, content="MissingTerminator(block_id=0)")
   } noraise {
     _ => fail("expected missing terminator")
+  }
+}
+
+///|
+test "verify catches undefined operands" {
+  let func = Function::new("bad_use", Signature::new([], []))
+  let entry = func.new_block([])
+  let bogus : Value = { id: 99, ty: I32 }
+  let result = func.new_value(I32)
+  entry.append_inst(func.new_inst(Iadd, [bogus, bogus], [result]))
+  entry.set_terminator(Return([result]))
+  try func.verify() catch {
+    err => inspect(err, content="UndefinedValue(value_id=99)")
+  } noraise {
+    _ => fail("expected undefined value")
   }
 }

@@ -177,7 +177,59 @@ fn opcode_name(opcode : @milkir.Opcode) -> String {
     StackAddr(_) => "aarch64.stack_addr"
     Call(symbol) => "aarch64.call:" + symbol.name
     CallIndirect(_) => "aarch64.call_indirect"
+    CallPtr(_, _) => "aarch64.call_ptr"
     Trap(reason) => "aarch64.trap:" + reason
+    Custom(name) => "aarch64.custom:" + name
+    Iconst(_) => "aarch64.iconst"
+    Fconst(_) => "aarch64.fconst"
+    Umulh => "aarch64.umulh"
+    Smulh => "aarch64.smulh"
+    Sdiv => "aarch64.sdiv"
+    Udiv => "aarch64.udiv"
+    Srem => "aarch64.srem"
+    Urem => "aarch64.urem"
+    Band => "aarch64.band"
+    Bor => "aarch64.bor"
+    Bxor => "aarch64.bxor"
+    Bnot => "aarch64.bnot"
+    Ishl => "aarch64.ishl"
+    Sshr => "aarch64.sshr"
+    Ushr => "aarch64.ushr"
+    Rotl => "aarch64.rotl"
+    Rotr => "aarch64.rotr"
+    Clz => "aarch64.clz"
+    Ctz => "aarch64.ctz"
+    Popcnt => "aarch64.popcnt"
+    Icmp(_) => "aarch64.icmp"
+    Fdiv => "aarch64.fdiv"
+    Fmin => "aarch64.fmin"
+    Fmax => "aarch64.fmax"
+    Fcmp(_) => "aarch64.fcmp"
+    Fneg => "aarch64.fneg"
+    Fabs => "aarch64.fabs"
+    Fsqrt => "aarch64.fsqrt"
+    Fceil => "aarch64.fceil"
+    Ffloor => "aarch64.ffloor"
+    Ftrunc => "aarch64.ftrunc"
+    Fnearest => "aarch64.fnearest"
+    Ireduce => "aarch64.ireduce"
+    Sextend => "aarch64.sextend"
+    Uextend => "aarch64.uextend"
+    Fpromote => "aarch64.fpromote"
+    Fdemote => "aarch64.fdemote"
+    FcvtToSint => "aarch64.fcvt_to_sint"
+    FcvtToUint => "aarch64.fcvt_to_uint"
+    FcvtToSintSat => "aarch64.fcvt_to_sint_sat"
+    FcvtToUintSat => "aarch64.fcvt_to_uint_sat"
+    SintToFcvt => "aarch64.sint_to_fcvt"
+    UintToFcvt => "aarch64.uint_to_fcvt"
+    Bitcast => "aarch64.bitcast"
+    Sextend8 => "aarch64.sextend8"
+    Sextend16 => "aarch64.sextend16"
+    Sextend32 => "aarch64.sextend32"
+    Copy => "aarch64.copy"
+    LoadPtr(_) => "aarch64.load_ptr"
+    StorePtr(_) => "aarch64.store_ptr"
   }
 }
 
@@ -225,6 +277,23 @@ fn lower_terminator(
     TrapExit(reason) => {
       let inst = out.new_inst(Target("aarch64.trap_exit:" + reason))
       block.append(inst)
+    }
+    Brz(cond, true_target, false_target)
+    | Brnz(cond, true_target, false_target) => {
+      let inst = out.new_inst(Branch(true_target, false_target))
+      inst.add_operand(@machv.Operand::use_reg(reg_for_value(cond)))
+      block.append(inst)
+      block.add_successor(true_target)
+      block.add_successor(false_target)
+    }
+    BrTable(index, targets, default_target) => {
+      let inst = out.new_inst(Target("aarch64.br_table"))
+      inst.add_operand(@machv.Operand::use_reg(reg_for_value(index)))
+      block.append(inst)
+      for target in targets {
+        block.add_successor(target)
+      }
+      block.add_successor(default_target)
     }
   }
 }

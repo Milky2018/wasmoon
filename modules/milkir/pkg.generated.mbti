@@ -11,6 +11,9 @@ import {
 pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
+  UndefinedValue(value_id~ : Int)
+  ArityMismatch(message~ : String)
+  TypeMismatch(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for VerifyError
 
@@ -21,14 +24,41 @@ pub(all) struct Block {
   instructions : Array[Inst]
   mut terminator : Terminator?
 } derive(@debug.Debug)
+pub fn Block::add_param(Self, Value) -> Unit
 pub fn Block::append_inst(Self, Inst) -> Unit
 pub fn Block::new(Int, Array[Value]) -> Self
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 
+pub(all) struct CFG {
+  size : Int
+  num_blocks : Int
+  successors : Array[Array[Int]]
+  predecessors : Array[Array[Int]]
+  valid : Array[Bool]
+} derive(@debug.Debug)
+pub fn CFG::build(Function) -> Self
+pub fn CFG::compute_dominators(Self) -> Array[Int]
+pub fn CFG::dominates(Self, Int, Int) -> Bool
+pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
+pub fn CFG::get_successors(Self, Int) -> Array[Int]
+pub fn CFG::is_valid(Self, Int) -> Bool
+pub fn CFG::postorder(Self) -> Array[Int]
+pub fn CFG::reverse_postorder(Self) -> Array[Int]
+pub fn CFG::to_dot(Self, String) -> String
+
 pub(all) struct ExternalSymbol {
   name : String
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 pub fn ExternalSymbol::new(String) -> Self
+
+pub(all) enum FloatCC {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) struct Function {
   name : String
@@ -41,13 +71,62 @@ pub(all) struct Function {
   mut next_block_id : Int
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
+pub fn Function::add_param(Self, Type) -> Value
+pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
 pub fn Function::new(String, Signature) -> Self
 pub fn Function::new_block(Self, Array[Value]) -> Block
+pub fn Function::new_block0(Self) -> Block
+pub fn Function::new_empty(String) -> Self
 pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
 pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
 pub fn Function::new_value(Self, Type) -> Value
+pub fn Function::print(Self) -> String
 pub fn Function::verify(Self) -> Unit raise VerifyError
+
+pub(all) struct IRBuilder {
+  func : Function
+  mut current_block : Block?
+} derive(@debug.Debug)
+pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
+pub fn IRBuilder::add_param(Self, Type) -> Value
+pub fn IRBuilder::add_result(Self, Type) -> Unit
+pub fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
+pub fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
+pub fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
+pub fn IRBuilder::call(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
+pub fn IRBuilder::call_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
+pub fn IRBuilder::copy(Self, Value) -> Value
+pub fn IRBuilder::create_block(Self) -> Block
+pub fn IRBuilder::current_block(Self) -> Block?
+pub fn IRBuilder::fadd(Self, Value, Value) -> Value
+pub fn IRBuilder::fconst(Self, Type, Double) -> Value
+pub fn IRBuilder::fconst_f32(Self, Float) -> Value
+pub fn IRBuilder::fconst_f64(Self, Double) -> Value
+pub fn IRBuilder::fmul(Self, Value, Value) -> Value
+pub fn IRBuilder::fneg(Self, Value) -> Value
+pub fn IRBuilder::fsub(Self, Value, Value) -> Value
+pub fn IRBuilder::get_const_value(Self, Value) -> Int64?
+pub fn IRBuilder::get_function(Self) -> Function
+pub fn IRBuilder::iadd(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
+pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_sgt(Self, Value, Value) -> Value
+pub fn IRBuilder::icmp_slt(Self, Value, Value) -> Value
+pub fn IRBuilder::iconst(Self, Type, Int64) -> Value
+pub fn IRBuilder::iconst_i32(Self, Int) -> Value
+pub fn IRBuilder::iconst_i64(Self, Int64) -> Value
+pub fn IRBuilder::imul(Self, Value, Value) -> Value
+pub fn IRBuilder::isub(Self, Value, Value) -> Value
+pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
+pub fn IRBuilder::new(String) -> Self
+pub fn IRBuilder::print(Self) -> String
+pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
+pub fn IRBuilder::select(Self, Value, Value, Value) -> Value
+pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
+pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
+pub fn IRBuilder::trap(Self, String) -> Unit
 
 pub(all) struct Inst {
   id : Int
@@ -59,44 +138,112 @@ pub(all) struct Inst {
 pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::new(Int, Opcode, Array[Value], Array[Value]) -> Self
 
+pub(all) enum IntCC {
+  Eq
+  Ne
+  Slt
+  Sle
+  Sgt
+  Sge
+  Ult
+  Ule
+  Ugt
+  Uge
+} derive(Eq, Hash, @debug.Debug)
+
 pub(all) enum Metadata {
   SourceLoc(String)
   Comment(String)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Opcode {
+  Iconst(Int64)
+  Fconst(Double)
   Iadd
   Isub
   Imul
+  Umulh
+  Smulh
+  Sdiv
+  Udiv
+  Srem
+  Urem
+  Band
+  Bor
+  Bxor
+  Bnot
+  Ishl
+  Sshr
+  Ushr
+  Rotl
+  Rotr
+  Clz
+  Ctz
+  Popcnt
+  Icmp(IntCC)
   IcmpEq
   Fadd
   Fsub
   Fmul
+  Fdiv
+  Fmin
+  Fmax
+  Fcmp(FloatCC)
+  Fneg
+  Fabs
+  Fsqrt
+  Fceil
+  Ffloor
+  Ftrunc
+  Fnearest
+  Ireduce
+  Sextend
+  Uextend
+  Fpromote
+  Fdemote
+  FcvtToSint
+  FcvtToUint
+  FcvtToSintSat
+  FcvtToUintSat
+  SintToFcvt
+  UintToFcvt
+  Bitcast
+  Sextend8
+  Sextend16
+  Sextend32
   Select
+  Copy
   Load
   Store
+  LoadPtr(Type)
+  StorePtr(Type)
   StackAddr(StackSlot)
   Call(ExternalSymbol)
   CallIndirect(Signature)
+  CallPtr(Int, Int)
   Trap(String)
-} derive(Eq, @debug.Debug)
+  Custom(String)
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) struct Signature {
   params : Array[Type]
   results : Array[Type]
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 pub fn Signature::new(Array[Type], Array[Type]) -> Self
 
 pub(all) struct StackSlot {
   id : Int
   size : Int
   align : Int
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) enum Terminator {
   Return(Array[Value])
   Jump(Int, Array[Value])
   Branch(Value, Int, Array[Value], Int, Array[Value])
+  Brz(Value, Int, Int)
+  Brnz(Value, Int, Int)
+  BrTable(Value, Array[Int], Int)
   TrapExit(String)
 } derive(Eq, @debug.Debug)
 
@@ -108,12 +255,13 @@ pub(all) enum Type {
   V128
   Ptr
   Ref
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
+pub impl Show for Type
 
 pub(all) struct Value {
   id : Int
   ty : Type
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 
 // Type aliases
 

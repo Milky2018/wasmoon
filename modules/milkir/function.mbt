@@ -17,6 +17,11 @@ pub fn Block::append_inst(self : Block, inst : Inst) -> Unit {
 }
 
 ///|
+pub fn Block::add_param(self : Block, value : Value) -> Unit {
+  self.params.push(value)
+}
+
+///|
 pub fn Block::set_terminator(self : Block, terminator : Terminator) -> Unit {
   self.terminator = Some(terminator)
 }
@@ -50,6 +55,11 @@ pub fn Function::new(name : String, signature : Signature) -> Function {
 }
 
 ///|
+pub fn Function::new_empty(name : String) -> Function {
+  Function::new(name, Signature::new([], []))
+}
+
+///|
 pub fn Function::new_value(self : Function, ty : Type) -> Value {
   let value = { id: self.next_value_id, ty }
   self.next_value_id = self.next_value_id + 1
@@ -74,6 +84,23 @@ pub fn Function::new_block(self : Function, params : Array[Value]) -> Block {
   self.next_block_id = self.next_block_id + 1
   self.blocks.push(block)
   block
+}
+
+///|
+pub fn Function::new_block0(self : Function) -> Block {
+  self.new_block([])
+}
+
+///|
+pub fn Function::add_param(self : Function, ty : Type) -> Value {
+  let value = self.new_value(ty)
+  self.signature.params.push(ty)
+  value
+}
+
+///|
+pub fn Function::add_result(self : Function, ty : Type) -> Unit {
+  self.signature.results.push(ty)
 }
 
 ///|
