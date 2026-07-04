@@ -96,6 +96,34 @@ pub fn resolve_import_function_ptr(
 }
 
 ///|
+pub(all) enum ImportFunctionResolution {
+  DirectImportFunction(Int64)
+  HostImportFunctionAddr(Int)
+  UnsupportedImportFunction
+} derive(Eq, Debug)
+
+///|
+pub fn classify_import_function_ptr(ptr : Int64) -> ImportFunctionResolution {
+  if ptr < 0L {
+    HostImportFunctionAddr((-(ptr + 1L)).to_int())
+  } else {
+    DirectImportFunction(ptr)
+  }
+}
+
+///|
+pub fn resolve_import_function(
+  external_imports : Map[String, Map[String, Int64]],
+  module_name : String,
+  field_name : String,
+) -> ImportFunctionResolution {
+  match resolve_import_function_ptr(external_imports, module_name, field_name) {
+    Some(ptr) => classify_import_function_ptr(ptr)
+    None => UnsupportedImportFunction
+  }
+}
+
+///|
 /// Check if a module is known to JIT (has trampoline support).
 pub fn is_jit_supported_module(module_name : String) -> Bool {
   import_trampolines.contains(module_name)

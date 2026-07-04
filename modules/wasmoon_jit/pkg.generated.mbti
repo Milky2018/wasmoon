@@ -30,6 +30,8 @@ pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 
+pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
+
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
 pub fn decode_externref(Int64) -> Int?
@@ -290,6 +292,8 @@ pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
 
 pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?
 
+pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
+
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
 
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
@@ -504,6 +508,12 @@ pub(all) struct HotThreshold {
 pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
+
+pub(all) enum ImportFunctionResolution {
+  DirectImportFunction(Int64)
+  HostImportFunctionAddr(Int)
+  UnsupportedImportFunction
+} derive(Eq, @debug.Debug)
 
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]

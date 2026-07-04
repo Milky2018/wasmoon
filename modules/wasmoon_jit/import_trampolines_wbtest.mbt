@@ -47,3 +47,21 @@ test "import trampolines: external imports override builtin fallback" {
     content="None",
   )
 }
+
+///|
+test "import trampolines: classify direct and hostcall pointers" {
+  let external : Map[String, Map[String, Int64]] = {}
+  external.set("env", { "host": -124L, "direct": 4096L })
+  debug_inspect(
+    resolve_import_function(external, "env", "host"),
+    content="HostImportFunctionAddr(123)",
+  )
+  debug_inspect(
+    resolve_import_function(external, "env", "direct"),
+    content="DirectImportFunction(4096)",
+  )
+  debug_inspect(
+    resolve_import_function(external, "env", "missing"),
+    content="UnsupportedImportFunction",
+  )
+}
