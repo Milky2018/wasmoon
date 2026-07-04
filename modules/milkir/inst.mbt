@@ -98,7 +98,7 @@ pub(all) enum Opcode {
 ///|
 pub(all) struct Inst {
   id : Int
-  opcode : Opcode
+  mut opcode : Opcode
   args : Array[Value]
   results : Array[Value]
   metadata : Array[Metadata]

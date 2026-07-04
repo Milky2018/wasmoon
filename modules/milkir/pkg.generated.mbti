@@ -8,6 +8,12 @@ import {
 // Values
 pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 
+pub fn fold_constants(Function) -> OptResult
+
+pub fn instruction_count(Function) -> Int
+
+pub fn optimize_with_level(Function, OptLevel) -> OptResult
+
 // Errors
 pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
@@ -136,7 +142,7 @@ pub fn IRBuilder::trap(Self, String) -> Unit
 
 pub(all) struct Inst {
   id : Int
-  opcode : Opcode
+  mut opcode : Opcode
   args : Array[Value]
   results : Array[Value]
   metadata : Array[Metadata]
@@ -237,6 +243,22 @@ pub(all) enum Opcode {
   Trap(String)
   Custom(String)
 } derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum OptLevel {
+  O0
+  O1
+  O2
+  O3
+} derive(Eq, @debug.Debug)
+pub fn OptLevel::from_int(Int) -> Self
+
+pub(all) struct OptResult {
+  mut changed : Bool
+  passes_run : Array[String]
+} derive(@debug.Debug)
+pub fn OptResult::add_pass(Self, String) -> Unit
+pub fn OptResult::mark_changed(Self) -> Unit
+pub fn OptResult::new() -> Self
 
 pub(all) struct Signature {
   params : Array[Type]

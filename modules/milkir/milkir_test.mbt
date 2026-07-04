@@ -132,3 +132,89 @@ test "verify catches undefined operands" {
     _ => fail("expected undefined value")
   }
 }
+
+///|
+test "optimizer folds integer constants" {
+  let builder = IRBuilder::new("const_add")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(10)
+  let rhs = builder.iconst_i32(20)
+  let sum = builder.iadd(lhs, rhs)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = optimize_with_level(func, O1)
+  inspect(result.changed, content="true")
+  inspect(instruction_count(func), content="3")
+  inspect(
+    func.print(),
+    content=(
+      #|function const_add() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 10
+      #|    v1:i32 = iconst 20
+      #|    v2:i32 = iconst 30
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "optimizer leaves trap-prone division unfused" {
+  let builder = IRBuilder::new("no_fold_div")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(10)
+  let rhs = builder.iconst_i32(0)
+  let result = builder.get_function().new_value(I32)
+  entry.append_inst(builder.get_function().new_inst(Sdiv, [lhs, rhs], [result]))
+  builder.return_([result])
+  let func = builder.get_function()
+  let opt = optimize_with_level(func, O2)
+  inspect(opt.changed, content="false")
+  inspect(
+    func.print(),
+    content=(
+      #|function no_fold_div() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 10
+      #|    v1:i32 = iconst 0
+      #|    v2:i32 = sdiv v0, v1
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "optimizer O0 does not rewrite constants" {
+  let builder = IRBuilder::new("o0")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(1)
+  let rhs = builder.iconst_i32(2)
+  let sum = builder.iadd(lhs, rhs)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = optimize_with_level(func, O0)
+  inspect(result.changed, content="false")
+  inspect(
+    func.print(),
+    content=(
+      #|function o0() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i32 = iconst 2
+      #|    v2:i32 = iadd v0, v1
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+}
