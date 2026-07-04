@@ -288,7 +288,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   let isa = @isaregs.current_isa()
   let sret_reg = @isaregs.sret_index()
   fn trap_msg_to_brk_imm(msg : String) -> Int {
-    // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
+    // Keep this mapping in sync with `wasmoon_jit/jit_ffi/trap.c`:
     //   0 unreachable
     //   1 out of bounds (memory/table)
     //   2 indirect call type mismatch

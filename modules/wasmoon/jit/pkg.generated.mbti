@@ -3,9 +3,9 @@ package "Milky2018/wasmoon/jit"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/jit/jit_ffi",
   "Milky2018/wasmoon/vcode",
   "Milky2018/wasmoon_jit/cwasm",
+  "Milky2018/wasmoon_jit/jit_ffi",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
 }

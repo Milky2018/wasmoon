@@ -23,8 +23,8 @@ pub(all) struct JitIntegrationPlan {
 
 ///|
 pub fn default_native_glue() -> Array[NativeGlueBinding] {
-  // TODO(wasmoon_jit): point these records at the moved jit_ffi C/assembly
-  // sources after the legacy JIT package is rehomed under wasmoon_jit.
+  // TODO(wasmoon_jit): replace these manifest records with direct ownership
+  // checks over the moved jit_ffi C/assembly sources.
   [
     { kind: ExecutableMemory, symbol: "wasmoon_jit_exec_mem" },
     { kind: TrapHandler, symbol: "wasmoon_jit_trap" },
