@@ -524,6 +524,7 @@ fn lower_terminator(
 ///|
 pub fn lower_function(func : @milkir.Function) -> @machv.Function {
   let out = @machv.Function::new(func.name)
+  out.next_vreg_id = func.next_value_id
   for milk_block in func.blocks {
     let block = out.new_block()
     for inst in milk_block.instructions {

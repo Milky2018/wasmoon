@@ -51,6 +51,43 @@ test "x64 lowers MilkIR arithmetic into MachV" {
 }
 
 ///|
+test "x64 legalizes integer division fixed-register operands" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("sdiv64", signature)
+  let lhs = func.new_value(I64)
+  let rhs = func.new_value(I64)
+  let quotient = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Sdiv, [lhs, rhs], [quotient]))
+  entry.set_terminator(Return([quotient]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
+  let div = lowered.blocks[0].instructions[2]
+  inspect(div.opcode == IntDiv(true), content="true")
+  inspect(div.operands.length(), content="4")
+  inspect(div.constraints.length(), content="4")
+  inspect(
+    div.constraints[0].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    div.constraints[1].allowed_regs[0] == { index: 8, class: Int },
+    content="true",
+  )
+  inspect(
+    div.constraints[2].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    div.constraints[3].allowed_regs[0] == { index: 3, class: Int },
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[3].opcode == Move, content="true")
+}
+
+///|
 test "x64 lowers extended MilkIR ops into structured MachV opcodes" {
   let func = @milkir.Function::new_empty("extended")
   let lhs = func.new_value(I64)

@@ -314,6 +314,43 @@ fn const_offset_arg(
 }
 
 ///|
+fn lower_int_div(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  signed : Bool,
+) -> Unit {
+  let lhs_tmp = out.new_vreg(Int)
+  let rhs_tmp = out.new_vreg(Int)
+  let lhs_move = out.new_inst(Move)
+  lhs_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  lhs_move.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
+  block.append(lhs_move)
+  let rhs_move = out.new_inst(Move)
+  rhs_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  rhs_move.add_operand(@machv.Operand::def(Virtual(rhs_tmp)))
+  block.append(rhs_move)
+
+  let div = out.new_inst(IntDiv(signed))
+  div.add_operand(@machv.Operand::use_reg(Virtual(lhs_tmp)))
+  div.add_operand(@machv.Operand::use_reg(Virtual(rhs_tmp)))
+  div.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
+  // TODO(x64_target): make the RDX side effect a first-class MachV tied/clobber
+  // operand once regalloc models clobbers during live-range construction.
+  let rdx_tmp = out.new_vreg(Int)
+  div.add_operand(@machv.Operand::def(Virtual(rdx_tmp)))
+  add_fixed_constraint(div, 0, int_reg(0))
+  add_fixed_constraint(div, 1, int_reg(8))
+  add_fixed_constraint(div, 2, int_reg(0))
+  add_fixed_constraint(div, 3, int_reg(3))
+  block.append(div)
+  let result_move = out.new_inst(Move)
+  result_move.add_operand(@machv.Operand::use_reg(Virtual(lhs_tmp)))
+  add_defs(result_move, inst.results)
+  block.append(result_move)
+}
+
+///|
 fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
   match opcode {
     Iadd => IntAdd
@@ -392,6 +429,17 @@ fn lower_inst(
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
+  match inst.opcode {
+    Sdiv => {
+      lower_int_div(out, block, inst, true)
+      return
+    }
+    Udiv => {
+      lower_int_div(out, block, inst, false)
+      return
+    }
+    _ => ()
+  }
   let lowered = match inst.opcode {
     LoadPtr(ty) => {
       let offset = const_offset_arg(func, inst.args, 1)
@@ -509,6 +557,7 @@ fn lower_terminator(
 ///|
 pub fn lower_function(func : @milkir.Function) -> @machv.Function {
   let out = @machv.Function::new(func.name)
+  out.next_vreg_id = func.next_value_id
   for milk_block in func.blocks {
     let block = out.new_block()
     for inst in milk_block.instructions {

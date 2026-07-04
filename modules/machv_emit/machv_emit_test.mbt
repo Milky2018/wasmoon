@@ -113,6 +113,46 @@ test "emit X64 integer constants and arithmetic bytes" {
 }
 
 ///|
+test "emit X64 integer division bytes" {
+  let func = @machv.Function::new("x64_int_div")
+  let entry = func.new_block()
+  let signed_div = func.new_inst(IntDiv(true))
+  signed_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  signed_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 10, class: Int })),
+  )
+  signed_div.add_operand(
+    @machv.Operand::def(Physical({ index: 0, class: Int })),
+  )
+  signed_div.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  entry.append(signed_div)
+  let unsigned_div = func.new_inst(IntDiv(false))
+  unsigned_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  unsigned_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 11, class: Int })),
+  )
+  unsigned_div.add_operand(
+    @machv.Operand::def(Physical({ index: 0, class: Int })),
+  )
+  unsigned_div.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  entry.append(unsigned_div)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[72, 153, 73, 247, 250, 49, 210, 73, 247, 243, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()

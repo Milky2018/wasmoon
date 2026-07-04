@@ -108,6 +108,13 @@ fn emit_x64_imul_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_div_r64(object : CodeObject, rhs : Int, signed : Bool) -> Unit {
+  emit_x64_rex_w(object, 0, (rhs >> 3) & 1)
+  object.code.push(0xf7)
+  emit_x64_modrm(object, 3, if signed { 7 } else { 6 }, rhs)
+}
+
+///|
 fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
   emit_x64_rex_w(object, 0, (dst >> 3) & 1)
@@ -969,6 +976,51 @@ fn emit_x64_float_unop(
 }
 
 ///|
+fn emit_x64_int_div(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  signed : Bool,
+) -> Unit raise EmitError {
+  let context = if signed { "idiv" } else { "div" }
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} dividend",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} divisor",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} quotient",
+  )
+  let rdx = require_int_preg(
+    find_operand(inst, Def, 1, context),
+    "\{context} rdx side effect",
+  )
+  if lhs != 0 || dst != 0 || rdx != 3 {
+    raise UnsupportedOperand(
+      message="\{context} requires dividend/result in rax and rdx side-effect def",
+    )
+  }
+  if rhs == 0 || rhs == 3 {
+    raise UnsupportedOperand(
+      message="\{context} divisor must not be rax or rdx",
+    )
+  }
+  if signed {
+    // cqo: sign-extend RAX into RDX:RAX before IDIV.
+    object.code.push(0x48)
+    object.code.push(0x99)
+  } else {
+    // xor edx, edx: zero the high dividend half before DIV.
+    object.code.push(0x31)
+    object.code.push(0xd2)
+  }
+  emit_x64_div_r64(object, rhs, signed)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1033,6 +1085,7 @@ fn write_x64_inst_bytes(
     IntAdd => emit_x64_int_add(object, inst)
     IntSub => emit_x64_int_binop3(object, inst, emit_x64_sub_rr, "sub")
     IntMul => emit_x64_int_binop3(object, inst, emit_x64_imul_rr, "mul")
+    IntDiv(signed) => emit_x64_int_div(object, inst, signed)
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
