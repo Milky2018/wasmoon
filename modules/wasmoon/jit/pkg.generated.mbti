@@ -213,8 +213,6 @@ pub fn get_spectest_print_i64_ptr() -> Int64
 
 pub fn get_spectest_print_ptr() -> Int64
 
-pub fn get_temperature(Int, @wasmoon_jit.HotThreshold) -> @wasmoon_jit.FunctionTemperature
-
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn is_funcref_ptr(Int64) -> Bool
@@ -331,29 +329,13 @@ pub using @wasmoon_jit {type CHeap}
 
 pub using @wasmoon_jit {type CHeapError}
 
-pub using @wasmoon_jit {type CallCounter}
-
-pub using @wasmoon_jit {type CompilationDecision}
-
-pub using @wasmoon_jit {type CompilationMode}
-
-pub using @wasmoon_jit {type CompilationQueue}
-
-pub using @wasmoon_jit {type CompilationRequest}
-
-pub using @wasmoon_jit {type CompilationStrategy}
-
 pub using @wasmoon_jit {type DWARFBuilder}
 
 pub using @wasmoon_jit {type ExecCode}
 
 pub using @wasmoon_jit {type FunctionInfo}
 
-pub using @wasmoon_jit {type FunctionTemperature}
-
 pub using @wasmoon_jit {type GCSetupError}
-
-pub using @wasmoon_jit {type HotThreshold}
 
 pub using @wasmoon_jit {type JITDebugDB}
 
@@ -362,10 +344,6 @@ pub using @wasmoon_jit {type JITFunctionDebug}
 pub using @wasmoon_jit {type JITTable}
 
 pub using @wasmoon_jit {type MemoryInfo}
-
-pub using @wasmoon_jit {type Profiler}
-
-pub using @wasmoon_jit {type TieredConfig}
 
 pub using @wasmoon_jit {type TrapDetails}
 
