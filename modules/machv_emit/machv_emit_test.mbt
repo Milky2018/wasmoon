@@ -74,6 +74,17 @@ test "emit X64 generic relocations and stack maps" {
 }
 
 ///|
+test "emit MachV terminators as target bytes" {
+  let func = @machv.Function::new("term")
+  let entry = func.new_block()
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[195]")
+  inspect(object.debug_entries.length(), content="1")
+  inspect(object.debug_entries[0].inst_id, content="-1")
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()

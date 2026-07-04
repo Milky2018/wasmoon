@@ -52,6 +52,6 @@ test "plan MilkIR through reusable JIT pipeline" {
   let plan = try! plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  debug_inspect(plan.object.code, content="[72, 137, 194, 72, 1, 202]")
-  inspect(plan.object.debug_entries.length(), content="1")
+  debug_inspect(plan.object.code, content="[72, 137, 194, 72, 1, 202, 195]")
+  inspect(plan.object.debug_entries.length(), content="2")
 }

@@ -7,6 +7,11 @@ fn opcode_debug_name(opcode : @machv.Opcode) -> String {
 }
 
 ///|
+fn terminator_debug_name(term : @machv.Terminator) -> String {
+  "machv." + to_repr(term).to_string()
+}
+
+///|
 pub suberror EmitError {
   UnsupportedOpcode(opcode~ : String)
   UnsupportedOperand(message~ : String)
@@ -272,6 +277,38 @@ fn emit_instruction(
 }
 
 ///|
+fn opcode_for_terminator(
+  term : @machv.Terminator,
+) -> @machv.Opcode raise EmitError {
+  match term {
+    TermReturn(_) => Return
+    TermJump(target, _) => Jump(target)
+    TermTrap(reason) => Trap(reason)
+    _ => raise UnsupportedOpcode(opcode=terminator_debug_name(term))
+  }
+}
+
+///|
+fn emit_terminator(
+  object : CodeObject,
+  target : EmitTarget,
+  block_id : Int,
+  term : @machv.Terminator,
+) -> Unit raise EmitError {
+  let opcode = opcode_for_terminator(term)
+  let inst = @machv.Instruction::new(-1, opcode)
+  let offset = object.current_offset()
+  write_inst_bytes(object, target, inst)
+  record_relocations(object, offset, opcode)
+  object.debug_entries.push({
+    offset,
+    block_id,
+    inst_id: -1,
+    opcode: opcode_debug_name(opcode),
+  })
+}
+
+///|
 pub fn emit_function_for_target(
   func : @machv.Function,
   target : EmitTarget,
@@ -280,6 +317,9 @@ pub fn emit_function_for_target(
   for block in func.blocks {
     for inst in block.instructions {
       emit_instruction(object, target, block.id, inst)
+    }
+    if block.terminator is Some(term) {
+      emit_terminator(object, target, block.id, term)
     }
   }
   object
