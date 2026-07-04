@@ -1,9 +1,5 @@
 ///|
-pub type VCodeLoop = @core_regalloc.DenseCfgLoop
-
-///|
-pub struct VCodeCFG {
-  size : Int
+priv struct VCodeCFG {
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
 }
@@ -29,7 +25,7 @@ fn terminator_successor_ids(term : @instr.VCodeTerminator) -> Array[Int] {
 }
 
 ///|
-pub fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
+fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
   let block_ids : Array[Int] = []
   let block_successor_ids : Array[Array[Int]] = []
   for block in func.get_blocks() {
@@ -42,7 +38,7 @@ pub fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
   let edges = @core_regalloc.build_dense_successor_edges(
     block_ids, block_successor_ids,
   )
-  { size: block_ids.length(), preds: edges.preds, succs: edges.succs }
+  { preds: edges.preds, succs: edges.succs }
 }
 
 ///|
@@ -51,22 +47,3 @@ fn VCodeCFG::reverse_postorder(self : VCodeCFG) -> Array[Int] {
 }
 
 ///|
-pub fn VCodeCFG::compute_dominators(self : VCodeCFG) -> Array[Int] {
-  @core_regalloc.compute_dominators_from_edges({
-    preds: self.preds,
-    succs: self.succs,
-  })
-}
-
-///|
-pub fn VCodeCFG::find_back_edges(self : VCodeCFG) -> Array[(Int, Int)] {
-  @core_regalloc.find_back_edges_from_edges({
-    preds: self.preds,
-    succs: self.succs,
-  })
-}
-
-///|
-pub fn VCodeCFG::find_loops(self : VCodeCFG) -> Array[VCodeLoop] {
-  @core_regalloc.find_loops_from_edges({ preds: self.preds, succs: self.succs })
-}

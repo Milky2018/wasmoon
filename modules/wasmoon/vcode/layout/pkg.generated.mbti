@@ -1,28 +1,22 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/layout"
 
+import {
+  "Milky2018/wasmoon/vcode/regalloc",
+}
+
 // Values
-pub fn layout_blocks(@Milky2018/wasmoon/vcode/regalloc.VCodeFunction) -> Array[Int]
+pub fn layout_blocks(@regalloc.VCodeFunction) -> Array[Int]
 
-pub fn optimize_layout(@Milky2018/wasmoon/vcode/regalloc.VCodeFunction) -> @Milky2018/wasmoon/vcode/regalloc.VCodeFunction
+pub fn optimize_layout(@regalloc.VCodeFunction) -> @regalloc.VCodeFunction
 
-pub fn reorder_blocks(@Milky2018/wasmoon/vcode/regalloc.VCodeFunction, Array[Int]) -> @Milky2018/wasmoon/vcode/regalloc.VCodeFunction
+pub fn reorder_blocks(@regalloc.VCodeFunction, Array[Int]) -> @regalloc.VCodeFunction
 
 // Errors
 
 // Types and methods
-pub struct VCodeCFG {
-  size : Int
-  preds : Array[Array[Int]]
-  succs : Array[Array[Int]]
-}
-pub fn VCodeCFG::build(@Milky2018/wasmoon/vcode/regalloc.VCodeFunction) -> Self
-pub fn VCodeCFG::compute_dominators(Self) -> Array[Int]
-pub fn VCodeCFG::find_back_edges(Self) -> Array[(Int, Int)]
-pub fn VCodeCFG::find_loops(Self) -> Array[@Milky2018/regalloc.DenseCfgLoop]
 
 // Type aliases
-pub using @Milky2018/regalloc {type DenseCfgLoop as VCodeLoop}
 
 // Traits
 

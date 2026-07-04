@@ -94,7 +94,7 @@ pub(all) struct CallFixup {
 }
 
 ///|
-pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
+fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
   let ord = match libcall {
     RefTest => 0
     RefCast => 1
@@ -121,7 +121,7 @@ pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
 }
 
 ///|
-pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
+fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
   let ord = match libcall {
     MemoryGrow => 0
     MemorySize => 1
@@ -142,7 +142,7 @@ pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
 }
 
 ///|
-pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
+fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
   let ord = match libcall {
     TryBegin => 0
     TryEnd => 1
