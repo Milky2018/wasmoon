@@ -8,6 +8,24 @@ test "x64 target owns ABI policy" {
 }
 
 ///|
+test "x64 target owns SystemV machine environment policy" {
+  inspect(call_clobbered_gprs().length(), content="9")
+  inspect(call_clobbered_fprs().length(), content="16")
+  inspect(int_reg_index(Vmctx), content="15")
+  let env = build_machine_env(
+    settings={ enable_pinned_reg: true },
+    reserve_mem0_desc=true,
+    reserve_func_table=true,
+    reserve_extra_results_ptr=true,
+  )
+  inspect(env.preferred_int.length(), content="7")
+  inspect(env.nonpreferred_int.length(), content="1")
+  inspect(env.callee_saved_int.length(), content="1")
+  inspect(env.scratch_int.length(), content="2")
+  inspect(env.scratch_float.length(), content="2")
+}
+
+///|
 test "x64 lowers MilkIR arithmetic into MachV" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("add64", signature)

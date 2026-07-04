@@ -10,9 +10,29 @@ import {
 // Values
 pub fn abi_policy() -> AbiPolicy
 
+pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[@machv.PReg]
+
 pub fn allocatable_regs() -> Array[@machv.PReg]
 
+pub fn allocatable_scratch_fprs() -> Array[@machv.PReg]
+
+pub fn allocatable_scratch_regs() -> Array[@machv.PReg]
+
+pub fn build_machine_env(settings? : TargetSettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnvData
+
+pub fn call_clobbered_fprs() -> Array[@machv.PReg]
+
+pub fn call_clobbered_fprs_same_abi() -> Array[@machv.PReg]
+
+pub fn call_clobbered_gprs() -> Array[@machv.PReg]
+
+pub fn int_reg_index(IntRegRole) -> Int
+
 pub fn lower_function(@milkir.Function) -> @machv.Function
+
+pub fn sysv_arg_fprs() -> Array[@machv.PReg]
+
+pub fn sysv_callee_saved() -> Array[@machv.PReg]
 
 pub fn target() -> Target
 
@@ -34,11 +54,41 @@ pub(all) enum CallingConvention {
   SystemV
 } derive(Eq, @debug.Debug)
 
+pub(all) enum IntRegRole {
+  Vmctx
+  Mem0Desc
+  FuncTable
+  ExtraResultsPtr
+  Scratch1
+  Scratch2
+  FP
+  LR
+  SRet
+} derive(Eq, @debug.Debug)
+
+pub(all) struct MachineEnvData {
+  preferred_int : Array[@machv.PReg]
+  nonpreferred_int : Array[@machv.PReg]
+  preferred_float : Array[@machv.PReg]
+  nonpreferred_float : Array[@machv.PReg]
+  preferred_vector : Array[@machv.PReg]
+  nonpreferred_vector : Array[@machv.PReg]
+  callee_saved_int : Array[@machv.PReg]
+  callee_saved_float : Array[@machv.PReg]
+  scratch_int : Array[Int]
+  scratch_float : Array[Int]
+} derive(@debug.Debug)
+
 pub(all) struct Target {
   triple : String
   calling_convention : CallingConvention
   abi : AbiPolicy
 } derive(@debug.Debug)
+
+pub(all) struct TargetSettings {
+  enable_pinned_reg : Bool
+} derive(@debug.Debug)
+pub fn TargetSettings::default() -> Self
 
 // Type aliases
 

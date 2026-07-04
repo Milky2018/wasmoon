@@ -17,7 +17,7 @@ test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
   entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function(func)
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
   let resolver = RuntimeSymbolResolver::new()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code(linked, 7)
