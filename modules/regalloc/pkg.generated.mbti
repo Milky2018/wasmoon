@@ -10,7 +10,15 @@ pub fn allocate(Program) -> Allocation
 
 pub fn build_live_ranges(Program) -> LiveRangeSet
 
+pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
+
 // Errors
+pub suberror VerifyError {
+  Unassigned(vreg~ : VirtualReg)
+  FixedConstraintViolation(vreg~ : VirtualReg, required~ : PhysicalReg, actual~ : Location)
+  OverlappingAllocation(left~ : VirtualReg, right~ : VirtualReg, location~ : Location)
+  RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
+}
 
 // Types and methods
 pub(all) struct Allocation {

@@ -124,3 +124,61 @@ test "linear scan honors fixed register constraints by evicting active range" {
   inspect(allocation.location_of(v0) == Some(Spill(0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
 }
+
+///|
+test "verify_allocation accepts allocator output" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0])
+  let block = Block::new(0)
+  let inst = Instruction::new(0)
+  inst.add_operand(Operand::def(v0))
+  block.append(inst)
+  program.add_block(block)
+  let allocation = allocate(program)
+  inspect(verify_allocation(program, allocation), content="()")
+}
+
+///|
+test "verify_allocation rejects fixed register mismatch" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0, r1])
+  let block = Block::new(0)
+  let inst = Instruction::new(0)
+  inst.add_operand(Operand::def(v0).with_constraint(FixedReg(r1)))
+  block.append(inst)
+  program.add_block(block)
+  let allocation = Allocation::new()
+  allocation.assign(v0, Reg(r0))
+  try verify_allocation(program, allocation) catch {
+    FixedConstraintViolation(_) => inspect("fixed", content="fixed")
+    _ => fail("unexpected verifier error")
+  } noraise {
+    _ => fail("expected fixed constraint violation")
+  }
+}
+
+///|
+test "verify_allocation rejects overlapping physical register assignments" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let v1 : VirtualReg = { id: 1, class: Int }
+  let program = Program::new([r0])
+  let block = Block::new(0)
+  let inst = Instruction::new(0)
+  inst.add_operand(Operand::def(v0))
+  inst.add_operand(Operand::def(v1))
+  block.append(inst)
+  program.add_block(block)
+  let allocation = Allocation::new()
+  allocation.assign(v0, Reg(r0))
+  allocation.assign(v1, Reg(r0))
+  try verify_allocation(program, allocation) catch {
+    OverlappingAllocation(_) => inspect("overlap", content="overlap")
+    _ => fail("unexpected verifier error")
+  } noraise {
+    _ => fail("expected overlap")
+  }
+}
