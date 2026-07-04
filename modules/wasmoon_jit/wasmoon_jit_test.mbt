@@ -74,6 +74,19 @@ test "default wasmoon runtime resolver maps memory.grow fixup" {
 }
 
 ///|
+test "default wasmoon runtime resolver maps bulk memory fixups" {
+  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+  guard resolver.resolve_symbol("wasmoon.runtime.memory_fill") is Some(fill) else {
+    fail("missing memory_fill runtime symbol")
+  }
+  guard resolver.resolve_symbol("wasmoon.runtime.memory_copy") is Some(copy) else {
+    fail("missing memory_copy runtime symbol")
+  }
+  debug_inspect(fill.fixup_idx, content="Some(-21002)")
+  debug_inspect(copy.fixup_idx, content="Some(-21004)")
+}
+
+///|
 test "resolve function-address fixup targets in wasmoon_jit" {
   inspect(resolve_func_addr_fixup_target(-20000, 0L) is Some(_), content="true")
   debug_inspect(resolve_func_addr_fixup_target(3, 0L), content="None")

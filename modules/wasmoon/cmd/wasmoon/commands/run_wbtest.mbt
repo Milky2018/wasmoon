@@ -230,6 +230,57 @@ test "compile api: reusable pipeline lowers memory.grow runtime call" {
 }
 
 ///|
+test "compile api: reusable pipeline lowers memory fill and copy runtime calls" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [],
+      [
+        I32Const(0),
+        I32Const(255),
+        I32Const(8),
+        MemoryFill(0),
+        I32Const(0),
+        I32Const(4),
+        I32Const(8),
+        MemoryCopy(0, 0),
+      ],
+      "memory_fill_copy",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("memory fill/copy did not compile through reusable pipeline")
+  }
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.MemoryFill"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.MemoryCopy"), content="false")
+  inspect(
+    reusable.milk_dump.contains("call wasmoon.runtime.memory_fill"),
+    content="true",
+  )
+  inspect(
+    reusable.milk_dump.contains("call wasmoon.runtime.memory_copy"),
+    content="true",
+  )
+  inspect(reusable.entry.call_fixups.length(), content="2")
+  inspect(reusable.entry.call_fixups[0].func_idx, content="-21002")
+  inspect(reusable.entry.call_fixups[1].func_idx, content="-21004")
+}
+
+///|
 test "compile api: reusable pipeline lowers non-zero memory load store" {
   let mod_ = {
     ..@types.Module::simple(

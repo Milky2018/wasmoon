@@ -51,6 +51,16 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     @jit_ffi.c_jit_get_memory_grow_ptr(),
     jit_runtime_fixup_idx(0),
   )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_fill",
+    @jit_ffi.c_jit_get_memory_fill_ptr(),
+    jit_runtime_fixup_idx(2),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_copy",
+    @jit_ffi.c_jit_get_memory_copy_ptr(),
+    jit_runtime_fixup_idx(4),
+  )
   resolver
 }
 

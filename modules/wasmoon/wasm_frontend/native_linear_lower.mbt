@@ -809,40 +809,65 @@ fn pop3(
 fn push_memory_fill(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
 ) -> Bool {
-  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
+  guard vmctx is Some(context) else { return false }
+  guard memory_index_type(memory_types, memidx) is Some(I32) else {
+    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // this reusable call path for memory64 memory.fill.
+    return false
+  }
   guard pop3(stack) is Some((dst, value, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy MemoryFill opcode shape.
-  emit_void_op(builder, Custom("wasmoon.MemoryFill(\{memidx})"), [
-    dst, value, size,
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.memory_fill")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(memidx),
+    dst,
+    value,
+    size,
   ])
+  |> ignore
+  true
 }
 
 ///|
 fn push_memory_copy(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   dst_memidx : Int,
   src_memidx : Int,
 ) -> Bool {
-  guard memory_index_type(memory_types, dst_memidx) is Some(_) else {
+  guard vmctx is Some(context) else { return false }
+  guard memory_index_type(memory_types, dst_memidx) is Some(I32) else {
+    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // this reusable call path for memory64 destination memories.
     return false
   }
-  guard memory_index_type(memory_types, src_memidx) is Some(_) else {
+  guard memory_index_type(memory_types, src_memidx) is Some(I32) else {
+    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // this reusable call path for memory64 source memories.
     return false
   }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy MemoryCopy opcode shape.
-  emit_void_op(
-    builder,
-    Custom("wasmoon.MemoryCopy(\{dst_memidx},\{src_memidx})"),
-    [dst, src, size],
-  )
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.memory_copy")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(dst_memidx),
+    builder.iconst_i32(src_memidx),
+    dst,
+    src,
+    size,
+  ])
+  |> ignore
+  true
 }
 
 ///|
@@ -2199,12 +2224,12 @@ fn try_lower_linear_function(
           return None
         }
       MemoryFill(memidx) =>
-        if !push_memory_fill(builder, stack, memory_types, memidx) {
+        if !push_memory_fill(builder, stack, vmctx, memory_types, memidx) {
           return None
         }
       MemoryCopy(dst_memidx, src_memidx) =>
         if !push_memory_copy(
-            builder, stack, memory_types, dst_memidx, src_memidx,
+            builder, stack, vmctx, memory_types, dst_memidx, src_memidx,
           ) {
           return None
         }
