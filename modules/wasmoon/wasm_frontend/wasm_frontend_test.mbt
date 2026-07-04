@@ -408,6 +408,98 @@ test "lower memory operations through Wasmoon-owned adapter opcodes" {
 }
 
 ///|
+test "lower memory grow size and bulk helpers as native custom ops" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32, I32],
+      [
+        MemorySize(0),
+        I32Const(1),
+        MemoryGrow(0),
+        I32Const(0),
+        I32Const(255),
+        I32Const(8),
+        MemoryFill(0),
+        I32Const(0),
+        I32Const(4),
+        I32Const(8),
+        MemoryCopy(0, 0),
+        I32Const(0),
+        I32Const(0),
+        I32Const(8),
+        MemoryInit(0, 0),
+        DataDrop(0),
+      ],
+      "memory_bulk",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.MemorySize"), content="true")
+  inspect(text.contains("wasmoon.MemoryGrow"), content="true")
+  inspect(text.contains("wasmoon.MemoryFill"), content="true")
+  inspect(text.contains("wasmoon.MemoryCopy"), content="true")
+  inspect(text.contains("wasmoon.MemoryInit"), content="true")
+  inspect(text.contains("wasmoon.DataDrop"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower table bulk helpers as native custom ops" {
+  let table : @types.Table = {
+    type_: {
+      elem_type: FuncRef,
+      limits: { min: 2, max: None },
+      is_table64: false,
+    },
+    init: None,
+  }
+  let mod_ = {
+    ..@types.Module::simple(
+      [I64],
+      [],
+      [
+        LocalGet(0),
+        I32Const(1),
+        TableGrow(0),
+        Drop,
+        I32Const(0),
+        LocalGet(0),
+        I32Const(1),
+        TableFill(0),
+        I32Const(0),
+        I32Const(1),
+        I32Const(1),
+        TableCopy(0, 0),
+        I32Const(0),
+        I32Const(0),
+        I32Const(1),
+        TableInit(0, 0),
+        ElemDrop(0),
+      ],
+      "table_bulk",
+    ),
+    tables: [table],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.TableGrow"), content="true")
+  inspect(text.contains("wasmoon.TableFill"), content="true")
+  inspect(text.contains("wasmoon.TableCopy"), content="true")
+  inspect(text.contains("wasmoon.TableInit"), content="true")
+  inspect(text.contains("wasmoon.ElemDrop"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
   let env = EmbeddingEnvironment::new()
