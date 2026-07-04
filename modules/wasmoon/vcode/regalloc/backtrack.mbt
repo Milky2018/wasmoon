@@ -561,6 +561,39 @@ fn backtrack_core_ordered_span(
 }
 
 ///|
+fn backtrack_old_ordered_span(
+  span : @core_regalloc.OrderedProgramSpan,
+) -> OrderedSpan {
+  {
+    start: backtrack_old_point(span.start),
+    start_ord: span.start_ord,
+    end_ord: span.end_ord,
+  }
+}
+
+///|
+fn backtrack_core_allocated_spans(
+  spans : Array[(Int, OrderedSpan)],
+) -> Array[@core_regalloc.AllocatedProgramSpan] {
+  let out : Array[@core_regalloc.AllocatedProgramSpan] = []
+  for item in spans {
+    out.push({ owner_id: item.0, span: backtrack_core_ordered_span(item.1) })
+  }
+  out
+}
+
+///|
+fn backtrack_old_allocated_spans(
+  spans : Array[@core_regalloc.AllocatedProgramSpan],
+) -> Array[(Int, OrderedSpan)] {
+  let out : Array[(Int, OrderedSpan)] = []
+  for item in spans {
+    out.push((item.owner_id, backtrack_old_ordered_span(item.span)))
+  }
+  out
+}
+
+///|
 fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
   self : BacktrackingAllocator,
   spans : Array[OrderedSpan],
@@ -699,48 +732,17 @@ fn BacktrackingAllocator::record_allocation(
   }
   let occupied = allocs[preg.index]
   let spans = self.bundle_sorted_spans(bundle)
-  if spans.length() == 1 {
-    let span = spans[0]
-    let mut lo = 0
-    let mut hi = occupied.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if occupied[mid].1.start_ord <= span.start_ord {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    occupied.insert(lo, (bundle.id, span))
-  } else if occupied.is_empty() {
-    let new_occupied : Array[(Int, OrderedSpan)] = []
-    for span in spans {
-      new_occupied.push((bundle.id, span))
-    }
-    allocs[preg.index] = new_occupied
-  } else {
-    let new_occupied : Array[(Int, OrderedSpan)] = []
-    let mut i = 0
-    let mut j = 0
-    while i < occupied.length() && j < spans.length() {
-      if occupied[i].1.start_ord <= spans[j].start_ord {
-        new_occupied.push(occupied[i])
-        i = i + 1
-      } else {
-        new_occupied.push((bundle.id, spans[j]))
-        j = j + 1
-      }
-    }
-    while i < occupied.length() {
-      new_occupied.push(occupied[i])
-      i = i + 1
-    }
-    while j < spans.length() {
-      new_occupied.push((bundle.id, spans[j]))
-      j = j + 1
-    }
-    allocs[preg.index] = new_occupied
+  let core_spans : Array[@core_regalloc.OrderedProgramSpan] = []
+  for span in spans {
+    core_spans.push(backtrack_core_ordered_span(span))
   }
+  allocs[preg.index] = backtrack_old_allocated_spans(
+    @core_regalloc.insert_allocated_spans(
+      backtrack_core_allocated_spans(occupied),
+      bundle.id,
+      core_spans,
+    ),
+  )
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     range.allocation = Reg(preg)
@@ -765,14 +767,12 @@ fn BacktrackingAllocator::remove_allocation(
     let allocs = self.get_reg_allocs(preg.class)
     if preg.index >= 0 && preg.index < allocs.length() {
       let occupied = allocs[preg.index]
-      // Remove ranges belonging to this bundle.
-      let new_occupied : Array[(Int, OrderedSpan)] = []
-      for occ in occupied {
-        if occ.0 != bundle.id {
-          new_occupied.push(occ)
-        }
-      }
-      allocs[preg.index] = new_occupied
+      allocs[preg.index] = backtrack_old_allocated_spans(
+        @core_regalloc.remove_allocated_spans(
+          backtrack_core_allocated_spans(occupied),
+          bundle.id,
+        ),
+      )
     }
 
     // Clear allocation

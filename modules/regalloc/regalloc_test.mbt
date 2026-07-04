@@ -410,6 +410,64 @@ test "ordered span conflict scan skips ended occupied spans" {
 }
 
 ///|
+test "allocated span table inserts and removes by owner" {
+  let a : OrderedProgramSpan = {
+    start: ProgramPoint::new(0, 0),
+    start_ord: 0,
+    end_ord: 4,
+  }
+  let b : OrderedProgramSpan = {
+    start: ProgramPoint::new(0, 2),
+    start_ord: 8,
+    end_ord: 12,
+  }
+  let c : OrderedProgramSpan = {
+    start: ProgramPoint::new(0, 1),
+    start_ord: 5,
+    end_ord: 7,
+  }
+  let inserted = insert_allocated_spans(
+    [{ owner_id: 1, span: a }, { owner_id: 3, span: b }],
+    2,
+    [c],
+  )
+  debug_inspect(
+    inserted,
+    content=(
+      #|[
+      #|  {
+      #|    owner_id: 1,
+      #|    span: { start: { block: 0, inst: 0 }, start_ord: 0, end_ord: 4 },
+      #|  },
+      #|  {
+      #|    owner_id: 2,
+      #|    span: { start: { block: 0, inst: 1 }, start_ord: 5, end_ord: 7 },
+      #|  },
+      #|  {
+      #|    owner_id: 3,
+      #|    span: { start: { block: 0, inst: 2 }, start_ord: 8, end_ord: 12 },
+      #|  },
+      #|]
+    ),
+  )
+  debug_inspect(
+    remove_allocated_spans(inserted, 2),
+    content=(
+      #|[
+      #|  {
+      #|    owner_id: 1,
+      #|    span: { start: { block: 0, inst: 0 }, start_ord: 0, end_ord: 4 },
+      #|  },
+      #|  {
+      #|    owner_id: 3,
+      #|    span: { start: { block: 0, inst: 2 }, start_ord: 8, end_ord: 12 },
+      #|  },
+      #|]
+    ),
+  )
+}
+
+///|
 test "compute block point bases from block order and lengths" {
   debug_inspect(
     compute_block_point_bases([2, 0, 1], [3, 1, 0]),

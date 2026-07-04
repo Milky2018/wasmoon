@@ -30,6 +30,8 @@ pub fn eviction_cutoff(Int?, Int?) -> Int?
 
 pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
 
+pub fn insert_allocated_spans(Array[AllocatedProgramSpan], Int, Array[OrderedProgramSpan]) -> Array[AllocatedProgramSpan]
+
 pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
 
 pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
@@ -51,6 +53,8 @@ pub fn plan_register_probe_order(Array[PhysicalReg], Array[PhysicalReg], Array[P
 pub fn plan_temp_register_pool(Array[Bool], Array[Int], Array[Int], Array[Int]) -> Array[Int]
 
 pub fn raise_scratch_register_unavailable(message~ : String) -> Unit raise VerifyError
+
+pub fn remove_allocated_spans(Array[AllocatedProgramSpan], Int) -> Array[AllocatedProgramSpan]
 
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 
@@ -92,6 +96,11 @@ pub fn ActiveReloadCache::clear(Self, Int) -> Unit
 pub fn ActiveReloadCache::get(Self, Int, Int) -> Int?
 pub fn ActiveReloadCache::new(Int) -> Self
 pub fn ActiveReloadCache::set(Self, Int, Int, Int) -> Unit
+
+pub(all) struct AllocatedProgramSpan {
+  owner_id : Int
+  span : OrderedProgramSpan
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Allocation {
   assignments : Array[Assignment]

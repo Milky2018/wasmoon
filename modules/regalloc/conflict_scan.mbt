@@ -14,6 +14,12 @@ pub(all) struct OccupiedProgramSpan {
 } derive(Eq, Debug)
 
 ///|
+pub(all) struct AllocatedProgramSpan {
+  owner_id : Int
+  span : OrderedProgramSpan
+} derive(Eq, Debug)
+
+///|
 pub(all) struct ConflictScanResult {
   conflict_ids : Array[Int]
   max_conflict_weight : Int
@@ -85,6 +91,81 @@ pub fn has_ordered_span_conflict(
     return true
   }
   false
+}
+
+///|
+pub fn insert_allocated_spans(
+  occupied : Array[AllocatedProgramSpan],
+  owner_id : Int,
+  spans : Array[OrderedProgramSpan],
+) -> Array[AllocatedProgramSpan] {
+  if spans.is_empty() {
+    return occupied
+  }
+  if spans.length() == 1 {
+    let span = spans[0]
+    let mut lo = 0
+    let mut hi = occupied.length()
+    while lo < hi {
+      let mid = lo + (hi - lo) / 2
+      if occupied[mid].span.start_ord <= span.start_ord {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    let out : Array[AllocatedProgramSpan] = []
+    for i in 0..<lo {
+      out.push(occupied[i])
+    }
+    out.push({ owner_id, span })
+    for i in lo..<occupied.length() {
+      out.push(occupied[i])
+    }
+    return out
+  }
+  if occupied.is_empty() {
+    let out : Array[AllocatedProgramSpan] = []
+    for span in spans {
+      out.push({ owner_id, span })
+    }
+    return out
+  }
+  let out : Array[AllocatedProgramSpan] = []
+  let mut i = 0
+  let mut j = 0
+  while i < occupied.length() && j < spans.length() {
+    if occupied[i].span.start_ord <= spans[j].start_ord {
+      out.push(occupied[i])
+      i = i + 1
+    } else {
+      out.push({ owner_id, span: spans[j] })
+      j = j + 1
+    }
+  }
+  while i < occupied.length() {
+    out.push(occupied[i])
+    i = i + 1
+  }
+  while j < spans.length() {
+    out.push({ owner_id, span: spans[j] })
+    j = j + 1
+  }
+  out
+}
+
+///|
+pub fn remove_allocated_spans(
+  occupied : Array[AllocatedProgramSpan],
+  owner_id : Int,
+) -> Array[AllocatedProgramSpan] {
+  let out : Array[AllocatedProgramSpan] = []
+  for item in occupied {
+    if item.owner_id != owner_id {
+      out.push(item)
+    }
+  }
+  out
 }
 
 ///|
