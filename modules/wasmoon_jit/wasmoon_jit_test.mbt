@@ -211,6 +211,49 @@ test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "emit MachV regalloc stack spills through reusable x64 pipeline" {
+  let func = @machv.Function::new("spilled_x64")
+  let entry = func.new_block()
+  let values : Array[@machv.VReg] = []
+  for i in 0..<5 {
+    let value = func.new_vreg(Int)
+    values.push(value)
+    let inst = func.new_inst(IntConst(i.to_int64()))
+    inst.add_operand(@machv.Operand::def(Virtual(value)))
+    entry.append(inst)
+  }
+  let sum = func.new_vreg(Int)
+  let add = func.new_inst(IntAdd)
+  add.add_operand(@machv.Operand::use_reg(Virtual(values[0])))
+  add.add_operand(@machv.Operand::use_reg(Virtual(values[4])))
+  add.add_operand(@machv.Operand::def(Virtual(sum)))
+  entry.append(add)
+  entry.set_terminator(TermReturn([]))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let result = @machv_regalloc.allocate_and_apply(func, [p0, p1])
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let mut has_stack_load = false
+  let mut has_stack_store = false
+  for i in 0..<(object.code.length() - 4) {
+    if object.code[i] == 0x48 &&
+      object.code[i + 1] == 0x8b &&
+      object.code[i + 3] == 0x24 {
+      has_stack_load = true
+    }
+    if object.code[i] == 0x48 &&
+      object.code[i + 1] == 0x89 &&
+      object.code[i + 3] == 0x24 {
+      has_stack_store = true
+    }
+  }
+  inspect(result.spill_slots.length() > 0, content="true")
+  inspect(has_stack_load, content="true")
+  inspect(has_stack_store, content="true")
+  inspect(object.code[object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [F64])
   let milk = @milkir.Function::new("bitcast_i64_f64", signature)

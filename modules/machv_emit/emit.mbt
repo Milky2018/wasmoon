@@ -312,6 +312,62 @@ fn emit_x64_store_base_disp32(
 }
 
 ///|
+fn emit_x64_int_stack_load(
+  object : CodeObject,
+  dst : Int,
+  offset : Int,
+) -> Unit {
+  emit_x64_rex_w(object, (dst >> 3) & 1, 0)
+  object.code.push(0x8b)
+  emit_x64_modrm(object, 2, dst, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_int_stack_store(
+  object : CodeObject,
+  src : Int,
+  offset : Int,
+) -> Unit {
+  emit_x64_rex_w(object, (src >> 3) & 1, 0)
+  object.code.push(0x89)
+  emit_x64_modrm(object, 2, src, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_float_stack_load(
+  object : CodeObject,
+  dst : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf2)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, 0)
+  object.code.push(0x0f)
+  object.code.push(0x10)
+  emit_x64_modrm(object, 2, dst, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_float_stack_store(
+  object : CodeObject,
+  src : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf2)
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, 0)
+  object.code.push(0x0f)
+  object.code.push(0x11)
+  emit_x64_modrm(object, 2, src, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn x64_jcc_opcode(cond : @machv.Cond) -> Int {
   match cond {
     Eq => 0x84
@@ -1093,6 +1149,96 @@ fn emit_aarch64_store_ptr(
 }
 
 ///|
+fn require_scaled_stack_offset(
+  offset : Int,
+  scale : Int,
+  context : String,
+) -> Int raise EmitError {
+  guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
+    raise UnsupportedOperand(
+      message="\{context} requires a non-negative scaled unsigned 12-bit stack offset",
+    )
+  }
+  offset / scale
+}
+
+///|
+fn emit_aarch64_stack_load(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot : @machv.StackSlot,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let (dst, dst_class) = require_physical_preg(
+    find_operand(inst, Def, 0, "stack load"),
+    "stack load destination",
+  )
+  let offset = frame.get_spill_offset(slot.id)
+  match dst_class {
+    Int => {
+      let imm12 = require_scaled_stack_offset(offset, 8, "AArch64 stack load")
+      emit_u32_le(
+        object,
+        0xf9400000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (dst & 0x1f),
+      )
+    }
+    Float32 | Float64 => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 8, "AArch64 float stack load",
+      )
+      emit_u32_le(
+        object,
+        0xfd400000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (dst & 0x1f),
+      )
+    }
+    // TODO(machv_emit): add 16-byte vector spill load emission once MachV
+    // frame emission owns vector spill alignment and Q/XMM stack traffic.
+    Vector =>
+      raise UnsupportedOperand(
+        message="AArch64 vector stack load is TODO until MachV frame emission owns 16-byte vector spills",
+      )
+  }
+}
+
+///|
+fn emit_aarch64_stack_store(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot : @machv.StackSlot,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "stack store"),
+    "stack store source",
+  )
+  let offset = frame.get_spill_offset(slot.id)
+  match src_class {
+    Int => {
+      let imm12 = require_scaled_stack_offset(offset, 8, "AArch64 stack store")
+      emit_u32_le(
+        object,
+        0xf9000000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
+    Float32 | Float64 => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 8, "AArch64 float stack store",
+      )
+      emit_u32_le(
+        object,
+        0xfd000000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
+    // TODO(machv_emit): add 16-byte vector spill store emission once MachV
+    // frame emission owns vector spill alignment and Q/XMM stack traffic.
+    Vector =>
+      raise UnsupportedOperand(
+        message="AArch64 vector stack store is TODO until MachV frame emission owns 16-byte vector spills",
+      )
+  }
+}
+
+///|
 fn emit_aarch64_float_binop3(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1769,9 +1915,58 @@ fn emit_x64_float_width_convert(
 }
 
 ///|
+fn emit_x64_stack_load(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot : @machv.StackSlot,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let (dst, dst_class) = require_physical_preg(
+    find_operand(inst, Def, 0, "stack load"),
+    "stack load destination",
+  )
+  let offset = frame.get_spill_offset(slot.id)
+  match dst_class {
+    Int => emit_x64_int_stack_load(object, dst, offset)
+    Float32 | Float64 => emit_x64_float_stack_load(object, dst, offset)
+    // TODO(machv_emit): add 16-byte vector spill load emission once MachV
+    // frame emission owns vector spill alignment and Q/XMM stack traffic.
+    Vector =>
+      raise UnsupportedOperand(
+        message="X64 vector stack load is TODO until MachV frame emission owns 16-byte vector spills",
+      )
+  }
+}
+
+///|
+fn emit_x64_stack_store(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot : @machv.StackSlot,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "stack store"),
+    "stack store source",
+  )
+  let offset = frame.get_spill_offset(slot.id)
+  match src_class {
+    Int => emit_x64_int_stack_store(object, src, offset)
+    Float32 | Float64 => emit_x64_float_stack_store(object, src, offset)
+    // TODO(machv_emit): add 16-byte vector spill store emission once MachV
+    // frame emission owns vector spill alignment and Q/XMM stack traffic.
+    Vector =>
+      raise UnsupportedOperand(
+        message="X64 vector stack store is TODO until MachV frame emission owns 16-byte vector spills",
+      )
+  }
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
   match inst.opcode {
     IntConst(imm) => emit_aarch64_int_const(object, inst, imm)
@@ -1846,6 +2041,8 @@ fn write_aarch64_inst_bytes(
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
       emit_aarch64_store_ptr(object, inst, mem_type, offset)
+    Load(slot) => emit_aarch64_stack_load(object, inst, slot, frame)
+    Store(slot) => emit_aarch64_stack_store(object, inst, slot, frame)
     Call(_) =>
       // TODO(machv_emit): resolve and range-check AArch64 BL relocations during real object linking.
       emit_u32_le(object, 0x94000000)
@@ -1862,6 +2059,7 @@ fn write_aarch64_inst_bytes(
 fn write_x64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
   match inst.opcode {
     IntConst(imm) => emit_x64_int_const(object, inst, imm)
@@ -1918,6 +2116,8 @@ fn write_x64_inst_bytes(
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
       emit_x64_store_ptr(object, inst, mem_type, offset)
+    Load(slot) => emit_x64_stack_load(object, inst, slot, frame)
+    Store(slot) => emit_x64_stack_store(object, inst, slot, frame)
     Call(_) => {
       // TODO(machv_emit): patch X64 call rel32 displacement during object linking.
       object.code.push(0xe8)
@@ -1942,10 +2142,11 @@ fn write_inst_bytes(
   object : CodeObject,
   target : EmitTarget,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
   match target {
-    AArch64 => write_aarch64_inst_bytes(object, inst)
-    X64 => write_x64_inst_bytes(object, inst)
+    AArch64 => write_aarch64_inst_bytes(object, inst, frame)
+    X64 => write_x64_inst_bytes(object, inst, frame)
   }
 }
 
@@ -2002,9 +2203,10 @@ fn emit_instruction(
   target : EmitTarget,
   block_id : Int,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
   let offset = object.current_offset()
-  write_inst_bytes(object, target, inst)
+  write_inst_bytes(object, target, inst, frame)
   record_relocations(object, offset, inst.opcode)
   record_stack_map(object, offset, inst)
   object.debug_entries.push({
@@ -2173,6 +2375,7 @@ fn emit_terminator(
   target : EmitTarget,
   block_id : Int,
   term : @machv.Terminator,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
   match term {
     TermBranch(_, _, _, _, _)
@@ -2194,7 +2397,7 @@ fn emit_terminator(
   let opcode = opcode_for_terminator(term)
   let inst = @machv.Instruction::new(-1, opcode)
   let offset = object.current_offset()
-  write_inst_bytes(object, target, inst)
+  write_inst_bytes(object, target, inst, frame)
   record_relocations(object, offset, opcode)
   object.debug_entries.push({
     offset,
@@ -2335,14 +2538,22 @@ pub fn emit_function_for_target(
   target : EmitTarget,
 ) -> CodeObject raise EmitError {
   let object = CodeObject::new()
+  let frame = StackFrameLayout::build(
+    [],
+    [],
+    func.get_num_spill_slots(),
+    false,
+    0,
+    outgoing_args_size=func.get_max_outgoing_args_size(),
+  )
   let block_offsets : Array[(Int, Int)] = []
   for block in func.blocks {
     block_offsets.push((block.id, object.current_offset()))
     for inst in block.instructions {
-      emit_instruction(object, target, block.id, inst)
+      emit_instruction(object, target, block.id, inst, frame)
     }
     if block.terminator is Some(term) {
-      emit_terminator(object, target, block.id, term)
+      emit_terminator(object, target, block.id, term, frame)
     }
   }
   patch_block_fixups(object, target, block_offsets)

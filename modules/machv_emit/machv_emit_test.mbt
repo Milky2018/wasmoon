@@ -1150,6 +1150,133 @@ test "emit X64 scalar float rounding bytes" {
 }
 
 ///|
+test "emit AArch64 stack spill load store bytes" {
+  let func = @machv.Function::new("aarch64_stack_spill")
+  let entry = func.new_block()
+  let slot0 = func.new_stack_slot(8, 8)
+  let slot1 = func.new_stack_slot(8, 8)
+  func.set_num_spill_slots(2)
+  let load_int = func.new_inst(Load(slot0))
+  load_int.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(load_int)
+  let store_int = func.new_inst(Store(slot1))
+  store_int.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  entry.append(store_int)
+  let load_float = func.new_inst(Load(slot1))
+  load_float.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Float64 })),
+  )
+  entry.append(load_float)
+  let store_float = func.new_inst(Store(slot0))
+  store_float.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float32 })),
+  )
+  entry.append(store_float)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  225,
+      #|  3,
+      #|  64,
+      #|  249,
+      #|  226,
+      #|  7,
+      #|  0,
+      #|  249,
+      #|  227,
+      #|  7,
+      #|  64,
+      #|  253,
+      #|  228,
+      #|  3,
+      #|  0,
+      #|  253,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
+}
+
+///|
+test "emit X64 stack spill load store bytes" {
+  let func = @machv.Function::new("x64_stack_spill")
+  let entry = func.new_block()
+  let slot0 = func.new_stack_slot(8, 8)
+  let slot1 = func.new_stack_slot(8, 8)
+  func.set_num_spill_slots(2)
+  let load_int = func.new_inst(Load(slot0))
+  load_int.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(load_int)
+  let store_int = func.new_inst(Store(slot1))
+  store_int.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  entry.append(store_int)
+  let load_float = func.new_inst(Load(slot1))
+  load_float.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Float64 })),
+  )
+  entry.append(load_float)
+  let store_float = func.new_inst(Store(slot0))
+  store_float.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float32 })),
+  )
+  entry.append(store_float)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  72,
+      #|  139,
+      #|  140,
+      #|  36,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  137,
+      #|  148,
+      #|  36,
+      #|  8,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  156,
+      #|  36,
+      #|  8,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  242,
+      #|  15,
+      #|  17,
+      #|  164,
+      #|  36,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  195,
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
