@@ -269,31 +269,12 @@ pub suberror PolycallError {
 // Types and methods
 type AddressRange derive(@debug.Debug)
 
-pub struct BacktraceFrame {
-  pc : Int64
-  name : String
-  offset : Int64
-  func_idx : Int
-}
-
 pub enum CompilationStatus {
   NotCompiled
   Compiled
   Failed(String)
 }
 pub impl Show for CompilationStatus
-
-pub struct DWARFBuilder {
-  // private fields
-}
-pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
-pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
-pub fn DWARFBuilder::destroy(Self) -> Unit
-pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
-pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
-pub fn DWARFBuilder::new() -> Self
-pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
-pub fn DWARFBuilder::unregister(Self) -> Unit
 
 pub struct ExecCode(@jit_ffi.ExecCode)
 pub fn ExecCode::new(Array[Int]) -> Self?
@@ -307,12 +288,6 @@ pub(all) struct FunctionEntry {
 }
 pub fn FunctionEntry::is_compiled(Self) -> Bool
 pub fn FunctionEntry::new(Int) -> Self
-
-pub struct FunctionInfo {
-  name : String
-  func_idx : Int
-  offset : Int64
-}
 
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]
@@ -394,7 +369,7 @@ pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::new() -> Self
-pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> DWARFBuilder
+pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
@@ -472,6 +447,8 @@ pub struct WasmTrapFrame {
 }
 
 // Type aliases
+pub using @wasmoon_jit {type BacktraceFrame}
+
 pub using @wasmoon_jit {type CHeap}
 
 pub using @wasmoon_jit {type CHeapError}
@@ -487,6 +464,10 @@ pub using @wasmoon_jit {type CompilationQueue}
 pub using @wasmoon_jit {type CompilationRequest}
 
 pub using @wasmoon_jit {type CompilationStrategy}
+
+pub using @wasmoon_jit {type DWARFBuilder}
+
+pub using @wasmoon_jit {type FunctionInfo}
 
 pub using @wasmoon_jit {type FunctionTemperature}
 

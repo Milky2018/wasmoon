@@ -135,6 +135,13 @@ pub suberror LinkError {
 pub impl Show for LinkError
 
 // Types and methods
+pub struct BacktraceFrame {
+  pc : Int64
+  name : String
+  offset : Int64
+  func_idx : Int
+}
+
 pub struct CHeap {
   ptr : Int64
 } derive(@debug.Debug)
@@ -250,6 +257,24 @@ pub(all) struct CwasmFunctionRecord {
   code_offset : Int
   code_size : Int
 } derive(Eq, @debug.Debug)
+
+pub struct DWARFBuilder {
+  // private fields
+}
+pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
+pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
+pub fn DWARFBuilder::destroy(Self) -> Unit
+pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
+pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
+pub fn DWARFBuilder::new() -> Self
+pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
+pub fn DWARFBuilder::unregister(Self) -> Unit
+
+pub struct FunctionInfo {
+  name : String
+  func_idx : Int
+  offset : Int64
+}
 
 pub(all) enum FunctionTemperature {
   Cold
