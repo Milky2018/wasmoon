@@ -445,6 +445,30 @@ fn emit_aarch64_fmov_w_to_s(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_aarch64_fcvt_d_s(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FCVT Dd, Sn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | 0xc0) << 8) |
+    0x1e220000,
+  )
+}
+
+///|
+fn emit_aarch64_fcvt_s_d(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FCVT Sd, Dn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | 0x40) << 8) |
+    0x1e620000,
+  )
+}
+
+///|
 fn emit_aarch64_sxtb_x(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: SXTB Xd, Wn.
   emit_u32_le(
@@ -865,6 +889,31 @@ fn emit_aarch64_sign_extend(
     16 => emit_aarch64_sxth_x(object, dst, src)
     32 => emit_aarch64_sxtw(object, dst, src)
     _ => abort("unreachable sign-extension width")
+  }
+}
+
+///|
+fn emit_aarch64_float_width_convert(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  promote : Bool,
+) -> Unit raise EmitError {
+  let context = if promote { "fpromote" } else { "fdemote" }
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  match (promote, src_class, dst_class) {
+    (true, Float32, Float64) => emit_aarch64_fcvt_d_s(object, dst, src)
+    (false, Float64, Float32) => emit_aarch64_fcvt_s_d(object, dst, src)
+    _ =>
+      raise UnsupportedOperand(
+        message="\{context} requires f32->f64 or f64->f32 registers",
+      )
   }
 }
 
@@ -1629,6 +1678,31 @@ fn emit_x64_sign_extend(
 }
 
 ///|
+fn emit_x64_float_width_convert(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  promote : Bool,
+) -> Unit raise EmitError {
+  let context = if promote { "fpromote" } else { "fdemote" }
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  match (promote, src_class, dst_class) {
+    (true, Float32, Float64) => emit_x64_sse_rr(object, 0xf3, 0x5a, dst, src)
+    (false, Float64, Float32) => emit_x64_sse_rr(object, 0xf2, 0x5a, dst, src)
+    _ =>
+      raise UnsupportedOperand(
+        message="\{context} requires f32->f64 or f64->f32 registers",
+      )
+  }
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1688,6 +1762,8 @@ fn write_aarch64_inst_bytes(
     FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
     FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
     FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
+    Fpromote => emit_aarch64_float_width_convert(object, inst, true)
+    Fdemote => emit_aarch64_float_width_convert(object, inst, false)
     Bitcast => emit_aarch64_bitcast(object, inst)
     Sextend8 => emit_aarch64_sign_extend(object, inst, 8)
     Sextend16 => emit_aarch64_sign_extend(object, inst, 16)
@@ -1754,6 +1830,8 @@ fn write_x64_inst_bytes(
     FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
     FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
     FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")
+    Fpromote => emit_x64_float_width_convert(object, inst, true)
+    Fdemote => emit_x64_float_width_convert(object, inst, false)
     Bitcast => emit_x64_bitcast(object, inst)
     Sextend8 => emit_x64_sign_extend(object, inst, 8)
     Sextend16 => emit_x64_sign_extend(object, inst, 16)

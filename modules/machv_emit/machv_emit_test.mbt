@@ -871,6 +871,34 @@ test "emit AArch64 scalar floating point bytes" {
 }
 
 ///|
+test "emit AArch64 float width conversion bytes" {
+  let func = @machv.Function::new("float_width")
+  let entry = func.new_block()
+  let promote = func.new_inst(Fpromote)
+  promote.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float32 })),
+  )
+  promote.add_operand(
+    @machv.Operand::def(Physical({ index: 0, class: Float64 })),
+  )
+  entry.append(promote)
+  let demote = func.new_inst(Fdemote)
+  demote.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Float64 })),
+  )
+  demote.add_operand(
+    @machv.Operand::def(Physical({ index: 2, class: Float32 })),
+  )
+  entry.append(demote)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[32, 192, 34, 30, 98, 64, 98, 30, 192, 3, 95, 214]",
+  )
+}
+
+///|
 test "emit X64 scalar floating point bytes" {
   let func = @machv.Function::new("x64_float_ops")
   let entry = func.new_block()
@@ -962,6 +990,34 @@ test "emit X64 scalar floating point bytes" {
       #|  195,
       #|]
     ),
+  )
+}
+
+///|
+test "emit X64 float width conversion bytes" {
+  let func = @machv.Function::new("x64_float_width")
+  let entry = func.new_block()
+  let promote = func.new_inst(Fpromote)
+  promote.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float32 })),
+  )
+  promote.add_operand(
+    @machv.Operand::def(Physical({ index: 1, class: Float64 })),
+  )
+  entry.append(promote)
+  let demote = func.new_inst(Fdemote)
+  demote.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float64 })),
+  )
+  demote.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Float32 })),
+  )
+  entry.append(demote)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[243, 15, 90, 202, 242, 15, 90, 220, 195]",
   )
 }
 

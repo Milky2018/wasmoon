@@ -33,6 +33,11 @@ fn float_reg(index : Int) -> @machv.PReg {
 }
 
 ///|
+fn float32_reg(index : Int) -> @machv.PReg {
+  { index, class: Float32 }
+}
+
+///|
 pub fn abi_policy() -> AbiPolicy {
   {
     pointer_size: 8,
@@ -115,9 +120,11 @@ pub fn allocatable_regs() -> Array[@machv.PReg] {
     regs.push(r)
   }
   for r in env.preferred_float {
+    regs.push(float32_reg(r.index))
     regs.push(r)
   }
   for r in env.nonpreferred_float {
+    regs.push(float32_reg(r.index))
     regs.push(r)
   }
   for r in env.preferred_vector {

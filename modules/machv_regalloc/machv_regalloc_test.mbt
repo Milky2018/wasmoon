@@ -50,6 +50,31 @@ test "apply rewrites allocated virtual operands to physical registers" {
 }
 
 ///|
+test "apply preserves MachV float width classes when rewriting operands" {
+  let func = @machv.Function::new("float_width")
+  let entry = func.new_block()
+  let f32_value = func.new_vreg(Float32)
+  let f64_value = func.new_vreg(Float64)
+  let inst = func.new_inst(Fpromote)
+  inst.add_operand(@machv.Operand::use_reg(Virtual(f32_value)))
+  inst.add_operand(@machv.Operand::def(Virtual(f64_value)))
+  entry.append(inst)
+  let f0_32 : @machv.PReg = { index: 0, class: Float32 }
+  let f0_64 : @machv.PReg = { index: 0, class: Float64 }
+  let f1_32 : @machv.PReg = { index: 1, class: Float32 }
+  let f1_64 : @machv.PReg = { index: 1, class: Float64 }
+  allocate_and_apply(func, [f0_32, f0_64, f1_32, f1_64]) |> ignore
+  inspect(
+    entry.instructions[0].operands[0].reg is Physical({ class: Float32, .. }),
+    content="true",
+  )
+  inspect(
+    entry.instructions[0].operands[1].reg is Physical({ class: Float64, .. }),
+    content="true",
+  )
+}
+
+///|
 test "projected MachV constraints guide fixed register allocation" {
   let func = @machv.Function::new("fixed")
   let entry = func.new_block()

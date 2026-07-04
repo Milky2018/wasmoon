@@ -18,17 +18,11 @@ fn preg_to_regalloc(preg : @machv.PReg) -> @regalloc.PhysicalReg {
 }
 
 ///|
-fn class_from_regalloc(class : @regalloc.RegClass) -> @machv.RegClass {
-  match class {
-    Int => Int
-    Float => Float64
-    Vector => Vector
-  }
-}
-
-///|
-fn preg_from_regalloc(preg : @regalloc.PhysicalReg) -> @machv.PReg {
-  { index: preg.id, class: class_from_regalloc(preg.class) }
+fn preg_from_regalloc_for_class(
+  preg : @regalloc.PhysicalReg,
+  class : @machv.RegClass,
+) -> @machv.PReg {
+  { index: preg.id, class }
 }
 
 ///|
@@ -141,8 +135,15 @@ fn find_scratch_reg(
   for offset in 0..<physical_regs.length() {
     let i = physical_regs.length() - 1 - offset
     let preg = physical_regs[i]
-    if class_to_regalloc(preg.class) == class_to_regalloc(class) {
+    if preg.class == class {
       return Some(preg)
+    }
+  }
+  for offset in 0..<physical_regs.length() {
+    let i = physical_regs.length() - 1 - offset
+    let preg = physical_regs[i]
+    if class_to_regalloc(preg.class) == class_to_regalloc(class) {
+      return Some({ index: preg.index, class })
     }
   }
   None
@@ -229,7 +230,10 @@ fn rewrite_allocated_operand(
     Virtual(vreg) =>
       match allocation.location_of(vreg_to_regalloc(vreg)) {
         Some(Reg(preg)) =>
-          { reg: Physical(preg_from_regalloc(preg)), role: operand.role }
+          {
+            reg: Physical(preg_from_regalloc_for_class(preg, vreg.class)),
+            role: operand.role,
+          }
         Some(Spill(_)) | None => operand
       }
     Physical(_) => operand
