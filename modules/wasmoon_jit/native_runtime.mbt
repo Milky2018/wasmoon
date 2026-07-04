@@ -708,6 +708,22 @@ pub fn build_aarch64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
 }
 
 ///|
+pub fn build_x64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
+  let bytes : Array[Int] = []
+  bytes.push(0x49)
+  bytes.push(0xbb)
+  let mut value = target_ptr
+  for _ in 0..<8 {
+    bytes.push((value & 0xffL).to_int())
+    value = value >> 8
+  }
+  bytes.push(0x41)
+  bytes.push(0xff)
+  bytes.push(0xe3)
+  bytes
+}
+
+///|
 pub fn direct_call_idx_memory_fill_mem0() -> Int {
   -1001
 }
@@ -853,6 +869,15 @@ pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
 }
 
 ///|
+pub fn encode_x64_call_rel32_disp(pc : Int64, target_ptr : Int64) -> Int? {
+  let disp = target_ptr - (pc + 5L)
+  if disp < -0x80000000L || disp > 0x7fffffffL {
+    return None
+  }
+  Some((disp & 0xffffffffL).to_int())
+}
+
+///|
 pub fn patch_aarch64_call_veneer_target(
   exec_ptr : Int64,
   fixup : @cwasm.CallFixup,
@@ -890,6 +915,22 @@ pub fn patch_aarch64_direct_call(
 }
 
 ///|
+pub fn patch_x64_direct_call(
+  exec_ptr : Int64,
+  fixup : @cwasm.CallFixup,
+  target_ptr : Int64,
+) -> Unit {
+  let pc = exec_ptr + fixup.offset.to_int64()
+  match encode_x64_call_rel32_disp(pc, target_ptr) {
+    Some(encoded) => c_jit_write_u32(pc + 1L, encoded)
+    None =>
+      abort(
+        "direct call target out of rel32 range (func_idx=\{fixup.func_idx})",
+      )
+  }
+}
+
+///|
 pub fn patch_aarch64_call_fixups(
   exec_ptr : Int64,
   fixups : Array[@cwasm.CallFixup],
@@ -907,6 +948,51 @@ pub fn patch_aarch64_call_fixups(
       None => abort("missing direct-call target for idx \{fixup.func_idx}")
     }
     patch_aarch64_direct_call(exec_ptr, fixup, target_ptr)
+  }
+}
+
+///|
+pub fn patch_x64_call_fixups(
+  exec_ptr : Int64,
+  fixups : Array[@cwasm.CallFixup],
+  func_table_ptr : Int64,
+  direct_call_targets : Map[Int, Int64],
+) -> Unit {
+  for fixup in fixups {
+    let target_ptr = match
+      resolve_call_fixup_target(
+        fixup.func_idx,
+        func_table_ptr,
+        direct_call_targets,
+      ) {
+      Some(ptr) => ptr
+      None => abort("missing direct-call target for idx \{fixup.func_idx}")
+    }
+    patch_x64_direct_call(exec_ptr, fixup, target_ptr)
+  }
+}
+
+///|
+pub fn patch_call_fixups_for_target(
+  target : @cwasm.TargetArch,
+  exec_ptr : Int64,
+  fixups : Array[@cwasm.CallFixup],
+  func_table_ptr : Int64,
+  direct_call_targets : Map[Int, Int64],
+) -> Unit {
+  match target {
+    AArch64 =>
+      patch_aarch64_call_fixups(
+        exec_ptr, fixups, func_table_ptr, direct_call_targets,
+      )
+    X86_64 =>
+      patch_x64_call_fixups(
+        exec_ptr, fixups, func_table_ptr, direct_call_targets,
+      )
+    Unknown =>
+      if fixups.length() > 0 {
+        abort("cannot patch call fixups for unknown cwasm target")
+      }
   }
 }
 

@@ -112,12 +112,25 @@ pub fn JITModule::new() -> JITModule {
 ///|
 fn install_direct_call_stubs(
   jit_module : JITModule,
+  target : @cwasm.TargetArch,
 ) -> Unit raise JITModuleLoadError {
   fn install_one(
     pseudo_idx : Int,
     target_ptr : Int64,
   ) -> Unit raise JITModuleLoadError {
-    let stub_code = @wasmoon_jit.build_aarch64_direct_call_stub(target_ptr)
+    let stub_code = match target {
+      AArch64 => @wasmoon_jit.build_aarch64_direct_call_stub(target_ptr)
+      X86_64 => @wasmoon_jit.build_x64_direct_call_stub(target_ptr)
+      Unknown => []
+    }
+    if stub_code.length() == 0 {
+      raise ImportTrampolineAllocationFailed(
+        import_idx=-1,
+        module_name="__jit_direct_call",
+        func_name="idx_\{pseudo_idx}",
+        code_size=0,
+      )
+    }
     match ExecCode::new(stub_code) {
       Some(ec) => {
         jit_module.import_exec_codes.push(ec)
@@ -181,7 +194,8 @@ fn apply_call_fixups(
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
-      @wasmoon_jit.patch_aarch64_call_fixups(
+      @wasmoon_jit.patch_call_fixups_for_target(
+        precompiled.target,
         exec_ptr,
         entry.call_fixups,
         func_table_ptr,
@@ -229,7 +243,7 @@ pub fn JITModule::load_with_imports(
       jit_module.context_ptr = context_ptr
 
       // Install near stubs used by pseudo direct-call fixups.
-      install_direct_call_stubs(jit_module)
+      install_direct_call_stubs(jit_module, precompiled.target)
 
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {

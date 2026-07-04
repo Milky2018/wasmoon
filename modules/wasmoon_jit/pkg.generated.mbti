@@ -30,6 +30,8 @@ pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[In
 
 pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
 
+pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
+
 pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
@@ -75,6 +77,8 @@ pub fn encode_heap_ref(Int) -> Int64
 pub fn encode_i31(Int) -> Int64
 
 pub fn encode_null_ref() -> Int64
+
+pub fn encode_x64_call_rel32_disp(Int64, Int64) -> Int?
 
 pub fn entry_trampoline_signature_hash(Array[@types.ValueType], Array[@types.ValueType]) -> Int64
 
@@ -313,6 +317,12 @@ pub fn patch_aarch64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
 pub fn patch_aarch64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
 
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
+
+pub fn patch_call_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
+
+pub fn patch_x64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
+
+pub fn patch_x64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 

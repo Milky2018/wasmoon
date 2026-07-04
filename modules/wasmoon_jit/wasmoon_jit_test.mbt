@@ -251,6 +251,25 @@ test "build AArch64 direct-call stubs in wasmoon_jit" {
 }
 
 ///|
+test "build X64 direct-call stubs in wasmoon_jit" {
+  let stub = build_x64_direct_call_stub(0x112233445566778L)
+  inspect(stub.length(), content="13")
+  inspect(stub[0], content="73")
+  inspect(stub[1], content="187")
+  inspect(stub[2], content="120")
+  inspect(stub[3], content="103")
+  inspect(stub[4], content="86")
+  inspect(stub[5], content="69")
+  inspect(stub[6], content="52")
+  inspect(stub[7], content="35")
+  inspect(stub[8], content="18")
+  inspect(stub[9], content="1")
+  inspect(stub[10], content="65")
+  inspect(stub[11], content="255")
+  inspect(stub[12], content="227")
+}
+
+///|
 test "resolve direct-call fixup targets in wasmoon_jit" {
   inspect(direct_call_idx_memory_fill_mem0(), content="-1001")
   inspect(direct_call_idx_memory_copy_mem0(), content="-1002")
@@ -282,6 +301,22 @@ test "encode AArch64 BL immediate for direct-call fixups" {
   )
   debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x1002L), content="None")
   debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x9000000L), content="None")
+}
+
+///|
+test "encode X64 call rel32 displacement for direct-call fixups" {
+  debug_inspect(
+    encode_x64_call_rel32_disp(0x1000L, 0x1010L),
+    content="Some(11)",
+  )
+  debug_inspect(
+    encode_x64_call_rel32_disp(0x1010L, 0x1000L),
+    content="Some(-21)",
+  )
+  debug_inspect(
+    encode_x64_call_rel32_disp(0x1000L, 0x80001005L),
+    content="None",
+  )
 }
 
 ///|
