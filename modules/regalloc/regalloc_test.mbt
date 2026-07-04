@@ -477,6 +477,67 @@ test "eviction policy chooses cutoff, best conflict, and later split" {
 }
 
 ///|
+test "bundle merge planner coalesces only compatible non-overlapping ranges" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let ranges : Array[BundleMergeRange] = [
+    {
+      id: 0,
+      class: Int,
+      ranges: [
+        ProgramRange::new(ProgramPoint::new(0, 0), ProgramPoint::new(0, 2)),
+      ],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 1,
+      class: Int,
+      ranges: [
+        ProgramRange::new(ProgramPoint::new(0, 4), ProgramPoint::new(0, 6)),
+      ],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 2,
+      class: Int,
+      ranges: [
+        ProgramRange::new(ProgramPoint::new(0, 1), ProgramPoint::new(0, 3)),
+      ],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 3,
+      class: Int,
+      ranges: [
+        ProgramRange::new(ProgramPoint::new(0, 8), ProgramPoint::new(0, 10)),
+      ],
+      fixed_reg: Some(r1),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+  ]
+  let plan = plan_bundle_merges(
+    ranges,
+    [
+      { target: 0, source: 1 },
+      { target: 0, source: 2 },
+      { target: 0, source: 3 },
+    ],
+    [0],
+    [16],
+  )
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[1], content="true")
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[2], content="false")
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[3], content="false")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

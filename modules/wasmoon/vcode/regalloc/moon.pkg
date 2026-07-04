@@ -8,7 +8,6 @@ import {
   "Milky2018/wasmoon/vcode/isa",
   "Milky2018/wasmoon/vcode/block",
   "Milky2018/wasmoon/vcode/instr",
-  "Milky2018/regalloc/unionfind",
   "moonbitlang/x/sys",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
@@ -17,5 +16,6 @@ import {
 }
 
 import {
+  "Milky2018/regalloc/unionfind",
   "moonbitlang/core/strconv",
 } for "wbtest"
