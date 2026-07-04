@@ -110,23 +110,6 @@ pub fn JITModule::new() -> JITModule {
 }
 
 ///|
-fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
-  let mut value : Int64 = 0L
-  for i in 0..<8 {
-    let b = bytes[start + i].to_int64() & 0xFFL
-    value = value | (b << (i * 8))
-  }
-  value
-}
-
-///|
-fn emit_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
-  let mc = @emit.MachineCode::new()
-  mc.emit_load_imm64_fixed(reg, imm)
-  mc.get_bytes()
-}
-
-///|
 fn direct_call_idx_memory_fill_mem0() -> Int {
   -1001
 }
@@ -137,15 +120,6 @@ fn direct_call_idx_memory_copy_mem0() -> Int {
 }
 
 ///|
-fn build_direct_call_stub(target_ptr : Int64) -> Array[Int] {
-  let mc = @emit.MachineCode::new()
-  // load absolute helper target into X16, then tail-branch.
-  mc.emit_load_imm64_fixed(16, target_ptr)
-  mc.emit_br(16)
-  mc.get_bytes()
-}
-
-///|
 fn install_direct_call_stubs(
   jit_module : JITModule,
 ) -> Unit raise JITModuleLoadError {
@@ -153,7 +127,7 @@ fn install_direct_call_stubs(
     pseudo_idx : Int,
     target_ptr : Int64,
   ) -> Unit raise JITModuleLoadError {
-    let stub_code = build_direct_call_stub(target_ptr)
+    let stub_code = @wasmoon_jit.build_aarch64_direct_call_stub(target_ptr)
     match ExecCode::new(stub_code) {
       Some(ec) => {
         jit_module.import_exec_codes.push(ec)
@@ -177,22 +151,6 @@ fn install_direct_call_stubs(
     direct_call_idx_memory_copy_mem0(),
     @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
   )
-}
-
-///|
-fn patch_load_imm64_fixed(
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  func_ptr : Int64,
-) -> Unit {
-  let bytes = emit_load_imm64_fixed_bytes(reg, func_ptr)
-  if bytes.length() != 16 {
-    abort("unexpected load_imm64_fixed size")
-  }
-  let base = exec_ptr + offset.to_int64()
-  c_jit_write_i64(base, pack_u64_le(bytes, 0))
-  c_jit_write_i64(base + 8L, pack_u64_le(bytes, 8))
 }
 
 ///|
@@ -235,7 +193,12 @@ fn apply_func_addr_fixups(
             None => abort("unknown runtime func fixup idx \{fixup.func_idx}")
           }
         }
-        patch_load_imm64_fixed(exec_ptr, fixup.offset, fixup.reg, target_ptr)
+        @wasmoon_jit.patch_aarch64_load_imm64_fixed(
+          exec_ptr,
+          fixup.offset,
+          fixup.reg,
+          target_ptr,
+        )
       }
     }
   }
@@ -425,7 +388,7 @@ pub fn JITModule::load_with_imports(
                           )
                       }
                     }
-                    patch_load_imm64_fixed(
+                    @wasmoon_jit.patch_aarch64_load_imm64_fixed(
                       ec.ptr(),
                       fixup.offset,
                       fixup.reg,

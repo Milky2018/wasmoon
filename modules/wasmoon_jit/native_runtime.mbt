@@ -579,6 +579,73 @@ pub fn get_spectest_print_char_ptr() -> Int64 {
 }
 
 ///|
+fn push_u32_le(bytes : Array[Int], value : Int) -> Unit {
+  bytes.push(value & 0xff)
+  bytes.push((value >> 8) & 0xff)
+  bytes.push((value >> 16) & 0xff)
+  bytes.push((value >> 24) & 0xff)
+}
+
+///|
+fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
+  let mut value : Int64 = 0L
+  for i in 0..<8 {
+    let b = bytes[start + i].to_int64() & 0xffL
+    value = value | (b << (i * 8))
+  }
+  value
+}
+
+///|
+pub fn build_aarch64_load_imm64_fixed_bytes(
+  reg : Int,
+  imm : Int64,
+) -> Array[Int] {
+  let bytes : Array[Int] = []
+  let v0 = (imm & 0xffffL).to_int()
+  let v1 = ((imm >> 16) & 0xffffL).to_int()
+  let v2 = ((imm >> 32) & 0xffffL).to_int()
+  let v3 = ((imm >> 48) & 0xffffL).to_int()
+  push_u32_le(bytes, 0xd2800000 | ((v0 & 0xffff) << 5) | (reg & 0x1f))
+  push_u32_le(
+    bytes,
+    0xf2800000 | (1 << 21) | ((v1 & 0xffff) << 5) | (reg & 0x1f),
+  )
+  push_u32_le(
+    bytes,
+    0xf2800000 | (2 << 21) | ((v2 & 0xffff) << 5) | (reg & 0x1f),
+  )
+  push_u32_le(
+    bytes,
+    0xf2800000 | (3 << 21) | ((v3 & 0xffff) << 5) | (reg & 0x1f),
+  )
+  bytes
+}
+
+///|
+pub fn build_aarch64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
+  let bytes = build_aarch64_load_imm64_fixed_bytes(16, target_ptr)
+  push_u32_le(bytes, 0xd61f0000 | ((16 & 0x1f) << 5))
+  bytes
+}
+
+///|
+pub fn patch_aarch64_load_imm64_fixed(
+  exec_ptr : Int64,
+  offset : Int,
+  reg : Int,
+  imm : Int64,
+) -> Unit {
+  let bytes = build_aarch64_load_imm64_fixed_bytes(reg, imm)
+  if bytes.length() != 16 {
+    abort("unexpected load_imm64_fixed size")
+  }
+  let base = exec_ptr + offset.to_int64()
+  c_jit_write_i64(base, pack_u64_le(bytes, 0))
+  c_jit_write_i64(base + 8L, pack_u64_le(bytes, 8))
+}
+
+///|
 /// GC-managed executable code block wrapper.
 struct ExecCode(@jit_ffi.ExecCode)
 

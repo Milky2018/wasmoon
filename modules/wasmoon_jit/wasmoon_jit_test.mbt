@@ -34,6 +34,18 @@ test "wrap linked code as cwasm artifact" {
 }
 
 ///|
+test "build AArch64 direct-call stubs in wasmoon_jit" {
+  let load = build_aarch64_load_imm64_fixed_bytes(16, 0L)
+  inspect(load.length(), content="16")
+  let stub = build_aarch64_direct_call_stub(0x1234L)
+  inspect(stub.length(), content="20")
+  inspect(stub[16], content="0")
+  inspect(stub[17], content="2")
+  inspect(stub[18], content="31")
+  inspect(stub[19], content="214")
+}
+
+///|
 test "plan Wasmoon JIT integration without leaking into machv_emit" {
   let milk = @milkir.Function::new("entry", @milkir.Signature::new([], []))
   let mach = @machv.Function::new("entry")
