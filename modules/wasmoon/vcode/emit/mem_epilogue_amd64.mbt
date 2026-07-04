@@ -14,9 +14,6 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
   _shared_exit_block : Int?,
 ) -> Unit {
   let isa = @isa.ISA::current()
-  fn fits_i32(value : Int) -> Bool {
-    value >= -2147483648 && value <= 2147483647
-  }
   fn trap_msg_to_imm16(msg : String) -> Int {
     if msg == "unreachable" {
       0
@@ -89,7 +86,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
     }
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       let rn = reg_num(lhs)
-      if fits_i32(imm) {
+      if @machv_emit.fits_signed_i32(imm) {
         if is_64 {
           self.x86_emit_cmp_r_imm32(rn, imm)
         } else {
