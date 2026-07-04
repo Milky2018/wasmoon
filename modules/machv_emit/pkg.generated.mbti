@@ -57,6 +57,28 @@ pub(all) enum RelocationKind {
   BlockTarget(Int)
 } derive(Eq, @debug.Debug)
 
+pub(all) struct StackFrameLayout {
+  setup_area_size : Int
+  gpr_save_size : Int
+  fpr_save_size : Int
+  spill_size : Int
+  outgoing_args_size : Int
+  gpr_save_offset : Int
+  fpr_save_offset : Int
+  spill_offset : Int
+  outgoing_args_offset : Int
+  total_size : Int
+  frame_size : Int
+  saved_gprs : Array[Int]
+  saved_fprs : Array[Int]
+  has_setup_area : Bool
+} derive(Eq, @debug.Debug)
+pub fn StackFrameLayout::build(Array[Int], Array[Int], Int, Bool, Int, outgoing_args_size? : Int) -> Self
+pub fn StackFrameLayout::get_fpr_save_offset(Self, Int) -> Int
+pub fn StackFrameLayout::get_gpr_save_offset(Self, Int) -> Int
+pub fn StackFrameLayout::get_outgoing_arg_offset(Self, Int) -> Int
+pub fn StackFrameLayout::get_spill_offset(Self, Int) -> Int
+
 pub(all) struct StackMap {
   offset : Int
   effect : @machv.StackEffect

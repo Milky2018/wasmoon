@@ -25,15 +25,6 @@
 // ============ Constants ============
 
 ///|
-const SPILL_SLOT_SIZE : Int = 8
-
-///|
-const SPILL_ALIGNMENT : Int = 16
-
-///|
-const MIN_SPILL_SIZE : Int = 16
-
-///|
 /// Size of setup area (FP + LR)
 const SETUP_AREA_SIZE : Int = 16
 
@@ -120,7 +111,8 @@ pub fn JITStackFrame::build(
     clobbered_fprs.length() > 0 ||
     num_spill_slots > 0
 
-  // Calculate size of each region
+  // Calculate generic frame regions in `machv_emit`; this package only owns
+  // ABI-specific save-list selection and setup-area size.
   let setup_area_size = if has_setup_area {
     match isa {
       AArch64 => SETUP_AREA_SIZE
@@ -129,44 +121,29 @@ pub fn JITStackFrame::build(
   } else {
     0
   }
-  let gpr_save_size = calc_gpr_save_size(saved_gprs.length())
-  let fpr_save_size = calc_fpr_save_size(clobbered_fprs.length())
-  let spill_size = calc_spill_size(num_spill_slots)
-  let aligned_outgoing = align_up(outgoing_args_size, 16)
-
-  // Calculate frame size (excluding setup area, which is handled separately)
-  // Standard layout from SP upward:
-  // [SP+0]: outgoing args
-  // [SP+outgoing]: spill slots
-  // [SP+outgoing+spill]: FPR saves
-  // [SP+outgoing+spill+fpr]: GPR saves
-  // [SP+total-16]: FP/LR (at the top)
-  let frame_size = gpr_save_size + fpr_save_size + spill_size + aligned_outgoing
-
-  // Calculate offsets (from SP after frame allocation)
-  // Standard style: outgoing args at bottom, FP/LR at top
-  let outgoing_args_offset = 0
-  let spill_offset = aligned_outgoing
-  let fpr_save_offset = spill_offset + spill_size
-  let gpr_save_offset = fpr_save_offset + fpr_save_size
-
-  // Total size includes setup area
-  let total_size = setup_area_size + frame_size
-  {
-    setup_area_size,
-    gpr_save_size,
-    fpr_save_size,
-    spill_size,
-    outgoing_args_size: aligned_outgoing,
-    gpr_save_offset,
-    fpr_save_offset,
-    spill_offset,
-    outgoing_args_offset,
-    total_size,
-    frame_size,
+  let layout = @machv_emit.StackFrameLayout::build(
     saved_gprs,
-    saved_fprs: clobbered_fprs.copy(),
+    clobbered_fprs,
+    num_spill_slots,
     has_setup_area,
+    setup_area_size,
+    outgoing_args_size~,
+  )
+  {
+    setup_area_size: layout.setup_area_size,
+    gpr_save_size: layout.gpr_save_size,
+    fpr_save_size: layout.fpr_save_size,
+    spill_size: layout.spill_size,
+    outgoing_args_size: layout.outgoing_args_size,
+    gpr_save_offset: layout.gpr_save_offset,
+    fpr_save_offset: layout.fpr_save_offset,
+    spill_offset: layout.spill_offset,
+    outgoing_args_offset: layout.outgoing_args_offset,
+    total_size: layout.total_size,
+    frame_size: layout.frame_size,
+    saved_gprs: layout.saved_gprs,
+    saved_fprs: layout.saved_fprs,
+    has_setup_area: layout.has_setup_area,
     needs_vmctx,
     cache_mem0_desc,
     cache_func_table,
@@ -179,7 +156,8 @@ pub fn JITStackFrame::get_spill_offset(
   self : JITStackFrame,
   slot_idx : Int,
 ) -> Int {
-  self.spill_offset + slot_idx * SPILL_SLOT_SIZE
+  let layout = self.to_layout()
+  layout.get_spill_offset(slot_idx)
 }
 
 ///|
@@ -188,7 +166,8 @@ pub fn JITStackFrame::get_outgoing_arg_offset(
   self : JITStackFrame,
   arg_offset : Int,
 ) -> Int {
-  self.outgoing_args_offset + arg_offset
+  let layout = self.to_layout()
+  layout.get_outgoing_arg_offset(arg_offset)
 }
 
 ///|
@@ -197,15 +176,8 @@ pub fn JITStackFrame::get_gpr_save_offset(
   self : JITStackFrame,
   reg_idx : Int,
 ) -> Int {
-  // Find the register in the saved list
-  for i, reg in self.saved_gprs {
-    if reg == reg_idx {
-      // Registers are saved in 8-byte slots (pairs are padded to 16 bytes).
-      return self.gpr_save_offset + i * 8
-    }
-  }
-  // Register not found, should not happen
-  -1
+  let layout = self.to_layout()
+  layout.get_gpr_save_offset(reg_idx)
 }
 
 ///|
@@ -214,12 +186,30 @@ pub fn JITStackFrame::get_fpr_save_offset(
   self : JITStackFrame,
   reg_idx : Int,
 ) -> Int {
-  for i, reg in self.saved_fprs {
-    if reg == reg_idx {
-      return self.fpr_save_offset + i * 8
-    }
+  let layout = self.to_layout()
+  layout.get_fpr_save_offset(reg_idx)
+}
+
+///|
+fn JITStackFrame::to_layout(
+  self : JITStackFrame,
+) -> @machv_emit.StackFrameLayout {
+  {
+    setup_area_size: self.setup_area_size,
+    gpr_save_size: self.gpr_save_size,
+    fpr_save_size: self.fpr_save_size,
+    spill_size: self.spill_size,
+    outgoing_args_size: self.outgoing_args_size,
+    gpr_save_offset: self.gpr_save_offset,
+    fpr_save_offset: self.fpr_save_offset,
+    spill_offset: self.spill_offset,
+    outgoing_args_offset: self.outgoing_args_offset,
+    total_size: self.total_size,
+    frame_size: self.frame_size,
+    saved_gprs: self.saved_gprs,
+    saved_fprs: self.saved_fprs,
+    has_setup_area: self.has_setup_area,
   }
-  -1
 }
 
 // ============ Helper Functions ============
@@ -253,44 +243,4 @@ fn build_gpr_save_list_v3(
   }
   result.sort()
   result
-}
-
-///|
-/// Calculate GPR save area size (pairs are 16 bytes each)
-fn calc_gpr_save_size(num_gprs : Int) -> Int {
-  if num_gprs == 0 {
-    return 0
-  }
-  align_up(num_gprs * 8, 16)
-}
-
-///|
-/// Calculate FPR save area size (pairs are 16 bytes each)
-fn calc_fpr_save_size(num_fprs : Int) -> Int {
-  if num_fprs == 0 {
-    return 0
-  }
-  align_up(num_fprs * 8, 16)
-}
-
-///|
-/// Calculate spill slot area size
-/// Returns 0 for leaf functions with no spills (no unnecessary stack allocation)
-fn calc_spill_size(num_slots : Int) -> Int {
-  if num_slots == 0 {
-    return 0 // Leaf functions without spills need no stack space
-  }
-  let raw_size = num_slots * SPILL_SLOT_SIZE
-  let aligned_size = align_up(raw_size, SPILL_ALIGNMENT)
-  if aligned_size < MIN_SPILL_SIZE {
-    MIN_SPILL_SIZE
-  } else {
-    aligned_size
-  }
-}
-
-///|
-/// Align value up to the given alignment
-fn align_up(value : Int, alignment : Int) -> Int {
-  (value + alignment - 1) / alignment * alignment
 }

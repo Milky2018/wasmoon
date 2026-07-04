@@ -339,3 +339,30 @@ test "reject unsupported MachV opcode instead of pseudo emitting" {
     _ => fail("expected unsupported opcode")
   }
 }
+
+///|
+test "stack frame layout computes spill and save regions" {
+  let frame = StackFrameLayout::build(
+    [20, 25, 26],
+    [8, 9],
+    5,
+    true,
+    16,
+    outgoing_args_size=16,
+  )
+  inspect(frame.gpr_save_size, content="32")
+  inspect(frame.fpr_save_size, content="16")
+  inspect(frame.spill_size, content="48")
+  inspect(frame.outgoing_args_size, content="16")
+  inspect(frame.frame_size, content="112")
+  inspect(frame.total_size, content="128")
+  inspect(frame.get_spill_offset(1), content="24")
+}
+
+///|
+test "stack frame layout supports x64 setup size" {
+  let frame = StackFrameLayout::build([], [], 5, true, 8)
+  inspect(frame.spill_size, content="48")
+  inspect(frame.total_size, content="56")
+  inspect(frame.total_size % 16, content="8")
+}
