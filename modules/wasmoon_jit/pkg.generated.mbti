@@ -11,6 +11,18 @@ import {
 }
 
 // Values
+pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
+
+pub fn alloc_memory(Int64) -> Int64
+
+pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
+
+pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
+pub fn c_jit_write_u32(Int64, Int) -> Unit
+
 pub fn decode_externref(Int64) -> Int?
 
 pub fn decode_funcref_idx(Int64) -> Int?
@@ -35,6 +47,10 @@ pub fn encode_i31(Int) -> Int64
 
 pub fn encode_null_ref() -> Int64
 
+pub fn free_memory(Int64) -> Unit
+
+pub fn free_memory_desc(Int64) -> Unit
+
 pub fn gc_begin_frame(Int64, Int64) -> Unit
 
 pub fn gc_clear_heap(Int64) -> Unit
@@ -54,6 +70,60 @@ pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
 pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
 
 pub fn gc_teardown(Int64) -> Unit
+
+pub fn get_args_get_ptr() -> Int64
+
+pub fn get_args_sizes_get_ptr() -> Int64
+
+pub fn get_clock_res_get_ptr() -> Int64
+
+pub fn get_clock_time_get_ptr() -> Int64
+
+pub fn get_environ_get_ptr() -> Int64
+
+pub fn get_environ_sizes_get_ptr() -> Int64
+
+pub fn get_fd_advise_ptr() -> Int64
+
+pub fn get_fd_allocate_ptr() -> Int64
+
+pub fn get_fd_close_ptr() -> Int64
+
+pub fn get_fd_datasync_ptr() -> Int64
+
+pub fn get_fd_fdstat_get_ptr() -> Int64
+
+pub fn get_fd_fdstat_set_flags_ptr() -> Int64
+
+pub fn get_fd_fdstat_set_rights_ptr() -> Int64
+
+pub fn get_fd_filestat_get_ptr() -> Int64
+
+pub fn get_fd_filestat_set_size_ptr() -> Int64
+
+pub fn get_fd_filestat_set_times_ptr() -> Int64
+
+pub fn get_fd_pread_ptr() -> Int64
+
+pub fn get_fd_prestat_dir_name_ptr() -> Int64
+
+pub fn get_fd_prestat_get_ptr() -> Int64
+
+pub fn get_fd_pwrite_ptr() -> Int64
+
+pub fn get_fd_read_ptr() -> Int64
+
+pub fn get_fd_readdir_ptr() -> Int64
+
+pub fn get_fd_renumber_ptr() -> Int64
+
+pub fn get_fd_seek_ptr() -> Int64
+
+pub fn get_fd_sync_ptr() -> Int64
+
+pub fn get_fd_tell_ptr() -> Int64
+
+pub fn get_fd_write_ptr() -> Int64
 
 pub fn get_gc_array_copy_ptr() -> Int64
 
@@ -79,6 +149,70 @@ pub fn get_gc_struct_set_ptr() -> Int64
 
 pub fn get_gc_type_check_subtype_ptr() -> Int64
 
+pub fn get_hostcall_func_addr() -> Int
+
+pub fn get_hostcall_num_arg_slots() -> Int
+
+pub fn get_hostcall_num_result_slots() -> Int
+
+pub fn get_hostcall_values_ptr() -> Int64
+
+pub fn get_last_trap_details() -> TrapDetails
+
+pub fn get_path_create_directory_ptr() -> Int64
+
+pub fn get_path_filestat_get_ptr() -> Int64
+
+pub fn get_path_filestat_set_times_ptr() -> Int64
+
+pub fn get_path_link_ptr() -> Int64
+
+pub fn get_path_open_ptr() -> Int64
+
+pub fn get_path_readlink_ptr() -> Int64
+
+pub fn get_path_remove_directory_ptr() -> Int64
+
+pub fn get_path_rename_ptr() -> Int64
+
+pub fn get_path_symlink_ptr() -> Int64
+
+pub fn get_path_unlink_file_ptr() -> Int64
+
+pub fn get_poll_oneoff_ptr() -> Int64
+
+pub fn get_proc_exit_ptr() -> Int64
+
+pub fn get_proc_raise_ptr() -> Int64
+
+pub fn get_random_get_ptr() -> Int64
+
+pub fn get_sched_yield_ptr() -> Int64
+
+pub fn get_sock_accept_ptr() -> Int64
+
+pub fn get_sock_recv_ptr() -> Int64
+
+pub fn get_sock_send_ptr() -> Int64
+
+pub fn get_sock_shutdown_ptr() -> Int64
+
+pub fn get_spectest_print_char_ptr() -> Int64
+
+pub fn get_spectest_print_f32_ptr() -> Int64
+
+pub fn get_spectest_print_f64_f64_ptr() -> Int64
+
+pub fn get_spectest_print_f64_ptr() -> Int64
+
+pub fn get_spectest_print_i32_f32_ptr() -> Int64
+
+pub fn get_spectest_print_i32_ptr() -> Int64
+
+pub fn get_spectest_print_i64_ptr() -> Int64
+
+pub fn get_spectest_print_ptr() -> Int64
+
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
@@ -94,6 +228,10 @@ pub fn is_null_ref(Int64) -> Bool
 pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
 pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
+pub fn memory_init(Int64, Int64, Bytes) -> Bool
+
+pub fn memory_read(Int64, Int64, Int) -> Bytes
 
 pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan raise @machv_emit.EmitError
 
@@ -270,6 +408,10 @@ pub fn DWARFBuilder::new() -> Self
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
+type ExecCode
+pub fn ExecCode::new(Array[Int]) -> Self?
+pub fn ExecCode::ptr(Self) -> Int64
+
 pub struct FunctionInfo {
   name : String
   func_idx : Int
@@ -291,6 +433,16 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
+type JITTable derive(@debug.Debug)
+pub fn JITTable::get_entry_type(Self, Int) -> Int
+pub fn JITTable::get_entry_value(Self, Int) -> Int64
+pub fn JITTable::get_max(Self) -> Int?
+pub fn JITTable::get_size(Self) -> Int
+pub fn JITTable::new(Int, Int?) -> Self?
+pub fn JITTable::raw_ptr(Self) -> Int64
+pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
+pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
+
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
   target : @machv_emit.EmitTarget
@@ -305,6 +457,13 @@ pub(all) struct LinkedCode {
   stack_maps : Array[@machv_emit.StackMap]
   debug_entries : Array[@machv_emit.DebugEntry]
 } derive(@debug.Debug)
+
+pub struct MemoryInfo {
+  ptr : Int64
+  size : Int64
+  max_pages : Int?
+}
+pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
 
 pub(all) struct NativeGlueBinding {
   kind : NativeGlueKind
@@ -364,6 +523,29 @@ pub(all) struct TieredConfig {
 pub fn TieredConfig::default() -> Self
 pub fn TieredConfig::deferred() -> Self
 pub fn TieredConfig::eager() -> Self
+
+pub struct TrapDetails {
+  signal : Int
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  func_idx : Int
+  x0 : Int64
+  x1 : Int64
+  x2 : Int64
+  x3 : Int64
+  x6 : Int64
+  x7 : Int64
+  x8 : Int64
+  x9 : Int64
+  x10 : Int64
+  x11 : Int64
+  x15 : Int64
+}
+pub fn TrapDetails::new() -> Self
 
 // Type aliases
 

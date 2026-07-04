@@ -6,9 +6,9 @@
 /// Helper struct to capture trap info with backtrace
 struct TrapInfo {
   trap_msg : String
-  backtrace : Array[@jit.BacktraceFrame]
+  backtrace : Array[@wasmoon_jit.BacktraceFrame]
   // Raw values for debugging
-  trap_details : @jit.TrapDetails
+  trap_details : @wasmoon_jit.TrapDetails
 }
 
 ///|
@@ -107,7 +107,7 @@ fn run_jit_with_backtrace(
     let mem_desc_ptr = if mem_pages > 0 && !mod_.memories[0].is_memory64 {
       jm.alloc_guarded_memory(mem_pages, max_pages)
     } else if mem_size > 0L {
-      @jit.alloc_memory_desc(
+      @wasmoon_jit.alloc_memory_desc(
         mem_size,
         max_pages,
         is_memory64=mod_.memories[0].is_memory64,
@@ -116,13 +116,16 @@ fn run_jit_with_backtrace(
       0L
     }
     if mem_desc_ptr != 0L || mem_size == 0L {
-      let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages)]
+      let memories = [
+        @wasmoon_jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages),
+      ]
       jm.set_memory_pointers(memories)
       let mem_base = jm.get_memory_ptr(0)
       for data in mod_.datas {
         if data.memory_idx == 0 {
           let offset = eval_const_expr(data.offset)
-          @jit.memory_init(mem_base, offset.to_int64(), data.init) |> ignore
+          @wasmoon_jit.memory_init(mem_base, offset.to_int64(), data.init)
+          |> ignore
         }
       }
     }
@@ -150,7 +153,7 @@ fn run_jit_with_backtrace(
   let results = jm.call_with_context(f, i64_args) catch {
     JITExit(code) => {
       let frames = dwarf.capture_backtrace()
-      let trap_details = @jit.get_last_trap_details()
+      let trap_details = @wasmoon_jit.get_last_trap_details()
       return Err({
         trap_msg: "WASI exit: \{code}",
         backtrace: frames,
@@ -159,7 +162,7 @@ fn run_jit_with_backtrace(
     }
     JITTrap(msg) => {
       let frames = dwarf.capture_backtrace()
-      let trap_details = @jit.get_last_trap_details()
+      let trap_details = @wasmoon_jit.get_last_trap_details()
       return Err({ trap_msg: msg, backtrace: frames, trap_details })
     }
   }
@@ -182,7 +185,11 @@ fn run_jit_with_backtrace(
 ///|
 /// Helper to create an empty TrapInfo for error cases
 fn make_empty_trap_info(msg : String) -> TrapInfo {
-  { trap_msg: msg, backtrace: [], trap_details: @jit.TrapDetails::new() }
+  {
+    trap_msg: msg,
+    backtrace: [],
+    trap_details: @wasmoon_jit.TrapDetails::new(),
+  }
 }
 
 ///|

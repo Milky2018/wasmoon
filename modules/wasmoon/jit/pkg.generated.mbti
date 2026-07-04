@@ -6,7 +6,6 @@ import {
   "Milky2018/wasmoon/vcode",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
-  "Milky2018/wasmoon_jit/jit_ffi",
   "moonbitlang/core/debug",
 }
 
@@ -159,7 +158,7 @@ pub fn get_hostcall_values_ptr() -> Int64
 
 pub fn get_import_trampoline(String, String) -> Int64?
 
-pub fn get_last_trap_details() -> TrapDetails
+pub fn get_last_trap_details() -> @wasmoon_jit.TrapDetails
 
 pub fn get_path_create_directory_ptr() -> Int64
 
@@ -276,10 +275,6 @@ pub enum CompilationStatus {
 }
 pub impl Show for CompilationStatus
 
-pub struct ExecCode(@jit_ffi.ExecCode)
-pub fn ExecCode::new(Array[Int]) -> Self?
-pub fn ExecCode::ptr(Self) -> Int64
-
 pub(all) struct FunctionEntry {
   func_idx : Int
   mut status : CompilationStatus
@@ -362,7 +357,7 @@ pub fn JITModule::get_table_ptr(Self, Int) -> Int64
 pub fn JITModule::get_table_size(Self, Int) -> Int
 pub fn JITModule::has_wasm_stack(Self) -> Bool
 pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
-pub fn JITModule::init_shared_tables(Self, Array[JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
+pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
@@ -374,51 +369,12 @@ pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
 pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
 pub fn JITModule::set_memory(Self, Int64) -> Unit
-pub fn JITModule::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
+pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
-
-type JITTable derive(@debug.Debug)
-pub fn JITTable::get_entry_type(Self, Int) -> Int
-pub fn JITTable::get_entry_value(Self, Int) -> Int64
-pub fn JITTable::get_max(Self) -> Int?
-pub fn JITTable::get_size(Self) -> Int
-pub fn JITTable::new(Int, Int?) -> Self?
-pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
-pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
-
-pub struct MemoryInfo {
-  ptr : Int64
-  size : Int64
-  max_pages : Int?
-}
-pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
 
 pub(all) struct Single[A](A)
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
-
-pub struct TrapDetails {
-  signal : Int
-  pc : Int64
-  lr : Int64
-  fp : Int64
-  frame_lr : Int64
-  fault_addr : Int64
-  brk_imm : Int
-  func_idx : Int
-  x0 : Int64
-  x1 : Int64
-  x2 : Int64
-  x3 : Int64
-  x6 : Int64
-  x7 : Int64
-  x8 : Int64
-  x9 : Int64
-  x10 : Int64
-  x11 : Int64
-  x15 : Int64
-}
-pub fn TrapDetails::new() -> Self
 
 pub struct TrapReport {
   trap_kind : String
@@ -467,6 +423,8 @@ pub using @wasmoon_jit {type CompilationStrategy}
 
 pub using @wasmoon_jit {type DWARFBuilder}
 
+pub using @wasmoon_jit {type ExecCode}
+
 pub using @wasmoon_jit {type FunctionInfo}
 
 pub using @wasmoon_jit {type FunctionTemperature}
@@ -475,9 +433,15 @@ pub using @wasmoon_jit {type GCSetupError}
 
 pub using @wasmoon_jit {type HotThreshold}
 
+pub using @wasmoon_jit {type JITTable}
+
+pub using @wasmoon_jit {type MemoryInfo}
+
 pub using @wasmoon_jit {type Profiler}
 
 pub using @wasmoon_jit {type TieredConfig}
+
+pub using @wasmoon_jit {type TrapDetails}
 
 // Traits
 pub trait DynamicArgs {

@@ -432,7 +432,7 @@ fn run_cross_module_jit(
   if mem_desc_ptr == 0L && mem_size > 0L {
     raise CrossModuleError("Failed to allocate memory")
   }
-  let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, None)]
+  let memories = [@wasmoon_jit.MemoryInfo::new(mem_desc_ptr, mem_size, None)]
   jm.set_memory_pointers(memories)
 
   // Get target function's result types

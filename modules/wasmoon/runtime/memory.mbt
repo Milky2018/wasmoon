@@ -125,9 +125,9 @@ pub fn Memory::new(
   let size_bytes = min.to_int64() * page_size_bytes
   let mem_desc_ptr = if !is_memory64 && l2 == 16 {
     // Guard pages are required for JIT memory0 correctness.
-    @jit.alloc_guarded_memory_desc(min, max)
+    @wasmoon_jit.alloc_guarded_memory_desc(min, max)
   } else {
-    @jit.alloc_memory_desc(
+    @wasmoon_jit.alloc_memory_desc(
       size_bytes,
       max,
       is_memory64~,
@@ -143,7 +143,7 @@ pub fn Memory::new(
 /// This is required for JIT guard-page-based trapping.
 pub fn Memory::new_guarded_memory0(min : Int, max : Int?) -> Memory {
   let initial_pages = min
-  let mem_desc_ptr = @jit.alloc_guarded_memory_desc(initial_pages, max)
+  let mem_desc_ptr = @wasmoon_jit.alloc_guarded_memory_desc(initial_pages, max)
   {
     mem_desc_ptr,
     max,

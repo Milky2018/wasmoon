@@ -1020,7 +1020,7 @@ fn init_jit_globals(
   }
   // Allocate 16 bytes per global (8 bytes value + 8 bytes tag)
   let size = (num_globals * 16).to_int64()
-  let globals_ptr = @jit.alloc_memory(size)
+  let globals_ptr = @wasmoon_jit.alloc_memory(size)
   if globals_ptr == 0L {
     return 0L
   }
@@ -1060,15 +1060,15 @@ fn init_jit_globals(
         let offset = globals_ptr + (i * 16).to_int64()
         let low = bytes_to_int64_le(bytes, 0)
         let high = bytes_to_int64_le(bytes, 8)
-        @jit.c_jit_write_i64(offset, low)
-        @jit.c_jit_write_i64(offset + 8L, high)
+        @wasmoon_jit.c_jit_write_i64(offset, low)
+        @wasmoon_jit.c_jit_write_i64(offset + 8L, high)
         continue // Skip the normal write below
       }
     }
     // Write value at offset i * 16
     let offset = globals_ptr + (i * 16).to_int64()
     // Use FFI to write the value
-    @jit.c_jit_write_i64(offset, raw_value)
+    @wasmoon_jit.c_jit_write_i64(offset, raw_value)
   }
   globals_ptr
 }
@@ -1086,7 +1086,7 @@ fn init_jit_tables(
     return
   }
   // Collect JIT tables in module table index order
-  let jit_tables : Array[@jit.JITTable?] = []
+  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
   for table_addr in instance.table_addrs {
     jit_tables.push(store.get_jit_table(table_addr))
   }
@@ -1254,7 +1254,7 @@ fn run_with_jit(
           }
           // Register DWARF debug info with debugger if enabled
           // The DWARF info must stay registered for the duration of JIT execution
-          let dwarf_builder : @jit.DWARFBuilder? = if enable_dwarf {
+          let dwarf_builder : @wasmoon_jit.DWARFBuilder? = if enable_dwarf {
             Some(jm.register_dwarf(verbose=@logger.is_debug_enabled()))
           } else {
             None

@@ -423,7 +423,7 @@ pub fn run_jit(
     // Allocate linear memories.
     // We pass memory *descriptors* (wasmoon_memory_t*) into the JIT context.
     // Memory 0 (memory32) uses guarded allocation to support bounds-check elimination.
-    let memories : Array[@jit.MemoryInfo] = []
+    let memories : Array[@wasmoon_jit.MemoryInfo] = []
     for i, mem_ty in mod_.memories {
       let pages = mem_ty.limits.min.to_int()
       let size = pages.to_int64() * 65536L
@@ -431,12 +431,16 @@ pub fn run_jit(
       let mem_desc_ptr = if i == 0 && !mem_ty.is_memory64 {
         jm.alloc_guarded_memory(pages, max_pages)
       } else {
-        @jit.alloc_memory_desc(size, max_pages, is_memory64=mem_ty.is_memory64)
+        @wasmoon_jit.alloc_memory_desc(
+          size,
+          max_pages,
+          is_memory64=mem_ty.is_memory64,
+        )
       }
       if mem_desc_ptr == 0L && size > 0L {
         return Err("Failed to allocate memory")
       }
-      memories.push(@jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
+      memories.push(@wasmoon_jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
     }
     if !memories.is_empty() {
       jm.set_memory_pointers(memories)
@@ -721,11 +725,11 @@ pub fn init_elem_segments(
   }
 
   // Create a JIT table for each WebAssembly table
-  let jit_tables : Array[@jit.JITTable?] = []
+  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
   for table in mod_.tables {
     let min_size = table.type_.limits.min.to_int()
     let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
-    match @jit.JITTable::new(min_size, max_size) {
+    match @wasmoon_jit.JITTable::new(min_size, max_size) {
       Some(jit_table) => jit_tables.push(Some(jit_table))
       None => jit_tables.push(None)
     }

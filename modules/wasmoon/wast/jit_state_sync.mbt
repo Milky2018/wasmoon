@@ -13,11 +13,11 @@ pub fn init_jit_memories_from_store(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
   jm : @jit.JITModule,
-) -> Array[@jit.MemoryInfo]? {
+) -> Array[@wasmoon_jit.MemoryInfo]? {
   if instance.mem_addrs.is_empty() {
     return Some([])
   }
-  let memories : Array[@jit.MemoryInfo] = []
+  let memories : Array[@wasmoon_jit.MemoryInfo] = []
   for mem_addr in instance.mem_addrs {
     let mem = store.get_mem(mem_addr) catch { _ => return None }
     let size = mem.byte_len()
@@ -26,7 +26,7 @@ pub fn init_jit_memories_from_store(
     if mem_desc_ptr == 0L && size > 0L {
       return None
     }
-    memories.push(@jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
+    memories.push(@wasmoon_jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
   }
   jm.set_memory_pointers(memories)
   Some(memories)

@@ -401,7 +401,7 @@ fn run_wasi_jit_quiet(
     let mem_desc_ptr = if mem_pages > 0 && !mod_.memories[0].is_memory64 {
       jm.alloc_guarded_memory(mem_pages, max_pages)
     } else if mem_size > 0L {
-      @jit.alloc_memory_desc(
+      @wasmoon_jit.alloc_memory_desc(
         mem_size,
         max_pages,
         is_memory64=mod_.memories[0].is_memory64,
@@ -412,14 +412,17 @@ fn run_wasi_jit_quiet(
     if mem_desc_ptr == 0L && mem_size > 0L {
       return (Err("Failed to allocate memory"), Bytes::from_array([]))
     }
-    let memories = [@jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages)]
+    let memories = [
+      @wasmoon_jit.MemoryInfo::new(mem_desc_ptr, mem_size, max_pages),
+    ]
     jm.set_memory_pointers(memories)
     let mem_base = jm.get_memory_ptr(0)
     // Initialize data segments
     for data in mod_.datas {
       if data.memory_idx == 0 {
         let offset = eval_const_expr(data.offset)
-        @jit.memory_init(mem_base, offset.to_int64(), data.init) |> ignore
+        @wasmoon_jit.memory_init(mem_base, offset.to_int64(), data.init)
+        |> ignore
       }
     }
     guard jm.get_func_by_name(func_name) is Some(f) else {

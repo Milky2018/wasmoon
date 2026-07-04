@@ -3,7 +3,6 @@ package "Milky2018/wasmoon/runtime"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon_jit",
   "moonbitlang/core/debug",
 }
@@ -369,7 +368,7 @@ pub struct Store {
   wrapped_externs : Array[@types.Value]
   func_owners : Array[FuncOwner]
   instances : Array[ModuleInstance]
-  jit_tables : Array[@jit.JITTable?]
+  jit_tables : Array[@wasmoon_jit.JITTable?]
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
 } derive(@debug.Debug)
@@ -405,7 +404,7 @@ pub fn Store::get_func_type_opt(Self, Int) -> @types.FuncType?
 pub fn Store::get_gc_stats(Self) -> (Int64, Int64, Int, Int, Int)
 pub fn Store::get_gc_type_idx(Self, Int) -> Int raise RuntimeError
 pub fn Store::get_global(Self, Int) -> GlobalInstance raise RuntimeError
-pub fn Store::get_jit_table(Self, Int) -> @jit.JITTable?
+pub fn Store::get_jit_table(Self, Int) -> @wasmoon_jit.JITTable?
 pub fn Store::get_mem(Self, Int) -> Memory raise RuntimeError
 pub fn Store::get_memory(Self, Int) -> Memory
 pub fn Store::get_table(Self, Int) -> Table raise RuntimeError

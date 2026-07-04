@@ -25,79 +25,13 @@ pub impl Show for JITTrap with fn output(self, logger) {
 let wasi_exit_trap_code : Int = 100
 
 ///|
-/// Low-level trap detail captured by the JIT signal handlers (best-effort).
-pub struct TrapDetails {
-  signal : Int
-  pc : Int64
-  lr : Int64
-  fp : Int64
-  frame_lr : Int64
-  fault_addr : Int64
-  brk_imm : Int
-  func_idx : Int
-  x0 : Int64
-  x1 : Int64
-  x2 : Int64
-  x3 : Int64
-  x6 : Int64
-  x7 : Int64
-  x8 : Int64
-  x9 : Int64
-  x10 : Int64
-  x11 : Int64
-  x15 : Int64
-}
-
-///|
-pub fn TrapDetails::new() -> TrapDetails {
-  {
-    signal: 0,
-    pc: 0L,
-    lr: 0L,
-    fp: 0L,
-    frame_lr: 0L,
-    fault_addr: 0L,
-    brk_imm: 0,
-    func_idx: -1,
-    x0: 0L,
-    x1: 0L,
-    x2: 0L,
-    x3: 0L,
-    x6: 0L,
-    x7: 0L,
-    x8: 0L,
-    x9: 0L,
-    x10: 0L,
-    x11: 0L,
-    x15: 0L,
-  }
-}
+pub type TrapDetails = @wasmoon_jit.TrapDetails
 
 ///|
 /// Get the last captured trap details (best-effort).
 /// These fields are reset at the start of each JIT call.
 pub fn get_last_trap_details() -> TrapDetails {
-  {
-    signal: @jit_ffi.c_jit_get_trap_signal(),
-    pc: @jit_ffi.c_jit_get_trap_pc(),
-    lr: @jit_ffi.c_jit_get_trap_lr(),
-    fp: @jit_ffi.c_jit_get_trap_fp(),
-    frame_lr: @jit_ffi.c_jit_get_trap_frame_lr(),
-    fault_addr: @jit_ffi.c_jit_get_trap_fault_addr(),
-    brk_imm: @jit_ffi.c_jit_get_trap_brk_imm(),
-    func_idx: @jit_ffi.c_jit_get_trap_func_idx(),
-    x0: @jit_ffi.c_jit_get_trap_xreg(0),
-    x1: @jit_ffi.c_jit_get_trap_xreg(1),
-    x2: @jit_ffi.c_jit_get_trap_xreg(2),
-    x3: @jit_ffi.c_jit_get_trap_xreg(3),
-    x6: @jit_ffi.c_jit_get_trap_xreg(6),
-    x7: @jit_ffi.c_jit_get_trap_xreg(7),
-    x8: @jit_ffi.c_jit_get_trap_xreg(8),
-    x9: @jit_ffi.c_jit_get_trap_xreg(9),
-    x10: @jit_ffi.c_jit_get_trap_xreg(10),
-    x11: @jit_ffi.c_jit_get_trap_xreg(11),
-    x15: @jit_ffi.c_jit_get_trap_xreg(15),
-  }
+  @wasmoon_jit.get_last_trap_details()
 }
 
 ///|
@@ -143,13 +77,13 @@ pub fn check_trap() -> Unit raise JITTrap {
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the
 /// MoonBit hostcall callback.
 pub fn get_hostcall_func_addr() -> Int {
-  @jit_ffi.c_jit_get_hostcall_func_idx()
+  @wasmoon_jit.get_hostcall_func_addr()
 }
 
 ///|
 /// Get the pointer to the hostcall scratch `values_vec` buffer.
 pub fn get_hostcall_values_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_hostcall_values_ptr()
+  @wasmoon_jit.get_hostcall_values_ptr()
 }
 
 ///|
@@ -157,7 +91,7 @@ pub fn get_hostcall_values_ptr() -> Int64 {
 ///
 /// Note: slots are 8 bytes each; V128 occupies 2 slots.
 pub fn get_hostcall_num_arg_slots() -> Int {
-  @jit_ffi.c_jit_get_hostcall_num_args()
+  @wasmoon_jit.get_hostcall_num_arg_slots()
 }
 
 ///|
@@ -165,33 +99,20 @@ pub fn get_hostcall_num_arg_slots() -> Int {
 ///
 /// Note: slots are 8 bytes each; V128 occupies 2 slots.
 pub fn get_hostcall_num_result_slots() -> Int {
-  @jit_ffi.c_jit_get_hostcall_num_results()
+  @wasmoon_jit.get_hostcall_num_result_slots()
 }
 
 // ============ Memory Info ============
 
 ///|
-/// Memory information for JIT execution
-pub struct MemoryInfo {
-  ptr : Int64 // Pointer to `wasmoon_memory_t` (memory descriptor)
-  size : Int64 // Initial size in bytes (informational)
-  max_pages : Int? // Max pages (None = unlimited)
-}
-
-///|
-/// Create a new MemoryInfo
-pub fn MemoryInfo::new(
-  ptr : Int64,
-  size : Int64,
-  max_pages : Int?,
-) -> MemoryInfo {
-  { ptr, size, max_pages }
-}
+pub type MemoryInfo = @wasmoon_jit.MemoryInfo
 
 // ============ JIT Context Wrapper ============
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
+/// TODO(ISS-022): move this context into `wasmoon_jit` after entry-trampoline
+/// generation no longer depends on legacy `wasmoon/vcode/emit`.
 /// Uses Standard on-demand loading from vmctx:
 /// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
 /// +24: func_table, +32: table0_base.
@@ -300,9 +221,9 @@ fn JITContext::set_table_pointers(
   for i, jit_table_opt in jit_tables {
     match jit_table_opt {
       Some(jit_table) => {
-        table_ptrs[i] = jit_table.table_ptr
-        table_sizes[i] = jit_table.size
-        table_max_sizes[i] = jit_table.max.unwrap_or(-1) // -1 = unlimited
+        table_ptrs[i] = jit_table.raw_ptr()
+        table_sizes[i] = jit_table.get_size()
+        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1)
       }
       None => {
         table_ptrs[i] = 0L // Null table pointer
@@ -599,16 +520,17 @@ fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
 }
 
 ///|
-/// Allocate linear memory for WASM (returns 0 on failure)
-/// NOTE: If you set the memory to a JITContext (via set_memory), the context
-/// takes ownership and its finalizer will free the memory. Do NOT call
-/// free_memory after that.
+pub type JITTable = @wasmoon_jit.JITTable
+
+///|
+pub type ExecCode = @wasmoon_jit.ExecCode
+
+///|
 pub fn alloc_memory(size : Int64) -> Int64 {
-  @jit_ffi.c_jit_alloc_memory(size)
+  @wasmoon_jit.alloc_memory(size)
 }
 
 ///|
-/// Allocate a `wasmoon_memory_t` descriptor with owned backing memory.
 pub fn alloc_memory_desc(
   size_bytes : Int64,
   max_pages : Int?,
@@ -616,529 +538,312 @@ pub fn alloc_memory_desc(
   page_size_log2? : Int = 16,
   is_shared? : Bool = false,
 ) -> Int64 {
-  @jit_ffi.c_jit_alloc_memory_desc(
+  @wasmoon_jit.alloc_memory_desc(
     size_bytes,
-    max_pages.unwrap_or(-1),
-    if is_memory64 {
-      1
-    } else {
-      0
-    },
-    page_size_log2,
-    if is_shared {
-      1
-    } else {
-      0
-    },
+    max_pages,
+    is_memory64~,
+    page_size_log2~,
+    is_shared~,
   )
 }
 
 ///|
-/// Allocate a guarded (reserved) memory descriptor for memory32 memory0.
-/// This is required for bounds-check elimination; out-of-bounds accesses trap via guard pages.
 pub fn alloc_guarded_memory_desc(
   initial_pages : Int,
   max_pages : Int?,
 ) -> Int64 {
-  @jit_ffi.c_jit_alloc_guarded_memory_desc(
-    initial_pages.to_int64(),
-    max_pages.unwrap_or(-1).to_int64(),
-  )
+  @wasmoon_jit.alloc_guarded_memory_desc(initial_pages, max_pages)
 }
 
 ///|
 pub fn free_memory(mem_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_free_memory(mem_ptr)
+  @wasmoon_jit.free_memory(mem_ptr)
 }
 
 ///|
 pub fn free_memory_desc(mem_desc_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_free_memory_desc(mem_desc_ptr)
+  @wasmoon_jit.free_memory_desc(mem_desc_ptr)
 }
 
 ///|
-/// Initialize memory with data at offset
 pub fn memory_init(mem_ptr : Int64, offset : Int64, data : Bytes) -> Bool {
-  let size = data.length()
-  if size == 0 {
-    return true
-  }
-  @jit_ffi.c_jit_memory_init_bytes(mem_ptr, offset, data, size) == 0
+  @wasmoon_jit.memory_init(mem_ptr, offset, data)
 }
 
 ///|
-/// Read `size` bytes from linear memory at offset
 pub fn memory_read(mem_ptr : Int64, offset : Int64, size : Int) -> Bytes {
-  if mem_ptr == 0L || size <= 0 {
-    return b""
-  }
-  let out = FixedArray::make(size, b'\x00')
-  let rc = @jit_ffi.c_jit_memory_read(mem_ptr, offset, out, size)
-  if rc != 0 {
-    return b""
-  }
-  let arr : Array[Byte] = Array::make(size, b'\x00')
-  for i in 0..<size {
-    arr[i] = out[i]
-  }
-  Bytes::from_array(arr)
-}
-
-// NOTE: No free() method needed - GC handles cleanup automatically!
-
-// ============ Shared JIT Indirect Table ============
-
-///|
-/// Shared indirect table that can be used by multiple JIT modules
-/// This enables cross-module table sharing and runtime modifications
-struct JITTable {
-  mut table_ptr : Int64 // Pointer to the shared C-side table
-  mut size : Int
-  max : Int?
-} derive(Debug)
-
-///|
-/// Create a new shared JIT table
-/// Note: size 0 is valid (empty table that can grow later)
-pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
-  if size < 0 {
-    return None
-  }
-  // For size 0, allocate with capacity 1 to avoid null pointer issues
-  // The actual size is tracked separately
-  let alloc_size = if size == 0 { 1 } else { size }
-  let table_ptr = @jit_ffi.c_jit_alloc_shared_indirect_table(alloc_size)
-  if table_ptr == 0L {
-    return None
-  }
-  Some({ table_ptr, size, max })
+  @wasmoon_jit.memory_read(mem_ptr, offset, size)
 }
 
 ///|
-/// Set an entry in the shared table
-/// table_idx: index in the table
-/// func_ptr: pointer to the function
-/// type_hash: type hash for type checking
-pub fn JITTable::set(
-  self : JITTable,
-  table_idx : Int,
-  func_ptr : Int64,
-  type_hash : Int,
-) -> Unit {
-  if table_idx < 0 || table_idx >= self.size {
-    return
-  }
-  @jit_ffi.c_jit_shared_table_set(
-    self.table_ptr,
-    table_idx,
-    func_ptr,
-    type_hash,
-  )
-}
-
-///|
-/// Read raw entry value bits from the shared table.
-pub fn JITTable::get_entry_value(self : JITTable, table_idx : Int) -> Int64 {
-  if table_idx < 0 || table_idx >= self.size {
-    return 0L
-  }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16).to_int64())
-}
-
-///|
-/// Read raw entry type index from the shared table.
-pub fn JITTable::get_entry_type(self : JITTable, table_idx : Int) -> Int {
-  if table_idx < 0 || table_idx >= self.size {
-    return -1
-  }
-  c_jit_read_i64(self.table_ptr + (table_idx * 16 + 8).to_int64()).to_int()
-}
-
-///|
-/// Get the table size
-pub fn JITTable::get_size(self : JITTable) -> Int {
-  self.size
-}
-
-///|
-/// Refresh table pointer and size from the active JIT context view.
-pub fn JITTable::refresh_layout(
-  self : JITTable,
-  table_ptr : Int64,
-  size : Int,
-) -> Unit {
-  if table_ptr == 0L || size < 0 {
-    return
-  }
-  self.table_ptr = table_ptr
-  self.size = size
-}
-
-///|
-/// Get the table max size
-pub fn JITTable::get_max(self : JITTable) -> Int? {
-  self.max
-}
-
-///|
-/// Get fd_write trampoline pointer
 pub fn get_fd_write_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_write_ptr()
+  @wasmoon_jit.get_fd_write_ptr()
 }
 
 ///|
-/// Get proc_exit trampoline pointer
 pub fn get_proc_exit_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_proc_exit_ptr()
+  @wasmoon_jit.get_proc_exit_ptr()
 }
 
 ///|
-/// Get fd_read trampoline pointer
 pub fn get_fd_read_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_read_ptr()
+  @wasmoon_jit.get_fd_read_ptr()
 }
 
 ///|
-/// Get args_sizes_get trampoline pointer
 pub fn get_args_sizes_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_args_sizes_get_ptr()
+  @wasmoon_jit.get_args_sizes_get_ptr()
 }
 
 ///|
-/// Get args_get trampoline pointer
 pub fn get_args_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_args_get_ptr()
+  @wasmoon_jit.get_args_get_ptr()
 }
 
 ///|
-/// Get environ_sizes_get trampoline pointer
 pub fn get_environ_sizes_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_environ_sizes_get_ptr()
+  @wasmoon_jit.get_environ_sizes_get_ptr()
 }
 
 ///|
-/// Get environ_get trampoline pointer
 pub fn get_environ_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_environ_get_ptr()
+  @wasmoon_jit.get_environ_get_ptr()
 }
 
 ///|
-/// Get clock_time_get trampoline pointer
 pub fn get_clock_time_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_clock_time_get_ptr()
+  @wasmoon_jit.get_clock_time_get_ptr()
 }
 
 ///|
-/// Get random_get trampoline pointer
 pub fn get_random_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_random_get_ptr()
+  @wasmoon_jit.get_random_get_ptr()
 }
 
 ///|
-/// Get fd_close trampoline pointer
 pub fn get_fd_close_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_close_ptr()
+  @wasmoon_jit.get_fd_close_ptr()
 }
 
 ///|
-/// Get fd_fdstat_get trampoline pointer
 pub fn get_fd_fdstat_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_fdstat_get_ptr()
+  @wasmoon_jit.get_fd_fdstat_get_ptr()
 }
 
 ///|
-/// Get fd_prestat_get trampoline pointer
 pub fn get_fd_prestat_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_prestat_get_ptr()
+  @wasmoon_jit.get_fd_prestat_get_ptr()
 }
 
 ///|
-/// Get fd_prestat_dir_name trampoline pointer
 pub fn get_fd_prestat_dir_name_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_prestat_dir_name_ptr()
+  @wasmoon_jit.get_fd_prestat_dir_name_ptr()
 }
 
 ///|
-/// Get fd_seek trampoline pointer
 pub fn get_fd_seek_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_seek_ptr()
+  @wasmoon_jit.get_fd_seek_ptr()
 }
 
 ///|
-/// Get fd_tell trampoline pointer
 pub fn get_fd_tell_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_tell_ptr()
+  @wasmoon_jit.get_fd_tell_ptr()
 }
 
 ///|
-/// Get fd_sync trampoline pointer
 pub fn get_fd_sync_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_sync_ptr()
+  @wasmoon_jit.get_fd_sync_ptr()
 }
 
 ///|
-/// Get fd_datasync trampoline pointer
 pub fn get_fd_datasync_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_datasync_ptr()
+  @wasmoon_jit.get_fd_datasync_ptr()
 }
 
 ///|
-/// Get fd_filestat_get trampoline pointer
 pub fn get_fd_filestat_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_filestat_get_ptr()
+  @wasmoon_jit.get_fd_filestat_get_ptr()
 }
 
 ///|
-/// Get fd_filestat_set_size trampoline pointer
 pub fn get_fd_filestat_set_size_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_filestat_set_size_ptr()
+  @wasmoon_jit.get_fd_filestat_set_size_ptr()
 }
 
 ///|
-/// Get path_open trampoline pointer
 pub fn get_path_open_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_open_ptr()
+  @wasmoon_jit.get_path_open_ptr()
 }
 
 ///|
-/// Get path_create_directory trampoline pointer
 pub fn get_path_create_directory_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_create_directory_ptr()
+  @wasmoon_jit.get_path_create_directory_ptr()
 }
 
 ///|
-/// Get path_unlink_file trampoline pointer
 pub fn get_path_unlink_file_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_unlink_file_ptr()
+  @wasmoon_jit.get_path_unlink_file_ptr()
 }
 
 ///|
-/// Get path_remove_directory trampoline pointer
 pub fn get_path_remove_directory_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_remove_directory_ptr()
+  @wasmoon_jit.get_path_remove_directory_ptr()
 }
 
 ///|
-/// Get path_rename trampoline pointer
 pub fn get_path_rename_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_rename_ptr()
+  @wasmoon_jit.get_path_rename_ptr()
 }
 
 ///|
-/// Get clock_res_get trampoline pointer
 pub fn get_clock_res_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_clock_res_get_ptr()
+  @wasmoon_jit.get_clock_res_get_ptr()
 }
 
 ///|
-/// Get sched_yield trampoline pointer
 pub fn get_sched_yield_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_sched_yield_ptr()
+  @wasmoon_jit.get_sched_yield_ptr()
 }
 
 ///|
-/// Get proc_raise trampoline pointer
 pub fn get_proc_raise_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_proc_raise_ptr()
+  @wasmoon_jit.get_proc_raise_ptr()
 }
 
 ///|
-/// Get poll_oneoff trampoline pointer
 pub fn get_poll_oneoff_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_poll_oneoff_ptr()
+  @wasmoon_jit.get_poll_oneoff_ptr()
 }
 
 ///|
-/// Get fd_advise trampoline pointer (stub)
 pub fn get_fd_advise_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_advise_ptr()
+  @wasmoon_jit.get_fd_advise_ptr()
 }
 
 ///|
-/// Get fd_allocate trampoline pointer (stub)
 pub fn get_fd_allocate_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_allocate_ptr()
+  @wasmoon_jit.get_fd_allocate_ptr()
 }
 
 ///|
-/// Get fd_pread trampoline pointer (stub)
 pub fn get_fd_pread_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_pread_ptr()
+  @wasmoon_jit.get_fd_pread_ptr()
 }
 
 ///|
-/// Get fd_pwrite trampoline pointer (stub)
 pub fn get_fd_pwrite_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_pwrite_ptr()
+  @wasmoon_jit.get_fd_pwrite_ptr()
 }
 
 ///|
-/// Get fd_readdir trampoline pointer (stub)
 pub fn get_fd_readdir_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_readdir_ptr()
+  @wasmoon_jit.get_fd_readdir_ptr()
 }
 
 ///|
-/// Get fd_renumber trampoline pointer (stub)
 pub fn get_fd_renumber_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_renumber_ptr()
+  @wasmoon_jit.get_fd_renumber_ptr()
 }
 
 ///|
-/// Get fd_fdstat_set_flags trampoline pointer (stub)
 pub fn get_fd_fdstat_set_flags_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_fdstat_set_flags_ptr()
+  @wasmoon_jit.get_fd_fdstat_set_flags_ptr()
 }
 
 ///|
-/// Get fd_fdstat_set_rights trampoline pointer (stub)
 pub fn get_fd_fdstat_set_rights_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_fdstat_set_rights_ptr()
+  @wasmoon_jit.get_fd_fdstat_set_rights_ptr()
 }
 
 ///|
-/// Get fd_filestat_set_times trampoline pointer (stub)
 pub fn get_fd_filestat_set_times_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_fd_filestat_set_times_ptr()
+  @wasmoon_jit.get_fd_filestat_set_times_ptr()
 }
 
 ///|
-/// Get path_filestat_get trampoline pointer (stub)
 pub fn get_path_filestat_get_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_filestat_get_ptr()
+  @wasmoon_jit.get_path_filestat_get_ptr()
 }
 
 ///|
-/// Get path_filestat_set_times trampoline pointer (stub)
 pub fn get_path_filestat_set_times_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_filestat_set_times_ptr()
+  @wasmoon_jit.get_path_filestat_set_times_ptr()
 }
 
 ///|
-/// Get path_link trampoline pointer (stub)
 pub fn get_path_link_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_link_ptr()
+  @wasmoon_jit.get_path_link_ptr()
 }
 
 ///|
-/// Get path_readlink trampoline pointer (stub)
 pub fn get_path_readlink_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_readlink_ptr()
+  @wasmoon_jit.get_path_readlink_ptr()
 }
 
 ///|
-/// Get path_symlink trampoline pointer (stub)
 pub fn get_path_symlink_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_path_symlink_ptr()
+  @wasmoon_jit.get_path_symlink_ptr()
 }
 
 ///|
-/// Get sock_accept trampoline pointer (stub - returns ENOTSUP)
 pub fn get_sock_accept_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_sock_accept_ptr()
+  @wasmoon_jit.get_sock_accept_ptr()
 }
 
 ///|
-/// Get sock_recv trampoline pointer (stub - returns ENOTSUP)
 pub fn get_sock_recv_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_sock_recv_ptr()
+  @wasmoon_jit.get_sock_recv_ptr()
 }
 
 ///|
-/// Get sock_send trampoline pointer (stub - returns ENOTSUP)
 pub fn get_sock_send_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_sock_send_ptr()
+  @wasmoon_jit.get_sock_send_ptr()
 }
 
 ///|
-/// Get sock_shutdown trampoline pointer (stub - returns ENOTSUP)
 pub fn get_sock_shutdown_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_sock_shutdown_ptr()
+  @wasmoon_jit.get_sock_shutdown_ptr()
 }
 
 ///|
-/// Get spectest print trampoline pointer
 pub fn get_spectest_print_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_ptr()
+  @wasmoon_jit.get_spectest_print_ptr()
 }
 
 ///|
-/// Get spectest print_i32 trampoline pointer
 pub fn get_spectest_print_i32_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_i32_ptr()
+  @wasmoon_jit.get_spectest_print_i32_ptr()
 }
 
 ///|
-/// Get spectest print_i64 trampoline pointer
 pub fn get_spectest_print_i64_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_i64_ptr()
+  @wasmoon_jit.get_spectest_print_i64_ptr()
 }
 
 ///|
-/// Get spectest print_f32 trampoline pointer
 pub fn get_spectest_print_f32_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_f32_ptr()
+  @wasmoon_jit.get_spectest_print_f32_ptr()
 }
 
 ///|
-/// Get spectest print_f64 trampoline pointer
 pub fn get_spectest_print_f64_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_f64_ptr()
+  @wasmoon_jit.get_spectest_print_f64_ptr()
 }
 
 ///|
-/// Get spectest print_i32_f32 trampoline pointer
 pub fn get_spectest_print_i32_f32_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_i32_f32_ptr()
+  @wasmoon_jit.get_spectest_print_i32_f32_ptr()
 }
 
 ///|
-/// Get spectest print_f64_f64 trampoline pointer
 pub fn get_spectest_print_f64_f64_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_f64_f64_ptr()
+  @wasmoon_jit.get_spectest_print_f64_f64_ptr()
 }
 
 ///|
-/// Get spectest print_char trampoline pointer
 pub fn get_spectest_print_char_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_spectest_print_char_ptr()
+  @wasmoon_jit.get_spectest_print_char_ptr()
 }
-
-// ============ Executable Code Block ============
-
-///|
-/// GC-managed executable code block wrapper
-/// Memory is automatically freed when the object is garbage collected
-pub struct ExecCode(@jit_ffi.ExecCode)
-
-///|
-/// Allocate and copy code to executable memory (GC-managed)
-pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
-  let size = code.length()
-  if size == 0 {
-    return None
-  }
-  // Copy code bytes
-  let bytes = FixedArray::make(size, b'\x00')
-  for i, b in code {
-    bytes[i] = b.to_byte()
-  }
-  let ec = @jit_ffi.c_jit_alloc_exec_managed(bytes, size)
-  // Check if allocation succeeded by verifying the pointer is valid
-  if @jit_ffi.c_jit_exec_code_ptr(ec) != 0L {
-    Some(ExecCode(ec))
-  } else {
-    None
-  }
-}
-
-///|
-/// Get the function pointer from this executable code
-pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
-  @jit_ffi.c_jit_exec_code_ptr(self.0)
-}
-
-// NOTE: No free() method needed - GC handles cleanup automatically!
 
 // ============ Multi-value Return Support ============
 

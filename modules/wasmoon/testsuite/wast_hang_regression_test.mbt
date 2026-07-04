@@ -35,7 +35,7 @@ fn init_jit_globals(
     return 0L
   }
   let size = (num_globals * 16).to_int64()
-  let globals_ptr = @jit.alloc_memory(size)
+  let globals_ptr = @wasmoon_jit.alloc_memory(size)
   if globals_ptr == 0L {
     return 0L
   }
@@ -70,13 +70,13 @@ fn init_jit_globals(
         let offset = globals_ptr + (i * 16).to_int64()
         let low = bytes_to_int64_le(bytes, 0)
         let high = bytes_to_int64_le(bytes, 8)
-        @jit.c_jit_write_i64(offset, low)
-        @jit.c_jit_write_i64(offset + 8L, high)
+        @wasmoon_jit.c_jit_write_i64(offset, low)
+        @wasmoon_jit.c_jit_write_i64(offset + 8L, high)
         continue
       }
     }
     let offset = globals_ptr + (i * 16).to_int64()
-    @jit.c_jit_write_i64(offset, raw_value)
+    @wasmoon_jit.c_jit_write_i64(offset, raw_value)
   }
   globals_ptr
 }

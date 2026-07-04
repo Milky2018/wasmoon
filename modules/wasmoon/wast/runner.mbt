@@ -864,13 +864,13 @@ pub fn invoke_action(
                   }
                   if gc_funcref_entries.length() > 0 {
                     let table_size = (gc_funcref_entries.length() * 8).to_int64()
-                    let table_ptr = @jit.alloc_memory(table_size)
+                    let table_ptr = @wasmoon_jit.alloc_memory(table_size)
                     if table_ptr != 0L {
                       temp_gc_func_table_ptr = table_ptr
                       gc_func_type_indices.clear()
                       for i, entry in gc_funcref_entries {
                         let (func_ptr, type_idx) = entry
-                        @jit.c_jit_write_i64(
+                        @wasmoon_jit.c_jit_write_i64(
                           table_ptr + (i * 8).to_int64(),
                           func_ptr,
                         )
@@ -891,7 +891,7 @@ pub fn invoke_action(
                   ) catch {
                     err => {
                       if temp_gc_func_table_ptr != 0L {
-                        @jit.free_memory(temp_gc_func_table_ptr)
+                        @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                         temp_gc_func_table_ptr = 0L
                       }
                       raise RuntimeError("JIT GC setup failed: \{err}")
@@ -916,7 +916,7 @@ pub fn invoke_action(
                   // Tear down GC context on exit
                   @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
-                    @jit.free_memory(temp_gc_func_table_ptr)
+                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on exit
@@ -928,7 +928,7 @@ pub fn invoke_action(
                   // Tear down GC context on trap
                   @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
-                    @jit.free_memory(temp_gc_func_table_ptr)
+                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
                   }
                   // Sync globals even on trap (in case globals were modified before trap)
@@ -940,7 +940,7 @@ pub fn invoke_action(
               // Tear down GC context after JIT call
               @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
               if temp_gc_func_table_ptr != 0L {
-                @jit.free_memory(temp_gc_func_table_ptr)
+                @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
               }
               // Sync JIT globals back to store after successful call
               sync_jit_globals_to_store(jit, ctx.store)

@@ -43,7 +43,7 @@ pub struct Store {
   instances : Array[ModuleInstance]
   // JIT tables corresponding to runtime tables (for cross-module sharing)
   // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
-  jit_tables : Array[@jit.JITTable?]
+  jit_tables : Array[@wasmoon_jit.JITTable?]
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
   mut wasi_mem_addr : Int?
@@ -279,7 +279,7 @@ pub fn Store::alloc_table(
   // Create corresponding JIT table (always enabled for cross-module sharing)
   if use_jit {
     let (min, max) = table.get_limits()
-    let jit_table = @jit.JITTable::new(min, max)
+    let jit_table = @wasmoon_jit.JITTable::new(min, max)
     self.jit_tables.push(jit_table)
   } else {
     self.jit_tables.push(None)
@@ -700,7 +700,7 @@ pub fn Store::get_table(self : Store, idx : Int) -> Table raise RuntimeError {
 
 ///|
 /// Get the JIT table corresponding to a runtime table (if exists)
-pub fn Store::get_jit_table(self : Store, idx : Int) -> @jit.JITTable? {
+pub fn Store::get_jit_table(self : Store, idx : Int) -> @wasmoon_jit.JITTable? {
   if idx < 0 || idx >= self.jit_tables.length() {
     return None
   }

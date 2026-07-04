@@ -220,7 +220,7 @@ pub fn sync_jit_globals_to_store(
     if global_inst.get_type().mutable {
       // Read raw value from JIT memory (16 bytes per global: 8 value + 8 tag)
       let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
-      let raw_value = @jit.c_jit_read_i64(offset)
+      let raw_value = @wasmoon_jit.c_jit_read_i64(offset)
       // Convert based on global's type
       // Note: For FuncRef, JIT stores module function index, we need to convert
       // it back to store address for the interpreter
@@ -314,7 +314,7 @@ pub fn sync_jit_globals_to_store(
         RefNone => Null
         V128 => {
           // Read both 64-bit halves and construct V128
-          let high_value = @jit.c_jit_read_i64(offset + 8L)
+          let high_value = @wasmoon_jit.c_jit_read_i64(offset + 8L)
           V128(int64_pair_to_v128_le(raw_value, high_value))
         }
       }
@@ -621,7 +621,7 @@ pub fn init_elem_segments(
   }
 
   // Get shared JIT tables from Store (one per runtime table)
-  let jit_tables : Array[@jit.JITTable?] = []
+  let jit_tables : Array[@wasmoon_jit.JITTable?] = []
   for table_addr in instance.table_addrs {
     let jit_table = store.get_jit_table(table_addr)
     jit_tables.push(jit_table)
@@ -873,7 +873,7 @@ pub fn count_func_imports(imports : Array[@types.Import]) -> Int {
 /// - externref = EXTERNREF_TAG | (host_idx << 1) (bit 62 set)
 pub fn sync_table_to_jit(
   table : @runtime.Table,
-  jit_table : @jit.JITTable,
+  jit_table : @wasmoon_jit.JITTable,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
@@ -956,12 +956,12 @@ fn sum_slot_count(types : Array[@types.ValueType]) -> Int {
 
 ///|
 fn read_slot_i64(values_ptr : Int64, slot_idx : Int) -> Int64 {
-  @jit.c_jit_read_i64(values_ptr + (slot_idx * 8).to_int64())
+  @wasmoon_jit.c_jit_read_i64(values_ptr + (slot_idx * 8).to_int64())
 }
 
 ///|
 fn write_slot_i64(values_ptr : Int64, slot_idx : Int, value : Int64) -> Unit {
-  @jit.c_jit_write_i64(values_ptr + (slot_idx * 8).to_int64(), value)
+  @wasmoon_jit.c_jit_write_i64(values_ptr + (slot_idx * 8).to_int64(), value)
 }
 
 ///|
@@ -1406,10 +1406,10 @@ pub fn install_jit_hostcall_dispatcher(
   }
 
   jit_module.set_hostcall_callback(fn() {
-    let func_addr = @jit.get_hostcall_func_addr()
-    let values_ptr = @jit.get_hostcall_values_ptr()
-    let arg_slots = @jit.get_hostcall_num_arg_slots()
-    let res_slots = @jit.get_hostcall_num_result_slots()
+    let func_addr = @wasmoon_jit.get_hostcall_func_addr()
+    let values_ptr = @wasmoon_jit.get_hostcall_values_ptr()
+    let arg_slots = @wasmoon_jit.get_hostcall_num_arg_slots()
+    let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
     let ft = match store.get_func_type_opt(func_addr) {
       Some(t) => t
       None => return 3
