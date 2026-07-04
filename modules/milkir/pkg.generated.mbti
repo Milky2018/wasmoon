@@ -1,11 +1,119 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/milkir"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 
 // Errors
+pub suberror VerifyError {
+  MissingTerminator(block_id~ : Int)
+  EmptyFunction
+} derive(Eq, @debug.Debug)
+pub impl Show for VerifyError
 
 // Types and methods
+pub(all) struct Block {
+  id : Int
+  params : Array[Value]
+  instructions : Array[Inst]
+  mut terminator : Terminator?
+} derive(@debug.Debug)
+pub fn Block::append_inst(Self, Inst) -> Unit
+pub fn Block::new(Int, Array[Value]) -> Self
+pub fn Block::set_terminator(Self, Terminator) -> Unit
+
+pub(all) struct ExternalSymbol {
+  name : String
+} derive(Eq, @debug.Debug)
+pub fn ExternalSymbol::new(String) -> Self
+
+pub(all) struct Function {
+  name : String
+  signature : Signature
+  blocks : Array[Block]
+  stack_slots : Array[StackSlot]
+  external_symbols : Array[ExternalSymbol]
+  mut next_value_id : Int
+  mut next_inst_id : Int
+  mut next_block_id : Int
+  mut next_stack_slot_id : Int
+} derive(@debug.Debug)
+pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
+pub fn Function::new(String, Signature) -> Self
+pub fn Function::new_block(Self, Array[Value]) -> Block
+pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
+pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
+pub fn Function::new_value(Self, Type) -> Value
+pub fn Function::verify(Self) -> Unit raise VerifyError
+
+pub(all) struct Inst {
+  id : Int
+  opcode : Opcode
+  args : Array[Value]
+  results : Array[Value]
+  metadata : Array[Metadata]
+} derive(Eq, @debug.Debug)
+pub fn Inst::add_metadata(Self, Metadata) -> Unit
+pub fn Inst::new(Int, Opcode, Array[Value], Array[Value]) -> Self
+
+pub(all) enum Metadata {
+  SourceLoc(String)
+  Comment(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Opcode {
+  Iadd
+  Isub
+  Imul
+  IcmpEq
+  Fadd
+  Fsub
+  Fmul
+  Select
+  Load
+  Store
+  StackAddr(StackSlot)
+  Call(ExternalSymbol)
+  CallIndirect(Signature)
+  Trap(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Signature {
+  params : Array[Type]
+  results : Array[Type]
+} derive(Eq, @debug.Debug)
+pub fn Signature::new(Array[Type], Array[Type]) -> Self
+
+pub(all) struct StackSlot {
+  id : Int
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Terminator {
+  Return(Array[Value])
+  Jump(Int, Array[Value])
+  Branch(Value, Int, Array[Value], Int, Array[Value])
+  TrapExit(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Type {
+  I32
+  I64
+  F32
+  F64
+  V128
+  Ptr
+  Ref
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Value {
+  id : Int
+  ty : Type
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

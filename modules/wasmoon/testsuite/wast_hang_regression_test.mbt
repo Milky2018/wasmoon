@@ -247,15 +247,30 @@ fn find_base_dir(path : String) -> String {
 }
 
 ///|
+fn resolve_repo_fixture_path(path : String) -> String {
+  if @fs.path_exists(path) {
+    path
+  } else {
+    let from_module_root = "../../" + path
+    if @fs.path_exists(from_module_root) {
+      from_module_root
+    } else {
+      path
+    }
+  }
+}
+
+///|
 fn run_wast_with_jit(path : String) -> @wast.WastResult {
-  let content = @fs.read_file_to_string(path) catch {
-    e => abort("failed to read \{path}: \{e}")
+  let resolved_path = resolve_repo_fixture_path(path)
+  let content = @fs.read_file_to_string(resolved_path) catch {
+    e => abort("failed to read \{resolved_path}: \{e}")
   }
   let script = @wast.parse(content) catch {
-    e => abort("failed to parse \{path}: \{e}")
+    e => abort("failed to parse \{resolved_path}: \{e}")
   }
   let jit_compiler = Some(@wast.JITCompiler::new(try_compile_jit))
-  let base_dir = find_base_dir(path)
+  let base_dir = find_base_dir(resolved_path)
   @wast.run_wast_commands(script, base_dir, true, false, jit_compiler~)
 }
 
