@@ -470,23 +470,6 @@ pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
 }
 
 ///|
-/// Get trampoline function pointer for an import
-/// Returns None if the import is not supported by JIT
-pub fn get_import_trampoline(
-  module_name : String,
-  field_name : String,
-) -> Int64? {
-  @wasmoon_jit.get_import_trampoline(module_name, field_name)
-}
-
-///|
-/// Check if a module is known to JIT (has trampoline support)
-/// JIT can handle imports from these modules without interpreter state sharing
-pub fn is_jit_supported_module(module_name : String) -> Bool {
-  @wasmoon_jit.is_jit_supported_module(module_name)
-}
-
-///|
 /// Get a function by index
 pub fn JITModule::get_func(self : JITModule, func_idx : Int) -> JITFunction? {
   self.functions.get(func_idx)
@@ -514,7 +497,7 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
       let func_table_ptr = self.get_func_table_ptr()
       let func_count = self.get_func_count()
       if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
-        c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
+        @wasmoon_jit.c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
       } else {
         0L
       }
@@ -678,7 +661,7 @@ fn JITModule::build_trap_report(
   self : JITModule,
   msg : String,
 ) -> @wasmoon_jit.TrapReport {
-  let details = get_last_trap_details()
+  let details = @wasmoon_jit.get_last_trap_details()
   let mut wasm_func_idx : Int? = None
   let mut wasm_func_name : String? = None
   let mut wasm_offset : Int64? = None

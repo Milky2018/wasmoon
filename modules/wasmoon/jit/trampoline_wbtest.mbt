@@ -6,18 +6,18 @@ test "trampoline pointers are valid" {
     return
   }
   // All 12 WASI trampolines should return non-zero function pointers
-  assert_true(get_fd_write_ptr() != 0L)
-  assert_true(get_fd_read_ptr() != 0L)
-  assert_true(get_fd_close_ptr() != 0L)
-  assert_true(get_fd_fdstat_get_ptr() != 0L)
-  assert_true(get_fd_prestat_get_ptr() != 0L)
-  assert_true(get_proc_exit_ptr() != 0L)
-  assert_true(get_args_sizes_get_ptr() != 0L)
-  assert_true(get_args_get_ptr() != 0L)
-  assert_true(get_environ_sizes_get_ptr() != 0L)
-  assert_true(get_environ_get_ptr() != 0L)
-  assert_true(get_clock_time_get_ptr() != 0L)
-  assert_true(get_random_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_fd_write_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_fd_read_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_fd_close_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_fd_fdstat_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_fd_prestat_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_proc_exit_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_args_sizes_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_args_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_environ_sizes_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_environ_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_clock_time_get_ptr() != 0L)
+  assert_true(@wasmoon_jit.get_random_get_ptr() != 0L)
 }
 
 ///|
@@ -32,7 +32,8 @@ test "get_import_trampoline: supported functions" {
   ]
   for name in supported {
     assert_true(
-      get_import_trampoline("wasi_snapshot_preview1", name) is Some(_),
+      @wasmoon_jit.get_import_trampoline("wasi_snapshot_preview1", name)
+      is Some(_),
     )
   }
 }
@@ -44,7 +45,9 @@ test "get_import_trampoline: unsupported modules" {
   }
   // All WASI functions are now supported (some as stubs returning ENOSYS)
   // Only unknown modules should return None
-  assert_true(get_import_trampoline("unknown_module", "unknown_func") is None)
+  assert_true(
+    @wasmoon_jit.get_import_trampoline("unknown_module", "unknown_func") is None,
+  )
 }
 
 ///|
@@ -57,10 +60,12 @@ test "get_import_trampoline: spectest module" {
     "print_f64_f64", "print_char",
   ]
   for name in supported {
-    assert_true(get_import_trampoline("spectest", name) is Some(_))
+    assert_true(@wasmoon_jit.get_import_trampoline("spectest", name) is Some(_))
   }
   // Unsupported spectest functions
-  assert_true(get_import_trampoline("spectest", "unknown_func") is None)
+  assert_true(
+    @wasmoon_jit.get_import_trampoline("spectest", "unknown_func") is None,
+  )
 }
 
 ///|
@@ -68,8 +73,10 @@ test "get_import_trampoline: unknown module" {
   if @isa.ISA::current() is AMD64 {
     return
   }
-  assert_true(get_import_trampoline("env", "memory") is None)
-  assert_true(get_import_trampoline("unknown_module", "some_func") is None)
+  assert_true(@wasmoon_jit.get_import_trampoline("env", "memory") is None)
+  assert_true(
+    @wasmoon_jit.get_import_trampoline("unknown_module", "some_func") is None,
+  )
 }
 
 ///|
@@ -90,9 +97,9 @@ test "memory allocation" {
   if @isa.ISA::current() is AMD64 {
     return
   }
-  let mem = alloc_memory(65536L)
+  let mem = @wasmoon_jit.alloc_memory(65536L)
   assert_true(mem != 0L)
-  free_memory(mem)
+  @wasmoon_jit.free_memory(mem)
 }
 
 // ============ Entry Trampoline Tests ============
