@@ -366,90 +366,12 @@ pub struct LivenessResult {
 /// Returns a FixedArray where order[block_idx] = position in reverse postorder
 fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
   let n = func.blocks.length()
-  let visited : Array[Bool] = Array::make(n, false)
-  let postorder : Array[Int] = []
-  let block_id_to_index = build_block_id_to_index_dense(func)
-
-  // DFS to compute postorder
-  fn dfs(
-    func : VCodeFunction,
-    block_id_to_index : Array[Int],
-    block_idx : Int,
-    visited : Array[Bool],
-    postorder : Array[Int],
-  ) {
-    if block_idx < 0 || block_idx >= func.blocks.length() || visited[block_idx] {
-      return
-    }
-    visited[block_idx] = true
-
-    // Visit successors first
-    let block = func.blocks[block_idx]
-    if block.terminator is Some(term) {
-      fn visit_succ(
-        func : VCodeFunction,
-        block_id_to_index : Array[Int],
-        succ_id : Int,
-        visited : Array[Bool],
-        postorder : Array[Int],
-      ) -> Unit {
-        if succ_id >= 0 && succ_id < block_id_to_index.length() {
-          let succ_idx = block_id_to_index[succ_id]
-          if succ_idx >= 0 {
-            dfs(func, block_id_to_index, succ_idx, visited, postorder)
-          }
-        }
-      }
-      match term {
-        Jump(target, _) =>
-          visit_succ(func, block_id_to_index, target, visited, postorder)
-        Branch(_, then_b, else_b) => {
-          visit_succ(func, block_id_to_index, then_b, visited, postorder)
-          visit_succ(func, block_id_to_index, else_b, visited, postorder)
-        }
-        BranchCmp(_, _, _, _, then_b, else_b) => {
-          visit_succ(func, block_id_to_index, then_b, visited, postorder)
-          visit_succ(func, block_id_to_index, else_b, visited, postorder)
-        }
-        BranchCmpImm(_, _, _, _, then_b, else_b) => {
-          visit_succ(func, block_id_to_index, then_b, visited, postorder)
-          visit_succ(func, block_id_to_index, else_b, visited, postorder)
-        }
-        BranchZero(_, _, _, then_b, else_b) => {
-          visit_succ(func, block_id_to_index, then_b, visited, postorder)
-          visit_succ(func, block_id_to_index, else_b, visited, postorder)
-        }
-        BrTable(_, targets, default) => {
-          for target in targets {
-            visit_succ(func, block_id_to_index, target, visited, postorder)
-          }
-          visit_succ(func, block_id_to_index, default, visited, postorder)
-        }
-        Return(_) | Trap(_) => ()
-      }
-    }
-
-    // Add to postorder after visiting all successors
-    postorder.push(block_idx)
-  }
-
-  // Start DFS from entry block index 0.
-  if n > 0 {
-    dfs(func, block_id_to_index, 0, visited, postorder)
-  }
-
-  // Also visit any unreachable blocks.
-  for block_idx in 0..<n {
-    if !visited[block_idx] {
-      dfs(func, block_id_to_index, block_idx, visited, postorder)
-    }
-  }
-
-  // Reverse postorder: order[block_idx] = position in reverse postorder.
+  let order_array = @core_regalloc.compute_reverse_postorder_from_successors(
+    build_cfg_edges(func).succs,
+  )
   let order : FixedArray[Int] = FixedArray::make(n, 0)
-  let len = postorder.length()
-  for i, block_idx in postorder {
-    order[block_idx] = len - 1 - i
+  for i, rank in order_array {
+    order[i] = rank
   }
   order
 }

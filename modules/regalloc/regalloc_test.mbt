@@ -138,6 +138,18 @@ test "linear scan keeps successor-live values from reusing a register" {
 }
 
 ///|
+test "compute reverse postorder from dense successors" {
+  debug_inspect(
+    compute_reverse_postorder_from_successors([[1, 2], [3], [3], []]),
+    content="[0, 2, 1, 3]",
+  )
+  debug_inspect(
+    compute_reverse_postorder_from_successors([[1], [], [], []]),
+    content="[2, 3, 1, 0]",
+  )
+}
+
+///|
 test "linear scan evicts longer active interval for shorter current interval" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }

@@ -24,6 +24,8 @@ pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
 
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
 
+pub fn compute_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
+
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
 pub fn eviction_cutoff(Int?, Int?) -> Int?
