@@ -596,18 +596,6 @@ fn scratch_regs_for_class(
 }
 
 ///|
-fn machv_class_for_move(class : @regalloc.RegClass) -> @machv.RegClass {
-  match class {
-    Int => Int
-    Float =>
-      // TODO(machv_regalloc): preserve Float32 vs Float64 lane width through
-      // the pure regalloc move resolver instead of defaulting edge copies to F64.
-      Float64
-    Vector => Vector
-  }
-}
-
-///|
 fn append_location_move(
   func : @machv.Function,
   spill_slots : Array[@machv.StackSlot],
@@ -652,6 +640,28 @@ fn append_location_move(
 }
 
 ///|
+fn resolve_edge_moves(
+  func : @machv.Function,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  class : @machv.RegClass,
+  moves : Array[@regalloc.ParallelMove],
+  out : Array[@machv.Instruction],
+) -> Unit {
+  if moves.length() == 0 {
+    return
+  }
+  let scratch_int = scratch_regs_for_class(physical_regs, Int)
+  let scratch_float = scratch_regs_for_class(physical_regs, Float)
+  let resolved = @regalloc.resolve_parallel_moves(
+    moves, scratch_int, scratch_float,
+  )
+  for mv in resolved {
+    append_location_move(func, spill_slots, class, mv.from, mv.to, out)
+  }
+}
+
+///|
 fn edge_transfer_insts(
   func : @machv.Function,
   allocation : @regalloc.Allocation,
@@ -666,33 +676,39 @@ fn edge_transfer_insts(
   }
   guard find_block(func, target_id) is Some(target) else { return out }
   guard target.params.length() == args.length() else { return out }
-  let moves : Array[@regalloc.ParallelMove] = []
+  let int_moves : Array[@regalloc.ParallelMove] = []
+  let f32_moves : Array[@regalloc.ParallelMove] = []
+  let f64_moves : Array[@regalloc.ParallelMove] = []
+  let vector_moves : Array[@regalloc.ParallelMove] = []
   for i in 0..<args.length() {
     let param = target.params[i]
     guard source_location(args[i], allocation) is Some(from) else { continue }
     guard allocation.location_of(vreg_to_regalloc(param)) is Some(to) else {
       continue
     }
-    moves.push({ from, to, class: class_to_regalloc(param.class) })
+    let edge_move : @regalloc.ParallelMove = {
+      from,
+      to,
+      class: class_to_regalloc(param.class),
+    }
+    match param.class {
+      Int => int_moves.push(edge_move)
+      Float32 => f32_moves.push(edge_move)
+      Float64 => f64_moves.push(edge_move)
+      Vector => vector_moves.push(edge_move)
+    }
   }
-  if moves.length() == 0 {
-    return out
-  }
-  let scratch_int = scratch_regs_for_class(physical_regs, Int)
-  let scratch_float = scratch_regs_for_class(physical_regs, Float)
-  let resolved = @regalloc.resolve_parallel_moves(
-    moves, scratch_int, scratch_float,
+  resolve_edge_moves(func, spill_slots, physical_regs, Int, int_moves, out)
+  resolve_edge_moves(func, spill_slots, physical_regs, Float32, f32_moves, out)
+  resolve_edge_moves(func, spill_slots, physical_regs, Float64, f64_moves, out)
+  resolve_edge_moves(
+    func,
+    spill_slots,
+    physical_regs,
+    Vector,
+    vector_moves,
+    out,
   )
-  for mv in resolved {
-    append_location_move(
-      func,
-      spill_slots,
-      machv_class_for_move(mv.class),
-      mv.from,
-      mv.to,
-      out,
-    )
-  }
   out
 }
 
