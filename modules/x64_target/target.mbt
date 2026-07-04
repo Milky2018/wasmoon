@@ -250,6 +250,70 @@ fn add_call_abi_constraints(
 }
 
 ///|
+fn add_callptr_abi_constraints(
+  inst : @machv.Instruction,
+  args : Array[@milkir.Value],
+  results : Array[@milkir.Value],
+) -> Unit {
+  guard args.length() >= 2 else { return }
+  add_fixed_constraint(inst, 0, int_reg(int_reg_index(Scratch2)))
+  add_fixed_constraint(inst, 1, wasm_vmctx_arg_preg())
+  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_fprs = wasm_arg_fprs()
+  let mut int_arg_idx = 0
+  let mut float_arg_idx = 0
+  for arg_index in 2..<args.length() {
+    let arg = args[arg_index]
+    match class_for_type(arg.ty) {
+      Int =>
+        if int_arg_idx < user_arg_gprs.length() {
+          add_fixed_constraint(inst, arg_index, user_arg_gprs[int_arg_idx])
+          int_arg_idx = int_arg_idx + 1
+        }
+      Float32 | Float64 | Vector =>
+        if float_arg_idx < user_arg_fprs.length() {
+          let class = class_for_type(arg.ty)
+          add_fixed_constraint(
+            inst,
+            arg_index,
+            preg_with_class(user_arg_fprs[float_arg_idx], class),
+          )
+          float_arg_idx = float_arg_idx + 1
+        }
+    }
+  }
+  let ret_gprs = wasm_ret_gprs()
+  let ret_fprs = wasm_ret_fprs()
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for result_index, result in results {
+    let operand_index = args.length() + result_index
+    match class_for_type(result.ty) {
+      Int =>
+        if int_result_idx < ret_gprs.length() {
+          add_fixed_constraint(inst, operand_index, ret_gprs[int_result_idx])
+          int_result_idx = int_result_idx + 1
+        }
+      Float32 | Float64 | Vector =>
+        if float_result_idx < ret_fprs.length() {
+          let class = class_for_type(result.ty)
+          add_fixed_constraint(
+            inst,
+            operand_index,
+            preg_with_class(ret_fprs[float_result_idx], class),
+          )
+          float_result_idx = float_result_idx + 1
+        }
+    }
+  }
+  // TODO(x64_target): model overflow stack arguments and split this Wasm
+  // VMContext convention from generic indirect-call lowering.
+  for preg in abi_policy().caller_saved_regs {
+    inst.add_clobber(preg)
+  }
+}
+
+///|
 fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
   match cc {
     Eq => Eq
@@ -1034,9 +1098,11 @@ fn lower_inst(
       add_defs(lowered, inst.results)
       if inst.opcode is Call(_) {
         add_call_abi_constraints(lowered, inst.args, inst.results)
-      } else if inst.opcode is CallPtr(_, _) || inst.opcode is CallIndirect(_) {
-        // TODO(x64_target): split generic indirect-call ABI from Wasmoon-specific
-        // callee VMContext and function-pointer placement.
+      } else if inst.opcode is CallPtr(_, _) {
+        add_callptr_abi_constraints(lowered, inst.args, inst.results)
+      } else if inst.opcode is CallIndirect(_) {
+        // TODO(x64_target): lower generic indirect calls once MilkIR carries
+        // target-independent callee/table ABI metadata.
       }
     }
   }

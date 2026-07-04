@@ -577,6 +577,13 @@ fn emit_x64_jmp_rel32(object : CodeObject) -> Unit {
 }
 
 ///|
+fn emit_x64_call_reg(object : CodeObject, reg : Int) -> Unit {
+  emit_x64_rex_w(object, 0, (reg >> 3) & 1)
+  object.code.push(0xff)
+  emit_x64_modrm(object, 3, 2, reg)
+}
+
+///|
 fn emit_aarch64_b_cond(object : CodeObject, cond : @machv.Cond) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: B.cond with patched imm19.
   emit_u32_le(object, 0x54000000 | aarch64_cond_bits(cond))
@@ -806,6 +813,11 @@ fn emit_aarch64_cmp_imm(
 ///|
 fn emit_aarch64_b(object : CodeObject) -> Unit {
   emit_u32_le(object, 0x14000000)
+}
+
+///|
+fn emit_aarch64_blr(object : CodeObject, reg : Int) -> Unit {
+  emit_u32_le(object, 0xd63f0000 | ((reg & 0x1f) << 5))
 }
 
 ///|
@@ -1610,6 +1622,18 @@ fn emit_aarch64_stack_store(
       )
     }
   }
+}
+
+///|
+fn emit_aarch64_call_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let target = require_int_preg(
+    find_operand(inst, Use, 0, "call_ptr"),
+    "call_ptr target",
+  )
+  emit_aarch64_blr(object, target)
 }
 
 ///|
@@ -2516,6 +2540,18 @@ fn emit_x64_stack_store(
 }
 
 ///|
+fn emit_x64_call_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let target = require_int_preg(
+    find_operand(inst, Use, 0, "call_ptr"),
+    "call_ptr target",
+  )
+  emit_x64_call_reg(object, target)
+}
+
+///|
 fn emit_x64_stack_addr(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2628,6 +2664,7 @@ fn write_aarch64_inst_bytes(
     Call(_) =>
       // TODO(machv_emit): resolve and range-check AArch64 BL relocations during real object linking.
       emit_u32_le(object, 0x94000000)
+    CallPtr(_, _) => emit_aarch64_call_ptr(object, inst)
     Jump(_) => emit_aarch64_b(object)
     Return => emit_u32_le(object, 0xd65f03c0)
     Trap(_) =>
@@ -2715,6 +2752,7 @@ fn write_x64_inst_bytes(
       object.code.push(0xe8)
       emit_u32_le(object, 0)
     }
+    CallPtr(_, _) => emit_x64_call_ptr(object, inst)
     Jump(_) =>
       // TODO(machv_emit): patch X64 jump rel32 displacement after block layout.
       emit_x64_jmp_rel32(object)

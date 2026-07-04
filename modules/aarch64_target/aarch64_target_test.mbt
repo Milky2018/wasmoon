@@ -8,6 +8,13 @@ test "AArch64 target owns ABI policy" {
 }
 
 ///|
+test "AArch64 target owns Wasm indirect-call ABI policy" {
+  inspect(wasm_vmctx_arg_preg().index, content="0")
+  inspect(wasm_user_arg_gprs().length(), content="7")
+  inspect(wasm_ret_gprs().length(), content="8")
+}
+
+///|
 test "AArch64 allocatable regs include floating point registers" {
   let regs = allocatable_regs()
   inspect(regs.any(fn(r) { r.class == Float32 }), content="true")
@@ -292,6 +299,46 @@ test "AArch64 lowers direct calls with AAPCS64 ABI constraints" {
   )
   inspect(
     call.constraints[4].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(call.clobbers.length() > 0, content="true")
+}
+
+///|
+test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
+  let func = @milkir.Function::new_empty("callptr")
+  let callee = func.new_value(Ptr)
+  let vmctx = func.new_value(Ptr)
+  let int_arg = func.new_value(I64)
+  let float_arg = func.new_value(F64)
+  let result = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(CallPtr(2, 1), [callee, vmctx, int_arg, float_arg], [result]),
+  )
+  entry.set_terminator(Return([result]))
+  let lowered = lower_function(func)
+  let call = lowered.blocks[0].instructions[0]
+  inspect(call.opcode == CallPtr(2, 1), content="true")
+  inspect(call.constraints.length(), content="5")
+  inspect(
+    call.constraints[0].allowed_regs[0] == { index: 17, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[1].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[2].allowed_regs[0] == { index: 1, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[3].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(
+    call.constraints[4].allowed_regs[0] == { index: 0, class: Int },
     content="true",
   )
   inspect(call.clobbers.length() > 0, content="true")

@@ -36,6 +36,16 @@ pub fn sysv_callee_saved() -> Array[@machv.PReg]
 
 pub fn target() -> Target
 
+pub fn wasm_arg_fprs() -> Array[@machv.PReg]
+
+pub fn wasm_ret_fprs() -> Array[@machv.PReg]
+
+pub fn wasm_ret_gprs() -> Array[@machv.PReg]
+
+pub fn wasm_user_arg_gprs() -> Array[@machv.PReg]
+
+pub fn wasm_vmctx_arg_preg() -> @machv.PReg
+
 // Errors
 
 // Types and methods

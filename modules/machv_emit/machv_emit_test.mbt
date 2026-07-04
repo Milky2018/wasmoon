@@ -576,6 +576,18 @@ test "emit X64 generic relocations and stack maps" {
 }
 
 ///|
+test "emit X64 CallPtr as indirect register call" {
+  let func = @machv.Function::new("callptr")
+  let entry = func.new_block()
+  let call = func.new_inst(CallPtr(0, 0))
+  call.add_operand(@machv.Operand::use_reg(Physical({ index: 11, class: Int })))
+  entry.append(call)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[73, 255, 211, 195]")
+}
+
+///|
 test "emit MachV terminators as target bytes" {
   let func = @machv.Function::new("term")
   let entry = func.new_block()
@@ -1741,6 +1753,18 @@ test "emit generic relocations and stack maps" {
   inspect(object.fixups.length(), content="1")
   inspect(object.stack_maps.length(), content="1")
   inspect(object.debug_entries.length(), content="3")
+}
+
+///|
+test "emit AArch64 CallPtr as indirect register call" {
+  let func = @machv.Function::new("callptr")
+  let entry = func.new_block()
+  let call = func.new_inst(CallPtr(0, 0))
+  call.add_operand(@machv.Operand::use_reg(Physical({ index: 17, class: Int })))
+  entry.append(call)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, AArch64)
+  debug_inspect(object.code, content="[32, 2, 63, 214, 192, 3, 95, 214]")
 }
 
 ///|

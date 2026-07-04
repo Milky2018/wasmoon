@@ -8,6 +8,13 @@ test "x64 target owns ABI policy" {
 }
 
 ///|
+test "x64 target owns Wasm indirect-call ABI policy" {
+  inspect(wasm_vmctx_arg_preg().index, content="7")
+  inspect(wasm_user_arg_gprs().length(), content="5")
+  inspect(wasm_ret_gprs().length(), content="8")
+}
+
+///|
 test "x64 target owns SystemV machine environment policy" {
   inspect(call_clobbered_gprs().length(), content="9")
   inspect(call_clobbered_fprs().length(), content="16")
@@ -430,6 +437,46 @@ test "x64 lowers direct calls with SystemV ABI constraints" {
   )
   inspect(
     call.constraints[4].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(call.clobbers.length() > 0, content="true")
+}
+
+///|
+test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
+  let func = @milkir.Function::new_empty("callptr")
+  let callee = func.new_value(Ptr)
+  let vmctx = func.new_value(Ptr)
+  let int_arg = func.new_value(I64)
+  let float_arg = func.new_value(F64)
+  let result = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(CallPtr(2, 1), [callee, vmctx, int_arg, float_arg], [result]),
+  )
+  entry.set_terminator(Return([result]))
+  let lowered = lower_function(func)
+  let call = lowered.blocks[0].instructions[0]
+  inspect(call.opcode == CallPtr(2, 1), content="true")
+  inspect(call.constraints.length(), content="5")
+  inspect(
+    call.constraints[0].allowed_regs[0] == { index: 11, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[1].allowed_regs[0] == { index: 7, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[2].allowed_regs[0] == { index: 6, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[3].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(
+    call.constraints[4].allowed_regs[0] == { index: 0, class: Int },
     content="true",
   )
   inspect(call.clobbers.length() > 0, content="true")
