@@ -7,6 +7,13 @@ import {
   "TheWaWaR/clap@0.2.6",
   "Milky2018/wasm_core@0.1.0",
   "Milky2018/milkir@0.1.0",
+  "Milky2018/machv@0.1.0",
+  "Milky2018/regalloc@0.1.0",
+  "Milky2018/machv_regalloc@0.1.0",
+  "Milky2018/machv_emit@0.1.0",
+  "Milky2018/x64_target@0.1.0",
+  "Milky2018/aarch64_target@0.1.0",
+  "Milky2018/wasmoon_jit@0.1.0",
 }
 
 readme = "README.mbt.md"

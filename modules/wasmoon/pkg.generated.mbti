@@ -1,11 +1,48 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon"
 
+import {
+  "Milky2018/aarch64_target",
+  "Milky2018/machv",
+  "Milky2018/machv_emit",
+  "Milky2018/milkir",
+  "Milky2018/regalloc",
+  "Milky2018/wasmoon_jit",
+  "Milky2018/x64_target",
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly
+
+pub fn runtime_assembly() -> RuntimeAssembly
 
 // Errors
 
 // Types and methods
+pub(all) struct CompilerInfrastructureAssembly {
+  signature : @milkir.Signature
+  machv_function : @machv.Function
+  regalloc_program : @regalloc.Program
+  code_object : @machv_emit.CodeObject
+  x64_abi : @x64_target.AbiPolicy
+  aarch64_abi : @aarch64_target.AbiPolicy
+  jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
+} derive(@debug.Debug)
+
+pub(all) struct RuntimeAssembly {
+  product_module : String
+  owned_components : Array[RuntimeComponent]
+  reusable_modules : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RuntimeComponent {
+  Cli
+  RuntimeObjects
+  InterpreterExecutor
+  WasiPreview1
+  JitSelection
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 
