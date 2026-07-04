@@ -124,11 +124,32 @@ test "try lower native function does not use legacy fallback" {
     "loop_branch",
   )
   inspect(try_lower_native_function(env, linear, 0) is Some(_), content="true")
-  inspect(try_lower_native_function(env, structured, 0) is None, content="true")
+  inspect(
+    try_lower_native_function(env, structured, 0) is Some(_),
+    content="true",
+  )
   inspect(
     try_lower_native_function(env, loop_branch, 0) is None,
     content="true",
   )
+}
+
+///|
+test "lower direct block branch through native linear fast path" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [Block(Value(I32), [I32Const(7), Br(0), I32Const(9)])],
+    "block_exit_branch",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("iconst 7"), content="true")
+  inspect(text.contains("iconst 9"), content="false")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
 }
 
 ///|

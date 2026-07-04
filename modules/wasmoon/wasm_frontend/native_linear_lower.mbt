@@ -1218,7 +1218,7 @@ fn append_linear_block_body(
   for instr in body {
     match instr {
       Block(_, nested) =>
-        if !append_linear_block_body(out, nested) {
+        if !append_linear_exit_block_body(out, nested) {
           return false
         }
       Loop(_, nested) =>
@@ -1235,6 +1235,25 @@ fn append_linear_block_body(
         // directly instead of using the legacy translator bridge.
         return false
       _ => out.push(instr)
+    }
+  }
+  true
+}
+
+///|
+fn append_linear_exit_block_body(
+  out : Array[@types.Instruction],
+  body : Array[@types.Instruction],
+) -> Bool {
+  for instr in body {
+    match instr {
+      Br(depth) =>
+        // TODO(ISS-023): model full label-stack branch effects. The native
+        // frontend can safely flatten only a direct branch to the current
+        // block label; any outer label, conditional branch, or loop continue
+        // still falls back to the legacy translator bridge.
+        return depth == 0
+      _ => if !append_linear_block_body(out, [instr]) { return false }
     }
   }
   true
