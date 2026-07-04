@@ -376,6 +376,38 @@ fn emit_x64_store_base_disp32(
 }
 
 ///|
+fn emit_x64_float_load_base_disp32(
+  object : CodeObject,
+  dst : Int,
+  base : Int,
+  offset : Int,
+  class : @machv.RegClass,
+) -> Unit {
+  object.code.push(if class == Float32 { 0xf3 } else { 0xf2 })
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (base >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x10)
+  emit_x64_modrm(object, 2, dst, base)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_float_store_base_disp32(
+  object : CodeObject,
+  base : Int,
+  src : Int,
+  offset : Int,
+  class : @machv.RegClass,
+) -> Unit {
+  object.code.push(if class == Float32 { 0xf3 } else { 0xf2 })
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, (base >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x11)
+  emit_x64_modrm(object, 2, src, base)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn emit_x64_int_stack_load(
   object : CodeObject,
   dst : Int,
@@ -1270,13 +1302,19 @@ fn mem_access_is_64(mem_type : @machv.MemType) -> Bool raise EmitError {
   match mem_type {
     MemI32 => false
     MemI64 | MemPtr => true
-    // TODO(machv_emit): add floating-point and vector memory encodings once
-    // generic LoadMemory/StoreMemory carries enough alignment and volatility
-    // metadata for non-integer memory operations.
     _ =>
       raise UnsupportedOperand(
-        message="machv_emit memory access currently supports only i32, i64, and ptr",
+        message="machv_emit integer memory access requires i32, i64, or ptr",
       )
+  }
+}
+
+///|
+fn float_class_for_mem_type(mem_type : @machv.MemType) -> @machv.RegClass? {
+  match mem_type {
+    MemF32 => Some(Float32)
+    MemF64 => Some(Float64)
+    _ => None
   }
 }
 
@@ -1291,10 +1329,6 @@ fn emit_aarch64_load_ptr(
     find_operand(inst, Use, 0, "load_ptr"),
     "load_ptr base",
   )
-  let dst = require_int_preg(
-    find_operand(inst, Def, 0, "load_ptr"),
-    "load_ptr destination",
-  )
   let scale = mem_access_scale(mem_type)
   guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
     raise UnsupportedOperand(
@@ -1302,11 +1336,40 @@ fn emit_aarch64_load_ptr(
     )
   }
   let imm12 = offset / scale
-  let base = if mem_access_is_64(mem_type) { 0xf9400000 } else { 0xb9400000 }
-  emit_u32_le(
-    object,
-    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (dst & 0x1f),
-  )
+  match float_class_for_mem_type(mem_type) {
+    Some(expected_class) => {
+      let (dst, dst_class) = require_float_preg(
+        find_operand(inst, Def, 0, "load_ptr"),
+        "load_ptr destination",
+      )
+      require_same_float_class(dst_class, expected_class, "load_ptr")
+      let base = if expected_class == Float32 { 0xbd400000 } else { 0xfd400000 }
+      emit_u32_le(
+        object,
+        base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (dst & 0x1f),
+      )
+    }
+    None => {
+      if mem_type == MemV128 {
+        // TODO(machv_emit): add vector memory encoding once MachV carries
+        // alignment and vector lane metadata.
+        raise UnsupportedOperand(message="AArch64 vector memory is TODO")
+      }
+      let dst = require_int_preg(
+        find_operand(inst, Def, 0, "load_ptr"),
+        "load_ptr destination",
+      )
+      let base = if mem_access_is_64(mem_type) {
+        0xf9400000
+      } else {
+        0xb9400000
+      }
+      emit_u32_le(
+        object,
+        base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (dst & 0x1f),
+      )
+    }
+  }
 }
 
 ///|
@@ -1320,10 +1383,6 @@ fn emit_aarch64_store_ptr(
     find_operand(inst, Use, 0, "store_ptr"),
     "store_ptr base",
   )
-  let src = require_int_preg(
-    find_operand(inst, Use, 1, "store_ptr"),
-    "store_ptr source",
-  )
   let scale = mem_access_scale(mem_type)
   guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
     raise UnsupportedOperand(
@@ -1331,11 +1390,40 @@ fn emit_aarch64_store_ptr(
     )
   }
   let imm12 = offset / scale
-  let base = if mem_access_is_64(mem_type) { 0xf9000000 } else { 0xb9000000 }
-  emit_u32_le(
-    object,
-    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (src & 0x1f),
-  )
+  match float_class_for_mem_type(mem_type) {
+    Some(expected_class) => {
+      let (src, src_class) = require_float_preg(
+        find_operand(inst, Use, 1, "store_ptr"),
+        "store_ptr source",
+      )
+      require_same_float_class(src_class, expected_class, "store_ptr")
+      let base = if expected_class == Float32 { 0xbd000000 } else { 0xfd000000 }
+      emit_u32_le(
+        object,
+        base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (src & 0x1f),
+      )
+    }
+    None => {
+      if mem_type == MemV128 {
+        // TODO(machv_emit): add vector memory encoding once MachV carries
+        // alignment and vector lane metadata.
+        raise UnsupportedOperand(message="AArch64 vector memory is TODO")
+      }
+      let src = require_int_preg(
+        find_operand(inst, Use, 1, "store_ptr"),
+        "store_ptr source",
+      )
+      let base = if mem_access_is_64(mem_type) {
+        0xf9000000
+      } else {
+        0xb9000000
+      }
+      emit_u32_le(
+        object,
+        base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (src & 0x1f),
+      )
+    }
+  }
 }
 
 ///|
@@ -1614,17 +1702,34 @@ fn emit_x64_load_ptr(
     find_operand(inst, Use, 0, "load_ptr"),
     "load_ptr base",
   )
-  let dst = require_int_preg(
-    find_operand(inst, Def, 0, "load_ptr"),
-    "load_ptr destination",
-  )
-  emit_x64_load_base_disp32(
-    object,
-    dst,
-    base,
-    offset,
-    mem_access_is_64(mem_type),
-  )
+  match float_class_for_mem_type(mem_type) {
+    Some(expected_class) => {
+      let (dst, dst_class) = require_float_preg(
+        find_operand(inst, Def, 0, "load_ptr"),
+        "load_ptr destination",
+      )
+      require_same_float_class(dst_class, expected_class, "load_ptr")
+      emit_x64_float_load_base_disp32(object, dst, base, offset, expected_class)
+    }
+    None => {
+      if mem_type == MemV128 {
+        // TODO(machv_emit): add vector memory encoding once MachV carries
+        // alignment and vector lane metadata.
+        raise UnsupportedOperand(message="X64 vector memory is TODO")
+      }
+      let dst = require_int_preg(
+        find_operand(inst, Def, 0, "load_ptr"),
+        "load_ptr destination",
+      )
+      emit_x64_load_base_disp32(
+        object,
+        dst,
+        base,
+        offset,
+        mem_access_is_64(mem_type),
+      )
+    }
+  }
 }
 
 ///|
@@ -1638,17 +1743,36 @@ fn emit_x64_store_ptr(
     find_operand(inst, Use, 0, "store_ptr"),
     "store_ptr base",
   )
-  let src = require_int_preg(
-    find_operand(inst, Use, 1, "store_ptr"),
-    "store_ptr source",
-  )
-  emit_x64_store_base_disp32(
-    object,
-    base,
-    src,
-    offset,
-    mem_access_is_64(mem_type),
-  )
+  match float_class_for_mem_type(mem_type) {
+    Some(expected_class) => {
+      let (src, src_class) = require_float_preg(
+        find_operand(inst, Use, 1, "store_ptr"),
+        "store_ptr source",
+      )
+      require_same_float_class(src_class, expected_class, "store_ptr")
+      emit_x64_float_store_base_disp32(
+        object, base, src, offset, expected_class,
+      )
+    }
+    None => {
+      if mem_type == MemV128 {
+        // TODO(machv_emit): add vector memory encoding once MachV carries
+        // alignment and vector lane metadata.
+        raise UnsupportedOperand(message="X64 vector memory is TODO")
+      }
+      let src = require_int_preg(
+        find_operand(inst, Use, 1, "store_ptr"),
+        "store_ptr source",
+      )
+      emit_x64_store_base_disp32(
+        object,
+        base,
+        src,
+        offset,
+        mem_access_is_64(mem_type),
+      )
+    }
+  }
 }
 
 ///|

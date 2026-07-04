@@ -514,6 +514,28 @@ test "emit X64 generic memory bytes" {
 }
 
 ///|
+test "emit X64 scalar float memory bytes" {
+  let func = @machv.Function::new("float_mem")
+  let entry = func.new_block()
+  let load = func.new_inst(LoadPtr(MemF32, 4))
+  load.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  load.add_operand(@machv.Operand::def(Physical({ index: 1, class: Float32 })))
+  entry.append(load)
+  let store = func.new_inst(StorePtr(MemF64, 8))
+  store.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  store.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float64 })),
+  )
+  entry.append(store)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[243, 15, 16, 136, 4, 0, 0, 0, 242, 15, 17, 144, 8, 0, 0, 0, 195]",
+  )
+}
+
+///|
 test "emit X64 generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
@@ -1069,6 +1091,28 @@ test "emit AArch64 generic memory bytes" {
   debug_inspect(
     object.code,
     content="[32, 4, 64, 249, 98, 4, 0, 185, 192, 3, 95, 214]",
+  )
+}
+
+///|
+test "emit AArch64 scalar float memory bytes" {
+  let func = @machv.Function::new("float_mem")
+  let entry = func.new_block()
+  let load = func.new_inst(LoadPtr(MemF32, 4))
+  load.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  load.add_operand(@machv.Operand::def(Physical({ index: 1, class: Float32 })))
+  entry.append(load)
+  let store = func.new_inst(StorePtr(MemF64, 8))
+  store.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  store.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float64 })),
+  )
+  entry.append(store)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[1, 4, 64, 189, 2, 4, 0, 253, 192, 3, 95, 214]",
   )
 }
 
