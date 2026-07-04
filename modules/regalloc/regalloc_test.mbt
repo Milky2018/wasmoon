@@ -147,6 +147,10 @@ test "compute reverse postorder from dense successors" {
     compute_reverse_postorder_from_successors([[1], [], [], []]),
     content="[2, 3, 1, 0]",
   )
+  debug_inspect(
+    compute_reachable_reverse_postorder_from_successors([[1], [], [], []]),
+    content="[0, 1]",
+  )
 }
 
 ///|

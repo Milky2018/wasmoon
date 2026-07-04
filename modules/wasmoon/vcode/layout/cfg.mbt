@@ -17,7 +17,7 @@ pub fn VCodeCFG::build(func : @regalloc.VCodeFunction) -> VCodeCFG {
 
 ///|
 fn VCodeCFG::reverse_postorder(self : VCodeCFG) -> Array[Int] {
-  self.core.reverse_postorder()
+  @core_regalloc.compute_reachable_reverse_postorder_from_successors(self.succs)
 }
 
 ///|

@@ -160,3 +160,38 @@ pub fn compute_reverse_postorder_from_successors(
   }
   order
 }
+
+///|
+pub fn compute_reachable_reverse_postorder_from_successors(
+  block_successors : Array[Array[Int]],
+) -> Array[Int] {
+  let n = block_successors.length()
+  let visited = Array::make(n, false)
+  let postorder : Array[Int] = []
+
+  fn dfs(
+    block_successors : Array[Array[Int]],
+    block_idx : Int,
+    visited : Array[Bool],
+    postorder : Array[Int],
+  ) -> Unit {
+    if block_idx < 0 ||
+      block_idx >= block_successors.length() ||
+      visited[block_idx] {
+      return
+    }
+    visited[block_idx] = true
+
+    for succ_idx in block_successors[block_idx] {
+      dfs(block_successors, succ_idx, visited, postorder)
+    }
+
+    postorder.push(block_idx)
+  }
+
+  if n > 0 {
+    dfs(block_successors, 0, visited, postorder)
+  }
+  postorder.rev_in_place()
+  postorder
+}
