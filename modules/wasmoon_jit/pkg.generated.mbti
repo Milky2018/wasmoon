@@ -409,6 +409,7 @@ pub(all) struct CwasmFunctionRecord {
   function_index : Int
   code_offset : Int
   code_size : Int
+  frame_size : Int
 } derive(Eq, @debug.Debug)
 
 pub struct DWARFBuilder {
@@ -482,6 +483,7 @@ pub(all) struct JitIntegrationPlan {
 
 pub(all) struct LinkedCode {
   code : Array[Int]
+  frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   block_fixups : Array[@machv_emit.Fixup]
   stack_maps : Array[@machv_emit.StackMap]

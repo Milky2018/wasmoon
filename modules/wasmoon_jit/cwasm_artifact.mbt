@@ -3,6 +3,7 @@ pub(all) struct CwasmFunctionRecord {
   function_index : Int
   code_offset : Int
   code_size : Int
+  frame_size : Int
 } derive(Eq, Debug)
 
 ///|
@@ -50,7 +51,12 @@ pub fn CwasmArtifact::from_linked_code_for_target(
     entry_symbol,
     code: linked.code,
     functions: [
-      { function_index, code_offset: 0, code_size: linked.code.length() },
+      {
+        function_index,
+        code_offset: 0,
+        code_size: linked.code.length(),
+        frame_size: linked.frame_size,
+      },
     ],
     runtime_relocations: linked.runtime_relocations,
     block_fixups: linked.block_fixups,
@@ -92,14 +98,14 @@ pub fn CwasmArtifact::to_precompiled_module(
 ) -> @cwasm.PrecompiledModule {
   let module_ = @cwasm.PrecompiledModule::new(self.target)
   for record in self.functions {
-    // TODO(wasmoon_jit): carry real per-function names, signatures, frame
-    // sizes, fixups, and GC stack maps from the production JIT pipeline.
+    // TODO(wasmoon_jit): carry real per-function signatures, fixups, and GC
+    // stack maps from the production JIT pipeline.
     module_.add_function(
       @cwasm.CompiledEntry::new(
         record.function_index,
         self.entry_symbol,
         self.function_code(record),
-        0,
+        record.frame_size,
         0,
         0,
         0,

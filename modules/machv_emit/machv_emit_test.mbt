@@ -1836,6 +1836,7 @@ test "emit X64 stack address bytes" {
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, X64)
   debug_inspect(object.code, content="[72, 141, 140, 36, 16, 0, 0, 0, 195]")
+  inspect(object.frame_size, content="32")
 }
 
 ///|

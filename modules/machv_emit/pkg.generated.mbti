@@ -26,6 +26,7 @@ pub(all) struct CodeObject {
   fixups : Array[Fixup]
   stack_maps : Array[StackMap]
   debug_entries : Array[DebugEntry]
+  mut frame_size : Int
 } derive(@debug.Debug)
 pub fn CodeObject::current_offset(Self) -> Int
 pub fn CodeObject::new() -> Self

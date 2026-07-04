@@ -37,11 +37,19 @@ pub(all) struct CodeObject {
   fixups : Array[Fixup]
   stack_maps : Array[StackMap]
   debug_entries : Array[DebugEntry]
+  mut frame_size : Int
 } derive(Debug)
 
 ///|
 pub fn CodeObject::new() -> CodeObject {
-  { code: [], relocations: [], fixups: [], stack_maps: [], debug_entries: [] }
+  {
+    code: [],
+    relocations: [],
+    fixups: [],
+    stack_maps: [],
+    debug_entries: [],
+    frame_size: 0,
+  }
 }
 
 ///|

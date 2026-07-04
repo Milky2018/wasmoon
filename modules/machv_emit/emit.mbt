@@ -3300,6 +3300,7 @@ pub fn emit_function_for_target(
       outgoing_args_size=func.get_max_outgoing_args_size(),
     )
   }
+  object.frame_size = frame.frame_size
   let block_offsets : Array[(Int, Int)] = []
   for block in func.blocks {
     block_offsets.push((block.id, object.current_offset()))

@@ -113,6 +113,7 @@ pub(all) struct ResolvedRuntimeRelocation {
 ///|
 pub(all) struct LinkedCode {
   code : Array[Int]
+  frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   block_fixups : Array[@machv_emit.Fixup]
   stack_maps : Array[@machv_emit.StackMap]
@@ -142,6 +143,7 @@ pub fn link_code_object(
   }
   {
     code: object.code,
+    frame_size: object.frame_size,
     runtime_relocations,
     block_fixups: object.fixups,
     stack_maps: object.stack_maps,

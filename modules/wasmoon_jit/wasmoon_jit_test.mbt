@@ -24,6 +24,11 @@ test "resolve legacy runtime fixup ids in wasmoon_jit" {
 test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
+  func.new_stack_slot(16, 16) |> ignore
+  let addr_slot = func.new_stack_slot(8, 8)
+  let addr = func.new_inst(StackAddr(addr_slot.id))
+  addr.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(addr)
   entry.append(func.new_inst(Return))
   let object = try! @machv_emit.emit_function_for_target(func, X64)
   let resolver = RuntimeSymbolResolver::new()
@@ -39,6 +44,7 @@ test "wrap linked code as cwasm artifact" {
   let restored = try! @cwasm.deserialize(artifact.serialize())
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].name, content="caller")
+  inspect(restored.functions[0].frame_size, content="32")
 }
 
 ///|
@@ -1277,6 +1283,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="3")
   inspect(restored.functions[0].name, content="add64_artifact")
+  inspect(restored.functions[0].frame_size, content="0")
   inspect(
     restored.functions[0].code.length(),
     content=artifact.code.length().to_string(),
