@@ -325,11 +325,46 @@ test "emit AArch64 scalar floating point bytes" {
   )
   sqrt.add_operand(@machv.Operand::def(Physical({ index: 3, class: Float32 })))
   entry.append(sqrt)
+  let abs = func.new_inst(FloatAbs)
+  abs.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 5, class: Float64 })),
+  )
+  abs.add_operand(@machv.Operand::def(Physical({ index: 6, class: Float64 })))
+  entry.append(abs)
+  let neg = func.new_inst(FloatNeg)
+  neg.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 7, class: Float32 })),
+  )
+  neg.add_operand(@machv.Operand::def(Physical({ index: 8, class: Float32 })))
+  entry.append(neg)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function(func)
   debug_inspect(
     object.code,
-    content="[32, 40, 98, 30, 131, 192, 33, 30, 192, 3, 95, 214]",
+    content=(
+      #|[
+      #|  32,
+      #|  40,
+      #|  98,
+      #|  30,
+      #|  131,
+      #|  192,
+      #|  33,
+      #|  30,
+      #|  166,
+      #|  192,
+      #|  96,
+      #|  30,
+      #|  232,
+      #|  64,
+      #|  33,
+      #|  30,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
   )
 }
 
@@ -352,11 +387,79 @@ test "emit X64 scalar floating point bytes" {
   )
   sqrt.add_operand(@machv.Operand::def(Physical({ index: 3, class: Float32 })))
   entry.append(sqrt)
+  let abs = func.new_inst(FloatAbs)
+  abs.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 5, class: Float64 })),
+  )
+  abs.add_operand(@machv.Operand::def(Physical({ index: 6, class: Float64 })))
+  entry.append(abs)
+  let neg = func.new_inst(FloatNeg)
+  neg.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 7, class: Float32 })),
+  )
+  neg.add_operand(@machv.Operand::def(Physical({ index: 8, class: Float32 })))
+  entry.append(neg)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, X64)
   debug_inspect(
     object.code,
-    content="[242, 15, 16, 193, 242, 15, 88, 194, 243, 15, 81, 220, 195]",
+    content=(
+      #|[
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  193,
+      #|  242,
+      #|  15,
+      #|  88,
+      #|  194,
+      #|  243,
+      #|  15,
+      #|  81,
+      #|  220,
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  245,
+      #|  102,
+      #|  69,
+      #|  15,
+      #|  118,
+      #|  246,
+      #|  102,
+      #|  65,
+      #|  15,
+      #|  115,
+      #|  214,
+      #|  1,
+      #|  102,
+      #|  65,
+      #|  15,
+      #|  84,
+      #|  246,
+      #|  243,
+      #|  68,
+      #|  15,
+      #|  16,
+      #|  199,
+      #|  102,
+      #|  69,
+      #|  15,
+      #|  118,
+      #|  246,
+      #|  102,
+      #|  65,
+      #|  15,
+      #|  114,
+      #|  246,
+      #|  31,
+      #|  69,
+      #|  15,
+      #|  87,
+      #|  198,
+      #|  195,
+      #|]
+    ),
   )
 }
 

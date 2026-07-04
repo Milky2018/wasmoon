@@ -85,6 +85,33 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([F64], [F64])
+  let milk = @milkir.Function::new("fabs_fneg64", signature)
+  let input = milk.new_value(F64)
+  let neg = milk.new_value(F64)
+  let abs = milk.new_value(F64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fneg, [input], [neg]))
+  entry.append_inst(milk.new_inst(Fabs, [neg], [abs]))
+  entry.set_terminator(Return([abs]))
+  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let mut has_abs_mask = false
+  let mut has_neg_mask = false
+  for byte in plan.object.code {
+    if byte == 0x54 {
+      has_abs_mask = true
+    }
+    if byte == 0x57 {
+      has_neg_mask = true
+    }
+  }
+  inspect(has_abs_mask, content="true")
+  inspect(has_neg_mask, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)

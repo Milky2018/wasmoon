@@ -824,6 +824,44 @@ fn emit_x64_sse_rr(
 }
 
 ///|
+fn emit_x64_sse_rr_no_prefix(
+  object : CodeObject,
+  opcode : Int,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(opcode)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_pcmpeqd_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  object.code.push(0x66)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x76)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_pshift_imm(
+  object : CodeObject,
+  opcode : Int,
+  ext : Int,
+  dst : Int,
+  amount : Int,
+) -> Unit {
+  object.code.push(0x66)
+  emit_x64_rex_if_needed(object, 0, (dst >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(opcode)
+  emit_x64_modrm(object, 3, ext, dst)
+  object.code.push(amount & 0xff)
+}
+
+///|
 fn emit_x64_float_move(
   object : CodeObject,
   dst : Int,
@@ -836,6 +874,42 @@ fn emit_x64_float_move(
     _ => abort("unreachable float class")
   }
   emit_x64_sse_rr(object, prefix, 0x10, dst, src)
+}
+
+///|
+fn emit_x64_float_abs_or_neg(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  is_abs : Bool,
+  context : String,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, src_class, context)
+  if dst != src {
+    emit_x64_float_move(object, dst, src, dst_class)
+  }
+  let scratch = if dst == 14 { 15 } else { 14 }
+  emit_x64_pcmpeqd_rr(object, scratch, scratch)
+  match (is_abs, dst_class) {
+    (true, Float32) => emit_x64_pshift_imm(object, 0x72, 2, scratch, 1)
+    (true, Float64) => emit_x64_pshift_imm(object, 0x73, 2, scratch, 1)
+    (false, Float32) => emit_x64_pshift_imm(object, 0x72, 6, scratch, 31)
+    (false, Float64) => emit_x64_pshift_imm(object, 0x73, 6, scratch, 63)
+    _ => abort("unreachable float class")
+  }
+  let opcode = if is_abs { 0x54 } else { 0x57 }
+  match dst_class {
+    Float32 => emit_x64_sse_rr_no_prefix(object, opcode, dst, scratch)
+    Float64 => emit_x64_sse_rr(object, 0x66, opcode, dst, scratch)
+    _ => abort("unreachable float class")
+  }
 }
 
 ///|
@@ -915,6 +989,8 @@ fn write_aarch64_inst_bytes(
     FloatMin => emit_aarch64_float_binop3(object, inst, 0x2058, 0x6058, "fmin")
     FloatMax => emit_aarch64_float_binop3(object, inst, 0x2048, 0x6048, "fmax")
     FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
+    FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
+    FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -952,6 +1028,8 @@ fn write_x64_inst_bytes(
     FloatMin => emit_x64_float_binop3(object, inst, 0x5d, "fmin")
     FloatMax => emit_x64_float_binop3(object, inst, 0x5f, "fmax")
     FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
+    FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
+    FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
