@@ -1196,7 +1196,9 @@ fn BacktrackingAllocator::split_into_minimal_bundles(
 pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
   self.init_queue()
 
-  let max_iterations = self.bundles.length() * 10 // Safety limit
+  let max_iterations = @core_regalloc.allocation_iteration_limit(
+    self.bundles.length(),
+  )
   let mut iterations = 0
   while self.queue.length() > 0 && iterations < max_iterations {
     iterations += 1
@@ -1243,16 +1245,22 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
     if bundle_id >= 0 && bundle_id < self.bundle_attempts.length() {
       self.bundle_attempts[bundle_id] = self.bundle_attempts[bundle_id] + 1
-      if self.bundle_attempts[bundle_id] > self.bundle_retry_limit &&
-        !bundle.is_pinned &&
-        !bundle.has_fixed_constraint(self.ranges) {
+      if @core_regalloc.should_force_spill_after_retry(
+          self.bundle_attempts[bundle_id],
+          self.bundle_retry_limit,
+          bundle.is_pinned,
+          bundle.has_fixed_constraint(self.ranges),
+        ) {
         self.force_spill_bundle(bundle)
         continue
       }
     }
 
     // Vector values live across calls must spill.
-    if bundle.reg_class is Vector && bundle.crosses_call(self.ranges) {
+    if @core_regalloc.should_force_spill_for_class_and_call(
+        backtrack_core_reg_class(bundle.reg_class),
+        bundle.crosses_call(self.ranges),
+      ) {
       self.force_spill_bundle(bundle)
       continue
     }

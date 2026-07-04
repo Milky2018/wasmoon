@@ -8,6 +8,8 @@ import {
 // Values
 pub fn allocate(Program) -> Allocation
 
+pub fn allocation_iteration_limit(Int) -> Int
+
 pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
@@ -39,6 +41,10 @@ pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
+
+pub fn should_force_spill_after_retry(Int, Int, Bool, Bool) -> Bool
+
+pub fn should_force_spill_for_class_and_call(RegClass, Bool) -> Bool
 
 pub fn should_take_eviction_candidate(Int?, PhysicalReg?, Int, PhysicalReg, PhysicalReg?) -> Bool
 

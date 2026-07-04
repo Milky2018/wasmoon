@@ -576,6 +576,16 @@ test "bundle split planner partitions around split point and handles fallbacks" 
 }
 
 ///|
+test "allocation policy covers retry and vector call spilling" {
+  inspect(allocation_iteration_limit(7), content="70")
+  inspect(should_force_spill_after_retry(4, 3, false, false), content="true")
+  inspect(should_force_spill_after_retry(4, 3, true, false), content="false")
+  inspect(should_force_spill_after_retry(4, 3, false, true), content="false")
+  inspect(should_force_spill_for_class_and_call(Vector, true), content="true")
+  inspect(should_force_spill_for_class_and_call(Float, true), content="false")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
