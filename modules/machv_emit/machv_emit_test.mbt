@@ -899,6 +899,67 @@ test "emit AArch64 float width conversion bytes" {
 }
 
 ///|
+test "emit AArch64 scalar float rounding bytes" {
+  let func = @machv.Function::new("float_round")
+  let entry = func.new_block()
+  let ceil = func.new_inst(FloatCeil)
+  ceil.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float32 })),
+  )
+  ceil.add_operand(@machv.Operand::def(Physical({ index: 0, class: Float32 })))
+  entry.append(ceil)
+  let floor = func.new_inst(FloatFloor)
+  floor.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Float64 })),
+  )
+  floor.add_operand(@machv.Operand::def(Physical({ index: 2, class: Float64 })))
+  entry.append(floor)
+  let trunc = func.new_inst(FloatTrunc)
+  trunc.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 5, class: Float32 })),
+  )
+  trunc.add_operand(@machv.Operand::def(Physical({ index: 4, class: Float32 })))
+  entry.append(trunc)
+  let nearest = func.new_inst(FloatNearest)
+  nearest.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 7, class: Float64 })),
+  )
+  nearest.add_operand(
+    @machv.Operand::def(Physical({ index: 6, class: Float64 })),
+  )
+  entry.append(nearest)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  32,
+      #|  192,
+      #|  36,
+      #|  30,
+      #|  98,
+      #|  64,
+      #|  101,
+      #|  30,
+      #|  164,
+      #|  192,
+      #|  37,
+      #|  30,
+      #|  230,
+      #|  64,
+      #|  100,
+      #|  30,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit X64 scalar floating point bytes" {
   let func = @machv.Function::new("x64_float_ops")
   let entry = func.new_block()
@@ -1018,6 +1079,73 @@ test "emit X64 float width conversion bytes" {
   debug_inspect(
     object.code,
     content="[243, 15, 90, 202, 242, 15, 90, 220, 195]",
+  )
+}
+
+///|
+test "emit X64 scalar float rounding bytes" {
+  let func = @machv.Function::new("x64_float_round")
+  let entry = func.new_block()
+  let ceil = func.new_inst(FloatCeil)
+  ceil.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float32 })),
+  )
+  ceil.add_operand(@machv.Operand::def(Physical({ index: 1, class: Float32 })))
+  entry.append(ceil)
+  let floor = func.new_inst(FloatFloor)
+  floor.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float64 })),
+  )
+  floor.add_operand(@machv.Operand::def(Physical({ index: 3, class: Float64 })))
+  entry.append(floor)
+  let trunc = func.new_inst(FloatTrunc)
+  trunc.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 6, class: Float32 })),
+  )
+  trunc.add_operand(@machv.Operand::def(Physical({ index: 5, class: Float32 })))
+  entry.append(trunc)
+  let nearest = func.new_inst(FloatNearest)
+  nearest.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 8, class: Float64 })),
+  )
+  nearest.add_operand(
+    @machv.Operand::def(Physical({ index: 7, class: Float64 })),
+  )
+  entry.append(nearest)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  102,
+      #|  15,
+      #|  58,
+      #|  10,
+      #|  202,
+      #|  2,
+      #|  102,
+      #|  15,
+      #|  58,
+      #|  11,
+      #|  220,
+      #|  1,
+      #|  102,
+      #|  15,
+      #|  58,
+      #|  10,
+      #|  238,
+      #|  3,
+      #|  102,
+      #|  65,
+      #|  15,
+      #|  58,
+      #|  11,
+      #|  248,
+      #|  0,
+      #|  195,
+      #|]
+    ),
   )
 }
 

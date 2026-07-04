@@ -1163,6 +1163,40 @@ fn emit_aarch64_float_unop(
 }
 
 ///|
+fn emit_aarch64_float_round(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  f32_b1_base : Int,
+  f32_b2 : Int,
+  f64_b1_base : Int,
+  f64_b2 : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, src_class, context)
+  let (b1_base, b2) = match dst_class {
+    Float32 => (f32_b1_base, f32_b2)
+    Float64 => (f64_b1_base, f64_b2)
+    _ => abort("unreachable float class")
+  }
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    ((((src >> 3) & 3) | b1_base) << 8) |
+    (b2 << 16) |
+    (0x1e << 24),
+  )
+}
+
+///|
 fn emit_x64_move(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1439,6 +1473,38 @@ fn emit_x64_float_unop(
     _ => abort("unreachable float class")
   }
   emit_x64_sse_rr(object, prefix, opcode, dst, src)
+}
+
+///|
+fn emit_x64_float_round(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  imm8 : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, src_class, context)
+  let opcode = match dst_class {
+    Float32 => 0x0a
+    Float64 => 0x0b
+    _ => abort("unreachable float class")
+  }
+  // TODO(machv_emit): plumb target feature flags before admitting x64 targets
+  // without SSE4.1 scalar ROUNDSS/ROUNDSD support.
+  object.code.push(0x66)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x3a)
+  object.code.push(opcode)
+  emit_x64_modrm(object, 3, dst, src)
+  object.code.push(imm8 & 0xff)
 }
 
 ///|
@@ -1762,6 +1828,14 @@ fn write_aarch64_inst_bytes(
     FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
     FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
     FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
+    FloatCeil =>
+      emit_aarch64_float_round(object, inst, 0xc0, 0x24, 0xc0, 0x64, "fceil")
+    FloatFloor =>
+      emit_aarch64_float_round(object, inst, 0x40, 0x25, 0x40, 0x65, "ffloor")
+    FloatTrunc =>
+      emit_aarch64_float_round(object, inst, 0xc0, 0x25, 0xc0, 0x65, "ftrunc")
+    FloatNearest =>
+      emit_aarch64_float_round(object, inst, 0x40, 0x24, 0x40, 0x64, "fnearest")
     Fpromote => emit_aarch64_float_width_convert(object, inst, true)
     Fdemote => emit_aarch64_float_width_convert(object, inst, false)
     Bitcast => emit_aarch64_bitcast(object, inst)
@@ -1830,6 +1904,10 @@ fn write_x64_inst_bytes(
     FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
     FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
     FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")
+    FloatCeil => emit_x64_float_round(object, inst, 2, "fceil")
+    FloatFloor => emit_x64_float_round(object, inst, 1, "ffloor")
+    FloatTrunc => emit_x64_float_round(object, inst, 3, "ftrunc")
+    FloatNearest => emit_x64_float_round(object, inst, 0, "fnearest")
     Fpromote => emit_x64_float_width_convert(object, inst, true)
     Fdemote => emit_x64_float_width_convert(object, inst, false)
     Bitcast => emit_x64_bitcast(object, inst)

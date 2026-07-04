@@ -161,6 +161,56 @@ test "plan MilkIR float demote through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR float ceil through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([F32], [F32])
+  let milk = @milkir.Function::new("fceil_x64", signature)
+  let input = milk.new_value(F32)
+  let output = milk.new_value(F32)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fceil, [input], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_roundss_ceil = false
+  for i in 0..<(plan.object.code.length() - 4) {
+    if plan.object.code[i] == 0x0f &&
+      plan.object.code[i + 1] == 0x3a &&
+      plan.object.code[i + 2] == 0x0a &&
+      plan.object.code[i + 4] == 0x02 {
+      has_roundss_ceil = true
+    }
+  }
+  inspect(has_roundss_ceil, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([F64], [F64])
+  let milk = @milkir.Function::new("fnearest_aarch64", signature)
+  let input = milk.new_value(F64)
+  let output = milk.new_value(F64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fnearest, [input], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_frintn_d = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if (plan.object.code[i + 1] & 0x40) == 0x40 &&
+      plan.object.code[i + 2] == 0x64 &&
+      plan.object.code[i + 3] == 0x1e {
+      has_frintn_d = true
+    }
+  }
+  inspect(has_frintn_d, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [F64])
   let milk = @milkir.Function::new("bitcast_i64_f64", signature)
