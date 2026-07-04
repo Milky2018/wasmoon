@@ -1060,6 +1060,8 @@ fn push_simple_expr_instr(
     RefI31 => push_i31_new(builder, expr_stack)
     I31GetS => push_i31_get(builder, expr_stack, true)
     I31GetU => push_i31_get(builder, expr_stack, false)
+    AnyConvertExtern | ExternConvertAny =>
+      push_unary_opcode(builder, expr_stack, Copy)
     Select | SelectTyped(_) => push_select(builder, expr_stack)
     Drop => {
       guard pop_value(expr_stack) is Some(_) else { return false }
@@ -1765,6 +1767,10 @@ fn try_lower_linear_function(
       RefI31 => if !push_i31_new(builder, stack) { return None }
       I31GetS => if !push_i31_get(builder, stack, true) { return None }
       I31GetU => if !push_i31_get(builder, stack, false) { return None }
+      AnyConvertExtern | ExternConvertAny =>
+        if !push_unary_opcode(builder, stack, Copy) {
+          return None
+        }
       Call(func_idx) =>
         if !push_direct_call(builder, stack, mod_, func_idx) {
           return None
