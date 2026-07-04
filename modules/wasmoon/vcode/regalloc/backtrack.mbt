@@ -1333,64 +1333,10 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
 }
 
 ///|
-/// Generate moves for split bundles that share a spill slot
-/// This inserts spills and reloads at the boundaries between split parts
-fn BacktrackingAllocator::generate_moves(
-  self : BacktrackingAllocator,
-) -> Array[RegMove] {
-  let moves : Array[RegMove] = []
-
-  // For each spill bundle, check if parts have different allocations
-  for spill_bundle in self.bundles.spill_bundles {
-    if spill_bundle.bundle_ids.length() < 2 {
-      continue
-    }
-
-    // Collect all bundles in this spill bundle
-    let parts : Array[(Bundle, @abi.PReg?)] = []
-    for bundle_id in spill_bundle.bundle_ids {
-      let bundle = self.bundles.get(bundle_id)
-      let preg = match bundle.allocation {
-        Reg(p) => Some(p)
-        _ => None
-      }
-      parts.push((bundle, preg))
-    }
-
-    // Generate moves between adjacent parts with different allocations
-    // This is a simplified version - a full implementation would track
-    // the exact split points and insert moves at those locations
-    for i in 0..<(parts.length() - 1) {
-      let (bundle1, alloc1) = parts[i]
-      let (bundle2, alloc2) = parts[i + 1]
-      match (alloc1, alloc2) {
-        (Some(preg1), Some(preg2)) =>
-          if preg1.index != preg2.index {
-            // Need a move from preg1 to preg2 (via spill slot)
-            // The actual move insertion happens in apply_allocation
-            ignore(bundle1)
-            ignore(bundle2)
-          }
-        (Some(_), None) | (None, Some(_)) =>
-          // One part in register, one spilled - needs reload/spill
-          // Handled by apply_allocation
-          ()
-        (None, None) =>
-          // Both spilled to same slot - no move needed
-          ()
-      }
-    }
-  }
-  moves
-}
-
-///|
 /// Generate allocation result compatible with existing code
 pub fn BacktrackingAllocator::generate_result(
   self : BacktrackingAllocator,
 ) -> RegAllocResult {
-  // Generate any needed moves for split bundles
-  let _moves = self.generate_moves()
   let result : RegAllocResult = {
     assignments: {},
     spill_slots: {},

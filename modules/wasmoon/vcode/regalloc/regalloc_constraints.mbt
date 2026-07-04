@@ -172,90 +172,117 @@ pub fn process_constraints(
   func : VCodeFunction,
   alloc : RegAllocResult,
 ) -> Unit {
+  fn core_class(class : @abi.RegClass) -> @core_regalloc.RegClass {
+    match class {
+      Int => Int
+      Float32 | Float64 => Float
+      Vector => Vector
+    }
+  }
+
+  fn class_tag(class : @abi.RegClass) -> Int {
+    match class {
+      Int => 0
+      Float32 => 1
+      Float64 => 2
+      Vector => 3
+    }
+  }
+
+  fn class_from_tag(tag : Int) -> @abi.RegClass {
+    match tag {
+      0 => Int
+      1 => Float32
+      2 => Float64
+      3 => Vector
+      _ => Int
+    }
+  }
+
+  fn core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+    { id: preg.index, class: core_class(preg.class) }
+  }
+
+  fn core_location(vreg_id : Int) -> @core_regalloc.Location? {
+    match alloc.assignments.get(vreg_id) {
+      Some(preg) => Some(Reg(core_preg(preg)))
+      None =>
+        match alloc.spill_slots.get(vreg_id) {
+          Some(slot) => Some(Spill(slot))
+          None => None
+        }
+    }
+  }
+
+  fn old_loc(loc : @core_regalloc.Location, class : @abi.RegClass) -> Loc {
+    match loc {
+      Reg(preg) => Reg({ index: preg.id, class })
+      Spill(slot) => Spill(slot)
+    }
+  }
+
+  let fixed_insts : Array[@core_regalloc.FixedConstraintInst] = []
   for block_idx, block in func.blocks {
     for inst_idx, inst in block.insts {
-      // Skip if no constraints
       if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
         continue
       }
-      let edits = InstEdits::new()
-
-      // Process use constraints (moves before the instruction)
+      let uses : Array[@core_regalloc.FixedConstraint] = []
+      let defs : Array[@core_regalloc.FixedConstraint] = []
       for i, constraint in inst.use_constraints {
         if constraint is FixedReg(required_preg) {
           let use_reg = inst.uses[i]
           if use_reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            match alloc.assignments.get(vreg.id) {
-              Some(assigned_preg) =>
-                if assigned_preg.index != required_preg.index {
-                  // Need to move from assigned to required
-                  edits.before.push({
-                    from: Reg(assigned_preg),
-                    to: Reg(required_preg),
-                    class: vreg.class,
-                  })
-                }
-              // If already at required_preg, no move needed
-              None =>
-                // Spilled: need to reload to the required register
-                if alloc.spill_slots.get(vreg.id) is Some(slot) {
-                  // Encode spill slot as negative index in 'from'
-                  // The emit phase will interpret this as a reload
-                  edits.before.push({
-                    from: Spill(slot),
-                    to: Reg(required_preg),
-                    class: vreg.class,
-                  })
-                }
-            }
+            uses.push({
+              operand: Virtual(core_location(vreg.id), class_tag(vreg.class)),
+              required: core_preg(required_preg),
+            })
           } else if use_reg is Physical(preg) {
-            if preg.index != required_preg.index {
-              edits.before.push({
-                from: Reg(preg),
-                to: Reg(required_preg),
-                class: preg.class,
-              })
-            }
+            uses.push({
+              operand: Physical(core_preg(preg), class_tag(preg.class)),
+              required: core_preg(required_preg),
+            })
           }
         }
       }
-
-      // Process def constraints (moves after the instruction)
       for i, constraint in inst.def_constraints {
         if constraint is FixedReg(required_preg) {
           let def = inst.defs[i]
           if def.reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            match alloc.assignments.get(vreg.id) {
-              Some(assigned_preg) =>
-                if assigned_preg.index != required_preg.index {
-                  // Need to move from required to assigned
-                  // (the instruction produces in required_preg, we need to move to assigned)
-                  edits.after.push({
-                    from: Reg(required_preg),
-                    to: Reg(assigned_preg),
-                    class: vreg.class,
-                  })
-                }
-              None =>
-                // Spilled: need to store from required register to spill slot
-                if alloc.spill_slots.get(vreg.id) is Some(slot) {
-                  edits.after.push({
-                    from: Reg(required_preg),
-                    to: Spill(slot),
-                    class: vreg.class,
-                  })
-                }
-            }
+            defs.push({
+              operand: Virtual(core_location(vreg.id), class_tag(vreg.class)),
+              required: core_preg(required_preg),
+            })
           }
         }
       }
-
-      // Store edits if any
-      if !edits.before.is_empty() || !edits.after.is_empty() {
-        alloc.inst_edits.push((block_idx, inst_idx, edits))
-      }
+      fixed_insts.push({
+        block_index: block_idx,
+        inst_index: inst_idx,
+        uses,
+        defs,
+      })
     }
+  }
+  let fixed_edits = @core_regalloc.plan_fixed_constraint_edits(fixed_insts)
+  for edit in fixed_edits {
+    let edits = InstEdits::new()
+    for mv in edit.before {
+      let class = class_from_tag(mv.class_tag)
+      edits.before.push({
+        from: old_loc(mv.from, class),
+        to: old_loc(mv.to, class),
+        class,
+      })
+    }
+    for mv in edit.after {
+      let class = class_from_tag(mv.class_tag)
+      edits.after.push({
+        from: old_loc(mv.from, class),
+        to: old_loc(mv.to, class),
+        class,
+      })
+    }
+    alloc.inst_edits.push((edit.block_index, edit.inst_index, edits))
   }
 }
