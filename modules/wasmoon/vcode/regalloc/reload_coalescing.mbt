@@ -16,6 +16,20 @@ priv struct ReloadInterval {
 }
 
 ///|
+fn reload_class_to_core(class : @abi.RegClass) -> @core_regalloc.RegClass {
+  match class {
+    Int => Int
+    Float32 | Float64 => Float
+    Vector => Vector
+  }
+}
+
+///|
+fn reload_vreg_to_core(vreg : @abi.VReg) -> @core_regalloc.VirtualReg {
+  { id: vreg.id, class: reload_class_to_core(vreg.class) }
+}
+
+///|
 /// Compute reload intervals for spilled values in each block.
 /// Returns a map: (block_id, spill_slot) -> ReloadInterval.
 fn compute_reload_intervals(
@@ -23,53 +37,35 @@ fn compute_reload_intervals(
   alloc : RegAllocResult,
 ) -> Map[(Int, Int), ReloadInterval] {
   let intervals : Map[(Int, Int), ReloadInterval] = {}
+  let reload_uses : Array[@core_regalloc.ReloadUseInfo] = []
+  let use_classes : Map[(Int, Int, Int), @abi.RegClass] = {}
   for block_idx, block in func.blocks {
-    // Track uses of spilled vregs in this block.
-    // Key: spill_slot, Value: (first_inst, last_inst, vreg_class, vreg_id)
-    //
-    // Important: spill slots may be reused across different spilled values
-    // (post-regalloc compaction). Reload coalescing is only safe when a spill
-    // slot refers to a single vreg within a block; otherwise we might keep a
-    // stale value in a register across a point where the slot's content
-    // changes. Therefore, we disable coalescing for any spill slot that is
-    // used by multiple vregs within the block.
-    let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = {}
-    let conflicting_slots : @hashset.HashSet[Int] = HashSet([])
     for inst_idx, inst in block.insts {
       for use_reg in inst.uses {
         if use_reg is Virtual(vreg) &&
           alloc.spill_slots.get(vreg.id) is Some(slot) {
-          if conflicting_slots.contains(slot) {
-            continue
-          }
-          // Do not reload-coalesce vector values: there is no safe
-          // non-allocatable vector scratch register bank, and AAPCS64 only
-          // guarantees preserving the low 64 bits of V8-V15.
-          if vreg.class is Vector {
-            continue
-          }
-          match slot_uses.get(slot) {
-            Some((first, _, cls, owner_id)) =>
-              if owner_id == vreg.id {
-                slot_uses.set(slot, (first, inst_idx, cls, owner_id))
-              } else {
-                // Slot reused within block by different values: disable.
-                slot_uses.remove(slot) |> ignore
-                conflicting_slots.add(slot) |> ignore
-              }
-            None =>
-              slot_uses.set(slot, (inst_idx, inst_idx, vreg.class, vreg.id))
-          }
+          reload_uses.push({
+            block_id: block_idx,
+            inst_index: inst_idx,
+            spill_slot: slot,
+            vreg: reload_vreg_to_core(vreg),
+          })
+          use_classes.set((block_idx, slot, vreg.id), vreg.class)
         }
       }
     }
-    // Create reload intervals for slots used multiple times.
-    for slot, info in slot_uses {
-      let (first_inst, last_inst, vreg_class, _vreg_id) = info
-      if last_inst > first_inst {
-        // Multiple uses - worth coalescing.
-        intervals.set((block_idx, slot), { vreg_class, preg: None })
-      }
+  }
+  for interval in @core_regalloc.compute_reload_intervals(reload_uses) {
+    match
+      use_classes.get(
+        (interval.block_id, interval.spill_slot, interval.vreg.id),
+      ) {
+      Some(vreg_class) =>
+        intervals.set((interval.block_id, interval.spill_slot), {
+          vreg_class,
+          preg: None,
+        })
+      None => ()
     }
   }
   intervals

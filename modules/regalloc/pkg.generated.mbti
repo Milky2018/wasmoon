@@ -12,6 +12,8 @@ pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
+pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
+
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
 pub fn raise_scratch_register_unavailable(message~ : String) -> Unit raise VerifyError
@@ -161,6 +163,21 @@ pub(all) enum RegClass {
   Int
   Float
   Vector
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ReloadIntervalInfo {
+  block_id : Int
+  spill_slot : Int
+  vreg : VirtualReg
+  first_inst : Int
+  last_inst : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ReloadUseInfo {
+  block_id : Int
+  inst_index : Int
+  spill_slot : Int
+  vreg : VirtualReg
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SpillSlotReservation {

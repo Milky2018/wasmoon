@@ -453,3 +453,53 @@ test "spill weight applies loop and constraint bonuses" {
 test "spill weight has minimum one" {
   inspect(compute_spill_weight([], []), content="1")
 }
+
+///|
+test "reload intervals keep repeated spill-slot uses" {
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let intervals = compute_reload_intervals([
+    { block_id: 7, inst_index: 1, spill_slot: 3, vreg: v0 },
+    { block_id: 7, inst_index: 4, spill_slot: 3, vreg: v0 },
+  ])
+  inspect(intervals.length(), content="1")
+  inspect(intervals[0].block_id, content="7")
+  inspect(intervals[0].spill_slot, content="3")
+  inspect(intervals[0].vreg.id, content="0")
+  inspect(intervals[0].vreg.class == Int, content="true")
+  inspect(intervals[0].first_inst, content="1")
+  inspect(intervals[0].last_inst, content="4")
+}
+
+///|
+test "reload intervals reject reused spill slots" {
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let v1 : VirtualReg = { id: 1, class: Int }
+  let intervals = compute_reload_intervals([
+    { block_id: 0, inst_index: 0, spill_slot: 2, vreg: v0 },
+    { block_id: 0, inst_index: 1, spill_slot: 2, vreg: v1 },
+    { block_id: 0, inst_index: 2, spill_slot: 2, vreg: v0 },
+  ])
+  inspect(intervals.length(), content="0")
+}
+
+///|
+test "reload intervals skip vectors by default" {
+  let v0 : VirtualReg = { id: 0, class: Vector }
+  inspect(
+    compute_reload_intervals([
+      { block_id: 0, inst_index: 0, spill_slot: 1, vreg: v0 },
+      { block_id: 0, inst_index: 2, spill_slot: 1, vreg: v0 },
+    ]).length(),
+    content="0",
+  )
+  inspect(
+    compute_reload_intervals(
+      [
+        { block_id: 0, inst_index: 0, spill_slot: 1, vreg: v0 },
+        { block_id: 0, inst_index: 2, spill_slot: 1, vreg: v0 },
+      ],
+      allow_vector=true,
+    ).length(),
+    content="1",
+  )
+}
