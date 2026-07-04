@@ -847,6 +847,20 @@ pub fn get_spectest_print_char_ptr() -> Int64 {
   @wasmoon_jit.get_spectest_print_char_ptr()
 }
 
+///|
+fn can_use_reusable_entry_trampoline(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+) -> Bool {
+  // TODO(ISS-022): expand this gate as the reusable entry trampoline gains full
+  // production ABI coverage. Today it is intentionally limited to the scalar
+  // register-only signature covered by the reusable MilkIR/MachV pipeline test.
+  if param_types.length() != 2 || result_types.length() != 1 {
+    return false
+  }
+  param_types[0] is I64 && param_types[1] is I64 && result_types[0] is I64
+}
+
 // ============ Multi-value Return Support ============
 
 ///|
@@ -864,6 +878,10 @@ fn JITContext::call_multi_return(
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
   let num_params = param_types.length() // Number of actual WASM parameters
+  let use_reusable_trampoline = can_use_reusable_entry_trampoline(
+    param_types, result_types,
+  )
+
   // For results, V128 needs 2 slots
   let mut num_result_slots = 0
   for result_type in result_types {
@@ -897,19 +915,32 @@ fn JITContext::call_multi_return(
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.ptr()
     None => {
-      // TODO(ISS-022): replace this legacy VCode trampoline once the reusable
-      // entry trampoline passes the full production WAST/testsuite gate.
-      let param_codes_arr : Array[Int] = []
-      for i in 0..<num_params {
-        param_codes_arr.push(param_type_codes[i])
+      let code_ints = if use_reusable_trampoline {
+        let target : @machv_emit.EmitTarget = match @isa.ISA::current() {
+          AArch64 => AArch64
+          AMD64 => X64
+        }
+        @wasmoon_jit.plan_entry_trampoline_for_target(
+          param_types, result_types, target,
+        ).object.code catch {
+          err => raise JITTrap(to_repr(err).to_string())
+        }
+      } else {
+        // TODO(ISS-022): remove this legacy fallback after the reusable entry
+        // trampoline models production ABI surfaces beyond the currently proven
+        // scalar register-only slice: stack-passed entry params, overflow Wasm
+        // call args/results, reference-root handling, FP packing, and V128 lane
+        // extract/insert operations.
+        let param_codes_arr : Array[Int] = []
+        for i in 0..<num_params {
+          param_codes_arr.push(param_type_codes[i])
+        }
+        let result_codes_arr : Array[Int] = []
+        for i in 0..<num_results {
+          result_codes_arr.push(result_type_codes[i])
+        }
+        @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr).get_bytes()
       }
-      let result_codes_arr : Array[Int] = []
-      for i in 0..<num_results {
-        result_codes_arr.push(result_type_codes[i])
-      }
-      let code_ints = @emit.emit_entry_trampoline(
-        param_codes_arr, result_codes_arr,
-      ).get_bytes()
       let trampoline = ExecCode::new(code_ints)
       match trampoline {
         Some(t) => {
