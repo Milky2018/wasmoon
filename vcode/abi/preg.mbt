@@ -15,7 +15,7 @@ fn PReg::to_string(self : PReg) -> String {
 }
 
 ///|
-pub impl Show for PReg with output(self, logger) {
+pub impl Show for PReg with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

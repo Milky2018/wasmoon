@@ -263,7 +263,7 @@ fn CompiledFunction::to_string(self : CompiledFunction) -> String {
 }
 
 ///|
-pub impl Show for CompiledFunction with output(self, logger) {
+pub impl Show for CompiledFunction with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -415,7 +415,7 @@ fn CodeCache::to_string(self : CodeCache) -> String {
 }
 
 ///|
-pub impl Show for CodeCache with output(self, logger) {
+pub impl Show for CodeCache with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -514,7 +514,7 @@ fn ExecutableRegion::to_string(self : ExecutableRegion) -> String {
 }
 
 ///|
-pub impl Show for ExecutableRegion with output(self, logger) {
+pub impl Show for ExecutableRegion with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -636,7 +636,7 @@ fn MemoryManager::to_string(self : MemoryManager) -> String {
 }
 
 ///|
-pub impl Show for MemoryManager with output(self, logger) {
+pub impl Show for MemoryManager with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -738,7 +738,7 @@ fn JITRuntime::to_string(self : JITRuntime) -> String {
 }
 
 ///|
-pub impl Show for JITRuntime with output(self, logger) {
+pub impl Show for JITRuntime with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

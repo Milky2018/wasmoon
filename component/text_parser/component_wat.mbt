@@ -13,7 +13,7 @@ fn ComponentTextError::to_string(self : ComponentTextError) -> String {
 }
 
 ///|
-pub impl Show for ComponentTextError with output(self, logger) {
+pub impl Show for ComponentTextError with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

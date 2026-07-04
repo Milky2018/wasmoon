@@ -6,7 +6,7 @@ pub suberror PolycallError {
 }
 
 ///|
-impl Show for PolycallError with output(self, logger) {
+impl Show for PolycallError with fn output(self, logger) {
   let msg = match self {
     OutputNumber(expected, got) =>
       "output number error: expected \{expected}, got \{got}"
@@ -22,21 +22,23 @@ pub(all) struct Single[A](A)
 
 ///|
 pub trait DynamicArgs {
-  to_int64_array(Self) -> Array[Int64]
+  fn to_int64_array(Self) -> Array[Int64]
 }
 
 ///|
-pub impl DynamicArgs for Unit with to_int64_array(_self) {
+pub impl DynamicArgs for Unit with fn to_int64_array(_self) {
   []
 }
 
 ///|
-pub impl[A : @types.ToInt64] DynamicArgs for Single[A] with to_int64_array(self) {
+pub impl[A : @types.ToInt64] DynamicArgs for Single[A] with fn to_int64_array(
+  self,
+) {
   [self.0.to_int64_bits()]
 }
 
 ///|
-pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B) with to_int64_array(
+pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B) with fn to_int64_array(
   self,
 ) {
   [@types.ToInt64::to_int64_bits(self.0), @types.ToInt64::to_int64_bits(self.1)]
@@ -47,7 +49,7 @@ pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64] DynamicArgs
   A,
   B,
   C,
-) with to_int64_array(self) {
+) with fn to_int64_array(self) {
   [
     @types.ToInt64::to_int64_bits(self.0),
     @types.ToInt64::to_int64_bits(self.1),
@@ -61,7 +63,7 @@ pub impl[
   B : @types.ToInt64,
   C : @types.ToInt64,
   D : @types.ToInt64,
-] DynamicArgs for (A, B, C, D) with to_int64_array(self) {
+] DynamicArgs for (A, B, C, D) with fn to_int64_array(self) {
   [
     @types.ToInt64::to_int64_bits(self.0),
     @types.ToInt64::to_int64_bits(self.1),
@@ -72,23 +74,23 @@ pub impl[
 
 ///|
 pub trait DynamicReturn {
-  from_int64_array(Array[Int64]) -> Self
+  fn from_int64_array(Array[Int64]) -> Self
 }
 
 ///|
-pub impl DynamicReturn for Unit with from_int64_array(_arr) {
+pub impl DynamicReturn for Unit with fn from_int64_array(_arr) {
   ()
 }
 
 ///|
-pub impl[A : @types.FromInt64] DynamicReturn for Single[A] with from_int64_array(
+pub impl[A : @types.FromInt64] DynamicReturn for Single[A] with fn from_int64_array(
   arr,
 ) {
   Single(arr[0] |> A::from_int64_bits())
 }
 
 ///|
-pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B) with from_int64_array(
+pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B) with fn from_int64_array(
   arr,
 ) {
   (
@@ -102,7 +104,7 @@ pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] Dynam
   A,
   B,
   C,
-) with from_int64_array(arr) {
+) with fn from_int64_array(arr) {
   (
     @types.FromInt64::from_int64_bits(arr[0]),
     @types.FromInt64::from_int64_bits(arr[1]),
@@ -116,7 +118,7 @@ pub impl[
   B : @types.FromInt64,
   C : @types.FromInt64,
   D : @types.FromInt64,
-] DynamicReturn for (A, B, C, D) with from_int64_array(arr) {
+] DynamicReturn for (A, B, C, D) with fn from_int64_array(arr) {
   (
     @types.FromInt64::from_int64_bits(arr[0]),
     @types.FromInt64::from_int64_bits(arr[1]),

@@ -59,7 +59,7 @@ pub(open) trait GcCompiler {
   // === Configuration ===
 
   /// Get the GC compiler configuration
-  config(Self) -> GcCompilerConfig
+  fn config(Self) -> GcCompilerConfig
 
   // === Allocation Code Generation ===
 
@@ -69,7 +69,7 @@ pub(open) trait GcCompiler {
   /// type_idx: the struct type index
   /// field_vregs: virtual registers containing field values
   /// Returns: virtual register containing the new struct reference
-  gen_alloc_struct(
+  fn gen_alloc_struct(
     Self,
     @regalloc.VCodeFunction,
     @block.VCodeBlock,
@@ -84,7 +84,7 @@ pub(open) trait GcCompiler {
   /// len_vreg: virtual register containing array length
   /// init_vreg: virtual register containing initial element value (optional)
   /// Returns: virtual register containing the new array reference
-  gen_alloc_array(
+  fn gen_alloc_array(
     Self,
     @regalloc.VCodeFunction,
     @block.VCodeBlock,
@@ -100,7 +100,7 @@ pub(open) trait GcCompiler {
   /// field_idx: field/element index
   /// old_vreg: current value being overwritten
   /// new_vreg: new reference value being stored
-  gen_write_barrier_pre(
+  fn gen_write_barrier_pre(
     Self,
     @regalloc.VCodeFunction,
     @abi.VReg,
@@ -110,31 +110,31 @@ pub(open) trait GcCompiler {
   ) -> Unit
 
   /// Generate write barrier code AFTER a reference store
-  gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
+  fn gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
 
   /// Generate read barrier code before a reference load
   /// Returns: possibly updated reference after barrier
-  gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
+  fn gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
 
   // === Safepoint Generation ===
 
   /// Generate a safepoint poll
   /// This checks if GC wants to run and yields if needed
   /// Returns: label to continue after safepoint
-  gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
+  fn gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
 
   /// Record safepoint information for stack map
   /// code_offset: where in the code this safepoint is
   /// live_refs: which vregs hold live GC references
-  record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
+  fn record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
 
   // === Stack Map Query ===
 
   /// Get all recorded safepoints for this function
-  get_safepoints(Self) -> Array[GcSafepoint]
+  fn get_safepoints(Self) -> Array[GcSafepoint]
 
   /// Clear safepoint records (call between functions)
-  clear_safepoints(Self) -> Unit
+  fn clear_safepoints(Self) -> Unit
 }
 
 // ============================================================
@@ -154,7 +154,7 @@ pub fn NoBarrierGcCompiler::new() -> NoBarrierGcCompiler {
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with config(_self) -> GcCompilerConfig {
+pub impl GcCompiler for NoBarrierGcCompiler with fn config(_self) -> GcCompilerConfig {
   {
     needs_write_barriers: false,
     needs_read_barriers: false,
@@ -165,7 +165,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with config(_self) -> GcCompilerConf
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_struct(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_alloc_struct(
   _self,
   _func,
   _block,
@@ -178,7 +178,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_struct(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_array(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_alloc_array(
   _self,
   _func,
   _block,
@@ -192,7 +192,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_alloc_array(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_write_barrier_pre(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_write_barrier_pre(
   _self,
   _func,
   _obj_vreg,
@@ -204,7 +204,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_write_barrier_pre(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_write_barrier_post(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_write_barrier_post(
   _self,
   _func,
   _obj_vreg,
@@ -214,7 +214,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_write_barrier_post(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_read_barrier(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_read_barrier(
   _self,
   _func,
   ref_vreg,
@@ -224,7 +224,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_read_barrier(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with gen_safepoint_poll(
+pub impl GcCompiler for NoBarrierGcCompiler with fn gen_safepoint_poll(
   _self,
   _func,
 ) -> Unit {
@@ -232,7 +232,7 @@ pub impl GcCompiler for NoBarrierGcCompiler with gen_safepoint_poll(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with record_safepoint(
+pub impl GcCompiler for NoBarrierGcCompiler with fn record_safepoint(
   self,
   code_offset,
   live_refs,
@@ -245,13 +245,13 @@ pub impl GcCompiler for NoBarrierGcCompiler with record_safepoint(
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with get_safepoints(self) -> Array[
+pub impl GcCompiler for NoBarrierGcCompiler with fn get_safepoints(self) -> Array[
   GcSafepoint,
 ] {
   self.safepoints
 }
 
 ///|
-pub impl GcCompiler for NoBarrierGcCompiler with clear_safepoints(self) -> Unit {
+pub impl GcCompiler for NoBarrierGcCompiler with fn clear_safepoints(self) -> Unit {
   self.safepoints.clear()
 }

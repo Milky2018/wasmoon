@@ -17,6 +17,6 @@ fn VReg::to_string(self : VReg) -> String {
 }
 
 ///|
-pub impl Show for VReg with output(self, logger) {
+pub impl Show for VReg with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

@@ -12,7 +12,7 @@ pub(all) enum BinaryKind {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for BinaryKind with output(self, logger) {
+pub impl Show for BinaryKind with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -92,7 +92,7 @@ fn ComponentParseError::to_string(self : ComponentParseError) -> String {
 }
 
 ///|
-pub impl Show for ComponentParseError with output(self, logger) {
+pub impl Show for ComponentParseError with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

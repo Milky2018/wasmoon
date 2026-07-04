@@ -28,7 +28,7 @@ fn CompilationMode::to_string(self : CompilationMode) -> String {
 }
 
 ///|
-pub impl Show for CompilationMode with output(self, logger) {
+pub impl Show for CompilationMode with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -246,7 +246,7 @@ fn CompilationDecision::to_string(self : CompilationDecision) -> String {
 }
 
 ///|
-pub impl Show for CompilationDecision with output(self, logger) {
+pub impl Show for CompilationDecision with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -373,6 +373,6 @@ fn CompilationStrategy::to_string(self : CompilationStrategy) -> String {
 }
 
 ///|
-pub impl Show for CompilationStrategy with output(self, logger) {
+pub impl Show for CompilationStrategy with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

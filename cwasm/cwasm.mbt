@@ -83,7 +83,7 @@ fn TargetArch::to_string(self : TargetArch) -> String {
 }
 
 ///|
-pub impl Show for TargetArch with output(self, logger) {
+pub impl Show for TargetArch with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -118,7 +118,7 @@ fn ImportEntry::to_string(self : ImportEntry) -> String {
 }
 
 ///|
-pub impl Show for ImportEntry with output(self, logger) {
+pub impl Show for ImportEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -186,7 +186,7 @@ fn CompiledEntry::to_string(self : CompiledEntry) -> String {
 }
 
 ///|
-pub impl Show for CompiledEntry with output(self, logger) {
+pub impl Show for CompiledEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -213,7 +213,7 @@ fn MemoryDef::to_string(self : MemoryDef) -> String {
 }
 
 ///|
-pub impl Show for MemoryDef with output(self, logger) {
+pub impl Show for MemoryDef with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -245,7 +245,7 @@ fn DataEntry::to_string(self : DataEntry) -> String {
 }
 
 ///|
-pub impl Show for DataEntry with output(self, logger) {
+pub impl Show for DataEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -273,7 +273,7 @@ fn TypeEntry::to_string(self : TypeEntry) -> String {
 }
 
 ///|
-pub impl Show for TypeEntry with output(self, logger) {
+pub impl Show for TypeEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -306,7 +306,7 @@ fn GlobalDef::to_string(self : GlobalDef) -> String {
 }
 
 ///|
-pub impl Show for GlobalDef with output(self, logger) {
+pub impl Show for GlobalDef with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -341,7 +341,7 @@ fn TableDef::to_string(self : TableDef) -> String {
 }
 
 ///|
-pub impl Show for TableDef with output(self, logger) {
+pub impl Show for TableDef with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -373,7 +373,7 @@ fn ElemEntry::to_string(self : ElemEntry) -> String {
 }
 
 ///|
-pub impl Show for ElemEntry with output(self, logger) {
+pub impl Show for ElemEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -554,7 +554,7 @@ fn PrecompiledModule::to_string(self : PrecompiledModule) -> String {
 }
 
 ///|
-pub impl Show for PrecompiledModule with output(self, logger) {
+pub impl Show for PrecompiledModule with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -827,7 +827,7 @@ pub suberror DeserializeError {
 }
 
 ///|
-pub impl Show for DeserializeError with output(self, logger) {
+pub impl Show for DeserializeError with fn output(self, logger) {
   match self {
     DeserializeError(msg) => logger.write_string(msg)
   }
