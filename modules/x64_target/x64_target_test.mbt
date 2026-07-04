@@ -103,6 +103,37 @@ test "x64 lowers popcnt through generic MachV arithmetic sequence" {
 }
 
 ///|
+test "x64 lowers bitcount ops through generic MachV arithmetic sequence" {
+  let func = @milkir.Function::new_empty("bitcount64")
+  let value = func.new_value(I64)
+  let leading = func.new_value(I64)
+  let trailing = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Clz, [value], [leading]))
+  entry.append_inst(func.new_inst(Ctz, [value], [trailing]))
+  entry.set_terminator(Return([leading, trailing]))
+  let lowered = lower_function(func)
+  let mut has_clz = false
+  let mut has_ctz = false
+  let mut has_mul = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == IntClz {
+      has_clz = true
+    }
+    if inst.opcode == IntCtz {
+      has_ctz = true
+    }
+    if inst.opcode == IntMul {
+      has_mul = true
+    }
+  }
+  inspect(has_clz, content="false")
+  inspect(has_ctz, content="false")
+  inspect(has_mul, content="true")
+  inspect(lowered.verify(), content="()")
+}
+
+///|
 test "x64 lowers floating point select through integer MachV select" {
   let signature = @milkir.Signature::new([I32, F64, F64], [F64])
   let func = @milkir.Function::new("select_f64", signature)

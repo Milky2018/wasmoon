@@ -425,6 +425,21 @@ fn append_int_binop(
 }
 
 ///|
+fn append_int_unop(
+  out : @machv.Function,
+  block : @machv.Block,
+  opcode : @machv.Opcode,
+  value : @machv.Reg,
+) -> @machv.VReg {
+  let dst = out.new_vreg(Int)
+  let op = out.new_inst(opcode)
+  op.add_operand(@machv.Operand::use_reg(value))
+  op.add_operand(@machv.Operand::def(Virtual(dst)))
+  block.append(op)
+  dst
+}
+
+///|
 fn append_int_move_result(
   block : @machv.Block,
   out : @machv.Function,
@@ -470,18 +485,28 @@ fn lower_int_popcnt(
   inst : @milkir.Inst,
 ) -> Unit {
   guard inst.args.length() == 1 && inst.results.length() == 1 else { return }
-  let input : @machv.Reg = if inst.args[0].ty == I32 {
+  let result = append_int_popcnt(
+    out,
+    block,
+    inst.args[0].ty,
+    reg_for_value(inst.args[0]),
+  )
+  append_int_move_result(block, out, Virtual(result), inst.results)
+}
+
+///|
+fn append_int_popcnt(
+  out : @machv.Function,
+  block : @machv.Block,
+  ty : @milkir.Type,
+  value : @machv.Reg,
+) -> @machv.VReg {
+  let input : @machv.Reg = if ty == I32 {
     let mask32 = append_int_const(out, block, 0xffffffffL)
-    let masked = append_int_binop(
-      out,
-      block,
-      IntAnd,
-      reg_for_value(inst.args[0]),
-      Virtual(mask32),
-    )
+    let masked = append_int_binop(out, block, IntAnd, value, Virtual(mask32))
     Virtual(masked)
   } else {
-    reg_for_value(inst.args[0])
+    value
   }
   let one = append_int_const(out, block, 1L)
   let mask1 = append_int_const(out, block, 0x5555555555555555L)
@@ -549,18 +574,94 @@ fn lower_int_popcnt(
   let final_shift = append_int_const(
     out,
     block,
-    if inst.args[0].ty == I32 {
+    if ty == I32 {
       24L
     } else {
       56L
     },
   )
-  let result = append_int_shift(
+  append_int_shift(out, block, Virtual(product), Virtual(final_shift))
+}
+
+///|
+fn lower_int_ctz(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+) -> Unit {
+  guard inst.args.length() == 1 && inst.results.length() == 1 else { return }
+  let input : @machv.Reg = if inst.args[0].ty == I32 {
+    let mask32 = append_int_const(out, block, 0xffffffffL)
+    let masked = append_int_binop(
+      out,
+      block,
+      IntAnd,
+      reg_for_value(inst.args[0]),
+      Virtual(mask32),
+    )
+    Virtual(masked)
+  } else {
+    reg_for_value(inst.args[0])
+  }
+  let zero = append_int_const(out, block, 0L)
+  let negated = append_int_binop(out, block, IntSub, Virtual(zero), input)
+  let low_bit = append_int_binop(out, block, IntAnd, input, Virtual(negated))
+  let one = append_int_const(out, block, 1L)
+  let trailing_mask = append_int_binop(
     out,
     block,
-    Virtual(product),
-    Virtual(final_shift),
+    IntSub,
+    Virtual(low_bit),
+    Virtual(one),
   )
+  let result = append_int_popcnt(
+    out,
+    block,
+    inst.args[0].ty,
+    Virtual(trailing_mask),
+  )
+  append_int_move_result(block, out, Virtual(result), inst.results)
+}
+
+///|
+fn lower_int_clz(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+) -> Unit {
+  guard inst.args.length() == 1 && inst.results.length() == 1 else { return }
+  let mut saturated : @machv.Reg = if inst.args[0].ty == I32 {
+    let mask32 = append_int_const(out, block, 0xffffffffL)
+    let masked = append_int_binop(
+      out,
+      block,
+      IntAnd,
+      reg_for_value(inst.args[0]),
+      Virtual(mask32),
+    )
+    Virtual(masked)
+  } else {
+    reg_for_value(inst.args[0])
+  }
+  let shifts : Array[Int64] = if inst.args[0].ty == I32 {
+    [1L, 2L, 4L, 8L, 16L]
+  } else {
+    [1L, 2L, 4L, 8L, 16L, 32L]
+  }
+  for shift in shifts {
+    let count = append_int_const(out, block, shift)
+    let shifted = append_int_shift(out, block, saturated, Virtual(count))
+    let merged = append_int_binop(
+      out,
+      block,
+      IntOr,
+      saturated,
+      Virtual(shifted),
+    )
+    saturated = Virtual(merged)
+  }
+  let inverted = append_int_unop(out, block, IntNot, saturated)
+  let result = append_int_popcnt(out, block, inst.args[0].ty, Virtual(inverted))
   append_int_move_result(block, out, Virtual(result), inst.results)
 }
 
@@ -830,6 +931,14 @@ fn lower_inst(
     }
     Popcnt => {
       lower_int_popcnt(out, block, inst)
+      return
+    }
+    Clz => {
+      lower_int_clz(out, block, inst)
+      return
+    }
+    Ctz => {
+      lower_int_ctz(out, block, inst)
       return
     }
     Smulh => {
