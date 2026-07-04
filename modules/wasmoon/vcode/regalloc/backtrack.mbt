@@ -572,27 +572,14 @@ fn BacktrackingAllocator::bundle_sorted_spans(
 }
 
 ///|
-/// Find first occupied index whose span.end is strictly after `point`.
-/// Occupied spans for one preg are non-overlapping and sorted by start, so end
-/// order is also monotonic.
-fn BacktrackingAllocator::occupied_lower_bound_by_end(
-  self : BacktrackingAllocator,
-  occupied : Array[(Int, OrderedSpan)],
-  point_ord : Int,
-) -> Int {
-  ignore(self)
-  let mut lo = 0
-  let mut hi = occupied.length()
-  while lo < hi {
-    let mid = lo + (hi - lo) / 2
-    let end_ord = occupied[mid].1.end_ord
-    if end_ord <= point_ord {
-      lo = mid + 1
-    } else {
-      hi = mid
-    }
+fn backtrack_core_ordered_span(
+  span : OrderedSpan,
+) -> @core_regalloc.OrderedProgramSpan {
+  {
+    start: backtrack_core_point(span.start),
+    start_ord: span.start_ord,
+    end_ord: span.end_ord,
   }
-  lo
 }
 
 ///|
@@ -609,22 +596,15 @@ fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
   if occupied.is_empty() || spans.is_empty() {
     return false
   }
-  let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end_ord <= occ.start_ord {
-      i = i + 1
-      continue
-    }
-    if occ.end_ord <= span.start_ord {
-      j = j + 1
-      continue
-    }
-    return true
+  let core_spans : Array[@core_regalloc.OrderedProgramSpan] = []
+  for span in spans {
+    core_spans.push(backtrack_core_ordered_span(span))
   }
-  false
+  let core_occupied : Array[@core_regalloc.OrderedProgramSpan] = []
+  for item in occupied {
+    core_occupied.push(backtrack_core_ordered_span(item.1))
+  }
+  @core_regalloc.has_ordered_span_conflict(core_spans, core_occupied)
 }
 
 ///|

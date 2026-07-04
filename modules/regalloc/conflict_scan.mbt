@@ -44,6 +44,50 @@ fn conflict_already_seen(seen : Array[Int], owner_id : Int) -> Bool {
 }
 
 ///|
+pub fn lower_bound_ordered_span_by_end(
+  spans : Array[OrderedProgramSpan],
+  point_ord : Int,
+) -> Int {
+  let mut lo = 0
+  let mut hi = spans.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    if spans[mid].end_ord <= point_ord {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+///|
+pub fn has_ordered_span_conflict(
+  spans : Array[OrderedProgramSpan],
+  occupied : Array[OrderedProgramSpan],
+) -> Bool {
+  if spans.is_empty() || occupied.is_empty() {
+    return false
+  }
+  let mut i = 0
+  let mut j = lower_bound_ordered_span_by_end(occupied, spans[0].start_ord)
+  while i < spans.length() && j < occupied.length() {
+    let span = spans[i]
+    let occ = occupied[j]
+    if span.end_ord <= occ.start_ord {
+      i = i + 1
+      continue
+    }
+    if occ.end_ord <= span.start_ord {
+      j = j + 1
+      continue
+    }
+    return true
+  }
+  false
+}
+
+///|
 pub fn scan_conflicts_with_cutoff(
   spans : Array[OrderedProgramSpan],
   occupied : Array[OccupiedProgramSpan],

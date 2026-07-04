@@ -26,6 +26,10 @@ pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
 pub fn eviction_cutoff(Int?, Int?) -> Int?
 
+pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
+
+pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
+
 pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
 
 pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan

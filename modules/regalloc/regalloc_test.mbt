@@ -387,6 +387,29 @@ test "scan conflicts reports evictable owners and first conflict point" {
 }
 
 ///|
+test "ordered span conflict scan skips ended occupied spans" {
+  let occupied : Array[OrderedProgramSpan] = [
+    { start: ProgramPoint::new(0, 0), start_ord: 0, end_ord: 4 },
+    { start: ProgramPoint::new(0, 1), start_ord: 8, end_ord: 12 },
+  ]
+  inspect(lower_bound_ordered_span_by_end(occupied, 6), content="1")
+  inspect(
+    has_ordered_span_conflict(
+      [{ start: ProgramPoint::new(0, 2), start_ord: 6, end_ord: 7 }],
+      occupied,
+    ),
+    content="false",
+  )
+  inspect(
+    has_ordered_span_conflict(
+      [{ start: ProgramPoint::new(0, 2), start_ord: 6, end_ord: 9 }],
+      occupied,
+    ),
+    content="true",
+  )
+}
+
+///|
 test "scan conflicts rejects pinned and cutoff conflicts" {
   let span : OrderedProgramSpan = {
     start: ProgramPoint::new(0, 0),
