@@ -42,6 +42,7 @@ pub(all) struct CwasmArtifact {
   stack_maps : Array[@machv_emit.StackMap]
   debug_entries : Array[@machv_emit.DebugEntry]
 } derive(@debug.Debug)
+pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
 pub fn CwasmArtifact::from_linked_code(LinkedCode, Int) -> Self
 pub fn CwasmArtifact::manifest(Self) -> Array[String]
 

@@ -35,9 +35,21 @@ pub fn CwasmArtifact::from_linked_code(
 }
 
 ///|
+pub fn CwasmArtifact::from_jit_plan(
+  plan : JitIntegrationPlan,
+  resolver : RuntimeSymbolResolver,
+  function_index : Int,
+) -> CwasmArtifact raise LinkError {
+  CwasmArtifact::from_linked_code(
+    link_code_object(plan.object, resolver),
+    function_index,
+  )
+}
+
+///|
 pub fn CwasmArtifact::manifest(self : CwasmArtifact) -> Array[String] {
-  // TODO(wasmoon_jit): replace this manifest helper with the final .cwasm
-  // binary reader/writer after the legacy cwasm package is physically moved.
+  // TODO(wasmoon_jit): route this artifact through the moved .cwasm binary
+  // reader/writer once function metadata from the new pipeline is complete.
   [
     "cwasm.version=" + self.version.to_string(),
     "cwasm.code_size=" + self.code.length().to_string(),

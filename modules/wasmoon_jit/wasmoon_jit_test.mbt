@@ -55,3 +55,25 @@ test "plan MilkIR through reusable JIT pipeline" {
   debug_inspect(plan.object.code, content="[72, 137, 194, 72, 1, 202, 195]")
   inspect(plan.object.debug_entries.length(), content="2")
 }
+
+///|
+test "wrap reusable JIT plan as cwasm artifact" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("add64_artifact", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let sum = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.set_terminator(Return([sum]))
+  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let artifact = try! CwasmArtifact::from_jit_plan(
+    plan,
+    RuntimeSymbolResolver::new(),
+    3,
+  )
+  inspect(artifact.functions.length(), content="1")
+  inspect(artifact.functions[0].function_index, content="3")
+  inspect(artifact.code.length() > 0, content="true")
+  inspect(artifact.debug_entries.length(), content="2")
+}
