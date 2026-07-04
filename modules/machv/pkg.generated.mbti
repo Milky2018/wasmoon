@@ -1,11 +1,121 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/machv"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 
 // Errors
+pub suberror VerifyError {
+  EmptyFunction
+  EmptyBlock(block_id~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for VerifyError
 
 // Types and methods
+pub(all) struct Block {
+  id : Int
+  instructions : Array[Instruction]
+  successors : Array[Int]
+} derive(@debug.Debug)
+pub fn Block::add_successor(Self, Int) -> Unit
+pub fn Block::append(Self, Instruction) -> Unit
+pub fn Block::new(Int) -> Self
+
+pub(all) struct Constraint {
+  operand_index : Int
+  allowed_regs : Array[PReg]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Function {
+  name : String
+  blocks : Array[Block]
+  stack_slots : Array[StackSlot]
+  mut next_block_id : Int
+  mut next_inst_id : Int
+  mut next_vreg_id : Int
+  mut next_stack_slot_id : Int
+} derive(@debug.Debug)
+pub fn Function::new(String) -> Self
+pub fn Function::new_block(Self) -> Block
+pub fn Function::new_inst(Self, Opcode) -> Instruction
+pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
+pub fn Function::new_vreg(Self, RegClass) -> VReg
+pub fn Function::verify(Self) -> Unit raise VerifyError
+
+pub(all) struct Instruction {
+  id : Int
+  opcode : Opcode
+  operands : Array[Operand]
+  clobbers : Array[PReg]
+  constraints : Array[Constraint]
+  mut stack_effect : StackEffect
+} derive(Eq, @debug.Debug)
+pub fn Instruction::add_clobber(Self, PReg) -> Unit
+pub fn Instruction::add_constraint(Self, Constraint) -> Unit
+pub fn Instruction::add_operand(Self, Operand) -> Unit
+pub fn Instruction::new(Int, Opcode) -> Self
+pub fn Instruction::set_stack_effect(Self, StackEffect) -> Unit
+
+pub(all) enum Opcode {
+  Target(String)
+  Move
+  Load(StackSlot)
+  Store(StackSlot)
+  Call(String)
+  Jump(Int)
+  Branch(Int, Int)
+  Return
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Operand {
+  reg : Reg
+  role : OperandRole
+} derive(Eq, @debug.Debug)
+pub fn Operand::def(Reg) -> Self
+pub fn Operand::use_def(Reg) -> Self
+pub fn Operand::use_reg(Reg) -> Self
+
+pub(all) enum OperandRole {
+  Use
+  Def
+  UseDef
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PReg {
+  index : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Reg {
+  Virtual(VReg)
+  Physical(PReg)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RegClass {
+  Int
+  Float
+  Vector
+} derive(Eq, @debug.Debug)
+
+pub(all) enum StackEffect {
+  None
+  Adjust(Int)
+  CallFrame(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct StackSlot {
+  id : Int
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct VReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 
