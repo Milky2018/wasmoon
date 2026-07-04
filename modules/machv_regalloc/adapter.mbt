@@ -29,7 +29,11 @@ fn preg_from_regalloc_for_class(
 fn constraint_for_operand(
   inst : @machv.Instruction,
   operand_index : Int,
+  include_fixed_constraints : Bool,
 ) -> @regalloc.OperandConstraint {
+  if !include_fixed_constraints {
+    return AnyReg
+  }
   for constraint in inst.constraints {
     if constraint.operand_index == operand_index {
       if constraint.allowed_regs.length() == 1 {
@@ -45,6 +49,7 @@ fn operand_to_regalloc(
   inst : @machv.Instruction,
   operand_index : Int,
   operand : @machv.Operand,
+  include_fixed_constraints : Bool,
 ) -> @regalloc.Operand? {
   match operand.reg {
     Virtual(vreg) => {
@@ -63,7 +68,9 @@ fn operand_to_regalloc(
       }
       Some(
         base
-        .with_constraint(constraint_for_operand(inst, operand_index))
+        .with_constraint(
+          constraint_for_operand(inst, operand_index, include_fixed_constraints),
+        )
         .with_tie(operand.tie_id),
       )
     }
@@ -72,10 +79,14 @@ fn operand_to_regalloc(
 }
 
 ///|
-fn instruction_to_regalloc(inst : @machv.Instruction) -> @regalloc.Instruction {
+fn instruction_to_regalloc(
+  inst : @machv.Instruction,
+  include_fixed_constraints : Bool,
+) -> @regalloc.Instruction {
   let out = @regalloc.Instruction::new(inst.id)
   for i, operand in inst.operands {
-    if operand_to_regalloc(inst, i, operand) is Some(regalloc_operand) {
+    if operand_to_regalloc(inst, i, operand, include_fixed_constraints)
+      is Some(regalloc_operand) {
       out.add_operand(regalloc_operand)
     }
   }
@@ -83,6 +94,14 @@ fn instruction_to_regalloc(inst : @machv.Instruction) -> @regalloc.Instruction {
     out.add_clobber(preg_to_regalloc(clobber))
   }
   out
+}
+
+///|
+fn materialize_fixed_constraints_for_opcode(opcode : @machv.Opcode) -> Bool {
+  match opcode {
+    Call(_) => true
+    _ => false
+  }
 }
 
 ///|
@@ -169,6 +188,15 @@ pub fn project_function(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Program {
+  project_function_impl(func, physical_regs, true)
+}
+
+///|
+fn project_function_impl(
+  func : @machv.Function,
+  physical_regs : Array[@machv.PReg],
+  include_fixed_constraints : Bool,
+) -> @regalloc.Program {
   let regs = physical_regs.map(preg_to_regalloc)
   let program = @regalloc.Program::new(regs)
   for block in func.blocks {
@@ -180,7 +208,9 @@ pub fn project_function(
       out_block.append(param_defs)
     }
     for inst in block.instructions {
-      out_block.append(instruction_to_regalloc(inst))
+      let include_inst_constraints = include_fixed_constraints &&
+        !materialize_fixed_constraints_for_opcode(inst.opcode)
+      out_block.append(instruction_to_regalloc(inst, include_inst_constraints))
     }
     if block.terminator is Some(term) {
       out_block.append(terminator_to_regalloc(block.id, term))
@@ -199,6 +229,17 @@ pub fn allocate_function(
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let program = project_function(func, physical_regs)
+  let allocation = @regalloc.allocate(program)
+  @regalloc.verify_allocation(program, allocation)
+  allocation
+}
+
+///|
+fn allocate_function_for_apply(
+  func : @machv.Function,
+  physical_regs : Array[@machv.PReg],
+) -> @regalloc.Allocation raise @regalloc.VerifyError {
+  let program = project_function_impl(func, physical_regs, true)
   let allocation = @regalloc.allocate(program)
   @regalloc.verify_allocation(program, allocation)
   allocation
@@ -361,11 +402,11 @@ fn allocate_with_optional_scratch(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
-  let first = allocate_function(func, physical_regs)
+  let first = allocate_function_for_apply(func, physical_regs)
   if has_spills(first) {
     let allocatable = allocatable_regs_for_spills(physical_regs)
     if allocatable.length() != physical_regs.length() {
-      return allocate_function(func, allocatable)
+      return allocate_function_for_apply(func, allocatable)
     }
   }
   first
@@ -753,6 +794,91 @@ fn append_location_move(
 }
 
 ///|
+fn operand_class(operand : @machv.Operand) -> @machv.RegClass {
+  match operand.reg {
+    Virtual(vreg) => vreg.class
+    Physical(preg) => preg.class
+  }
+}
+
+///|
+fn operand_with_physical(
+  operand : @machv.Operand,
+  preg : @machv.PReg,
+) -> @machv.Operand {
+  let reg : @machv.Reg = Physical(preg)
+  let out = match operand.role {
+    Use => @machv.Operand::use_reg(reg)
+    Def => @machv.Operand::def(reg)
+    UseDef => @machv.Operand::use_def(reg)
+  }
+  out.with_tie(operand.tie_id)
+}
+
+///|
+fn materialize_fixed_constraint_moves(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+) -> Unit raise @regalloc.VerifyError {
+  for block in func.blocks {
+    let rewritten : Array[@machv.Instruction] = []
+    for inst in block.instructions {
+      let before : Array[@machv.Instruction] = []
+      let after : Array[@machv.Instruction] = []
+      for constraint in inst.constraints {
+        guard constraint.allowed_regs.length() == 1 else { continue }
+        guard constraint.operand_index >= 0 &&
+          constraint.operand_index < inst.operands.length() else {
+          continue
+        }
+        let required = constraint.allowed_regs[0]
+        let operand = inst.operands[constraint.operand_index]
+        let class = operand_class(operand)
+        if operand.role == Use || operand.role == UseDef {
+          if source_location(operand.reg, allocation) is Some(from) {
+            append_location_move(
+              func,
+              spill_slots,
+              class,
+              from,
+              Reg(preg_to_regalloc(required)),
+              before,
+            )
+          }
+        }
+        if operand.role == Def || operand.role == UseDef {
+          if source_location(operand.reg, allocation) is Some(to) {
+            append_location_move(
+              func,
+              spill_slots,
+              class,
+              Reg(preg_to_regalloc(required)),
+              to,
+              after,
+            )
+          }
+        }
+        inst.operands[constraint.operand_index] = operand_with_physical(
+          operand, required,
+        )
+      }
+      for mov in before {
+        rewritten.push(mov)
+      }
+      rewritten.push(inst)
+      for mov in after {
+        rewritten.push(mov)
+      }
+    }
+    block.instructions.clear()
+    for inst in rewritten {
+      block.instructions.push(inst)
+    }
+  }
+}
+
+///|
 fn resolve_edge_moves(
   func : @machv.Function,
   spill_slots : Array[@machv.StackSlot],
@@ -1123,6 +1249,7 @@ pub fn allocate_and_apply(
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
   materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
+  materialize_fixed_constraint_moves(func, allocation, spill_slots)
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
   materialize_entry_param_transfers(
     func, allocation, spill_slots, physical_regs,

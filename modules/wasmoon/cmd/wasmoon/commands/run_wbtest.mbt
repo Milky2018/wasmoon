@@ -190,6 +190,46 @@ test "compile api: reusable pipeline lowers memory.size for non-zero memory" {
 }
 
 ///|
+test "compile api: reusable pipeline lowers memory.grow runtime call" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [I32Const(1), MemoryGrow(0)],
+      "memory_grow",
+    ),
+    memories: [
+      {
+        limits: { min: 1, max: Some(2L) },
+        is_memory64: false,
+        page_size_log2: 16,
+      },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("memory.grow did not compile through reusable pipeline")
+  }
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.MemoryGrow"), content="false")
+  inspect(
+    reusable.milk_dump.contains("call wasmoon.runtime.memory_grow"),
+    content="true",
+  )
+  inspect(reusable.entry.call_fixups.length(), content="1")
+  inspect(reusable.entry.call_fixups[0].func_idx, content="-21000")
+}
+
+///|
 test "compile api: reusable pipeline lowers non-zero memory load store" {
   let mod_ = {
     ..@types.Module::simple(

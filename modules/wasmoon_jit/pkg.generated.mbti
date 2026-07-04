@@ -694,6 +694,7 @@ pub fn RuntimeSymbolResolver::add_symbol_fixup(Self, String, Int64, Int) -> Unit
 pub fn RuntimeSymbolResolver::new() -> Self
 pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
 pub fn RuntimeSymbolResolver::resolve_symbol(Self, String) -> RuntimeSymbol?
+pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self
 
 pub(all) struct TieredConfig {
   baseline_threshold : Int

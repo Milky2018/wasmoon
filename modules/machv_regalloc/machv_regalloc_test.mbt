@@ -111,6 +111,41 @@ test "projected MachV constraints guide fixed register allocation" {
 }
 
 ///|
+test "apply materializes call fixed constraints as moves" {
+  let func = @machv.Function::new("call_fixed_moves")
+  let entry = func.new_block()
+  let value = func.new_vreg(Int)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let def_value = func.new_inst(Target("def_value"))
+  def_value.add_operand(@machv.Operand::def(Virtual(value)))
+  def_value.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  entry.append(def_value)
+  let call0 = func.new_inst(Call("first"))
+  call0.add_operand(@machv.Operand::use_reg(Virtual(value)))
+  call0.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  entry.append(call0)
+  let call1 = func.new_inst(Call("second"))
+  call1.add_operand(@machv.Operand::use_reg(Virtual(value)))
+  call1.add_constraint({ operand_index: 0, allowed_regs: [p1] })
+  entry.append(call1)
+  allocate_and_apply(func, [p0, p1]) |> ignore
+  inspect(entry.instructions.length(), content="4")
+  inspect(entry.instructions[1].operands[0].reg, content="x0")
+  inspect(entry.instructions[2].opcode is Move, content="true")
+  debug_inspect(
+    entry.instructions[2].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 1, class: Int }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 0, class: Int }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+  inspect(entry.instructions[3].operands[0].reg, content="x1")
+}
+
+///|
 test "projected MachV ties co-locate use-def operands" {
   let func = @machv.Function::new("tied")
   let entry = func.new_block()

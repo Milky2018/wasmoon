@@ -50,6 +50,30 @@ test "resolve legacy runtime fixup ids in wasmoon_jit" {
 }
 
 ///|
+test "default wasmoon runtime resolver maps memory.grow fixup" {
+  let func = @machv.Function::new("memory_grow_caller")
+  let entry = func.new_block()
+  entry.append(func.new_inst(Call("wasmoon.runtime.memory_grow")))
+  entry.append(func.new_inst(Return))
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let linked = try! link_code_object(
+    object,
+    RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
+  )
+  inspect(linked.runtime_relocations.length(), content="1")
+  debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(-21000)")
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    7,
+    X86_64,
+    "memory_grow_caller",
+  )
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].call_fixups.length(), content="1")
+  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21000")
+}
+
+///|
 test "resolve function-address fixup targets in wasmoon_jit" {
   inspect(resolve_func_addr_fixup_target(-20000, 0L) is Some(_), content="true")
   debug_inspect(resolve_func_addr_fixup_target(3, 0L), content="None")

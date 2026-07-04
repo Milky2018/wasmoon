@@ -44,6 +44,17 @@ pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
 }
 
 ///|
+pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolResolver {
+  let resolver = RuntimeSymbolResolver::new()
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_grow",
+    @jit_ffi.c_jit_get_memory_grow_ptr(),
+    jit_runtime_fixup_idx(0),
+  )
+  resolver
+}
+
+///|
 pub fn RuntimeSymbolResolver::add_symbol(
   self : RuntimeSymbolResolver,
   name : String,

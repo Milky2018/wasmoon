@@ -1568,7 +1568,7 @@ fn try_compile_with_reusable_pipeline(
     .join("\n")
   let artifact = @wasmoon_jit.CwasmArtifact::from_jit_plan_with_signature(
     plan,
-    @wasmoon_jit.RuntimeSymbolResolver::new(),
+    @wasmoon_jit.RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
     func_idx,
     func_type.params.length(),
     func_type.results.length(),

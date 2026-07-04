@@ -751,20 +751,45 @@ fn push_memory_size(
 fn push_memory_grow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
     return false
   }
   guard pop_value(stack) is Some(delta) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy MemoryGrow opcode shape.
-  guard emit_op(builder, result_ty, Custom("wasmoon.MemoryGrow(\{memidx})"), [
-      delta,
+  let delta_i64 = if delta.ty == I64 {
+    delta
+  } else {
+    guard emit_op(builder, I64, Uextend, [delta]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
+  let max_pages = memory_types[memidx].limits.max
+    .map(fn(max) { max.to_int() })
+    .unwrap_or(-1)
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.memory_grow")
+  guard builder.call(symbol, Some(I32), [
+      context,
+      builder.iconst_i64(memidx.to_int64()),
+      delta_i64,
+      builder.iconst_i64(max_pages.to_int64()),
     ])
-    is Some(result) else {
+    is Some(call_result_i32) else {
     return false
+  }
+  let result = if result_ty == I64 {
+    guard emit_op(builder, I64, Sextend, [call_result_i32]) is Some(extended) else {
+      return false
+    }
+    extended
+  } else {
+    call_result_i32
   }
   stack.push(result)
   true
@@ -2170,7 +2195,7 @@ fn try_lower_linear_function(
           return None
         }
       MemoryGrow(memidx) =>
-        if !push_memory_grow(builder, stack, memory_types, memidx) {
+        if !push_memory_grow(builder, stack, vmctx, memory_types, memidx) {
           return None
         }
       MemoryFill(memidx) =>
