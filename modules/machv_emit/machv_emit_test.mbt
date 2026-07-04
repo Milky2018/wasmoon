@@ -279,6 +279,28 @@ test "emit X64 integer shift bytes" {
 }
 
 ///|
+test "emit X64 integer rotate bytes" {
+  let func = @machv.Function::new("x64_int_rotate")
+  let entry = func.new_block()
+  let rotl = func.new_inst(IntRotl)
+  rotl.add_operand(@machv.Operand::use_reg(Physical({ index: 8, class: Int })))
+  rotl.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  rotl.add_operand(@machv.Operand::def(Physical({ index: 10, class: Int })))
+  entry.append(rotl)
+  let rotr = func.new_inst(IntRotr)
+  rotr.add_operand(@machv.Operand::use_reg(Physical({ index: 9, class: Int })))
+  rotr.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  rotr.add_operand(@machv.Operand::def(Physical({ index: 9, class: Int })))
+  entry.append(rotr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[77, 137, 194, 73, 211, 194, 73, 211, 201, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()

@@ -187,6 +187,31 @@ test "x64 legalizes shift count into rcx" {
 }
 
 ///|
+test "x64 legalizes rotate count into rcx" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("rotl64", signature)
+  let value = func.new_value(I64)
+  let count = func.new_value(I64)
+  let rotated = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Rotl, [value, count], [rotated]))
+  entry.set_terminator(Return([rotated]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
+  let rotate = lowered.blocks[0].instructions[2]
+  inspect(rotate.opcode == IntRotl, content="true")
+  inspect(rotate.operands.length(), content="3")
+  inspect(rotate.constraints.length(), content="1")
+  inspect(
+    rotate.constraints[0].allowed_regs[0] == { index: 1, class: Int },
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[3].opcode == Move, content="true")
+}
+
+///|
 test "x64 lowers extended MilkIR ops into structured MachV opcodes" {
   let func = @milkir.Function::new_empty("extended")
   let lhs = func.new_value(I64)

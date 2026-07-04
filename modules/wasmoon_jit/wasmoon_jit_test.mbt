@@ -268,6 +268,29 @@ test "plan MilkIR integer shift through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer rotate through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("rotr64", signature)
+  let value = milk.new_value(I64)
+  let count = milk.new_value(I64)
+  let rotated = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Rotr, [value, count], [rotated]))
+  entry.set_terminator(Return([rotated]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_rotate_cl = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0xd3 && (plan.object.code[i + 1] & 0x38) == 0x08 {
+      has_rotate_cl = true
+    }
+  }
+  inspect(has_rotate_cl, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [I64])
   let milk = @milkir.Function::new("ctz64", signature)

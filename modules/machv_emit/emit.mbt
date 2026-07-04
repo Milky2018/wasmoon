@@ -1483,6 +1483,8 @@ fn write_x64_inst_bytes(
           "ushr"
         },
       )
+    IntRotl => emit_x64_int_shift(object, inst, 0, "rotl")
+    IntRotr => emit_x64_int_shift(object, inst, 1, "rotr")
     FloatAdd => emit_x64_float_binop3(object, inst, 0x58, "fadd")
     FloatSub => emit_x64_float_binop3(object, inst, 0x5c, "fsub")
     FloatMul => emit_x64_float_binop3(object, inst, 0x59, "fmul")

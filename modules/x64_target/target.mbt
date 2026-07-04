@@ -570,6 +570,14 @@ fn lower_inst(
       lower_int_shift(out, block, inst, IntShr(false))
       return
     }
+    Rotl => {
+      lower_int_shift(out, block, inst, IntRotl)
+      return
+    }
+    Rotr => {
+      lower_int_shift(out, block, inst, IntRotr)
+      return
+    }
     _ => ()
   }
   let lowered = match inst.opcode {
