@@ -1515,7 +1515,7 @@ fn compile_module_to_jit(
   compile_start? : @perf.PerfTick? = None,
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
-) -> (@cwasm.PrecompiledModule, @jit.JITDebugDB?)? {
+) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
@@ -1525,8 +1525,8 @@ fn compile_module_to_jit(
     AMD64 => X86_64
   }
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
-  let debug_db : @jit.JITDebugDB? = if dump_on_trap {
-    Some(@jit.JITDebugDB::new())
+  let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
+    Some(@wasmoon_jit.JITDebugDB::new())
   } else {
     None
   }
@@ -1825,7 +1825,7 @@ fn compile_module_to_jit(
       // Store best-effort dumps (empty string if unavailable for a stage).
       db.set(
         func_idx,
-        @jit.JITFunctionDebug::new(
+        @wasmoon_jit.JITFunctionDebug::new(
           ir_dump.unwrap_or(""),
           vcode_before_dump.unwrap_or(""),
           vcode_after_dump.unwrap_or(""),

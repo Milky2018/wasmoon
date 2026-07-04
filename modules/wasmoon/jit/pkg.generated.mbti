@@ -284,13 +284,6 @@ pub(all) struct FunctionEntry {
 pub fn FunctionEntry::is_compiled(Self) -> Bool
 pub fn FunctionEntry::new(Int) -> Self
 
-pub struct JITDebugDB {
-  entries : Map[Int, JITFunctionDebug]
-}
-pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
-pub fn JITDebugDB::new() -> Self
-pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
-
 pub(all) struct JITEngine {
   strategy : @wasmoon_jit.CompilationStrategy
   runtime : @vcode.JITRuntime
@@ -319,14 +312,6 @@ pub struct JITFunction {
   // private fields
 }
 
-pub struct JITFunctionDebug {
-  ir : String
-  vcode_before_regalloc : String
-  vcode_after_regalloc : String
-  machine_code : String
-}
-pub fn JITFunctionDebug::new(String, String, String, String) -> Self
-
 type JITModule
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
@@ -350,7 +335,7 @@ pub fn JITModule::get_func_count(Self) -> Int
 pub fn JITModule::get_func_ptr(Self, Int) -> Int64
 pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
 pub fn JITModule::get_func_table_ptr(Self) -> Int64
-pub fn JITModule::get_last_trap_report(Self) -> TrapReport?
+pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
 pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
 pub fn JITModule::get_memory_size(Self, Int) -> Int64
 pub fn JITModule::get_table_ptr(Self, Int) -> Int64
@@ -361,8 +346,8 @@ pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[
 pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
-pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
-pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
@@ -375,32 +360,6 @@ pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], 
 pub(all) struct Single[A](A)
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
-
-pub struct TrapReport {
-  trap_kind : String
-  message : String
-  signal : Int
-  signal_name : String
-  pc : Int64
-  lr : Int64
-  fp : Int64
-  frame_lr : Int64
-  fault_addr : Int64
-  brk_imm : Int
-  wasm_func_idx : Int?
-  wasm_func_name : String?
-  wasm_offset : Int64?
-  wasm_frames : Array[WasmTrapFrame]
-  host_frames : Array[String]
-  dump_path : String?
-}
-
-pub struct WasmTrapFrame {
-  pc : Int64
-  func_idx : Int
-  func_name : String
-  wasm_offset : Int64
-}
 
 // Type aliases
 pub using @wasmoon_jit {type BacktraceFrame}
@@ -433,6 +392,10 @@ pub using @wasmoon_jit {type GCSetupError}
 
 pub using @wasmoon_jit {type HotThreshold}
 
+pub using @wasmoon_jit {type JITDebugDB}
+
+pub using @wasmoon_jit {type JITFunctionDebug}
+
 pub using @wasmoon_jit {type JITTable}
 
 pub using @wasmoon_jit {type MemoryInfo}
@@ -442,6 +405,10 @@ pub using @wasmoon_jit {type Profiler}
 pub using @wasmoon_jit {type TieredConfig}
 
 pub using @wasmoon_jit {type TrapDetails}
+
+pub using @wasmoon_jit {type TrapReport}
+
+pub using @wasmoon_jit {type WasmTrapFrame}
 
 // Traits
 pub trait DynamicArgs {

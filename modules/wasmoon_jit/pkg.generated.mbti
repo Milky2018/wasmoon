@@ -433,6 +433,21 @@ pub fn HotThreshold::aggressive() -> Self
 pub fn HotThreshold::conservative() -> Self
 pub fn HotThreshold::default() -> Self
 
+pub struct JITDebugDB {
+  entries : Map[Int, JITFunctionDebug]
+}
+pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
+pub fn JITDebugDB::new() -> Self
+pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
+
+pub struct JITFunctionDebug {
+  ir : String
+  vcode_before_regalloc : String
+  vcode_after_regalloc : String
+  machine_code : String
+}
+pub fn JITFunctionDebug::new(String, String, String, String) -> Self
+
 type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
@@ -546,6 +561,32 @@ pub struct TrapDetails {
   x15 : Int64
 }
 pub fn TrapDetails::new() -> Self
+
+pub(all) struct TrapReport {
+  trap_kind : String
+  message : String
+  signal : Int
+  signal_name : String
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  wasm_func_idx : Int?
+  wasm_func_name : String?
+  wasm_offset : Int64?
+  wasm_frames : Array[WasmTrapFrame]
+  host_frames : Array[String]
+  dump_path : String?
+}
+
+pub(all) struct WasmTrapFrame {
+  pc : Int64
+  func_idx : Int
+  func_name : String
+  wasm_offset : Int64
+}
 
 // Type aliases
 
