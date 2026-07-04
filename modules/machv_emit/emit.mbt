@@ -1613,6 +1613,26 @@ fn emit_aarch64_stack_store(
 }
 
 ///|
+fn emit_aarch64_stack_addr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot_id : Int,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "stack_addr"),
+    "stack_addr destination",
+  )
+  let offset = frame.get_spill_offset(slot_id)
+  guard offset >= 0 && offset <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 stack_addr requires a non-negative unsigned 12-bit stack offset",
+    )
+  }
+  emit_u32_le(object, 0x91000000 | ((offset & 0xfff) << 10) | (31 << 5) | dst)
+}
+
+///|
 fn emit_aarch64_float_binop3(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2496,6 +2516,25 @@ fn emit_x64_stack_store(
 }
 
 ///|
+fn emit_x64_stack_addr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  slot_id : Int,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "stack_addr"),
+    "stack_addr destination",
+  )
+  let offset = frame.get_spill_offset(slot_id)
+  emit_x64_rex_w(object, (dst >> 3) & 1, 0)
+  object.code.push(0x8d)
+  emit_x64_modrm(object, 2, dst, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2583,6 +2622,7 @@ fn write_aarch64_inst_bytes(
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
       emit_aarch64_store_ptr(object, inst, mem_type, offset)
+    StackAddr(slot_id) => emit_aarch64_stack_addr(object, inst, slot_id, frame)
     Load(slot) => emit_aarch64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_aarch64_stack_store(object, inst, slot, frame)
     Call(_) =>
@@ -2667,6 +2707,7 @@ fn write_x64_inst_bytes(
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
       emit_x64_store_ptr(object, inst, mem_type, offset)
+    StackAddr(slot_id) => emit_x64_stack_addr(object, inst, slot_id, frame)
     Load(slot) => emit_x64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_x64_stack_store(object, inst, slot, frame)
     Call(_) => {

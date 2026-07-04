@@ -550,6 +550,28 @@ test "emit MachV regalloc stack spills through reusable x64 pipeline" {
 }
 
 ///|
+test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([], [Ptr])
+  let milk = @milkir.Function::new("stack_addr_x64", signature)
+  let slot = milk.new_stack_slot(16, 16)
+  let ptr = milk.new_value(Ptr)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(StackAddr(slot), [], [ptr]))
+  entry.set_terminator(Return([ptr]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_lea = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0x48 && plan.object.code[i + 1] == 0x8d {
+      has_lea = true
+    }
+  }
+  inspect(has_lea, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [F64])
   let milk = @milkir.Function::new("bitcast_i64_f64", signature)

@@ -1695,6 +1695,34 @@ test "emit X64 vector stack spill load store bytes" {
 }
 
 ///|
+test "emit AArch64 stack address bytes" {
+  let func = @machv.Function::new("aarch64_stack_addr")
+  let entry = func.new_block()
+  func.new_stack_slot(16, 16) |> ignore
+  let addr_slot = func.new_stack_slot(8, 8)
+  let addr = func.new_inst(StackAddr(addr_slot.id))
+  addr.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(addr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(object.code, content="[225, 67, 0, 145, 192, 3, 95, 214]")
+}
+
+///|
+test "emit X64 stack address bytes" {
+  let func = @machv.Function::new("x64_stack_addr")
+  let entry = func.new_block()
+  func.new_stack_slot(16, 16) |> ignore
+  let addr_slot = func.new_stack_slot(8, 8)
+  let addr = func.new_inst(StackAddr(addr_slot.id))
+  addr.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(addr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[72, 141, 140, 36, 16, 0, 0, 0, 195]")
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()

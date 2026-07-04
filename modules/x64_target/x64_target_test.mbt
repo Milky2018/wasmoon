@@ -52,6 +52,24 @@ test "x64 lowers MilkIR arithmetic into MachV" {
 }
 
 ///|
+test "x64 preserves MilkIR stack slots for StackAddr lowering" {
+  let func = @milkir.Function::new_empty("stack_addr")
+  let slot = func.new_stack_slot(16, 16)
+  let ptr = func.new_value(Ptr)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(StackAddr(slot), [], [ptr]))
+  entry.set_terminator(Return([ptr]))
+  let lowered = lower_function(func)
+  inspect(lowered.stack_slots.length(), content="1")
+  inspect(lowered.stack_slots[0].size, content="16")
+  inspect(lowered.stack_slots[0].align, content="16")
+  inspect(
+    lowered.blocks[0].instructions[0].opcode == StackAddr(0),
+    content="true",
+  )
+}
+
+///|
 test "x64 legalizes integer division fixed-register operands" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("sdiv64", signature)
