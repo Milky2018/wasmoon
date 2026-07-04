@@ -11,7 +11,7 @@ fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
     I31((raw >> 1).to_int())
   } else {
     // Heap reference: encoded as (gc_ref << 1), where gc_ref is 1-based.
-    let heap_idx = @jit.decode_heap_ref(raw)
+    let heap_idx = @wasmoon_jit.decode_heap_ref(raw)
     match store.c_heap {
       Some(heap) =>
         if heap.is_array(heap_idx) {
@@ -244,8 +244,8 @@ pub fn sync_jit_globals_to_store(
             } else {
               Null
             }
-          } else if @jit.is_funcref_ptr(raw_value) {
-            let ptr = @jit.untag_funcref_ptr(raw_value)
+          } else if @wasmoon_jit.is_funcref_ptr(raw_value) {
+            let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
             let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
               Some(addr) => Some(addr)
               None => {
@@ -273,7 +273,7 @@ pub fn sync_jit_globals_to_store(
           if raw_value == 0L {
             Null
           } else if (raw_value & EXTERNREF_TAG) != 0L {
-            match @jit.decode_externref(raw_value) {
+            match @wasmoon_jit.decode_externref(raw_value) {
               Some(idx) => ExternRef(idx)
               None => ExternRef(raw_value.to_int())
             }
@@ -334,7 +334,7 @@ fn decode_funcref_from_jit_ctx(
   if raw_value == NULL_REF {
     return Null
   }
-  match @jit.decode_funcref_idx(raw_value) {
+  match @wasmoon_jit.decode_funcref_idx(raw_value) {
     Some(func_idx) =>
       if func_idx >= 0 && func_idx < jit_ctx.func_addrs.length() {
         FuncRef(jit_ctx.func_addrs[func_idx])
@@ -342,8 +342,8 @@ fn decode_funcref_from_jit_ctx(
         Null
       }
     None =>
-      if @jit.is_funcref_ptr(raw_value) {
-        let ptr = @jit.untag_funcref_ptr(raw_value)
+      if @wasmoon_jit.is_funcref_ptr(raw_value) {
+        let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
         let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
           Some(addr) => Some(addr)
           None => {
@@ -384,7 +384,7 @@ fn decode_table_entry_value(
       if raw_value == NULL_REF {
         Null
       } else {
-        match @jit.decode_externref(raw_value) {
+        match @wasmoon_jit.decode_externref(raw_value) {
           Some(idx) => ExternRef(idx)
           None => ExternRef(raw_value.to_int())
         }
@@ -393,11 +393,11 @@ fn decode_table_entry_value(
       if raw_value == NULL_REF {
         Null
       } else if (raw_value & EXTERNREF_TAG) != 0L {
-        match @jit.decode_externref(raw_value) {
+        match @wasmoon_jit.decode_externref(raw_value) {
           Some(idx) => ExternRef(idx)
           None => ExternRef(raw_value.to_int())
         }
-      } else if @jit.is_funcref_ptr(raw_value) || raw_value < 0L {
+      } else if @wasmoon_jit.is_funcref_ptr(raw_value) || raw_value < 0L {
         decode_funcref_from_jit_ctx(raw_value, jit_ctx)
       } else {
         decode_gc_value(raw_value, store)
@@ -414,13 +414,13 @@ fn decode_table_entry_value(
       if raw_value == NULL_REF {
         Null
       } else {
-        StructRef(@jit.decode_heap_ref(raw_value))
+        StructRef(@wasmoon_jit.decode_heap_ref(raw_value))
       }
     RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
       if raw_value == NULL_REF {
         Null
       } else {
-        ArrayRef(@jit.decode_heap_ref(raw_value))
+        ArrayRef(@wasmoon_jit.decode_heap_ref(raw_value))
       }
     _ => Null
   }
@@ -772,8 +772,8 @@ pub fn init_bulk_segments(
       let mut ty = -1L
       match value {
         Null => ()
-        I31(n) => raw = @jit.encode_i31(n)
-        ExternRef(host_idx) => raw = @jit.encode_externref(host_idx)
+        I31(n) => raw = @wasmoon_jit.encode_i31(n)
+        ExternRef(host_idx) => raw = @wasmoon_jit.encode_externref(host_idx)
         StructRef(idx) =>
           // JIT GC refs are encoded as (gc_ref << 1), where gc_ref = idx + 1.
           raw = (idx + 1).to_int64() << 1
@@ -789,9 +789,9 @@ pub fn init_bulk_segments(
               }
               ty = t.to_int64()
               raw = if ptr != 0L {
-                @jit.tag_funcref_ptr(ptr)
+                @wasmoon_jit.tag_funcref_ptr(ptr)
               } else {
-                @jit.encode_funcref_idx(func_idx)
+                @wasmoon_jit.encode_funcref_idx(func_idx)
               }
             }
             None => ()
@@ -891,11 +891,11 @@ pub fn sync_table_to_jit(
         encoded = NULL_REF
         type_idx = -1
       }
-      I31(n) => encoded = @jit.encode_i31(n)
+      I31(n) => encoded = @wasmoon_jit.encode_i31(n)
       StructRef(idx) | ArrayRef(idx) =>
         // gc_ref is 1-based for the JIT/C heap: (idx + 1) << 1
         encoded = (idx + 1).to_int64() << 1
-      ExternRef(host_idx) => encoded = @jit.encode_externref(host_idx)
+      ExternRef(host_idx) => encoded = @wasmoon_jit.encode_externref(host_idx)
       FuncRef(store_addr) => {
         encoded = encode_store_funcref_for_jit(value, jit_module, instance)
         let mut resolved_type_idx = -1
@@ -1029,7 +1029,7 @@ fn decode_funcref_to_store_addr(
   if raw == NULL_REF {
     return Null
   }
-  match @jit.decode_funcref_idx(raw) {
+  match @wasmoon_jit.decode_funcref_idx(raw) {
     Some(mod_func_idx) =>
       if mod_func_idx >= 0 && mod_func_idx < instance.func_addrs.length() {
         FuncRef(instance.func_addrs[mod_func_idx])
@@ -1037,8 +1037,8 @@ fn decode_funcref_to_store_addr(
         Null
       }
     None =>
-      if @jit.is_funcref_ptr(raw) {
-        let ptr = @jit.untag_funcref_ptr(raw)
+      if @wasmoon_jit.is_funcref_ptr(raw) {
+        let ptr = @wasmoon_jit.untag_funcref_ptr(raw)
         match lookup_store_addr_for_funcref_ptr(ptr, jit_module, instance) {
           Some(addr) => FuncRef(addr)
           None => Null
@@ -1061,10 +1061,10 @@ fn encode_store_funcref_for_jit(
     FuncRef(store_addr) =>
       match
         lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
-        Some(ptr) => @jit.tag_funcref_ptr(ptr)
+        Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
         None =>
           match store_addr_to_module_func_idx(store_addr, instance) {
-            Some(func_idx) => @jit.encode_funcref_idx(func_idx)
+            Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
             None => NULL_REF
           }
       }
@@ -1086,10 +1086,10 @@ fn encode_exception_value_for_jit(
     Null => Some(NULL_REF)
     FuncRef(_) =>
       Some(encode_store_funcref_for_jit(value, jit_module, instance))
-    ExternRef(idx) => Some(@jit.encode_externref(idx))
-    StructRef(idx) => Some(@jit.encode_heap_ref(idx))
-    ArrayRef(idx) => Some(@jit.encode_heap_ref(idx))
-    I31(n) => Some(@jit.encode_i31(n))
+    ExternRef(idx) => Some(@wasmoon_jit.encode_externref(idx))
+    StructRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
+    ArrayRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
+    I31(n) => Some(@wasmoon_jit.encode_i31(n))
     ExnRef(idx) => Some(idx.to_int64())
     V128(_) => None
   }
@@ -1110,7 +1110,7 @@ fn decode_ref_value(
       if raw == NULL_REF {
         Null
       } else {
-        match @jit.decode_externref(raw) {
+        match @wasmoon_jit.decode_externref(raw) {
           Some(idx) => ExternRef(idx)
           None => ExternRef(raw.to_int())
         }
@@ -1125,13 +1125,13 @@ fn decode_ref_value(
       if raw == NULL_REF {
         Null
       } else {
-        StructRef(@jit.decode_heap_ref(raw))
+        StructRef(@wasmoon_jit.decode_heap_ref(raw))
       }
     ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
       if raw == NULL_REF {
         Null
       } else {
-        ArrayRef(@jit.decode_heap_ref(raw))
+        ArrayRef(@wasmoon_jit.decode_heap_ref(raw))
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       if raw == NULL_REF {
@@ -1139,7 +1139,7 @@ fn decode_ref_value(
       } else if (raw & 1L) == 1L {
         I31((raw >> 1).to_int())
       } else {
-        let heap_idx = @jit.decode_heap_ref(raw)
+        let heap_idx = @wasmoon_jit.decode_heap_ref(raw)
         match store.c_heap {
           Some(heap) =>
             if heap.is_array(heap_idx) {
@@ -1250,7 +1250,7 @@ fn encode_value(
     ExternRef | RefExtern | NullExternRef =>
       match value {
         Null => Some([NULL_REF])
-        ExternRef(idx) => Some([@jit.encode_externref(idx)])
+        ExternRef(idx) => Some([@wasmoon_jit.encode_externref(idx)])
         _ => None
       }
     ExnRef | NullExnRef =>
@@ -1262,29 +1262,29 @@ fn encode_value(
     StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
       match value {
         Null => Some([NULL_REF])
-        StructRef(idx) => Some([@jit.encode_heap_ref(idx)])
-        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)]) // best-effort
+        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)]) // best-effort
         _ => None
       }
     ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
       match value {
         Null => Some([NULL_REF])
-        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)])
-        StructRef(idx) => Some([@jit.encode_heap_ref(idx)]) // best-effort
+        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)]) // best-effort
         _ => None
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       match value {
         Null => Some([NULL_REF])
-        I31(n) => Some([@jit.encode_i31(n)])
-        StructRef(idx) => Some([@jit.encode_heap_ref(idx)])
-        ArrayRef(idx) => Some([@jit.encode_heap_ref(idx)])
+        I31(n) => Some([@wasmoon_jit.encode_i31(n)])
+        StructRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
+        ArrayRef(idx) => Some([@wasmoon_jit.encode_heap_ref(idx)])
         _ => None
       }
     RefI31 | RefNullI31 =>
       match value {
         Null => Some([NULL_REF])
-        I31(n) => Some([@jit.encode_i31(n)])
+        I31(n) => Some([@wasmoon_jit.encode_i31(n)])
         _ => None
       }
     RefNone => Some([NULL_REF])

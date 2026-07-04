@@ -68,7 +68,7 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       F32(f) => f.reinterpret_as_int().to_int64()
       F64(d) => d.reinterpret_as_int64()
       FuncRef(idx) => idx.to_int64()
-      ExternRef(idx) => @jit.encode_externref(idx)
+      ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
       Null => @types.NULL_REF
       V128(_) => abort("V128 args not yet supported")
       StructRef(idx) => idx.to_int64() << 1
@@ -126,7 +126,7 @@ fn convert_jit_results(
         if raw == @types.NULL_REF {
           Null
         } else {
-          match @jit.decode_externref(raw) {
+          match @wasmoon_jit.decode_externref(raw) {
             Some(idx) => ExternRef(idx)
             None => ExternRef(raw.to_int())
           }
@@ -1042,18 +1042,18 @@ fn init_jit_globals(
           Some(func_idx) => {
             let func_ptr = jit_module.get_func_ptr(func_idx)
             if func_ptr == 0L {
-              @jit.encode_funcref_idx(func_idx)
+              @wasmoon_jit.encode_funcref_idx(func_idx)
             } else {
-              @jit.tag_funcref_ptr(func_ptr)
+              @wasmoon_jit.tag_funcref_ptr(func_ptr)
             }
           }
           None => @types.NULL_REF
         }
       ExternRef(idx) => idx.to_int64()
       ExnRef(idx) => idx.to_int64()
-      ArrayRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
-      StructRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
-      I31(n) => @jit.encode_i31(n)
+      ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      I31(n) => @wasmoon_jit.encode_i31(n)
       Null => @types.NULL_REF // null is encoded as 0 in JIT
       V128(bytes) => {
         // V128 needs special handling - write both 64-bit halves
@@ -1321,7 +1321,7 @@ fn run_with_jit(
                   )
                   // Provide func_type_indices + func_table_ptr so libcalls can infer funcref types
                   // (e.g. table.fill) and ref.test can resolve tagged-pointer funcrefs.
-                  @jit.gc_setup(
+                  @wasmoon_jit.gc_setup(
                     heap,
                     store.module_types,
                     canonical,
@@ -1342,13 +1342,13 @@ fn run_with_jit(
               }
               let results = jm.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
-                  @jit.gc_teardown(jm.get_context_ptr())
+                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   native_exit(code)
                   panic()
                 }
                 JITTrap(msg) => {
-                  @jit.gc_teardown(jm.get_context_ptr())
+                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
                   // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   // Capture and display backtrace if DWARF is enabled
@@ -1376,7 +1376,7 @@ fn run_with_jit(
                 }
               }
               // Tear down GC context after JIT call
-              @jit.gc_teardown(jm.get_context_ptr())
+              @wasmoon_jit.gc_teardown(jm.get_context_ptr())
               // Sync JIT globals back to interpreter store for consistency.
               @wast.sync_jit_globals_to_store(jit_ctx, store)
               // Convert Int64 results to Value using shared helper

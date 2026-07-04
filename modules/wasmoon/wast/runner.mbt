@@ -773,8 +773,9 @@ pub fn invoke_action(
                     )
                   RefNull(_) => i64_args.push(NULL_REF)
                   // Externref uses special encoding: EXTERNREF_TAG | (host_idx << 1)
-                  RefExtern(n) => i64_args.push(@jit.encode_externref(n))
-                  RefHost(n) => i64_args.push(@jit.encode_externref(n))
+                  RefExtern(n) =>
+                    i64_args.push(@wasmoon_jit.encode_externref(n))
+                  RefHost(n) => i64_args.push(@wasmoon_jit.encode_externref(n))
                   RefFunc => i64_args.push(NULL_REF) // placeholder
                   RefExternAny => i64_args.push(NULL_REF) // placeholder
                   // GC reference types - these shouldn't appear as args but handle them
@@ -879,7 +880,7 @@ pub fn invoke_action(
                       gc_num_funcs = gc_funcref_entries.length()
                     }
                   }
-                  @jit.gc_setup(
+                  @wasmoon_jit.gc_setup(
                     heap,
                     jit.module_types,
                     canonical,
@@ -913,7 +914,7 @@ pub fn invoke_action(
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
                 JITExit(code) => {
                   // Tear down GC context on exit
-                  @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
                     @jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
@@ -925,7 +926,7 @@ pub fn invoke_action(
                 }
                 JITTrap(msg) => {
                   // Tear down GC context on trap
-                  @jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
                     @jit.free_memory(temp_gc_func_table_ptr)
                     temp_gc_func_table_ptr = 0L
@@ -937,7 +938,7 @@ pub fn invoke_action(
                 }
               }
               // Tear down GC context after JIT call
-              @jit.gc_teardown(jit.jit_module.get_context_ptr())
+              @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
               if temp_gc_func_table_ptr != 0L {
                 @jit.free_memory(temp_gc_func_table_ptr)
               }
@@ -1035,7 +1036,7 @@ pub fn invoke_action(
 fn convert_jit_result(
   v : Int64,
   ty : @types.ValueType,
-  c_heap : @jit.CHeap?,
+  c_heap : @wasmoon_jit.CHeap?,
 ) -> @types.Value {
   match ty {
     I32 => I32(@types.FromInt64::from_int64_bits(v))
@@ -1060,7 +1061,7 @@ fn convert_jit_result(
       if v == NULL_REF {
         Null
       } else {
-        match @jit.decode_externref(v) {
+        match @wasmoon_jit.decode_externref(v) {
           Some(idx) => ExternRef(idx)
           None => ExternRef(v.to_int())
         }
@@ -1073,7 +1074,7 @@ fn convert_jit_result(
         Null
       } else if (v & EXTERNREF_TAG) != 0L {
         // Host externref that was converted to anyref via any.convert_extern
-        match @jit.decode_externref(v) {
+        match @wasmoon_jit.decode_externref(v) {
           Some(idx) => ExternRef(idx)
           None => ExternRef(v.to_int())
         }

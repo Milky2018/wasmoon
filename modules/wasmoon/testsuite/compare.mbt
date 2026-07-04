@@ -135,7 +135,7 @@ pub fn jit_results_to_values(
         if raw == 0L {
           Null
         } else {
-          match @jit.decode_externref(raw) {
+          match @wasmoon_jit.decode_externref(raw) {
             Some(idx) => ExternRef(idx)
             None => ExternRef(raw.to_int())
           }
@@ -220,18 +220,19 @@ pub fn value_to_jit_arg_typed(
         | RefFunc
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
-        | NullFuncRef => @jit.encode_funcref_idx(idx)
+        | NullFuncRef => @wasmoon_jit.encode_funcref_idx(idx)
         _ => idx.to_int64()
       }
     ExternRef(idx) =>
       match ty {
-        ExternRef | RefExtern | NullExternRef => @jit.encode_externref(idx)
+        ExternRef | RefExtern | NullExternRef =>
+          @wasmoon_jit.encode_externref(idx)
         _ => idx.to_int64()
       }
     ExnRef(idx) => idx.to_int64()
     // GC references: encoding uses 0 for null
-    ArrayRef(gc_ref) => @jit.encode_gc_heap_ref(gc_ref)
-    StructRef(gc_ref) => @jit.encode_gc_heap_ref(gc_ref)
+    ArrayRef(gc_ref) => @wasmoon_jit.encode_gc_heap_ref(gc_ref)
+    StructRef(gc_ref) => @wasmoon_jit.encode_gc_heap_ref(gc_ref)
     I31(n) => (n.to_int64() << 1) | 1L
     Null => 0L
     V128(_) => abort("V128 not yet supported in testsuite")
@@ -451,13 +452,13 @@ pub fn run_jit(
     jm.setup_segments(mod_.datas, elem_pairs, elem_dropped~)
 
     // Set up GC heap for GC operations (struct, array, i31)
-    let c_heap = @jit.CHeap::new()
+    let c_heap = @wasmoon_jit.CHeap::new()
     let canonical_indices = @types.compute_canonical_type_indices(
       mod_.types,
       type_rec_groups=mod_.type_rec_groups,
     )
     let module_func_type_indices = build_module_func_type_indices(mod_)
-    @jit.gc_setup(
+    @wasmoon_jit.gc_setup(
       c_heap,
       mod_.types,
       canonical_indices,
@@ -471,7 +472,7 @@ pub fn run_jit(
 
     // Call the target function
     guard jm.get_func_by_name(func_name) is Some(f) else {
-      @jit.gc_teardown(jm.get_context_ptr())
+      @wasmoon_jit.gc_teardown(jm.get_context_ptr())
       jm.clear_segments()
       return Err("Failed to get JIT function")
     }
@@ -499,7 +500,7 @@ pub fn run_jit(
     let raw_results = jm.call_with_context(f, jit_args)
 
     // Tear down GC context and per-context segments after JIT call
-    @jit.gc_teardown(jm.get_context_ptr())
+    @wasmoon_jit.gc_teardown(jm.get_context_ptr())
     jm.clear_segments()
 
     // Convert to Values
@@ -513,7 +514,7 @@ pub fn run_jit(
         None => 0L
       }
       if ctx_ptr != 0L {
-        @jit.gc_teardown(ctx_ptr)
+        @wasmoon_jit.gc_teardown(ctx_ptr)
       }
       if jm_opt is Some(jm) {
         jm.clear_segments()
@@ -563,7 +564,7 @@ fn extract_elem_segment_pairs(
       let mut ty = -1L
       match init_expr {
         [RefFunc(idx)] => {
-          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          raw = @wasmoon_jit.tag_funcref_ptr(jm.get_func_ptr(idx))
           let t = if idx >= 0 && idx < func_type_indices.length() {
             func_type_indices[idx]
           } else {
@@ -572,7 +573,7 @@ fn extract_elem_segment_pairs(
           ty = t.to_int64()
         }
         [I32Const(idx)] => {
-          raw = @jit.tag_funcref_ptr(jm.get_func_ptr(idx))
+          raw = @wasmoon_jit.tag_funcref_ptr(jm.get_func_ptr(idx))
           let t = if idx >= 0 && idx < func_type_indices.length() {
             func_type_indices[idx]
           } else {

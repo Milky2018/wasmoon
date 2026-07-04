@@ -28,7 +28,7 @@ pub struct Store {
   exns : Array[ExnInstance] // Exception instances for exnref
   heap : MarkSweepHeap // GC heap for struct and array instances (interpreter mode)
   // C-managed GC heap for JIT mode (None = use MarkSweepHeap)
-  mut c_heap : @jit.CHeap?
+  mut c_heap : @wasmoon_jit.CHeap?
   // Module types for CHeap type lookups (needed to decode Int64 to Value)
   mut module_types : Array[@types.SubType]
   // Module rec groups for canonical type index computation
@@ -126,7 +126,7 @@ pub fn Store::with_c_heap() -> Store {
     tag_owners: [],
     exns: [],
     heap: MarkSweepHeap::new(), // Keep for fallback
-    c_heap: Some(@jit.CHeap::new(capacity=initial_capacity)),
+    c_heap: Some(@wasmoon_jit.CHeap::new(capacity=initial_capacity)),
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: [],
@@ -142,7 +142,9 @@ pub fn Store::with_c_heap() -> Store {
 /// Enable C heap for this store
 pub fn Store::enable_c_heap(self : Store) -> Unit {
   if self.c_heap is None {
-    self.c_heap = Some(@jit.CHeap::new(capacity=c_heap_initial_capacity()))
+    self.c_heap = Some(
+      @wasmoon_jit.CHeap::new(capacity=c_heap_initial_capacity()),
+    )
   }
 }
 

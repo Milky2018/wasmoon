@@ -55,16 +55,16 @@ fn init_jit_globals(
             if func_ptr == 0L {
               @types.NULL_REF
             } else {
-              @jit.tag_funcref_ptr(func_ptr)
+              @wasmoon_jit.tag_funcref_ptr(func_ptr)
             }
           }
           None => @types.NULL_REF
         }
       ExternRef(idx) => idx.to_int64()
       ExnRef(idx) => idx.to_int64()
-      ArrayRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
-      StructRef(gc_ref) => @jit.encode_heap_ref(gc_ref)
-      I31(n) => @jit.encode_i31(n)
+      ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      I31(n) => @wasmoon_jit.encode_i31(n)
       Null => @types.NULL_REF
       V128(bytes) => {
         let offset = globals_ptr + (i * 16).to_int64()
