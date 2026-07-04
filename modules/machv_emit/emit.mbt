@@ -2,25 +2,7 @@
 fn opcode_debug_name(opcode : @machv.Opcode) -> String {
   match opcode {
     Target(name) => name
-    Move => "machv.move"
-    IntConst(value) => "machv.iconst." + value.to_string()
-    FloatConst(value) => "machv.fconst." + value.to_string()
-    IntAdd => "machv.iadd"
-    IntSub => "machv.isub"
-    IntMul => "machv.imul"
-    IntCmp(cond) => "machv.icmp." + to_repr(cond).to_string()
-    FloatAdd => "machv.fadd"
-    FloatSub => "machv.fsub"
-    FloatMul => "machv.fmul"
-    Select => "machv.select"
-    Load(slot) => "machv.load.slot." + slot.id.to_string()
-    Store(slot) => "machv.store.slot." + slot.id.to_string()
-    Call(symbol) => "machv.call." + symbol
-    Trap(reason) => "machv.trap." + reason
-    Jump(target) => "machv.jump." + target.to_string()
-    Branch(true_target, false_target) =>
-      "machv.branch." + true_target.to_string() + "." + false_target.to_string()
-    Return => "machv.return"
+    _ => "machv." + to_repr(opcode).to_string()
   }
 }
 
@@ -28,17 +10,6 @@ fn opcode_debug_name(opcode : @machv.Opcode) -> String {
 fn opcode_tag(opcode : @machv.Opcode) -> Int {
   match opcode {
     Target(_) => 0x10
-    Move => 0x20
-    IntConst(_) => 0x21
-    FloatConst(_) => 0x22
-    IntAdd => 0x23
-    IntSub => 0x24
-    IntMul => 0x25
-    IntCmp(_) => 0x26
-    FloatAdd => 0x27
-    FloatSub => 0x28
-    FloatMul => 0x29
-    Select => 0x2a
     Load(_) => 0x30
     Store(_) => 0x31
     Call(_) => 0x40
@@ -46,6 +17,7 @@ fn opcode_tag(opcode : @machv.Opcode) -> Int {
     Jump(_) => 0x50
     Branch(_) => 0x51
     Return => 0x60
+    _ => 0x20
   }
 }
 
@@ -88,22 +60,7 @@ fn record_relocations(
       object.fixups.push({ offset, block_id: true_target })
       object.fixups.push({ offset: offset + 1, block_id: false_target })
     }
-    Target(_)
-    | Move
-    | IntConst(_)
-    | FloatConst(_)
-    | IntAdd
-    | IntSub
-    | IntMul
-    | IntCmp(_)
-    | FloatAdd
-    | FloatSub
-    | FloatMul
-    | Select
-    | Load(_)
-    | Store(_)
-    | Trap(_)
-    | Return => ()
+    _ => ()
   }
 }
 

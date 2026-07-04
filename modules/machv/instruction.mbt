@@ -1,8 +1,4 @@
 ///|
-/// Generic MachV instruction opcode.
-///
-/// TODO(machv): replace textual target opcodes with compact target-owned opcode
-/// descriptors once x64_target and aarch64_target are extracted.
 pub(all) enum Opcode {
   Target(String)
   Move
@@ -11,11 +7,59 @@ pub(all) enum Opcode {
   IntAdd
   IntSub
   IntMul
+  IntMulHigh(Bool)
+  IntDiv(Bool)
+  IntRem(Bool)
+  IntAnd
+  IntOr
+  IntXor
+  IntNot
+  IntShl
+  IntShr(Bool)
+  IntRotl
+  IntRotr
+  IntClz
+  IntCtz
+  IntPopcnt
   IntCmp(Cond)
   FloatAdd
   FloatSub
   FloatMul
+  FloatDiv
+  FloatMin
+  FloatMax
+  FloatCmp(Cond)
+  FloatNeg
+  FloatAbs
+  FloatSqrt
+  FloatCeil
+  FloatFloor
+  FloatTrunc
+  FloatNearest
+  Ireduce
+  Sextend
+  Uextend
+  Fpromote
+  Fdemote
+  FcvtToSint
+  FcvtToUint
+  FcvtToSintSat
+  FcvtToUintSat
+  SintToFcvt
+  UintToFcvt
+  Bitcast
+  Sextend8
+  Sextend16
+  Sextend32
   Select
+  LoadMemory
+  StoreMemory
+  LoadPtr
+  StorePtr
+  StackAddr(Int)
+  CallIndirect
+  CallPtr(Int, Int)
+  Custom(String)
   Load(StackSlot)
   Store(StackSlot)
   Call(String)

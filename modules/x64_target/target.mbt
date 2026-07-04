@@ -169,72 +169,14 @@ fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
 }
 
 ///|
-fn opcode_name(opcode : @milkir.Opcode) -> String {
-  match opcode {
-    Iadd => "x64.iadd"
-    Isub => "x64.isub"
-    Imul => "x64.imul"
-    IcmpEq => "x64.icmp_eq"
-    Icmp(_) => "x64.icmp"
-    Fadd => "x64.fadd"
-    Fsub => "x64.fsub"
-    Fmul => "x64.fmul"
-    Select => "x64.select"
-    Iconst(_) => "x64.iconst"
-    Fconst(_) => "x64.fconst"
-    Call(symbol) => "x64.call:" + symbol.name
-    Trap(reason) => "x64.trap:" + reason
-    StackAddr(_) => "x64.stack_addr"
-    CallIndirect(_) => "x64.call_indirect"
-    CallPtr(_, _) => "x64.call_ptr"
-    Custom(name) => "x64.custom:" + name
-    Umulh => "x64.umulh"
-    Smulh => "x64.smulh"
-    Sdiv => "x64.sdiv"
-    Udiv => "x64.udiv"
-    Srem => "x64.srem"
-    Urem => "x64.urem"
-    Band => "x64.band"
-    Bor => "x64.bor"
-    Bxor => "x64.bxor"
-    Bnot => "x64.bnot"
-    Ishl => "x64.ishl"
-    Sshr => "x64.sshr"
-    Ushr => "x64.ushr"
-    Rotl => "x64.rotl"
-    Rotr => "x64.rotr"
-    Clz => "x64.clz"
-    Ctz => "x64.ctz"
-    Popcnt => "x64.popcnt"
-    Fdiv => "x64.fdiv"
-    Fmin => "x64.fmin"
-    Fmax => "x64.fmax"
-    Fcmp(_) => "x64.fcmp"
-    Fneg => "x64.fneg"
-    Fabs => "x64.fabs"
-    Fsqrt => "x64.fsqrt"
-    Fceil => "x64.fceil"
-    Ffloor => "x64.ffloor"
-    Ftrunc => "x64.ftrunc"
-    Fnearest => "x64.fnearest"
-    Ireduce => "x64.ireduce"
-    Sextend => "x64.sextend"
-    Uextend => "x64.uextend"
-    Fpromote => "x64.fpromote"
-    Fdemote => "x64.fdemote"
-    FcvtToSint => "x64.fcvt_to_sint"
-    FcvtToUint => "x64.fcvt_to_uint"
-    FcvtToSintSat => "x64.fcvt_to_sint_sat"
-    FcvtToUintSat => "x64.fcvt_to_uint_sat"
-    SintToFcvt => "x64.sint_to_fcvt"
-    UintToFcvt => "x64.uint_to_fcvt"
-    Bitcast => "x64.bitcast"
-    Sextend8 => "x64.sextend8"
-    Sextend16 => "x64.sextend16"
-    Sextend32 => "x64.sextend32"
-    Copy => "x64.copy"
-    Load | LoadPtr(_) => "x64.load_ptr"
-    Store | StorePtr(_) => "x64.store_ptr"
+fn floatcc_to_machv(cc : @milkir.FloatCC) -> @machv.Cond {
+  match cc {
+    Eq => Eq
+    Ne => Ne
+    Lt => Lt
+    Le => Le
+    Gt => Gt
+    Ge => Ge
   }
 }
 
@@ -249,12 +191,64 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     Fadd => FloatAdd
     Fsub => FloatSub
     Fmul => FloatMul
+    Umulh => IntMulHigh(false)
+    Smulh => IntMulHigh(true)
+    Sdiv => IntDiv(true)
+    Udiv => IntDiv(false)
+    Srem => IntRem(true)
+    Urem => IntRem(false)
+    Band => IntAnd
+    Bor => IntOr
+    Bxor => IntXor
+    Bnot => IntNot
+    Ishl => IntShl
+    Sshr => IntShr(true)
+    Ushr => IntShr(false)
+    Rotl => IntRotl
+    Rotr => IntRotr
+    Clz => IntClz
+    Ctz => IntCtz
+    Popcnt => IntPopcnt
+    Fdiv => FloatDiv
+    Fmin => FloatMin
+    Fmax => FloatMax
+    Fcmp(cc) => FloatCmp(floatcc_to_machv(cc))
+    Fneg => FloatNeg
+    Fabs => FloatAbs
+    Fsqrt => FloatSqrt
+    Fceil => FloatCeil
+    Ffloor => FloatFloor
+    Ftrunc => FloatTrunc
+    Fnearest => FloatNearest
+    Ireduce => Ireduce
+    Sextend => Sextend
+    Uextend => Uextend
+    Fpromote => Fpromote
+    Fdemote => Fdemote
+    FcvtToSint => FcvtToSint
+    FcvtToUint => FcvtToUint
+    FcvtToSintSat => FcvtToSintSat
+    FcvtToUintSat => FcvtToUintSat
+    SintToFcvt => SintToFcvt
+    UintToFcvt => UintToFcvt
+    Bitcast => Bitcast
+    Sextend8 => Sextend8
+    Sextend16 => Sextend16
+    Sextend32 => Sextend32
     Select => Select
+    Copy => Move
+    Load => LoadMemory
+    Store => StoreMemory
+    LoadPtr(_) => LoadPtr
+    StorePtr(_) => StorePtr
+    StackAddr(slot) => StackAddr(slot.id)
     Iconst(value) => IntConst(value)
     Fconst(value) => FloatConst(value)
     Call(symbol) => Call(symbol.name)
+    CallIndirect(_) => CallIndirect
+    CallPtr(params, results) => CallPtr(params, results)
     Trap(reason) => Trap(reason)
-    _ => Target(opcode_name(opcode))
+    Custom(name) => Custom(name)
   }
 }
 

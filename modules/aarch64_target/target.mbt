@@ -184,72 +184,14 @@ fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
 }
 
 ///|
-fn opcode_name(opcode : @milkir.Opcode) -> String {
-  match opcode {
-    Iadd => "aarch64.iadd"
-    Isub => "aarch64.isub"
-    Imul => "aarch64.imul"
-    IcmpEq => "aarch64.icmp_eq"
-    Icmp(_) => "aarch64.icmp"
-    Fadd => "aarch64.fadd"
-    Fsub => "aarch64.fsub"
-    Fmul => "aarch64.fmul"
-    Select => "aarch64.select"
-    Iconst(_) => "aarch64.iconst"
-    Fconst(_) => "aarch64.fconst"
-    Call(symbol) => "aarch64.call:" + symbol.name
-    Trap(reason) => "aarch64.trap:" + reason
-    StackAddr(_) => "aarch64.stack_addr"
-    CallIndirect(_) => "aarch64.call_indirect"
-    CallPtr(_, _) => "aarch64.call_ptr"
-    Custom(name) => "aarch64.custom:" + name
-    Umulh => "aarch64.umulh"
-    Smulh => "aarch64.smulh"
-    Sdiv => "aarch64.sdiv"
-    Udiv => "aarch64.udiv"
-    Srem => "aarch64.srem"
-    Urem => "aarch64.urem"
-    Band => "aarch64.band"
-    Bor => "aarch64.bor"
-    Bxor => "aarch64.bxor"
-    Bnot => "aarch64.bnot"
-    Ishl => "aarch64.ishl"
-    Sshr => "aarch64.sshr"
-    Ushr => "aarch64.ushr"
-    Rotl => "aarch64.rotl"
-    Rotr => "aarch64.rotr"
-    Clz => "aarch64.clz"
-    Ctz => "aarch64.ctz"
-    Popcnt => "aarch64.popcnt"
-    Fdiv => "aarch64.fdiv"
-    Fmin => "aarch64.fmin"
-    Fmax => "aarch64.fmax"
-    Fcmp(_) => "aarch64.fcmp"
-    Fneg => "aarch64.fneg"
-    Fabs => "aarch64.fabs"
-    Fsqrt => "aarch64.fsqrt"
-    Fceil => "aarch64.fceil"
-    Ffloor => "aarch64.ffloor"
-    Ftrunc => "aarch64.ftrunc"
-    Fnearest => "aarch64.fnearest"
-    Ireduce => "aarch64.ireduce"
-    Sextend => "aarch64.sextend"
-    Uextend => "aarch64.uextend"
-    Fpromote => "aarch64.fpromote"
-    Fdemote => "aarch64.fdemote"
-    FcvtToSint => "aarch64.fcvt_to_sint"
-    FcvtToUint => "aarch64.fcvt_to_uint"
-    FcvtToSintSat => "aarch64.fcvt_to_sint_sat"
-    FcvtToUintSat => "aarch64.fcvt_to_uint_sat"
-    SintToFcvt => "aarch64.sint_to_fcvt"
-    UintToFcvt => "aarch64.uint_to_fcvt"
-    Bitcast => "aarch64.bitcast"
-    Sextend8 => "aarch64.sextend8"
-    Sextend16 => "aarch64.sextend16"
-    Sextend32 => "aarch64.sextend32"
-    Copy => "aarch64.copy"
-    Load | LoadPtr(_) => "aarch64.load_ptr"
-    Store | StorePtr(_) => "aarch64.store_ptr"
+fn floatcc_to_machv(cc : @milkir.FloatCC) -> @machv.Cond {
+  match cc {
+    Eq => Eq
+    Ne => Ne
+    Lt => Lt
+    Le => Le
+    Gt => Gt
+    Ge => Ge
   }
 }
 
@@ -264,12 +206,64 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     Fadd => FloatAdd
     Fsub => FloatSub
     Fmul => FloatMul
+    Umulh => IntMulHigh(false)
+    Smulh => IntMulHigh(true)
+    Sdiv => IntDiv(true)
+    Udiv => IntDiv(false)
+    Srem => IntRem(true)
+    Urem => IntRem(false)
+    Band => IntAnd
+    Bor => IntOr
+    Bxor => IntXor
+    Bnot => IntNot
+    Ishl => IntShl
+    Sshr => IntShr(true)
+    Ushr => IntShr(false)
+    Rotl => IntRotl
+    Rotr => IntRotr
+    Clz => IntClz
+    Ctz => IntCtz
+    Popcnt => IntPopcnt
+    Fdiv => FloatDiv
+    Fmin => FloatMin
+    Fmax => FloatMax
+    Fcmp(cc) => FloatCmp(floatcc_to_machv(cc))
+    Fneg => FloatNeg
+    Fabs => FloatAbs
+    Fsqrt => FloatSqrt
+    Fceil => FloatCeil
+    Ffloor => FloatFloor
+    Ftrunc => FloatTrunc
+    Fnearest => FloatNearest
+    Ireduce => Ireduce
+    Sextend => Sextend
+    Uextend => Uextend
+    Fpromote => Fpromote
+    Fdemote => Fdemote
+    FcvtToSint => FcvtToSint
+    FcvtToUint => FcvtToUint
+    FcvtToSintSat => FcvtToSintSat
+    FcvtToUintSat => FcvtToUintSat
+    SintToFcvt => SintToFcvt
+    UintToFcvt => UintToFcvt
+    Bitcast => Bitcast
+    Sextend8 => Sextend8
+    Sextend16 => Sextend16
+    Sextend32 => Sextend32
     Select => Select
+    Copy => Move
+    Load => LoadMemory
+    Store => StoreMemory
+    LoadPtr(_) => LoadPtr
+    StorePtr(_) => StorePtr
+    StackAddr(slot) => StackAddr(slot.id)
     Iconst(value) => IntConst(value)
     Fconst(value) => FloatConst(value)
     Call(symbol) => Call(symbol.name)
+    CallIndirect(_) => CallIndirect
+    CallPtr(params, results) => CallPtr(params, results)
     Trap(reason) => Trap(reason)
-    _ => Target(opcode_name(opcode))
+    Custom(name) => Custom(name)
   }
 }
 
