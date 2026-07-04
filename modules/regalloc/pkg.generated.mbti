@@ -44,6 +44,8 @@ pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedCon
 
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
 
+pub fn plan_param_preassignment(Bool, Bool, Bool) -> ParamPreassignDecision
+
 pub fn plan_register_probe_order(Array[PhysicalReg], Array[PhysicalReg], Array[PhysicalReg], Bool, Int, Int, PhysicalReg?) -> Array[PhysicalReg]
 
 pub fn plan_temp_register_pool(Array[Bool], Array[Int], Array[Int], Array[Int]) -> Array[Int]
@@ -274,6 +276,12 @@ pub(all) struct ParallelMove {
   from : Location
   to : Location
   class : RegClass
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ParamPreassignDecision {
+  PreassignIncoming(Bool)
+  HintIncoming
+  Defer
 } derive(Eq, @debug.Debug)
 
 pub(all) struct PhysicalReg {

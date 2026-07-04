@@ -75,3 +75,27 @@ pub fn select_caller_saved_regs(
   }
   caller_saved
 }
+
+///|
+pub(all) enum ParamPreassignDecision {
+  PreassignIncoming(Bool)
+  HintIncoming
+  Defer
+} derive(Eq, Debug)
+
+///|
+pub fn plan_param_preassignment(
+  strict_precolor : Bool,
+  is_pinned_special_param : Bool,
+  crosses_call : Bool,
+) -> ParamPreassignDecision {
+  if crosses_call && !is_pinned_special_param {
+    Defer
+  } else if strict_precolor || is_pinned_special_param {
+    PreassignIncoming(
+      is_pinned_special_param || (strict_precolor && !crosses_call),
+    )
+  } else {
+    HintIncoming
+  }
+}

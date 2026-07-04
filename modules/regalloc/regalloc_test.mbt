@@ -655,6 +655,23 @@ test "allocation policy covers retry and vector call spilling" {
 }
 
 ///|
+test "param preassignment policy separates pin hint and defer" {
+  debug_inspect(
+    plan_param_preassignment(true, false, false),
+    content="PreassignIncoming(true)",
+  )
+  debug_inspect(
+    plan_param_preassignment(false, true, true),
+    content="PreassignIncoming(true)",
+  )
+  debug_inspect(
+    plan_param_preassignment(false, false, false),
+    content="HintIncoming",
+  )
+  debug_inspect(plan_param_preassignment(true, false, true), content="Defer")
+}
+
+///|
 test "fixed constraint edit planner emits before and after moves" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

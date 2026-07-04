@@ -1889,21 +1889,24 @@ fn BacktrackingAllocator::preassign_params(
         continue
       }
 
-      // Normal case:
-      // - strict mode: pin param bundle to incoming ABI register.
-      // - relaxed mode: keep vmctx pinned, but treat other params as hints only.
-      if strict_precolor || is_vmctx_param {
-        self.record_allocation(bundle, preg)
-        // Keep VMContext pinned. For strict precoloring, only pin params that
-        // do not cross calls; call-crossing values must remain movable so the
-        // allocator can satisfy call-clobber constraints.
-        if is_vmctx_param ||
-          (strict_precolor && !bundle.crosses_call(self.ranges)) {
-          bundle.is_pinned = true
+      match
+        @core_regalloc.plan_param_preassignment(
+          strict_precolor,
+          is_vmctx_param,
+          bundle.crosses_call(self.ranges),
+        ) {
+        PreassignIncoming(pin) => {
+          self.record_allocation(bundle, preg)
+          if pin {
+            bundle.is_pinned = true
+          }
         }
-      } else if bundle.spillset_id >= 0 &&
-        bundle.spillset_id < self.spillset_hints.length() {
-        self.spillset_hints[bundle.spillset_id] = Some(preg)
+        HintIncoming =>
+          if bundle.spillset_id >= 0 &&
+            bundle.spillset_id < self.spillset_hints.length() {
+            self.spillset_hints[bundle.spillset_id] = Some(preg)
+          }
+        Defer => ()
       }
     }
   }
