@@ -269,6 +269,24 @@ test "emit AArch64 integer constants and arithmetic bytes" {
 }
 
 ///|
+test "emit AArch64 wide integer constants" {
+  let func = @machv.Function::new("wide_consts")
+  let entry = func.new_block()
+  let minus_one = func.new_inst(IntConst(-1L))
+  minus_one.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
+  entry.append(minus_one)
+  let shifted = func.new_inst(IntConst(0x10000L))
+  shifted.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(shifted)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[1, 0, 128, 146, 34, 0, 160, 210, 192, 3, 95, 214]",
+  )
+}
+
+///|
 test "emit AArch64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()

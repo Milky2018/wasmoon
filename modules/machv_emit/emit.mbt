@@ -411,6 +411,45 @@ fn emit_aarch64_int_mul(
 }
 
 ///|
+fn emit_aarch64_movz(
+  object : CodeObject,
+  rd : Int,
+  imm16 : Int,
+  shift : Int,
+) -> Unit {
+  emit_u32_le(
+    object,
+    0xd2800000 | ((shift / 16) << 21) | ((imm16 & 0xffff) << 5) | (rd & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_movn(
+  object : CodeObject,
+  rd : Int,
+  imm16 : Int,
+  shift : Int,
+) -> Unit {
+  emit_u32_le(
+    object,
+    0x92800000 | ((shift / 16) << 21) | ((imm16 & 0xffff) << 5) | (rd & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_movk(
+  object : CodeObject,
+  rd : Int,
+  imm16 : Int,
+  shift : Int,
+) -> Unit {
+  emit_u32_le(
+    object,
+    0xf2800000 | ((shift / 16) << 21) | ((imm16 & 0xffff) << 5) | (rd & 0x1f),
+  )
+}
+
+///|
 fn emit_aarch64_int_const(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -420,13 +459,51 @@ fn emit_aarch64_int_const(
     find_operand(inst, Def, 0, "iconst"),
     "iconst destination",
   )
-  guard imm >= 0L && imm <= 0xffffL else {
-    raise UnsupportedOperand(
-      message="AArch64 IntConst currently supports only unsigned 16-bit immediates",
-    )
+  let halfwords = FixedArray::make(4, 0)
+  for i in 0..<4 {
+    halfwords[i] = ((imm >> (i * 16)) & 0xffffL).to_int()
   }
-  // TODO(machv_emit): copy the full legacy MOVZ/MOVN/MOVK materialization sequence for arbitrary 64-bit constants.
-  emit_u32_le(object, 0xd2800000 | (imm.to_int() << 5) | (dst & 0x1f))
+  let mut non_zero = 0
+  let mut non_ffff = 0
+  for i in 0..<4 {
+    if halfwords[i] != 0 {
+      non_zero = non_zero + 1
+    }
+    if halfwords[i] != 0xffff {
+      non_ffff = non_ffff + 1
+    }
+  }
+  let movz_count = if non_zero == 0 { 1 } else { non_zero }
+  let movn_count = if non_ffff == 0 { 1 } else { non_ffff }
+  if movn_count < movz_count {
+    if non_ffff == 0 {
+      emit_aarch64_movn(object, dst, 0, 0)
+    } else {
+      let mut first = 0
+      while first < 4 && halfwords[first] == 0xffff {
+        first = first + 1
+      }
+      emit_aarch64_movn(object, dst, halfwords[first] ^ 0xffff, first * 16)
+      for i in 0..<4 {
+        if i != first && halfwords[i] != 0xffff {
+          emit_aarch64_movk(object, dst, halfwords[i], i * 16)
+        }
+      }
+    }
+  } else if non_zero == 0 {
+    emit_aarch64_movz(object, dst, 0, 0)
+  } else {
+    let mut first = 0
+    while first < 4 && halfwords[first] == 0 {
+      first = first + 1
+    }
+    emit_aarch64_movz(object, dst, halfwords[first], first * 16)
+    for i in 0..<4 {
+      if i != first && halfwords[i] != 0 {
+        emit_aarch64_movk(object, dst, halfwords[i], i * 16)
+      }
+    }
+  }
 }
 
 ///|
