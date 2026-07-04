@@ -224,3 +224,15 @@ test "compute approximate loop depths ignores invalid successors" {
   let depths = compute_approx_loop_depths([[1, -1, 99], [0], []])
   debug_inspect(depths, content="[1, 1, 0]")
 }
+
+///|
+test "reserve spill slots aligns vector slots" {
+  let int_slot = reserve_spill_slot(0, Int)
+  inspect(int_slot.slot, content="0")
+  inspect(int_slot.next_slot, content="1")
+  inspect(int_slot.slots_used, content="1")
+  let vector_slot = reserve_spill_slot(1, Vector)
+  inspect(vector_slot.slot, content="2")
+  inspect(vector_slot.next_slot, content="4")
+  inspect(vector_slot.slots_used, content="2")
+}

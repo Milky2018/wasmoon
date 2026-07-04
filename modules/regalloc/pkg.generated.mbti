@@ -12,6 +12,8 @@ pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
+pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
+
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
 pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
@@ -147,6 +149,12 @@ pub(all) enum RegClass {
   Int
   Float
   Vector
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotReservation {
+  slot : Int
+  next_slot : Int
+  slots_used : Int
 } derive(Eq, @debug.Debug)
 
 pub(all) enum UseKind {

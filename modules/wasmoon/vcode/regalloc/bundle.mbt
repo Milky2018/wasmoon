@@ -267,20 +267,17 @@ fn BundleSet::new_spill_bundle(
   reg_class : @abi.RegClass,
 ) -> SpillBundle {
   let id = self.spill_bundles.length()
-
-  // Spill slots are counted in 8-byte units.
-  // For 128-bit vectors, reserve 16 bytes and ensure 16-byte alignment.
-  let (slot, slots_used) = match reg_class {
-    Vector => {
-      if self.next_spill_slot % 2 != 0 {
-        self.next_spill_slot += 1
-      }
-      (self.next_spill_slot, 2)
-    }
-    _ => (self.next_spill_slot, 1)
+  let class : @core_regalloc.RegClass = match reg_class {
+    Vector => Vector
+    Float32 | Float64 => Float
+    Int => Int
   }
-  self.next_spill_slot += slots_used
-  let spill_bundle = SpillBundle::new(id, slot)
+  let reservation = @core_regalloc.reserve_spill_slot(
+    self.next_spill_slot,
+    class,
+  )
+  self.next_spill_slot = reservation.next_slot
+  let spill_bundle = SpillBundle::new(id, reservation.slot)
   self.spill_bundles.push(spill_bundle)
   spill_bundle
 }
