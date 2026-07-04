@@ -290,6 +290,8 @@ pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
 
 pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?
 
+pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
+
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
 
 pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit

@@ -245,15 +245,11 @@ pub fn JITModule::load_with_imports(
 
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
-        // First check external imports, then fall back to built-in trampolines
-        let func_ptr : Int64? = match external_imports.get(imp.module_name) {
-          Some(m) => m.get(imp.func_name)
-          None => None
-        }
-        let func_ptr : Int64? = match func_ptr {
-          Some(_) => func_ptr
-          None => get_import_trampoline(imp.module_name, imp.func_name)
-        }
+        let func_ptr = @wasmoon_jit.resolve_import_function_ptr(
+          external_imports,
+          imp.module_name,
+          imp.func_name,
+        )
         match func_ptr {
           Some(ptr) =>
             if ptr < 0L {

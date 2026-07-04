@@ -80,6 +80,22 @@ pub fn get_import_trampoline(
 }
 
 ///|
+pub fn resolve_import_function_ptr(
+  external_imports : Map[String, Map[String, Int64]],
+  module_name : String,
+  field_name : String,
+) -> Int64? {
+  match external_imports.get(module_name) {
+    Some(module_imports) =>
+      match module_imports.get(field_name) {
+        Some(ptr) => Some(ptr)
+        None => get_import_trampoline(module_name, field_name)
+      }
+    None => get_import_trampoline(module_name, field_name)
+  }
+}
+
+///|
 /// Check if a module is known to JIT (has trampoline support).
 pub fn is_jit_supported_module(module_name : String) -> Bool {
   import_trampolines.contains(module_name)

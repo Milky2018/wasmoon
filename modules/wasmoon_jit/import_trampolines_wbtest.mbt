@@ -29,3 +29,21 @@ test "import trampolines: unsupported imports" {
   assert_true(get_import_trampoline("env", "memory") is None)
   assert_true(!is_jit_supported_module("env"))
 }
+
+///|
+test "import trampolines: external imports override builtin fallback" {
+  let external : Map[String, Map[String, Int64]] = {}
+  external.set("spectest", { "print": 1234L })
+  debug_inspect(
+    resolve_import_function_ptr(external, "spectest", "print"),
+    content="Some(1234)",
+  )
+  assert_true(
+    resolve_import_function_ptr(external, "wasi_snapshot_preview1", "fd_write")
+    is Some(_),
+  )
+  debug_inspect(
+    resolve_import_function_ptr(external, "env", "memory"),
+    content="None",
+  )
+}
