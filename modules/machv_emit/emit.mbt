@@ -137,6 +137,46 @@ fn emit_x64_shift_r_cl(object : CodeObject, dst : Int, subopcode : Int) -> Unit 
 }
 
 ///|
+fn emit_x64_movd_r32_xmm(object : CodeObject, dst : Int, src_xmm : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movd r/m32, xmm.
+  object.code.push(0x66)
+  emit_x64_rex_if_needed(object, (src_xmm >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x7e)
+  emit_x64_modrm(object, 3, src_xmm, dst)
+}
+
+///|
+fn emit_x64_movd_xmm_r32(object : CodeObject, dst_xmm : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movd xmm, r/m32.
+  object.code.push(0x66)
+  emit_x64_rex_if_needed(object, (dst_xmm >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x6e)
+  emit_x64_modrm(object, 3, dst_xmm, src)
+}
+
+///|
+fn emit_x64_movq_r64_xmm(object : CodeObject, dst : Int, src_xmm : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movq r/m64, xmm.
+  object.code.push(0x66)
+  emit_x64_rex_w(object, (src_xmm >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x7e)
+  emit_x64_modrm(object, 3, src_xmm, dst)
+}
+
+///|
+fn emit_x64_movq_xmm_r64(object : CodeObject, dst_xmm : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movq xmm, r/m64.
+  object.code.push(0x66)
+  emit_x64_rex_w(object, (dst_xmm >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x6e)
+  emit_x64_modrm(object, 3, dst_xmm, src)
+}
+
+///|
 fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
   emit_x64_rex_w(object, 0, (dst >> 3) & 1)
@@ -343,6 +383,42 @@ fn emit_aarch64_cmp_rr(
 }
 
 ///|
+fn emit_aarch64_fmov_d_to_x(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FMOV Xd, Dn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0x9e660000,
+  )
+}
+
+///|
+fn emit_aarch64_fmov_s_to_w(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FMOV Wd, Sn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0x1e260000,
+  )
+}
+
+///|
+fn emit_aarch64_fmov_x_to_d(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FMOV Dd, Xn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0x9e670000,
+  )
+}
+
+///|
+fn emit_aarch64_fmov_w_to_s(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: FMOV Sd, Wn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0x1e270000,
+  )
+}
+
+///|
 fn emit_aarch64_clz(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: CLZ Xd, Xn.
   emit_u32_le(
@@ -415,6 +491,27 @@ fn require_float_preg(
       } else {
         raise UnsupportedOperand(
           message="\{context} requires a floating-point physical register",
+        )
+      }
+    Virtual(_) =>
+      raise UnsupportedOperand(
+        message="\{context} requires register allocation before emission",
+      )
+  }
+}
+
+///|
+fn require_physical_preg(
+  operand : @machv.Operand,
+  context : String,
+) -> (Int, @machv.RegClass) raise EmitError {
+  match operand.reg {
+    Physical(preg) =>
+      if !preg.is_spilled() {
+        (preg.index, preg.class)
+      } else {
+        raise UnsupportedOperand(
+          message="\{context} requires a non-spilled physical register",
         )
       }
     Virtual(_) =>
@@ -659,6 +756,31 @@ fn emit_aarch64_int_mul_high(
     (((if signed { 0x40 } else { 0xc0 }) | (rhs & 31)) << 16) |
     (0x9b << 24),
   )
+}
+
+///|
+fn emit_aarch64_bitcast(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "bitcast"),
+    "bitcast source",
+  )
+  let (dst, dst_class) = require_physical_preg(
+    find_operand(inst, Def, 0, "bitcast"),
+    "bitcast destination",
+  )
+  match (src_class, dst_class) {
+    (Int, Float64) => emit_aarch64_fmov_x_to_d(object, dst, src)
+    (Float64, Int) => emit_aarch64_fmov_d_to_x(object, dst, src)
+    (Int, Float32) => emit_aarch64_fmov_w_to_s(object, dst, src)
+    (Float32, Int) => emit_aarch64_fmov_s_to_w(object, dst, src)
+    _ =>
+      raise UnsupportedOperand(
+        message="bitcast requires int<->f32/f64 physical registers",
+      )
+  }
 }
 
 ///|
@@ -1374,6 +1496,31 @@ fn emit_x64_int_shift(
 }
 
 ///|
+fn emit_x64_bitcast(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "bitcast"),
+    "bitcast source",
+  )
+  let (dst, dst_class) = require_physical_preg(
+    find_operand(inst, Def, 0, "bitcast"),
+    "bitcast destination",
+  )
+  match (src_class, dst_class) {
+    (Float32, Int) => emit_x64_movd_r32_xmm(object, dst, src)
+    (Float64, Int) => emit_x64_movq_r64_xmm(object, dst, src)
+    (Int, Float32) => emit_x64_movd_xmm_r32(object, dst, src)
+    (Int, Float64) => emit_x64_movq_xmm_r64(object, dst, src)
+    _ =>
+      raise UnsupportedOperand(
+        message="bitcast requires int<->f32/f64 physical registers",
+      )
+  }
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1433,6 +1580,7 @@ fn write_aarch64_inst_bytes(
     FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
     FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
     FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
+    Bitcast => emit_aarch64_bitcast(object, inst)
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -1495,6 +1643,7 @@ fn write_x64_inst_bytes(
     FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
     FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
     FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")
+    Bitcast => emit_x64_bitcast(object, inst)
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>

@@ -301,6 +301,34 @@ test "emit X64 integer rotate bytes" {
 }
 
 ///|
+test "emit X64 bitcast bytes" {
+  let func = @machv.Function::new("x64_bitcast")
+  let entry = func.new_block()
+  let int_to_float = func.new_inst(Bitcast)
+  int_to_float.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 10, class: Int })),
+  )
+  int_to_float.add_operand(
+    @machv.Operand::def(Physical({ index: 15, class: Float64 })),
+  )
+  entry.append(int_to_float)
+  let float_to_int = func.new_inst(Bitcast)
+  float_to_int.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 15, class: Float64 })),
+  )
+  float_to_int.add_operand(
+    @machv.Operand::def(Physical({ index: 10, class: Int })),
+  )
+  entry.append(float_to_int)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[102, 77, 15, 110, 250, 102, 77, 15, 126, 250, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -682,6 +710,34 @@ test "emit AArch64 integer rotate-right bytes" {
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function(func)
   debug_inspect(object.code, content="[32, 44, 194, 154, 192, 3, 95, 214]")
+}
+
+///|
+test "emit AArch64 bitcast bytes" {
+  let func = @machv.Function::new("bitcast")
+  let entry = func.new_block()
+  let int_to_float = func.new_inst(Bitcast)
+  int_to_float.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  int_to_float.add_operand(
+    @machv.Operand::def(Physical({ index: 1, class: Float64 })),
+  )
+  entry.append(int_to_float)
+  let float_to_int = func.new_inst(Bitcast)
+  float_to_int.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float64 })),
+  )
+  float_to_int.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  entry.append(float_to_int)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[65, 0, 103, 158, 131, 0, 102, 158, 192, 3, 95, 214]",
+  )
 }
 
 ///|
