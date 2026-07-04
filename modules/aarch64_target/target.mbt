@@ -463,6 +463,29 @@ fn lower_int_rotl(
 }
 
 ///|
+fn lower_fconst(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  value : Double,
+) -> Unit {
+  guard inst.results.length() == 1 else { return }
+  let bits = match inst.results[0].ty {
+    F32 => value.reinterpret_as_int64() & 0xffffffffL
+    F64 => value.reinterpret_as_int64()
+    _ => abort("aarch64_target: fconst result must be f32 or f64")
+  }
+  let raw = out.new_vreg(Int)
+  let load = out.new_inst(IntConst(bits))
+  load.add_operand(@machv.Operand::def(Virtual(raw)))
+  block.append(load)
+  let cast = out.new_inst(Bitcast)
+  cast.add_operand(@machv.Operand::use_reg(Virtual(raw)))
+  add_defs(cast, inst.results)
+  block.append(cast)
+}
+
+///|
 fn lower_inst(
   func : @milkir.Function,
   out : @machv.Function,
@@ -480,6 +503,10 @@ fn lower_inst(
     }
     Rotl => {
       lower_int_rotl(out, block, inst)
+      return
+    }
+    Fconst(value) => {
+      lower_fconst(out, block, inst, value)
       return
     }
     _ => ()

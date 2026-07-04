@@ -112,6 +112,52 @@ test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([], [F64])
+  let milk = @milkir.Function::new("fconst64_x64", signature)
+  let output = milk.new_value(F64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fconst(1.5), [], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_movq_to_xmm = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x6e {
+      has_movq_to_xmm = true
+    }
+  }
+  inspect(has_movq_to_xmm, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([], [F32])
+  let milk = @milkir.Function::new("fconst32_aarch64", signature)
+  let output = milk.new_value(F32)
+  let entry = milk.new_block([])
+  let bits = (1.25 : Float).reinterpret_as_int().to_int64()
+  entry.append_inst(
+    milk.new_inst(Fconst(bits.reinterpret_as_double()), [], [output]),
+  )
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_fmov_w_to_s = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if plan.object.code[i + 2] == 0x27 && plan.object.code[i + 3] == 0x1e {
+      has_fmov_w_to_s = true
+    }
+  }
+  inspect(has_fmov_w_to_s, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "plan MilkIR float promote through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([F32], [F64])
   let milk = @milkir.Function::new("fpromote_x64", signature)
