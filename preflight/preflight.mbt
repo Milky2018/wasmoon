@@ -20,7 +20,7 @@ fn PreflightStage::to_string(self : PreflightStage) -> String {
 }
 
 ///|
-pub impl Show for PreflightStage with output(self, logger) {
+pub impl Show for PreflightStage with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -40,7 +40,7 @@ fn PreflightSeverity::to_string(self : PreflightSeverity) -> String {
 }
 
 ///|
-pub impl Show for PreflightSeverity with output(self, logger) {
+pub impl Show for PreflightSeverity with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -153,7 +153,7 @@ fn parse_and_validate_module(
   @validator.validate_module(mod_) catch {
     e => {
       let (message, func_idx) = match e {
-        @validator.WithContext(ctx) => (ctx.format(), ctx.func_idx)
+        WithContext(ctx) => (ctx.format(), ctx.func_idx)
         _ => (@validator.format_validation_error(e), None)
       }
       report.add_error(Validate, message, func_idx~)

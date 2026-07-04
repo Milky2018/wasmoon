@@ -159,9 +159,9 @@ pub fn Profiler::new(threshold : HotThreshold) -> Profiler {
   {
     counter: CallCounter::new(),
     threshold,
-    hot_functions: @hashset.HashSet([]),
-    pending_compilation: @hashset.HashSet([]),
-    compiled_functions: @hashset.HashSet([]),
+    hot_functions: HashSet([]),
+    pending_compilation: HashSet([]),
+    compiled_functions: HashSet([]),
   }
 }
 

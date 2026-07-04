@@ -74,7 +74,7 @@ fn validate_component_section_export(
   }
   for e in exports {
     validate_export_name(e.name, cfg)
-    if is_root && e.sortidx.sort is @component.Sort::Component {
+    if is_root && e.sortidx.sort is Component {
       raise SectionParseError(
         11, "exporting a component from the root component is not supported",
       )
@@ -102,14 +102,14 @@ fn validate_component_section_export(
     }
     if exportname_to_string(e.name) is Some(name) &&
       parse_bracket_resource_name(name) is Some(_) &&
-      !(e.sortidx.sort is @component.Sort::Func) {
+      !(e.sortidx.sort is Func) {
       raise SectionParseError(11, "is not a func")
     }
     if is_root && e.sortidx.sort is Func && e.sortidx.idx < imported_funcs {
       raise ExportedImportedFunc(e.sortidx.idx)
     }
     check_sortidx(e.sortidx, counts, type_table.length())
-    if e.sortidx.sort is @component.Sort::Type {
+    if e.sortidx.sort is Type {
       if exportname_to_string(e.name) is Some(name) {
         my_export_type_sigs.set(
           name,
@@ -118,19 +118,19 @@ fn validate_component_section_export(
       }
       if exportname_to_string(e.name) is Some(name) &&
         type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
-        is TypeSig::Resource(_) {
+        is Resource(_) {
         export_resource_names.set(name, e.sortidx.idx)
       }
     }
-    if e.sortidx.sort is @component.Sort::Func &&
+    if e.sortidx.sort is Func &&
       exportname_to_string(e.name) is Some(name) &&
       e.sortidx.idx >= 0 &&
       e.sortidx.idx < func_types.length() {
       let mut ft : @component.FuncType? = None
-      if e.desc is Some(@component.ExternDesc::FuncType(tyidx)) &&
+      if e.desc is Some(FuncType(tyidx)) &&
         tyidx >= 0 &&
         tyidx < type_table.length() &&
-        type_table[tyidx] is Some(@component.TypeDef::FuncType(t)) {
+        type_table[tyidx] is Some(FuncType(t)) {
         ft = Some(t)
       }
       if ft is None {
@@ -146,8 +146,7 @@ fn validate_component_section_export(
         )
       }
     }
-    if e.sortidx.sort is @component.Sort::Instance &&
-      exportname_to_string(e.name) is Some(name) {
+    if e.sortidx.sort is Instance && exportname_to_string(e.name) is Some(name) {
       if e.sortidx.idx >= 0 &&
         e.sortidx.idx < instance_sigs.length() &&
         instance_sigs[e.sortidx.idx] is Some(sig) {
@@ -168,14 +167,14 @@ fn validate_component_section_export(
     // Enforce "exportable" rules: nominal-ish types must have names in the
     // interface namespace (provided via type imports/exports).
     match e.sortidx.sort {
-      @component.Sort::Type => {
+      Type => {
         let idx = e.sortidx.idx
         let had = named_types.get(idx) is Some(_)
         if !had {
           named_types.set(idx, 1)
         }
         if !valtype_valid_for_type_import_export(
-            @component.ValType::TypeIdx(idx),
+            TypeIdx(idx),
             type_table,
             resource_ids,
             named_types,
@@ -188,8 +187,7 @@ fn validate_component_section_export(
         }
         if idx >= 0 && idx < type_table.length() {
           match type_table[idx] {
-            Some(@component.TypeDef::InstanceType(_))
-            | Some(@component.TypeDef::InstanceTypeEmpty) =>
+            Some(InstanceType(_)) | Some(InstanceTypeEmpty) =>
               if !instancetype_valid_for_use_as_interface(
                   idx, type_table, type_outers,
                 ) {
@@ -201,14 +199,14 @@ fn validate_component_section_export(
           }
         }
       }
-      @component.Sort::Func =>
+      Func =>
         if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
           let mut ft : @component.FuncType? = None
           match e.desc {
-            Some(@component.ExternDesc::FuncType(tyidx)) =>
+            Some(FuncType(tyidx)) =>
               if tyidx >= 0 && tyidx < type_table.length() {
                 match type_table[tyidx] {
-                  Some(@component.TypeDef::FuncType(t)) => ft = Some(t)
+                  Some(FuncType(t)) => ft = Some(t)
                   _ => ()
                 }
               }
@@ -229,7 +227,7 @@ fn validate_component_section_export(
             None => ()
           }
         }
-      @component.Sort::Instance => {
+      Instance => {
         let inst_idx = e.sortidx.idx
         if inst_idx >= 0 && inst_idx < counts.instance {
           let exported_type_idxs : Array[Int] = []
@@ -252,7 +250,7 @@ fn validate_component_section_export(
                 for kv in map.iter() {
                   let (_name, info) = kv
                   match info {
-                    ExportedTypeInfo::Existing(t) =>
+                    Existing(t) =>
                       if seen.get(t) is None {
                         seen.set(t, 1)
                         exported_type_idxs.push(t)
@@ -290,7 +288,7 @@ fn validate_component_section_export(
           }
           for t in exported_type_idxs {
             if !valtype_valid_in_interface(
-                @component.ValType::TypeIdx(t),
+                TypeIdx(t),
                 type_table,
                 resource_ids,
                 inst_named,
@@ -314,7 +312,7 @@ fn validate_component_section_export(
           for kv in inst_named.iter() {
             let (k, _v) = kv
             let sig = type_sig_of_typeidx(k, type_table, resource_ids)
-            if sig != TypeSig::Other && !typesig_contains(sig, named_sigs) {
+            if sig != Other && !typesig_contains(sig, named_sigs) {
               named_sigs.push(sig)
             }
           }
@@ -323,7 +321,7 @@ fn validate_component_section_export(
               Some(map) =>
                 for kv in map.iter() {
                   let (_name, sig) = kv
-                  if sig != TypeSig::Other && !typesig_contains(sig, named_sigs) {
+                  if sig != Other && !typesig_contains(sig, named_sigs) {
                     named_sigs.push(sig)
                   }
                 }
@@ -380,7 +378,7 @@ fn validate_component_section_export(
                 Some(s) =>
                   for kv in s.exports.iter() {
                     let (_n, sort) = kv
-                    if sort is @component.Sort::Func {
+                    if sort is Func {
                       needs_funcs = true
                       break
                     }
@@ -400,7 +398,7 @@ fn validate_component_section_export(
     }
     // Track effective type size of this component's export signature.
     match e.sortidx.sort {
-      @component.Sort::Instance => {
+      Instance => {
         let delta = if e.sortidx.idx >= 0 &&
           e.sortidx.idx < instance_sizes.length() {
           instance_sizes[e.sortidx.idx]
@@ -409,7 +407,7 @@ fn validate_component_section_export(
         }
         export_size = add_type_size(export_size, delta)
       }
-      @component.Sort::Type => {
+      Type => {
         let delta = if e.sortidx.idx >= 0 && e.sortidx.idx < type_sizes.length() {
           type_sizes[e.sortidx.idx]
         } else {
@@ -417,7 +415,7 @@ fn validate_component_section_export(
         }
         export_size = add_type_size(export_size, delta)
       }
-      @component.Sort::Component => {
+      Component => {
         let delta = if e.sortidx.idx >= 0 &&
           e.sortidx.idx < component_sizes.length() {
           component_sizes[e.sortidx.idx]
@@ -434,10 +432,7 @@ fn validate_component_section_export(
     // Export ascription: if a type is provided, it must be compatible with
     // the actual export (we currently model instance-type compatibility).
     match (e.sortidx.sort, e.desc) {
-      (
-        @component.Sort::Instance,
-        Some(@component.ExternDesc::InstanceType(tyidx)),
-      ) =>
+      (Instance, Some(InstanceType(tyidx))) =>
         if tyidx >= 0 && tyidx < type_table.length() {
           let expected = instancetype_sig_of_global_idx(tyidx, type_table, {})
           let actual = if e.sortidx.idx >= 0 &&
@@ -463,7 +458,7 @@ fn validate_component_section_export(
 
     // Component exports can introduce an alias in the corresponding index
     // space, which later sections can reference by index.
-    if e.sortidx.sort is @component.Sort::Type {
+    if e.sortidx.sort is Type {
       let idx = e.sortidx.idx
       if idx >= 0 && idx < type_table.length() {
         type_table.push(type_table[idx])
@@ -499,7 +494,7 @@ fn validate_component_section_export(
     } else {
       count_alias(e.sortidx.sort, counts)
       match e.sortidx.sort {
-        @component.Sort::Func =>
+        Func =>
           if e.sortidx.idx >= 0 && e.sortidx.idx < func_types.length() {
             func_types.push(func_types[e.sortidx.idx])
             if e.sortidx.idx >= 0 && e.sortidx.idx < func_sig_shapes.length() {
@@ -511,7 +506,7 @@ fn validate_component_section_export(
             func_types.push(None)
             func_sig_shapes.push(None)
           }
-        @component.Sort::Instance =>
+        Instance =>
           if e.sortidx.idx >= 0 && e.sortidx.idx < instance_sigs.length() {
             instance_sigs.push(instance_sigs[e.sortidx.idx])
             if e.sortidx.idx >= 0 &&
@@ -588,7 +583,7 @@ fn validate_component_section_export(
             instance_sizes.push(1)
             interface_instance_idxs.set(instance_sigs.length() - 1, 1)
           }
-        @component.Sort::Component => {
+        Component => {
           let src = e.sortidx.idx
           if src >= 0 && src < component_import_sorts.length() {
             component_import_sorts.push(component_import_sorts[src])
@@ -641,7 +636,7 @@ fn validate_component_section_export(
             component_sizes.push(1)
           }
         }
-        @component.Sort::Core(core_sort) =>
+        Core(core_sort) =>
           if core_sort == 0x00 {
             if e.sortidx.idx >= 0 && e.sortidx.idx < core_func_types.length() {
               core_func_types.push(core_func_types[e.sortidx.idx])
@@ -707,7 +702,7 @@ fn validate_component_section_export(
     // conservatively account for their contribution to the effective
     // signature size (wasm-tools' very-nested.wast).
     match e.sortidx.sort {
-      @component.Sort::Instance => {
+      Instance => {
         let delta = if instance_sizes.length() > 0 {
           instance_sizes[instance_sizes.length() - 1]
         } else {
@@ -715,7 +710,7 @@ fn validate_component_section_export(
         }
         export_size = add_type_size(export_size, delta)
       }
-      @component.Sort::Type => {
+      Type => {
         let delta = if type_sizes.length() > 0 {
           type_sizes[type_sizes.length() - 1]
         } else {
@@ -723,7 +718,7 @@ fn validate_component_section_export(
         }
         export_size = add_type_size(export_size, delta)
       }
-      @component.Sort::Component => {
+      Component => {
         let delta = if component_sizes.length() > 0 {
           component_sizes[component_sizes.length() - 1]
         } else {

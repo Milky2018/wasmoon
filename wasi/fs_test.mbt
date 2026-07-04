@@ -73,11 +73,7 @@ test "native file operations: write and read" {
   let content = "Hello, WASI!"
 
   // Open file for writing (use ReadWrite to set proper permissions)
-  let fd = @wasi.native_open(
-    test_file,
-    [@wasi.ReadWrite, @wasi.Create, @wasi.Truncate],
-    0o666,
-  )
+  let fd = @wasi.native_open(test_file, [ReadWrite, Create, Truncate], 0o666)
   guard fd is Some(fd) else { // Skip test if can't create file
     return
   }
@@ -92,7 +88,7 @@ test "native file operations: write and read" {
   inspect(@wasi.native_close(fd), content="true")
 
   // Open file for reading
-  let fd = @wasi.native_open(test_file, [@wasi.ReadOnly], 0)
+  let fd = @wasi.native_open(test_file, [ReadOnly], 0)
   guard fd is Some(fd) else { // Skip if can't open
     return
   }
@@ -116,11 +112,7 @@ test "native file operations: seek and tell" {
   let content = "0123456789"
 
   // Create file with content (use ReadWrite for proper permissions)
-  let fd = @wasi.native_open(
-    test_file,
-    [@wasi.ReadWrite, @wasi.Create, @wasi.Truncate],
-    0o666,
-  )
+  let fd = @wasi.native_open(test_file, [ReadWrite, Create, Truncate], 0o666)
   guard fd is Some(fd) else { // Skip test if can't create file
     return
   }
@@ -130,7 +122,7 @@ test "native file operations: seek and tell" {
   @wasi.native_close(fd) |> ignore
 
   // Open for reading and test seek
-  let fd = @wasi.native_open(test_file, [@wasi.ReadOnly], 0)
+  let fd = @wasi.native_open(test_file, [ReadOnly], 0)
   guard fd is Some(fd) else { // Skip if can't open
     return
   }
@@ -139,7 +131,7 @@ test "native file operations: seek and tell" {
   inspect(@debug.to_string(@wasi.native_tell(fd)), content="Some(0)")
 
   // Seek to position 5
-  let new_pos = @wasi.native_seek(fd, 5L, @wasi.Set)
+  let new_pos = @wasi.native_seek(fd, 5L, Set)
   inspect(@debug.to_string(new_pos), content="Some(5)")
 
   // Tell should return 5
@@ -153,22 +145,18 @@ test "native file operations: seek and tell" {
   inspect(utf8_to_string(read_bytes, 5), content="56789")
 
   // Seek relative from current position
-  let new_pos = @wasi.native_seek(fd, -3L, @wasi.Cur)
+  let new_pos = @wasi.native_seek(fd, -3L, Cur)
   inspect(@debug.to_string(new_pos), content="Some(7)")
 
   // Seek from end
-  let new_pos = @wasi.native_seek(fd, -2L, @wasi.End)
+  let new_pos = @wasi.native_seek(fd, -2L, End)
   inspect(@debug.to_string(new_pos), content="Some(8)")
   @wasi.native_close(fd) |> ignore
 }
 
 ///|
 test "native file operations: open non-existent file" {
-  let fd = @wasi.native_open(
-    "/tmp/non_existent_file_12345.txt",
-    [@wasi.ReadOnly],
-    0,
-  )
+  let fd = @wasi.native_open("/tmp/non_existent_file_12345.txt", [ReadOnly], 0)
   guard fd is None else {
     @wasi.native_close(fd.unwrap()) |> ignore // File exists unexpectedly
     return

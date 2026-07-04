@@ -13,7 +13,7 @@ struct WasiCompareResult {
 }
 
 ///|
-pub impl Show for WasiCompareResult with output(self, logger) {
+pub impl Show for WasiCompareResult with fn output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
   } else {
@@ -184,7 +184,7 @@ fn wasi_errno_from_result(result : Result[Array[@types.Value], String]) -> Int {
     Ok(values) =>
       if values.length() == 1 {
         match values[0] {
-          @types.Value::I32(errno) => errno
+          I32(errno) => errno
           _ => -2
         }
       } else {
@@ -200,7 +200,7 @@ fn wasi_i32_from_result(result : Result[Array[@types.Value], String]) -> Int {
     Ok(values) =>
       if values.length() == 1 {
         match values[0] {
-          @types.Value::I32(value) => value
+          I32(value) => value
           _ => -2
         }
       } else {
@@ -213,7 +213,7 @@ fn wasi_i32_from_result(result : Result[Array[@types.Value], String]) -> Int {
 ///|
 fn find_wasi_func_index(mod_ : @types.Module, name : String) -> Int? {
   for exp in mod_.exports {
-    if exp.name == name && exp.desc is @types.ExportDesc::Func(idx) {
+    if exp.name == name && exp.desc is Func(idx) {
       return Some(idx)
     }
   }

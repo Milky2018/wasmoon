@@ -18,21 +18,21 @@ fn Parser::resolve_heap_type_as_ref_value_type(
     match self.types[type_idx].composite {
       Func(_) =>
         if nullable {
-          @types.ValueType::RefNullFuncTyped(type_idx)
+          RefNullFuncTyped(type_idx)
         } else {
-          @types.ValueType::RefFuncTyped(type_idx)
+          RefFuncTyped(type_idx)
         }
       Struct(_) =>
         if nullable {
-          @types.ValueType::RefNullStruct(type_idx)
+          RefNullStruct(type_idx)
         } else {
-          @types.ValueType::RefStruct(type_idx)
+          RefStruct(type_idx)
         }
       Array(_) =>
         if nullable {
-          @types.ValueType::RefNullArray(type_idx)
+          RefNullArray(type_idx)
         } else {
-          @types.ValueType::RefArray(type_idx)
+          RefArray(type_idx)
         }
     }
   }
@@ -42,58 +42,18 @@ fn Parser::resolve_heap_type_as_ref_value_type(
     nullable : Bool,
   ) -> @types.ValueType raise ParserError {
     match heap_type {
-      -16 =>
-        if nullable {
-          @types.ValueType::FuncRef
-        } else {
-          @types.ValueType::RefFunc
-        }
-      -17 =>
-        if nullable {
-          @types.ValueType::ExternRef
-        } else {
-          @types.ValueType::RefExtern
-        }
-      -18 =>
-        if nullable {
-          @types.ValueType::AnyRef
-        } else {
-          @types.ValueType::RefAny
-        }
-      -19 =>
-        if nullable {
-          @types.ValueType::RefNullEq
-        } else {
-          @types.ValueType::RefEq
-        }
-      -20 =>
-        if nullable {
-          @types.ValueType::RefNullI31
-        } else {
-          @types.ValueType::RefI31
-        }
-      -21 =>
-        if nullable {
-          @types.ValueType::StructRef
-        } else {
-          @types.ValueType::RefStructAbs
-        }
-      -22 =>
-        if nullable {
-          @types.ValueType::ArrayRef
-        } else {
-          @types.ValueType::RefArrayAbs
-        }
-      -23 => @types.ValueType::ExnRef
-      -15 =>
-        if nullable {
-          @types.ValueType::NullRef
-        } else {
-          @types.ValueType::RefNone
-        }
-      -14 => @types.ValueType::NullExternRef
-      -13 => @types.ValueType::NullFuncRef
-      -12 => @types.ValueType::NullExnRef
+      -16 => if nullable { FuncRef } else { RefFunc }
+      -17 => if nullable { ExternRef } else { RefExtern }
+      -18 => if nullable { AnyRef } else { RefAny }
+      -19 => if nullable { RefNullEq } else { RefEq }
+      -20 => if nullable { RefNullI31 } else { RefI31 }
+      -21 => if nullable { StructRef } else { RefStructAbs }
+      -22 => if nullable { ArrayRef } else { RefArrayAbs }
+      -23 => ExnRef
+      -15 => if nullable { NullRef } else { RefNone }
+      -14 => NullExternRef
+      -13 => NullFuncRef
+      -12 => NullExnRef
       _ => raise ParseError("invalid heap type")
     }
   }

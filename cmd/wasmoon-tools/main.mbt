@@ -12,16 +12,16 @@ fn main {
         help="Parse and resolve WIT packages and print as normalized text/JSON",
         args={
           "input": @clap.Arg::positional(
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Input .wit file or a directory containing .wit files",
           ),
           "output": @clap.Arg::named(
             short='o',
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Output file (default: stdout)",
           ),
           "out-dir": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Emit the resolved WIT graph to this directory (writes root + deps/*.wit)",
           ),
           "json": @clap.Arg::flag(
@@ -46,11 +46,11 @@ fn main {
             help="Generate a WIT world that imports the exports of the input component (.wasm)",
           ),
           "importize-world": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Generate a WIT world that imports the exports of the selected world in a WIT package",
           ),
           "importize-out-world-name": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Name of the generated world for --importize/--importize-world",
           ),
         },
@@ -61,7 +61,7 @@ fn main {
           "file": @clap.Arg::positional(help="Path to WASM file"),
           "output": @clap.Arg::named(
             short='o',
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Output file (default: stdout)",
           ),
         },
@@ -72,7 +72,7 @@ fn main {
           "file": @clap.Arg::positional(help="Path to WAT file"),
           "output": @clap.Arg::named(
             short='o',
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Output file (default: input.wasm)",
           ),
         },

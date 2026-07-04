@@ -67,28 +67,17 @@ fn OperandStack::pop(
 ///|
 fn to_non_nullable_cast_diff_type(ty : @types.ValueType) -> @types.ValueType {
   match ty {
-    FuncRef => @types.ValueType::RefFunc
-    ExternRef => @types.ValueType::RefExtern
-    AnyRef => @types.ValueType::RefAny
-    StructRef => @types.ValueType::RefStruct(-1)
-    ArrayRef => @types.ValueType::RefArray(-1)
-    RefNullFuncTyped(idx) => @types.ValueType::RefFuncTyped(idx)
-    RefNullStruct(idx) =>
-      if idx < 0 {
-        @types.ValueType::RefStruct(-1)
-      } else {
-        @types.ValueType::RefStruct(idx)
-      }
-    RefNullArray(idx) =>
-      if idx < 0 {
-        @types.ValueType::RefArray(-1)
-      } else {
-        @types.ValueType::RefArray(idx)
-      }
-    RefNullEq => @types.ValueType::RefEq
-    RefNullI31 => @types.ValueType::RefI31
-    NullRef | NullFuncRef | NullExternRef | NullExnRef =>
-      @types.ValueType::RefNone
+    FuncRef => RefFunc
+    ExternRef => RefExtern
+    AnyRef => RefAny
+    StructRef => RefStruct(-1)
+    ArrayRef => RefArray(-1)
+    RefNullFuncTyped(idx) => RefFuncTyped(idx)
+    RefNullStruct(idx) => if idx < 0 { RefStruct(-1) } else { RefStruct(idx) }
+    RefNullArray(idx) => if idx < 0 { RefArray(-1) } else { RefArray(idx) }
+    RefNullEq => RefEq
+    RefNullI31 => RefI31
+    NullRef | NullFuncRef | NullExternRef | NullExnRef => RefNone
     _ => ty
   }
 }
@@ -125,10 +114,10 @@ fn is_type_subtype(
     return true
   }
   // Bottom types for reference hierarchies.
-  if actual == @types.ValueType::RefNone && is_reference_type(expected) {
+  if actual == RefNone && is_reference_type(expected) {
     return true
   }
-  if actual == @types.ValueType::NullRef && expected.is_nullable() {
+  if actual == NullRef && expected.is_nullable() {
     return true
   }
   // Helper: check if a type is a subtype of anyref (AnyRef = ref null any)
@@ -219,7 +208,7 @@ fn OperandStack::pop_any(
   self : OperandStack,
 ) -> @types.ValueType raise ValidationError {
   if self.polymorphic && self.stack.is_empty() {
-    return @types.ValueType::I32 // Return arbitrary type for polymorphic stack
+    return I32 // Return arbitrary type for polymorphic stack
   }
   if self.stack.is_empty() {
     raise StackUnderflow("Expected value, but stack is empty")
@@ -285,7 +274,7 @@ fn OperandStack::pop_ref_any(
   self : OperandStack,
 ) -> @types.ValueType raise ValidationError {
   if self.polymorphic && self.stack.is_empty() {
-    return @types.ValueType::NullRef
+    return NullRef
   }
   let actual = self.pop_any()
   if !is_reference_type(actual) {

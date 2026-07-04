@@ -50,7 +50,7 @@ pub fn resolve_package(
 ) -> ResolveResult raise WitError {
   let root_doc = desugar_toplevel_use(root)
   if root_doc.name is None {
-    raise WitError::Error(
+    raise Error(
       "no `package` header was found in any WIT file for this package",
     )
   }
@@ -208,9 +208,7 @@ fn add_pkg_recursive_strict(
   pkg : Package,
 ) -> Unit raise WitError {
   if pkg.name is None {
-    raise WitError::Error(
-      "dependency package missing `package ...;` declaration",
-    )
+    raise Error("dependency package missing `package ...;` declaration")
   }
   let key = package_key(pkg)
   match pkgs.get(key) {
@@ -230,7 +228,7 @@ fn package_key(pkg : Package) -> String raise WitError {
         Some(v) => n + "@" + v
         None => n
       }
-    None => raise WitError::Error("package missing name")
+    None => raise Error("package missing name")
   }
 }
 
@@ -342,7 +340,7 @@ fn topo_sort_graph(
       return
     }
     if st == 1 {
-      raise WitError::Error(cycle_msg(k))
+      raise Error(cycle_msg(k))
     }
     state.set(k, 1)
     let ds = deps_map.get(k).unwrap_or([])
@@ -379,7 +377,7 @@ fn resolve_one_package(
     match it {
       Interface(i) =>
         if ifaces.get(i.name) is Some(_) {
-          raise WitError::Error(
+          raise Error(
             "duplicate interface `" + i.name + "` in package `" + pkg_key + "`",
           )
         } else {
@@ -387,7 +385,7 @@ fn resolve_one_package(
         }
       World(w) =>
         if worlds.get(w.name) is Some(_) {
-          raise WitError::Error(
+          raise Error(
             "duplicate world `" + w.name + "` in package `" + pkg_key + "`",
           )
         } else {
@@ -529,7 +527,7 @@ fn resolve_interface_in_package(
     match item {
       Func(f) =>
         if names.get(f.name) is Some(_) {
-          raise WitError::Error(
+          raise Error(
             "duplicate name `" + f.name + "` in interface `" + iface.name + "`",
           )
         } else {
@@ -555,14 +553,14 @@ fn resolve_interface_in_package(
       for pair in u.names {
         let (n, asn) = pair
         if exports.get(n) is None {
-          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
+          raise Error("unknown name `" + n + "` in use " + u.path.raw)
         }
         let local_name = match asn {
           Some(x) => x
           None => n
         }
         if names.get(local_name) is Some(_) {
-          raise WitError::Error(
+          raise Error(
             "duplicate name `" +
             local_name +
             "` in interface `" +
@@ -612,7 +610,7 @@ fn add_type_name(
   iface_name : String,
 ) -> Unit raise WitError {
   if ns.get(name) is Some(_) {
-    raise WitError::Error(
+    raise Error(
       "duplicate name `" + name + "` in interface `" + iface_name + "`",
     )
   }
@@ -639,7 +637,7 @@ fn get_iface_type_exports(
     }
   }
   if !found {
-    raise WitError::Error(
+    raise Error(
       "unknown interface `" +
       target.name +
       "` in package `" +
@@ -651,9 +649,7 @@ fn get_iface_type_exports(
   match iface_type_exports.get(key) {
     Some(m) => m
     None =>
-      raise WitError::Error(
-        "internal: interface `" + target.name + "` not resolved yet",
-      )
+      raise Error("internal: interface `" + target.name + "` not resolved yet")
   }
 }
 
@@ -688,11 +684,11 @@ fn validate_type_expr(
       if is_builtin_type(n) || visible_types.get(n) is Some(_) {
         ()
       } else {
-        raise WitError::Error("unknown type `" + n + "`")
+        raise Error("unknown type `" + n + "`")
       }
     Apply(name, args) => {
       if !is_builtin_ctor(name) {
-        raise WitError::Error("unknown type constructor `" + name + "`")
+        raise Error("unknown type constructor `" + name + "`")
       }
       for a in args {
         validate_type_expr(visible_types, a)
@@ -883,9 +879,7 @@ fn resolve_world_in_package(
         for pair in u.names {
           let (n, _) = pair
           if exports.get(n) is None {
-            raise WitError::Error(
-              "unknown name `" + n + "` in use " + u.path.raw,
-            )
+            raise Error("unknown name `" + n + "` in use " + u.path.raw)
           }
         }
         required.set(iface_key(r), r)
@@ -899,9 +893,7 @@ fn resolve_world_in_package(
               for pair in u.names {
                 let (n, _) = pair
                 if exports.get(n) is None {
-                  raise WitError::Error(
-                    "unknown name `" + n + "` in use " + u.path.raw,
-                  )
+                  raise Error("unknown name `" + n + "` in use " + u.path.raw)
                 }
               }
               required.set(iface_key(r), r)
@@ -981,11 +973,8 @@ fn resolve_world_ref(
         None =>
           match local_worlds.get(name) {
             Some(_) =>
-              raise WitError::Error(
-                "internal: world `" + name + "` not resolved yet",
-              )
-            None =>
-              raise WitError::Error("unknown world `" + name + "` in include")
+              raise Error("internal: world `" + name + "` not resolved yet")
+            None => raise Error("unknown world `" + name + "` in include")
           }
       }
     (Some(pkg_key), name, _) => {
@@ -1031,7 +1020,7 @@ fn apply_include_renames(
       }
     }
     if !found {
-      raise WitError::Error("no import or export kebab-name `" + from + "`")
+      raise Error("no import or export kebab-name `" + from + "`")
     }
   }
   let out : Array[WorldItem] = []
@@ -1143,13 +1132,13 @@ fn validate_iface_exists(
     }
   }
   if !found {
-    raise WitError::Error(
+    raise Error(
       "unknown interface `" + r.name + "` in package `" + r.pkg_key + "`",
     )
   }
   // Ensure export info exists.
   if iface_type_exports.get(iface_key(r)) is None {
-    raise WitError::Error(
+    raise Error(
       "unknown interface `" + r.name + "` in package `" + r.pkg_key + "`",
     )
   }
@@ -1168,7 +1157,7 @@ fn compute_iface_closure(
       return
     }
     if st == 1 {
-      raise WitError::Error(
+      raise Error(
         "cycle in transitive interface dependencies involving `" + k + "`",
       )
     }
@@ -1288,16 +1277,14 @@ fn validate_inline_interface_types(
       for pair in u.names {
         let (n, asn) = pair
         if exports.get(n) is None {
-          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
+          raise Error("unknown name `" + n + "` in use " + u.path.raw)
         }
         let local_name = match asn {
           Some(x) => x
           None => n
         }
         if ns.get(local_name) is Some(_) {
-          raise WitError::Error(
-            "duplicate name `" + local_name + "` in inline interface",
-          )
+          raise Error("duplicate name `" + local_name + "` in inline interface")
         }
         ns.set(local_name, true)
         visible.set(local_name, true)
@@ -1373,14 +1360,14 @@ fn validate_world_types(
       for pair in u.names {
         let (n, asn) = pair
         if exports.get(n) is None {
-          raise WitError::Error("unknown name `" + n + "` in use " + u.path.raw)
+          raise Error("unknown name `" + n + "` in use " + u.path.raw)
         }
         let local_name = match asn {
           Some(x) => x
           None => n
         }
         if ns.get(local_name) is Some(_) {
-          raise WitError::Error(
+          raise Error(
             "duplicate name `" + local_name + "` in world `" + world_name + "`",
           )
         }
@@ -1539,7 +1526,7 @@ fn merge_packages(acc : Package?, pkg : Package) -> Package raise WitError {
           if x == y {
             Some(x)
           } else {
-            raise WitError::Error("conflicting package names")
+            raise Error("conflicting package names")
           }
         (Some(x), None) => Some(x)
         (None, Some(y)) => Some(y)
@@ -1550,7 +1537,7 @@ fn merge_packages(acc : Package?, pkg : Package) -> Package raise WitError {
           if x == y {
             Some(x)
           } else {
-            raise WitError::Error("conflicting package versions")
+            raise Error("conflicting package versions")
           }
         (Some(x), None) => Some(x)
         (None, Some(y)) => Some(y)

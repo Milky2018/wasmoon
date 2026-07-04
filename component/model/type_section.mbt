@@ -105,7 +105,7 @@ pub(all) enum TypeDef {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for TypeDef with output(self, logger) {
+pub impl Show for TypeDef with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -229,9 +229,9 @@ fn parse_typebound_for_instancedecl(
 ) -> TypeBound raise ComponentParseError {
   let tag = reader.read_u8()
   if tag == 0x00 {
-    TypeBound::Eq(reader.read_typeidx())
+    Eq(reader.read_typeidx())
   } else if tag == 0x01 {
-    TypeBound::SubResource
+    SubResource
   } else {
     raise InvalidTypeSection
   }
@@ -243,9 +243,9 @@ fn parse_valuebound_for_instancedecl(
 ) -> ValueBound raise ComponentParseError {
   let tag = reader.read_u8()
   if tag == 0x00 {
-    ValueBound::Eq(reader.read_leb_u32())
+    Eq(reader.read_leb_u32())
   } else if tag == 0x01 {
-    ValueBound::Type(parse_valtype(reader))
+    Type(parse_valtype(reader))
   } else {
     raise InvalidTypeSection
   }
@@ -261,17 +261,17 @@ fn parse_externdesc_for_instancedecl(
     if must_be_core_module != 0x11 {
       raise InvalidTypeSection
     }
-    ExternDesc::CoreModuleType(reader.read_leb_u32())
+    CoreModuleType(reader.read_leb_u32())
   } else if tag == 0x01 {
-    ExternDesc::FuncType(reader.read_typeidx())
+    FuncType(reader.read_typeidx())
   } else if tag == 0x02 {
-    ExternDesc::Value(parse_valuebound_for_instancedecl(reader))
+    Value(parse_valuebound_for_instancedecl(reader))
   } else if tag == 0x03 {
-    ExternDesc::Type(parse_typebound_for_instancedecl(reader))
+    Type(parse_typebound_for_instancedecl(reader))
   } else if tag == 0x04 {
-    ExternDesc::ComponentType(reader.read_typeidx())
+    ComponentType(reader.read_typeidx())
   } else if tag == 0x05 {
-    ExternDesc::InstanceType(reader.read_typeidx())
+    InstanceType(reader.read_typeidx())
   } else {
     raise InvalidTypeSection
   }
@@ -406,9 +406,9 @@ fn parse_instancedecl(
     let start = reader.pos
     skip_core_typedef(reader)
     let end = reader.pos
-    InstanceDecl::CoreType(bytes_sub(reader.data, start, end))
+    CoreType(bytes_sub(reader.data, start, end))
   } else if tag == 0x01 {
-    InstanceDecl::Type(parse_typedef(reader))
+    Type(parse_typedef(reader))
   } else if tag == 0x02 {
     // aliasdecl ::= 0x02 kind:<externkind> target:<aliastarget> ...
     let kind = parse_alias_kind(reader)
@@ -419,19 +419,19 @@ fn parse_instancedecl(
       // Alias targets use the plain `name` string encoding (length + bytes),
       // not the export-name string encoding used by import/export decls.
       let name = reader.read_label()
-      InstanceDecl::AliasInstanceExport(kind, instance_idx, name)
+      AliasInstanceExport(kind, instance_idx, name)
     } else if target == 0x02 {
       // Outer { count, index }
       let count = reader.read_leb_u32()
       let idx = reader.read_leb_u32()
-      InstanceDecl::AliasOuter(kind, count, idx)
+      AliasOuter(kind, count, idx)
     } else {
       raise InvalidTypeSection
     }
   } else if tag == 0x04 {
     let name = parse_exportname_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    InstanceDecl::Export(name, desc)
+    Export(name, desc)
   } else {
     raise UnsupportedTypeOpcode(tag)
   }
@@ -446,9 +446,9 @@ fn parse_componentdecl(
     let start = reader.pos
     skip_core_typedef(reader)
     let end = reader.pos
-    ComponentDecl::CoreType(bytes_sub(reader.data, start, end))
+    CoreType(bytes_sub(reader.data, start, end))
   } else if tag == 0x01 {
-    ComponentDecl::Type(parse_typedef(reader))
+    Type(parse_typedef(reader))
   } else if tag == 0x02 {
     // aliasdecl ::= 0x02 kind:<externkind> target:<aliastarget> ...
     let kind = parse_alias_kind(reader)
@@ -457,23 +457,23 @@ fn parse_componentdecl(
       // InstanceExport { instance_index, name }
       let instance_idx = reader.read_leb_u32()
       let name = reader.read_label()
-      ComponentDecl::AliasInstanceExport(kind, instance_idx, name)
+      AliasInstanceExport(kind, instance_idx, name)
     } else if target == 0x02 {
       // Outer { count, index }
       let count = reader.read_leb_u32()
       let idx = reader.read_leb_u32()
-      ComponentDecl::AliasOuter(kind, count, idx)
+      AliasOuter(kind, count, idx)
     } else {
       raise InvalidTypeSection
     }
   } else if tag == 0x03 {
     let name = parse_exportname_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    ComponentDecl::Import(name, desc)
+    Import(name, desc)
   } else if tag == 0x04 {
     let name = parse_exportname_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    ComponentDecl::Export(name, desc)
+    Export(name, desc)
   } else {
     raise UnsupportedTypeOpcode(tag)
   }
@@ -599,7 +599,7 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
       } else {
         raise InvalidTypeSection
       }
-      ResourceType(-1, rep, dtor, ResourceKind::GuestDefined)
+      ResourceType(-1, rep, dtor, GuestDefined)
     }
     0x41 => {
       // componenttype ::= 0x41 cd*:vec(<componentdecl>)

@@ -4,8 +4,8 @@
 /// Keep these tests lightweight; CI acceptance uses full WAST runners.
 test "ISA::current matches host arch" {
   match c_host_arch() {
-    0 => inspect(ISA::current() is ISA::AArch64, content="true")
-    1 => inspect(ISA::current() is ISA::AMD64, content="true")
+    0 => inspect(ISA::current() is AArch64, content="true")
+    1 => inspect(ISA::current() is AMD64, content="true")
     _ => inspect(false, content="true")
   }
 }

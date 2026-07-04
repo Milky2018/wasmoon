@@ -113,11 +113,11 @@ fn wit_type_to_prim_opcode(t : TypeExpr) -> Int raise WitError {
         "char" => 0x74
         "string" => 0x73
         _ =>
-          raise WitError::Error(
+          raise Error(
             "unsupported WIT type for component encoding: `" + n + "`",
           )
       }
-    _ => raise WitError::Error("unsupported WIT type expression in signature")
+    _ => raise Error("unsupported WIT type expression in signature")
   }
 }
 
@@ -583,8 +583,7 @@ fn lower_valtype_in_typedef(
       } else {
         match env.named_typeidx.get(n) {
           Some(i) => TypeIdx(i)
-          None =>
-            raise WitError::Error("unknown type `" + n + "` in type definition")
+          None => raise Error("unknown type `" + n + "` in type definition")
         }
       }
     Record(fields) => {
@@ -606,7 +605,7 @@ fn lower_valtype_in_typedef(
       match name {
         "list" => {
           if args.length() < 1 {
-            raise WitError::Error("list<T> requires an element type")
+            raise Error("list<T> requires an element type")
           }
           let elem = lower_valtype_in_typedef(env, args[0])
           let key = "list:" + typeexpr_key_of_valtype(elem)
@@ -624,9 +623,7 @@ fn lower_valtype_in_typedef(
         }
         "option" => {
           if args.length() != 1 {
-            raise WitError::Error(
-              "option<T> requires exactly one type argument",
-            )
+            raise Error("option<T> requires exactly one type argument")
           }
           let inner = lower_valtype_in_typedef(env, args[0])
           let key = "option:" + typeexpr_key_of_valtype(inner)
@@ -675,9 +672,7 @@ fn lower_valtype_in_typedef(
         }
         "borrow" => {
           if args.length() != 1 {
-            raise WitError::Error(
-              "borrow<T> requires exactly one type argument",
-            )
+            raise Error("borrow<T> requires exactly one type argument")
           }
           match args[0] {
             Id(n) =>
@@ -687,15 +682,14 @@ fn lower_valtype_in_typedef(
                   let idx = ensure_compound_type(env, key, typedef_borrow(ridx))
                   TypeIdx(idx)
                 }
-                None =>
-                  raise WitError::Error("unknown type `" + n + "` in borrow<>")
+                None => raise Error("unknown type `" + n + "` in borrow<>")
               }
-            _ => raise WitError::Error("borrow<> expects a type identifier")
+            _ => raise Error("borrow<> expects a type identifier")
           }
         }
         "own" => {
           if args.length() != 1 {
-            raise WitError::Error("own<T> requires exactly one type argument")
+            raise Error("own<T> requires exactly one type argument")
           }
           match args[0] {
             Id(n) =>
@@ -705,14 +699,13 @@ fn lower_valtype_in_typedef(
                   let idx = ensure_compound_type(env, key, typedef_own(ridx))
                   TypeIdx(idx)
                 }
-                None =>
-                  raise WitError::Error("unknown type `" + n + "` in own<>")
+                None => raise Error("unknown type `" + n + "` in own<>")
               }
-            _ => raise WitError::Error("own<> expects a type identifier")
+            _ => raise Error("own<> expects a type identifier")
           }
         }
         _ =>
-          raise WitError::Error(
+          raise Error(
             "unsupported type constructor `" + name + "` in type definition",
           )
       }
@@ -741,10 +734,7 @@ fn lower_valtype_in_value(
       } else {
         match env.named_typeidx.get(n) {
           Some(i) => TypeIdx(i)
-          None =>
-            raise WitError::Error(
-              "unknown type `" + n + "` in function signature",
-            )
+          None => raise Error("unknown type `" + n + "` in function signature")
         }
       }
     _ => lower_valtype_in_typedef(env, t)
@@ -862,7 +852,7 @@ fn encode_interface_instancetype_full(
       return
     }
     if st == 1 {
-      raise WitError::Error("cycle in interface types at `" + n + "`")
+      raise Error("cycle in interface types at `" + n + "`")
     }
     state.set(n, 1)
     for d in deps_map.get(n).unwrap_or([]) {
@@ -914,9 +904,7 @@ fn encode_interface_instancetype_full(
                     match nm {
                       "list" =>
                         if args.length() < 1 {
-                          raise WitError::Error(
-                            "list<T> requires an element type",
-                          )
+                          raise Error("list<T> requires an element type")
                         } else {
                           let elem = lower_valtype_in_typedef(env, args[0])
                           env.alloc_type(typedef_list(elem))
@@ -930,7 +918,7 @@ fn encode_interface_instancetype_full(
                       }
                       "option" =>
                         if args.length() != 1 {
-                          raise WitError::Error(
+                          raise Error(
                             "option<T> requires exactly one type argument",
                           )
                         } else {
@@ -967,7 +955,7 @@ fn encode_interface_instancetype_full(
                         env.alloc_type(typedef_stream(payload))
                       }
                       _ =>
-                        raise WitError::Error(
+                        raise Error(
                           "unsupported type alias RHS for `" + t.name + "`",
                         )
                     }
@@ -1036,7 +1024,7 @@ fn encode_interface_instancetype_full(
         } else if f.results.length() == 1 {
           Some(lower_valtype_in_value(env, f.results[0].1))
         } else {
-          raise WitError::Error(
+          raise Error(
             "unsupported WIT function results (expected 0 or 1 result): `" +
             f.name +
             "`",
@@ -1069,7 +1057,7 @@ fn encode_interface_instancetype_full(
           } else if m.results.length() == 1 {
             Some(lower_valtype_in_value(env, m.results[0].1))
           } else {
-            raise WitError::Error(
+            raise Error(
               "unsupported WIT method results (expected 0 or 1 result): `" +
               m.name +
               "`",
@@ -1258,7 +1246,7 @@ fn encode_componenttype_inner_for_world(
         pairs.push((is_import, p, iface, full))
       }
       _ =>
-        raise WitError::Error(
+        raise Error(
           "unsupported world item for component encoding (only `import`/`export` of interfaces is supported): `" +
           world.name +
           "`",
@@ -1344,7 +1332,7 @@ fn encode_section(id : Int, payload : Bytes) -> Bytes {
 fn pkg_key_of(pkg : Package) -> String raise WitError {
   let name = match pkg.name {
     Some(n) => n
-    None => raise WitError::Error("missing `package` header")
+    None => raise Error("missing `package` header")
   }
   match pkg.version {
     Some(v) => name + "@" + v
@@ -1613,10 +1601,8 @@ fn pp_externdesc(sb : StringBuilder, desc : @component.ExternDesc) -> Unit {
     FuncType(ti) => sb.write_string("(func (type " + ti.to_string() + "))")
     Type(bound) =>
       match bound {
-        @component.TypeBound::Eq(ti) =>
-          sb.write_string("(type (eq " + ti.to_string() + "))")
-        @component.TypeBound::SubResource =>
-          sb.write_string("(type (sub resource))")
+        Eq(ti) => sb.write_string("(type (eq " + ti.to_string() + "))")
+        SubResource => sb.write_string("(type (sub resource))")
       }
     InstanceType(ti) =>
       sb.write_string("(instance (type " + ti.to_string() + "))")
@@ -1728,7 +1714,7 @@ fn pp_instancedecl(
 pub fn format_wit_component_wat(res : ResolveResult) -> String raise WitError {
   let bytes = encode_wit_component_wasm(res)
   let c = @component.parse_component(bytes) catch {
-    e => raise WitError::Error("parsing encoded component: " + e.to_string())
+    e => raise Error("parsing encoded component: " + e.to_string())
   }
   let sb = StringBuilder::new()
   sb.write_string("(component\n")

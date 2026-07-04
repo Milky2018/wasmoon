@@ -29,20 +29,18 @@ fn collect_used_callee_saved(
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
-  let used : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used : @hashset.HashSet[Int] = HashSet([])
   let mut has_calls = false
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_int : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let callee_saved_int : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
     callee_saved_int.add(r.index)
   }
 
   // Check param_pregs: parameters that cross calls are moved to callee-saved registers.
   for preg in func.get_param_pregs() {
-    if preg is Some(p) &&
-      p.class is @abi.Int &&
-      callee_saved_int.contains(p.index) {
+    if preg is Some(p) && p.class is Int && callee_saved_int.contains(p.index) {
       used.add(p.index)
     }
   }
@@ -51,7 +49,7 @@ fn collect_used_callee_saved(
       // Check if this instruction is a function call
       // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
-      if inst.opcode.call_type() is @instr.Regular {
+      if inst.opcode.call_type() is Regular {
         has_calls = true
       }
       for def in inst.defs {
@@ -66,7 +64,7 @@ fn collect_used_callee_saved(
   // If the function makes any calls, we must save LR on AArch64.
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
-  if has_calls && isa is @isa.AArch64 {
+  if has_calls && isa is AArch64 {
     used.add(@isaregs.lr_index())
   }
   // Sort the registers for consistent ordering
@@ -84,10 +82,10 @@ fn collect_used_callee_saved_fprs(
   func : @regalloc.VCodeFunction,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used : @hashset.HashSet[Int] = HashSet([])
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let callee_saved_fprs : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_float {
     callee_saved_fprs.add(r.index)
   }
@@ -131,7 +129,7 @@ fn func_has_calls(func : @regalloc.VCodeFunction) -> Bool {
 fn func_has_incoming_stack_args(func : @regalloc.VCodeFunction) -> Bool {
   for block in func.get_blocks() {
     for inst in block.insts {
-      if inst.opcode is @instr.LoadStackParam(_, _) {
+      if inst.opcode is LoadStackParam(_, _) {
         return true
       }
     }
@@ -221,7 +219,7 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     let (abs_amount, is_sub) = if amount < 0 {
       (-amount, true)
     } else {
@@ -315,7 +313,7 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     let isa = @isaregs.current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
@@ -535,7 +533,7 @@ fn MachineCode::emit_prologue(
         None
       }
       match param.class {
-        @abi.Int =>
+        Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
               isa.wasm_vmctx_arg_preg().index
@@ -557,7 +555,7 @@ fn MachineCode::emit_prologue(
             }
             int_idx += 1
           }
-        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        Float32 | Float64 | Vector =>
           if float_idx < float_regs.length() {
             let src = float_regs[float_idx].index
             match dest_preg {
@@ -794,7 +792,7 @@ pub fn emit_function(
   // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
   // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
   let force_vmctx_cache = abi_settings.enable_pinned_reg &&
-    @isaregs.current_isa() is @isa.AMD64
+    @isaregs.current_isa() is AMD64
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
     func_uses_vmctx(func) ||
@@ -1027,7 +1025,7 @@ pub fn emit_function(
       }
     }
   }
-  let is_amd64 = @isaregs.current_isa() is @isa.AMD64
+  let is_amd64 = @isaregs.current_isa() is AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -1275,8 +1273,8 @@ fn collect_used_callee_saved_from_output(
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
-    if output.get_param_loc(i) is @regalloc.Reg(p) &&
-      p.class is @abi.Int &&
+    if output.get_param_loc(i) is Reg(p) &&
+      p.class is Int &&
       p.index >= 0 &&
       p.index < callee_saved_int.length() &&
       callee_saved_int[p.index] {
@@ -1287,8 +1285,8 @@ fn collect_used_callee_saved_from_output(
   // Edits (moves) define their destination reg.
   for edit_entry in output.iter_edits() {
     let ((_block_id, _inst_idx, _pos), edit) = edit_entry
-    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-      p.class is @abi.Int &&
+    if edit is Move(_from, Reg(p), _class) &&
+      p.class is Int &&
       p.index >= 0 &&
       p.index < callee_saved_int.length() &&
       callee_saved_int[p.index] {
@@ -1306,9 +1304,9 @@ fn collect_used_callee_saved_from_output(
     // design.
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        if inst.defs[di].reg is @abi.Virtual(_) &&
-          output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
-          p.class is @abi.Int &&
+        if inst.defs[di].reg is Virtual(_) &&
+          output.inst_def_loc(block.id, inst_idx, false, di) is Reg(p) &&
+          p.class is Int &&
           p.index >= 0 &&
           p.index < callee_saved_int.length() &&
           callee_saved_int[p.index] {
@@ -1317,7 +1315,7 @@ fn collect_used_callee_saved_from_output(
       }
     }
   }
-  if func_has_calls(func) && isa is @isa.AArch64 {
+  if func_has_calls(func) && isa is AArch64 {
     let lr = @isaregs.lr_index()
     if lr >= 0 && lr < used.length() {
       used[lr] = true
@@ -1351,8 +1349,8 @@ fn collect_used_callee_saved_fprs_from_output(
 
   // Params are defined in the prologue, so they count as clobbers.
   for i in 0..<func.get_params().length() {
-    if output.get_param_loc(i) is @regalloc.Reg(p) &&
-      (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+    if output.get_param_loc(i) is Reg(p) &&
+      (p.class is Float32 || p.class is Float64) &&
       p.index >= 0 &&
       p.index < callee_saved_fprs.length() &&
       callee_saved_fprs[p.index] {
@@ -1363,8 +1361,8 @@ fn collect_used_callee_saved_fprs_from_output(
   // Edits define their destination reg.
   for edit_entry in output.iter_edits() {
     let ((_block_id, _inst_idx, _pos), edit) = edit_entry
-    if edit is @regalloc.Move(_from, @regalloc.Reg(p), _class) &&
-      (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+    if edit is Move(_from, Reg(p), _class) &&
+      (p.class is Float32 || p.class is Float64) &&
       p.index >= 0 &&
       p.index < callee_saved_fprs.length() &&
       callee_saved_fprs[p.index] {
@@ -1377,9 +1375,9 @@ fn collect_used_callee_saved_fprs_from_output(
   for block in func.get_blocks() {
     for inst_idx, inst in block.insts {
       for di in 0..<inst.defs.length() {
-        if inst.defs[di].reg is @abi.Virtual(_) &&
-          output.inst_def_loc(block.id, inst_idx, false, di) is @regalloc.Reg(p) &&
-          (p.class is @abi.Float32 || p.class is @abi.Float64) &&
+        if inst.defs[di].reg is Virtual(_) &&
+          output.inst_def_loc(block.id, inst_idx, false, di) is Reg(p) &&
+          (p.class is Float32 || p.class is Float64) &&
           p.index >= 0 &&
           p.index < callee_saved_fprs.length() &&
           callee_saved_fprs[p.index] {
@@ -1420,7 +1418,7 @@ fn invalidate_edit_slot_cache_defs(
   inst : @instr.VCodeInst,
 ) -> Unit {
   for def in inst.defs {
-    if def.reg is @abi.Physical(preg) {
+    if def.reg is Physical(preg) {
       invalidate_edit_slot_cache_reg(slot_cache, preg)
     }
   }
@@ -1429,7 +1427,7 @@ fn invalidate_edit_slot_cache_defs(
 ///|
 fn spill_slots_for_class(class : @abi.RegClass) -> Int {
   match class {
-    @abi.Vector => 2
+    Vector => 2
     _ => 1
   }
 }
@@ -1454,32 +1452,32 @@ fn emit_edit_move_with_cache(
   slot_cache : Map[Int, @abi.PReg],
 ) -> Unit {
   match edit {
-    @regalloc.Move(from, to, class) =>
+    Move(from, to, class) =>
       match (from, to) {
-        (@regalloc.Reg(src), @regalloc.Reg(dst)) => {
+        (Reg(src), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let inst = @instr.VCodeInst::new(@instr.Move)
-          inst.add_def({ reg: @abi.Physical(dst_preg) })
-          inst.add_use(@abi.Physical({ index: src.index, class }))
+          let inst = @instr.VCodeInst::new(Move)
+          inst.add_def({ reg: Physical(dst_preg) })
+          inst.add_use(Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
         }
-        (@regalloc.Spill(slot), @regalloc.Reg(dst)) => {
+        (Spill(slot), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.VCodeInst::new(@instr.StackLoad(slot * 8))
-          inst.add_def({ reg: @abi.Physical(dst_preg) })
+          let inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+          inst.add_def({ reg: Physical(dst_preg) })
           mc.emit_instruction(inst, stack_frame)
         }
-        (@regalloc.Reg(src), @regalloc.Spill(slot)) => {
+        (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
-          inst.add_use(@abi.Physical(src_preg))
+          let inst = @instr.VCodeInst::new(StackStore(slot * 8))
+          inst.add_use(Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
         }
-        (@regalloc.Spill(from_slot), @regalloc.Spill(to_slot)) =>
+        (Spill(from_slot), Spill(to_slot)) =>
           abort(
             "regalloc output should not contain stack-to-stack moves: \{from_slot} -> \{to_slot} (class=\{class})",
           )
@@ -1496,14 +1494,14 @@ fn map_inst_for_emission(
 ) -> @instr.VCodeInst {
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
-      @regalloc.Reg(preg) => inst.defs[di] = { reg: @abi.Physical(preg) }
-      @regalloc.Spill(_) => abort("Spill loc in instruction def allocation")
+      Reg(preg) => inst.defs[di] = { reg: Physical(preg) }
+      Spill(_) => abort("Spill loc in instruction def allocation")
     }
   }
   for ui in 0..<inst.uses.length() {
     match output.inst_use_loc(block_id, inst_idx, false, ui) {
-      @regalloc.Reg(preg) => inst.uses[ui] = @abi.Physical(preg)
-      @regalloc.Spill(_) => abort("Spill loc in instruction use allocation")
+      Reg(preg) => inst.uses[ui] = Physical(preg)
+      Spill(_) => abort("Spill loc in instruction use allocation")
     }
   }
   inst
@@ -1521,57 +1519,50 @@ fn map_term_for_emission(
     Jump(_, _) | Trap(_) => term
     Branch(_cond, then_b, else_b) => {
       let loc = output.inst_use_loc(block_id, term_inst, true, 0)
-      guard loc is @regalloc.Reg(p) else {
+      guard loc is Reg(p) else {
         abort("Spill loc in terminator use allocation")
       }
-      Branch(@abi.Physical(p), then_b, else_b)
+      Branch(Physical(p), then_b, else_b)
     }
     BranchCmp(_lhs, _rhs, cond, is_64, then_b, else_b) => {
       let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
       let l1 = output.inst_use_loc(block_id, term_inst, true, 1)
-      guard (l0, l1) is (@regalloc.Reg(p0), @regalloc.Reg(p1)) else {
+      guard (l0, l1) is (Reg(p0), Reg(p1)) else {
         abort("Spill loc in terminator use allocation")
       }
-      BranchCmp(
-        @abi.Physical(p0),
-        @abi.Physical(p1),
-        cond,
-        is_64,
-        then_b,
-        else_b,
-      )
+      BranchCmp(Physical(p0), Physical(p1), cond, is_64, then_b, else_b)
     }
     BranchZero(_r, is_nonzero, is_64, then_b, else_b) => {
       let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
-      guard l0 is @regalloc.Reg(p0) else {
+      guard l0 is Reg(p0) else {
         abort("Spill loc in terminator use allocation")
       }
-      BranchZero(@abi.Physical(p0), is_nonzero, is_64, then_b, else_b)
+      BranchZero(Physical(p0), is_nonzero, is_64, then_b, else_b)
     }
     BranchCmpImm(_lhs, imm, cond, is_64, then_b, else_b) => {
       let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
-      guard l0 is @regalloc.Reg(p0) else {
+      guard l0 is Reg(p0) else {
         abort("Spill loc in terminator use allocation")
       }
-      BranchCmpImm(@abi.Physical(p0), imm, cond, is_64, then_b, else_b)
+      BranchCmpImm(Physical(p0), imm, cond, is_64, then_b, else_b)
     }
     Return(values) => {
       let mapped : Array[@abi.Reg] = []
       for i in 0..<values.length() {
         let li = output.inst_use_loc(block_id, term_inst, true, i)
-        guard li is @regalloc.Reg(p0) else {
+        guard li is Reg(p0) else {
           abort("Spill loc in terminator use allocation")
         }
-        mapped.push(@abi.Physical(p0))
+        mapped.push(Physical(p0))
       }
       Return(mapped)
     }
     BrTable(_index, targets, default) => {
       let l0 = output.inst_use_loc(block_id, term_inst, true, 0)
-      guard l0 is @regalloc.Reg(p0) else {
+      guard l0 is Reg(p0) else {
         abort("Spill loc in terminator use allocation")
       }
-      BrTable(@abi.Physical(p0), targets, default)
+      BrTable(Physical(p0), targets, default)
     }
   }
 }
@@ -1585,7 +1576,7 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     let isa = @isaregs.current_isa()
     // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
     // then do a Cranelift-style "param moves + param spills" stage.
@@ -1609,7 +1600,7 @@ fn MachineCode::emit_prologue_with_output(
     for param_idx, param in params {
       let loc = output.get_param_loc(param_idx)
       match param.class {
-        @abi.Int =>
+        Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
               isa.wasm_vmctx_arg_preg().index
@@ -1617,7 +1608,7 @@ fn MachineCode::emit_prologue_with_output(
               user_gprs[int_idx - 1].index
             }
             match loc {
-              @regalloc.Spill(slot) =>
+              Spill(slot) =>
                 self.x86_emit_mov_m64_r64(
                   4,
                   stack_frame.spill_offset + slot * 8,
@@ -1627,11 +1618,11 @@ fn MachineCode::emit_prologue_with_output(
             }
             int_idx += 1
           }
-        @abi.Float32 | @abi.Float64 =>
+        Float32 | Float64 =>
           if float_idx < float_regs.length() {
             let src = float_regs[float_idx].index
             match loc {
-              @regalloc.Spill(slot) =>
+              Spill(slot) =>
                 self.x86_emit_movsd_m64_xmm(
                   4,
                   stack_frame.spill_offset + slot * 8,
@@ -1641,11 +1632,11 @@ fn MachineCode::emit_prologue_with_output(
             }
             float_idx += 1
           }
-        @abi.Vector =>
+        Vector =>
           if float_idx < float_regs.length() {
             let src = float_regs[float_idx].index
             match loc {
-              @regalloc.Spill(slot) =>
+              Spill(slot) =>
                 self.x86_emit_movdqu_m128_xmm(
                   4,
                   stack_frame.spill_offset + slot * 8,
@@ -1785,7 +1776,7 @@ fn MachineCode::emit_prologue_with_output(
     for param_idx, param in params {
       let loc = output.get_param_loc(param_idx)
       match param.class {
-        @abi.Int =>
+        Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
               isa.wasm_vmctx_arg_preg().index
@@ -1793,7 +1784,7 @@ fn MachineCode::emit_prologue_with_output(
               user_gprs[int_idx - 1].index
             }
             match loc {
-              @regalloc.Reg(dst) =>
+              Reg(dst) =>
                 if dst.index != src {
                   let vmctx_dst = isa.vmctx_preg().index
                   let is_redundant_vmctx_move = int_idx == 0 &&
@@ -1807,11 +1798,11 @@ fn MachineCode::emit_prologue_with_output(
             }
             int_idx += 1
           }
-        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        Float32 | Float64 | Vector =>
           if float_idx < float_regs.length() {
             let src = float_regs[float_idx].index
             match loc {
-              @regalloc.Reg(dst) =>
+              Reg(dst) =>
                 if dst.index != src {
                   fp_moves.push((src, dst.index))
                 }
@@ -1848,21 +1839,21 @@ fn MachineCode::emit_prologue_with_output(
   for param_idx, param in params {
     let loc = output.get_param_loc(param_idx)
     match param.class {
-      @abi.Int =>
+      Int =>
         if int_idx < int_arg_regs.length() {
           let x_src = int_arg_regs[int_idx].index
           match loc {
-            @regalloc.Spill(slot) =>
+            Spill(slot) =>
               self.emit_str_imm(x_src, 31, stack_frame.spill_offset + slot * 8)
             _ => ()
           }
           int_idx += 1
         }
-      @abi.Float32 | @abi.Float64 =>
+      Float32 | Float64 =>
         if float_idx < float_arg_regs.length() {
           let v_src = float_arg_regs[float_idx].index
           match loc {
-            @regalloc.Spill(slot) =>
+            Spill(slot) =>
               self.emit_str_d_imm(
                 v_src,
                 31,
@@ -1872,11 +1863,11 @@ fn MachineCode::emit_prologue_with_output(
           }
           float_idx += 1
         }
-      @abi.Vector =>
+      Vector =>
         if float_idx < float_arg_regs.length() {
           let v_src = float_arg_regs[float_idx].index
           match loc {
-            @regalloc.Spill(slot) =>
+            Spill(slot) =>
               self.emit_str_q_imm(
                 v_src,
                 31,
@@ -2014,11 +2005,11 @@ fn MachineCode::emit_prologue_with_output(
   for param_idx, param in params {
     let loc = output.get_param_loc(param_idx)
     match param.class {
-      @abi.Int =>
+      Int =>
         if int_idx < int_arg_regs.length() {
           let x_src = int_arg_regs[int_idx].index
           match loc {
-            @regalloc.Reg(dst) =>
+            Reg(dst) =>
               if dst.index != x_src {
                 let vmctx_dst = @isaregs.vmctx_index()
                 let is_redundant_vmctx_move = int_idx == 0 &&
@@ -2032,11 +2023,11 @@ fn MachineCode::emit_prologue_with_output(
           }
           int_idx += 1
         }
-      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+      Float32 | Float64 | Vector =>
         if float_idx < float_arg_regs.length() {
           let v_src = float_arg_regs[float_idx].index
           match loc {
-            @regalloc.Reg(dst) =>
+            Reg(dst) =>
               if dst.index != v_src {
                 fp_moves.push((v_src, dst.index))
               }
@@ -2063,7 +2054,7 @@ pub fn emit_function_with_regalloc(
   // Keep block layout optimization (targets are block IDs; ids stay stable).
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new(record_disasm~)
-  let is_amd64 = @isaregs.current_isa() is @isa.AMD64
+  let is_amd64 = @isaregs.current_isa() is AMD64
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
@@ -2079,7 +2070,7 @@ pub fn emit_function_with_regalloc(
   let cache_func_table = func.should_cache_func_table()
   let vmctx = @isaregs.vmctx_index()
   let force_vmctx_cache = abi_settings.enable_pinned_reg &&
-    @isaregs.current_isa() is @isa.AMD64
+    @isaregs.current_isa() is AMD64
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
     func_uses_vmctx(func) ||
@@ -2172,7 +2163,7 @@ pub fn emit_function_with_regalloc(
         output,
         block.id,
         inst_idx,
-        @regalloc.ProgPos::Before,
+        Before,
         stack_frame,
         edit_slot_cache,
       )
@@ -2186,7 +2177,7 @@ pub fn emit_function_with_regalloc(
         output,
         block.id,
         inst_idx,
-        @regalloc.ProgPos::After,
+        After,
         stack_frame,
         edit_slot_cache,
       )
@@ -2199,7 +2190,7 @@ pub fn emit_function_with_regalloc(
         output,
         block.id,
         term_inst,
-        @regalloc.ProgPos::Before,
+        Before,
         stack_frame,
         edit_slot_cache,
       )

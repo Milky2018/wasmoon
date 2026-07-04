@@ -7,10 +7,10 @@ fn validate_instr(
 ) -> Unit raise ValidationError {
   match instr {
     // Constants
-    I32Const(_) => stack.push(@types.ValueType::I32)
-    I64Const(_) => stack.push(@types.ValueType::I64)
-    F32Const(_) => stack.push(@types.ValueType::F32)
-    F64Const(_) => stack.push(@types.ValueType::F64)
+    I32Const(_) => stack.push(I32)
+    I64Const(_) => stack.push(I64)
+    F32Const(_) => stack.push(F32)
+    F64Const(_) => stack.push(F64)
 
     // Local operations
     LocalGet(idx) => {
@@ -79,9 +79,9 @@ fn validate_instr(
     | I32ShrU
     | I32Rotl
     | I32Rotr => {
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.push(I32)
     }
 
     // i32 comparison operations
@@ -95,32 +95,32 @@ fn validate_instr(
     | I32LeU
     | I32GeS
     | I32GeU => {
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.push(I32)
     }
 
     // i32 unary operations
     I32Eqz => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I32)
+      stack.push(I32)
     }
     I32Clz | I32Ctz | I32Popcnt => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I32)
+      stack.push(I32)
     }
     // i32 sign-extension operations
     I32Extend8S | I32Extend16S => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I32)
+      stack.push(I32)
     }
 
     // i64 binary operations
     I64MulWideS | I64MulWideU => {
-      stack.pop(@types.ValueType::I64)
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.push(I64)
+      stack.push(I64)
     }
 
     // i64 binary operations
@@ -139,9 +139,9 @@ fn validate_instr(
     | I64ShrU
     | I64Rotl
     | I64Rotr => {
-      stack.pop(@types.ValueType::I64)
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.push(I64)
     }
 
     // i64 comparison operations
@@ -155,130 +155,130 @@ fn validate_instr(
     | I64LeU
     | I64GeS
     | I64GeU => {
-      stack.pop(@types.ValueType::I64)
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I64)
+      stack.pop(I64)
+      stack.push(I32)
     }
 
     // i64 unary operations
     I64Eqz => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I64)
+      stack.push(I32)
     }
     I64Clz | I64Ctz | I64Popcnt => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(I64)
+      stack.push(I64)
     }
     // i64 sign-extension operations
     I64Extend8S | I64Extend16S | I64Extend32S => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(I64)
+      stack.push(I64)
     }
 
     // f32 binary operations
     F32Add | F32Sub | F32Mul | F32Div | F32Min | F32Max | F32Copysign => {
-      stack.pop(@types.ValueType::F32)
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::F32)
+      stack.pop(F32)
+      stack.pop(F32)
+      stack.push(F32)
     }
 
     // f32 comparison operations
     F32Eq | F32Ne | F32Lt | F32Gt | F32Le | F32Ge => {
-      stack.pop(@types.ValueType::F32)
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(F32)
+      stack.pop(F32)
+      stack.push(I32)
     }
 
     // f32 unary operations
     F32Abs | F32Neg | F32Ceil | F32Floor | F32Trunc | F32Nearest | F32Sqrt => {
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::F32)
+      stack.pop(F32)
+      stack.push(F32)
     }
 
     // f64 binary operations
     F64Add | F64Sub | F64Mul | F64Div | F64Min | F64Max | F64Copysign => {
-      stack.pop(@types.ValueType::F64)
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::F64)
+      stack.pop(F64)
+      stack.pop(F64)
+      stack.push(F64)
     }
 
     // f64 comparison operations
     F64Eq | F64Ne | F64Lt | F64Gt | F64Le | F64Ge => {
-      stack.pop(@types.ValueType::F64)
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::I32)
+      stack.pop(F64)
+      stack.pop(F64)
+      stack.push(I32)
     }
 
     // f64 unary operations
     F64Abs | F64Neg | F64Ceil | F64Floor | F64Trunc | F64Nearest | F64Sqrt => {
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::F64)
+      stack.pop(F64)
+      stack.push(F64)
     }
 
     // Conversion operations
     I32WrapI64 => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::I32)
+      stack.pop(I64)
+      stack.push(I32)
     }
     I64ExtendI32S | I64ExtendI32U => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::I64)
+      stack.pop(I32)
+      stack.push(I64)
     }
     I32TruncF32S | I32TruncF32U | I32TruncSatF32S | I32TruncSatF32U => {
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(F32)
+      stack.push(I32)
     }
     I32TruncF64S | I32TruncF64U | I32TruncSatF64S | I32TruncSatF64U => {
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::I32)
+      stack.pop(F64)
+      stack.push(I32)
     }
     I64TruncF32S | I64TruncF32U | I64TruncSatF32S | I64TruncSatF32U => {
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::I64)
+      stack.pop(F32)
+      stack.push(I64)
     }
     I64TruncF64S | I64TruncF64U | I64TruncSatF64S | I64TruncSatF64U => {
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(F64)
+      stack.push(I64)
     }
     F32ConvertI32S | F32ConvertI32U => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::F32)
+      stack.pop(I32)
+      stack.push(F32)
     }
     F32ConvertI64S | F32ConvertI64U => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::F32)
+      stack.pop(I64)
+      stack.push(F32)
     }
     F64ConvertI32S | F64ConvertI32U => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::F64)
+      stack.pop(I32)
+      stack.push(F64)
     }
     F64ConvertI64S | F64ConvertI64U => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::F64)
+      stack.pop(I64)
+      stack.push(F64)
     }
     F32DemoteF64 => {
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::F32)
+      stack.pop(F64)
+      stack.push(F32)
     }
     F64PromoteF32 => {
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::F64)
+      stack.pop(F32)
+      stack.push(F64)
     }
     I32ReinterpretF32 => {
-      stack.pop(@types.ValueType::F32)
-      stack.push(@types.ValueType::I32)
+      stack.pop(F32)
+      stack.push(I32)
     }
     I64ReinterpretF64 => {
-      stack.pop(@types.ValueType::F64)
-      stack.push(@types.ValueType::I64)
+      stack.pop(F64)
+      stack.push(I64)
     }
     F32ReinterpretI32 => {
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::F32)
+      stack.pop(I32)
+      stack.push(F32)
     }
     F64ReinterpretI64 => {
-      stack.pop(@types.ValueType::I64)
-      stack.push(@types.ValueType::F64)
+      stack.pop(I64)
+      stack.push(F64)
     }
 
     // Memory operations - validate memory index exists
@@ -294,7 +294,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     I32Load8S(memidx, align, offset) | I32Load8U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -307,7 +307,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     I32Load16S(memidx, align, offset) | I32Load16U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -320,7 +320,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     I64Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -333,7 +333,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I64)
+      stack.push(I64)
     }
     I64Load8S(memidx, align, offset) | I64Load8U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -346,7 +346,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I64)
+      stack.push(I64)
     }
     I64Load16S(memidx, align, offset) | I64Load16U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -359,7 +359,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I64)
+      stack.push(I64)
     }
     I64Load32S(memidx, align, offset) | I64Load32U(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -372,7 +372,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::I64)
+      stack.push(I64)
     }
     F32Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -385,7 +385,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::F32)
+      stack.push(F32)
     }
     F64Load(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -398,7 +398,7 @@ fn validate_instr(
         )
       }
       stack.pop(ctx.mems[memidx].addr_type()) // address
-      stack.push(@types.ValueType::F64)
+      stack.push(F64)
     }
     I32Store(memidx, align, offset) => {
       if memidx >= ctx.mems.length() {
@@ -410,7 +410,7 @@ fn validate_instr(
           "i32.store alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::I32) // value
+      stack.pop(I32) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I32Store8(memidx, align, offset) => {
@@ -423,7 +423,7 @@ fn validate_instr(
           "i32.store8 alignment \{align} exceeds natural alignment 0",
         )
       }
-      stack.pop(@types.ValueType::I32) // value
+      stack.pop(I32) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I32Store16(memidx, align, offset) => {
@@ -436,7 +436,7 @@ fn validate_instr(
           "i32.store16 alignment \{align} exceeds natural alignment 1",
         )
       }
-      stack.pop(@types.ValueType::I32) // value
+      stack.pop(I32) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store(memidx, align, offset) => {
@@ -449,7 +449,7 @@ fn validate_instr(
           "i64.store alignment \{align} exceeds natural alignment 3",
         )
       }
-      stack.pop(@types.ValueType::I64) // value
+      stack.pop(I64) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store8(memidx, align, offset) => {
@@ -462,7 +462,7 @@ fn validate_instr(
           "i64.store8 alignment \{align} exceeds natural alignment 0",
         )
       }
-      stack.pop(@types.ValueType::I64) // value
+      stack.pop(I64) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store16(memidx, align, offset) => {
@@ -475,7 +475,7 @@ fn validate_instr(
           "i64.store16 alignment \{align} exceeds natural alignment 1",
         )
       }
-      stack.pop(@types.ValueType::I64) // value
+      stack.pop(I64) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     I64Store32(memidx, align, offset) => {
@@ -488,7 +488,7 @@ fn validate_instr(
           "i64.store32 alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::I64) // value
+      stack.pop(I64) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     F32Store(memidx, align, offset) => {
@@ -501,7 +501,7 @@ fn validate_instr(
           "f32.store alignment \{align} exceeds natural alignment 2",
         )
       }
-      stack.pop(@types.ValueType::F32) // value
+      stack.pop(F32) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     F64Store(memidx, align, offset) => {
@@ -514,7 +514,7 @@ fn validate_instr(
           "f64.store alignment \{align} exceeds natural alignment 3",
         )
       }
-      stack.pop(@types.ValueType::F64) // value
+      stack.pop(F64) // value
       stack.pop(ctx.mems[memidx].addr_type()) // address
     }
     MemorySize(memidx) | MemoryGrow(memidx) => {
@@ -535,8 +535,8 @@ fn validate_instr(
         raise InvalidDataIndex(data_idx)
       }
       let addr_type = ctx.mems[memidx].addr_type()
-      stack.pop(@types.ValueType::I32) // n (always i32 for data segment offset)
-      stack.pop(@types.ValueType::I32) // s (always i32 for data segment offset)
+      stack.pop(I32) // n (always i32 for data segment offset)
+      stack.pop(I32) // s (always i32 for data segment offset)
       stack.pop(addr_type) // d (memory address)
     }
     DataDrop(data_idx) =>
@@ -553,11 +553,10 @@ fn validate_instr(
       let dst_addr_type = ctx.mems[dst].addr_type()
       let src_addr_type = ctx.mems[src].addr_type()
       // n uses the larger of the two address types
-      let n_type = if dst_addr_type == @types.ValueType::I64 ||
-        src_addr_type == @types.ValueType::I64 {
+      let n_type = if dst_addr_type == I64 || src_addr_type == I64 {
         @types.ValueType::I64
       } else {
-        @types.ValueType::I32
+        I32
       }
       stack.pop(n_type) // n
       stack.pop(src_addr_type) // s
@@ -569,7 +568,7 @@ fn validate_instr(
       }
       let addr_type = ctx.mems[memidx].addr_type()
       stack.pop(addr_type) // n
-      stack.pop(@types.ValueType::I32) // val (always i32)
+      stack.pop(I32) // val (always i32)
       stack.pop(addr_type) // d
     }
     Atomic(subop, memidx, align, offset) => {
@@ -583,7 +582,7 @@ fn validate_instr(
       let addr_type = if memidx < ctx.mems.length() {
         ctx.mems[memidx].addr_type()
       } else {
-        @types.ValueType::I32
+        I32
       }
       fn check_align(
         natural : Int,
@@ -607,23 +606,23 @@ fn validate_instr(
       match op {
         0 => {
           check_align(2, "memory.atomic.notify")
-          stack.pop(@types.ValueType::I32) // count
+          stack.pop(I32) // count
           stack.pop(addr_type) // addr
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         1 => {
           check_align(2, "memory.atomic.wait32")
-          stack.pop(@types.ValueType::I64) // timeout
-          stack.pop(@types.ValueType::I32) // expected
+          stack.pop(I64) // timeout
+          stack.pop(I32) // expected
           stack.pop(addr_type) // addr
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         2 => {
           check_align(3, "memory.atomic.wait64")
-          stack.pop(@types.ValueType::I64) // timeout
-          stack.pop(@types.ValueType::I64) // expected
+          stack.pop(I64) // timeout
+          stack.pop(I64) // expected
           stack.pop(addr_type) // addr
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         3 => () // atomic.fence
         4 | 6 | 7 => {
@@ -631,7 +630,7 @@ fn validate_instr(
           let natural = if op == 4 { 2 } else if op == 6 { 0 } else { 1 }
           check_align(natural, "i32.atomic.load")
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         5 | 8 | 9 | 10 => {
           // i64.atomic.load / load8_u / load16_u / load32_u
@@ -646,13 +645,13 @@ fn validate_instr(
           }
           check_align(natural, "i64.atomic.load")
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I64)
+          stack.push(I64)
         }
         11 | 13 | 14 => {
           // i32.atomic.store / store8 / store16
           let natural = if op == 11 { 2 } else if op == 13 { 0 } else { 1 }
           check_align(natural, "i32.atomic.store")
-          stack.pop(@types.ValueType::I32)
+          stack.pop(I32)
           stack.pop(addr_type)
         }
         12 | 15 | 16 | 17 => {
@@ -667,7 +666,7 @@ fn validate_instr(
             2
           }
           check_align(natural, "i64.atomic.store")
-          stack.pop(@types.ValueType::I64)
+          stack.pop(I64)
           stack.pop(addr_type)
         }
 
@@ -709,9 +708,9 @@ fn validate_instr(
             1
           }
           check_align(natural, "i32.atomic.rmw")
-          stack.pop(@types.ValueType::I32)
+          stack.pop(I32)
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         19
         | 22
@@ -763,9 +762,9 @@ fn validate_instr(
             2
           }
           check_align(natural, "i64.atomic.rmw")
-          stack.pop(@types.ValueType::I64)
+          stack.pop(I64)
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I64)
+          stack.push(I64)
         }
 
         // cmpxchg
@@ -773,10 +772,10 @@ fn validate_instr(
           // i32 cmpxchg + 8/16
           let natural = if op == 60 { 2 } else if op == 62 { 0 } else { 1 }
           check_align(natural, "i32.atomic.rmw.cmpxchg")
-          stack.pop(@types.ValueType::I32) // replacement
-          stack.pop(@types.ValueType::I32) // expected
+          stack.pop(I32) // replacement
+          stack.pop(I32) // expected
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I32)
+          stack.push(I32)
         }
         61 | 64 | 65 | 66 => {
           // i64 cmpxchg + 8/16/32
@@ -790,10 +789,10 @@ fn validate_instr(
             2
           }
           check_align(natural, "i64.atomic.rmw.cmpxchg")
-          stack.pop(@types.ValueType::I64) // replacement
-          stack.pop(@types.ValueType::I64) // expected
+          stack.pop(I64) // replacement
+          stack.pop(I64) // expected
           stack.pop(addr_type)
-          stack.push(@types.ValueType::I64)
+          stack.push(I64)
         }
         _ => raise TypeMismatch("unsupported atomic subopcode \{subop}")
       }
@@ -805,11 +804,7 @@ fn validate_instr(
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(idx_type) // index
       stack.push(table.elem_type)
     }
@@ -818,11 +813,7 @@ fn validate_instr(
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(table.elem_type) // value
       stack.pop(idx_type) // index
     }
@@ -832,9 +823,9 @@ fn validate_instr(
       }
       let table = ctx.tables[idx]
       if table.is_table64 {
-        stack.push(@types.ValueType::I64)
+        stack.push(I64)
       } else {
-        stack.push(@types.ValueType::I32)
+        stack.push(I32)
       }
     }
     TableGrow(idx) => {
@@ -842,11 +833,7 @@ fn validate_instr(
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(idx_type) // delta
       stack.pop(table.elem_type) // init value
       stack.push(idx_type) // old size or -1
@@ -856,11 +843,7 @@ fn validate_instr(
         raise InvalidTableIndex(idx)
       }
       let table = ctx.tables[idx]
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(idx_type) // n
       stack.pop(table.elem_type) // value
       stack.pop(idx_type) // i
@@ -884,25 +867,13 @@ fn validate_instr(
       let len_type = if dst_table.is_table64 && src_table.is_table64 {
         @types.ValueType::I64
       } else {
-        @types.ValueType::I32
+        I32
       }
       stack.pop(len_type) // n
       // Source index uses source table's index type
-      stack.pop(
-        if src_table.is_table64 {
-          @types.ValueType::I64
-        } else {
-          @types.ValueType::I32
-        },
-      ) // s
+      stack.pop(if src_table.is_table64 { I64 } else { I32 }) // s
       // Dest index uses dest table's index type
-      stack.pop(
-        if dst_table.is_table64 {
-          @types.ValueType::I64
-        } else {
-          @types.ValueType::I32
-        },
-      ) // d
+      stack.pop(if dst_table.is_table64 { I64 } else { I32 }) // d
     }
     TableInit(table_idx, elem_idx) => {
       // Validate table and elem indices
@@ -922,13 +893,9 @@ fn validate_instr(
       }
       // For table64: d uses table's index type, s and n are always i32
       // (s is offset into elem segment, n is count - both use i32 since elem is i32-indexed)
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
-      stack.pop(@types.ValueType::I32) // n (always i32 - elem segments are i32-indexed)
-      stack.pop(@types.ValueType::I32) // s (always i32 - offset into elem segment)
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
+      stack.pop(I32) // n (always i32 - elem segments are i32-indexed)
+      stack.pop(I32) // s (always i32 - offset into elem segment)
       stack.pop(idx_type) // d (table's index type)
     }
     ElemDrop(elem_idx) =>
@@ -940,7 +907,7 @@ fn validate_instr(
     RefNull(ref_type) => stack.push(ref_type)
     RefIsNull => {
       stack.pop_any() |> ignore // any ref type
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     RefEqInstr => {
       // ref.eq: compares two references for equality
@@ -958,7 +925,7 @@ fn validate_instr(
           "ref.eq operand must be subtype of eqref, got \{val2}",
         )
       }
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     RefFunc(func_idx) => {
       if func_idx >= ctx.funcs.length() {
@@ -970,7 +937,7 @@ fn validate_instr(
       }
       // ref.func produces (ref $t) where $t is the function's type index
       let type_idx = ctx.funcs[func_idx]
-      stack.push(@types.ValueType::RefFuncTyped(type_idx))
+      stack.push(RefFuncTyped(type_idx))
     }
     RefAsNonNull => {
       // ref.as_non_null: pops nullable ref, pushes refined non-null ref
@@ -1032,7 +999,7 @@ fn validate_instr(
     Unreachable => stack.set_polymorphic()
     Drop => stack.pop_any() |> ignore
     Select => {
-      stack.pop(@types.ValueType::I32) // condition
+      stack.pop(I32) // condition
       let t2_opt = stack.pop_any_or_unknown()
       let t1_opt = stack.pop_any_or_unknown()
       let selected_type = match (t1_opt, t2_opt) {
@@ -1054,7 +1021,7 @@ fn validate_instr(
         // In polymorphic-unreachable contexts, missing operands are unconstrained.
         (Some(t1), None) => t1
         (None, Some(t2)) => t2
-        (None, None) => @types.ValueType::I32
+        (None, None) => I32
       }
       stack.push(selected_type)
     }
@@ -1068,7 +1035,7 @@ fn validate_instr(
       for ty in types {
         validate_value_type(ty, num_types)
       }
-      stack.pop(@types.ValueType::I32) // condition
+      stack.pop(I32) // condition
       // Pop operands matching result types in reverse
       for i = types.length() - 1; i >= 0; i = i - 1 {
         stack.pop(types[i])
@@ -1104,10 +1071,7 @@ fn validate_instr(
       }
       // call_indirect requires a funcref table
       let table = ctx.tables[table_idx]
-      if !ctx.subtyping_ctx.value_type_subtype(
-          table.elem_type,
-          @types.ValueType::FuncRef,
-        ) {
+      if !ctx.subtyping_ctx.value_type_subtype(table.elem_type, FuncRef) {
         raise TypeMismatch(
           "call_indirect requires funcref table, got \{table.elem_type}",
         )
@@ -1116,11 +1080,7 @@ fn validate_instr(
         raise InvalidTypeIndex(type_idx)
       }
       // Table index uses i64 for table64
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(idx_type) // table index
       let func_type = ctx.get_func_type(type_idx)
       let num_ci_params = func_type.params.length()
@@ -1139,7 +1099,7 @@ fn validate_instr(
       let func_type = ctx.get_func_type(type_idx)
       // Pop the function reference (ref null $t)
       // In unreachable context, this may be a polymorphic type
-      stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
+      stack.pop(RefNullFuncTyped(type_idx))
       // Pop parameters in reverse order
       let num_params = func_type.params.length()
       for offset in 0..<num_params {
@@ -1186,10 +1146,7 @@ fn validate_instr(
       }
       // return_call_indirect requires a funcref table
       let table = ctx.tables[table_idx]
-      if !ctx.subtyping_ctx.value_type_subtype(
-          table.elem_type,
-          @types.ValueType::FuncRef,
-        ) {
+      if !ctx.subtyping_ctx.value_type_subtype(table.elem_type, FuncRef) {
         raise TypeMismatch(
           "return_call_indirect requires funcref table, got \{table.elem_type}",
         )
@@ -1198,11 +1155,7 @@ fn validate_instr(
         raise InvalidTypeIndex(type_idx)
       }
       // Table index uses i64 for table64
-      let idx_type = if table.is_table64 {
-        @types.ValueType::I64
-      } else {
-        @types.ValueType::I32
-      }
+      let idx_type = if table.is_table64 { @types.ValueType::I64 } else { I32 }
       stack.pop(idx_type) // table index
       let func_type = ctx.get_func_type(type_idx)
       let num_params = func_type.params.length()
@@ -1232,7 +1185,7 @@ fn validate_instr(
       }
       let func_type = ctx.get_func_type(type_idx)
       // Pop the function reference (ref null $t)
-      stack.pop(@types.ValueType::RefNullFuncTyped(type_idx))
+      stack.pop(RefNullFuncTyped(type_idx))
       // Pop parameters in reverse order
       let num_params = func_type.params.length()
       for offset in 0..<num_params {
@@ -1330,7 +1283,7 @@ fn validate_instr(
       }
     }
     If(bt, then_body, else_body) => {
-      stack.pop(@types.ValueType::I32) // condition
+      stack.pop(I32) // condition
       let results = get_block_results(ctx, bt)
       let params = get_block_params(ctx, bt)
       // Pop input params from outer stack
@@ -1401,7 +1354,7 @@ fn validate_instr(
       stack.set_polymorphic()
     }
     BrIf(label_idx) => {
-      stack.pop(@types.ValueType::I32) // condition
+      stack.pop(I32) // condition
       if label_idx > ctx.labels.length() {
         raise InvalidLabelIndex(label_idx)
       }
@@ -1420,7 +1373,7 @@ fn validate_instr(
       }
     }
     BrTable(labels, default_label) => {
-      stack.pop(@types.ValueType::I32) // index
+      stack.pop(I32) // index
       // Validate default label
       if default_label > ctx.labels.length() {
         raise InvalidLabelIndex(default_label)
@@ -1478,7 +1431,7 @@ fn validate_instr(
     }
     ThrowRef => {
       // throw_ref pops an exnref and throws it
-      stack.pop(@types.ValueType::ExnRef)
+      stack.pop(ExnRef)
       stack.set_polymorphic()
     }
     TryTable(bt, handlers, body) => {
@@ -1495,7 +1448,7 @@ fn validate_instr(
       // NOT from inside the try_table body)
       for handler in handlers {
         match handler {
-          @types.CatchHandler::Catch(tag_idx, label_idx) => {
+          Catch(tag_idx, label_idx) => {
             // Validate tag index
             if tag_idx < 0 || tag_idx >= ctx.tags.length() {
               raise UnknownTag(tag_idx)
@@ -1530,7 +1483,7 @@ fn validate_instr(
               }
             }
           }
-          @types.CatchHandler::CatchRef(tag_idx, label_idx) => {
+          CatchRef(tag_idx, label_idx) => {
             // Validate tag index
             if tag_idx < 0 || tag_idx >= ctx.tags.length() {
               raise UnknownTag(tag_idx)
@@ -1567,7 +1520,7 @@ fn validate_instr(
             }
             // The last expected type should be ExnRef (exnref is always a subtype of itself)
           }
-          @types.CatchHandler::CatchAll(label_idx) => {
+          CatchAll(label_idx) => {
             // Validate label index
             if label_idx > ctx.labels.length() {
               raise InvalidLabelIndex(label_idx)
@@ -1585,7 +1538,7 @@ fn validate_instr(
               )
             }
           }
-          @types.CatchHandler::CatchAllRef(label_idx) => {
+          CatchAllRef(label_idx) => {
             // Validate label index
             if label_idx > ctx.labels.length() {
               raise InvalidLabelIndex(label_idx)
@@ -1653,18 +1606,18 @@ fn validate_instr(
           storage_type_to_value_type(struct_type.fields[i].storage_type),
         )
       }
-      stack.push(@types.ValueType::RefStruct(type_idx))
+      stack.push(RefStruct(type_idx))
     }
     StructNewDefault(type_idx) => {
       // Just push struct ref (default values are implicit)
       ignore(ctx.get_struct_type(type_idx))
-      stack.push(@types.ValueType::RefStruct(type_idx))
+      stack.push(RefStruct(type_idx))
     }
     StructGet(type_idx, field_idx)
     | StructGetS(type_idx, field_idx)
     | StructGetU(type_idx, field_idx) => {
       // Pop struct ref, push field value
-      stack.pop(@types.ValueType::RefNullStruct(type_idx))
+      stack.pop(RefNullStruct(type_idx))
       let struct_type = ctx.get_struct_type(type_idx)
       let field_type = struct_type.fields[field_idx].storage_type
       stack.push(storage_type_to_value_type(field_type))
@@ -1678,23 +1631,23 @@ fn validate_instr(
         raise TypeMismatch("struct.set on immutable field")
       }
       stack.pop(storage_type_to_value_type(field.storage_type))
-      stack.pop(@types.ValueType::RefNullStruct(type_idx))
+      stack.pop(RefNullStruct(type_idx))
     }
 
     // GC instructions - array operations
     ArrayNew(type_idx) => {
       // Pop length (i32), pop init value, push array ref
       ignore(ctx.get_array_type(type_idx))
-      stack.pop(@types.ValueType::I32)
+      stack.pop(I32)
       let array_type = ctx.get_array_type(type_idx)
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
-      stack.push(@types.ValueType::RefArray(type_idx))
+      stack.push(RefArray(type_idx))
     }
     ArrayNewDefault(type_idx) => {
       // Pop length (i32), push array ref
       ignore(ctx.get_array_type(type_idx))
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::RefArray(type_idx))
+      stack.pop(I32)
+      stack.push(RefArray(type_idx))
     }
     ArrayNewFixed(type_idx, len) => {
       // Pop len elements, push array ref
@@ -1705,7 +1658,7 @@ fn validate_instr(
       for _ in 0..<len {
         stack.pop(elem_type)
       }
-      stack.push(@types.ValueType::RefArray(type_idx))
+      stack.push(RefArray(type_idx))
     }
     ArrayNewData(type_idx, data_idx) => {
       // Pop size (i32), pop offset (i32), push array ref
@@ -1718,9 +1671,9 @@ fn validate_instr(
           "array.new_data: invalid data segment index \{data_idx}",
         )
       }
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::RefArray(type_idx))
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.push(RefArray(type_idx))
     }
     ArrayNewElem(type_idx, elem_idx) => {
       // Pop size (i32), pop offset (i32), push array ref
@@ -1737,15 +1690,15 @@ fn validate_instr(
           "array.new_elem: element segment type \{elem_type} incompatible with array element type \{array_elem_type}",
         )
       }
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::RefArray(type_idx))
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.push(RefArray(type_idx))
     }
     ArrayGet(type_idx) | ArrayGetS(type_idx) | ArrayGetU(type_idx) => {
       // Pop index (i32), pop array ref, push element
       let array_type = ctx.get_array_type(type_idx)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.pop(I32)
+      stack.pop(RefNullArray(type_idx))
       stack.push(storage_type_to_value_type(array_type.element.storage_type))
     }
     ArraySet(type_idx) => {
@@ -1756,14 +1709,14 @@ fn validate_instr(
         raise TypeMismatch("array.set on immutable array")
       }
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.pop(I32)
+      stack.pop(RefNullArray(type_idx))
     }
     ArrayLen => {
       // Pop array ref (any array type), push i32
       // RefNullArray(-1) matches any nullable array reference
-      stack.pop(@types.ValueType::RefNullArray(-1))
-      stack.push(@types.ValueType::I32)
+      stack.pop(RefNullArray(-1))
+      stack.push(I32)
     }
     ArrayFill(type_idx) => {
       // Pop n (i32), pop value, pop offset (i32), pop array ref
@@ -1772,10 +1725,10 @@ fn validate_instr(
       if !array_type.element.mutable {
         raise TypeMismatch("array.fill on immutable array")
       }
-      stack.pop(@types.ValueType::I32)
+      stack.pop(I32)
       stack.pop(storage_type_to_value_type(array_type.element.storage_type))
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.pop(I32)
+      stack.pop(RefNullArray(type_idx))
     }
     ArrayCopy(dst_type, src_type) => {
       // Pop n (i32), pop src_offset (i32), pop src, pop dst_offset (i32), pop dst
@@ -1791,11 +1744,11 @@ fn validate_instr(
       if dst_elem != src_elem {
         raise TypeMismatch("array.copy: array types do not match")
       }
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(src_type))
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(dst_type))
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.pop(RefNullArray(src_type))
+      stack.pop(I32)
+      stack.pop(RefNullArray(dst_type))
     }
     ArrayInitData(type_idx, data_idx) => {
       // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
@@ -1813,10 +1766,10 @@ fn validate_instr(
           "array.init_data: invalid data segment index \{data_idx}",
         )
       }
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.pop(RefNullArray(type_idx))
     }
     ArrayInitElem(type_idx, elem_idx) => {
       // Pop n (i32), pop src_offset (i32), pop dst_offset (i32), pop array ref
@@ -1839,17 +1792,17 @@ fn validate_instr(
           "array.init_elem: element segment type \{elem_type} incompatible with array element type \{array_elem_type}",
         )
       }
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::I32)
-      stack.pop(@types.ValueType::RefNullArray(type_idx))
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.pop(I32)
+      stack.pop(RefNullArray(type_idx))
     }
 
     // GC instructions - reference casting (simplified validation)
     RefTest(_) | RefTestNull(_) => {
       // Pop ref, push i32
       ignore(stack.pop_any())
-      stack.push(@types.ValueType::I32)
+      stack.push(I32)
     }
     RefCast(target_type) => {
       // Pop ref, push target type
@@ -1955,25 +1908,25 @@ fn validate_instr(
     // GC instructions - i31
     RefI31 => {
       // Pop i32, push i31ref
-      stack.pop(@types.ValueType::I32)
-      stack.push(@types.ValueType::RefI31)
+      stack.pop(I32)
+      stack.push(RefI31)
     }
     I31GetS | I31GetU => {
       // Pop i31ref, push i32
-      stack.pop(@types.ValueType::RefNullI31)
-      stack.push(@types.ValueType::I32)
+      stack.pop(RefNullI31)
+      stack.push(I32)
     }
 
     // GC instructions - type conversion
     AnyConvertExtern => {
       // Pop externref, push anyref
-      stack.pop(@types.ValueType::ExternRef)
-      stack.push(@types.ValueType::AnyRef)
+      stack.pop(ExternRef)
+      stack.push(AnyRef)
     }
     ExternConvertAny => {
       // Pop anyref, push externref
-      stack.pop(@types.ValueType::AnyRef)
-      stack.push(@types.ValueType::ExternRef)
+      stack.pop(AnyRef)
+      stack.push(ExternRef)
     }
 
     // SIMD instructions
@@ -2003,25 +1956,24 @@ fn to_non_nullable_ref_type(
 ) -> @types.ValueType raise ValidationError {
   match ty {
     // Nullable function/extern refs
-    FuncRef => @types.ValueType::RefFunc
-    ExternRef => @types.ValueType::RefExtern
+    FuncRef => RefFunc
+    ExternRef => RefExtern
 
     // Typed refs
-    RefNullFuncTyped(idx) => @types.ValueType::RefFuncTyped(idx)
-    RefNullStruct(idx) => @types.ValueType::RefStruct(idx)
-    RefNullArray(idx) => @types.ValueType::RefArray(idx)
+    RefNullFuncTyped(idx) => RefFuncTyped(idx)
+    RefNullStruct(idx) => RefStruct(idx)
+    RefNullArray(idx) => RefArray(idx)
 
     // Abstract refs
-    AnyRef => @types.ValueType::RefAny
-    RefNullEq => @types.ValueType::RefEq
-    RefNullI31 => @types.ValueType::RefI31
-    StructRef => @types.ValueType::RefStructAbs
-    ArrayRef => @types.ValueType::RefArrayAbs
+    AnyRef => RefAny
+    RefNullEq => RefEq
+    RefNullI31 => RefI31
+    StructRef => RefStructAbs
+    ArrayRef => RefArrayAbs
 
     // Exn has no dedicated non-null type in current representation.
-    ExnRef => @types.ValueType::ExnRef
-    NullRef | NullFuncRef | NullExnRef | NullExternRef =>
-      @types.ValueType::RefNone
+    ExnRef => ExnRef
+    NullRef | NullFuncRef | NullExnRef | NullExternRef => RefNone
 
     // Already non-null
     RefFunc
@@ -2045,17 +1997,17 @@ fn to_nullable_ref_type(
 ) -> @types.ValueType raise ValidationError {
   match ty {
     // Non-null to nullable
-    RefFunc => @types.ValueType::FuncRef
-    RefExtern => @types.ValueType::ExternRef
-    RefFuncTyped(idx) => @types.ValueType::RefNullFuncTyped(idx)
-    RefStruct(idx) => @types.ValueType::RefNullStruct(idx)
-    RefArray(idx) => @types.ValueType::RefNullArray(idx)
-    RefAny => @types.ValueType::AnyRef
-    RefEq => @types.ValueType::RefNullEq
-    RefI31 => @types.ValueType::RefNullI31
-    RefStructAbs => @types.ValueType::StructRef
-    RefArrayAbs => @types.ValueType::ArrayRef
-    RefNone => @types.ValueType::NullRef
+    RefFunc => FuncRef
+    RefExtern => ExternRef
+    RefFuncTyped(idx) => RefNullFuncTyped(idx)
+    RefStruct(idx) => RefNullStruct(idx)
+    RefArray(idx) => RefNullArray(idx)
+    RefAny => AnyRef
+    RefEq => RefNullEq
+    RefI31 => RefNullI31
+    RefStructAbs => StructRef
+    RefArrayAbs => ArrayRef
+    RefNone => NullRef
 
     // Already nullable
     FuncRef

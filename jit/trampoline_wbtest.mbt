@@ -2,7 +2,7 @@
 
 ///|
 test "trampoline pointers are valid" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // All 12 WASI trampolines should return non-zero function pointers
@@ -22,7 +22,7 @@ test "trampoline pointers are valid" {
 
 ///|
 test "get_import_trampoline: supported functions" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let supported = [
@@ -39,7 +39,7 @@ test "get_import_trampoline: supported functions" {
 
 ///|
 test "get_import_trampoline: unsupported modules" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // All WASI functions are now supported (some as stubs returning ENOSYS)
@@ -49,7 +49,7 @@ test "get_import_trampoline: unsupported modules" {
 
 ///|
 test "get_import_trampoline: spectest module" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let supported = [
@@ -65,7 +65,7 @@ test "get_import_trampoline: spectest module" {
 
 ///|
 test "get_import_trampoline: unknown module" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   assert_true(get_import_trampoline("env", "memory") is None)
@@ -74,7 +74,7 @@ test "get_import_trampoline: unknown module" {
 
 ///|
 test "JITContext: allocation (GC-managed)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let ctx = JITContext::new(10)
@@ -87,7 +87,7 @@ test "JITContext: allocation (GC-managed)" {
 
 ///|
 test "memory allocation" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let mem = alloc_memory(65536L)
@@ -99,7 +99,7 @@ test "memory allocation" {
 
 ///|
 test "entry trampoline: no params, i32 result" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for () -> i32
@@ -136,7 +136,7 @@ test "entry trampoline: no params, i32 result" {
 
 ///|
 test "entry trampoline: i32 param, i32 result" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for (i32) -> i32
@@ -171,7 +171,7 @@ test "entry trampoline: i32 param, i32 result" {
 
 ///|
 test "entry trampoline: no params, no result" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for () -> ()
@@ -199,7 +199,7 @@ test "entry trampoline: no params, no result" {
 
 ///|
 test "entry trampoline: f64 param, f64 result" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for (f64) -> f64
@@ -233,7 +233,7 @@ test "entry trampoline: f64 param, f64 result" {
 
 ///|
 test "entry trampoline: multiple params" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for (i32, i64, f32) -> i64
@@ -255,7 +255,7 @@ test "entry trampoline: multiple params" {
 
 ///|
 test "entry trampoline: 8 f64 params" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for 8 f64 params -> f64 result
@@ -307,7 +307,7 @@ test "entry trampoline: 8 f64 params" {
 
 ///|
 test "entry trampoline: 20 i64 params (debug)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Generate trampoline for 20 i64 params -> i64 result

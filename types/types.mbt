@@ -160,7 +160,7 @@ pub fn SubType::simple(composite : CompositeType) -> SubType {
 ///|
 /// Create a subtype from a function type
 pub fn SubType::from_func(func_type : FuncType) -> SubType {
-  SubType::simple(CompositeType::Func(func_type))
+  SubType::simple(Func(func_type))
 }
 
 ///|
@@ -1265,62 +1265,62 @@ pub fn compact_show_repr(text : String) -> String {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for ValueType with output(self, logger) {
+pub impl Show for ValueType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for StorageType with output(self, logger) {
+pub impl Show for StorageType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for CompositeType with output(self, logger) {
+pub impl Show for CompositeType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for SubType with output(self, logger) {
+pub impl Show for SubType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for Value with output(self, logger) {
+pub impl Show for Value with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for FunctionCode with output(self, logger) {
+pub impl Show for FunctionCode with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for FuncType with output(self, logger) {
+pub impl Show for FuncType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for MemoryType with output(self, logger) {
+pub impl Show for MemoryType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for TableType with output(self, logger) {
+pub impl Show for TableType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for GlobalType with output(self, logger) {
+pub impl Show for GlobalType with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for Instruction with output(self, logger) {
+pub impl Show for Instruction with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for Module with output(self, logger) {
+pub impl Show for Module with fn output(self, logger) {
   logger.write_string(compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -1363,7 +1363,7 @@ pub fn Module::simple(
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: export_name, desc: ExportDesc::Func(0) }],
+    exports: [{ name: export_name, desc: Func(0) }],
     start: None,
     elems: [],
     codes: [{ locals: [], body }],

@@ -155,7 +155,7 @@ pub fn Output::summary(self : Output) -> String {
   }
 
   // Count distinct spill slots referenced (may be less than reserved slots due to reuse).
-  let used_slots : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used_slots : @hashset.HashSet[Int] = HashSet([])
   fn record_slot(used : @hashset.HashSet[Int], loc : Loc) -> Unit {
     if loc is Spill(slot) {
       used.add(slot) |> ignore
@@ -181,9 +181,9 @@ pub fn Output::summary(self : Output) -> String {
   // Operand allocation breakdown and unique preg usage.
   let mut alloc_reg = 0
   let mut alloc_spill = 0
-  let used_int_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
-  let used_fp_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
-  let used_vec_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used_int_pregs : @hashset.HashSet[Int] = HashSet([])
+  let used_fp_pregs : @hashset.HashSet[Int] = HashSet([])
+  let used_vec_pregs : @hashset.HashSet[Int] = HashSet([])
   fn record_preg(
     used_int : @hashset.HashSet[Int],
     used_fp : @hashset.HashSet[Int],
@@ -191,9 +191,9 @@ pub fn Output::summary(self : Output) -> String {
     preg : @abi.PReg,
   ) -> Unit {
     match preg.class {
-      @abi.Int => used_int.add(preg.index) |> ignore
-      @abi.Float32 | @abi.Float64 => used_fp.add(preg.index) |> ignore
-      @abi.Vector => used_vec.add(preg.index) |> ignore
+      Int => used_int.add(preg.index) |> ignore
+      Float32 | Float64 => used_fp.add(preg.index) |> ignore
+      Vector => used_vec.add(preg.index) |> ignore
     }
   }
 
@@ -359,7 +359,7 @@ pub fn Output::spill_reload_stats(self : Output) -> (Int, Int, Int, Int) {
 /// This is a fail-fast guard: silent truncation in x86 encoders can clobber rsp/rbp
 /// if an out-of-range preg leaks into emission (e.g. x20 -> rsp).
 pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
-  if !(isa is @isa.AMD64) {
+  if !(isa is AMD64) {
     return
   }
   fn alloc_context(self : Output, alloc_idx : Int) -> String {
@@ -382,7 +382,7 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
 
   fn validate_preg(p : @abi.PReg, ctx_desc_fn : () -> String) -> Unit {
     match p.class {
-      @abi.Int => {
+      Int => {
         guard p.index >= 0 && p.index < 16 else {
           abort(
             "amd64 regalloc output contains invalid Int preg \{p} at \{ctx_desc_fn()}",
@@ -395,7 +395,7 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
           )
         }
       }
-      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+      Float32 | Float64 | Vector => {
         guard p.index >= 0 && p.index < 16 else {
           abort(
             "amd64 regalloc output contains invalid FP/Vec preg \{p} at \{ctx_desc_fn()}",
@@ -465,11 +465,11 @@ fn Output::mark_used_preg_any(self : Output, loc : Loc) -> Unit {
       return
     }
     match preg.class {
-      @abi.Int =>
+      Int =>
         if preg.index < self.used_int_pregs_any.length() {
           self.used_int_pregs_any[preg.index] = true
         }
-      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+      Float32 | Float64 | Vector =>
         if preg.index < self.used_fp_pregs_any.length() {
           self.used_fp_pregs_any[preg.index] = true
         }

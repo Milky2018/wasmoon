@@ -34,7 +34,7 @@ fn parse_core_inlineexport(
   // encoding used in other sections.
   let kind = reader.read_u8()
   let idx = reader.read_leb_u32()
-  let sortidx : SortIdx = { sort: Sort::Core(kind), idx }
+  let sortidx : SortIdx = { sort: Core(kind), idx }
   { name, sortidx }
 }
 
@@ -46,7 +46,7 @@ fn parse_core_instantiatearg(
   // Same encoding as parse_core_inlineexport: (kind:u8, idx:u32).
   let kind = reader.read_u8()
   let idx = reader.read_leb_u32()
-  let sortidx : SortIdx = { sort: Sort::Core(kind), idx }
+  let sortidx : SortIdx = { sort: Core(kind), idx }
   { name, sortidx }
 }
 
@@ -83,7 +83,7 @@ pub fn parse_core_instance_section(
   let n = reader.read_leb_u32()
   let instances : Array[CoreInstanceDecl] = []
   for _ in 0..<n {
-    instances.push(CoreInstanceDecl::{ expr: parse_core_instanceexpr(reader) })
+    instances.push({ expr: parse_core_instanceexpr(reader) })
   }
   if !reader.is_eof() {
     raise InvalidInstanceSection

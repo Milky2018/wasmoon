@@ -10,9 +10,9 @@ test "gc: unreachable objects are collected" {
   let heap = CHeap::new()
 
   // Allocate 3 structs, none are roots
-  let _obj1 = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let _obj2 = heap.alloc_struct(0, [@types.Value::I32(2)])
-  let _obj3 = heap.alloc_struct(0, [@types.Value::I32(3)])
+  let _obj1 = heap.alloc_struct(0, [I32(1)])
+  let _obj2 = heap.alloc_struct(0, [I32(2)])
+  let _obj3 = heap.alloc_struct(0, [I32(3)])
 
   // All 3 should exist
   inspect(heap.get_object_count(), content="3")
@@ -31,12 +31,12 @@ test "gc: rooted objects survive" {
   let heap = CHeap::new()
 
   // Allocate 3 structs
-  let obj1 = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let obj2 = heap.alloc_struct(0, [@types.Value::I32(2)])
-  let _obj3 = heap.alloc_struct(0, [@types.Value::I32(3)])
+  let obj1 = heap.alloc_struct(0, [I32(1)])
+  let obj2 = heap.alloc_struct(0, [I32(2)])
+  let _obj3 = heap.alloc_struct(0, [I32(3)])
 
   // Only obj1 and obj2 are roots
-  let roots = [@types.Value::StructRef(obj1), @types.Value::StructRef(obj2)]
+  let roots = [@types.Value::StructRef(obj1), StructRef(obj2)]
   let collected = heap.collect(roots)
 
   // Only obj3 should be collected
@@ -57,14 +57,14 @@ test "gc: reference chain keeps objects alive" {
 
   // Create chain: obj1 -> obj2 -> obj3
   // obj3 has no references
-  let obj3 = heap.alloc_struct(0, [@types.Value::I32(3)])
+  let obj3 = heap.alloc_struct(0, [I32(3)])
   // obj2 references obj3
-  let obj2 = heap.alloc_struct(0, [@types.Value::StructRef(obj3)])
+  let obj2 = heap.alloc_struct(0, [StructRef(obj3)])
   // obj1 references obj2
-  let obj1 = heap.alloc_struct(0, [@types.Value::StructRef(obj2)])
+  let obj1 = heap.alloc_struct(0, [StructRef(obj2)])
 
   // Also allocate an unreachable object
-  let _unreachable = heap.alloc_struct(0, [@types.Value::I32(999)])
+  let _unreachable = heap.alloc_struct(0, [I32(999)])
 
   // Only obj1 is a root, but obj2 and obj3 should survive via references
   let roots = [@types.Value::StructRef(obj1)]
@@ -89,15 +89,15 @@ test "gc: circular references without root are collected" {
 
   // Create two objects that will reference each other
   // First allocate with placeholder values
-  let obj1 = heap.alloc_struct(0, [@types.Value::I32(0)])
-  let obj2 = heap.alloc_struct(0, [@types.Value::I32(0)])
+  let obj1 = heap.alloc_struct(0, [I32(0)])
+  let obj2 = heap.alloc_struct(0, [I32(0)])
 
   // Now set up circular references: obj1 -> obj2, obj2 -> obj1
-  heap.struct_set(obj1, 0, @types.Value::StructRef(obj2))
-  heap.struct_set(obj2, 0, @types.Value::StructRef(obj1))
+  heap.struct_set(obj1, 0, StructRef(obj2))
+  heap.struct_set(obj2, 0, StructRef(obj1))
 
   // Also allocate a rooted object
-  let rooted = heap.alloc_struct(0, [@types.Value::I32(42)])
+  let rooted = heap.alloc_struct(0, [I32(42)])
 
   // Only 'rooted' is a root - circular pair should be collected
   let roots = [@types.Value::StructRef(rooted)]
@@ -119,19 +119,19 @@ test "gc: array elements are traced" {
   let heap = CHeap::new()
 
   // Create leaf objects
-  let leaf1 = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let leaf2 = heap.alloc_struct(0, [@types.Value::I32(2)])
-  let leaf3 = heap.alloc_struct(0, [@types.Value::I32(3)])
+  let leaf1 = heap.alloc_struct(0, [I32(1)])
+  let leaf2 = heap.alloc_struct(0, [I32(2)])
+  let leaf3 = heap.alloc_struct(0, [I32(3)])
 
   // Create array containing references to leaf objects
   let arr = heap.alloc_array_from_values(0, [
-    @types.Value::StructRef(leaf1),
-    @types.Value::StructRef(leaf2),
-    @types.Value::StructRef(leaf3),
+    StructRef(leaf1),
+    StructRef(leaf2),
+    StructRef(leaf3),
   ])
 
   // Create unreachable object
-  let _unreachable = heap.alloc_struct(0, [@types.Value::I32(999)])
+  let _unreachable = heap.alloc_struct(0, [I32(999)])
 
   // Only array is root, but all leaf objects should survive
   let roots = [@types.Value::ArrayRef(arr)]
@@ -152,19 +152,16 @@ test "gc: multiple collection cycles" {
   let heap = CHeap::new()
 
   // First cycle: create and collect
-  let obj1 = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let _temp1 = heap.alloc_struct(0, [@types.Value::I32(100)])
-  let collected1 = heap.collect([@types.Value::StructRef(obj1)])
+  let obj1 = heap.alloc_struct(0, [I32(1)])
+  let _temp1 = heap.alloc_struct(0, [I32(100)])
+  let collected1 = heap.collect([StructRef(obj1)])
   inspect(collected1, content="1")
 
   // Second cycle: add more objects
-  let obj2 = heap.alloc_struct(0, [@types.Value::I32(2)])
-  let _temp2 = heap.alloc_struct(0, [@types.Value::I32(200)])
-  let _temp3 = heap.alloc_struct(0, [@types.Value::I32(300)])
-  let collected2 = heap.collect([
-    @types.Value::StructRef(obj1),
-    @types.Value::StructRef(obj2),
-  ])
+  let obj2 = heap.alloc_struct(0, [I32(2)])
+  let _temp2 = heap.alloc_struct(0, [I32(200)])
+  let _temp3 = heap.alloc_struct(0, [I32(300)])
+  let collected2 = heap.collect([StructRef(obj1), StructRef(obj2)])
   inspect(collected2, content="2")
 
   // Both survivors should still be valid
@@ -184,9 +181,9 @@ test "gc: deep reference chain" {
   let heap = CHeap::new()
 
   // Create a chain of 10 objects
-  let mut prev = heap.alloc_struct(0, [@types.Value::I32(0)]) // leaf
+  let mut prev = heap.alloc_struct(0, [I32(0)]) // leaf
   for i in 1..<10 {
-    let curr = heap.alloc_struct(0, [@types.Value::StructRef(prev)])
+    let curr = heap.alloc_struct(0, [StructRef(prev)])
     prev = curr
     ignore(i)
   }
@@ -194,12 +191,12 @@ test "gc: deep reference chain" {
 
   // Add some garbage
   for _ in 0..<5 {
-    let _ = heap.alloc_struct(0, [@types.Value::I32(999)])
+    let _ = heap.alloc_struct(0, [I32(999)])
   }
   inspect(heap.get_object_count(), content="15")
 
   // Only head is root, entire chain should survive
-  let collected = heap.collect([@types.Value::StructRef(head)])
+  let collected = heap.collect([StructRef(head)])
   inspect(collected, content="5") // 5 garbage objects collected
 }
 
@@ -214,14 +211,14 @@ test "gc: i31 values are not traced as references" {
   // Create struct with i31 value that looks like a valid gc_ref
   // i31 encoding: (value << 1) | 1
   // If value=0, encoded i31 = 1, which could be confused with gc_ref=1
-  let obj = heap.alloc_struct(0, [@types.Value::I31(0)])
+  let obj = heap.alloc_struct(0, [I31(0)])
 
   // Create another object
-  let _other = heap.alloc_struct(0, [@types.Value::I32(42)])
+  let _other = heap.alloc_struct(0, [I32(42)])
 
   // Collect with obj as root
   // The i31(0) in obj should NOT keep _other alive (gc_ref encoding is different)
-  let collected = heap.collect([@types.Value::StructRef(obj)])
+  let collected = heap.collect([StructRef(obj)])
 
   // _other should be collected (i31 is tagged, not a heap ref)
   inspect(collected, content="1")
@@ -238,16 +235,16 @@ test "gc: heap size after allocation and collection" {
   inspect(initial_size, content="0")
 
   // Allocate some objects
-  let obj1 = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let _obj2 = heap.alloc_struct(0, [@types.Value::I32(2)])
-  let _obj3 = heap.alloc_struct(0, [@types.Value::I32(3)])
+  let obj1 = heap.alloc_struct(0, [I32(1)])
+  let _obj2 = heap.alloc_struct(0, [I32(2)])
+  let _obj3 = heap.alloc_struct(0, [I32(3)])
   let size_after_alloc = heap.get_size()
   // Each struct: 16 (header) + 8 (one i64 field) = 24, aligned to 32
   // 3 objects = 96 bytes
   inspect(size_after_alloc, content="96")
 
   // Collect - keep only obj1
-  let _ = heap.collect([@types.Value::StructRef(obj1)])
+  let _ = heap.collect([StructRef(obj1)])
 
   // After compaction, only obj1 remains: 32 bytes
   let size_after_gc = heap.get_size()
@@ -263,58 +260,55 @@ test "gc: field access after collection" {
   let heap = CHeap::new()
 
   // Create objects with distinct values
-  let leaf = heap.alloc_struct(0, [@types.Value::I32(42)])
-  let parent = heap.alloc_struct(0, [
-    @types.Value::StructRef(leaf),
-    @types.Value::I64(12345L),
-  ])
+  let leaf = heap.alloc_struct(0, [I32(42)])
+  let parent = heap.alloc_struct(0, [StructRef(leaf), I64(12345L)])
 
   // Add garbage
   for _ in 0..<10 {
-    let _ = heap.alloc_struct(0, [@types.Value::I32(999)])
+    let _ = heap.alloc_struct(0, [I32(999)])
   }
 
   // Collect
-  let _ = heap.collect([@types.Value::StructRef(parent)])
+  let _ = heap.collect([StructRef(parent)])
 
   // Verify we can still access fields correctly
-  let field0 = heap.struct_get(parent, 0, @types.ValueType::RefStruct(0))
-  let field1 = heap.struct_get(parent, 1, @types.ValueType::I64)
+  let field0 = heap.struct_get(parent, 0, RefStruct(0))
+  let field1 = heap.struct_get(parent, 1, I64)
   inspect(field0, content="StructRef(0)")
   inspect(field1, content="I64(12345)")
 
   // Access the referenced object
-  let leaf_value = heap.struct_get(leaf, 0, @types.ValueType::I32)
+  let leaf_value = heap.struct_get(leaf, 0, I32)
   inspect(leaf_value, content="I32(42)")
 }
 
 ///|
 test "gc: heap verify succeeds on valid graph" {
   let heap = CHeap::new()
-  let leaf = heap.alloc_struct(0, [@types.Value::I32(7)])
-  let root = heap.alloc_struct(0, [@types.Value::StructRef(leaf)])
-  let _ = heap.collect([@types.Value::StructRef(root)])
+  let leaf = heap.alloc_struct(0, [I32(7)])
+  let root = heap.alloc_struct(0, [StructRef(leaf)])
+  let _ = heap.collect([StructRef(root)])
   inspect(heap.verify(), content="true")
 }
 
 ///|
 test "gc: heap verify allows non-reference immediates" {
   let heap = CHeap::new()
-  let obj = heap.alloc_struct(0, [@types.Value::I32(1)])
+  let obj = heap.alloc_struct(0, [I32(1)])
   // Large even i64 payload is a valid immediate value, not necessarily a GC ref.
-  heap.struct_set(obj, 0, @types.Value::I64(2000000L))
+  heap.struct_set(obj, 0, I64(2000000L))
   inspect(heap.verify(), content="true")
 }
 
 ///|
 test "gc: barrier write counter tracks reference stores" {
   let heap = CHeap::new()
-  let object0 = heap.alloc_struct(0, [@types.Value::I32(10)])
-  let object1 = heap.alloc_struct(0, [@types.Value::I32(20)])
-  let array0 = heap.alloc_array(0, 2, @types.Value::I32(0))
+  let object0 = heap.alloc_struct(0, [I32(10)])
+  let object1 = heap.alloc_struct(0, [I32(20)])
+  let array0 = heap.alloc_array(0, 2, I32(0))
 
-  heap.struct_set(object0, 0, @types.Value::StructRef(object1))
-  heap.array_set(array0, 0, @types.Value::StructRef(object0))
+  heap.struct_set(object0, 0, StructRef(object1))
+  heap.array_set(array0, 0, StructRef(object0))
   inspect(heap.get_barrier_writes(), content="2")
 }
 
@@ -338,7 +332,7 @@ test "gc: fault injection fails configured allocation attempt" {
 test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
   gc_debug_set_fail_alloc(1)
   let heap = CHeap::new(capacity=1024)
-  let failed = try heap.alloc_struct(0, [@types.Value::I32(123)]) catch {
+  let failed = try heap.alloc_struct(0, [I32(123)]) catch {
     OutOfMemory => true
     _ => false
   } noraise {
@@ -420,10 +414,10 @@ test "gc: collect_for_alloc keeps scratch roots alive" {
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
   gc_set_heap(ctx_ptr, heap)
 
-  let rooted = heap.alloc_struct(0, [@types.Value::I32(1)])
-  let _unrooted = heap.alloc_struct(0, [@types.Value::I32(2)])
+  let rooted = heap.alloc_struct(0, [I32(1)])
+  let _unrooted = heap.alloc_struct(0, [I32(2)])
 
-  let rooted_raw = value_to_i64(@types.Value::StructRef(rooted))
+  let rooted_raw = value_to_i64(StructRef(rooted))
   guard gc_set_root_scratch(ctx_ptr, [rooted_raw]) else {
     fail("expected gc_set_root_scratch success")
   }

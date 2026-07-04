@@ -5,8 +5,8 @@
 ///|
 test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I32],
+    [F64],
+    [I32],
     [LocalGet(0), I32TruncF64U],
     "trunc",
   )
@@ -21,8 +21,8 @@ test "i32.trunc_f64_u: value in (-1, 0) truncates to 0" {
 ///|
 test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F32],
-    [@types.ValueType::I32],
+    [F32],
+    [I32],
     [LocalGet(0), I32TruncF32U],
     "trunc",
   )
@@ -37,8 +37,8 @@ test "i32.trunc_f32_u: value in (-1, 0) truncates to 0" {
 ///|
 test "i64.trunc_f64_u: large value near 2^64" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I64],
+    [F64],
+    [I64],
     [LocalGet(0), I64TruncF64U],
     "trunc",
   )
@@ -54,8 +54,8 @@ test "i64.trunc_f64_u: large value near 2^64" {
 ///|
 test "i64.trunc_sat_f64_u: large value saturates correctly" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I64],
+    [F64],
+    [I64],
     [LocalGet(0), I64TruncSatF64U],
     "trunc_sat",
   )
@@ -71,8 +71,8 @@ test "i64.trunc_sat_f64_u: large value saturates correctly" {
 ///|
 test "i64.trunc_sat_f64_u: value in range converts correctly" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I64],
+    [F64],
+    [I64],
     [LocalGet(0), I64TruncSatF64U],
     "trunc_sat",
   )
@@ -88,8 +88,8 @@ test "i64.trunc_sat_f64_u: value in range converts correctly" {
 ///|
 test "i32.trunc_f64_s: boundary near INT32_MIN" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I32],
+    [F64],
+    [I32],
     [LocalGet(0), I32TruncF64S],
     "trunc",
   )
@@ -106,27 +106,27 @@ test "i32.trunc_f64_s: boundary near INT32_MIN" {
 ///|
 test "executor: normalize_runtime_error preserves runtime errors" {
   let errors : Array[@runtime.RuntimeError] = [
-    @runtime.StackUnderflow,
-    @runtime.StackOverflow,
-    @runtime.TypeMismatch,
-    @runtime.OutOfBoundsMemoryAccess,
-    @runtime.OutOfBoundsTableAccess,
-    @runtime.OutOfBoundsArrayAccess,
-    @runtime.UndefinedElement,
-    @runtime.UninitializedElement,
-    @runtime.IndirectCallTypeMismatch,
-    @runtime.DivisionByZero,
-    @runtime.IntegerOverflow,
-    @runtime.InvalidConversion,
-    @runtime.OutOfMemory,
-    @runtime.Unreachable,
-    @runtime.CallStackExhausted,
-    @runtime.UnknownImport("test_mod", "test_field"),
-    @runtime.LinkError,
-    @runtime.LinkErrorDetail("test detail"),
-    @runtime.NullReference,
-    @runtime.UnalignedAtomic,
-    @runtime.InvalidConstantExpression("test detail"),
+    StackUnderflow,
+    StackOverflow,
+    TypeMismatch,
+    OutOfBoundsMemoryAccess,
+    OutOfBoundsTableAccess,
+    OutOfBoundsArrayAccess,
+    UndefinedElement,
+    UninitializedElement,
+    IndirectCallTypeMismatch,
+    DivisionByZero,
+    IntegerOverflow,
+    InvalidConversion,
+    OutOfMemory,
+    Unreachable,
+    CallStackExhausted,
+    UnknownImport("test_mod", "test_field"),
+    LinkError,
+    LinkErrorDetail("test detail"),
+    NullReference,
+    UnalignedAtomic,
+    InvalidConstantExpression("test detail"),
   ]
   for err in errors {
     let mapped = normalize_runtime_error(err)
@@ -151,15 +151,15 @@ test "executor: const expr supports extern.convert_any/any.convert_extern" {
     ..@types.Module::empty(),
     globals: [
       {
-        type_: { value_type: @types.ValueType::ExternRef, mutable: false },
-        init: [RefNull(@types.ValueType::AnyRef), ExternConvertAny],
+        type_: { value_type: ExternRef, mutable: false },
+        init: [RefNull(AnyRef), ExternConvertAny],
       },
       {
-        type_: { value_type: @types.ValueType::AnyRef, mutable: false },
-        init: [RefNull(@types.ValueType::ExternRef), AnyConvertExtern],
+        type_: { value_type: AnyRef, mutable: false },
+        init: [RefNull(ExternRef), AnyConvertExtern],
       },
       {
-        type_: { value_type: @types.ValueType::AnyRef, mutable: false },
+        type_: { value_type: AnyRef, mutable: false },
         init: [I32Const(7), RefI31, ExternConvertAny, AnyConvertExtern],
       },
     ],

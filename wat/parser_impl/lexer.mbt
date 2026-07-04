@@ -30,12 +30,12 @@ priv struct LocatedToken {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-impl Show for Token with output(self, logger) {
+impl Show for Token with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-impl Show for LocatedToken with output(self, logger) {
+impl Show for LocatedToken with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -409,29 +409,29 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                         hex_buf.write_char(c)
                         self.advance_pos()
                       } else {
-                        raise WatError::ParseError(
+                        raise ParseError(
                           "Invalid Unicode escape: expected hex digit or '}'",
                           self.current_loc(),
                         )
                       }
-                    None => raise WatError::UnexpectedEof(self.current_loc())
+                    None => raise UnexpectedEof(self.current_loc())
                   }
                 }
                 let hex = hex_buf.to_string()
                 if hex.is_empty() {
-                  raise WatError::ParseError("Empty Unicode escape", start_loc)
+                  raise ParseError("Empty Unicode escape", start_loc)
                 }
                 match parse_hex_codepoint(hex) {
                   Some(cp) => buf.write_char(cp.unsafe_to_char())
                   None =>
-                    raise WatError::ParseError(
+                    raise ParseError(
                       "Invalid Unicode escape: \\u{\{hex}}",
                       start_loc,
                     )
                 }
               }
               _ =>
-                raise WatError::ParseError(
+                raise ParseError(
                   "Invalid Unicode escape: expected '{'",
                   self.current_loc(),
                 )
@@ -445,31 +445,28 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
                   match parse_hex_byte(hex) {
                     Some(b) => buf.write_char(b.unsafe_to_char())
                     None =>
-                      raise WatError::ParseError(
-                        "Invalid hex escape: \{hex}",
-                        start_loc,
-                      )
+                      raise ParseError("Invalid hex escape: \{hex}", start_loc)
                   }
                 }
-                None => raise WatError::UnexpectedEof(self.current_loc())
+                None => raise UnexpectedEof(self.current_loc())
               }
             } else {
               // Unknown escape - just output the character
               buf.write_char(c)
             }
-          None => raise WatError::UnexpectedEof(self.current_loc())
+          None => raise UnexpectedEof(self.current_loc())
         }
       }
       Some(_) =>
         // Regular character
         match self.next_char() {
           Some(c) => buf.write_char(c)
-          None => raise WatError::UnexpectedEof(self.current_loc())
+          None => raise UnexpectedEof(self.current_loc())
         }
-      None => raise WatError::UnexpectedEof(self.current_loc())
+      None => raise UnexpectedEof(self.current_loc())
     }
   }
-  raise WatError::UnexpectedEof(self.current_loc())
+  raise UnexpectedEof(self.current_loc())
 }
 
 ///|
@@ -512,29 +509,29 @@ fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
                         hex_buf.write_char(c)
                         self.advance_pos()
                       } else {
-                        raise WatError::ParseError(
+                        raise ParseError(
                           "Invalid Unicode escape: expected hex digit or '}'",
                           self.current_loc(),
                         )
                       }
-                    None => raise WatError::UnexpectedEof(self.current_loc())
+                    None => raise UnexpectedEof(self.current_loc())
                   }
                 }
                 let hex = hex_buf.to_string()
                 if hex.is_empty() {
-                  raise WatError::ParseError("Empty Unicode escape", start_loc)
+                  raise ParseError("Empty Unicode escape", start_loc)
                 }
                 match parse_hex_codepoint(hex) {
                   Some(cp) => encode_utf8_codepoint(bytes, cp)
                   None =>
-                    raise WatError::ParseError(
+                    raise ParseError(
                       "Invalid Unicode escape: \\u{\{hex}}",
                       start_loc,
                     )
                 }
               }
               _ =>
-                raise WatError::ParseError(
+                raise ParseError(
                   "Invalid Unicode escape: expected '{'",
                   self.current_loc(),
                 )
@@ -548,31 +545,28 @@ fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
                   match parse_hex_byte(hex) {
                     Some(b) => bytes.push(b)
                     None =>
-                      raise WatError::ParseError(
-                        "Invalid hex escape: \{hex}",
-                        start_loc,
-                      )
+                      raise ParseError("Invalid hex escape: \{hex}", start_loc)
                   }
                 }
-                None => raise WatError::UnexpectedEof(self.current_loc())
+                None => raise UnexpectedEof(self.current_loc())
               }
             } else {
               // Unknown escape - encode as UTF-8
               encode_utf8_codepoint(bytes, c.to_int())
             }
-          None => raise WatError::UnexpectedEof(self.current_loc())
+          None => raise UnexpectedEof(self.current_loc())
         }
       }
       Some(_) =>
         // Regular character - encode as UTF-8
         match self.next_char() {
           Some(c) => encode_utf8_codepoint(bytes, c.to_int())
-          None => raise WatError::UnexpectedEof(self.current_loc())
+          None => raise UnexpectedEof(self.current_loc())
         }
-      None => raise WatError::UnexpectedEof(self.current_loc())
+      None => raise UnexpectedEof(self.current_loc())
     }
   }
-  raise WatError::UnexpectedEof(self.current_loc())
+  raise UnexpectedEof(self.current_loc())
 }
 
 ///|
@@ -884,16 +878,13 @@ fn Lexer::next_token(self : Lexer) -> LocatedToken raise WatError {
           let kw = self.read_id_or_keyword()
           Keyword(kw)
         } else {
-          raise WatError::UnexpectedToken(
-            String::make(1, c),
-            self.current_loc(),
-          )
+          raise UnexpectedToken(String::make(1, c), self.current_loc())
         }
       } else if is_idchar(c) {
         let kw = self.read_id_or_keyword()
         Keyword(kw)
       } else {
-        raise WatError::UnexpectedToken(String::make(1, c), self.current_loc())
+        raise UnexpectedToken(String::make(1, c), self.current_loc())
       }
     None => Eof
   }

@@ -7,19 +7,19 @@
 ///|
 fn sysv_callee_saved() -> Array[@abi.PReg] {
   [
-    { index: 3, class: @abi.Int }, // rbx
-    { index: 5, class: @abi.Int }, // rbp
-    { index: 12, class: @abi.Int }, // r12
-    { index: 13, class: @abi.Int }, // r13
-    { index: 14, class: @abi.Int }, // r14
-    { index: 15, class: @abi.Int },
+    { index: 3, class: Int }, // rbx
+    { index: 5, class: Int }, // rbp
+    { index: 12, class: Int }, // r12
+    { index: 13, class: Int }, // r13
+    { index: 14, class: Int }, // r14
+    { index: 15, class: Int },
   ] // r15
 }
 
 ///|
 fn allocatable_callee_saved_regs(enable_pinned_reg : Bool) -> Array[@abi.PReg] {
-  let fp_idx = int_reg_index(@spec.IntRegRole::FP)
-  let vmctx_idx = int_reg_index(@spec.IntRegRole::Vmctx)
+  let fp_idx = int_reg_index(FP)
+  let vmctx_idx = int_reg_index(Vmctx)
   let regs : Array[@abi.PReg] = []
   for r in sysv_callee_saved() {
     // Keep rbp out of the general pool.
@@ -41,13 +41,13 @@ fn allocatable_scratch_regs() -> Array[@abi.PReg] {
   // (rsi,rdi,rax,rcx,rdx,r8,r9,...) as far as our reserved-scratch policy allows.
   // Note: r10/r11 are reserved as scratch via MachineEnvData.scratch_int.
   [
-    { index: 6, class: @abi.Int }, // rsi
-    { index: 7, class: @abi.Int }, // rdi
-    { index: 0, class: @abi.Int }, // rax
-    { index: 1, class: @abi.Int }, // rcx
-    { index: 2, class: @abi.Int }, // rdx
-    { index: 8, class: @abi.Int }, // r8
-    { index: 9, class: @abi.Int },
+    { index: 6, class: Int }, // rsi
+    { index: 7, class: Int }, // rdi
+    { index: 0, class: Int }, // rax
+    { index: 1, class: Int }, // rcx
+    { index: 2, class: Int }, // rdx
+    { index: 8, class: Int }, // r8
+    { index: 9, class: Int },
   ] // r9
 }
 
@@ -55,7 +55,7 @@ fn allocatable_scratch_regs() -> Array[@abi.PReg] {
 fn sysv_arg_fprs() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<8 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }
@@ -64,7 +64,7 @@ fn sysv_arg_fprs() -> Array[@abi.PReg] {
 fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<16 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }
@@ -76,9 +76,9 @@ pub fn build_machine_env(
   reserve_func_table : Bool,
   reserve_extra_results_ptr : Bool,
 ) -> @spec.MachineEnvData {
-  let mem0_desc_idx = int_reg_index(@spec.IntRegRole::Mem0Desc)
-  let func_table_idx = int_reg_index(@spec.IntRegRole::FuncTable)
-  let extra_results_ptr_idx = int_reg_index(@spec.IntRegRole::ExtraResultsPtr)
+  let mem0_desc_idx = int_reg_index(Mem0Desc)
+  let func_table_idx = int_reg_index(FuncTable)
+  let extra_results_ptr_idx = int_reg_index(ExtraResultsPtr)
   let preferred_int : Array[@abi.PReg] = []
   let nonpreferred_int : Array[@abi.PReg] = []
   let callee_saved_int : Array[@abi.PReg] = []
@@ -125,13 +125,13 @@ pub fn build_machine_env(
   let preferred_vector : Array[@abi.PReg] = []
   let nonpreferred_vector : Array[@abi.PReg] = []
   for r in sysv_arg_fprs() {
-    preferred_vector.push({ index: r.index, class: @abi.Vector })
+    preferred_vector.push({ index: r.index, class: Vector })
   }
   for r in allocatable_scratch_fprs() {
     if r.index < 8 || r.index == 14 || r.index == 15 {
       continue
     }
-    preferred_vector.push({ index: r.index, class: @abi.Vector })
+    preferred_vector.push({ index: r.index, class: Vector })
   }
   {
     preferred_int,
@@ -143,10 +143,7 @@ pub fn build_machine_env(
     callee_saved_int,
     callee_saved_float,
     // Reserve scratch regs for lowering/emission.
-    scratch_int: [
-      int_reg_index(@spec.IntRegRole::Scratch1),
-      int_reg_index(@spec.IntRegRole::Scratch2),
-    ],
+    scratch_int: [int_reg_index(Scratch1), int_reg_index(Scratch2)],
     // Reserve two XMM scratch registers for move breaking / lowering sequences.
     scratch_float: [14, 15],
   }

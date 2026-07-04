@@ -14,7 +14,7 @@ fn make_func_type(
 ///|
 /// Match wasmtime p1 ABI behavior: invalid enum/bitflags trap at call boundary.
 fn trap_invalid_wasi_abi_arg() -> Unit raise @runtime.RuntimeError {
-  raise @runtime.RuntimeError::Unreachable
+  raise Unreachable
 }
 
 ///|
@@ -36,24 +36,24 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nwritten = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       // Get memory from store (using WASI memory address)
       let mem = store.get_wasi_memory()
       let result = fd_write(ctx, mem, fd, iovs, iovs_len, nwritten)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32], [i32]),
   )
@@ -65,23 +65,23 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nread = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_read(ctx, mem, fd, iovs, iovs_len, nread)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32], [i32]),
   )
@@ -93,15 +93,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let argc_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let argv_buf_size_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = args_sizes_get(ctx, mem, argc_ptr, argv_buf_size_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -113,15 +113,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let argv_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let argv_buf_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = args_get(ctx, mem, argv_ptr, argv_buf_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -133,17 +133,17 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let environc_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let environ_buf_size_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = environ_sizes_get(
         ctx, mem, environc_ptr, environ_buf_size_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -155,15 +155,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let environ_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let environ_buf_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = environ_get(ctx, mem, environ_ptr, environ_buf_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -194,22 +194,22 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let clock_id = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let precision = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let time_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       if clock_id < 0 || clock_id > 3 {
         trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = clock_time_get(mem, clock_id, precision, time_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i32], [i32]),
   )
@@ -221,15 +221,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let prestat_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_prestat_get(ctx, mem, fd, prestat_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -241,19 +241,19 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_prestat_dir_name(ctx, mem, fd, path_ptr, path_len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )
@@ -265,10 +265,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_close(ctx, fd)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32], [i32]),
   )
@@ -280,15 +280,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let buf_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_len = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = random_get(mem, buf_ptr, buf_len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -300,26 +300,26 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let whence = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let newoffset_ptr = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       if whence < 0 || whence > 2 {
         trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = fd_seek(ctx, mem, fd, offset, whence, newoffset_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i32, i32], [i32]),
   )
@@ -331,15 +331,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_tell(ctx, mem, fd, offset_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -351,27 +351,27 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset = match args[3] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nread_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_pread(ctx, mem, fd, iovs, iovs_len, offset, nread_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i64, i32], [i32]),
   )
@@ -383,27 +383,27 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let iovs_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset = match args[3] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nwritten_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_pwrite(ctx, mem, fd, iovs, iovs_len, offset, nwritten_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i64, i32], [i32]),
   )
@@ -415,39 +415,39 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let dirflags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let oflags = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fs_rights_base = match args[5] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fs_rights_inheriting = match args[6] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fdflags = match args[7] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let opened_fd_ptr = match args[8] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_lookupflags_mask = 0x01
       if (dirflags & known_lookupflags_mask.lnot()) != 0 {
@@ -466,7 +466,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         ctx, mem, dir_fd, dirflags, path_ptr, path_len, oflags, fs_rights_base, fs_rights_inheriting,
         fdflags, opened_fd_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32, i64, i64, i32, i32], [
       i32,
@@ -480,15 +480,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fdstat_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_fdstat_get(ctx, mem, fd, fdstat_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -500,18 +500,18 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let clock_id = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let resolution_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       if clock_id < 0 || clock_id > 3 {
         trap_invalid_wasi_abi_arg()
       }
       let mem = store.get_wasi_memory()
       let result = clock_res_get(mem, clock_id, resolution_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -522,7 +522,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     "sched_yield",
     fn(_args) {
       let result = sched_yield()
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([], [i32]),
   )
@@ -534,19 +534,19 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let dir_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_create_directory(ctx, mem, dir_fd, path_ptr, path_len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )
@@ -558,29 +558,29 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let cookie = match args[3] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let bufused_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_readdir(
         ctx, mem, fd, buf_ptr, buf_len, cookie, bufused_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i64, i32], [i32]),
   )
@@ -596,10 +596,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_sync_impl(ctx, fd)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32], [i32]),
   )
@@ -611,10 +611,10 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_datasync_impl(ctx, fd)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32], [i32]),
   )
@@ -626,19 +626,19 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_unlink_file_impl(ctx, mem, fd, path_ptr, path_len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )
@@ -650,19 +650,19 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_remove_directory_impl(ctx, mem, fd, path_ptr, path_len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )
@@ -674,33 +674,33 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let old_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_fd = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_len = match args[5] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_rename_impl(
         ctx, mem, old_fd, old_path_ptr, old_path_len, new_fd, new_path_ptr, new_path_len,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
   )
@@ -716,15 +716,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = fd_filestat_get_impl(ctx, mem, fd, buf_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -736,23 +736,23 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let flags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_lookupflags_mask = 0x01
       if (flags & known_lookupflags_mask.lnot()) != 0 {
@@ -762,7 +762,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let result = path_filestat_get_impl(
         ctx, mem, dir_fd, flags, path_ptr, path_len, buf_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
   )
@@ -774,14 +774,14 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let size = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_filestat_set_size_impl(ctx, fd, size)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64], [i32]),
   )
@@ -793,26 +793,26 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let atim = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mtim = match args[2] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fst_flags = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_fstflags_mask = 0x0F
       if (fst_flags & known_fstflags_mask.lnot()) != 0 {
         trap_invalid_wasi_abi_arg()
       }
       let result = fd_filestat_set_times_impl(ctx, fd, atim, mtim, fst_flags)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i64, i32], [i32]),
   )
@@ -824,31 +824,31 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let dir_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let flags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let atim = match args[4] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mtim = match args[5] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fst_flags = match args[6] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_lookupflags_mask = 0x01
       if (flags & known_lookupflags_mask.lnot()) != 0 {
@@ -862,7 +862,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let result = path_filestat_set_times_impl(
         ctx, mem, dir_fd, flags, path_ptr, path_len, atim, mtim, fst_flags,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i64, i64, i32], [i32]),
   )
@@ -878,25 +878,25 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let len = match args[2] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let advice = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       if advice < 0 || advice > 5 {
         trap_invalid_wasi_abi_arg()
       }
       let result = fd_advise_impl(ctx, fd, offset, len, advice)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i64, i32], [i32]),
   )
@@ -908,18 +908,18 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let offset = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let len = match args[2] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_allocate_impl(ctx, fd, offset, len)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i64], [i32]),
   )
@@ -931,18 +931,18 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let flags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_fdflags_mask = 0x1F
       if (flags & known_fdflags_mask.lnot()) != 0 {
         trap_invalid_wasi_abi_arg()
       }
       let result = fd_fdstat_set_flags_impl(ctx, fd, flags)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -954,20 +954,20 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fs_rights_base = match args[1] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let fs_rights_inheriting = match args[2] {
         I64(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_fdstat_set_rights_impl(
         ctx, fd, fs_rights_base, fs_rights_inheriting,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i64, i64], [i32]),
   )
@@ -979,14 +979,14 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let from = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let to = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result = fd_renumber_impl(ctx, from, to)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -1002,29 +1002,29 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let old_path_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_path_len = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let dir_fd = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_ptr = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_len = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_symlink_impl(
         ctx, mem, old_path_ptr, old_path_len, dir_fd, new_path_ptr, new_path_len,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
   )
@@ -1036,33 +1036,33 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let dir_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let path_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_ptr = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let buf_len = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let bufused_ptr = match args[5] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = path_readlink_impl(
         ctx, mem, dir_fd, path_ptr, path_len, buf_ptr, buf_len, bufused_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
   )
@@ -1074,31 +1074,31 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let old_fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_flags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_path_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let old_path_len = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_fd = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_ptr = match args[5] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let new_path_len = match args[6] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_lookupflags_mask = 0x01
       if (old_flags & known_lookupflags_mask.lnot()) != 0 {
@@ -1109,7 +1109,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
         ctx, mem, old_fd, old_flags, old_path_ptr, old_path_len, new_fd, new_path_ptr,
         new_path_len,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32, i32, i32], [i32]),
   )
@@ -1125,25 +1125,25 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let in_ptr = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let out_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nsubscriptions = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let nevents_ptr = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = poll_oneoff_impl(
         ctx, mem, in_ptr, out_ptr, nsubscriptions, nevents_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32], [i32]),
   )
@@ -1155,27 +1155,27 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let ri_data_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let ri_data_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let ri_flags = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let ro_datalen_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let ro_flags_ptr = match args[5] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_sock_recv_riflags_mask = 0x03
       if (ri_flags & known_sock_recv_riflags_mask.lnot()) != 0 {
@@ -1185,7 +1185,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       let result = sock_recv_impl(
         ctx, mem, fd, ri_data_ptr, ri_data_len, ri_flags, ro_datalen_ptr, ro_flags_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32, i32], [i32]),
   )
@@ -1197,29 +1197,29 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let si_data_ptr = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let si_data_len = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let si_flags = match args[3] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let so_datalen_ptr = match args[4] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let mem = store.get_wasi_memory()
       let result = sock_send_impl(
         ctx, mem, fd, si_data_ptr, si_data_len, si_flags, so_datalen_ptr,
       )
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32, i32, i32], [i32]),
   )
@@ -1231,18 +1231,18 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let how = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_sock_shutdown_sdflags_mask = 0x03
       if (how & known_sock_shutdown_sdflags_mask.lnot()) != 0 {
         trap_invalid_wasi_abi_arg()
       }
       let result = sock_shutdown_impl(ctx, fd, how)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32], [i32]),
   )
@@ -1254,13 +1254,13 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let signal = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       if signal < 0 || signal > 30 {
         trap_invalid_wasi_abi_arg()
       }
       let result = proc_raise_impl(signal)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32], [i32]),
   )
@@ -1272,15 +1272,15 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
     fn(args) raise @runtime.RuntimeError {
       let fd = match args[0] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let flags = match args[1] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let result_fd_ptr = match args[2] {
         I32(v) => v
-        _ => return [@types.Value::I32(Errno::Inval.to_i32())]
+        _ => return [I32(Errno::Inval.to_i32())]
       }
       let known_sock_accept_fdflags_mask = 0x1F
       if (flags & known_sock_accept_fdflags_mask.lnot()) != 0 {
@@ -1288,7 +1288,7 @@ pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
       }
       let mem = store.get_wasi_memory()
       let result = sock_accept_impl(ctx, mem, fd, flags, result_fd_ptr)
-      [@types.Value::I32(result)]
+      [I32(result)]
     },
     func_type=make_func_type([i32, i32, i32], [i32]),
   )

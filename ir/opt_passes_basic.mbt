@@ -62,7 +62,7 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
 ///|
 /// Compute use counts for all values in a function
 fn compute_use_counts(func : Function) -> @hashmap.HashMap[Int, Int] {
-  let counts : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
+  let counts : @hashmap.HashMap[Int, Int] = HashMap([])
   for block in func.blocks {
     // Count uses in instructions
     for inst in block.instructions {
@@ -160,7 +160,7 @@ fn has_side_effects(inst : Inst) -> Bool {
 pub fn fold_constants(func : Function) -> OptResult {
   let result = OptResult::new()
   // Map from value id to constant value (if known)
-  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.HashMap([])
+  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       // First, record any constant instruction
@@ -169,9 +169,9 @@ pub fn fold_constants(func : Function) -> OptResult {
           match inst.first_result() {
             Some(r) =>
               if r.ty is I32 {
-                constants.set(r.id, ConstValue::I32(v.to_int()))
+                constants.set(r.id, I32(v.to_int()))
               } else {
-                constants.set(r.id, ConstValue::I64(v))
+                constants.set(r.id, I64(v))
               }
             None => ()
           }
@@ -182,12 +182,9 @@ pub fn fold_constants(func : Function) -> OptResult {
                 // F32 bits are packed in the lower 32 bits of the Double's bit representation
                 // Extract them directly to preserve NaN payloads
                 let f32_bits = v.reinterpret_as_int64().to_int()
-                constants.set(
-                  r.id,
-                  ConstValue::F32(Float::reinterpret_from_int(f32_bits)),
-                )
+                constants.set(r.id, F32(Float::reinterpret_from_int(f32_bits)))
               } else {
-                constants.set(r.id, ConstValue::F64(v))
+                constants.set(r.id, F64(v))
               }
             None => ()
           }
@@ -221,14 +218,14 @@ priv enum ConstValue {
 /// Convert constant value to opcode
 fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
-    I32(v) => Opcode::Iconst(v.to_int64())
-    I64(v) => Opcode::Iconst(v)
+    I32(v) => Iconst(v.to_int64())
+    I64(v) => Iconst(v)
     F32(v) => {
       // Pack F32 bits into Double's bit representation to preserve NaN payloads
       let f32_bits = v.reinterpret_as_int().to_int64()
-      Opcode::Fconst(f32_bits.reinterpret_as_double())
+      Fconst(f32_bits.reinterpret_as_double())
     }
-    F64(v) => Opcode::Fconst(v)
+    F64(v) => Fconst(v)
   }
 }
 
@@ -290,8 +287,8 @@ fn fold_binary_int(
   let b = get_const(inst.operands[1], constants)
   match (a, b) {
     (Some(I32(va)), Some(I32(vb))) =>
-      Some(ConstValue::I32(op(va.to_int64(), vb.to_int64()).to_int()))
-    (Some(I64(va)), Some(I64(vb))) => Some(ConstValue::I64(op(va, vb)))
+      Some(I32(op(va.to_int64(), vb.to_int64()).to_int()))
+    (Some(I64(va)), Some(I64(vb))) => Some(I64(op(va, vb)))
     _ => None
   }
 }
@@ -310,12 +307,8 @@ fn fold_binary_float(
   let b = get_const(inst.operands[1], constants)
   match (a, b) {
     (Some(F32(va)), Some(F32(vb))) =>
-      Some(
-        ConstValue::F32(
-          op(va.to_double(), vb.to_double()) |> Float::from_double,
-        ),
-      )
-    (Some(F64(va)), Some(F64(vb))) => Some(ConstValue::F64(op(va, vb)))
+      Some(F32(op(va.to_double(), vb.to_double()) |> Float::from_double))
+    (Some(F64(va)), Some(F64(vb))) => Some(F64(op(va, vb)))
     _ => None
   }
 }
@@ -335,11 +328,11 @@ fn fold_icmp(
   match (a, b) {
     (Some(I32(va)), Some(I32(vb))) => {
       let result = eval_icmp_i32(cc, va, vb)
-      Some(ConstValue::I32(if result { 1 } else { 0 }))
+      Some(I32(if result { 1 } else { 0 }))
     }
     (Some(I64(va)), Some(I64(vb))) => {
       let result = eval_icmp_i64(cc, va, vb)
-      Some(ConstValue::I32(if result { 1 } else { 0 }))
+      Some(I32(if result { 1 } else { 0 }))
     }
     _ => None
   }
@@ -358,9 +351,8 @@ fn fold_ishl(
       get_const(inst.operands[0], constants),
       get_const(inst.operands[1], constants),
     ) {
-    (Some(I32(a)), Some(I32(b))) => Some(ConstValue::I32(a << (b % 32)))
-    (Some(I64(a)), Some(I64(b))) =>
-      Some(ConstValue::I64(a << (b.to_int() % 64)))
+    (Some(I32(a)), Some(I32(b))) => Some(I32(a << (b % 32)))
+    (Some(I64(a)), Some(I64(b))) => Some(I64(a << (b.to_int() % 64)))
     _ => None
   }
 }
@@ -378,9 +370,8 @@ fn fold_sshr(
       get_const(inst.operands[0], constants),
       get_const(inst.operands[1], constants),
     ) {
-    (Some(I32(a)), Some(I32(b))) => Some(ConstValue::I32(a >> (b % 32)))
-    (Some(I64(a)), Some(I64(b))) =>
-      Some(ConstValue::I64(a >> (b.to_int() % 64)))
+    (Some(I32(a)), Some(I32(b))) => Some(I32(a >> (b % 32)))
+    (Some(I64(a)), Some(I64(b))) => Some(I64(a >> (b.to_int() % 64)))
     _ => None
   }
 }
@@ -402,12 +393,12 @@ fn fold_ushr(
       let shift = b % 32
       let result = (a.reinterpret_as_uint() >> shift)
         |> UInt::reinterpret_as_int
-      Some(ConstValue::I32(result))
+      Some(I32(result))
     }
     (Some(I64(a)), Some(I64(b))) => {
       let shift = b.to_int() % 64
       let result = (a.reinterpret_as_uint64() >> shift).reinterpret_as_int64()
-      Some(ConstValue::I64(result))
+      Some(I64(result))
     }
     _ => None
   }
@@ -432,7 +423,7 @@ fn fold_sdiv(
       } else if a == @types.I32_MIN && b == -1 {
         None
       } else {
-        Some(ConstValue::I32(a / b))
+        Some(I32(a / b))
       }
     (Some(I64(a)), Some(I64(b))) =>
       if b == 0L {
@@ -440,7 +431,7 @@ fn fold_sdiv(
       } else if a == -9223372036854775808L && b == -1L {
         None
       } else {
-        Some(ConstValue::I64(a / b))
+        Some(I64(a / b))
       }
     _ => None
   }
@@ -465,7 +456,7 @@ fn fold_udiv(
       } else {
         let result = (a.reinterpret_as_uint() / b.reinterpret_as_uint())
           |> UInt::reinterpret_as_int
-        Some(ConstValue::I32(result))
+        Some(I32(result))
       }
     (Some(I64(a)), Some(I64(b))) =>
       if b == 0L {
@@ -473,7 +464,7 @@ fn fold_udiv(
       } else {
         let result = (a.reinterpret_as_uint64() / b.reinterpret_as_uint64())
           |> UInt64::reinterpret_as_int64
-        Some(ConstValue::I64(result))
+        Some(I64(result))
       }
     _ => None
   }
@@ -492,17 +483,12 @@ fn fold_srem(
       get_const(inst.operands[0], constants),
       get_const(inst.operands[1], constants),
     ) {
-    (Some(I32(a)), Some(I32(b))) =>
-      if b == 0 {
-        None
-      } else {
-        Some(ConstValue::I32(a % b))
-      }
+    (Some(I32(a)), Some(I32(b))) => if b == 0 { None } else { Some(I32(a % b)) }
     (Some(I64(a)), Some(I64(b))) =>
       if b == 0L {
         None
       } else {
-        Some(ConstValue::I64(a % b))
+        Some(I64(a % b))
       }
     _ => None
   }
@@ -527,7 +513,7 @@ fn fold_urem(
       } else {
         let result = (a.reinterpret_as_uint() % b.reinterpret_as_uint())
           |> UInt::reinterpret_as_int
-        Some(ConstValue::I32(result))
+        Some(I32(result))
       }
     (Some(I64(a)), Some(I64(b))) =>
       if b == 0L {
@@ -535,7 +521,7 @@ fn fold_urem(
       } else {
         let result = (a.reinterpret_as_uint64() % b.reinterpret_as_uint64())
           |> UInt64::reinterpret_as_int64
-        Some(ConstValue::I64(result))
+        Some(I64(result))
       }
     _ => None
   }
@@ -587,7 +573,7 @@ pub fn propagate_copies(func : Function) -> OptResult {
   // Process each block independently to avoid cross-block copy propagation issues
   for block in func.blocks {
     // Map from copy destination to copy source (local to this block)
-    let copies : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
+    let copies : @hashmap.HashMap[Int, Value] = HashMap([])
     // First pass: collect copy instructions in this block
     for inst in block.instructions {
       if inst.opcode is Copy &&
@@ -628,12 +614,12 @@ pub fn canonicalize_aliases(func : Function) -> OptResult {
   let idom = cfg.compute_dominators()
   let domtree = build_dominator_tree(idom)
   // Build block_id -> array_index mapping.
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
+  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
   // Active alias environment for the current dominator-tree path.
-  let aliases : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
+  let aliases : @hashmap.HashMap[Int, Value] = HashMap([])
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
@@ -691,7 +677,7 @@ pub fn propagate_copies_global(func : Function) -> OptResult {
 fn resolve_copy(v : Value, copies : @hashmap.HashMap[Int, Value]) -> Value? {
   // Follow copy chain (with cycle detection)
   let mut current = v
-  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
+  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
   while true {
     if visited.get(current.id).unwrap_or(false) {
       break // Cycle detected
@@ -726,7 +712,7 @@ fn propagate_copies_in_terminator(
           None => new_args.push(arg)
         }
       }
-      Terminator::Jump(target, new_args)
+      Jump(target, new_args)
     }
     Brz(cond, then_t, else_t) =>
       match resolve_copy(cond, copies) {
@@ -734,7 +720,7 @@ fn propagate_copies_in_terminator(
           if resolved.id != cond.id {
             result.mark_changed()
           }
-          Terminator::Brz(resolved, then_t, else_t)
+          Brz(resolved, then_t, else_t)
         }
         None => term
       }
@@ -744,7 +730,7 @@ fn propagate_copies_in_terminator(
           if resolved.id != cond.id {
             result.mark_changed()
           }
-          Terminator::Brnz(resolved, then_t, else_t)
+          Brnz(resolved, then_t, else_t)
         }
         None => term
       }
@@ -754,7 +740,7 @@ fn propagate_copies_in_terminator(
           if resolved.id != index.id {
             result.mark_changed()
           }
-          Terminator::BrTable(resolved, targets, default_t)
+          BrTable(resolved, targets, default_t)
         }
         None => term
       }
@@ -771,7 +757,7 @@ fn propagate_copies_in_terminator(
           None => new_values.push(v)
         }
       }
-      Terminator::Return(new_values)
+      Return(new_values)
     }
     Trap(_) => term
   }

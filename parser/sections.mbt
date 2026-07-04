@@ -89,13 +89,13 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           let kind = parser.read_byte()
           let desc = match kind {
             0x00 => @types.ImportDesc::Func(parser.read_u32())
-            0x01 => @types.ImportDesc::Table(parser.read_table_type())
-            0x02 => @types.ImportDesc::Memory(parser.read_memory_type())
-            0x03 => @types.ImportDesc::Global(parser.read_global_type())
+            0x01 => Table(parser.read_table_type())
+            0x02 => Memory(parser.read_memory_type())
+            0x03 => Global(parser.read_global_type())
             0x04 => {
               // Tag import: attribute (should be 0 for exception) + type_idx
               let _ = parser.read_byte() // attribute, always 0 for exceptions
-              @types.ImportDesc::Tag(parser.read_u32())
+              Tag(parser.read_u32())
             }
             _ => raise InvalidImportKind(kind)
           }
@@ -140,10 +140,10 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           let kind = parser.read_byte()
           let desc = match kind {
             0x00 => @types.ExportDesc::Func(parser.read_u32())
-            0x01 => @types.ExportDesc::Table(parser.read_u32())
-            0x02 => @types.ExportDesc::Memory(parser.read_u32())
-            0x03 => @types.ExportDesc::Global(parser.read_u32())
-            0x04 => @types.ExportDesc::Tag(parser.read_u32())
+            0x01 => Table(parser.read_u32())
+            0x02 => Memory(parser.read_u32())
+            0x03 => Global(parser.read_u32())
+            0x04 => Tag(parser.read_u32())
             _ => raise InvalidExportKind(kind)
           }
           mod.exports.push({ name, desc })
@@ -237,7 +237,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         for _ in 0..<count {
           let _ = parser.read_byte() // attribute, always 0 for exceptions
           let type_idx = parser.read_u32()
-          mod.tags.push(@types.TagType::{ type_idx, })
+          mod.tags.push({ type_idx, })
         }
       }
       _ =>

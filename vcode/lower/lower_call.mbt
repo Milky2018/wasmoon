@@ -18,8 +18,8 @@ fn emit_call_const(
 ) -> Unit {
   let opcode = match value {
     Int(v) => @instr.LoadConst(v)
-    F32(bits) => @instr.LoadConstF32(bits)
-    F64(bits) => @instr.LoadConstF64(bits)
+    F32(bits) => LoadConstF32(bits)
+    F64(bits) => LoadConstF64(bits)
   }
   let inst = @instr.VCodeInst::new(opcode)
   match preg {
@@ -122,10 +122,10 @@ fn lower_wasm_call_common(
   let float_args : Array[(@abi.VReg, @abi.RegClass)] = []
   for arg in args {
     match arg.class {
-      @abi.Int => int_args.push((arg, @abi.Int))
-      @abi.Float32 => float_args.push((arg, @abi.Float32))
-      @abi.Float64 => float_args.push((arg, @abi.Float64))
-      @abi.Vector => float_args.push((arg, @abi.Vector)) // SIMD uses Vn registers
+      Int => int_args.push((arg, Int))
+      Float32 => float_args.push((arg, Float32))
+      Float64 => float_args.push((arg, Float64))
+      Vector => float_args.push((arg, Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -196,17 +196,17 @@ fn lower_wasm_call_common(
   let mut float_result_idx = 0
   for result in results {
     match result.class {
-      @abi.Int => {
-        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
+      Int => {
+        call_inst.add_def_fixed({ reg: Virtual(result) }, {
           index: ret_gprs[int_result_idx].index,
-          class: @abi.Int,
+          class: Int,
         })
         int_result_idx += 1
       }
-      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+      Float32 | Float64 | Vector => {
         // Float/Vector results go to V0, V1, ...
         // Use actual class for proper move size (32/64/128 bits)
-        call_inst.add_def_fixed({ reg: Virtual(result) }, @abi.PReg::{
+        call_inst.add_def_fixed({ reg: Virtual(result) }, {
           index: ret_fprs[float_result_idx].index,
           class: result.class,
         })
@@ -245,9 +245,9 @@ fn lower_wasm_call(
   let num_results = results.length()
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }
@@ -299,10 +299,10 @@ fn lower_return_call(
   for operand in inst.operands {
     let vreg = ctx.get_vreg_for_use(operand, block)
     match vreg.class {
-      @abi.Int => int_args.push((vreg, @abi.Int))
-      @abi.Float32 => float_args.push((vreg, @abi.Float32))
-      @abi.Float64 => float_args.push((vreg, @abi.Float64))
-      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
+      Int => int_args.push((vreg, Int))
+      Float32 => float_args.push((vreg, Float32))
+      Float64 => float_args.push((vreg, Float64))
+      Vector => float_args.push((vreg, Vector)) // SIMD uses Vn registers
     }
   }
 
@@ -316,9 +316,9 @@ fn lower_return_call(
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
@@ -334,9 +334,9 @@ fn lower_return_call(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+    call_inst.add_use_fixed(Virtual(vreg), {
       index: user_arg_gprs[i].index,
-      class: @abi.Int,
+      class: Int,
     })
   }
 
@@ -350,10 +350,7 @@ fn lower_return_call(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: arg_fprs[i].index,
-      class,
-    })
+    call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
 
   // No result defs for tail call (doesn't return to this function)
@@ -399,7 +396,7 @@ fn lower_return_call_indirect(
   // Calculate address = table_ptr + (zext(elem_idx) << 4) (entry size = 16B).
   // Match Cranelift-style folded add+shift shape.
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(AddExtend(@instr.IndexExtend::Uxtw, 4))
+  let add_inst = @instr.VCodeInst::new(AddExtend(Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(elem_idx_vreg))
@@ -447,10 +444,10 @@ fn lower_return_call_indirect(
   for i in 1..<inst.operands.length() {
     let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
     match vreg.class {
-      @abi.Int => int_args.push((vreg, @abi.Int))
-      @abi.Float32 => float_args.push((vreg, @abi.Float32))
-      @abi.Float64 => float_args.push((vreg, @abi.Float64))
-      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
+      Int => int_args.push((vreg, Int))
+      Float32 => float_args.push((vreg, Float32))
+      Float64 => float_args.push((vreg, Float64))
+      Vector => float_args.push((vreg, Vector)) // SIMD uses Vn registers
     }
   }
   let stack_arg_bytes = emit_wasm_overflow_arg_stores(
@@ -462,9 +459,9 @@ fn lower_return_call_indirect(
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
@@ -480,9 +477,9 @@ fn lower_return_call_indirect(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+    call_inst.add_use_fixed(Virtual(vreg), {
       index: user_arg_gprs[i].index,
-      class: @abi.Int,
+      class: Int,
     })
   }
 
@@ -496,10 +493,7 @@ fn lower_return_call_indirect(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: arg_fprs[i].index,
-      class,
-    })
+    call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
@@ -535,10 +529,10 @@ fn lower_return_call_ref(
   for i in 1..<inst.operands.length() {
     let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
     match vreg.class {
-      @abi.Int => int_args.push((vreg, @abi.Int))
-      @abi.Float32 => float_args.push((vreg, @abi.Float32))
-      @abi.Float64 => float_args.push((vreg, @abi.Float64))
-      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
+      Int => int_args.push((vreg, Int))
+      Float32 => float_args.push((vreg, Float32))
+      Float64 => float_args.push((vreg, Float64))
+      Vector => float_args.push((vreg, Vector)) // SIMD uses Vn registers
     }
   }
   let stack_arg_bytes = emit_wasm_overflow_arg_stores(
@@ -550,9 +544,9 @@ fn lower_return_call_ref(
   let call_inst = @instr.VCodeInst::new(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr_vreg), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
@@ -568,9 +562,9 @@ fn lower_return_call_ref(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+    call_inst.add_use_fixed(Virtual(vreg), {
       index: user_arg_gprs[i].index,
-      class: @abi.Int,
+      class: Int,
     })
   }
 
@@ -584,10 +578,7 @@ fn lower_return_call_ref(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: arg_fprs[i].index,
-      class,
-    })
+    call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
@@ -656,7 +647,7 @@ fn lower_call_indirect(
   // Step 1: Calculate address = table_ptr + (zext(elem_idx) << 4)
   // (entry size is 16 bytes).
   let addr_vreg = ctx.vcode_func.new_vreg(Int)
-  let add_inst = @instr.VCodeInst::new(AddExtend(@instr.IndexExtend::Uxtw, 4))
+  let add_inst = @instr.VCodeInst::new(AddExtend(Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(elem_idx_vreg))
@@ -765,8 +756,7 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
   // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
-    CallPtr(_, _, @instr.C) | CallDirect(_, _, _, @instr.C) =>
-      isa.call_clobbered_fprs()
+    CallPtr(_, _, C) | CallDirect(_, _, _, C) => isa.call_clobbered_fprs()
     _ => isa.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {
@@ -792,8 +782,8 @@ fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
 /// Negative indices are never used by wasm/imported functions.
 fn jit_direct_call_func_idx(libcall : @instr.JITLibcall) -> Int {
   match libcall {
-    @instr.MemoryFillMem0 => -1001
-    @instr.MemoryCopyMem0 => -1002
+    MemoryFillMem0 => -1001
+    MemoryCopyMem0 => -1002
     _ => abort("jit_direct_call_func_idx: unsupported libcall \{libcall}")
   }
 }
@@ -811,8 +801,8 @@ fn lower_c_libcall_direct(
 ) -> Unit {
   fn c_arg_gpr_indices() -> Array[Int] {
     match @isa.ISA::current() {
-      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
-      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
+      AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      AMD64 => [7, 6, 2, 1, 8, 9]
     }
   }
 
@@ -826,16 +816,10 @@ fn lower_c_libcall_direct(
     CallDirect(pseudo_func_idx, num_args, num_results, C),
   )
   for i, arg in args {
-    call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
-      index: arg_regs[i],
-      class: @abi.Int,
-    })
+    call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })
   }
   if result is Some(dst) {
-    call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
-      index: 0,
-      class: @abi.Int,
-    })
+    call_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 0, class: Int })
   }
   add_call_clobbers(call_inst)
   block.add_inst(call_inst)
@@ -876,10 +860,10 @@ fn lower_call_ptr(
   for i in 2..<inst.operands.length() {
     let vreg = ctx.get_vreg_for_use(inst.operands[i], block)
     match vreg.class {
-      @abi.Int => int_args.push((vreg, @abi.Int))
-      @abi.Float32 => float_args.push((vreg, @abi.Float32))
-      @abi.Float64 => float_args.push((vreg, @abi.Float64))
-      @abi.Vector => float_args.push((vreg, @abi.Vector)) // SIMD uses Vn registers
+      Int => int_args.push((vreg, Int))
+      Float32 => float_args.push((vreg, Float32))
+      Float64 => float_args.push((vreg, Float64))
+      Vector => float_args.push((vreg, Vector)) // SIMD uses Vn registers
     }
   }
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
@@ -893,9 +877,9 @@ fn lower_call_ptr(
   )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
 
   // callee_vmctx constrained to the ISA's vmctx-arg register.
@@ -911,9 +895,9 @@ fn lower_call_ptr(
   }
   for i in 0..<int_reg_count {
     let (vreg, _) = int_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
+    call_inst.add_use_fixed(Virtual(vreg), {
       index: user_arg_gprs[i].index,
-      class: @abi.Int,
+      class: Int,
     })
   }
 
@@ -927,10 +911,7 @@ fn lower_call_ptr(
   }
   for i in 0..<float_reg_count {
     let (vreg, class) = float_args[i]
-    call_inst.add_use_fixed(Virtual(vreg), @abi.PReg::{
-      index: arg_fprs[i].index,
-      class,
-    })
+    call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
 
   // Step 4: Define results with constraints
@@ -940,15 +921,15 @@ fn lower_call_ptr(
   let mut float_result_idx = 0
   for dst in result_vregs {
     match dst.class {
-      @abi.Int => {
-        call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+      Int => {
+        call_inst.add_def_fixed({ reg: Virtual(dst) }, {
           index: ret_gprs[int_result_idx].index,
-          class: @abi.Int,
+          class: Int,
         })
         int_result_idx = int_result_idx + 1
       }
-      @abi.Float32 | @abi.Float64 | @abi.Vector => {
-        call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
+      Float32 | Float64 | Vector => {
+        call_inst.add_def_fixed({ reg: Virtual(dst) }, {
           index: ret_fprs[float_result_idx].index,
           class: dst.class,
         })
@@ -984,9 +965,9 @@ fn lower_c_libcall(
   fn c_arg_gpr_indices() -> Array[Int] {
     match @isa.ISA::current() {
       // AAPCS64: X0-X7
-      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
-      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
+      AMD64 => [7, 6, 2, 1, 8, 9]
     }
   }
 
@@ -998,9 +979,9 @@ fn lower_c_libcall(
   let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, C))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
-  call_inst.add_use_fixed(Virtual(func_ptr), @abi.PReg::{
+  call_inst.add_use_fixed(Virtual(func_ptr), {
     index: scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
 
   // Args constrained to C ABI arg regs (ISA-dependent).
@@ -1011,19 +992,13 @@ fn lower_c_libcall(
   }
   for i in 0..<reg_arg_count {
     let arg = args[i]
-    call_inst.add_use_fixed(Virtual(arg), @abi.PReg::{
-      index: arg_regs[i],
-      class: @abi.Int,
-    })
+    call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })
   }
   emit_c_overflow_arg_stores(ctx, block, args, arg_regs.length())
 
   // Result constrained to the C ABI integer return register.
   if result is Some(dst) {
-    call_inst.add_def_fixed({ reg: Virtual(dst) }, @abi.PReg::{
-      index: 0,
-      class: @abi.Int,
-    })
+    call_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 0, class: Int })
   }
 
   // Add clobbers for all caller-saved registers

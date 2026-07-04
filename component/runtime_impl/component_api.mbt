@@ -22,7 +22,7 @@ pub(all) enum ComponentFunc {
 }
 
 ///|
-pub impl Debug for ComponentFunc with to_repr(self) {
+pub impl Debug for ComponentFunc with fn to_repr(self) {
   match self {
     Lifted(_, _, _, _, _, _, _, _) =>
       Repr::ctor("Lifted", [(None, Repr::literal("<lowered>"))])
@@ -31,7 +31,7 @@ pub impl Debug for ComponentFunc with to_repr(self) {
 }
 
 ///|
-pub impl Show for ComponentFunc with output(self, logger) {
+pub impl Show for ComponentFunc with fn output(self, logger) {
   match self {
     Lifted(_, _, _, _, _, _, _, _) => logger.write_string("Lifted")
     Host(_, _, _) => logger.write_string("Host")
@@ -48,7 +48,7 @@ pub(all) struct CoreInstance {
 }
 
 ///|
-pub impl Show for CoreInstance with output(_self, logger) {
+pub impl Show for CoreInstance with fn output(_self, logger) {
   logger.write_string("CoreInstance")
 }
 
@@ -61,7 +61,7 @@ pub(all) struct ComponentClosure {
 }
 
 ///|
-pub impl Show for ComponentClosure with output(_self, logger) {
+pub impl Show for ComponentClosure with fn output(_self, logger) {
   logger.write_string("ComponentClosure")
 }
 
@@ -83,7 +83,7 @@ pub(all) enum ComponentExtern {
 }
 
 ///|
-pub impl Show for ComponentExtern with output(self, logger) {
+pub impl Show for ComponentExtern with fn output(self, logger) {
   match self {
     Func(_) => logger.write_string("Func")
     Value(_) => logger.write_string("Value")
@@ -139,10 +139,10 @@ pub fn ComponentInstance::call_exported_func(
   args : Array[ComponentValue],
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   match self.exports.get(name) {
-    Some(ComponentExtern::Func(func)) => {
+    Some(Func(func)) => {
       let func_type = match func {
-        ComponentFunc::Host(ft, _, _) => ft
-        ComponentFunc::Lifted(_, ft, _, _, _, _, _, _) => ft
+        Host(ft, _, _) => ft
+        Lifted(_, ft, _, _, _, _, _, _) => ft
       }
       let prev_can_block = self.async_state.task_can_block[0]
       let prev_can_block_stack = if self.async_state.can_block_stack.length() >
@@ -270,8 +270,8 @@ pub fn ComponentLinker::add_func(
 ) -> Unit {
   self.add_import(
     name,
-    ComponentExtern::Func(
-      ComponentFunc::Host(func_type, [], fn(
+    Func(
+      Host(func_type, [], fn(
         args : Array[ComponentValue],
         _table : ResourceTable,
       ) -> Array[ComponentValue] raise ComponentRuntimeError {
@@ -287,7 +287,7 @@ pub fn ComponentLinker::add_value(
   name : String,
   value : ComponentValue,
 ) -> Unit {
-  self.add_import(name, ComponentExtern::Value(value))
+  self.add_import(name, Value(value))
 }
 
 ///|
@@ -296,10 +296,7 @@ pub fn ComponentLinker::add_component(
   name : String,
   component : Component,
 ) -> Unit {
-  self.add_import(
-    name,
-    ComponentExtern::Component({ component, outer_stack: [] }),
-  )
+  self.add_import(name, Component({ component, outer_stack: [] }))
 }
 
 ///|
@@ -308,7 +305,7 @@ pub fn ComponentLinker::add_instance(
   name : String,
   instance : ComponentInstance,
 ) -> Unit {
-  self.add_import(name, ComponentExtern::Instance(instance))
+  self.add_import(name, Instance(instance))
 }
 
 ///|
@@ -317,7 +314,7 @@ pub fn ComponentLinker::add_core_module(
   name : String,
   module_ : @types.Module,
 ) -> Unit {
-  self.add_import(name, ComponentExtern::CoreModule(module_))
+  self.add_import(name, CoreModule(module_))
 }
 
 ///|
@@ -326,7 +323,7 @@ pub fn ComponentLinker::add_core_instance(
   name : String,
   instance : CoreInstance,
 ) -> Unit {
-  self.add_import(name, ComponentExtern::CoreInstance(instance))
+  self.add_import(name, CoreInstance(instance))
 }
 
 ///|

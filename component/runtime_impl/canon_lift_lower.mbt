@@ -18,7 +18,7 @@ fn instantiate_canon_lift(
   }
   let td = state.types[type_idx]
   let func_type = match td {
-    Some(TypeDef::FuncType(ft)) => ft
+    Some(FuncType(ft)) => ft
     _ => raise InvalidCanonFuncType(type_idx)
   }
   let resources = resolve_canon_resources(opts, state)
@@ -27,7 +27,7 @@ fn instantiate_canon_lift(
   let async_abi = canon_opt_is_async(opts) ||
     (func_type.is_async && callback is None)
   state.funcs.push(
-    ComponentFunc::Lifted(
+    Lifted(
       state.core_funcs[core_func_idx],
       func_type,
       resources,
@@ -52,8 +52,8 @@ fn instantiate_canon_lower(
   }
   let func = state.funcs[func_idx]
   let (func_type, func_types) = match func {
-    ComponentFunc::Host(ft, types, _) => (ft, types)
-    ComponentFunc::Lifted(_, ft, _, types, _, _, _, _) => (ft, types)
+    Host(ft, types, _) => (ft, types)
+    Lifted(_, ft, _, types, _, _, _, _) => (ft, types)
   }
   let resources = resolve_canon_resources(opts, state)
   let is_async_lower = canon_opt_is_async(opts)
@@ -70,11 +70,7 @@ fn instantiate_canon_lower(
   if is_async_lower {
     // Async lowering: start a subtask and return a status code, writing
     // eventual results into the provided return pointer.
-    let ptr_ty = if mem.is_memory64() {
-      @types.ValueType::I64
-    } else {
-      @types.ValueType::I32
-    }
+    let ptr_ty = if mem.is_memory64() { @types.ValueType::I64 } else { I32 }
     let flat_params : Array[@types.ValueType] = []
     for p in func_type.params {
       for t in core_types_for_valtype(p.ty, func_types, mem.is_memory64()) {
@@ -85,10 +81,7 @@ fn instantiate_canon_lower(
       Some(_) => flat_params + [ptr_ty]
       None => flat_params
     }
-    let core_type : @types.FuncType = {
-      params,
-      results: [@types.ValueType::I32],
-    }
+    let core_type : @types.FuncType = { params, results: [I32] }
     let async_state = state.async_state
     let caller_table = state.resource_table
     let host = fn(
@@ -97,8 +90,7 @@ fn instantiate_canon_lower(
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) &&
-        !may_enter[0] {
+      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter[0] {
         trap_canon("wasm trap: cannot enter component instance")
       }
       let cur_task_id = current_task_id(async_state)
@@ -141,14 +133,14 @@ fn instantiate_canon_lower(
         Some(_) => {
           if args.length() == 0 {
             trap_canon("missing retptr")
-            return cache_and_advance([@types.Value::I32(0)])
+            return cache_and_advance([I32(0)])
           }
           for i in 0..<(args.length() - 1) {
             param_args.push(args[i])
           }
           retptr = match args[args.length() - 1] {
-            @types.Value::I32(n) => Some(n)
-            @types.Value::I64(n) => Some(n.to_int())
+            I32(n) => Some(n)
+            I64(n) => Some(n.to_int())
             _ => None
           }
         }
@@ -162,17 +154,16 @@ fn instantiate_canon_lower(
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
-          return cache_and_advance([@types.Value::I32(0)])
+          return cache_and_advance([I32(0)])
         }
       }
       let inst_id = match func {
-        ComponentFunc::Host(_, _, _) => caller_table.id
-        ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-          callee_table.id
+        Host(_, _, _) => caller_table.id
+        Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
-        ComponentFunc::Host(_, _, _) => -1
+        Host(_, _, _) => -1
         _ => inst_id
       }
       // Prevent stackless callback-driven tasks from re-entering their own
@@ -277,16 +268,8 @@ fn instantiate_canon_lower(
 
       if inflight == 0 && instance_backpressure == 0 {
         let is_callback = match func {
-          ComponentFunc::Lifted(
-            _,
-            _ft,
-            _res,
-            _tys,
-            _tbl,
-            _may_enter,
-            Some(_cb),
-            _async_abi
-          ) => true
+          Lifted(_, _ft, _res, _tys, _tbl, _may_enter, Some(_cb), _async_abi) =>
+            true
           _ => false
         }
         if is_callback {
@@ -306,12 +289,12 @@ fn instantiate_canon_lower(
               task.started[0] = false
               task.code[0] = 0
               task.waiting_set[0] = None
-              TaskStep::Blocked
+              Blocked
             }
           }
           pop_task(async_state)
           canon_in_handleless_step[0] = false
-          if ok && step == TaskStep::Done {
+          if ok && step == Done {
             if func_type.result is Some(_) && retptr is Some(p) {
               let vals = match take_task_result(async_state, tmp_task_id) {
                 Some(v) => v
@@ -327,7 +310,7 @@ fn instantiate_canon_lower(
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
-                  return cache_and_advance([@types.Value::I32(0)])
+                  return cache_and_advance([I32(0)])
                 }
               }
               let core_vals = component_results_to_core(
@@ -340,17 +323,17 @@ fn instantiate_canon_lower(
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
-                  return cache_and_advance([@types.Value::I32(0)])
+                  return cache_and_advance([I32(0)])
                 }
               }
               match core_vals {
-                [@types.Value::I32(n)] => mem.store_i32(p, n) catch { _ => () }
-                [@types.Value::I64(n)] => mem.store_i64(p, n) catch { _ => () }
+                [I32(n)] => mem.store_i32(p, n) catch { _ => () }
+                [I64(n)] => mem.store_i64(p, n) catch { _ => () }
                 _ => ()
               }
             }
             cleanup_task_id(tmp_task_id)
-            return cache_and_advance([@types.Value::I32(2)]) // RETURNED
+            return cache_and_advance([I32(2)]) // RETURNED
           }
 
           // Some callback-style async functions publish their results early via `canon task.return`
@@ -358,7 +341,7 @@ fn instantiate_canon_lower(
           // RETURNED=2 immediately and keep the task alive as a detached background subtask so the
           // event loop can continue driving it (component-spec/async/partial-stream-copies.wast).
           if ok &&
-            step != TaskStep::Done &&
+            step != Done &&
             func_type.result is Some(_) &&
             async_state.task_returned.get(tmp_task_id) is Some(true) {
             if retptr is Some(p) {
@@ -388,7 +371,7 @@ fn instantiate_canon_lower(
               } catch {
                 e => {
                   trap_canon(canon_err_message(e))
-                  return cache_and_advance([@types.Value::I32(0)])
+                  return cache_and_advance([I32(0)])
                 }
               }
               let core_vals = component_results_to_core(
@@ -401,12 +384,12 @@ fn instantiate_canon_lower(
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
-                  return cache_and_advance([@types.Value::I32(0)])
+                  return cache_and_advance([I32(0)])
                 }
               }
               match core_vals {
-                [@types.Value::I32(n)] => mem.store_i32(p, n) catch { _ => () }
-                [@types.Value::I64(n)] => mem.store_i64(p, n) catch { _ => () }
+                [I32(n)] => mem.store_i32(p, n) catch { _ => () }
+                [I64(n)] => mem.store_i64(p, n) catch { _ => () }
                 _ => ()
               }
             }
@@ -414,7 +397,7 @@ fn instantiate_canon_lower(
               // Detached background task: no guest-visible waitable handle.
               id: 0,
               detached: true,
-              phase: [SubtaskPhase::Started],
+              phase: [Started],
               caller_table,
               callee_instance_id: inst_id,
               bp_key,
@@ -423,10 +406,10 @@ fn instantiate_canon_lower(
               result_ty: None,
               types: func_types,
               resources,
-              driver: SubtaskDriver::CallbackLifted(task),
+              driver: CallbackLifted(task),
             })
             async_state.inflight_by_instance.set(bp_key, 1)
-            return cache_and_advance([@types.Value::I32(2)]) // RETURNED
+            return cache_and_advance([I32(2)]) // RETURNED
           }
 
           // Needs a real subtask handle: allocate and migrate the per-task state.
@@ -437,7 +420,7 @@ fn instantiate_canon_lower(
           let st : Subtask = {
             id: sub_id,
             detached: false,
-            phase: [SubtaskPhase::Started],
+            phase: [Started],
             caller_table,
             callee_instance_id: inst_id,
             bp_key,
@@ -446,11 +429,11 @@ fn instantiate_canon_lower(
             result_ty: func_type.result,
             types: func_types,
             resources,
-            driver: SubtaskDriver::CallbackLifted(task),
+            driver: CallbackLifted(task),
           }
           async_state.inflight_by_instance.set(bp_key, 1)
           async_state.subtasks.set(sub_key, st)
-          return cache_and_advance([@types.Value::I32((sub_id << 4) | 1)]) // STARTED
+          return cache_and_advance([I32((sub_id << 4) | 1)]) // STARTED
         }
 
         // Non-callback async lowering: do a handle-less initial step so the task can
@@ -468,12 +451,12 @@ fn instantiate_canon_lower(
             task.started[0] = false
             task.code[0] = 0
             task.waiting_set[0] = None
-            TaskStep::Blocked
+            Blocked
           }
         }
         pop_task(async_state)
         canon_in_handleless_step[0] = false
-        if ok && step == TaskStep::Done {
+        if ok && step == Done {
           if func_type.result is Some(_) && retptr is Some(p) {
             let vals = match take_task_result(async_state, tmp_task_id) {
               Some(v) => v
@@ -489,7 +472,7 @@ fn instantiate_canon_lower(
             ) catch {
               e => {
                 trap_canon(canon_err_message(e))
-                return cache_and_advance([@types.Value::I32(0)])
+                return cache_and_advance([I32(0)])
               }
             }
             let core_vals = component_results_to_core(
@@ -502,17 +485,17 @@ fn instantiate_canon_lower(
             ) catch {
               e => {
                 trap_canon(canon_err_message(e))
-                return cache_and_advance([@types.Value::I32(0)])
+                return cache_and_advance([I32(0)])
               }
             }
             match core_vals {
-              [@types.Value::I32(n)] => mem.store_i32(p, n) catch { _ => () }
-              [@types.Value::I64(n)] => mem.store_i64(p, n) catch { _ => () }
+              [I32(n)] => mem.store_i32(p, n) catch { _ => () }
+              [I64(n)] => mem.store_i64(p, n) catch { _ => () }
               _ => ()
             }
           }
           cleanup_task_id(tmp_task_id)
-          return cache_and_advance([@types.Value::I32(2)]) // RETURNED
+          return cache_and_advance([I32(2)]) // RETURNED
         }
         let sub_id = alloc_shared_handle(async_state, caller_table.id)
         let sub_key = handle_key(caller_table.id, sub_id)
@@ -521,7 +504,7 @@ fn instantiate_canon_lower(
         let st : Subtask = {
           id: sub_id,
           detached: false,
-          phase: [SubtaskPhase::Started],
+          phase: [Started],
           caller_table,
           callee_instance_id: inst_id,
           bp_key,
@@ -530,11 +513,11 @@ fn instantiate_canon_lower(
           result_ty: func_type.result,
           types: func_types,
           resources,
-          driver: SubtaskDriver::CallbackLifted(task),
+          driver: CallbackLifted(task),
         }
         async_state.inflight_by_instance.set(bp_key, 1)
         async_state.subtasks.set(sub_key, st)
-        cache_and_advance([@types.Value::I32((sub_id << 4) | 1)]) // STARTED
+        cache_and_advance([I32((sub_id << 4) | 1)]) // STARTED
       } else {
         // Backpressure/serialization: queue in STARTING state until this
         // async-lowered call becomes eligible to start.
@@ -542,7 +525,7 @@ fn instantiate_canon_lower(
         let st : Subtask = {
           id: sub_id,
           detached: false,
-          phase: [SubtaskPhase::Starting],
+          phase: [Starting],
           caller_table,
           callee_instance_id: inst_id,
           bp_key,
@@ -551,7 +534,7 @@ fn instantiate_canon_lower(
           result_ty: func_type.result,
           types: func_types,
           resources,
-          driver: SubtaskDriver::CallbackLifted(task),
+          driver: CallbackLifted(task),
         }
         let sub_key = handle_key(caller_table.id, sub_id)
         init_task_meta(async_state, sub_key, meta_inst_id, caller_task_id)
@@ -562,7 +545,7 @@ fn instantiate_canon_lower(
         }
         q.push(sub_key)
         async_state.pending_by_instance.set(bp_key, q)
-        cache_and_advance([@types.Value::I32((sub_id << 4) | 0)]) // STARTING
+        cache_and_advance([I32((sub_id << 4) | 0)]) // STARTING
       }
     }
     state.core_funcs.push(alloc_host_core_func(store, core_type, host))
@@ -575,8 +558,7 @@ fn instantiate_canon_lower(
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      if func is ComponentFunc::Lifted(_, _, _, _, _, may_enter, _, _) &&
-        !may_enter[0] {
+      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter[0] {
         trap_canon("wasm trap: cannot enter component instance")
       }
       if !canon_may_leave[0] {
@@ -598,13 +580,12 @@ fn instantiate_canon_lower(
       let async_state = state.async_state
       let owner_component_id = state.resource_table.id
       let inst_id = match func {
-        ComponentFunc::Host(_, _, _) => owner_component_id
-        ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-          callee_table.id
+        Host(_, _, _) => owner_component_id
+        Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
-        ComponentFunc::Host(_, _, _) => -1
+        Host(_, _, _) => -1
         _ => inst_id
       }
       if meta_inst_id >= 0 &&
@@ -694,9 +675,8 @@ fn instantiate_canon_lower(
           ([] : Array[ComponentValue])
         } else {
           let callee_instance_id = match st.task.func {
-            ComponentFunc::Host(_, _, _) => state.resource_table.id
-            ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-              callee_table.id
+            Host(_, _, _) => state.resource_table.id
+            Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
           }
           ensure_task_thread(async_state, callee_instance_id, st.task_id)
           push_task(async_state, st.task_id, can_block)
@@ -710,17 +690,17 @@ fn instantiate_canon_lower(
               pop_task(async_state)
               match e {
                 AsyncSuspendYield => {
-                  canon_suspend[0] = Some(CanonSuspend::Yield)
-                  raise @runtime.RuntimeError::Unreachable
+                  canon_suspend[0] = Some(Yield)
+                  raise Unreachable
                 }
                 AsyncSuspendWait(ws) => {
-                  canon_suspend[0] = Some(CanonSuspend::Wait(ws))
-                  raise @runtime.RuntimeError::Unreachable
+                  canon_suspend[0] = Some(Wait(ws))
+                  raise Unreachable
                 }
                 CanonCallError(msg) =>
                   if msg.contains("AsyncSuspendYield") {
-                    canon_suspend[0] = Some(CanonSuspend::Yield)
-                    raise @runtime.RuntimeError::Unreachable
+                    canon_suspend[0] = Some(Yield)
+                    raise Unreachable
                   } else {
                     trap_canon(msg)
                     return []
@@ -734,16 +714,8 @@ fn instantiate_canon_lower(
           }
           pop_task(async_state)
           let is_callback_task = match st.task.func {
-            ComponentFunc::Lifted(
-              _,
-              _ft,
-              _res,
-              _tys,
-              _tbl,
-              _may_enter,
-              Some(_cb),
-              _async_abi
-            ) => true
+            Lifted(_, _ft, _res, _tys, _tbl, _may_enter, Some(_cb), _async_abi) =>
+              true
             _ => false
           }
           // Some callback-style async functions (notably stream producers) publish their
@@ -752,7 +724,7 @@ fn instantiate_canon_lower(
           // alive as a detached background subtask, otherwise nested components can deadlock
           // (component-spec/async/zero-length.wast).
           if is_callback_task &&
-            step != TaskStep::Done &&
+            step != Done &&
             async_state.task_returned.get(st.task_id) is Some(true) &&
             async_state.task_results.get(st.task_id) is Some(vals) {
             // Promote the task to a detached background subtask so the event loop can
@@ -793,7 +765,7 @@ fn instantiate_canon_lower(
               // Detached background task: no guest-visible waitable handle.
               id: 0,
               detached: true,
-              phase: [SubtaskPhase::Started],
+              phase: [Started],
               caller_table: state.resource_table,
               callee_instance_id,
               bp_key: 0,
@@ -802,7 +774,7 @@ fn instantiate_canon_lower(
               result_ty: None,
               types: func_types,
               resources,
-              driver: SubtaskDriver::CallbackLifted(st.task),
+              driver: CallbackLifted(st.task),
             })
             per_task_state.remove(cur) |> ignore
 
@@ -821,8 +793,8 @@ fn instantiate_canon_lower(
                   trap_canon("missing retptr")
                 } else {
                   out_ptr = match args[args.length() - 1] {
-                    @types.Value::I32(n) => Some(n)
-                    @types.Value::I64(n) => Some(n.to_int())
+                    I32(n) => Some(n)
+                    I64(n) => Some(n.to_int())
                     _ => None
                   }
                 }
@@ -842,7 +814,7 @@ fn instantiate_canon_lower(
             return out
           }
           match step {
-            TaskStep::Done => {
+            Done => {
               per_task_state.remove(cur) |> ignore
               let vals = match take_task_result(async_state, st.task_id) {
                 Some(v) => v
@@ -852,9 +824,8 @@ fn instantiate_canon_lower(
               // component returned any stream/future readable handles, move them into the caller's
               // handle space before exposing the core i32 indices.
               let callee_instance_id = match st.task.func {
-                ComponentFunc::Host(_, _, _) => state.resource_table.id
-                ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-                  callee_table.id
+                Host(_, _, _) => state.resource_table.id
+                Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
               }
               let result_owner = match
                 async_state.task_result_owner.get(st.task_id) {
@@ -892,8 +863,8 @@ fn instantiate_canon_lower(
                       trap_canon("missing retptr")
                     } else {
                       out_ptr = match args[args.length() - 1] {
-                        @types.Value::I32(n) => Some(n)
-                        @types.Value::I64(n) => Some(n.to_int())
+                        I32(n) => Some(n)
+                        I64(n) => Some(n.to_int())
                         _ => None
                       }
                     }
@@ -922,10 +893,10 @@ fn instantiate_canon_lower(
                 ([] : Array[ComponentValue])
               } else {
                 match st.task.waiting_set[0] {
-                  Some(ws) => canon_suspend[0] = Some(CanonSuspend::Wait(ws))
-                  None => canon_suspend[0] = Some(CanonSuspend::Yield)
+                  Some(ws) => canon_suspend[0] = Some(Wait(ws))
+                  None => canon_suspend[0] = Some(Yield)
                 }
-                raise @runtime.RuntimeError::Unreachable
+                raise Unreachable
               }
           }
         }
@@ -961,8 +932,8 @@ fn instantiate_canon_lower(
             trap_canon("missing retptr")
           } else {
             out_ptr = match args[args.length() - 1] {
-              @types.Value::I32(n) => Some(n)
-              @types.Value::I64(n) => Some(n.to_int())
+              I32(n) => Some(n)
+              I64(n) => Some(n.to_int())
               _ => None
             }
           }

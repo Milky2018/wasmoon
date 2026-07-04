@@ -5,28 +5,20 @@ test "canon convert: lower non-empty list stores elements" {
   let heap_ptr = [1024]
   let realloc = alloc_host_core_func(
     store,
-    {
-      params: [
-        @types.ValueType::I32,
-        @types.ValueType::I32,
-        @types.ValueType::I32,
-        @types.ValueType::I32,
-      ],
-      results: [@types.ValueType::I32],
-    },
+    { params: [I32, I32, I32, I32], results: [I32] },
     fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
       if args.length() != 4 {
-        raise @runtime.RuntimeError::TypeMismatch
+        raise TypeMismatch
       }
       let align = match args[2] {
-        @types.Value::I32(n) => n
-        _ => raise @runtime.RuntimeError::TypeMismatch
+        I32(n) => n
+        _ => raise TypeMismatch
       }
       let size = match args[3] {
-        @types.Value::I32(n) => n
-        _ => raise @runtime.RuntimeError::TypeMismatch
+        I32(n) => n
+        _ => raise TypeMismatch
       }
       let mut ptr = heap_ptr[0]
       if align > 1 {
@@ -36,29 +28,23 @@ test "canon convert: lower non-empty list stores elements" {
         }
       }
       heap_ptr[0] = ptr + size
-      [@types.Value::I32(ptr)]
+      [I32(ptr)]
     },
   )
   let resources : CanonResources = {
     mem_addr: Some(mem_addr),
     realloc: Some(realloc),
     post_return: None,
-    encoding: StringEncoding::Utf8,
+    encoding: Utf8,
   }
   let func_type : FuncType = {
     is_async: false,
     params: [{ label: "", ty: TypeIdx(0) }],
     result: None,
   }
-  let types : Array[TypeDef?] = [Some(TypeDef::List(Prim(S32)))]
+  let types : Array[TypeDef?] = [Some(List(Prim(S32)))]
   let core_args = component_args_to_core(
-    [
-      ComponentValue::List([
-        ComponentValue::S32(10),
-        ComponentValue::S32(20),
-        ComponentValue::S32(30),
-      ]),
-    ],
+    [List([S32(10), S32(20), S32(30)])],
     func_type,
     types,
     resources,
@@ -69,7 +55,7 @@ test "canon convert: lower non-empty list stores elements" {
     e => return fail("lower list failed: \{e}")
   }
   let (ptr, len) = match core_args {
-    [@types.Value::I32(ptr), @types.Value::I32(len)] => (ptr, len)
+    [I32(ptr), I32(len)] => (ptr, len)
     _ => return fail("unexpected lowered args")
   }
   inspect(len, content="3")

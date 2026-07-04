@@ -423,7 +423,7 @@ pub fn EGraph::new() -> EGraph {
     opcode_index: {},
     uses: {},
     type_map: {},
-    remat_set: @hashset.HashSet([]),
+    remat_set: HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
     last_eclass_size_limit_hits: 0,
@@ -436,7 +436,7 @@ fn EGraph::index_add(self : EGraph, tag : EOpcodeTag, class_id : Int) -> Unit {
   match self.opcode_index.get(tag) {
     Some(set) => set.add(class_id)
     None => {
-      let set : @hashset.HashSet[Int] = @hashset.HashSet([])
+      let set : @hashset.HashSet[Int] = HashSet([])
       set.add(class_id)
       self.opcode_index.set(tag, set)
     }
@@ -535,7 +535,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     match self.uses.get(child_root) {
       Some(parents) => parents.add(id)
       None => {
-        let parents : @hashset.HashSet[Int] = @hashset.HashSet([])
+        let parents : @hashset.HashSet[Int] = HashSet([])
         parents.add(id)
         self.uses.set(child_root, parents)
       }
@@ -864,7 +864,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       match idx.get(tag) {
         Some(set) => set.add(root)
         None => {
-          let set : @hashset.HashSet[Int] = @hashset.HashSet([])
+          let set : @hashset.HashSet[Int] = HashSet([])
           set.add(root)
           idx.set(tag, set)
         }
@@ -954,7 +954,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             match self.uses.get(child_root) {
               Some(parents) => parents.add(class_id)
               None => {
-                let parents : @hashset.HashSet[Int] = @hashset.HashSet([])
+                let parents : @hashset.HashSet[Int] = HashSet([])
                 parents.add(class_id)
                 self.uses.set(child_root, parents)
               }
@@ -1737,7 +1737,7 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
   let memo : Map[Int, (ExtractCost, ENode)] = {}
   // Track classes currently being processed to detect cycles
-  let in_progress : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let in_progress : @hashset.HashSet[Int] = HashSet([])
   let (cost, node) = self.extract_impl(id, memo, in_progress)
   if cost.infinite {
     (@int.MAX_VALUE, node)

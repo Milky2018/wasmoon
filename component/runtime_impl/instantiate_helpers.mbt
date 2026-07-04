@@ -5,85 +5,85 @@ fn resolve_sortidx(
 ) -> ComponentExtern raise ComponentRuntimeError {
   let idx = sortidx.idx
   match sortidx.sort {
-    Sort::Func =>
+    Func =>
       if idx < 0 || idx >= state.funcs.length() {
         raise InvalidFuncIndex(idx)
       } else {
-        ComponentExtern::Func(state.funcs[idx])
+        Func(state.funcs[idx])
       }
-    Sort::Value =>
+    Value =>
       if idx < 0 || idx >= state.values.length() {
         raise InvalidValueIndex(idx)
       } else {
-        ComponentExtern::Value(state.values[idx])
+        Value(state.values[idx])
       }
-    Sort::Type =>
+    Type =>
       if idx < 0 || idx >= state.types.length() {
         raise InvalidTypeIndex(idx)
       } else {
-        ComponentExtern::Type(state.types[idx])
+        Type(state.types[idx])
       }
-    Sort::Component =>
+    Component =>
       if idx < 0 || idx >= state.components.length() {
         raise InvalidComponentIndex(idx)
       } else {
-        ComponentExtern::Component(state.components[idx])
+        Component(state.components[idx])
       }
-    Sort::Instance =>
+    Instance =>
       if idx < 0 || idx >= state.instances.length() {
         raise InvalidInstanceIndex(idx)
       } else {
-        ComponentExtern::Instance(state.instances[idx])
+        Instance(state.instances[idx])
       }
-    Sort::Core(core_sort) =>
+    Core(core_sort) =>
       match core_sort {
         0x00 =>
           if idx < 0 || idx >= state.core_funcs.length() {
             raise InvalidCoreFuncIndex(idx)
           } else {
-            ComponentExtern::CoreFunc(state.core_funcs[idx])
+            CoreFunc(state.core_funcs[idx])
           }
         0x01 =>
           if idx < 0 || idx >= state.core_tables.length() {
             raise InvalidCoreTableIndex(idx)
           } else {
-            ComponentExtern::CoreTable(state.core_tables[idx])
+            CoreTable(state.core_tables[idx])
           }
         0x02 =>
           if idx < 0 || idx >= state.core_mems.length() {
             raise InvalidCoreMemoryIndex(idx)
           } else {
-            ComponentExtern::CoreMemory(state.core_mems[idx])
+            CoreMemory(state.core_mems[idx])
           }
         0x03 =>
           if idx < 0 || idx >= state.core_globals.length() {
             raise InvalidCoreGlobalIndex(idx)
           } else {
-            ComponentExtern::CoreGlobal(state.core_globals[idx])
+            CoreGlobal(state.core_globals[idx])
           }
         0x04 =>
           if idx < 0 || idx >= state.core_tags.length() {
             raise InvalidCoreTagIndex(idx)
           } else {
-            ComponentExtern::CoreTag(state.core_tags[idx])
+            CoreTag(state.core_tags[idx])
           }
         0x05 | 0x10 =>
           if idx < 0 || idx >= state.core_types.length() {
             raise InvalidCoreTypeIndex(idx)
           } else {
-            ComponentExtern::CoreType(state.core_types[idx])
+            CoreType(state.core_types[idx])
           }
         0x11 =>
           if idx < 0 || idx >= state.core_modules.length() {
             raise InvalidCoreModuleIndex(idx)
           } else {
-            ComponentExtern::CoreModule(state.core_modules[idx])
+            CoreModule(state.core_modules[idx])
           }
         0x12 =>
           if idx < 0 || idx >= state.core_instances.length() {
             raise InvalidCoreInstanceIndex(idx)
           } else {
-            ComponentExtern::CoreInstance(state.core_instances[idx])
+            CoreInstance(state.core_instances[idx])
           }
         _ => raise AliasTargetMismatch("unsupported core sort")
       }
@@ -97,85 +97,85 @@ fn resolve_sortidx_in_instance(
 ) -> ComponentExtern raise ComponentRuntimeError {
   let idx = sortidx.idx
   match sortidx.sort {
-    Sort::Func =>
+    Func =>
       if idx < 0 || idx >= inst.funcs.length() {
         raise InvalidFuncIndex(idx)
       } else {
-        ComponentExtern::Func(inst.funcs[idx])
+        Func(inst.funcs[idx])
       }
-    Sort::Value =>
+    Value =>
       if idx < 0 || idx >= inst.values.length() {
         raise InvalidValueIndex(idx)
       } else {
-        ComponentExtern::Value(inst.values[idx])
+        Value(inst.values[idx])
       }
-    Sort::Type =>
+    Type =>
       if idx < 0 || idx >= inst.types.length() {
         raise InvalidTypeIndex(idx)
       } else {
-        ComponentExtern::Type(inst.types[idx])
+        Type(inst.types[idx])
       }
-    Sort::Component =>
+    Component =>
       if idx < 0 || idx >= inst.components.length() {
         raise InvalidComponentIndex(idx)
       } else {
-        ComponentExtern::Component(inst.components[idx])
+        Component(inst.components[idx])
       }
-    Sort::Instance =>
+    Instance =>
       if idx < 0 || idx >= inst.instances.length() {
         raise InvalidInstanceIndex(idx)
       } else {
-        ComponentExtern::Instance(inst.instances[idx])
+        Instance(inst.instances[idx])
       }
-    Sort::Core(core_sort) =>
+    Core(core_sort) =>
       match core_sort {
         0x00 =>
           if idx < 0 || idx >= inst.core_funcs.length() {
             raise InvalidCoreFuncIndex(idx)
           } else {
-            ComponentExtern::CoreFunc(inst.core_funcs[idx])
+            CoreFunc(inst.core_funcs[idx])
           }
         0x01 =>
           if idx < 0 || idx >= inst.core_tables.length() {
             raise InvalidCoreTableIndex(idx)
           } else {
-            ComponentExtern::CoreTable(inst.core_tables[idx])
+            CoreTable(inst.core_tables[idx])
           }
         0x02 =>
           if idx < 0 || idx >= inst.core_mems.length() {
             raise InvalidCoreMemoryIndex(idx)
           } else {
-            ComponentExtern::CoreMemory(inst.core_mems[idx])
+            CoreMemory(inst.core_mems[idx])
           }
         0x03 =>
           if idx < 0 || idx >= inst.core_globals.length() {
             raise InvalidCoreGlobalIndex(idx)
           } else {
-            ComponentExtern::CoreGlobal(inst.core_globals[idx])
+            CoreGlobal(inst.core_globals[idx])
           }
         0x04 =>
           if idx < 0 || idx >= inst.core_tags.length() {
             raise InvalidCoreTagIndex(idx)
           } else {
-            ComponentExtern::CoreTag(inst.core_tags[idx])
+            CoreTag(inst.core_tags[idx])
           }
         0x05 | 0x10 =>
           if idx < 0 || idx >= inst.core_types.length() {
             raise InvalidCoreTypeIndex(idx)
           } else {
-            ComponentExtern::CoreType(inst.core_types[idx])
+            CoreType(inst.core_types[idx])
           }
         0x11 =>
           if idx < 0 || idx >= inst.core_modules.length() {
             raise InvalidCoreModuleIndex(idx)
           } else {
-            ComponentExtern::CoreModule(inst.core_modules[idx])
+            CoreModule(inst.core_modules[idx])
           }
         0x12 =>
           if idx < 0 || idx >= inst.core_instances.length() {
             raise InvalidCoreInstanceIndex(idx)
           } else {
-            ComponentExtern::CoreInstance(inst.core_instances[idx])
+            CoreInstance(inst.core_instances[idx])
           }
         _ => raise AliasTargetMismatch("unsupported core sort")
       }
@@ -189,54 +189,54 @@ fn append_alias(
   state : BuildState,
 ) -> Unit raise ComponentRuntimeError {
   match (sort, ext) {
-    (Sort::Func, ComponentExtern::Func(f)) => state.funcs.push(f)
-    (Sort::Value, ComponentExtern::Value(v)) => state.values.push(v)
-    (Sort::Type, ComponentExtern::Type(t)) => state.types.push(t)
-    (Sort::Component, ComponentExtern::Component(c)) => state.components.push(c)
-    (Sort::Instance, ComponentExtern::Instance(i)) => state.instances.push(i)
-    (Sort::Core(core_sort), ComponentExtern::CoreFunc(f)) =>
+    (Func, Func(f)) => state.funcs.push(f)
+    (Value, Value(v)) => state.values.push(v)
+    (Type, Type(t)) => state.types.push(t)
+    (Component, Component(c)) => state.components.push(c)
+    (Instance, Instance(i)) => state.instances.push(i)
+    (Core(core_sort), CoreFunc(f)) =>
       if core_sort == 0x00 {
         state.core_funcs.push(f)
       } else {
         raise AliasTargetMismatch("core func")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreTable(t)) =>
+    (Core(core_sort), CoreTable(t)) =>
       if core_sort == 0x01 {
         state.core_tables.push(t)
       } else {
         raise AliasTargetMismatch("core table")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreMemory(m)) =>
+    (Core(core_sort), CoreMemory(m)) =>
       if core_sort == 0x02 {
         state.core_mems.push(m)
       } else {
         raise AliasTargetMismatch("core memory")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreGlobal(g)) =>
+    (Core(core_sort), CoreGlobal(g)) =>
       if core_sort == 0x03 {
         state.core_globals.push(g)
       } else {
         raise AliasTargetMismatch("core global")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreTag(t)) =>
+    (Core(core_sort), CoreTag(t)) =>
       if core_sort == 0x04 {
         state.core_tags.push(t)
       } else {
         raise AliasTargetMismatch("core tag")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreType(t)) =>
+    (Core(core_sort), CoreType(t)) =>
       if core_sort == 0x05 || core_sort == 0x10 {
         state.core_types.push(t)
       } else {
         raise AliasTargetMismatch("core type")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreModule(m)) =>
+    (Core(core_sort), CoreModule(m)) =>
       if core_sort == 0x11 {
         state.core_modules.push(m)
       } else {
         raise AliasTargetMismatch("core module")
       }
-    (Sort::Core(core_sort), ComponentExtern::CoreInstance(i)) =>
+    (Core(core_sort), CoreInstance(i)) =>
       if core_sort == 0x12 {
         state.core_instances.push(i)
       } else {
@@ -314,11 +314,11 @@ fn build_inline_core_instance(
   let tags : Map[String, Int] = {}
   for ex in exports {
     match resolve_sortidx(ex.sortidx, state) {
-      ComponentExtern::CoreFunc(f) => funcs.set(ex.name, f)
-      ComponentExtern::CoreTable(t) => tables.set(ex.name, t)
-      ComponentExtern::CoreMemory(m) => memories.set(ex.name, m)
-      ComponentExtern::CoreGlobal(g) => globals.set(ex.name, g)
-      ComponentExtern::CoreTag(t) => tags.set(ex.name, t)
+      CoreFunc(f) => funcs.set(ex.name, f)
+      CoreTable(t) => tables.set(ex.name, t)
+      CoreMemory(m) => memories.set(ex.name, m)
+      CoreGlobal(g) => globals.set(ex.name, g)
+      CoreTag(t) => tags.set(ex.name, t)
       _ => raise AliasTargetMismatch("inline core export")
     }
   }
@@ -352,7 +352,7 @@ fn core_imports_from_args(
   let imports = @runtime.Imports::new()
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
-      ComponentExtern::CoreInstance(inst) => {
+      CoreInstance(inst) => {
         // `with "mod" (instance ...)` supplies a whole namespace for core imports.
         let mod_name = arg.name
         for kv in inst.funcs.iter() {
@@ -376,23 +376,23 @@ fn core_imports_from_args(
           imports.add_tag(mod_name, field, t)
         }
       }
-      ComponentExtern::CoreFunc(f) => {
+      CoreFunc(f) => {
         let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_func(mod_name, field, f.instance.func_addrs[f.func_idx])
       }
-      ComponentExtern::CoreTable(t) => {
+      CoreTable(t) => {
         let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_table(mod_name, field, t)
       }
-      ComponentExtern::CoreMemory(m) => {
+      CoreMemory(m) => {
         let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_memory(mod_name, field, m)
       }
-      ComponentExtern::CoreGlobal(g) => {
+      CoreGlobal(g) => {
         let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_global(mod_name, field, g)
       }
-      ComponentExtern::CoreTag(t) => {
+      CoreTag(t) => {
         let (mod_name, field) = split_core_import_name(arg.name)
         imports.add_tag(mod_name, field, t)
       }
@@ -411,14 +411,14 @@ fn supplied_core_func_for_import(
 ) -> CoreFuncRef? raise ComponentRuntimeError {
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
-      ComponentExtern::CoreInstance(inst) =>
+      CoreInstance(inst) =>
         if arg.name == mod_name {
           match inst.funcs.get(field) {
             Some(f) => return Some(f)
             None => ()
           }
         }
-      ComponentExtern::CoreFunc(f) => {
+      CoreFunc(f) => {
         let (arg_mod, arg_field) = split_core_import_name(arg.name)
         if arg_mod == mod_name && arg_field == field {
           return Some(f)
@@ -438,7 +438,7 @@ fn validate_core_import_args(
 ) -> Unit raise ComponentRuntimeError {
   for imp in module_.imports {
     match imp.desc {
-      @types.ImportDesc::Func(tyidx) => {
+      Func(tyidx) => {
         let expected = module_.get_func_type(tyidx)
         match
           supplied_core_func_for_import(imp.mod_name, imp.name, args, state) {

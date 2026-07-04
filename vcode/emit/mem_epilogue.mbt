@@ -141,7 +141,7 @@ fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     let isa = @isaregs.current_isa()
     let saved_gprs = stack_frame.saved_gprs
 
@@ -279,7 +279,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     self.emit_terminator_with_epilogue_x86_64(
       term, stack_frame, result_types, next_block, shared_exit_block,
     )
@@ -456,11 +456,7 @@ fn MachineCode::emit_terminator_with_epilogue(
       let float_sources : Array[(@ir.Type, Int, Int)] = [] // (type, src_reg, value_index)
       for i, value in values {
         let src = reg_num(value)
-        let ty = if i < result_types.length() {
-          result_types[i]
-        } else {
-          @ir.Type::I64
-        }
+        let ty = if i < result_types.length() { result_types[i] } else { I64 }
         match ty {
           F32 | F64 | V128 => float_sources.push((ty, src, i))
           _ => int_sources.push((src, i))

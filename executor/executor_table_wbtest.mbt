@@ -2,7 +2,7 @@
 test "table import: call_indirect with imported table" {
   // Create a store with a shared table
   let store = @runtime.Store::new()
-  let shared_table = @runtime.Table::new(@types.ValueType::FuncRef, 2, None)
+  let shared_table = @runtime.Table::new(FuncRef, 2, None)
   let table_addr = store.alloc_table(shared_table)
 
   // Create two functions: add and sub
@@ -16,20 +16,17 @@ test "table import: call_indirect with imported table" {
   }
 
   // The type for add/sub functions
-  let binary_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
 
   // Allocate the functions in store with their type
   let add_addr = store.alloc_func(add_func, func_type=binary_type)
   let sub_addr = store.alloc_func(sub_func, func_type=binary_type)
 
   // Set function references in table
-  shared_table.set(0, @types.Value::FuncRef(add_addr)) catch {
+  shared_table.set(0, FuncRef(add_addr)) catch {
     _ => fail("Failed to set table")
   }
-  shared_table.set(1, @types.Value::FuncRef(sub_addr)) catch {
+  shared_table.set(1, FuncRef(sub_addr)) catch {
     _ => fail("Failed to set table")
   }
 
@@ -44,14 +41,7 @@ test "table import: call_indirect with imported table" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let apply_type : @types.FuncType = {
-    params: [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
-    results: [@types.ValueType::I32],
-  }
+  let apply_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(binary_type),
@@ -63,7 +53,7 @@ test "table import: call_indirect with imported table" {
         mod_name: "env",
         name: "table",
         desc: Table({
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 2, max: None },
           is_table64: false,
         }),
@@ -73,7 +63,7 @@ test "table import: call_indirect with imported table" {
     tables: [], // No local tables, only imported
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "apply", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [apply_func],
@@ -113,15 +103,12 @@ test "global variables: global.get and global.set" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [GlobalGet(0), I32Const(5), I32Add, GlobalSet(0), GlobalGet(0)],
       "test",
     ),
     globals: [
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: true },
-        init: [I32Const(10)],
-      },
+      { type_: { value_type: I32, mutable: true }, init: [I32Const(10)] },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -137,19 +124,13 @@ test "global variables: multiple globals" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [GlobalGet(0), GlobalGet(1), I32Add],
       "test",
     ),
     globals: [
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: true },
-        init: [I32Const(7)],
-      },
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: false },
-        init: [I32Const(100)],
-      },
+      { type_: { value_type: I32, mutable: true }, init: [I32Const(7)] },
+      { type_: { value_type: I32, mutable: false }, init: [I32Const(100)] },
     ],
   }
   let (store, instance) = instantiate_module(mod)
@@ -163,10 +144,10 @@ test "global variables: multiple globals" {
 ///|
 test "global variables: i64 global" {
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I64], [GlobalGet(0)], "test"),
+    ..@types.Module::simple([], [I64], [GlobalGet(0)], "test"),
     globals: [
       {
-        type_: { value_type: @types.ValueType::I64, mutable: false },
+        type_: { value_type: I64, mutable: false },
         init: [I64Const(9999999999L)],
       },
     ],
@@ -183,17 +164,17 @@ test "global variables: i64 global" {
 test "global import: imported global" {
   let store = @runtime.Store::new()
   let global_inst = @runtime.GlobalInstance::new(
-    { value_type: @types.ValueType::I32, mutable: true },
-    @types.Value::I32(42),
+    { value_type: I32, mutable: true },
+    I32(42),
   )
   let global_addr = store.alloc_global(global_inst)
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I32], [GlobalGet(0)], "get"),
+    ..@types.Module::simple([], [I32], [GlobalGet(0)], "get"),
     imports: [
       {
         mod_name: "env",
         name: "g",
-        desc: Global({ value_type: @types.ValueType::I32, mutable: true }),
+        desc: Global({ value_type: I32, mutable: true }),
       },
     ],
   }
@@ -210,11 +191,11 @@ test "global import: imported global" {
 ///|
 test "table operations: table.size" {
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I32], [TableSize(0)], "test"),
+    ..@types.Module::simple([], [I32], [TableSize(0)], "test"),
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 4, max: None },
           is_table64: false,
         },
@@ -238,7 +219,7 @@ test "table operations: table.grow" {
   // - grow function: (ref.null func) (i32.const 3) (table.grow $t)
   // - size function: (table.size $t)
   let table_type : @types.TableType = {
-    elem_type: @types.ValueType::FuncRef,
+    elem_type: FuncRef,
     limits: { min: 2, max: None },
     is_table64: false,
   }
@@ -247,7 +228,7 @@ test "table operations: table.grow" {
   let func_type : @types.SubType = {
     final_: true,
     supertypes: [],
-    composite: Func({ params: [], results: [@types.ValueType::I32] }),
+    composite: Func({ params: [], results: [I32] }),
   }
   let mod : @types.Module = {
     types: [func_type],
@@ -257,18 +238,12 @@ test "table operations: table.grow" {
     tables: [table],
     memories: [],
     globals: [],
-    exports: [
-      { name: "grow", desc: @types.ExportDesc::Func(0) },
-      { name: "size", desc: @types.ExportDesc::Func(1) },
-    ],
+    exports: [{ name: "grow", desc: Func(0) }, { name: "size", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [
       // grow function: ref.null func, i32.const 3, table.grow 0
-      {
-        locals: [],
-        body: [RefNull(@types.ValueType::FuncRef), I32Const(3), TableGrow(0)],
-      },
+      { locals: [], body: [RefNull(FuncRef), I32Const(3), TableGrow(0)] },
       // size function: table.size 0
       { locals: [], body: [TableSize(0)] },
     ],
@@ -289,10 +264,10 @@ test "table operations: table.grow" {
 test "table operations: table.fill" {
   // Test table.fill via direct runtime manipulation
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 5, None)
+  let table = @runtime.Table::new(FuncRef, 5, None)
   store.alloc_table(table) |> ignore
   // Fill table[1..4] with FuncRef(42)
-  table.fill(1, @types.Value::FuncRef(42), 3) catch {
+  table.fill(1, FuncRef(42), 3) catch {
     _ => fail("table.fill failed")
   }
 
@@ -308,16 +283,16 @@ test "table operations: table.fill" {
 test "table operations: table.copy same table" {
   // Test table.copy within the same table
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
+  let table = @runtime.Table::new(FuncRef, 6, None)
   store.alloc_table(table) |> ignore
   // Set some initial values
-  table.set(0, @types.Value::FuncRef(10)) catch {
+  table.set(0, FuncRef(10)) catch {
     _ => ()
   }
-  table.set(1, @types.Value::FuncRef(20)) catch {
+  table.set(1, FuncRef(20)) catch {
     _ => ()
   }
-  table.set(2, @types.Value::FuncRef(30)) catch {
+  table.set(2, FuncRef(30)) catch {
     _ => ()
   }
 
@@ -337,15 +312,15 @@ test "table operations: table.copy same table" {
 test "table operations: table.copy between tables" {
   // Test table.copy between different tables
   let store = @runtime.Store::new()
-  let table1 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
-  let table2 = @runtime.Table::new(@types.ValueType::FuncRef, 4, None)
+  let table1 = @runtime.Table::new(FuncRef, 4, None)
+  let table2 = @runtime.Table::new(FuncRef, 4, None)
   store.alloc_table(table1) |> ignore
   store.alloc_table(table2) |> ignore
   // Set values in table1
-  table1.set(0, @types.Value::FuncRef(100)) catch {
+  table1.set(0, FuncRef(100)) catch {
     _ => ()
   }
-  table1.set(1, @types.Value::FuncRef(200)) catch {
+  table1.set(1, FuncRef(200)) catch {
     _ => ()
   }
 
@@ -363,16 +338,16 @@ test "table operations: table.copy between tables" {
 test "table operations: table.copy overlapping backward" {
   // Test table.copy with overlapping regions (dest > src)
   let store = @runtime.Store::new()
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 6, None)
+  let table = @runtime.Table::new(FuncRef, 6, None)
   store.alloc_table(table) |> ignore
   // Set initial values: [1, 2, 3, 0, 0, 0]
-  table.set(0, @types.Value::FuncRef(1)) catch {
+  table.set(0, FuncRef(1)) catch {
     _ => ()
   }
-  table.set(1, @types.Value::FuncRef(2)) catch {
+  table.set(1, FuncRef(2)) catch {
     _ => ()
   }
-  table.set(2, @types.Value::FuncRef(3)) catch {
+  table.set(2, FuncRef(3)) catch {
     _ => ()
   }
 

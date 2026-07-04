@@ -7,38 +7,38 @@ fn ExecContext::exec_simd(
   instr : @types.Instruction,
 ) -> Unit raise {
   match instr {
-    V128Const(bytes) => self.stack.push(@types.Value::V128(bytes))
+    V128Const(bytes) => self.stack.push(V128(bytes))
 
     // Splat operations - broadcast scalar to all lanes
     I8x16Splat => {
       let v = self.stack.pop_i32()
       let b = v.to_byte()
       let bytes = Bytes::make(16, b)
-      self.stack.push(@types.Value::V128(bytes))
+      self.stack.push(V128(bytes))
     }
     I16x8Splat => {
       let v = self.stack.pop_i32()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<8 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4Splat => {
       let v = self.stack.pop_i32()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<4 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
         buf.write_byte((v >> 16).to_byte())
         buf.write_byte((v >> 24).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2Splat => {
       let v = self.stack.pop_i64()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<2 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
@@ -49,24 +49,24 @@ fn ExecContext::exec_simd(
         buf.write_byte((v >> 48).to_byte())
         buf.write_byte((v >> 56).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4Splat => {
       let f = self.stack.pop_f32()
       let v = f.reinterpret_as_int()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<4 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
         buf.write_byte((v >> 16).to_byte())
         buf.write_byte((v >> 24).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2Splat => {
       let f = self.stack.pop_f64()
       let v = f.reinterpret_as_int64()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<2 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
@@ -77,7 +77,7 @@ fn ExecContext::exec_simd(
         buf.write_byte((v >> 48).to_byte())
         buf.write_byte((v >> 56).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // Extract lane operations
@@ -86,11 +86,11 @@ fn ExecContext::exec_simd(
       let v = v128[lane].to_int()
       // Sign-extend from i8
       let result = if v >= 128 { v - 256 } else { v }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I8x16ExtractLaneU(lane) => {
       let v128 = self.stack.pop_v128()
-      self.stack.push(@types.Value::I32(v128[lane].to_int()))
+      self.stack.push(I32(v128[lane].to_int()))
     }
     I16x8ExtractLaneS(lane) => {
       let v128 = self.stack.pop_v128()
@@ -98,13 +98,13 @@ fn ExecContext::exec_simd(
       let v = v128[offset].to_int() | (v128[offset + 1].to_int() << 8)
       // Sign-extend from i16
       let result = if v >= 32768 { v - 65536 } else { v }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I16x8ExtractLaneU(lane) => {
       let v128 = self.stack.pop_v128()
       let offset = lane * 2
       let v = v128[offset].to_int() | (v128[offset + 1].to_int() << 8)
-      self.stack.push(@types.Value::I32(v))
+      self.stack.push(I32(v))
     }
     I32x4ExtractLane(lane) => {
       let v128 = self.stack.pop_v128()
@@ -113,7 +113,7 @@ fn ExecContext::exec_simd(
         (v128[offset + 1].to_int() << 8) |
         (v128[offset + 2].to_int() << 16) |
         (v128[offset + 3].to_int() << 24)
-      self.stack.push(@types.Value::I32(v))
+      self.stack.push(I32(v))
     }
     I64x2ExtractLane(lane) => {
       let v128 = self.stack.pop_v128()
@@ -126,7 +126,7 @@ fn ExecContext::exec_simd(
         (v128[offset + 5].to_int().to_int64() << 40) |
         (v128[offset + 6].to_int().to_int64() << 48) |
         (v128[offset + 7].to_int().to_int64() << 56)
-      self.stack.push(@types.Value::I64(v))
+      self.stack.push(I64(v))
     }
     F32x4ExtractLane(lane) => {
       let v128 = self.stack.pop_v128()
@@ -135,7 +135,7 @@ fn ExecContext::exec_simd(
         (v128[offset + 1].to_int() << 8) |
         (v128[offset + 2].to_int() << 16) |
         (v128[offset + 3].to_int() << 24)
-      self.stack.push(@types.Value::F32(Float::reinterpret_from_int(bits)))
+      self.stack.push(F32(Float::reinterpret_from_int(bits)))
     }
     F64x2ExtractLane(lane) => {
       let v128 = self.stack.pop_v128()
@@ -148,7 +148,7 @@ fn ExecContext::exec_simd(
         (v128[offset + 5].to_int().to_int64() << 40) |
         (v128[offset + 6].to_int().to_int64() << 48) |
         (v128[offset + 7].to_int().to_int64() << 56)
-      self.stack.push(@types.Value::F64(bits.reinterpret_as_double()))
+      self.stack.push(F64(bits.reinterpret_as_double()))
     }
 
     // Replace lane operations
@@ -156,95 +156,95 @@ fn ExecContext::exec_simd(
       let v = self.stack.pop_i32()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i8(v128, lane, v.to_byte())
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     I16x8ReplaceLane(lane) => {
       let v = self.stack.pop_i32()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i16(v128, lane, v)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     I32x4ReplaceLane(lane) => {
       let v = self.stack.pop_i32()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i32(v128, lane, v)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     I64x2ReplaceLane(lane) => {
       let v = self.stack.pop_i64()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i64(v128, lane, v)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     F32x4ReplaceLane(lane) => {
       let f = self.stack.pop_f32()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i32(v128, lane, f.reinterpret_as_int())
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     F64x2ReplaceLane(lane) => {
       let f = self.stack.pop_f64()
       let v128 = self.stack.pop_v128()
       let result = v128_replace_i64(v128, lane, f.reinterpret_as_int64())
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
 
     // Bitwise operations
     V128Not => {
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() ^ 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128And => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() & b[i].to_int()).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128AndNot => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() & (b[i].to_int() ^ 0xFF)).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Or => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() | b[i].to_int()).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Xor => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((a[i].to_int() ^ b[i].to_int()).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Bitselect => {
       let c = self.stack.pop_v128() // mask
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let mask = c[i].to_int()
         let val = (a[i].to_int() & mask) | (b[i].to_int() & (mask ^ 0xFF))
         buf.write_byte(val.to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128AnyTrue => {
       let v = self.stack.pop_v128()
@@ -255,7 +255,7 @@ fn ExecContext::exec_simd(
           break
         }
       }
-      self.stack.push(@types.Value::I32(if any { 1 } else { 0 }))
+      self.stack.push(I32(if any { 1 } else { 0 }))
     }
 
     // i8x16 comparisons
@@ -330,7 +330,7 @@ fn ExecContext::exec_simd(
           break
         }
       }
-      self.stack.push(@types.Value::I32(if all { 1 } else { 0 }))
+      self.stack.push(I32(if all { 1 } else { 0 }))
     }
     I8x16Bitmask => {
       let v = self.stack.pop_v128()
@@ -340,40 +340,40 @@ fn ExecContext::exec_simd(
           result = result | (1 << i)
         }
       }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I8x16Shl => {
       let shift = self.stack.pop_i32() & 7 // mod 8
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte(((v[i].to_int() << shift) & 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16ShrS => {
       let shift = self.stack.pop_i32() & 7
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let signed = sign_i8(v[i].to_int())
         buf.write_byte(((signed >> shift) & 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16ShrU => {
       let shift = self.stack.pop_i32() & 7
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte((v[i].to_int() >> shift).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16NarrowI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         buf.write_byte(sat_i16_to_i8_s(va))
@@ -382,12 +382,12 @@ fn ExecContext::exec_simd(
         let vb = get_i16_lane(b, i)
         buf.write_byte(sat_i16_to_i8_s(vb))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16NarrowI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         buf.write_byte(sat_i16_to_u8(va))
@@ -396,7 +396,7 @@ fn ExecContext::exec_simd(
         let vb = get_i16_lane(b, i)
         buf.write_byte(sat_i16_to_u8(vb))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // i16x8 comparisons
@@ -472,7 +472,7 @@ fn ExecContext::exec_simd(
           break
         }
       }
-      self.stack.push(@types.Value::I32(if all { 1 } else { 0 }))
+      self.stack.push(I32(if all { 1 } else { 0 }))
     }
     I16x8Bitmask => {
       let v = self.stack.pop_v128()
@@ -482,48 +482,48 @@ fn ExecContext::exec_simd(
           result = result | (1 << i)
         }
       }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I16x8Shl => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let lane = get_i16_lane(v, i)
         let shifted = (lane << shift) & 0xFFFF
         buf.write_byte(shifted.to_byte())
         buf.write_byte((shifted >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ShrS => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let lane = sign_i16(get_i16_lane(v, i))
         let shifted = (lane >> shift) & 0xFFFF
         buf.write_byte(shifted.to_byte())
         buf.write_byte((shifted >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ShrU => {
       let shift = self.stack.pop_i32() & 15
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let lane = get_i16_lane(v, i)
         let shifted = lane >> shift
         buf.write_byte(shifted.to_byte())
         buf.write_byte((shifted >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8NarrowI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let v = sat_i32_to_i16_s(get_i32_lane(a, i))
         buf.write_byte(v.to_byte())
@@ -534,12 +534,12 @@ fn ExecContext::exec_simd(
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8NarrowI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let v = sat_i32_to_u16(get_i32_lane(a, i))
         buf.write_byte(v.to_byte())
@@ -550,49 +550,49 @@ fn ExecContext::exec_simd(
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtendLowI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let b = sign_i8(v[i].to_int())
         buf.write_byte((b & 0xFF).to_byte())
         buf.write_byte(((b >> 8) & 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtendHighI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 8..<16 {
         let b = sign_i8(v[i].to_int())
         buf.write_byte((b & 0xFF).to_byte())
         buf.write_byte(((b >> 8) & 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtendLowI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         buf.write_byte(v[i])
         buf.write_byte(b'\x00')
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtendHighI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 8..<16 {
         buf.write_byte(v[i])
         buf.write_byte(b'\x00')
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtAddPairwiseI8x16S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let a = sign_i8(v[i * 2].to_int())
         let b = sign_i8(v[i * 2 + 1].to_int())
@@ -600,11 +600,11 @@ fn ExecContext::exec_simd(
         buf.write_byte(sum.to_byte())
         buf.write_byte((sum >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtAddPairwiseI8x16U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let a = v[i * 2].to_int()
         let b = v[i * 2 + 1].to_int()
@@ -612,12 +612,12 @@ fn ExecContext::exec_simd(
         buf.write_byte(sum.to_byte())
         buf.write_byte((sum >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtMulLowI8x16S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let va = sign_i8(a[i].to_int())
         let vb = sign_i8(b[i].to_int())
@@ -625,12 +625,12 @@ fn ExecContext::exec_simd(
         buf.write_byte(prod.to_byte())
         buf.write_byte((prod >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtMulHighI8x16S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 8..<16 {
         let va = sign_i8(a[i].to_int())
         let vb = sign_i8(b[i].to_int())
@@ -638,29 +638,29 @@ fn ExecContext::exec_simd(
         buf.write_byte(prod.to_byte())
         buf.write_byte((prod >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtMulLowI8x16U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let prod = a[i].to_int() * b[i].to_int()
         buf.write_byte(prod.to_byte())
         buf.write_byte((prod >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8ExtMulHighI8x16U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 8..<16 {
         let prod = a[i].to_int() * b[i].to_int()
         buf.write_byte(prod.to_byte())
         buf.write_byte((prod >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // i32x4 comparisons
@@ -722,7 +722,7 @@ fn ExecContext::exec_simd(
           break
         }
       }
-      self.stack.push(@types.Value::I32(if all { 1 } else { 0 }))
+      self.stack.push(I32(if all { 1 } else { 0 }))
     }
     I32x4Bitmask => {
       let v = self.stack.pop_v128()
@@ -732,136 +732,136 @@ fn ExecContext::exec_simd(
           result = result | (1 << i)
         }
       }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I32x4Shl => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i) << shift
         write_i32_lane(buf, lane)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ShrS => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i) >> shift
         write_i32_lane(buf, lane)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ShrU => {
       let shift = self.stack.pop_i32() & 31
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let lane = get_i32_lane(v, i).reinterpret_as_uint() >> shift
         write_i32_lane(buf, lane.reinterpret_as_int())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtendLowI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let h = sign_i16(get_i16_lane(v, i))
         write_i32_lane(buf, h)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtendHighI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 4..<8 {
         let h = sign_i16(get_i16_lane(v, i))
         write_i32_lane(buf, h)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtendLowI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         write_i32_lane(buf, get_i16_lane(v, i))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtendHighI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 4..<8 {
         write_i32_lane(buf, get_i16_lane(v, i))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtAddPairwiseI16x8S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let a = sign_i16(get_i16_lane(v, i * 2))
         let b = sign_i16(get_i16_lane(v, i * 2 + 1))
         write_i32_lane(buf, a + b)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtAddPairwiseI16x8U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let a = get_i16_lane(v, i * 2)
         let b = get_i16_lane(v, i * 2 + 1)
         write_i32_lane(buf, a + b)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtMulLowI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let va = sign_i16(get_i16_lane(a, i))
         let vb = sign_i16(get_i16_lane(b, i))
         write_i32_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtMulHighI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 4..<8 {
         let va = sign_i16(get_i16_lane(a, i))
         let vb = sign_i16(get_i16_lane(b, i))
         write_i32_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtMulLowI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         write_i32_lane(buf, get_i16_lane(a, i) * get_i16_lane(b, i))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4ExtMulHighI16x8U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 4..<8 {
         write_i32_lane(buf, get_i16_lane(a, i) * get_i16_lane(b, i))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4DotI16x8S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let a0 = sign_i16(get_i16_lane(a, i * 2))
         let a1 = sign_i16(get_i16_lane(a, i * 2 + 1))
@@ -869,7 +869,7 @@ fn ExecContext::exec_simd(
         let b1 = sign_i16(get_i16_lane(b, i * 2 + 1))
         write_i32_lane(buf, a0 * b0 + a1 * b1)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // i64x2 comparisons
@@ -895,7 +895,7 @@ fn ExecContext::exec_simd(
           break
         }
       }
-      self.stack.push(@types.Value::I32(if all { 1 } else { 0 }))
+      self.stack.push(I32(if all { 1 } else { 0 }))
     }
     I64x2Bitmask => {
       let v = self.stack.pop_v128()
@@ -905,113 +905,113 @@ fn ExecContext::exec_simd(
           result = result | (1 << i)
         }
       }
-      self.stack.push(@types.Value::I32(result))
+      self.stack.push(I32(result))
     }
     I64x2Shl => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i) << shift
         write_i64_lane(buf, lane)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ShrS => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i) >> shift
         write_i64_lane(buf, lane)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ShrU => {
       let shift = self.stack.pop_i32() & 63
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let lane = get_i64_lane(v, i).reinterpret_as_uint64() >> shift
         write_i64_lane(buf, lane.reinterpret_as_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtendLowI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         write_i64_lane(buf, get_i32_lane(v, i).to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtendHighI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 2..<4 {
         write_i64_lane(buf, get_i32_lane(v, i).to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtendLowI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         write_i64_lane(buf, get_i32_lane(v, i).reinterpret_as_uint().to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtendHighI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 2..<4 {
         write_i64_lane(buf, get_i32_lane(v, i).reinterpret_as_uint().to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtMulLowI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let va = get_i32_lane(a, i).to_int64()
         let vb = get_i32_lane(b, i).to_int64()
         write_i64_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtMulHighI32x4S => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 2..<4 {
         let va = get_i32_lane(a, i).to_int64()
         let vb = get_i32_lane(b, i).to_int64()
         write_i64_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtMulLowI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let va = get_i32_lane(a, i).reinterpret_as_uint().to_int64()
         let vb = get_i32_lane(b, i).reinterpret_as_uint().to_int64()
         write_i64_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2ExtMulHighI32x4U => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 2..<4 {
         let va = get_i32_lane(a, i).reinterpret_as_uint().to_int64()
         let vb = get_i32_lane(b, i).reinterpret_as_uint().to_int64()
         write_i64_lane(buf, va * vb)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // f32x4 comparisons
@@ -1071,45 +1071,45 @@ fn ExecContext::exec_simd(
     // Conversions
     I32x4TruncSatF32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let r = trunc_sat_f32_to_i32_s(f)
         write_i32_lane(buf, r)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4TruncSatF32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let r = trunc_sat_f32_to_u32(f)
         write_i32_lane(buf, r.reinterpret_as_int())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4ConvertI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let n = get_i32_lane(v, i)
         write_f32_lane(buf, Float::from_int(n))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4ConvertI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let n = get_i32_lane(v, i).reinterpret_as_uint().to_int64().to_double()
         write_f32_lane(buf, Float::from_double(n))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4TruncSatF64x2SZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let r = trunc_sat_f64_to_i32_s(f)
@@ -1117,11 +1117,11 @@ fn ExecContext::exec_simd(
       }
       write_i32_lane(buf, 0)
       write_i32_lane(buf, 0)
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4TruncSatF64x2UZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let r = trunc_sat_f64_to_u32(f)
@@ -1129,52 +1129,52 @@ fn ExecContext::exec_simd(
       }
       write_i32_lane(buf, 0)
       write_i32_lane(buf, 0)
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2ConvertLowI32x4S => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let n = get_i32_lane(v, i)
         write_f64_lane(buf, n.to_double())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2ConvertLowI32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let n = get_i32_lane(v, i).reinterpret_as_uint().to_int64().to_double()
         write_f64_lane(buf, n)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4DemoteF64x2Zero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         write_f32_lane(buf, Float::from_double(f))
       }
       write_f32_lane(buf, 0.0)
       write_f32_lane(buf, 0.0)
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2PromoteLowF32x4 => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f32_lane(v, i)
         write_f64_lane(buf, f.to_double())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // Shuffle and Swizzle
     I8x16Shuffle(lanes) => {
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let lane = lanes[i]
         if lane < 16 {
@@ -1183,12 +1183,12 @@ fn ExecContext::exec_simd(
           buf.write_byte(b[lane - 16])
         }
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16Swizzle => {
       let s = self.stack.pop_v128() // selector
       let a = self.stack.pop_v128() // source
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let idx = s[i].to_int()
         if idx < 16 {
@@ -1197,7 +1197,7 @@ fn ExecContext::exec_simd(
           buf.write_byte(b'\x00')
         }
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // Memory operations
@@ -1213,11 +1213,11 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 16L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         buf.write_byte(mem.load_byte(effective_addr.to_int() + i))
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Store(memidx, _align, offset) => {
       let v = self.stack.pop_v128()
@@ -1249,11 +1249,11 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let b = mem.load_byte(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<16 {
         buf.write_byte(b)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load16Splat(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1268,12 +1268,12 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32_16u(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<8 {
         buf.write_byte(v.to_byte())
         buf.write_byte((v >> 8).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load32Splat(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1288,11 +1288,11 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<4 {
         write_i32_lane(buf, v)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load64Splat(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1307,11 +1307,11 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = mem.load_i64(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for _ in 0..<2 {
         write_i64_lane(buf, v)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load32Zero(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1326,12 +1326,12 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = mem.load_i32(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       write_i32_lane(buf, v)
       for _ in 0..<12 {
         buf.write_byte(b'\x00')
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load64Zero(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1346,12 +1346,12 @@ fn ExecContext::exec_simd(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       let v = mem.load_i64(effective_addr.to_int())
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       write_i64_lane(buf, v)
       for _ in 0..<8 {
         buf.write_byte(b'\x00')
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load8x8S(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1365,14 +1365,14 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let b = mem.load_byte(effective_addr.to_int() + i)
         let v = sign_i8(b.to_int())
         buf.write_byte((v & 0xFF).to_byte())
         buf.write_byte(((v >> 8) & 0xFF).to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load8x8U(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1386,13 +1386,13 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let b = mem.load_byte(effective_addr.to_int() + i)
         buf.write_byte(b)
         buf.write_byte(b'\x00')
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load16x4S(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1406,12 +1406,12 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let h = mem.load_i32_16s(effective_addr.to_int() + i * 2)
         write_i32_lane(buf, h)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load16x4U(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1425,12 +1425,12 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let h = mem.load_i32_16u(effective_addr.to_int() + i * 2)
         write_i32_lane(buf, h)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load32x2S(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1444,12 +1444,12 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let w = mem.load_i32(effective_addr.to_int() + i * 4)
         write_i64_lane(buf, w.to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load32x2U(memidx, _align, offset) => {
       let mem_addr = self.instance.mem_addrs[memidx]
@@ -1463,12 +1463,12 @@ fn ExecContext::exec_simd(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let w = mem.load_i32(effective_addr.to_int() + i * 4)
         write_i64_lane(buf, w.reinterpret_as_uint().to_int64())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     V128Load8Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1485,7 +1485,7 @@ fn ExecContext::exec_simd(
       }
       let b = mem.load_byte(effective_addr.to_int())
       let result = v128_replace_i8(v128, lane, b)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     V128Load16Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1502,7 +1502,7 @@ fn ExecContext::exec_simd(
       }
       let h = mem.load_i32_16u(effective_addr.to_int())
       let result = v128_replace_i16(v128, lane, h)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     V128Load32Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1519,7 +1519,7 @@ fn ExecContext::exec_simd(
       }
       let w = mem.load_i32(effective_addr.to_int())
       let result = v128_replace_i32(v128, lane, w)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     V128Load64Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1536,7 +1536,7 @@ fn ExecContext::exec_simd(
       }
       let d = mem.load_i64(effective_addr.to_int())
       let result = v128_replace_i64(v128, lane, d)
-      self.stack.push(@types.Value::V128(result))
+      self.stack.push(V128(result))
     }
     V128Store8Lane(memidx, _align, offset, lane) => {
       let v128 = self.stack.pop_v128()
@@ -1610,7 +1610,7 @@ fn ExecContext::exec_simd(
       // Same as swizzle - out-of-range indices return 0 on ARM (TBL behavior)
       let s = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let idx = s[i].to_int()
         if idx < 16 {
@@ -1619,32 +1619,32 @@ fn ExecContext::exec_simd(
           buf.write_byte(b'\x00')
         }
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedTruncF32x4S => {
       // Use native truncation - same as saturating for most values
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let n = trunc_sat_f32_to_i32_s(f)
         write_i32_lane(buf, n)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedTruncF32x4U => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let f = get_f32_lane(v, i)
         let n = trunc_sat_f32_to_i32_u(f)
         write_i32_lane(buf, n)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedTruncF64x2SZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let n = trunc_sat_f64_to_i32_s(f)
@@ -1653,11 +1653,11 @@ fn ExecContext::exec_simd(
       // Zero-extend: add two zero i32 lanes
       write_i32_lane(buf, 0)
       write_i32_lane(buf, 0)
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedTruncF64x2UZero => {
       let v = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let f = get_f64_lane(v, i)
         let n = trunc_sat_f64_to_i32_u(f)
@@ -1665,14 +1665,14 @@ fn ExecContext::exec_simd(
       }
       write_i32_lane(buf, 0)
       write_i32_lane(buf, 0)
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4RelaxedMadd => {
       // FMA: a * b + c (may or may not be fused)
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let fa = get_f32_lane(a, i)
         let fb = get_f32_lane(b, i)
@@ -1680,14 +1680,14 @@ fn ExecContext::exec_simd(
         let result = fa * fb + fc
         write_f32_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4RelaxedNmadd => {
       // -a * b + c
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let fa = get_f32_lane(a, i)
         let fb = get_f32_lane(b, i)
@@ -1695,13 +1695,13 @@ fn ExecContext::exec_simd(
         let result = -fa * fb + fc
         write_f32_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2RelaxedMadd => {
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let fa = get_f64_lane(a, i)
         let fb = get_f64_lane(b, i)
@@ -1709,13 +1709,13 @@ fn ExecContext::exec_simd(
         let result = fa * fb + fc
         write_f64_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F64x2RelaxedNmadd => {
       let c = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let fa = get_f64_lane(a, i)
         let fb = get_f64_lane(b, i)
@@ -1723,26 +1723,26 @@ fn ExecContext::exec_simd(
         let result = -fa * fb + fc
         write_f64_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I8x16RelaxedLaneselect => {
       // BSL: (a & mask) | (b & ~mask) - same as bitselect
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<16 {
         let result = (a[i].to_int() & mask[i].to_int()) |
           (b[i].to_int() & mask[i].to_int().lnot())
         buf.write_byte(result.to_byte())
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8RelaxedLaneselect => {
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let va = get_i16_lane(a, i)
         let vb = get_i16_lane(b, i)
@@ -1750,13 +1750,13 @@ fn ExecContext::exec_simd(
         let result = (va & vm) | (vb & vm.lnot())
         write_i16_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedLaneselect => {
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let va = get_i32_lane(a, i)
         let vb = get_i32_lane(b, i)
@@ -1764,13 +1764,13 @@ fn ExecContext::exec_simd(
         let result = (va & vm) | (vb & vm.lnot())
         write_i32_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I64x2RelaxedLaneselect => {
       let mask = self.stack.pop_v128()
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<2 {
         let va = get_i64_lane(a, i)
         let vb = get_i64_lane(b, i)
@@ -1778,7 +1778,7 @@ fn ExecContext::exec_simd(
         let result = (va & vm) | (vb & vm.lnot())
         write_i64_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     F32x4RelaxedMin =>
       // Use native min (may differ in NaN handling)
@@ -1790,7 +1790,7 @@ fn ExecContext::exec_simd(
       // Same as q15mulr_sat_s - SQRDMULH on ARM
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let va = sign_extend_i16(get_i16_lane(a, i))
         let vb = sign_extend_i16(get_i16_lane(b, i))
@@ -1798,13 +1798,13 @@ fn ExecContext::exec_simd(
         let result = ((product + 0x4000) >> 15) & 0xFFFF
         write_i16_lane(buf, result)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I16x8RelaxedDotI8x16I7x16S => {
       // Dot product: pairs of i8*i8 summed to i16
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<8 {
         let a0 = sign_extend_i8(a[i * 2].to_int())
         let a1 = sign_extend_i8(a[i * 2 + 1].to_int())
@@ -1813,14 +1813,14 @@ fn ExecContext::exec_simd(
         let sum = a0 * b0 + a1 * b1
         write_i16_lane(buf, sum)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
     I32x4RelaxedDotI8x16I7x16AddS => {
       // Dot product with accumulator: 4 pairs of i8*i8 summed + i32 acc
       let c = self.stack.pop_v128() // accumulator
       let b = self.stack.pop_v128()
       let a = self.stack.pop_v128()
-      let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+      let buf : @buffer.Buffer = Buffer(size_hint=16)
       for i in 0..<4 {
         let mut sum = get_i32_lane(c, i)
         for j in 0..<4 {
@@ -1831,7 +1831,7 @@ fn ExecContext::exec_simd(
         }
         write_i32_lane(buf, sum)
       }
-      self.stack.push(@types.Value::V128(buf.contents()))
+      self.stack.push(V128(buf.contents()))
     }
 
     // All remaining instructions handled

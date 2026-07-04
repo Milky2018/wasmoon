@@ -22,27 +22,6 @@ type AArch64
 pub fn AArch64::new() -> Self
 pub impl TargetISA for AArch64
 
-type AArch64Regs
-pub fn AArch64Regs::d0(Self) -> @abi.PReg
-pub fn AArch64Regs::d1(Self) -> @abi.PReg
-pub fn AArch64Regs::d2(Self) -> @abi.PReg
-pub fn AArch64Regs::d3(Self) -> @abi.PReg
-pub fn AArch64Regs::d4(Self) -> @abi.PReg
-pub fn AArch64Regs::d5(Self) -> @abi.PReg
-pub fn AArch64Regs::d6(Self) -> @abi.PReg
-pub fn AArch64Regs::d7(Self) -> @abi.PReg
-pub fn AArch64Regs::fp(Self) -> @abi.PReg
-pub fn AArch64Regs::lr(Self) -> @abi.PReg
-pub fn AArch64Regs::new() -> Self
-pub fn AArch64Regs::x0(Self) -> @abi.PReg
-pub fn AArch64Regs::x1(Self) -> @abi.PReg
-pub fn AArch64Regs::x2(Self) -> @abi.PReg
-pub fn AArch64Regs::x3(Self) -> @abi.PReg
-pub fn AArch64Regs::x4(Self) -> @abi.PReg
-pub fn AArch64Regs::x5(Self) -> @abi.PReg
-pub fn AArch64Regs::x6(Self) -> @abi.PReg
-pub fn AArch64Regs::x7(Self) -> @abi.PReg
-
 type CodeCache
 pub fn CodeCache::clear(Self) -> Unit
 pub fn CodeCache::contains(Self, Int) -> Bool

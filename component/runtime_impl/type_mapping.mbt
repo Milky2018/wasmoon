@@ -10,7 +10,7 @@ fn resolve_valtype(
         raise InvalidTypeIndex(idx)
       }
       match types[idx] {
-        Some(TypeDef::DefValType(p)) => Prim(p)
+        Some(DefValType(p)) => Prim(p)
         _ => TypeIdx(idx)
       }
     }
@@ -44,13 +44,13 @@ fn stream_payload_info(
           }
         TypeIdx(idx) =>
           match types.get(idx) {
-            Some(Some(TypeDef::Own(resource_tyidx))) =>
+            Some(Some(Own(resource_tyidx))) =>
               match types.get(resource_tyidx) {
-                Some(Some(TypeDef::ResourceType(id, _, _, _))) => (4, Some(id))
+                Some(Some(ResourceType(id, _, _, _))) => (4, Some(id))
                 _ => raise HostCallError("unsupported stream payload type")
               }
-            Some(Some(TypeDef::Borrow(_)))
-            | Some(Some(TypeDef::ResourceType(_, _, _, _))) => (4, None)
+            Some(Some(Borrow(_))) | Some(Some(ResourceType(_, _, _, _))) =>
+              (4, None)
             _ => raise HostCallError("unsupported stream payload type")
           }
       }
@@ -78,35 +78,25 @@ fn core_types_for_valtype(
       return a
     }
     match (a, b) {
-      (@types.ValueType::I64, _)
-      | (_, @types.ValueType::I64)
-      | (@types.ValueType::F64, _)
-      | (_, @types.ValueType::F64) => @types.ValueType::I64
-      (@types.ValueType::F32, @types.ValueType::I32)
-      | (@types.ValueType::I32, @types.ValueType::F32) => @types.ValueType::I32
-      (@types.ValueType::I32, _) | (_, @types.ValueType::I32) =>
-        @types.ValueType::I32
-      _ => @types.ValueType::I64
+      (I64, _) | (_, I64) | (F64, _) | (_, F64) => I64
+      (F32, I32) | (I32, F32) => I32
+      (I32, _) | (_, I32) => I32
+      _ => I64
     }
   }
 
   match resolve_valtype(ty, types) {
     Prim(p) =>
       match p {
-        Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => [@types.ValueType::I32]
-        S64 | U64 => [@types.ValueType::I64]
-        F32 => [@types.ValueType::F32]
-        F64 => [@types.ValueType::F64]
-        String | ErrorContext =>
-          if mem_is_64 {
-            [@types.ValueType::I64, @types.ValueType::I64]
-          } else {
-            [@types.ValueType::I32, @types.ValueType::I32]
-          }
+        Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => [I32]
+        S64 | U64 => [I64]
+        F32 => [F32]
+        F64 => [F64]
+        String | ErrorContext => if mem_is_64 { [I64, I64] } else { [I32, I32] }
       }
     TypeIdx(idx) =>
       match types[idx] {
-        Some(TypeDef::Tuple(tys)) => {
+        Some(Tuple(tys)) => {
           let out : Array[@types.ValueType] = []
           for t in tys {
             for vt in core_types_for_valtype(t, types, mem_is_64) {
@@ -115,7 +105,7 @@ fn core_types_for_valtype(
           }
           out
         }
-        Some(TypeDef::Record(fields)) => {
+        Some(Record(fields)) => {
           let out : Array[@types.ValueType] = []
           for f in fields {
             for vt in core_types_for_valtype(f.ty, types, mem_is_64) {
@@ -124,7 +114,7 @@ fn core_types_for_valtype(
           }
           out
         }
-        Some(TypeDef::Variant(cases)) => {
+        Some(Variant(cases)) => {
           let payloads : Array[Array[@types.ValueType]] = []
           let mut max_len = 0
           for c in cases {
@@ -153,11 +143,10 @@ fn core_types_for_valtype(
               Some(t) => joined.push(t)
             }
           }
-          [@types.ValueType::I32] + joined
+          [I32] + joined
         }
-        Some(TypeDef::Option(v)) =>
-          [@types.ValueType::I32] + core_types_for_valtype(v, types, mem_is_64)
-        Some(TypeDef::Result(ok, err)) => {
+        Some(Option(v)) => [I32] + core_types_for_valtype(v, types, mem_is_64)
+        Some(Result(ok, err)) => {
           let ok_flat = match ok {
             None => []
             Some(v) => core_types_for_valtype(v, types, mem_is_64)
@@ -187,28 +176,15 @@ fn core_types_for_valtype(
               Some(t) => joined.push(t)
             }
           }
-          [@types.ValueType::I32] + joined
+          [I32] + joined
         }
-        Some(TypeDef::Flags(labels)) =>
-          if labels.length() <= 32 {
-            [@types.ValueType::I32]
-          } else {
-            [@types.ValueType::I64]
-          }
-        Some(TypeDef::Enum(_)) => [@types.ValueType::I32]
-        Some(TypeDef::Own(_))
-        | Some(TypeDef::Borrow(_))
-        | Some(TypeDef::ResourceType(_, _, _, _)) => [@types.ValueType::I32]
+        Some(Flags(labels)) => if labels.length() <= 32 { [I32] } else { [I64] }
+        Some(Enum(_)) => [I32]
+        Some(Own(_)) | Some(Borrow(_)) | Some(ResourceType(_, _, _, _)) => [I32]
         // Stream/future values are represented as i32 handles; the i64
         // representation is used by the `canon stream.new` intrinsic only.
-        Some(TypeDef::Stream(_)) | Some(TypeDef::Future(_)) =>
-          [@types.ValueType::I32]
-        Some(TypeDef::List(_)) =>
-          if mem_is_64 {
-            [@types.ValueType::I64, @types.ValueType::I64]
-          } else {
-            [@types.ValueType::I32, @types.ValueType::I32]
-          }
+        Some(Stream(_)) | Some(Future(_)) => [I32]
+        Some(List(_)) => if mem_is_64 { [I64, I64] } else { [I32, I32] }
         _ => raise InvalidTypeDef(idx)
       }
   }
@@ -252,25 +228,25 @@ fn resolve_canon_resources(
   let mut encoding = StringEncoding::Utf8
   for opt in opts {
     match opt {
-      CanonOpt::Memory(idx) => {
+      Memory(idx) => {
         if idx < 0 || idx >= state.core_mems.length() {
           raise InvalidCoreMemoryIndex(idx)
         }
         mem = Some(state.core_mems[idx])
       }
-      CanonOpt::Realloc(idx) => {
+      Realloc(idx) => {
         if idx < 0 || idx >= state.core_funcs.length() {
           raise InvalidCoreFuncIndex(idx)
         }
         realloc = Some(state.core_funcs[idx])
       }
-      CanonOpt::PostReturn(idx) => {
+      PostReturn(idx) => {
         if idx < 0 || idx >= state.core_funcs.length() {
           raise InvalidCoreFuncIndex(idx)
         }
         post_return = Some(state.core_funcs[idx])
       }
-      CanonOpt::StringEncoding(enc) => encoding = enc
+      StringEncoding(enc) => encoding = enc
       _ => ()
     }
   }
@@ -280,7 +256,7 @@ fn resolve_canon_resources(
 ///|
 fn canon_opt_is_async(opts : Array[CanonOpt]) -> Bool {
   for opt in opts {
-    if opt is CanonOpt::Async {
+    if opt is Async {
       return true
     }
   }
@@ -293,7 +269,7 @@ fn resolve_canon_callback(
   state : BuildState,
 ) -> CoreFuncRef? raise ComponentRuntimeError {
   for opt in opts {
-    if opt is CanonOpt::Callback(idx) {
+    if opt is Callback(idx) {
       if idx < 0 || idx >= state.core_funcs.length() {
         raise InvalidCoreFuncIndex(idx)
       }
@@ -309,11 +285,7 @@ fn core_func_type_from_component(
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> @types.FuncType raise ComponentRuntimeError {
-  let ptr_ty = if mem_is_64 {
-    @types.ValueType::I64
-  } else {
-    @types.ValueType::I32
-  }
+  let ptr_ty = if mem_is_64 { @types.ValueType::I64 } else { I32 }
   let flat_params : Array[@types.ValueType] = []
   for p in func_type.params {
     for t in core_types_for_valtype(p.ty, types, mem_is_64) {

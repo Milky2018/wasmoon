@@ -51,8 +51,8 @@ fn reg_home_loc_dense(
   spill_slots : Array[Int],
 ) -> Loc {
   match reg {
-    @abi.Physical(preg) => Reg(preg)
-    @abi.Virtual(vreg) => vreg_home_loc_dense(vreg, assigned_pregs, spill_slots)
+    Physical(preg) => Reg(preg)
+    Virtual(vreg) => vreg_home_loc_dense(vreg, assigned_pregs, spill_slots)
   }
 }
 
@@ -60,7 +60,7 @@ fn reg_home_loc_dense(
 fn fixed_use_preg(inst : @instr.VCodeInst, idx : Int) -> @abi.PReg? {
   if idx < inst.use_constraints.length() {
     match inst.use_constraints[idx] {
-      @abi.FixedReg(preg) => Some(preg)
+      FixedReg(preg) => Some(preg)
       _ => None
     }
   } else {
@@ -72,7 +72,7 @@ fn fixed_use_preg(inst : @instr.VCodeInst, idx : Int) -> @abi.PReg? {
 fn fixed_def_preg(inst : @instr.VCodeInst, idx : Int) -> @abi.PReg? {
   if idx < inst.def_constraints.length() {
     match inst.def_constraints[idx] {
-      @abi.FixedReg(preg) => Some(preg)
+      FixedReg(preg) => Some(preg)
       _ => None
     }
   } else {
@@ -103,7 +103,7 @@ fn add_used_reg(
   preg : @abi.PReg,
 ) -> Unit {
   match preg.class {
-    @abi.Int => mark_used_reg(used_int, preg.index)
+    Int => mark_used_reg(used_int, preg.index)
     _ => mark_used_reg(used_fp, preg.index)
   }
 }
@@ -132,7 +132,7 @@ fn add_used_reg_marks(
   preg : @abi.PReg,
 ) -> Unit {
   match preg.class {
-    @abi.Int => mark_used(used_int_marks, preg.index, epoch)
+    Int => mark_used(used_int_marks, preg.index, epoch)
     _ => mark_used(used_fp_marks, preg.index, epoch)
   }
 }
@@ -149,7 +149,7 @@ fn active_reload_get(
     return None
   }
   if active_reload_epoch[slot] == epoch {
-    Some(@abi.PReg::{ index: active_reload_preg_idx[slot], class: cls })
+    Some({ index: active_reload_preg_idx[slot], class: cls })
   } else {
     None
   }
@@ -203,7 +203,7 @@ fn pick_temp_preg(
     // Spill slots are counted in 8-byte units.
     // Keep the same rules as BundleSet::new_spill_bundle.
     match cls {
-      @abi.Vector => {
+      Vector => {
         if out.num_spillslots % 2 != 0 {
           out.num_spillslots += 1
         }
@@ -220,11 +220,11 @@ fn pick_temp_preg(
   }
 
   match cls {
-    @abi.Int => {
+    Int => {
       for i in 0..<temp_int_pool.length() {
         let idx = temp_int_pool[(cursor + i) % temp_int_pool.length()]
         if !is_used(used_int_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: @abi.Int }
+          let preg = @abi.PReg::{ index: idx, class: Int }
           mark_used(used_int_marks, idx, used_epoch)
           return (preg, cursor + 1, None)
         }
@@ -250,10 +250,10 @@ fn pick_temp_preg(
           continue
         }
         if !is_used(used_int_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: @abi.Int }
+          let preg = @abi.PReg::{ index: idx, class: Int }
           mark_used(used_int_marks, idx, used_epoch)
           if need_preserve {
-            let save_slot = alloc_temp_spill_slot(out, @abi.Int)
+            let save_slot = alloc_temp_spill_slot(out, Int)
             return (preg, cursor + 1, Some(save_slot))
           } else {
             return (preg, cursor + 1, None)
@@ -262,11 +262,11 @@ fn pick_temp_preg(
       }
       abort("no free integer temp register (even after stealing)")
     }
-    @abi.Vector => {
+    Vector => {
       for i in 0..<temp_vec_pool.length() {
         let idx = temp_vec_pool[(cursor + i) % temp_vec_pool.length()]
         if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: @abi.Vector }
+          let preg = @abi.PReg::{ index: idx, class: Vector }
           mark_used(used_fp_marks, idx, used_epoch)
           return (preg, cursor + 1, None)
         }
@@ -282,10 +282,10 @@ fn pick_temp_preg(
       for p in candidates {
         let idx = p.index
         if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: @abi.Vector }
+          let preg = @abi.PReg::{ index: idx, class: Vector }
           mark_used(used_fp_marks, idx, used_epoch)
           if need_preserve {
-            let save_slot = alloc_temp_spill_slot(out, @abi.Vector)
+            let save_slot = alloc_temp_spill_slot(out, Vector)
             return (preg, cursor + 1, Some(save_slot))
           } else {
             return (preg, cursor + 1, None)
@@ -509,12 +509,7 @@ fn build_output(
     }
     let resolved = resolve_parallel_moves(moves)
     for mv in resolved {
-      out.push_edit(
-        block_id,
-        inst_idx,
-        pos,
-        Edit::Move(mv.from, mv.to, mv.class),
-      )
+      out.push_edit(block_id, inst_idx, pos, Move(mv.from, mv.to, mv.class))
     }
   }
 
@@ -581,7 +576,7 @@ fn build_output(
       // do not need per-inst temp-reg selection or used-reg marking.
       let mut needs_spill_temps = false
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) &&
+        if use_reg is Virtual(vreg) &&
           assigned_preg_of(vreg.id, assigned_pregs) is None &&
           fixed_use_preg(inst, i) is None {
           needs_spill_temps = true
@@ -590,7 +585,7 @@ fn build_output(
       }
       if !needs_spill_temps {
         for i, def in inst.defs {
-          if def.reg is @abi.Virtual(vreg) &&
+          if def.reg is Virtual(vreg) &&
             assigned_preg_of(vreg.id, assigned_pregs) is None &&
             fixed_def_preg(inst, i) is None {
             needs_spill_temps = true
@@ -611,8 +606,8 @@ fn build_output(
             Some(preg) => out.push_inst_alloc_loc(Reg(preg))
             None =>
               match def.reg {
-                @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
-                @abi.Virtual(vreg) =>
+                Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
+                Virtual(vreg) =>
                   match assigned_preg_of(vreg.id, assigned_pregs) {
                     Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                     None => abort("missing def allocation for vreg \{vreg.id}")
@@ -625,8 +620,8 @@ fn build_output(
             Some(preg) => out.push_inst_alloc_loc(Reg(preg))
             None =>
               match use_reg {
-                @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
-                @abi.Virtual(vreg) =>
+                Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
+                Virtual(vreg) =>
                   match assigned_preg_of(vreg.id, assigned_pregs) {
                     Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                     None => abort("missing use allocation for vreg \{vreg.id}")
@@ -649,9 +644,9 @@ fn build_output(
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
           None =>
             match def.reg {
-              @abi.Physical(preg) =>
+              Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
-              @abi.Virtual(vreg) =>
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
@@ -668,9 +663,9 @@ fn build_output(
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
           None =>
             match use_reg {
-              @abi.Physical(preg) =>
+              Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
-              @abi.Virtual(vreg) =>
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
@@ -706,7 +701,7 @@ fn build_output(
       spill_tmp_epoch = spill_tmp_epoch + 1
       let spill_epoch = spill_tmp_epoch
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) &&
+        if use_reg is Virtual(vreg) &&
           assigned_preg_of(vreg.id, assigned_pregs) is None {
           let slot = spill_slot_of(vreg.id, spill_slots)
           if slot < 0 {
@@ -743,7 +738,7 @@ fn build_output(
               block_id,
               inst_idx,
               Before,
-              Edit::Move(Spill(slot), Reg(rp), vreg.class),
+              Move(Spill(slot), Reg(rp), vreg.class),
             )
             active_reload_set(
               active_reload_epoch, active_reload_preg_idx, slot, rp, reload_epoch,
@@ -775,20 +770,20 @@ fn build_output(
               block_id,
               inst_idx,
               Before,
-              Edit::Move(Reg(tmp), Spill(s), vreg.class),
+              Move(Reg(tmp), Spill(s), vreg.class),
             )
             out.push_edit(
               block_id,
               inst_idx,
               After,
-              Edit::Move(Spill(s), Reg(tmp), vreg.class),
+              Move(Spill(s), Reg(tmp), vreg.class),
             )
           }
           out.push_edit(
             block_id,
             inst_idx,
             Before,
-            Edit::Move(Spill(slot), Reg(tmp), vreg.class),
+            Move(Spill(slot), Reg(tmp), vreg.class),
           )
           spill_use_tmp_epoch[vreg.id] = spill_epoch
           spill_use_tmp_idx[vreg.id] = tmp.index
@@ -798,7 +793,7 @@ fn build_output(
 
       // Allocate spilled defs to temps and store after the instruction.
       for i, def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) &&
+        if def.reg is Virtual(vreg) &&
           assigned_preg_of(vreg.id, assigned_pregs) is None {
           let slot = spill_slot_of(vreg.id, spill_slots)
           if slot < 0 {
@@ -834,21 +829,21 @@ fn build_output(
               block_id,
               inst_idx,
               Before,
-              Edit::Move(Reg(tmp), Spill(s), vreg.class),
+              Move(Reg(tmp), Spill(s), vreg.class),
             )
           }
           out.push_edit(
             block_id,
             inst_idx,
             After,
-            Edit::Move(Reg(tmp), Spill(slot), vreg.class),
+            Move(Reg(tmp), Spill(slot), vreg.class),
           )
           if save_slot is Some(s) {
             out.push_edit(
               block_id,
               inst_idx,
               After,
-              Edit::Move(Spill(s), Reg(tmp), vreg.class),
+              Move(Spill(s), Reg(tmp), vreg.class),
             )
           }
           // If this slot had an active reload register, it is now stale.
@@ -870,8 +865,8 @@ fn build_output(
           Some(preg) => out.push_inst_alloc_loc(Reg(preg))
           None =>
             match def.reg {
-              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
-              @abi.Virtual(vreg) =>
+              Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {
@@ -898,8 +893,8 @@ fn build_output(
           Some(preg) => out.push_inst_alloc_loc(Reg(preg))
           None =>
             match use_reg {
-              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
-              @abi.Virtual(vreg) =>
+              Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {
@@ -940,7 +935,7 @@ fn build_output(
 
       // Jump args: materialize block params at predecessor end.
       match term {
-        @instr.Jump(target, args) => {
+        Jump(target, args) => {
           let target_block = func.blocks[target]
           let moves : Array[RegMove] = []
           for i, param in target_block.params {
@@ -969,20 +964,20 @@ fn build_output(
           used_epoch = used_epoch + 1
           let epoch = used_epoch
           let use_regs : Array[@abi.Reg] = match term {
-            @instr.Branch(cond, _, _) => [cond]
-            @instr.BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-            @instr.BranchZero(r, _, _, _, _) => [r]
-            @instr.BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-            @instr.Return(values) => values
-            @instr.BrTable(index, _, _) => [index]
-            @instr.Trap(_) => []
-            @instr.Jump(_, _) => []
+            Branch(cond, _, _) => [cond]
+            BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+            BranchZero(r, _, _, _, _) => [r]
+            BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+            Return(values) => values
+            BrTable(index, _, _) => [index]
+            Trap(_) => []
+            Jump(_, _) => []
           }
           for r in use_regs {
             match r {
-              @abi.Physical(preg) =>
+              Physical(preg) =>
                 add_used_reg_marks(used_int_marks, used_fp_marks, epoch, preg)
-              @abi.Virtual(vreg) =>
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) =>
                     add_used_reg_marks(
@@ -995,7 +990,7 @@ fn build_output(
           spill_tmp_epoch = spill_tmp_epoch + 1
           let spill_epoch = spill_tmp_epoch
           for r in use_regs {
-            if r is @abi.Virtual(vreg) &&
+            if r is Virtual(vreg) &&
               assigned_preg_of(vreg.id, assigned_pregs) is None {
               let slot = spill_slot_of(vreg.id, spill_slots)
               if slot < 0 {
@@ -1038,7 +1033,7 @@ fn build_output(
                 block_id,
                 term_inst,
                 Before,
-                Edit::Move(Spill(slot), Reg(tmp), vreg.class),
+                Move(Spill(slot), Reg(tmp), vreg.class),
               )
               spill_use_tmp_epoch[vreg.id] = spill_epoch
               spill_use_tmp_idx[vreg.id] = tmp.index
@@ -1054,8 +1049,8 @@ fn build_output(
           )
           for r in use_regs {
             match r {
-              @abi.Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
-              @abi.Virtual(vreg) =>
+              Physical(preg) => out.push_inst_alloc_loc(Reg(preg))
+              Virtual(vreg) =>
                 match assigned_preg_of(vreg.id, assigned_pregs) {
                   Some(preg) => out.push_inst_alloc_loc(Reg(preg))
                   None => {

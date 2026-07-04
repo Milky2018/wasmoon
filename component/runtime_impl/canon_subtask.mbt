@@ -8,10 +8,7 @@ fn instantiate_canon_subtask_cancel(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -52,7 +49,7 @@ fn instantiate_canon_subtask_cancel(
       return cache_i32(0)
     }
     match args {
-      [@types.Value::I32(id)] => {
+      [I32(id)] => {
         let skey = handle_key(owner_component_id, id)
         match async_state.subtasks.get(skey) {
           None => {
@@ -60,7 +57,7 @@ fn instantiate_canon_subtask_cancel(
             cache_i32(0)
           }
           Some(st) => {
-            if st.phase[0] == SubtaskPhase::Returned {
+            if st.phase[0] == Returned {
               // Already resolved.
               return cache_i32(0)
             }
@@ -68,15 +65,15 @@ fn instantiate_canon_subtask_cancel(
 
             // Mark cancellation request for callback-driven tasks.
             match st.driver {
-              SubtaskDriver::CallbackLifted(t) => t.cancelled[0] = true
+              CallbackLifted(t) => t.cancelled[0] = true
             }
 
             // Best-effort: if the subtask uses the callback-style async ABI,
             // attempt to deliver the cancellation immediately.
             let is_callback = match st.driver {
-              SubtaskDriver::CallbackLifted(t) =>
+              CallbackLifted(t) =>
                 match t.func {
-                  ComponentFunc::Lifted(
+                  Lifted(
                     _,
                     _ft,
                     _res,
@@ -91,7 +88,7 @@ fn instantiate_canon_subtask_cancel(
             }
             if is_callback {
               match st.driver {
-                SubtaskDriver::CallbackLifted(t) => {
+                CallbackLifted(t) => {
                   push_task(async_state, skey, true)
                   let step = step_task_once(
                     t,
@@ -107,8 +104,8 @@ fn instantiate_canon_subtask_cancel(
                   }
                   pop_task(async_state)
                   match step {
-                    TaskStep::Done => {
-                      st.phase[0] = SubtaskPhase::Returned
+                    Done => {
+                      st.phase[0] = Returned
                       async_state.inflight_by_instance.set(st.bp_key, 0)
                       enqueue_waitable_event(async_state, skey, {
                         owner_component_id,
@@ -144,10 +141,7 @@ fn instantiate_canon_subtask_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -184,13 +178,13 @@ fn instantiate_canon_subtask_drop(
     }
 
     match args {
-      [@types.Value::I32(id)] => {
+      [I32(id)] => {
         let skey = handle_key(owner_component_id, id)
         // Ensure this is a known subtask and it has completed.
         let st_opt = async_state.subtasks.get(skey)
         match st_opt {
           Some(st) =>
-            if st.phase[0] != SubtaskPhase::Returned {
+            if st.phase[0] != Returned {
               trap_canon("cannot drop a subtask which has not yet resolved")
               return cache_void()
             } else {

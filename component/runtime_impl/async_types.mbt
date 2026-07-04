@@ -24,7 +24,7 @@ pub(all) enum ComponentValue {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for ComponentValue with output(self, logger) {
+pub impl Show for ComponentValue with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -665,8 +665,8 @@ fn validate_lifted_stream_future(
 ) -> Unit raise ComponentRuntimeError {
   fn as_i32(v : ComponentValue) -> Int raise ComponentRuntimeError {
     match v {
-      ComponentValue::U32(n) => n
-      ComponentValue::S32(n) => n
+      U32(n) => n
+      S32(n) => n
       _ => raise HostCallError("type mismatch")
     }
   }
@@ -675,9 +675,9 @@ fn validate_lifted_stream_future(
     Prim(_) => ()
     TypeIdx(ti) =>
       match types.get(ti) {
-        Some(Some(TypeDef::Tuple(tys))) =>
+        Some(Some(Tuple(tys))) =>
           match v {
-            ComponentValue::Tuple(items) =>
+            Tuple(items) =>
               for i in 0..<tys.length() {
                 if i < items.length() {
                   validate_lifted_stream_future(
@@ -691,9 +691,9 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::Record(fields))) =>
+        Some(Some(Record(fields))) =>
           match v {
-            ComponentValue::Tuple(items) =>
+            Tuple(items) =>
               for i in 0..<fields.length() {
                 if i < items.length() {
                   validate_lifted_stream_future(
@@ -707,9 +707,9 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::List(elem_ty))) =>
+        Some(Some(List(elem_ty))) =>
           match v {
-            ComponentValue::List(items) =>
+            List(items) =>
               for it in items {
                 validate_lifted_stream_future(
                   elem_ty, it, types, async_state, owner_component_id,
@@ -717,9 +717,9 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::Variant(cases))) =>
+        Some(Some(Variant(cases))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag >= 0 && tag < cases.length() {
                 match cases[tag].ty {
                   Some(case_ty) =>
@@ -735,9 +735,9 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::Option(elem_ty))) =>
+        Some(Some(Option(elem_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 1 {
                 match payload {
                   Some(p) =>
@@ -749,9 +749,9 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::Result(ok_ty, err_ty))) =>
+        Some(Some(Result(ok_ty, err_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 0 {
                 match (ok_ty, payload) {
                   (Some(t), Some(p)) =>
@@ -771,7 +771,7 @@ fn validate_lifted_stream_future(
               }
             _ => ()
           }
-        Some(Some(TypeDef::Stream(_))) => {
+        Some(Some(Stream(_))) => {
           let h = as_i32(v)
           let k = handle_key(owner_component_id, h)
           match async_state.stream_table.endpoints.get(k) {
@@ -790,7 +790,7 @@ fn validate_lifted_stream_future(
               }
           }
         }
-        Some(Some(TypeDef::Future(_))) => {
+        Some(Some(Future(_))) => {
           let h = as_i32(v)
           let k = handle_key(owner_component_id, h)
           match async_state.future_endpoints.get(k) {
@@ -978,9 +978,9 @@ fn transfer_stream_future_value(
     Prim(_) => v
     TypeIdx(ti) =>
       match types.get(ti) {
-        Some(Some(TypeDef::Tuple(tys))) =>
+        Some(Some(Tuple(tys))) =>
           match v {
-            ComponentValue::Tuple(items) => {
+            Tuple(items) => {
               let out : Array[ComponentValue] = []
               for i in 0..<items.length() {
                 let ty0 = if i < tys.length() {
@@ -999,13 +999,13 @@ fn transfer_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::Tuple(out)
+              Tuple(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::Record(fields))) =>
+        Some(Some(Record(fields))) =>
           match v {
-            ComponentValue::Tuple(items) => {
+            Tuple(items) => {
               let out : Array[ComponentValue] = []
               for i in 0..<items.length() {
                 let ty0 = if i < fields.length() {
@@ -1024,13 +1024,13 @@ fn transfer_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::Tuple(out)
+              Tuple(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::List(elem_ty))) =>
+        Some(Some(List(elem_ty))) =>
           match v {
-            ComponentValue::List(items) => {
+            List(items) => {
               let out : Array[ComponentValue] = []
               for it in items {
                 out.push(
@@ -1039,17 +1039,17 @@ fn transfer_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::List(out)
+              List(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::Variant(cases))) =>
+        Some(Some(Variant(cases))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag >= 0 && tag < cases.length() {
                 match (cases[tag].ty, payload) {
                   (Some(t), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       tag,
                       Some(
                         transfer_stream_future_value(
@@ -1064,13 +1064,13 @@ fn transfer_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Option(elem_ty))) =>
+        Some(Some(Option(elem_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 1 {
                 match payload {
                   Some(p) =>
-                    ComponentValue::Variant(
+                    Variant(
                       1,
                       Some(
                         transfer_stream_future_value(
@@ -1085,13 +1085,13 @@ fn transfer_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Result(ok_ty, err_ty))) =>
+        Some(Some(Result(ok_ty, err_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 0 {
                 match (ok_ty, payload) {
                   (Some(t), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       0,
                       Some(
                         transfer_stream_future_value(
@@ -1104,7 +1104,7 @@ fn transfer_stream_future_value(
               } else if tag == 1 {
                 match (err_ty, payload) {
                   (Some(t), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       1,
                       Some(
                         transfer_stream_future_value(
@@ -1119,32 +1119,32 @@ fn transfer_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Stream(_))) =>
+        Some(Some(Stream(_))) =>
           match v {
-            ComponentValue::U32(h) =>
-              ComponentValue::U32(
+            U32(h) =>
+              U32(
                 transfer_stream_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
-            ComponentValue::S32(h) =>
-              ComponentValue::S32(
+            S32(h) =>
+              S32(
                 transfer_stream_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
             _ => v
           }
-        Some(Some(TypeDef::Future(_))) =>
+        Some(Some(Future(_))) =>
           match v {
-            ComponentValue::U32(h) =>
-              ComponentValue::U32(
+            U32(h) =>
+              U32(
                 transfer_future_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
-            ComponentValue::S32(h) =>
-              ComponentValue::S32(
+            S32(h) =>
+              S32(
                 transfer_future_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
@@ -1174,9 +1174,9 @@ fn clone_stream_future_value(
     Prim(_) => v
     TypeIdx(ti) =>
       match types.get(ti) {
-        Some(Some(TypeDef::Tuple(tys))) =>
+        Some(Some(Tuple(tys))) =>
           match v {
-            ComponentValue::Tuple(items) => {
+            Tuple(items) => {
               let out : Array[ComponentValue] = []
               for i in 0..<items.length() {
                 let ty0 = if i < tys.length() {
@@ -1195,13 +1195,13 @@ fn clone_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::Tuple(out)
+              Tuple(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::Record(fields))) =>
+        Some(Some(Record(fields))) =>
           match v {
-            ComponentValue::Tuple(items) => {
+            Tuple(items) => {
               let out : Array[ComponentValue] = []
               for i in 0..<items.length() {
                 let ty0 = if i < fields.length() {
@@ -1220,13 +1220,13 @@ fn clone_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::Tuple(out)
+              Tuple(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::List(elem_ty))) =>
+        Some(Some(List(elem_ty))) =>
           match v {
-            ComponentValue::List(items) => {
+            List(items) => {
               let out : Array[ComponentValue] = []
               for it in items {
                 out.push(
@@ -1235,19 +1235,19 @@ fn clone_stream_future_value(
                   ),
                 )
               }
-              ComponentValue::List(out)
+              List(out)
             }
             _ => v
           }
-        Some(Some(TypeDef::Variant(cases))) =>
+        Some(Some(Variant(cases))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag < 0 || tag >= cases.length() {
                 v
               } else {
                 match (cases[tag].ty, payload) {
                   (Some(payload_ty), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       tag,
                       Some(
                         clone_stream_future_value(
@@ -1260,13 +1260,13 @@ fn clone_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Option(elem_ty))) =>
+        Some(Some(Option(elem_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 1 {
                 match payload {
                   Some(p) =>
-                    ComponentValue::Variant(
+                    Variant(
                       1,
                       Some(
                         clone_stream_future_value(
@@ -1281,13 +1281,13 @@ fn clone_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Result(ok_ty, err_ty))) =>
+        Some(Some(Result(ok_ty, err_ty))) =>
           match v {
-            ComponentValue::Variant(tag, payload) =>
+            Variant(tag, payload) =>
               if tag == 0 {
                 match (ok_ty, payload) {
                   (Some(t), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       0,
                       Some(
                         clone_stream_future_value(
@@ -1300,7 +1300,7 @@ fn clone_stream_future_value(
               } else if tag == 1 {
                 match (err_ty, payload) {
                   (Some(t), Some(p)) =>
-                    ComponentValue::Variant(
+                    Variant(
                       1,
                       Some(
                         clone_stream_future_value(
@@ -1315,32 +1315,32 @@ fn clone_stream_future_value(
               }
             _ => v
           }
-        Some(Some(TypeDef::Stream(_))) =>
+        Some(Some(Stream(_))) =>
           match v {
-            ComponentValue::U32(h) =>
-              ComponentValue::U32(
+            U32(h) =>
+              U32(
                 clone_stream_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
-            ComponentValue::S32(h) =>
-              ComponentValue::S32(
+            S32(h) =>
+              S32(
                 clone_stream_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
             _ => v
           }
-        Some(Some(TypeDef::Future(_))) =>
+        Some(Some(Future(_))) =>
           match v {
-            ComponentValue::U32(h) =>
-              ComponentValue::U32(
+            U32(h) =>
+              U32(
                 clone_future_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),
               )
-            ComponentValue::S32(h) =>
-              ComponentValue::S32(
+            S32(h) =>
+              S32(
                 clone_future_readable_handle(
                   async_state, from_component_id, to_component_id, h,
                 ),

@@ -81,43 +81,43 @@ pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch26)
+      mc.add_fixup(target_block, Branch26)
     }
     BCond(_, target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch19)
+      mc.add_fixup(target_block, Branch19)
     }
     Cbz(_, target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch19)
+      mc.add_fixup(target_block, Branch19)
     }
     Cbnz(_, target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch19)
+      mc.add_fixup(target_block, Branch19)
     }
     Cbz32(_, target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch19)
+      mc.add_fixup(target_block, Branch19)
     }
     Cbnz32(_, target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch19)
+      mc.add_fixup(target_block, Branch19)
     }
     Bl(target_block) => {
       mc.annotate(self.annotate())
       let (b0, b1, b2, b3) = self.instr_bytes()
       mc.emit_inst(b0, b1, b2, b3)
-      mc.add_fixup(target_block, FixupKind::Branch26)
+      mc.add_fixup(target_block, Branch26)
     }
     _ => {
       mc.annotate(self.annotate())

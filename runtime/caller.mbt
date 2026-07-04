@@ -41,7 +41,7 @@ pub fn Caller::get_exported_memory(
   name : String,
 ) -> Memory? raise RuntimeError {
   match self.find_export_desc(name) {
-    Some(@types.ExportDesc::Memory(mem_idx)) => {
+    Some(Memory(mem_idx)) => {
       if mem_idx < 0 || mem_idx >= self.instance.mem_addrs.length() {
         return None
       }
@@ -56,7 +56,7 @@ pub fn Caller::get_exported_memory(
 /// Look up an exported function address from the caller instance.
 pub fn Caller::get_exported_func_addr(self : Caller, name : String) -> Int? {
   match self.find_export_desc(name) {
-    Some(@types.ExportDesc::Func(func_idx)) => {
+    Some(Func(func_idx)) => {
       if func_idx < 0 || func_idx >= self.instance.func_addrs.length() {
         return None
       }

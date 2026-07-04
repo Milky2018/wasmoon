@@ -189,7 +189,7 @@ fn convert_jit_results(
         let low = results[slot_idx]
         let high = results[slot_idx + 1]
         slot_idx += 2
-        let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+        let buf : @buffer.Buffer = Buffer(size_hint=16)
         for i in 0..<8 {
           buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
         }
@@ -803,7 +803,7 @@ fn build_run_compile_mask(
     )
   }
   for elem in mod_.elems {
-    if elem.mode is @types.ElemMode::Active(_, offset_expr) {
+    if elem.mode is Active(_, offset_expr) {
       collect_wast_reachable_from_instrs(
         offset_expr, num_imports, compile_mask, pending_locals,
       )
@@ -870,8 +870,8 @@ fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
 ///|
 fn run_jit_cache_arch_tag() -> String {
   match @isa.ISA::current() {
-    @isa.AArch64 => "aarch64"
-    @isa.AMD64 => "x86_64"
+    AArch64 => "aarch64"
+    AMD64 => "x86_64"
   }
 }
 
@@ -1341,13 +1341,13 @@ fn run_with_jit(
                 None => ()
               }
               let results = jm.call_with_context(f, i64_args) catch {
-                @jit.JITExit(code) => {
+                JITExit(code) => {
                   @jit.gc_teardown(jm.get_context_ptr())
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
                   native_exit(code)
                   panic()
                 }
-                @jit.JITTrap(msg) => {
+                JITTrap(msg) => {
                   @jit.gc_teardown(jm.get_context_ptr())
                   // Sync globals back to interpreter store even on trap.
                   @wast.sync_jit_globals_to_store(jit_ctx, store)
@@ -1461,7 +1461,7 @@ pub fn compile_module(
   @validator.validate_module(wasm_module) catch {
     e => {
       let message = match e {
-        @validator.WithContext(ctx) => ctx.format()
+        WithContext(ctx) => ctx.format()
         _ => @validator.format_validation_error(e)
       }
       emit_compile_progress(
@@ -1521,8 +1521,8 @@ fn compile_module_to_jit(
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let isa = @isa.ISA::current()
   let target_arch : @cwasm.TargetArch = match isa {
-    @isa.AArch64 => @cwasm.AArch64
-    @isa.AMD64 => @cwasm.X86_64
+    AArch64 => AArch64
+    AMD64 => X86_64
   }
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @jit.JITDebugDB? = if dump_on_trap {
@@ -1598,8 +1598,7 @@ fn compile_module_to_jit(
     match imp.desc {
       Func(type_idx) => import_func_type_indices.push(type_idx)
       Global(global_type) => global_types.push(global_type)
-      @types.ImportDesc::Tag(tag_type_idx) =>
-        all_tags.push({ type_idx: tag_type_idx })
+      Tag(tag_type_idx) => all_tags.push({ type_idx: tag_type_idx })
       _ => ()
     }
   }
@@ -1932,19 +1931,19 @@ fn parse_func_args(
             u.reinterpret_as_int64()
           }
         }
-        @types.Value::I64(n)
+        I64(n)
       }
       F32 => {
         let n = @string.parse_double(arg) catch {
           _ => raise ArgTypeError(F32, arg)
         }
-        @types.Value::F32(Float::from_double(n))
+        F32(Float::from_double(n))
       }
       F64 => {
         let n = @string.parse_double(arg) catch {
           _ => raise ArgTypeError(F64, arg)
         }
-        @types.Value::F64(n)
+        F64(n)
       }
       t => raise UnsupportedArgTypeError(t, arg)
     }
@@ -1982,7 +1981,7 @@ fn check_jit_import_support(
               continue
             }
           }
-          if !(inst is @runtime.FuncInst::HostFunc(_)) {
+          if !(inst is HostFunc(_)) {
             unsupported.push("\{imp.mod_name}.\{imp.name}")
           }
         }

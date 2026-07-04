@@ -147,7 +147,7 @@ fn run_jit_with_backtrace(
 
   // Call and handle trap
   let results = jm.call_with_context(f, i64_args) catch {
-    @jit.JITExit(code) => {
+    JITExit(code) => {
       let frames = dwarf.capture_backtrace()
       let trap_details = @jit.get_last_trap_details()
       return Err({
@@ -156,7 +156,7 @@ fn run_jit_with_backtrace(
         trap_details,
       })
     }
-    @jit.JITTrap(msg) => {
+    JITTrap(msg) => {
       let frames = dwarf.capture_backtrace()
       let trap_details = @jit.get_last_trap_details()
       return Err({ trap_msg: msg, backtrace: frames, trap_details })
@@ -226,7 +226,7 @@ fn extract_trap_type(msg : String) -> String {
 /// Helper to find function index by name
 fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
   for exp in mod_.exports {
-    if exp.name == name && exp.desc is @types.ExportDesc::Func(idx) {
+    if exp.name == name && exp.desc is Func(idx) {
       return Some(idx)
     }
   }
@@ -239,7 +239,7 @@ fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
 
 ///|
 test "backtrace: simple unreachable" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -262,7 +262,7 @@ test "backtrace: simple unreachable" {
 
 ///|
 test "backtrace: unreachable after some ops" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -289,7 +289,7 @@ test "backtrace: unreachable after some ops" {
 
 ///|
 test "backtrace: two-level call - callee traps" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -315,7 +315,7 @@ test "backtrace: two-level call - callee traps" {
 
 ///|
 test "backtrace: three-level call - deepest traps" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -344,7 +344,7 @@ test "backtrace: three-level call - deepest traps" {
 
 ///|
 test "backtrace: recursive call" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -375,7 +375,7 @@ test "backtrace: recursive call" {
 
 ///|
 test "backtrace: call_indirect trap" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -403,7 +403,7 @@ test "backtrace: call_indirect trap" {
 
 ///|
 test "backtrace: out of bounds memory access" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -428,7 +428,7 @@ test "backtrace: out of bounds memory access" {
 
 ///|
 test "backtrace: divide by zero" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -451,7 +451,7 @@ test "backtrace: divide by zero" {
 
 ///|
 test "backtrace: call chain with args" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -481,7 +481,7 @@ test "backtrace: call chain with args" {
 
 ///|
 test "backtrace: trap in conditional branch" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =

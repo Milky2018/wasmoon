@@ -4,9 +4,9 @@
 test "lower simple add function" {
   // Build IR function: fn add(a: i32, b: i32) -> i32 { a + b }
   let builder = @ir.IRBuilder::new("add")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let result = builder.iadd(a, b)
@@ -31,9 +31,9 @@ test "lower simple add function" {
 ///|
 test "lower integer arithmetic" {
   let builder = @ir.IRBuilder::new("arith")
-  let a = builder.add_param(@ir.Type::I64)
-  let b = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let a = builder.add_param(I64)
+  let b = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.iadd(a, b)
@@ -59,9 +59,9 @@ test "lower integer arithmetic" {
 ///|
 test "lower add(sub(x, c), c) cancelation keeps source value" {
   let builder = @ir.IRBuilder::new("add_sub_cancel")
-  let x = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c16 = builder.iconst_i32(16)
@@ -89,11 +89,11 @@ test "lower madd does not skip mul accumulator" {
   // only one side can be fused into a single MADD. The other multiply must be
   // materialized and used as the accumulator.
   let builder = @ir.IRBuilder::new("mul_add")
-  let a = builder.add_param(@ir.Type::I64)
-  let b = builder.add_param(@ir.Type::I64)
-  let c = builder.add_param(@ir.Type::I64)
-  let d = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let a = builder.add_param(I64)
+  let b = builder.add_param(I64)
+  let c = builder.add_param(I64)
+  let d = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let p1 = builder.imul(a, b)
@@ -119,7 +119,7 @@ test "lower madd does not skip mul accumulator" {
 ///|
 test "lower constants" {
   let builder = @ir.IRBuilder::new("const_test")
-  builder.add_result(@ir.Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -145,9 +145,9 @@ test "lower constants" {
 ///|
 test "lower float operations" {
   let builder = @ir.IRBuilder::new("float_add")
-  let a = builder.add_param(@ir.Type::F32)
-  let b = builder.add_param(@ir.Type::F32)
-  builder.add_result(@ir.Type::F32)
+  let a = builder.add_param(F32)
+  let b = builder.add_param(F32)
+  builder.add_result(F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(a, b)
@@ -172,9 +172,9 @@ test "lower float operations" {
 ///|
 test "lower comparison" {
   let builder = @ir.IRBuilder::new("cmp_test")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let cmp_result = builder.icmp_sgt(a, b)
@@ -197,9 +197,9 @@ test "lower comparison" {
 ///|
 test "lower conditional branch" {
   let builder = @ir.IRBuilder::new("max")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -239,16 +239,16 @@ test "lower memory operations" {
   // Note: Uses load_ptr/store_ptr directly (raw pointer ops without bounds checking)
   // Bounds checking is now done at IR translation time via FuncEnvironment
   let builder = @ir.IRBuilder::new("load_store")
-  let addr = builder.add_param(@ir.Type::I64) // ptr is i64
-  builder.add_result(@ir.Type::I32)
+  let addr = builder.add_param(I64) // ptr is i64
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let offset0 = builder.iconst_i64(0)
-  let loaded = builder.load_ptr(@ir.Type::I32, addr, offset0)
+  let loaded = builder.load_ptr(I32, addr, offset0)
   let one = builder.iconst_i32(1)
   let sum = builder.iadd(loaded, one)
   let offset4 = builder.iconst_i64(4)
-  builder.store_ptr(@ir.Type::I32, addr, sum, offset4)
+  builder.store_ptr(I32, addr, sum, offset4)
   builder.return_([sum])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -269,22 +269,22 @@ test "lower memory operations" {
 
 ///|
 test "amd64 lower load/store regoff with uxtw index" {
-  if !(@isa.ISA::current() is @isa.AMD64) {
+  if !(@isa.ISA::current() is AMD64) {
     return
   }
   let builder = @ir.IRBuilder::new("amd64_load_store_regoff_uxtw")
-  let base = builder.add_param(@ir.Type::I64)
-  let idx = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let base = builder.add_param(I64)
+  let idx = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let idx64 = builder.uextend(I64, idx)
   let sh3 = builder.iconst_i64(3L)
   let scaled = builder.ishl(idx64, sh3)
   let addr = builder.iadd(base, scaled)
   let offset0 = builder.iconst_i64(0L)
-  let loaded = builder.load_ptr(@ir.Type::I64, addr, offset0)
-  builder.store_ptr(@ir.Type::I64, addr, loaded, offset0)
+  let loaded = builder.load_ptr(I64, addr, offset0)
+  builder.store_ptr(I64, addr, loaded, offset0)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
   inspect(output.contains("load_ptr_regoff.i64 (uxtw,3)"), content="true")
@@ -293,19 +293,19 @@ test "amd64 lower load/store regoff with uxtw index" {
 
 ///|
 test "amd64 lower regoff with explicit offset" {
-  if !(@isa.ISA::current() is @isa.AMD64) {
+  if !(@isa.ISA::current() is AMD64) {
     return
   }
   let builder = @ir.IRBuilder::new("amd64_regoff_explicit_offset")
-  let base = builder.add_param(@ir.Type::I64)
-  let idx = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let base = builder.add_param(I64)
+  let idx = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iadd(base, idx)
   let off = builder.iconst_i64(8L)
-  let loaded = builder.load_ptr(@ir.Type::I64, addr, off)
-  builder.store_ptr(@ir.Type::I64, addr, loaded, off)
+  let loaded = builder.load_ptr(I64, addr, off)
+  builder.store_ptr(I64, addr, loaded, off)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
   inspect(output.contains("load_ptr_regoff.i64 (none,0) +8"), content="true")
@@ -315,19 +315,19 @@ test "amd64 lower regoff with explicit offset" {
 
 ///|
 test "amd64 lower narrow regoff with explicit offset" {
-  if !(@isa.ISA::current() is @isa.AMD64) {
+  if !(@isa.ISA::current() is AMD64) {
     return
   }
   let builder = @ir.IRBuilder::new("amd64_narrow_regoff_explicit_offset")
-  let base = builder.add_param(@ir.Type::I64)
-  let idx = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let base = builder.add_param(I64)
+  let idx = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let idx64 = builder.uextend(I64, idx)
   let addr = builder.iadd(base, idx64)
   let off = builder.iconst_i64(8L)
-  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off)
+  let loaded = builder.load_ptr_narrow(I64, 8, false, addr, off)
   builder.store_ptr_narrow(8, addr, loaded, off)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
@@ -338,21 +338,21 @@ test "amd64 lower narrow regoff with explicit offset" {
 
 ///|
 test "amd64 lower regoff folds base displacement" {
-  if !(@isa.ISA::current() is @isa.AMD64) {
+  if !(@isa.ISA::current() is AMD64) {
     return
   }
   let builder = @ir.IRBuilder::new("amd64_regoff_base_displacement")
-  let base = builder.add_param(@ir.Type::I64)
-  let idx = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let base = builder.add_param(I64)
+  let idx = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let idx64 = builder.uextend(@ir.Type::I64, idx)
+  let idx64 = builder.uextend(I64, idx)
   let addr0 = builder.iadd(base, idx64)
   let one = builder.iconst_i64(1L)
   let addr = builder.iadd(addr0, one)
   let off0 = builder.iconst_i64(0L)
-  let loaded = builder.load_ptr_narrow(@ir.Type::I64, 8, false, addr, off0)
+  let loaded = builder.load_ptr_narrow(I64, 8, false, addr, off0)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
   let has_uxtw = output.contains("load_ptr8_u_regoff (uxtw,0) +1")
@@ -363,12 +363,12 @@ test "amd64 lower regoff folds base displacement" {
 
 ///|
 test "amd64 lower logical const ops to immediate forms" {
-  if !(@isa.ISA::current() is @isa.AMD64) {
+  if !(@isa.ISA::current() is AMD64) {
     return
   }
   let builder = @ir.IRBuilder::new("amd64_logical_imm")
-  let x = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let and_mask = builder.iconst_i64(0xDFFFFFFFFFFFFFFFL)
@@ -387,21 +387,21 @@ test "amd64 lower logical const ops to immediate forms" {
 
 ///|
 test "aarch64 keeps i32 add before uxtw regoff" {
-  if !(@isa.ISA::current() is @isa.AArch64) {
+  if !(@isa.ISA::current() is AArch64) {
     return
   }
   let builder = @ir.IRBuilder::new("aarch64_uxtw_wrap_safety")
-  let base = builder.add_param(@ir.Type::I64)
-  let idx = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let base = builder.add_param(I64)
+  let idx = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let delta = builder.iconst_i32(1056064)
   let idx_plus = builder.iadd(idx, delta)
-  let idx64 = builder.uextend(@ir.Type::I64, idx_plus)
+  let idx64 = builder.uextend(I64, idx_plus)
   let addr = builder.iadd(base, idx64)
   let off = builder.iconst_i64(0L)
-  let loaded = builder.load_ptr(@ir.Type::I32, addr, off)
+  let loaded = builder.load_ptr(I32, addr, off)
   builder.return_([loaded])
   let output = lower_function(builder.get_function()).print()
   inspect(output.contains("load_ptr_regoff.i32 (uxtw,0)"), content="true")
@@ -411,9 +411,9 @@ test "aarch64 keeps i32 add before uxtw regoff" {
 ///|
 test "lower bitwise operations" {
   let builder = @ir.IRBuilder::new("bitwise")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let and_res = builder.band(a, b)
@@ -440,9 +440,9 @@ test "lower bitwise operations" {
 ///|
 test "lower shift operations" {
   let builder = @ir.IRBuilder::new("shifts")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_res = builder.ishl(a, b)
@@ -468,13 +468,13 @@ test "lower shift operations" {
 
 ///|
 test "lower division operations" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let builder = @ir.IRBuilder::new("division")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sdiv_res = builder.sdiv(a, b)
@@ -504,12 +504,12 @@ test "lower division operations" {
 ///|
 test "lower float comparison" {
   let builder = @ir.IRBuilder::new("fcmp_test")
-  let a = builder.add_param(@ir.Type::F32)
-  let b = builder.add_param(@ir.Type::F32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(F32)
+  let b = builder.add_param(F32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let cmp_result = builder.fcmp(@ir.FloatCC::Lt, a, b)
+  let cmp_result = builder.fcmp(Lt, a, b)
   builder.return_([cmp_result])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -526,9 +526,9 @@ test "lower float comparison" {
 ///|
 test "lower f64 operations" {
   let builder = @ir.IRBuilder::new("f64_add")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(F64)
+  let b = builder.add_param(F64)
+  builder.add_result(F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(a, b)
@@ -553,12 +553,12 @@ test "lower f64 operations" {
 ///|
 test "lower f64 comparison" {
   let builder = @ir.IRBuilder::new("f64_cmp_test")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(F64)
+  let b = builder.add_param(F64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let cmp_result = builder.fcmp(@ir.FloatCC::Gt, a, b)
+  let cmp_result = builder.fcmp(Gt, a, b)
   builder.return_([cmp_result])
   let vcode_func = lower_function(builder.get_function())
   let output = vcode_func.print()
@@ -575,9 +575,9 @@ test "lower f64 comparison" {
 ///|
 test "lower f64 division and subtraction" {
   let builder = @ir.IRBuilder::new("f64_ops")
-  let a = builder.add_param(@ir.Type::F64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(F64)
+  let b = builder.add_param(F64)
+  builder.add_result(F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let div = builder.fdiv(a, b)
@@ -604,9 +604,9 @@ test "lower mixed int and f64" {
   // fn mixed(a: i64, b: f64) -> f64
   // Converts int to float and adds
   let builder = @ir.IRBuilder::new("mixed_int_f64")
-  let a = builder.add_param(@ir.Type::I64)
-  let b = builder.add_param(@ir.Type::F64)
-  builder.add_result(@ir.Type::F64)
+  let a = builder.add_param(I64)
+  let b = builder.add_param(F64)
+  builder.add_result(F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // Just return b doubled (can't convert int to float in current IR)
@@ -631,7 +631,7 @@ test "lower mixed int and f64" {
 ///|
 test "lower unconditional jump" {
   let builder = @ir.IRBuilder::new("jump_test")
-  builder.add_result(@ir.Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let target = builder.create_block()
   builder.switch_to_block(entry)
@@ -659,7 +659,7 @@ test "lower unconditional jump" {
 ///|
 test "lower trap" {
   let builder = @ir.IRBuilder::new("trap_test")
-  builder.add_result(@ir.Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   builder.trap("unreachable")
@@ -677,7 +677,7 @@ test "lower trap" {
 ///|
 test "lower double constant" {
   let builder = @ir.IRBuilder::new("fconst_test")
-  builder.add_result(@ir.Type::F64)
+  builder.add_result(F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c = builder.fconst_f64(3.14)
@@ -706,10 +706,10 @@ test "lower double constant" {
 test "lower add(x, mul(y, z)) to madd" {
   // Pattern: add(x, mul(y, z)) -> MADD: x + y * z
   let builder = @ir.IRBuilder::new("madd_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  let z = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  let z = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_yz = builder.imul(y, z)
@@ -735,10 +735,10 @@ test "lower add(x, mul(y, z)) to madd" {
 test "lower sub(x, mul(y, z)) to msub" {
   // Pattern: sub(x, mul(y, z)) -> MSUB: x - y * z
   let builder = @ir.IRBuilder::new("msub_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  let z = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  let z = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_yz = builder.imul(y, z)
@@ -764,9 +764,9 @@ test "lower sub(x, mul(y, z)) to msub" {
 test "lower sub(0, mul(x, y)) to mneg" {
   // Pattern: sub(0, mul(x, y)) -> MNEG: -(x * y)
   let builder = @ir.IRBuilder::new("mneg_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i64(0L)
@@ -793,10 +793,10 @@ test "lower sub(0, mul(x, y)) to mneg" {
 test "lower i32 add(x, mul(y, z)) to madd32" {
   // Cranelift lower.isle iadd_imul_* applies to fits_in_64, including i32.
   let builder = @ir.IRBuilder::new("madd32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  let z = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  let z = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_yz = builder.imul(y, z)
@@ -819,10 +819,10 @@ test "lower i32 add(x, mul(y, z)) to madd32" {
 ///|
 test "lower i32 sub(x, mul(y, z)) to msub32" {
   let builder = @ir.IRBuilder::new("msub32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  let z = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  let z = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_yz = builder.imul(y, z)
@@ -845,9 +845,9 @@ test "lower i32 sub(x, mul(y, z)) to msub32" {
 ///|
 test "lower i32 sub(0, mul(x, y)) to mneg32" {
   let builder = @ir.IRBuilder::new("mneg32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -872,9 +872,9 @@ test "lower i32 sub(0, mul(x, y)) to mneg32" {
 test "lower add(x, shl(y, n)) to add_shifted" {
   // Pattern: add(x, shl(y, n)) -> AddShifted: x + (y << n)
   let builder = @ir.IRBuilder::new("add_shifted_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(3L)
@@ -901,9 +901,9 @@ test "lower add(x, shl(y, n)) to add_shifted" {
 test "lower i32 add(x, shl(y, n)) to add_shifted32" {
   // Cranelift-aligned: i32 shifted-add should use 32-bit shifted-register form.
   let builder = @ir.IRBuilder::new("add_shifted32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i32(35) // masked to 3 by Wasm semantics
@@ -928,12 +928,12 @@ test "lower i32 add(x, shl(y, n)) to add_shifted32" {
 ///|
 test "lower i64 add(x, uextend(y)) to add.uxtw" {
   let builder = @ir.IRBuilder::new("add_uxtw_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let y64 = builder.uextend(@ir.Type::I64, y)
+  let y64 = builder.uextend(I64, y)
   let result = builder.iadd(x, y64)
   builder.return_([result])
   let vcode_func = lower_function(builder.get_function())
@@ -953,12 +953,12 @@ test "lower i64 add(x, uextend(y)) to add.uxtw" {
 ///|
 test "lower i64 add(sextend(y), x) to add.sxtw" {
   let builder = @ir.IRBuilder::new("add_sxtw_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let y64 = builder.sextend(@ir.Type::I64, y)
+  let y64 = builder.sextend(I64, y)
   let result = builder.iadd(y64, x)
   builder.return_([result])
   let vcode_func = lower_function(builder.get_function())
@@ -978,12 +978,12 @@ test "lower i64 add(sextend(y), x) to add.sxtw" {
 ///|
 test "lower i64 sub(x, uextend(y)) to sub.uxtw" {
   let builder = @ir.IRBuilder::new("sub_uxtw_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let y64 = builder.uextend(@ir.Type::I64, y)
+  let y64 = builder.uextend(I64, y)
   let result = builder.isub(x, y64)
   builder.return_([result])
   let vcode_func = lower_function(builder.get_function())
@@ -1003,12 +1003,12 @@ test "lower i64 sub(x, uextend(y)) to sub.uxtw" {
 ///|
 test "lower i64 sub(x, sextend(y)) to sub.sxtw" {
   let builder = @ir.IRBuilder::new("sub_sxtw_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let y64 = builder.sextend(@ir.Type::I64, y)
+  let y64 = builder.sextend(I64, y)
   let result = builder.isub(x, y64)
   builder.return_([result])
   let vcode_func = lower_function(builder.get_function())
@@ -1027,16 +1027,16 @@ test "lower i64 sub(x, sextend(y)) to sub.sxtw" {
 
 ///|
 test "lower i64 sub(0, uextend(y)) avoids sub.uxtw on aarch64" {
-  if !(@isa.ISA::current() is @isa.AArch64) {
+  if !(@isa.ISA::current() is AArch64) {
     return
   }
   let builder = @ir.IRBuilder::new("sub_zero_uxtw_test")
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I64)
+  let y = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let zero = builder.iconst(@ir.Type::I64, 0L)
-  let y64 = builder.uextend(@ir.Type::I64, y)
+  let zero = builder.iconst(I64, 0L)
+  let y64 = builder.uextend(I64, y)
   let result = builder.isub(zero, y64)
   builder.return_([result])
   let vcode_func = lower_function(builder.get_function())
@@ -1058,8 +1058,8 @@ test "lower i64 sub(0, uextend(y)) avoids sub.uxtw on aarch64" {
 test "lower i32 add(x, -imm) to sub32 #imm" {
   // Cranelift lower.isle iadd_imm12_neg_{right,left}.
   let builder = @ir.IRBuilder::new("add_neg_imm_test")
-  let x = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let neg_imm = builder.iconst_i32(-12)
@@ -1083,8 +1083,8 @@ test "lower i32 add(x, -imm) to sub32 #imm" {
 test "lower i32 sub(x, -imm) to add32 #imm" {
   // Cranelift lower.isle isub_imm12_neg.
   let builder = @ir.IRBuilder::new("sub_neg_imm_test")
-  let x = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let neg_imm = builder.iconst_i32(-12)
@@ -1106,44 +1106,32 @@ test "lower i32 sub(x, -imm) to add32 #imm" {
 
 ///|
 test "isa add/sub immediate encoding helpers" {
-  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 0L), content="true")
-  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4095L), content="true")
-  inspect(is_valid_add_sub_imm_for_isa(@isa.AArch64, 4097L), content="false")
-  inspect(
-    is_valid_add_sub_imm_for_isa(@isa.AMD64, -2147483648L),
-    content="true",
-  )
-  inspect(is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483647L), content="true")
-  inspect(
-    is_valid_add_sub_imm_for_isa(@isa.AMD64, 2147483648L),
-    content="false",
-  )
+  inspect(is_valid_add_sub_imm_for_isa(AArch64, 0L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(AArch64, 4095L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(AArch64, 4097L), content="false")
+  inspect(is_valid_add_sub_imm_for_isa(AMD64, -2147483648L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(AMD64, 2147483647L), content="true")
+  inspect(is_valid_add_sub_imm_for_isa(AMD64, 2147483648L), content="false")
 }
 
 ///|
 test "isa load/store offset encoding helpers" {
+  inspect(is_valid_load_store_offset_for_isa(AArch64, 0L, 8), content="true")
   inspect(
-    is_valid_load_store_offset_for_isa(@isa.AArch64, 0L, 8),
+    is_valid_load_store_offset_for_isa(AArch64, 4095L * 8L, 8),
     content="true",
   )
   inspect(
-    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L, 8),
-    content="true",
-  )
-  inspect(
-    is_valid_load_store_offset_for_isa(@isa.AArch64, 4095L * 8L + 8L, 8),
+    is_valid_load_store_offset_for_isa(AArch64, 4095L * 8L + 8L, 8),
     content="false",
   )
+  inspect(is_valid_load_store_offset_for_isa(AMD64, -1L, 8), content="true")
   inspect(
-    is_valid_load_store_offset_for_isa(@isa.AMD64, -1L, 8),
+    is_valid_load_store_offset_for_isa(AMD64, 2147483647L, 1),
     content="true",
   )
   inspect(
-    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483647L, 1),
-    content="true",
-  )
-  inspect(
-    is_valid_load_store_offset_for_isa(@isa.AMD64, 2147483648L, 1),
+    is_valid_load_store_offset_for_isa(AMD64, 2147483648L, 1),
     content="false",
   )
 }
@@ -1152,9 +1140,9 @@ test "isa load/store offset encoding helpers" {
 test "lower sub(x, shl(y, n)) to sub_shifted" {
   // Pattern: sub(x, shl(y, n)) -> SubShifted: x - (y << n)
   let builder = @ir.IRBuilder::new("sub_shifted_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(2L)
@@ -1180,9 +1168,9 @@ test "lower sub(x, shl(y, n)) to sub_shifted" {
 ///|
 test "lower i32 xor(x, shl(y, n)) to xor_shifted32" {
   let builder = @ir.IRBuilder::new("xor_shifted32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i32(33) // masked to 1
@@ -1208,9 +1196,9 @@ test "lower i32 xor(x, shl(y, n)) to xor_shifted32" {
 test "lower and(x, shl(y, n)) to and_shifted" {
   // Pattern: and(x, shl(y, n)) -> AndShifted: x & (y << n)
   let builder = @ir.IRBuilder::new("and_shifted_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(4L)
@@ -1237,9 +1225,9 @@ test "lower and(x, shl(y, n)) to and_shifted" {
 test "lower or(x, shl(y, n)) to or_shifted" {
   // Pattern: or(x, shl(y, n)) -> OrShifted: x | (y << n)
   let builder = @ir.IRBuilder::new("or_shifted_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(5L)
@@ -1265,8 +1253,8 @@ test "lower or(x, shl(y, n)) to or_shifted" {
 ///|
 test "lower rotate idiom (i32) to rotr32_imm" {
   let builder = @ir.IRBuilder::new("or_rotate_i32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_amt = builder.iconst_i32(7)
@@ -1292,8 +1280,8 @@ test "lower rotate idiom (i32) to rotr32_imm" {
 ///|
 test "lower rotate idiom (i64) to rotr_imm" {
   let builder = @ir.IRBuilder::new("or_rotate_i64_test")
-  let x = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_amt = builder.iconst_i64(13L)
@@ -1319,9 +1307,9 @@ test "lower rotate idiom (i64) to rotr_imm" {
 ///|
 test "lower extr idiom (i64) to extr_imm" {
   let builder = @ir.IRBuilder::new("or_extr_i64_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_amt = builder.iconst_i64(13L)
@@ -1347,9 +1335,9 @@ test "lower extr idiom (i64) to extr_imm" {
 ///|
 test "lower extr idiom (i32) to extr32_imm" {
   let builder = @ir.IRBuilder::new("or_extr_i32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shl_amt = builder.iconst_i32(25)
@@ -1376,9 +1364,9 @@ test "lower extr idiom (i32) to extr32_imm" {
 test "lower xor(x, shl(y, n)) to xor_shifted" {
   // Pattern: xor(x, shl(y, n)) -> XorShifted: x ^ (y << n)
   let builder = @ir.IRBuilder::new("xor_shifted_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(1L)
@@ -1404,9 +1392,9 @@ test "lower xor(x, shl(y, n)) to xor_shifted" {
 ///|
 test "lower and(x, bnot(y)) to andnot" {
   let builder = @ir.IRBuilder::new("andnot_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let not_y = builder.bnot(y)
@@ -1429,9 +1417,9 @@ test "lower and(x, bnot(y)) to andnot" {
 ///|
 test "lower or(bnot(x), y) to ornot" {
   let builder = @ir.IRBuilder::new("ornot_test")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let not_x = builder.bnot(x)
@@ -1454,9 +1442,9 @@ test "lower or(bnot(x), y) to ornot" {
 ///|
 test "lower i32 xor(x, bnot(y)) to xornot32" {
   let builder = @ir.IRBuilder::new("xornot32_test")
-  let x = builder.add_param(@ir.Type::I32)
-  let y = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let x = builder.add_param(I32)
+  let y = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let not_y = builder.bnot(y)
@@ -1480,10 +1468,10 @@ test "lower i32 xor(x, bnot(y)) to xornot32" {
 test "madd commutative: add(mul(x, y), z) to madd" {
   // Pattern: add(mul(x, y), z) -> MADD: z + x * y (commutative)
   let builder = @ir.IRBuilder::new("madd_commutative")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  let z = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  let z = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_xy = builder.imul(x, y)
@@ -1509,9 +1497,9 @@ test "madd commutative: add(mul(x, y), z) to madd" {
 test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
   // Pattern: add(shl(x, n), y) -> AddShifted: y + (x << n)
   let builder = @ir.IRBuilder::new("add_shifted_commutative")
-  let x = builder.add_param(@ir.Type::I64)
-  let y = builder.add_param(@ir.Type::I64)
-  builder.add_result(@ir.Type::I64)
+  let x = builder.add_param(I64)
+  let y = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amt = builder.iconst_i64(3L)
@@ -1568,7 +1556,7 @@ test "add_shifted commutative: add(shl(x, n), y) to add_shifted" {
 
 ///|
 test "lower br_table with f32 locals (f32_br_2locals pattern)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Build IR that mimics the f32_br_2locals.wast function:
@@ -1590,8 +1578,8 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   //     return local2_phi
 
   let builder = @ir.IRBuilder::new("test")
-  let selector = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::F32)
+  let selector = builder.add_param(I32)
+  builder.add_result(F32)
 
   // Create all blocks first
   let entry = builder.create_block()
@@ -1601,7 +1589,7 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
   let exit = builder.create_block()
 
   // Add block parameter for exit (the merged local2 value)
-  let local2_phi = builder.add_block_param(exit, @ir.Type::F32)
+  let local2_phi = builder.add_block_param(exit, F32)
 
   // Entry block
   builder.switch_to_block(entry)
@@ -1615,20 +1603,20 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
 
   // case0: store local1, load to local2, jump exit with local2
   builder.switch_to_block(case0)
-  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
-  let local2_0 = builder.load_ptr(@ir.Type::F32, addr, offset0)
+  builder.store_ptr(F32, addr, local1, offset0)
+  let local2_0 = builder.load_ptr(F32, addr, offset0)
   builder.jump(exit, [local2_0])
 
   // case1: same pattern
   builder.switch_to_block(case1)
-  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
-  let local2_1 = builder.load_ptr(@ir.Type::F32, addr, offset0)
+  builder.store_ptr(F32, addr, local1, offset0)
+  let local2_1 = builder.load_ptr(F32, addr, offset0)
   builder.jump(exit, [local2_1])
 
   // case2: same pattern
   builder.switch_to_block(case2)
-  builder.store_ptr(@ir.Type::F32, addr, local1, offset0)
-  let local2_2 = builder.load_ptr(@ir.Type::F32, addr, offset0)
+  builder.store_ptr(F32, addr, local1, offset0)
+  let local2_2 = builder.load_ptr(F32, addr, offset0)
   builder.jump(exit, [local2_2])
 
   // exit: return local2_phi
@@ -1783,11 +1771,11 @@ test "lower br_table with f32 locals (f32_br_2locals pattern)" {
 
 ///|
 test "minimal: dead float constant should not affect live values" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let builder = @ir.IRBuilder::new("dead_fconst_test")
-  builder.add_result(@ir.Type::F32)
+  builder.add_result(F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1798,7 +1786,7 @@ test "minimal: dead float constant should not affect live values" {
   let v3 = builder.fconst_f32(10.0) // LIVE - stored to memory
   let addr = builder.iconst_i64(0) // ptr is i64
   let offset0 = builder.iconst_i64(0)
-  builder.store_ptr(@ir.Type::F32, addr, v3, offset0)
+  builder.store_ptr(F32, addr, v3, offset0)
   builder.return_([v2])
   ignore(v1)
 

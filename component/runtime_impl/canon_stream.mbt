@@ -8,12 +8,9 @@ fn instantiate_canon_stream_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I64],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I64] }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(TypeDef::Stream(v))) => v
+    Some(Some(Stream(v))) => v
     _ => None
   }
   let (elem_size, own_resource_type_id) = stream_payload_info(
@@ -106,17 +103,10 @@ fn instantiate_canon_stream_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
   let resources = resolve_canon_resources(opts, state) catch { e => raise e }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(TypeDef::Stream(v))) => v
+    Some(Some(Stream(v))) => v
     _ => None
   }
   let is_async = canon_opt_is_async(opts)
@@ -166,13 +156,13 @@ fn instantiate_canon_stream_read(
       set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
-      return [@types.Value::I32(code)]
+      return [I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
       per_task.set(cur, code)
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
-      [@types.Value::I32(code)]
+      [I32(code)]
     }
 
     fn ret_i32(code : Int) -> Array[@types.Value] {
@@ -199,11 +189,7 @@ fn instantiate_canon_stream_read(
       None => None
     }
     match args {
-      [
-        @types.Value::I32(handle),
-        @types.Value::I32(ptr),
-        @types.Value::I32(len),
-      ] => {
+      [I32(handle), I32(ptr), I32(len)] => {
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -346,8 +332,8 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
-                        canon_suspend[0] = Some(CanonSuspend::Yield)
-                        raise @runtime.RuntimeError::Unreachable
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
                       }
                     } else {
                       // Another read is already in progress.
@@ -501,8 +487,8 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
-                        canon_suspend[0] = Some(CanonSuspend::Yield)
-                        raise @runtime.RuntimeError::Unreachable
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
                       }
                     }
                     let n = if len < remain { len } else { remain }
@@ -643,8 +629,8 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
-                        canon_suspend[0] = Some(CanonSuspend::Yield)
-                        raise @runtime.RuntimeError::Unreachable
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
                       }
                     }
                 }
@@ -668,17 +654,10 @@ fn instantiate_canon_stream_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
   let resources = resolve_canon_resources(opts, state) catch { e => raise e }
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(TypeDef::Stream(v))) => v
+    Some(Some(Stream(v))) => v
     _ => None
   }
   let is_async = canon_opt_is_async(opts)
@@ -728,13 +707,13 @@ fn instantiate_canon_stream_write(
       set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
-      return [@types.Value::I32(code)]
+      return [I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
       per_task.set(cur, code)
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
-      [@types.Value::I32(code)]
+      [I32(code)]
     }
 
     fn ret_i32(code : Int) -> Array[@types.Value] {
@@ -761,11 +740,7 @@ fn instantiate_canon_stream_write(
       None => None
     }
     match args {
-      [
-        @types.Value::I32(handle),
-        @types.Value::I32(ptr),
-        @types.Value::I32(len),
-      ] => {
+      [I32(handle), I32(ptr), I32(len)] => {
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -827,8 +802,8 @@ fn instantiate_canon_stream_write(
                             readable_dropped: st0.readable_dropped,
                             writable_dropped: st0.writable_dropped,
                           })
-                          canon_suspend[0] = Some(CanonSuspend::Yield)
-                          raise @runtime.RuntimeError::Unreachable
+                          canon_suspend[0] = Some(Yield)
+                          raise Unreachable
                         }
                         let dropped = if st0.readable_dropped { 1 } else { 0 }
                         if dropped == 1 {
@@ -859,8 +834,8 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
-                        canon_suspend[0] = Some(CanonSuspend::Yield)
-                        raise @runtime.RuntimeError::Unreachable
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
                       }
                     } else {
                       trap_canon("cannot drop busy stream")
@@ -946,7 +921,7 @@ fn instantiate_canon_stream_write(
                             mem.load_byte(ptr + i) catch {
                               e => {
                                 trap_canon(e.to_string())
-                                return [@types.Value::I32(0)]
+                                return [I32(0)]
                               }
                             }
                           None => b'\x00'
@@ -980,8 +955,8 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
-                        canon_suspend[0] = Some(CanonSuspend::Yield)
-                        raise @runtime.RuntimeError::Unreachable
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
                       }
                     }
                     let n = if len < remain { len } else { remain }
@@ -994,7 +969,7 @@ fn instantiate_canon_stream_write(
                           mem.load_byte(ptr + i) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => b'\x00'
@@ -1011,12 +986,12 @@ fn instantiate_canon_stream_write(
                             store.get_mem(addr) catch {
                               e => {
                                 trap_canon(e.to_string())
-                                return [@types.Value::I32(0)]
+                                return [I32(0)]
                               }
                             }
                           None => {
                             trap_canon("missing canon memory")
-                            return [@types.Value::I32(0)]
+                            return [I32(0)]
                           }
                         }
                         for i in 0..<n {
@@ -1025,7 +1000,7 @@ fn instantiate_canon_stream_write(
                           ) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                           let new_handle = if writer_table.id ==
@@ -1038,14 +1013,14 @@ fn instantiate_canon_stream_write(
                                 trap_canon(
                                   "unknown handle index \{writer_handle}",
                                 )
-                                return [@types.Value::I32(0)]
+                                return [I32(0)]
                               }
                             }
                             if entry.type_id != expected_type_id {
                               trap_canon(
                                 "handle index \{writer_handle} used with the wrong type",
                               )
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                             pr0.reader_table.alloc(entry)
                           }
@@ -1055,14 +1030,14 @@ fn instantiate_canon_stream_write(
                           ) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         }
                       }
                       (Some(_), None) => {
                         trap_canon("missing canon memory")
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                       (None, Some(_src_mem)) => {
                         let dst_mem = match pr0.mem_addr {
@@ -1070,12 +1045,12 @@ fn instantiate_canon_stream_write(
                             store.get_mem(addr) catch {
                               e => {
                                 trap_canon(e.to_string())
-                                return [@types.Value::I32(0)]
+                                return [I32(0)]
                               }
                             }
                           None => {
                             trap_canon("missing canon memory")
-                            return [@types.Value::I32(0)]
+                            return [I32(0)]
                           }
                         }
                         let bytes_n = n * elem_size
@@ -1084,7 +1059,7 @@ fn instantiate_canon_stream_write(
                           dst_mem.store_byte(dst_base + i, buf[i]) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         }
@@ -1143,7 +1118,7 @@ fn instantiate_canon_stream_write(
                           mem.load_byte(ptr + i) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => b'\x00'
@@ -1177,8 +1152,8 @@ fn instantiate_canon_stream_write(
                         )
                         return ret_i32(0)
                       }
-                      canon_suspend[0] = Some(CanonSuspend::Yield)
-                      raise @runtime.RuntimeError::Unreachable
+                      canon_suspend[0] = Some(Yield)
+                      raise Unreachable
                     }
                   }
                 }
@@ -1188,7 +1163,7 @@ fn instantiate_canon_stream_write(
       }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -1202,10 +1177,7 @@ fn instantiate_canon_stream_cancel_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1217,25 +1189,25 @@ fn instantiate_canon_stream_cancel_read(
     }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
-      return [@types.Value::I32(0)]
+      return [I32(0)]
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
           None => {
             trap_canon("unknown stream handle index \{handle}")
-            [@types.Value::I32(0)]
+            [I32(0)]
           }
           Some(ep) =>
             if !ep.is_readable {
               trap_canon("type mismatch")
-              [@types.Value::I32(0)]
+              [I32(0)]
             } else {
               let st0 = match table.streams.get(ep.stream_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown stream handle index \{handle}")
-                  return [@types.Value::I32(0)]
+                  return [I32(0)]
                 }
               }
               match st0.pending_read {
@@ -1250,15 +1222,15 @@ fn instantiate_canon_stream_cancel_read(
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: st0.writable_dropped,
                   })
-                  [@types.Value::I32(code | (filled << 4))]
+                  [I32(code | (filled << 4))]
                 }
-                None => [@types.Value::I32(2)]
+                None => [I32(2)]
               }
             }
         }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -1272,10 +1244,7 @@ fn instantiate_canon_stream_cancel_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1287,25 +1256,25 @@ fn instantiate_canon_stream_cancel_write(
     }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
-      return [@types.Value::I32(0)]
+      return [I32(0)]
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
           None => {
             trap_canon("unknown stream handle index \{handle}")
-            [@types.Value::I32(0)]
+            [I32(0)]
           }
           Some(ep) =>
             if ep.is_readable {
               trap_canon("type mismatch")
-              [@types.Value::I32(0)]
+              [I32(0)]
             } else {
               let st0 = match table.streams.get(ep.stream_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown stream handle index \{handle}")
-                  return [@types.Value::I32(0)]
+                  return [I32(0)]
                 }
               }
               match st0.pending_write {
@@ -1320,15 +1289,15 @@ fn instantiate_canon_stream_cancel_write(
                     readable_dropped: st0.readable_dropped,
                     writable_dropped: st0.writable_dropped,
                   })
-                  [@types.Value::I32(code | (sent << 4))]
+                  [I32(code | (sent << 4))]
                 }
-                None => [@types.Value::I32(2)]
+                None => [I32(2)]
               }
             }
         }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -1341,10 +1310,7 @@ fn instantiate_canon_stream_drop_readable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1356,7 +1322,7 @@ fn instantiate_canon_stream_drop_readable(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
           None => {
             trap_canon("unknown stream handle index \{handle}")
@@ -1452,10 +1418,7 @@ fn instantiate_canon_stream_drop_writable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1466,7 +1429,7 @@ fn instantiate_canon_stream_drop_writable(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
           None => {
             trap_canon("unknown stream handle index \{handle}")

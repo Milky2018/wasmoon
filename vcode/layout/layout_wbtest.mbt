@@ -4,20 +4,20 @@
 test "layout: no loops - preserves order" {
   // Create a simple linear function: block0 -> block1 -> block2
   let func = @regalloc.VCodeFunction::new("test_linear")
-  let a = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
+  let a = func.add_param(Int)
+  func.add_result(Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
 
   // block0: jump to block1
-  block0.set_terminator(@instr.Jump(block1.id, []))
+  block0.set_terminator(Jump(block1.id, []))
 
   // block1: jump to block2
-  block1.set_terminator(@instr.Jump(block2.id, []))
+  block1.set_terminator(Jump(block2.id, []))
 
   // block2: return
-  block2.set_terminator(@instr.Return([@abi.Virtual(a)]))
+  block2.set_terminator(Return([Virtual(a)]))
 
   // Compute layout
   let order = layout_blocks(func)
@@ -35,27 +35,27 @@ test "layout: simple loop - cfg rpo order" {
   // block3 (exit): return
 
   let func = @regalloc.VCodeFunction::new("test_loop")
-  let counter = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
+  let counter = func.add_param(Int)
+  func.add_result(Int)
   let block0 = func.new_block() // entry
   let block1 = func.new_block() // header
   let block2 = func.new_block() // body
   let block3 = func.new_block() // exit
 
   // block0: jump to loop header
-  block0.set_terminator(@instr.Jump(block1.id, []))
+  block0.set_terminator(Jump(block1.id, []))
 
   // block1 (header): branch on condition
   // if counter != 0, go to body; else go to exit
   block1.set_terminator(
-    @instr.BranchZero(@abi.Virtual(counter), false, false, block3.id, block2.id),
+    BranchZero(Virtual(counter), false, false, block3.id, block2.id),
   )
 
   // block2 (body): decrement and jump back to header
-  block2.set_terminator(@instr.Jump(block1.id, [])) // back edge
+  block2.set_terminator(Jump(block1.id, [])) // back edge
 
   // block3 (exit): return
-  block3.set_terminator(@instr.Return([@abi.Virtual(counter)]))
+  block3.set_terminator(Return([Virtual(counter)]))
 
   // Compute layout
   let order = layout_blocks(func)
@@ -69,15 +69,15 @@ test "layout: simple loop - cfg rpo order" {
 test "cfg: find back edges" {
   // Create a function with a loop
   let func = @regalloc.VCodeFunction::new("test_back_edge")
-  func.add_param(@abi.Int) |> ignore
+  func.add_param(Int) |> ignore
   let block0 = func.new_block()
   let block1 = func.new_block()
 
   // block0: jump to block1
-  block0.set_terminator(@instr.Jump(block1.id, []))
+  block0.set_terminator(Jump(block1.id, []))
 
   // block1: jump back to block0 (back edge)
-  block1.set_terminator(@instr.Jump(block0.id, []))
+  block1.set_terminator(Jump(block0.id, []))
   let cfg = VCodeCFG::build(func)
   let back_edges = cfg.find_back_edges()
 
@@ -99,8 +99,8 @@ test "cfg: sparse block ids keep edges" {
   func.get_blocks().remove(1) |> ignore
 
   // 0 -> 3 -> 0 creates one back edge in index space: 1 -> 0.
-  block0.set_terminator(@instr.Jump(block3.id, []))
-  block3.set_terminator(@instr.Jump(block0.id, []))
+  block0.set_terminator(Jump(block3.id, []))
+  block3.set_terminator(Jump(block0.id, []))
   let cfg = VCodeCFG::build(func)
   let back_edges = cfg.find_back_edges()
   inspect(back_edges.length(), content="1")
@@ -111,17 +111,17 @@ test "cfg: sparse block ids keep edges" {
 test "cfg: find loops" {
   // Create a function with a simple loop
   let func = @regalloc.VCodeFunction::new("test_find_loop")
-  let a = func.add_param(@abi.Int)
+  let a = func.add_param(Int)
   let block0 = func.new_block() // entry
   let block1 = func.new_block() // header
   let block2 = func.new_block() // body
   let block3 = func.new_block() // exit
-  block0.set_terminator(@instr.Jump(block1.id, []))
+  block0.set_terminator(Jump(block1.id, []))
   block1.set_terminator(
-    @instr.BranchZero(@abi.Virtual(a), false, false, block3.id, block2.id),
+    BranchZero(Virtual(a), false, false, block3.id, block2.id),
   )
-  block2.set_terminator(@instr.Jump(block1.id, [])) // back edge
-  block3.set_terminator(@instr.Return([]))
+  block2.set_terminator(Jump(block1.id, [])) // back edge
+  block3.set_terminator(Return([]))
   let cfg = VCodeCFG::build(func)
   let loops = cfg.find_loops()
 
@@ -134,14 +134,14 @@ test "cfg: find loops" {
 ///|
 test "reorder_blocks: applies new order" {
   let func = @regalloc.VCodeFunction::new("test_reorder")
-  let a = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
+  let a = func.add_param(Int)
+  func.add_result(Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
-  block0.set_terminator(@instr.Jump(block1.id, []))
-  block1.set_terminator(@instr.Jump(block2.id, []))
-  block2.set_terminator(@instr.Return([@abi.Virtual(a)]))
+  block0.set_terminator(Jump(block1.id, []))
+  block1.set_terminator(Jump(block2.id, []))
+  block2.set_terminator(Return([Virtual(a)]))
 
   // Original order: [0, 1, 2]
   // New order: [0, 2, 1]
@@ -161,8 +161,8 @@ test "reorder_blocks: preserves spill slot count" {
   func.set_num_spill_slots(123)
   let block0 = func.new_block()
   let block1 = func.new_block()
-  block0.set_terminator(@instr.Jump(block1.id, []))
-  block1.set_terminator(@instr.Return([]))
+  block0.set_terminator(Jump(block1.id, []))
+  block1.set_terminator(Return([]))
   let reordered = reorder_blocks(func, [1, 0])
   inspect(reordered.get_num_spill_slots(), content="123")
 }
@@ -177,8 +177,8 @@ test "layout: loop with exit chain" {
   // block4 (exit): setup, jump to block1
 
   let func = @regalloc.VCodeFunction::new("test_fib_like")
-  let counter = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
+  let counter = func.add_param(Int)
+  func.add_result(Int)
   let block0 = func.new_block() // entry
   let block1 = func.new_block() // return block
   let block2 = func.new_block() // header
@@ -186,21 +186,21 @@ test "layout: loop with exit chain" {
   let block4 = func.new_block() // exit (before return)
 
   // block0: jump to header
-  block0.set_terminator(@instr.Jump(block2.id, []))
+  block0.set_terminator(Jump(block2.id, []))
 
   // block1: return
-  block1.set_terminator(@instr.Return([@abi.Virtual(counter)]))
+  block1.set_terminator(Return([Virtual(counter)]))
 
   // block2 (header): branch on condition
   block2.set_terminator(
-    @instr.BranchZero(@abi.Virtual(counter), false, false, block4.id, block3.id),
+    BranchZero(Virtual(counter), false, false, block4.id, block3.id),
   )
 
   // block3 (body): jump back to header
-  block3.set_terminator(@instr.Jump(block2.id, [])) // back edge
+  block3.set_terminator(Jump(block2.id, [])) // back edge
 
   // block4 (exit): jump to return
-  block4.set_terminator(@instr.Jump(block1.id, []))
+  block4.set_terminator(Jump(block1.id, []))
 
   // Compute layout
   let order = layout_blocks(func)
@@ -213,18 +213,18 @@ test "layout: loop with exit chain" {
 test "optimize_layout: full pipeline" {
   // Test the full optimization pipeline
   let func = @regalloc.VCodeFunction::new("test_optimize")
-  let counter = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
+  let counter = func.add_param(Int)
+  func.add_result(Int)
   let block0 = func.new_block() // entry
   let block1 = func.new_block() // header
   let block2 = func.new_block() // body
   let block3 = func.new_block() // exit
-  block0.set_terminator(@instr.Jump(block1.id, []))
+  block0.set_terminator(Jump(block1.id, []))
   block1.set_terminator(
-    @instr.BranchZero(@abi.Virtual(counter), false, false, block3.id, block2.id),
+    BranchZero(Virtual(counter), false, false, block3.id, block2.id),
   )
-  block2.set_terminator(@instr.Jump(block1.id, []))
-  block3.set_terminator(@instr.Return([@abi.Virtual(counter)]))
+  block2.set_terminator(Jump(block1.id, []))
+  block3.set_terminator(Return([Virtual(counter)]))
   let optimized = optimize_layout(func)
 
   // After optimization, blocks should be in CFG-RPO-based order plus threading.
@@ -258,22 +258,22 @@ test "optimize_layout: threads trivial conditional targets" {
   // block0 branches to block1/block2, both are empty jumps to block3.
   // After threading, block0 should become an unconditional jump to block3.
   let func = @regalloc.VCodeFunction::new("test_thread_conditional")
-  let cond = func.add_param(@abi.Int)
+  let cond = func.add_param(Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
   let block3 = func.new_block()
   block0.set_terminator(
-    @instr.BranchZero(@abi.Virtual(cond), false, false, block1.id, block2.id),
+    BranchZero(Virtual(cond), false, false, block1.id, block2.id),
   )
-  block1.set_terminator(@instr.Jump(block3.id, []))
-  block2.set_terminator(@instr.Jump(block3.id, []))
-  block3.set_terminator(@instr.Return([]))
+  block1.set_terminator(Jump(block3.id, []))
+  block2.set_terminator(Jump(block3.id, []))
+  block3.set_terminator(Return([]))
   let optimized = optimize_layout(func)
   let mut threaded_to_jump = false
   for block in optimized.get_blocks() {
     if block.id == 0 {
-      if block.terminator is Some(@instr.Jump(target, args)) &&
+      if block.terminator is Some(Jump(target, args)) &&
         target == 3 &&
         args.length() == 0 {
         threaded_to_jump = true
@@ -293,15 +293,15 @@ test "optimize_layout: threads jump chains transitively" {
   let block1 = func.new_block()
   let block2 = func.new_block()
   let block3 = func.new_block()
-  block0.set_terminator(@instr.Jump(block1.id, []))
-  block1.set_terminator(@instr.Jump(block2.id, []))
-  block2.set_terminator(@instr.Jump(block3.id, []))
-  block3.set_terminator(@instr.Return([]))
+  block0.set_terminator(Jump(block1.id, []))
+  block1.set_terminator(Jump(block2.id, []))
+  block2.set_terminator(Jump(block3.id, []))
+  block3.set_terminator(Return([]))
   let optimized = optimize_layout(func)
   let mut retargeted = false
   for block in optimized.get_blocks() {
     if block.id == 0 {
-      if block.terminator is Some(@instr.Jump(target, args)) &&
+      if block.terminator is Some(Jump(target, args)) &&
         target == 3 &&
         args.length() == 0 {
         retargeted = true
@@ -318,27 +318,27 @@ test "optimize_layout: threads jump chains with block args" {
   // block1 is empty and forwards p directly to q, so block0 should jump to
   // block2 with the original argument.
   let func = @regalloc.VCodeFunction::new("test_thread_chain_with_args")
-  let incoming = func.add_param(@abi.Int)
-  func.add_result(@abi.Int)
-  let forwarded = func.new_vreg(@abi.Int)
-  let result = func.new_vreg(@abi.Int)
+  let incoming = func.add_param(Int)
+  func.add_result(Int)
+  let forwarded = func.new_vreg(Int)
+  let result = func.new_vreg(Int)
   let block0 = func.new_block()
   let block1 = func.new_block()
   let block2 = func.new_block()
   block1.params.push(forwarded)
   block2.params.push(result)
-  block0.set_terminator(@instr.Jump(block1.id, [@abi.Virtual(incoming)]))
-  block1.set_terminator(@instr.Jump(block2.id, [@abi.Virtual(forwarded)]))
-  block2.set_terminator(@instr.Return([@abi.Virtual(result)]))
+  block0.set_terminator(Jump(block1.id, [Virtual(incoming)]))
+  block1.set_terminator(Jump(block2.id, [Virtual(forwarded)]))
+  block2.set_terminator(Return([Virtual(result)]))
 
   let optimized = optimize_layout(func)
   let mut retargeted = false
   for block in optimized.get_blocks() {
     if block.id == block0.id {
-      if block.terminator is Some(@instr.Jump(target, args)) &&
+      if block.terminator is Some(Jump(target, args)) &&
         target == block2.id &&
         args.length() == 1 &&
-        args[0] is @abi.Virtual(v) &&
+        args[0] is Virtual(v) &&
         v.id == incoming.id {
         retargeted = true
       }

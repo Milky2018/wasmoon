@@ -280,7 +280,7 @@ test "parse WAT: forward reference global export" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(mod.exports.length(), content="1")
   inspect(mod.exports[0].name, content="a")
-  inspect(mod.exports[0].desc is @types.ExportDesc::Global(_), content="true")
+  inspect(mod.exports[0].desc is Global(_), content="true")
 }
 
 ///|
@@ -300,7 +300,7 @@ test "parse WAT: forward reference func" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(mod.exports.length(), content="1")
   inspect(mod.exports[0].name, content="f")
-  inspect(mod.exports[0].desc is @types.ExportDesc::Func(_), content="true")
+  inspect(mod.exports[0].desc is Func(_), content="true")
 }
 
 ///|
@@ -310,7 +310,7 @@ test "parse WAT: forward reference memory" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(mod.exports.length(), content="1")
   inspect(mod.exports[0].name, content="m")
-  inspect(mod.exports[0].desc is @types.ExportDesc::Memory(_), content="true")
+  inspect(mod.exports[0].desc is Memory(_), content="true")
 }
 
 ///|
@@ -320,7 +320,7 @@ test "parse WAT: forward reference table" {
   let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
   inspect(mod.exports.length(), content="1")
   inspect(mod.exports[0].name, content="t")
-  inspect(mod.exports[0].desc is @types.ExportDesc::Table(_), content="true")
+  inspect(mod.exports[0].desc is Table(_), content="true")
 }
 
 // ============================================================

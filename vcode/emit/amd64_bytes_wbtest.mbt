@@ -49,7 +49,7 @@ test "x86_64 bsr encodings" {
 ///|
 test "x86_64 jcc rel32 fixup patches disp32" {
   let mc = MachineCode::new()
-  mc.x86_emit_jcc_rel32(@instr.Cond::Eq, 1)
+  mc.x86_emit_jcc_rel32(Eq, 1)
   // 2 bytes padding between branch and label.
   mc.emit_byte(0x90)
   mc.emit_byte(0x90)
@@ -364,13 +364,13 @@ test "x86_64 insertps encoding (SSE4.1)" {
 ///|
 test "x86_64 SIMD integer encodings (padd/psub/pmul/pshufd)" {
   let mc = MachineCode::new()
-  mc.x86_emit_padd_xmm_xmm(@instr.B8, 1, 2) // paddb xmm1, xmm2
-  mc.x86_emit_padd_xmm_xmm(@instr.D64, 1, 2) // paddq xmm1, xmm2
-  mc.x86_emit_psub_xmm_xmm(@instr.S32, 1, 2) // psubd xmm1, xmm2
+  mc.x86_emit_padd_xmm_xmm(B8, 1, 2) // paddb xmm1, xmm2
+  mc.x86_emit_padd_xmm_xmm(D64, 1, 2) // paddq xmm1, xmm2
+  mc.x86_emit_psub_xmm_xmm(S32, 1, 2) // psubd xmm1, xmm2
   mc.x86_emit_pmullw_xmm_xmm(1, 2) // pmullw xmm1, xmm2
   mc.x86_emit_pmulld_xmm_xmm(1, 2) // pmulld xmm1, xmm2
-  mc.x86_emit_pcmpgt_xmm_xmm(@instr.S32, 1, 2) // pcmpgtd xmm1, xmm2
-  mc.x86_emit_pcmpeq_xmm_xmm(@instr.H16, 1, 2) // pcmpeqw xmm1, xmm2
+  mc.x86_emit_pcmpgt_xmm_xmm(S32, 1, 2) // pcmpgtd xmm1, xmm2
+  mc.x86_emit_pcmpeq_xmm_xmm(H16, 1, 2) // pcmpeqw xmm1, xmm2
   mc.x86_emit_pshufd_xmm_xmm_imm8(1, 2, 0xB1) // pshufd xmm1, xmm2, 0xB1
   inspect(
     mc.bytes_repr(),
@@ -434,9 +434,9 @@ test "x86_64 SIMD widen + lane insert/extract encodings" {
 test "x86_64 SIMD variable shift + unpack encodings" {
   let mc = MachineCode::new()
   mc.x86_emit_psllw_xmm_imm8(1, 8) // psllw xmm1, 8
-  mc.x86_emit_psll_xmm_xmm(@instr.H16, 1, 2) // psllw xmm1, xmm2
-  mc.x86_emit_psrl_xmm_xmm(@instr.S32, 1, 2) // psrld xmm1, xmm2
-  mc.x86_emit_psra_xmm_xmm(@instr.H16, 1, 2) // psraw xmm1, xmm2
+  mc.x86_emit_psll_xmm_xmm(H16, 1, 2) // psllw xmm1, xmm2
+  mc.x86_emit_psrl_xmm_xmm(S32, 1, 2) // psrld xmm1, xmm2
+  mc.x86_emit_psra_xmm_xmm(H16, 1, 2) // psraw xmm1, xmm2
   mc.x86_emit_punpcklbw_xmm_xmm(1, 1) // punpcklbw xmm1, xmm1
   mc.x86_emit_punpckhbw_xmm_xmm(1, 1) // punpckhbw xmm1, xmm1
   inspect(
@@ -587,9 +587,9 @@ test "x86_64 imul/not/neg encodings" {
 ///|
 test "x86_64 setcc + movzx encodings" {
   let mc = MachineCode::new()
-  mc.x86_emit_setcc_r8(@instr.Cond::Eq, 9) // setz r9b
+  mc.x86_emit_setcc_r8(Eq, 9) // setz r9b
   mc.x86_emit_movzx_r32_r8(9, 9) // movzx r9d, r9b
-  mc.x86_emit_setcc_r8(@instr.Cond::Ne, 4) // setnz spl (needs REX)
+  mc.x86_emit_setcc_r8(Ne, 4) // setnz spl (needs REX)
   inspect(
     mc.bytes_repr(),
     content="[65, 15, 148, 193, 69, 15, 182, 201, 64, 15, 149, 196]",
@@ -599,8 +599,8 @@ test "x86_64 setcc + movzx encodings" {
 ///|
 test "x86_64 parity condition encodings (Ps/Pc)" {
   let mc = MachineCode::new()
-  mc.x86_emit_setcc_r8(@instr.Cond::Ps, 0) // setp al
-  mc.x86_emit_setcc_r8(@instr.Cond::Pc, 0) // setnp al
+  mc.x86_emit_setcc_r8(Ps, 0) // setp al
+  mc.x86_emit_setcc_r8(Pc, 0) // setnp al
   inspect(mc.bytes_repr(), content="[15, 154, 192, 15, 155, 192]")
 }
 
@@ -720,8 +720,8 @@ test "x86_64 shld/shrd encodings (imm8)" {
 ///|
 test "x86_64 cmovcc encodings" {
   let mc = MachineCode::new()
-  mc.x86_emit_cmovcc_rr(@instr.Cond::Ne, 0, 8) // cmovne rax, r8
-  mc.x86_emit_cmovcc_rr(@instr.Cond::Lt, 9, 10) // cmovl r9, r10
+  mc.x86_emit_cmovcc_rr(Ne, 0, 8) // cmovne rax, r8
+  mc.x86_emit_cmovcc_rr(Lt, 9, 10) // cmovl r9, r10
   inspect(mc.bytes_repr(), content="[73, 15, 69, 192, 77, 15, 76, 202]")
 }
 

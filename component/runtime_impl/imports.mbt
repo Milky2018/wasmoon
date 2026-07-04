@@ -25,14 +25,14 @@ fn resolve_import(
   match ext_opt {
     Some(ext) =>
       match (desc, ext) {
-        (CoreModuleType(_), ComponentExtern::CoreModule(_))
-        | (FuncType(_), ComponentExtern::Func(_))
-        | (Value(_), ComponentExtern::Value(_))
-        | (Type(_), ComponentExtern::Type(_))
-        | (ComponentType(_), ComponentExtern::Component(_))
-        | (InstanceType(_), ComponentExtern::Instance(_)) =>
+        (CoreModuleType(_), CoreModule(_))
+        | (FuncType(_), Func(_))
+        | (Value(_), Value(_))
+        | (Type(_), Type(_))
+        | (ComponentType(_), Component(_))
+        | (InstanceType(_), Instance(_)) =>
           match (desc, ext) {
-            (InstanceType(tyidx), ComponentExtern::Instance(inst)) => {
+            (InstanceType(tyidx), Instance(inst)) => {
               validate_instance_import_type(
                 key, tyidx, inst, types, core_types, outer_stack,
               )
@@ -42,34 +42,34 @@ fn resolve_import(
           }
         _ => {
           let actual = match ext {
-            ComponentExtern::Func(_) => "func"
-            ComponentExtern::Value(_) => "value"
-            ComponentExtern::Type(_) => "type"
-            ComponentExtern::Component(_) => "component"
-            ComponentExtern::Instance(_) => "instance"
-            ComponentExtern::CoreModule(_) => "module"
-            ComponentExtern::CoreInstance(_) => "instance"
-            ComponentExtern::CoreFunc(_) => "func"
-            ComponentExtern::CoreTable(_) => "table"
-            ComponentExtern::CoreMemory(_) => "memory"
-            ComponentExtern::CoreGlobal(_) => "global"
-            ComponentExtern::CoreTag(_) => "tag"
-            ComponentExtern::CoreType(_) => "type"
+            Func(_) => "func"
+            Value(_) => "value"
+            Type(_) => "type"
+            Component(_) => "component"
+            Instance(_) => "instance"
+            CoreModule(_) => "module"
+            CoreInstance(_) => "instance"
+            CoreFunc(_) => "func"
+            CoreTable(_) => "table"
+            CoreMemory(_) => "memory"
+            CoreGlobal(_) => "global"
+            CoreTag(_) => "tag"
+            CoreType(_) => "type"
           }
           raise ImportTypeMismatch("expected \{expected} found \{actual}")
         }
       }
     None =>
       match desc {
-        Type(TypeBound::Eq(ti)) =>
+        Type(Eq(ti)) =>
           if ti >= 0 && ti < types.length() {
-            ComponentExtern::Type(types[ti])
+            Type(types[ti])
           } else {
             raise UnknownImport(key)
           }
         InstanceType(tyidx) =>
           match synthesize_trivial_instance_import(key, tyidx, types, store) {
-            Some(inst) => ComponentExtern::Instance(inst)
+            Some(inst) => Instance(inst)
             None => raise UnknownImport(key)
           }
         _ => raise UnknownImport(key)
@@ -90,16 +90,16 @@ fn validate_instance_import_type(
     raise UnknownImport(import_key)
   }
   match types[tyidx] {
-    Some(TypeDef::InstanceTypeEmpty) => ()
-    Some(TypeDef::InstanceType(decls)) => {
+    Some(InstanceTypeEmpty) => ()
+    Some(InstanceType(decls)) => {
       // Instance type decls have their own local type space; we interpret a
       // minimal subset needed for resource type bounds and (alias outer ...).
       let local_types : Array[TypeDef?] = []
       let local_core_types : Array[Bytes] = []
       for d in decls {
         match d {
-          InstanceDecl::CoreType(bytes) => local_core_types.push(bytes)
-          InstanceDecl::AliasOuter(kind, count, idx) => {
+          CoreType(bytes) => local_core_types.push(bytes)
+          AliasOuter(kind, count, idx) => {
             // In the binary format, `count` is 1-based: 1 = current env, 2 = one level out, ...
             let depth = count - 1
             if depth < 0 || depth >= outer_stack.length() {
@@ -123,35 +123,28 @@ fn validate_instance_import_type(
               ()
             }
           }
-          InstanceDecl::AliasInstanceExport(kind, _instance_idx, _name) =>
+          AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               // Not needed for current component-spec coverage; keep the local
               // type space aligned for later indices.
               local_types.push(None)
             }
-          InstanceDecl::Type(t) => local_types.push(Some(t))
-          InstanceDecl::Export(name, desc) => {
+          Type(t) => local_types.push(Some(t))
+          Export(name, desc) => {
             // Instance type exports of `type` also declare a slot in the local
             // type index space, which later decls can reference (e.g. `own 0`).
             let type_slot : Int? = match desc {
-              ExternDesc::Type(_) => Some(local_types.length())
+              Type(_) => Some(local_types.length())
               _ => None
             }
             match desc {
-              ExternDesc::Type(bound) =>
+              Type(bound) =>
                 match bound {
-                  TypeBound::SubResource =>
+                  SubResource =>
                     local_types.push(
-                      Some(
-                        TypeDef::ResourceType(
-                          -1,
-                          0x7f,
-                          None,
-                          ResourceKind::HostDefined,
-                        ),
-                      ),
+                      Some(ResourceType(-1, 0x7f, None, HostDefined)),
                     )
-                  TypeBound::Eq(ti) => {
+                  Eq(ti) => {
                     let aliased = if ti >= 0 && ti < local_types.length() {
                       local_types[ti]
                     } else if ti >= 0 && ti < types.length() {
@@ -169,35 +162,28 @@ fn validate_instance_import_type(
                 match desc {
                   // For equality-bounded type exports, the host doesn't need to
                   // redundantly supply the alias; it can be inferred.
-                  ExternDesc::Type(TypeBound::Eq(_)) => ()
+                  Type(Eq(_)) => ()
                   _ => raise UnknownImport(import_key)
                 }
               Some(ext) =>
                 match (desc, ext) {
-                  (
-                    ExternDesc::Type(TypeBound::SubResource),
-                    ComponentExtern::Func(_),
-                  ) => raise ImportTypeMismatch("expected resource found func")
-                  (
-                    ExternDesc::CoreModuleType(tyidx),
-                    ComponentExtern::CoreModule(m),
-                  ) => {
+                  (Type(SubResource), Func(_)) =>
+                    raise ImportTypeMismatch("expected resource found func")
+                  (CoreModuleType(tyidx), CoreModule(m)) => {
                     if tyidx < 0 || tyidx >= local_core_types.length() {
                       raise ImportTypeMismatch("invalid core module type index")
                     }
                     check_core_module_against_type(m, local_core_types[tyidx])
                   }
-                  (ExternDesc::FuncType(_), ComponentExtern::Func(_))
-                  | (ExternDesc::Value(_), ComponentExtern::Value(_))
-                  | (ExternDesc::ComponentType(_), ComponentExtern::Component(_)
-                  )
-                  | (ExternDesc::InstanceType(_), ComponentExtern::Instance(_)) =>
-                    ()
-                  (ExternDesc::Type(bound), ComponentExtern::Type(actual)) =>
+                  (FuncType(_), Func(_))
+                  | (Value(_), Value(_))
+                  | (ComponentType(_), Component(_))
+                  | (InstanceType(_), Instance(_)) => ()
+                  (Type(bound), Type(actual)) =>
                     match bound {
-                      TypeBound::SubResource =>
+                      SubResource =>
                         match actual {
-                          Some(TypeDef::ResourceType(_, _, _, _)) =>
+                          Some(ResourceType(_, _, _, _)) =>
                             // Capture the host-supplied identity so later `(eq ...)` bounds
                             // compare against the real type instead of the placeholder.
                             match type_slot {
@@ -212,7 +198,7 @@ fn validate_instance_import_type(
                               "mismatched resource types",
                             )
                         }
-                      TypeBound::Eq(ti) => {
+                      Eq(ti) => {
                         let expected = if ti >= 0 && ti < local_types.length() {
                           local_types[ti]
                         } else if ti >= 0 && ti < types.length() {
@@ -222,8 +208,8 @@ fn validate_instance_import_type(
                         }
                         match (expected, actual) {
                           (
-                            Some(TypeDef::ResourceType(id1, _, _, kind1)),
-                            Some(TypeDef::ResourceType(id2, _, _, kind2)),
+                            Some(ResourceType(id1, _, _, kind1)),
+                            Some(ResourceType(id2, _, _, kind2)),
                           ) =>
                             if id1 < 0 {
                               // Unify the abstract resource type with the

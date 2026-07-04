@@ -98,64 +98,63 @@ pub fn value_to_i64(value : @types.Value) -> Int64 {
 /// Decode an Int64 from C heap to a Value based on expected type
 pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
   match ty {
-    I32 => @types.Value::I32(raw.to_int())
-    I64 => @types.Value::I64(raw)
-    F32 => @types.Value::F32(Float::reinterpret_from_int(raw.to_int()))
-    F64 => @types.Value::F64(raw.reinterpret_as_double())
+    I32 => I32(raw.to_int())
+    I64 => I64(raw)
+    F32 => F32(Float::reinterpret_from_int(raw.to_int()))
+    F64 => F64(raw.reinterpret_as_double())
     RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
-        @types.Value::StructRef(((raw >> 1) - 1L).to_int())
+        StructRef(((raw >> 1) - 1L).to_int())
       }
     RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
-        @types.Value::ArrayRef(((raw >> 1) - 1L).to_int())
+        ArrayRef(((raw >> 1) - 1L).to_int())
       }
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::FuncRef((raw - 1L).to_int())
+        FuncRef((raw - 1L).to_int())
       }
     ExternRef | RefExtern =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::ExternRef((raw - 1L).to_int())
+        ExternRef((raw - 1L).to_int())
       }
     ExnRef =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::ExnRef((raw - 1L).to_int())
+        ExnRef((raw - 1L).to_int())
       }
     RefI31 | RefNullI31 =>
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::I31((raw >> 1).to_int())
+        I31((raw >> 1).to_int())
       }
     RefEq | RefNullEq | AnyRef | RefAny =>
       // For abstract types, we need to decode based on the actual value
       if raw == @types.NULL_REF {
-        @types.Value::Null
+        Null
       } else if (raw & 1L) != 0L {
         // Tagged i31 (odd)
-        @types.Value::I31((raw >> 1).to_int())
+        I31((raw >> 1).to_int())
       } else {
         // GC reference (even, non-zero)
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         // We don't know if struct or array without querying the heap
-        @types.Value::StructRef(((raw >> 1) - 1L).to_int())
+        StructRef(((raw >> 1) - 1L).to_int())
       }
-    NullRef | NullFuncRef | NullExnRef | NullExternRef | RefNone =>
-      @types.Value::Null
-    V128 => @types.Value::I64(raw) // V128 not fully supported
+    NullRef | NullFuncRef | NullExnRef | NullExternRef | RefNone => Null
+    V128 => I64(raw) // V128 not fully supported
   }
 }
 

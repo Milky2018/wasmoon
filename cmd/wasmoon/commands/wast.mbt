@@ -198,13 +198,13 @@ fn rewrite_module_alias_indices_for_jit(
   let rewritten_elems : Array[@types.Element] = []
   for elem in mod_.elems {
     let rewritten_mode = match elem.mode {
-      @types.ElemMode::Active(table_idx, offset_expr) =>
+      Active(table_idx, offset_expr) =>
         @types.ElemMode::Active(
           table_idx,
           rewrite_instr_indices(offset_expr, global_alias_map, tag_alias_map),
         )
-      @types.ElemMode::Passive => @types.ElemMode::Passive
-      @types.ElemMode::Declarative => @types.ElemMode::Declarative
+      Passive => Passive
+      Declarative => Declarative
     }
     let rewritten_init : Array[Array[@types.Instruction]] = []
     for expr in elem.init {
@@ -361,7 +361,7 @@ fn build_wast_compile_mask(mod_ : @types.Module) -> Array[Bool]? {
     )
   }
   for elem in mod_.elems {
-    if elem.mode is @types.ElemMode::Active(_, offset_expr) {
+    if elem.mode is Active(_, offset_expr) {
       collect_wast_reachable_from_instrs(
         offset_expr, num_imports, compile_mask, pending_locals,
       )

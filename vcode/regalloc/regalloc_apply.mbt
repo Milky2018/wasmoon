@@ -49,7 +49,7 @@ pub fn apply_allocation(
   let scratch_float_indices = env.scratch_float
   fn scratch_indices_for_class(class : @abi.RegClass) -> Array[Int] {
     match class {
-      @abi.Int => scratch_int_indices
+      Int => scratch_int_indices
       _ => scratch_float_indices
     }
   }
@@ -66,11 +66,11 @@ pub fn apply_allocation(
   fn fold_stack_slot_loads(block : @block.VCodeBlock) -> Unit {
     fn same_mem_type(a : @instr.MemType, b : @instr.MemType) -> Bool {
       match (a, b) {
-        (@instr.I32, @instr.I32) => true
-        (@instr.I64, @instr.I64) => true
-        (@instr.F32, @instr.F32) => true
-        (@instr.F64, @instr.F64) => true
-        (@instr.V128, @instr.V128) => true
+        (I32, I32) => true
+        (I64, I64) => true
+        (F32, F32) => true
+        (F64, F64) => true
+        (V128, V128) => true
         _ => false
       }
     }
@@ -95,41 +95,41 @@ pub fn apply_allocation(
     for inst in block.insts {
       let mut emitted = false
       match inst.opcode {
-        @instr.StackLoad(offset) =>
+        StackLoad(offset) =>
           if inst.defs.length() == 1 &&
-            inst.defs[0].reg is @abi.Physical(dst) &&
+            inst.defs[0].reg is Physical(dst) &&
             slot_cache.get(offset) is Some(src) &&
             src.class == dst.class {
             if src.index != dst.index {
-              let mv = @instr.VCodeInst::new(@instr.Move)
-              mv.add_def({ reg: @abi.Physical(dst) })
-              mv.add_use(@abi.Physical(src))
+              let mv = @instr.VCodeInst::new(Move)
+              mv.add_def({ reg: Physical(dst) })
+              mv.add_use(Physical(src))
               optimized.push(mv)
             }
             emitted = true
           }
-        @instr.LoadPtr(load_ty, load_offset) =>
+        LoadPtr(load_ty, load_offset) =>
           if inst.defs.length() == 1 &&
-            inst.defs[0].reg is @abi.Physical(dst) &&
+            inst.defs[0].reg is Physical(dst) &&
             inst.uses.length() == 1 &&
-            inst.uses[0] is @abi.Physical(base_reg) &&
+            inst.uses[0] is Physical(base_reg) &&
             optimized.length() > 0 {
             let prev = optimized[optimized.length() - 1]
             match prev.opcode {
-              @instr.StorePtr(store_ty, store_offset) =>
+              StorePtr(store_ty, store_offset) =>
                 if same_mem_type(store_ty, load_ty) &&
                   store_offset == load_offset &&
                   prev.uses.length() == 2 &&
-                  prev.uses[0] is @abi.Physical(store_base) &&
-                  prev.uses[1] is @abi.Physical(src_reg) &&
+                  prev.uses[0] is Physical(store_base) &&
+                  prev.uses[1] is Physical(src_reg) &&
                   store_base.index == base_reg.index &&
                   store_base.class == base_reg.class &&
                   src_reg.class == dst.class &&
-                  src_reg.class is @abi.Int {
+                  src_reg.class is Int {
                   if src_reg.index != dst.index {
-                    let mv = @instr.VCodeInst::new(@instr.Move)
-                    mv.add_def({ reg: @abi.Physical(dst) })
-                    mv.add_use(@abi.Physical(src_reg))
+                    let mv = @instr.VCodeInst::new(Move)
+                    mv.add_def({ reg: Physical(dst) })
+                    mv.add_use(Physical(src_reg))
                     optimized.push(mv)
                   }
                   emitted = true
@@ -143,19 +143,19 @@ pub fn apply_allocation(
         optimized.push(inst)
       }
       for def in inst.defs {
-        if def.reg is @abi.Physical(preg) {
+        if def.reg is Physical(preg) {
           invalidate_cached_preg(slot_cache, preg)
         }
       }
       match inst.opcode {
-        @instr.StackStore(offset) =>
-          if inst.uses.length() == 1 && inst.uses[0] is @abi.Physical(src) {
+        StackStore(offset) =>
+          if inst.uses.length() == 1 && inst.uses[0] is Physical(src) {
             slot_cache.set(offset, src)
           } else {
             slot_cache.remove(offset) |> ignore
           }
-        @instr.StackLoad(offset) =>
-          if inst.defs.length() == 1 && inst.defs[0].reg is @abi.Physical(dst) {
+        StackLoad(offset) =>
+          if inst.defs.length() == 1 && inst.defs[0].reg is Physical(dst) {
             slot_cache.set(offset, dst)
           } else {
             slot_cache.remove(offset) |> ignore
@@ -198,7 +198,7 @@ pub fn apply_allocation(
         // Check if param is in register or on stack, and whether it needs a move
         let (default_preg_opt, is_int) : (@abi.PReg?, Bool) = match
           param.class {
-          @abi.Int =>
+          Int =>
             if int_idx == 0 {
               (Some(wasm_vmctx_arg), true)
             } else {
@@ -209,38 +209,29 @@ pub fn apply_allocation(
                 (None, true) // Stack param
               }
             }
-          @abi.Float32 =>
+          Float32 =>
             if float_idx < wasm_arg_fprs.length() {
               (
-                Some(@abi.PReg::{
-                  index: wasm_arg_fprs[float_idx].index,
-                  class: @abi.Float32,
-                }),
+                Some({ index: wasm_arg_fprs[float_idx].index, class: Float32 }),
                 false,
               )
             } else {
               (None, false)
             }
-          @abi.Float64 =>
+          Float64 =>
             if float_idx < wasm_arg_fprs.length() {
               (
-                Some(@abi.PReg::{
-                  index: wasm_arg_fprs[float_idx].index,
-                  class: @abi.Float64,
-                }),
+                Some({ index: wasm_arg_fprs[float_idx].index, class: Float64 }),
                 false,
               )
             } else {
               (None, false)
             }
-          @abi.Vector =>
+          Vector =>
             // Vector uses same Vn registers as Float
             if float_idx < wasm_arg_fprs.length() {
               (
-                Some(@abi.PReg::{
-                  index: wasm_arg_fprs[float_idx].index,
-                  class: @abi.Vector,
-                }),
+                Some({ index: wasm_arg_fprs[float_idx].index, class: Vector }),
                 false,
               )
             } else {
@@ -274,7 +265,7 @@ pub fn apply_allocation(
         // to its spill slot. This makes spilling params safe.
         if alloc.spill_slots.get(param.id) is Some(slot) {
           let incoming_preg_opt : @abi.PReg? = match param.class {
-            @abi.Int =>
+            Int =>
               if int_idx == 0 {
                 Some(wasm_vmctx_arg)
               } else {
@@ -285,21 +276,15 @@ pub fn apply_allocation(
                   None
                 }
               }
-            @abi.Float32 | @abi.Float64 =>
+            Float32 | Float64 =>
               if float_idx < wasm_arg_fprs.length() {
-                Some(@abi.PReg::{
-                  index: wasm_arg_fprs[float_idx].index,
-                  class: @abi.Float64,
-                })
+                Some({ index: wasm_arg_fprs[float_idx].index, class: Float64 })
               } else {
                 None
               }
-            @abi.Vector =>
+            Vector =>
               if float_idx < wasm_arg_fprs.length() {
-                Some(@abi.PReg::{
-                  index: wasm_arg_fprs[float_idx].index,
-                  class: @abi.Vector,
-                })
+                Some({ index: wasm_arg_fprs[float_idx].index, class: Vector })
               } else {
                 None
               }
@@ -312,8 +297,8 @@ pub fn apply_allocation(
 
         // Still need to increment indices for unassigned params
         match param.class {
-          @abi.Int => int_idx += 1
-          @abi.Float32 | @abi.Float64 | @abi.Vector => float_idx += 1
+          Int => int_idx += 1
+          Float32 | Float64 | Vector => float_idx += 1
         }
       }
     }
@@ -361,8 +346,8 @@ pub fn apply_allocation(
     if block_idx == 0 {
       for entry in spilled_param_stores {
         let (src_preg, slot) = entry
-        let store_inst = @instr.VCodeInst::new(@instr.StackStore(slot * 8))
-        store_inst.add_use(@abi.Physical(src_preg))
+        let store_inst = @instr.VCodeInst::new(StackStore(slot * 8))
+        store_inst.add_use(Physical(src_preg))
         new_block.add_inst(store_inst)
       }
     }
@@ -404,28 +389,27 @@ pub fn apply_allocation(
 
       // First, collect registers that are in use by non-spilled uses
       // to avoid clobbering them with scratch register reloads
-      let used_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
+      let used_regs : @hashset.HashSet[Int] = HashSet([])
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) &&
+        if use_reg is Virtual(vreg) &&
           alloc.assignments.get(vreg.id) is Some(preg) {
           used_regs.add(preg.index) |> ignore
         }
       }
       let mut inst_spill_idx = 0
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) &&
-          alloc.assignments.get(vreg.id) is None {
+        if use_reg is Virtual(vreg) && alloc.assignments.get(vreg.id) is None {
           // This vreg is spilled, need to reload
           if alloc.spill_slots.get(vreg.id) is Some(slot) {
             let scratch_class = match vreg.class {
-              @abi.Float32 | @abi.Float64 => @abi.Float64
+              Float32 | Float64 => @abi.Float64
               _ => vreg.class
             }
 
             // Determine how to handle this spilled use
             // Check FixedReg constraint first - constraint edits will handle the reload
             if i < inst.use_constraints.length() &&
-              inst.use_constraints[i] is @abi.FixedReg(_) {
+              inst.use_constraints[i] is FixedReg(_) {
               // This use has a FixedReg constraint - constraint edits will handle the reload
               // Use spilled encoding so use rewriting puts the fixed register
               let spilled_preg = @abi.PReg::spilled(slot, scratch_class)
@@ -441,7 +425,7 @@ pub fn apply_allocation(
               spill_regs.set(vreg.id, reload_preg)
               active_reloads.set(slot, reload_preg)
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(reload_preg) })
+              reload_inst.add_def({ reg: Physical(reload_preg) })
               new_block.add_inst(reload_inst)
             } else {
               // No coalescing available - use scratch registers X16, X17
@@ -462,7 +446,7 @@ pub fn apply_allocation(
               block_scratch_idx = block_scratch_idx + 1
               spill_regs.set(vreg.id, scratch_preg)
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              reload_inst.add_def({ reg: Physical(scratch_preg) })
               new_block.add_inst(reload_inst)
             }
           }
@@ -473,12 +457,12 @@ pub fn apply_allocation(
       // Defs with fixed constraints are handled by process_constraints, not here
       let spilled_defs : Array[(@abi.VReg, Int)] = []
       for i, def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) &&
+        if def.reg is Virtual(vreg) &&
           alloc.assignments.get(vreg.id) is None &&
           alloc.spill_slots.get(vreg.id) is Some(slot) {
           // Skip defs with fixed constraints - they are handled by constraint processing
           let has_fixed_constraint = if i < inst.def_constraints.length() {
-            inst.def_constraints[i] is @abi.FixedReg(_)
+            inst.def_constraints[i] is FixedReg(_)
           } else {
             false
           }
@@ -496,10 +480,10 @@ pub fn apply_allocation(
       let spill_scratch_map : Map[Int, @abi.PReg] = {} // vreg.id -> scratch preg
       for i, def in inst.defs {
         match def.reg {
-          @abi.Virtual(vreg) => {
+          Virtual(vreg) => {
             let fixed_preg_opt = if i < inst.def_constraints.length() {
               match inst.def_constraints[i] {
-                @abi.FixedReg(preg) => Some(preg)
+                FixedReg(preg) => Some(preg)
                 _ => None
               }
             } else {
@@ -508,14 +492,14 @@ pub fn apply_allocation(
             match fixed_preg_opt {
               Some(fixed_preg) =>
                 // Use the fixed register - constraint processing handles any move/spill.
-                new_inst.add_def({ reg: @abi.Physical(fixed_preg) })
+                new_inst.add_def({ reg: Physical(fixed_preg) })
               None =>
                 match alloc.assignments.get(vreg.id) {
-                  Some(preg) => new_inst.add_def({ reg: @abi.Physical(preg) })
+                  Some(preg) => new_inst.add_def({ reg: Physical(preg) })
                   None => {
                     // Spilled without constraint: use X16, X17 as scratch registers
                     let scratch_class = match vreg.class {
-                      @abi.Float32 | @abi.Float64 => @abi.Float64
+                      Float32 | Float64 => @abi.Float64
                       _ => vreg.class
                     }
                     let scratch_indices = scratch_indices_for_class(
@@ -527,35 +511,34 @@ pub fn apply_allocation(
                     }
                     block_scratch_idx = block_scratch_idx + 1
                     spill_scratch_map.set(vreg.id, scratch_preg)
-                    new_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                    new_inst.add_def({ reg: Physical(scratch_preg) })
                   }
                 }
             }
           }
-          @abi.Physical(_) => new_inst.add_def(def)
+          Physical(_) => new_inst.add_def(def)
         }
       }
 
       // Rewrite uses
       for i, use_reg in inst.uses {
         match use_reg {
-          @abi.Virtual(vreg) =>
+          Virtual(vreg) =>
             match alloc.assignments.get(vreg.id) {
               Some(preg) => {
                 // Preserve FixedReg constraints in the rewritten instruction.
                 // Constraint processing already inserts the needed move(s).
                 let fixed_preg_opt = if i < inst.use_constraints.length() {
                   match inst.use_constraints[i] {
-                    @abi.FixedReg(fixed_preg) => Some(fixed_preg)
+                    FixedReg(fixed_preg) => Some(fixed_preg)
                     _ => None
                   }
                 } else {
                   None
                 }
                 match fixed_preg_opt {
-                  Some(fixed_preg) =>
-                    new_inst.add_use(@abi.Physical(fixed_preg))
-                  None => new_inst.add_use(@abi.Physical(preg))
+                  Some(fixed_preg) => new_inst.add_use(Physical(fixed_preg))
+                  None => new_inst.add_use(Physical(preg))
                 }
               }
               None =>
@@ -569,17 +552,17 @@ pub fn apply_allocation(
                       guard i < inst.use_constraints.length() else {
                         abort("spilled encoding without constraint")
                       }
-                      guard inst.use_constraints[i] is @abi.FixedReg(fixed_preg) else {
+                      guard inst.use_constraints[i] is FixedReg(fixed_preg) else {
                         abort("spilled encoding without FixedReg constraint")
                       }
-                      new_inst.add_use(@abi.Physical(fixed_preg))
+                      new_inst.add_use(Physical(fixed_preg))
                     } else {
-                      new_inst.add_use(@abi.Physical(scratch_preg))
+                      new_inst.add_use(Physical(scratch_preg))
                     }
                   None => {
                     // Fallback: use the first reserved scratch reg for this bank.
                     let scratch_class = match vreg.class {
-                      @abi.Float32 | @abi.Float64 => @abi.Float64
+                      Float32 | Float64 => @abi.Float64
                       _ => vreg.class
                     }
                     let scratch_indices = scratch_indices_for_class(
@@ -589,22 +572,22 @@ pub fn apply_allocation(
                       index: scratch_indices[0],
                       class: scratch_class,
                     }
-                    new_inst.add_use(@abi.Physical(scratch_preg))
+                    new_inst.add_use(Physical(scratch_preg))
                   }
                 }
             }
-          @abi.Physical(preg) => {
+          Physical(preg) => {
             let fixed_preg_opt = if i < inst.use_constraints.length() {
               match inst.use_constraints[i] {
-                @abi.FixedReg(fixed_preg) => Some(fixed_preg)
+                FixedReg(fixed_preg) => Some(fixed_preg)
                 _ => None
               }
             } else {
               None
             }
             match fixed_preg_opt {
-              Some(fixed_preg) => new_inst.add_use(@abi.Physical(fixed_preg))
-              None => new_inst.add_use(@abi.Physical(preg))
+              Some(fixed_preg) => new_inst.add_use(Physical(fixed_preg))
+              None => new_inst.add_use(Physical(preg))
             }
           }
         }
@@ -626,12 +609,12 @@ pub fn apply_allocation(
               let from_slot = mv.from.get_spill_slot()
               if reloaded_slots.get(from_slot) is Some(source_preg) {
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-                store_inst.add_use(@abi.Physical(source_preg))
+                store_inst.add_use(Physical(source_preg))
                 new_block.add_inst(store_inst)
                 invalidate_reload_slot(active_reloads, to_slot)
               } else {
                 let scratch_class = match mv.class {
-                  @abi.Float32 | @abi.Float64 => @abi.Float64
+                  Float32 | Float64 => @abi.Float64
                   _ => mv.class
                 }
                 let scratch_indices = scratch_indices_for_class(scratch_class)
@@ -642,16 +625,16 @@ pub fn apply_allocation(
                 let reload_inst = @instr.VCodeInst::new(
                   StackLoad(from_slot * 8),
                 )
-                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                reload_inst.add_def({ reg: Physical(scratch_preg) })
                 new_block.add_inst(reload_inst)
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-                store_inst.add_use(@abi.Physical(scratch_preg))
+                store_inst.add_use(Physical(scratch_preg))
                 new_block.add_inst(store_inst)
                 invalidate_reload_slot(active_reloads, to_slot)
               }
             } else {
               let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-              store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+              store_inst.add_use(Physical(loc_as_preg(mv.from)))
               new_block.add_inst(store_inst)
               invalidate_reload_slot(active_reloads, to_slot)
             }
@@ -661,21 +644,21 @@ pub fn apply_allocation(
             if reloaded_slots.get(slot) is Some(source_preg) {
               // This slot was already reloaded - use mov instead of another load
               let move_inst = @instr.VCodeInst::new(Move)
-              move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
-              move_inst.add_use(@abi.Physical(source_preg))
+              move_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
+              move_inst.add_use(Physical(source_preg))
               new_block.add_inst(move_inst)
             } else {
               // First reload of this slot - emit StackLoad and record
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
+              reload_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
               new_block.add_inst(reload_inst)
               reloaded_slots.set(slot, loc_as_preg(mv.to))
             }
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
-            move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
-            move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+            move_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
+            move_inst.add_use(Physical(loc_as_preg(mv.from)))
             new_block.add_inst(move_inst)
           }
         }
@@ -691,14 +674,14 @@ pub fn apply_allocation(
             // Store to spill slot from source register
             let slot = mv.to.get_spill_slot()
             let store_inst = @instr.VCodeInst::new(StackStore(slot * 8))
-            store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+            store_inst.add_use(Physical(loc_as_preg(mv.from)))
             new_block.add_inst(store_inst)
             invalidate_reload_slot(active_reloads, slot)
           } else {
             // Register to register move
             let move_inst = @instr.VCodeInst::new(Move)
-            move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
-            move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+            move_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
+            move_inst.add_use(Physical(loc_as_preg(mv.from)))
             new_block.add_inst(move_inst)
           }
         }
@@ -709,7 +692,7 @@ pub fn apply_allocation(
         let (vreg, slot) = entry
         let spill_inst = @instr.VCodeInst::new(StackStore(slot * 8))
         let scratch_preg = spill_scratch_map.get(vreg.id).unwrap()
-        spill_inst.add_use(@abi.Physical(scratch_preg))
+        spill_inst.add_use(Physical(scratch_preg))
         new_block.add_inst(spill_inst)
         invalidate_reload_slot(active_reloads, slot)
       }
@@ -736,8 +719,8 @@ pub fn apply_allocation(
 
           fn reg_location(reg : @abi.Reg) -> @abi.PReg {
             match reg {
-              @abi.Physical(p) => p
-              @abi.Virtual(v) => vreg_location(v)
+              Physical(p) => p
+              Virtual(v) => vreg_location(v)
             }
           }
 
@@ -754,15 +737,8 @@ pub fn apply_allocation(
               // Same location: nothing to do.
               // Compare both index and register bank (int vs float/vector).
               let same_bank = match (from_preg.class, to_preg.class) {
-                (@abi.Int, @abi.Int) => true
-                (
-                  @abi.Float32
-                  | @abi.Float64
-                  | @abi.Vector,
-                  @abi.Float32
-                  | @abi.Float64
-                  | @abi.Vector,
-                ) => true
+                (Int, Int) => true
+                (Float32 | Float64 | Vector, Float32 | Float64 | Vector) => true
                 _ => false
               }
               if from_preg.index == to_preg.index && same_bank {
@@ -785,7 +761,7 @@ pub fn apply_allocation(
               if mv.from.is_spilled() {
                 let from_slot = mv.from.get_spill_slot()
                 let scratch_class = match mv.class {
-                  @abi.Float32 | @abi.Float64 => @abi.Float64
+                  Float32 | Float64 => @abi.Float64
                   _ => mv.class
                 }
                 let scratch_indices = scratch_indices_for_class(scratch_class)
@@ -796,27 +772,27 @@ pub fn apply_allocation(
                 let reload_inst = @instr.VCodeInst::new(
                   StackLoad(from_slot * 8),
                 )
-                reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+                reload_inst.add_def({ reg: Physical(scratch_preg) })
                 new_block.add_inst(reload_inst)
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-                store_inst.add_use(@abi.Physical(scratch_preg))
+                store_inst.add_use(Physical(scratch_preg))
                 new_block.add_inst(store_inst)
                 invalidate_reload_slot(active_reloads, to_slot)
               } else {
                 let store_inst = @instr.VCodeInst::new(StackStore(to_slot * 8))
-                store_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+                store_inst.add_use(Physical(loc_as_preg(mv.from)))
                 new_block.add_inst(store_inst)
                 invalidate_reload_slot(active_reloads, to_slot)
               }
             } else if mv.from.is_spilled() {
               let slot = mv.from.get_spill_slot()
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
+              reload_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
               new_block.add_inst(reload_inst)
             } else {
               let move_inst = @instr.VCodeInst::new(Move)
-              move_inst.add_def({ reg: @abi.Physical(loc_as_preg(mv.to)) })
-              move_inst.add_use(@abi.Physical(loc_as_preg(mv.from)))
+              move_inst.add_def({ reg: Physical(loc_as_preg(mv.to)) })
+              move_inst.add_use(Physical(loc_as_preg(mv.from)))
               new_block.add_inst(move_inst)
             }
           }
@@ -886,16 +862,16 @@ pub fn apply_allocation(
           // This ensures each spilled value uses a different scratch register
           let new_values : Array[@abi.Reg] = []
           for v in values {
-            if v is @abi.Virtual(vreg) &&
+            if v is Virtual(vreg) &&
               alloc.assignments.get(vreg.id) is Some(preg) {
-              new_values.push(@abi.Physical(preg))
+              new_values.push(Physical(preg))
               // Spilled: insert reload and use scratch register from block pool
-            } else if v is @abi.Virtual(vreg) &&
+            } else if v is Virtual(vreg) &&
               alloc.spill_slots.get(vreg.id) is Some(slot) {
               // Use X16, X17 as scratch registers
               // These are the only safe scratch registers
               let scratch_class = match vreg.class {
-                @abi.Float32 | @abi.Float64 => @abi.Float64
+                Float32 | Float64 => @abi.Float64
                 _ => vreg.class
               }
               let scratch_indices = scratch_indices_for_class(scratch_class)
@@ -905,9 +881,9 @@ pub fn apply_allocation(
               }
               block_scratch_idx = block_scratch_idx + 1
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              reload_inst.add_def({ reg: Physical(scratch_preg) })
               new_block.add_inst(reload_inst)
-              new_values.push(@abi.Physical(scratch_preg))
+              new_values.push(Physical(scratch_preg))
             } else {
               new_values.push(v)
             }
@@ -933,15 +909,8 @@ pub fn apply_allocation(
 fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
   fn same_location(a : @abi.PReg, b : @abi.PReg) -> Bool {
     let same_bank = match (a.class, b.class) {
-      (@abi.Int, @abi.Int) => true
-      (
-        @abi.Float32
-        | @abi.Float64
-        | @abi.Vector,
-        @abi.Float32
-        | @abi.Float64
-        | @abi.Vector,
-      ) => true
+      (Int, Int) => true
+      (Float32 | Float64 | Vector, Float32 | Float64 | Vector) => true
       _ => false
     }
     a.index == b.index && same_bank
@@ -968,11 +937,11 @@ fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
     }
     for inst in block.insts {
       let mut skip = false
-      if inst.opcode is @instr.Move &&
+      if inst.opcode is Move &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
-        inst.defs[0].reg is @abi.Physical(dst) &&
-        inst.uses[0] is @abi.Physical(src) &&
+        inst.defs[0].reg is Physical(dst) &&
+        inst.uses[0] is Physical(src) &&
         same_location(src, dst) {
         skip = true
       }
@@ -996,15 +965,15 @@ fn rewrite_reg_with_spill(
   scratch_idx : Int,
 ) -> @abi.Reg {
   match reg {
-    @abi.Virtual(vreg) =>
+    Virtual(vreg) =>
       match alloc.assignments.get(vreg.id) {
-        Some(preg) => @abi.Physical(preg)
+        Some(preg) => Physical(preg)
         None =>
           // Spilled: insert reload and use scratch register
           match alloc.spill_slots.get(vreg.id) {
             Some(slot) => {
               let scratch_class = match vreg.class {
-                @abi.Float32 | @abi.Float64 => @abi.Float64
+                Float32 | Float64 => @abi.Float64
                 _ => vreg.class
               }
               let scratch_preg : @abi.PReg = {
@@ -1012,13 +981,13 @@ fn rewrite_reg_with_spill(
                 class: scratch_class,
               }
               let reload_inst = @instr.VCodeInst::new(StackLoad(slot * 8))
-              reload_inst.add_def({ reg: @abi.Physical(scratch_preg) })
+              reload_inst.add_def({ reg: Physical(scratch_preg) })
               block.add_inst(reload_inst)
-              @abi.Physical(scratch_preg)
+              Physical(scratch_preg)
             }
             None => reg // Should not happen
           }
       }
-    @abi.Physical(_) => reg
+    Physical(_) => reg
   }
 }

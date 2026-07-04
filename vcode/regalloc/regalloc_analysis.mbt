@@ -572,17 +572,17 @@ fn collect_defs_uses(
       // Record call points for caller-saved register handling
       // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
-      if inst.opcode.call_type() is @instr.Regular {
+      if inst.opcode.call_type() is Regular {
         let conv = match inst.opcode {
-          @instr.CallPtr(_, _, call_conv) => call_conv
-          @instr.CallDirect(_, _, _, call_conv) => call_conv
+          CallPtr(_, _, call_conv) => call_conv
+          CallDirect(_, _, _, call_conv) => call_conv
           // This pseudo-op may call a C helper on a slow path.
-          @instr.TypeCheckSubtypeIndirect(_) => @instr.C
-          @instr.GCAllocStructInline(_, _) => @instr.C
-          @instr.GCAllocStructSlowPrecise(_, _) => @instr.C
-          @instr.GCAllocArrayFixedInline(_, _) => @instr.C
-          @instr.GCAllocArraySlowPrecise(_) => @instr.C
-          _ => @instr.Wasm
+          TypeCheckSubtypeIndirect(_) => C
+          GCAllocStructInline(_, _) => C
+          GCAllocStructSlowPrecise(_, _) => C
+          GCAllocArrayFixedInline(_, _) => C
+          GCAllocArraySlowPrecise(_) => C
+          _ => Wasm
         }
         result.call_points.push(
           ({ block: block_idx, inst: inst_idx, pos: After }, conv),
@@ -591,12 +591,12 @@ fn collect_defs_uses(
 
       // Record uses (before the instruction)
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
+        if use_reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
           let fixed = if i < inst.use_constraints.length() &&
-            inst.use_constraints[i] is @abi.FixedReg(preg) {
+            inst.use_constraints[i] is FixedReg(preg) {
             Some(preg)
           } else {
             None
@@ -609,7 +609,7 @@ fn collect_defs_uses(
 
       // Record definitions (after the instruction)
       for i, def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
+        if def.reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
@@ -622,7 +622,7 @@ fn collect_defs_uses(
             abort("vreg defined multiple times (SSA violation)")
           }
           let fixed = if i < inst.def_constraints.length() &&
-            inst.def_constraints[i] is @abi.FixedReg(preg) {
+            inst.def_constraints[i] is FixedReg(preg) {
             Some(preg)
           } else {
             None
@@ -641,7 +641,7 @@ fn collect_defs_uses(
         block_idx : Int,
         inst_idx : Int,
       ) -> Unit {
-        if reg is @abi.Virtual(vreg) {
+        if reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
@@ -855,7 +855,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     let (call_point, call_conv) = entry
     call_prog_points.push(call_point)
     let prev = c_call_prefix[c_call_prefix.length() - 1]
-    let add = if call_conv is @instr.C { 1 } else { 0 }
+    let add = if call_conv is C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
   }
 

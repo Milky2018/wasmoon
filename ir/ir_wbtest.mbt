@@ -4,9 +4,9 @@
 test "simple add function" {
   // Build: function add(v0:i32, v1:i32) -> i32 { return v0 + v1 }
   let builder = IRBuilder::new("add")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.iadd(p0, p1)
@@ -25,7 +25,7 @@ test "simple add function" {
 ///|
 test "constants" {
   let builder = IRBuilder::new("constants")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(42)
@@ -48,9 +48,9 @@ test "constants" {
 ///|
 test "conditional branch" {
   let builder = IRBuilder::new("max")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -79,9 +79,9 @@ test "conditional branch" {
 ///|
 test "float operations" {
   let builder = IRBuilder::new("fadd")
-  let p0 = builder.add_param(Type::F64)
-  let p1 = builder.add_param(Type::F64)
-  builder.add_result(Type::F64)
+  let p0 = builder.add_param(F64)
+  let p1 = builder.add_param(F64)
+  builder.add_result(F64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.fadd(p0, p1)
@@ -104,16 +104,16 @@ test "memory operations" {
   // Note: Load/Store with memidx replaced by LoadPtr/StorePtr
   // Memory bounds checking now handled at IR translation time via FuncEnvironment
   let builder = IRBuilder::new("load_store")
-  let addr = builder.add_param(Type::I64) // ptr is i64
-  builder.add_result(Type::I32)
+  let addr = builder.add_param(I64) // ptr is i64
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let offset0 = builder.iconst_i64(0)
-  let loaded = builder.load_ptr(Type::I32, addr, offset0)
+  let loaded = builder.load_ptr(I32, addr, offset0)
   let c1 = builder.iconst_i32(1)
   let added = builder.iadd(loaded, c1)
   let offset4 = builder.iconst_i64(4)
-  builder.store_ptr(Type::I32, addr, added, offset4)
+  builder.store_ptr(I32, addr, added, offset4)
   builder.return_([added])
   let output = builder.print()
   let expected =
@@ -134,8 +134,8 @@ test "memory operations" {
 ///|
 test "block parameters" {
   let builder = IRBuilder::new("loop_sum")
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let loop_header = builder.create_block()
   let loop_body = builder.create_block()
@@ -146,8 +146,8 @@ test "block parameters" {
   let init_counter = builder.iconst_i32(0)
   builder.jump(loop_header, [init_sum, init_counter])
   // Loop header with parameters
-  let sum_param = builder.add_block_param(loop_header, Type::I32)
-  let counter_param = builder.add_block_param(loop_header, Type::I32)
+  let sum_param = builder.add_block_param(loop_header, I32)
+  let counter_param = builder.add_block_param(loop_header, I32)
   builder.switch_to_block(loop_header)
   let cmp = builder.icmp_slt(counter_param, n)
   builder.brnz(cmp, loop_body, exit_block)
@@ -185,15 +185,8 @@ test "block parameters" {
 ///|
 test "translate simple add function" {
   // WASM: func add(i32, i32) -> i32 { local.get 0; local.get 1; i32.add }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let instrs : Array[@types.Instruction] = [
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::I32Add,
-  ]
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let instrs : Array[@types.Instruction] = [LocalGet(0), LocalGet(1), I32Add]
   let translator = Translator::new("add", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let output = func.print()
@@ -213,16 +206,13 @@ test "translate simple add function" {
 ///|
 test "translate multiply and add" {
   // WASM: func mul_add(i32, i32) -> i32 { local.get 0; local.get 1; i32.mul; i32.const 1; i32.add }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let instrs : Array[@types.Instruction] = [
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::I32Mul,
-    @types.Instruction::I32Const(1),
-    @types.Instruction::I32Add,
+    LocalGet(0),
+    LocalGet(1),
+    I32Mul,
+    I32Const(1),
+    I32Add,
   ]
   let translator = Translator::new(
     "mul_add",
@@ -257,23 +247,20 @@ test "translate with local variable" {
   //   local.get 0; local.get 1; i32.add; local.set 2;
   //   local.get 2; i32.const 2; i32.mul
   // }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let instrs : Array[@types.Instruction] = [
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::I32Add,
-    @types.Instruction::LocalSet(2),
-    @types.Instruction::LocalGet(2),
-    @types.Instruction::I32Const(2),
-    @types.Instruction::I32Mul,
+    LocalGet(0),
+    LocalGet(1),
+    I32Add,
+    LocalSet(2),
+    LocalGet(2),
+    I32Const(2),
+    I32Mul,
   ]
   let translator = Translator::new(
     "with_local",
     func_type,
-    [@types.ValueType::I32],
+    [I32],
     [func_type],
     [0],
     0,
@@ -302,17 +289,14 @@ test "translate comparison" {
   // WASM: func max(i32, i32) -> i32 {
   //   local.get 0; local.get 1; i32.gt_s; select
   // }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let instrs : Array[@types.Instruction] = [
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::I32GtS,
-    @types.Instruction::Select,
+    LocalGet(0),
+    LocalGet(1),
+    LocalGet(0),
+    LocalGet(1),
+    I32GtS,
+    Select,
   ]
   let translator = Translator::new("max", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
@@ -336,9 +320,9 @@ test "translate comparison" {
 ///|
 test "validate valid function" {
   let builder = IRBuilder::new("add")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let sum = builder.iadd(p0, p1)
@@ -367,15 +351,8 @@ test "validate function with no blocks" {
 ///|
 test "validate translated function" {
   // Validate a function translated from WASM
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let instrs : Array[@types.Instruction] = [
-    @types.Instruction::LocalGet(0),
-    @types.Instruction::LocalGet(1),
-    @types.Instruction::I32Add,
-  ]
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let instrs : Array[@types.Instruction] = [LocalGet(0), LocalGet(1), I32Add]
   let translator = Translator::new("add", func_type, [], [func_type], [0], 0, [])
   let func = translator.translate(instrs)
   let result = validate_function(func)
@@ -385,11 +362,11 @@ test "validate translated function" {
 ///|
 test "validate SIMD binary requires v128 operands" {
   let builder = IRBuilder::new("simd_invalid_binary")
-  let a = builder.add_param(Type::I32)
-  let b = builder.add_param(Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  builder.emit_inst(Type::V128, Opcode::V128Add8, [a, b]) |> ignore
+  builder.emit_inst(V128, V128Add8, [a, b]) |> ignore
   builder.return_([])
   let func = builder.get_function()
   let result = validate_function(func)
@@ -400,14 +377,11 @@ test "validate SIMD binary requires v128 operands" {
 ///|
 test "validate SIMD lane load accepts integer address and v128 lane source" {
   let builder = IRBuilder::new("simd_valid_lane_load")
-  let addr = builder.add_param(Type::I32)
-  let vector = builder.add_param(Type::V128)
+  let addr = builder.add_param(I32)
+  let vector = builder.add_param(V128)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  builder.emit_inst(Type::V128, Opcode::V128Load8Lane(0, 0, 0L, 0), [
-    addr, vector,
-  ])
-  |> ignore
+  builder.emit_inst(V128, V128Load8Lane(0, 0, 0L, 0), [addr, vector]) |> ignore
   builder.return_([])
   let func = builder.get_function()
   let result = validate_function(func)
@@ -417,14 +391,11 @@ test "validate SIMD lane load accepts integer address and v128 lane source" {
 ///|
 test "validate SIMD lane store must not produce a result" {
   let builder = IRBuilder::new("simd_invalid_lane_store")
-  let addr = builder.add_param(Type::I32)
-  let vector = builder.add_param(Type::V128)
+  let addr = builder.add_param(I32)
+  let vector = builder.add_param(V128)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  builder.emit_inst(Type::V128, Opcode::V128Store8Lane(0, 0, 0L, 0), [
-    addr, vector,
-  ])
-  |> ignore
+  builder.emit_inst(V128, V128Store8Lane(0, 0, 0L, 0), [addr, vector]) |> ignore
   builder.return_([])
   let func = builder.get_function()
   let result = validate_function(func)
@@ -438,7 +409,7 @@ test "validate SIMD lane store must not produce a result" {
 test "cfg linear" {
   // Simple linear CFG: block0 -> block1 -> return
   let builder = IRBuilder::new("linear")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   builder.switch_to_block(b0)
@@ -460,8 +431,8 @@ test "cfg linear" {
 test "cfg branching" {
   // Diamond CFG: block0 -> block1/block2 -> block3
   let builder = IRBuilder::new("diamond")
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -498,15 +469,15 @@ test "cfg branching" {
 test "cfg loop" {
   // Loop CFG: block0 -> block1 -> block1/block2
   let builder = IRBuilder::new("loop")
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let loop_header = builder.create_block()
   let exit = builder.create_block()
   builder.switch_to_block(entry)
   let init = builder.iconst_i32(0)
   builder.jump(loop_header, [])
-  let counter = builder.add_block_param(loop_header, Type::I32)
+  let counter = builder.add_block_param(loop_header, I32)
   builder.switch_to_block(loop_header)
   let cmp = builder.icmp_slt(counter, n)
   builder.brnz(cmp, loop_header, exit)
@@ -528,8 +499,8 @@ test "cfg loop" {
 test "cfg dominators" {
   // Diamond CFG for dominator testing
   let builder = IRBuilder::new("dom_test")
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -563,7 +534,7 @@ test "cfg dominators" {
 ///|
 test "cfg dot output" {
   let builder = IRBuilder::new("dot_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   builder.switch_to_block(b0)
@@ -588,7 +559,7 @@ test "cfg dot output" {
 ///|
 test "constant folding basic" {
   let builder = IRBuilder::new("const_fold")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // 10 + 20 should fold to 30
@@ -619,7 +590,7 @@ test "constant folding basic" {
 ///|
 test "constant folding: i32 shift amount masked" {
   let builder = IRBuilder::new("const_fold_i32_shl_mask")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let one = builder.iconst_i32(1)
@@ -629,13 +600,13 @@ test "constant folding: i32 shift amount masked" {
   let func = builder.get_function()
   let result = fold_constants(func)
   assert_true(result.changed)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(1L))
+  assert_true(func.blocks[0].instructions[2].opcode is Iconst(1L))
 }
 
 ///|
 test "constant folding: i32 shr_s is arithmetic" {
   let builder = IRBuilder::new("const_fold_i32_sshr")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let a = builder.iconst_i32(-4)
@@ -645,13 +616,13 @@ test "constant folding: i32 shr_s is arithmetic" {
   let func = builder.get_function()
   let result = fold_constants(func)
   assert_true(result.changed)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(-2L))
+  assert_true(func.blocks[0].instructions[2].opcode is Iconst(-2L))
 }
 
 ///|
 test "constant folding: i32 div_u uses 32-bit" {
   let builder = IRBuilder::new("const_fold_i32_udiv")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let a = builder.iconst_i32(-1)
@@ -661,15 +632,13 @@ test "constant folding: i32 div_u uses 32-bit" {
   let func = builder.get_function()
   let result = fold_constants(func)
   assert_true(result.changed)
-  assert_true(
-    func.blocks[0].instructions[2].opcode is Opcode::Iconst(2147483647L),
-  )
+  assert_true(func.blocks[0].instructions[2].opcode is Iconst(2147483647L))
 }
 
 ///|
 test "constant folding: i32 div_s overflow not folded" {
   let builder = IRBuilder::new("const_fold_i32_sdiv_overflow")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let a = builder.iconst_i32(-2147483648)
@@ -679,13 +648,13 @@ test "constant folding: i32 div_s overflow not folded" {
   let func = builder.get_function()
   let result = fold_constants(func)
   assert_false(result.changed)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Sdiv)
+  assert_true(func.blocks[0].instructions[2].opcode is Sdiv)
 }
 
 ///|
 test "egraph purity boundary: trapping div/rem opcodes are excluded" {
   let builder = IRBuilder::new("egraph_purity_trapping_ops")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let lhs = builder.iconst_i32(42)
@@ -704,16 +673,16 @@ test "egraph purity boundary: trapping div/rem opcodes are excluded" {
   assert_false(opcode_to_eopcode(func.blocks[0].instructions[5]) is Some(_))
   let stats = optimize_function_with_stats(func)
   ignore(stats)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Sdiv)
-  assert_true(func.blocks[0].instructions[3].opcode is Opcode::Udiv)
-  assert_true(func.blocks[0].instructions[4].opcode is Opcode::Srem)
-  assert_true(func.blocks[0].instructions[5].opcode is Opcode::Urem)
+  assert_true(func.blocks[0].instructions[2].opcode is Sdiv)
+  assert_true(func.blocks[0].instructions[3].opcode is Udiv)
+  assert_true(func.blocks[0].instructions[4].opcode is Srem)
+  assert_true(func.blocks[0].instructions[5].opcode is Urem)
 }
 
 ///|
 test "egraph purity boundary: pure arithmetic remains admitted" {
   let builder = IRBuilder::new("egraph_purity_pure_add")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -724,13 +693,13 @@ test "egraph purity boundary: pure arithmetic remains admitted" {
   assert_true(opcode_to_eopcode(func.blocks[0].instructions[2]) is Some(_))
   let stats = optimize_function_with_stats(func)
   assert_true(stats.changed)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iconst(30L))
+  assert_true(func.blocks[0].instructions[2].opcode is Iconst(30L))
 }
 
 ///|
 test "egraph purity boundary: multi-result instruction is excluded" {
   let builder = IRBuilder::new("egraph_purity_multi_result")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -741,7 +710,7 @@ test "egraph purity boundary: multi-result instruction is excluded" {
   let add_inst = func.blocks[0].instructions[2]
 
   // Cranelift parity: e-graph purity only admits one-result instructions.
-  let extra_result = func.new_value(Type::I32)
+  let extra_result = func.new_value(I32)
   add_inst.results.push(extra_result)
   assert_true(add_inst.all_results().length() == 2)
   assert_false(opcode_to_eopcode(add_inst) is Some(_))
@@ -750,7 +719,7 @@ test "egraph purity boundary: multi-result instruction is excluded" {
 ///|
 test "egraph function-scope reps: child duplicate maps to dominator value" {
   let builder = IRBuilder::new("egraph_function_scope_representatives")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let child = builder.create_block()
 
@@ -800,7 +769,7 @@ test "egraph function-scope reps: child duplicate maps to dominator value" {
 ///|
 test "egraph limits: matches_limit=0 disables rewrites" {
   let builder = IRBuilder::new("egraph_matches_limit_zero")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -811,13 +780,13 @@ test "egraph limits: matches_limit=0 disables rewrites" {
   let limits = @egraph.SaturationLimits::new(0, 5)
   let stats = optimize_function_with_stats_with_limits(func, limits)
   ignore(stats)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+  assert_true(func.blocks[0].instructions[2].opcode is Iadd)
 }
 
 ///|
 test "egraph limits: eclass_enode_limit=1 disables rewrites" {
   let builder = IRBuilder::new("egraph_eclass_limit_one")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c1 = builder.iconst_i32(10)
@@ -828,13 +797,13 @@ test "egraph limits: eclass_enode_limit=1 disables rewrites" {
   let limits = @egraph.SaturationLimits::new(5, 1)
   let stats = optimize_function_with_stats_with_limits(func, limits)
   ignore(stats)
-  assert_true(func.blocks[0].instructions[2].opcode is Opcode::Iadd)
+  assert_true(func.blocks[0].instructions[2].opcode is Iadd)
 }
 
 ///|
 test "dead code elimination" {
   let builder = IRBuilder::new("dce_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // c1 is used in return, c2 is unused (dead)
@@ -864,13 +833,13 @@ test "dead code elimination" {
 ///|
 test "constant block param elimination" {
   let builder = IRBuilder::new("phi_const")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let block1 = builder.create_block()
   builder.switch_to_block(entry)
   let c0 = builder.iconst_i32(7)
   builder.jump(block1, [c0])
-  let p0 = builder.add_block_param(block1, Type::I32)
+  let p0 = builder.add_block_param(block1, I32)
   builder.switch_to_block(block1)
   builder.return_([p0])
   let func = builder.get_function()
@@ -894,8 +863,8 @@ test "constant block param elimination" {
 ///|
 test "copy propagation" {
   let builder = IRBuilder::new("copy_prop")
-  let p0 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let copy = builder.copy(p0)
@@ -919,8 +888,8 @@ test "cross-block copy propagation" {
   // Block 1: v2 = iadd v1, 1; return v2
   // After propagation: v2 = iadd p0, 1
   let builder = IRBuilder::new("cross_block_cp")
-  let p0 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  builder.add_result(I32)
   let block0 = builder.create_block()
   let block1 = builder.create_block()
   // Block 0: define copy, jump to block1
@@ -982,8 +951,8 @@ test "alias canonicalization collapses copy chains" {
   // block1: v2 = copy v1; v3 = copy v2; v5 = iadd v3, 1
   // After canonicalization, v2/v3/iadd should all point to v0.
   let builder = IRBuilder::new("alias_canon_copy_chain")
-  let p0 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  builder.add_result(I32)
   let block0 = builder.create_block()
   let block1 = builder.create_block()
   builder.switch_to_block(block0)
@@ -1021,15 +990,15 @@ test "cross-block copy propagation respects dominance" {
   //        use v1 <- should NOT be propagated because block1 doesn't dominate block3
   //
   let builder = IRBuilder::new("dominance_test")
-  let p0 = builder.add_param(Type::I32)
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let block0 = builder.create_block()
   let block1 = builder.create_block()
   let block2 = builder.create_block()
   let block3 = builder.create_block()
   // Add block param to block3 to receive the value
-  let block3_param = builder.add_block_param(block3, Type::I32)
+  let block3_param = builder.add_block_param(block3, I32)
   // Block 0: branch based on condition
   builder.switch_to_block(block0)
   builder.brnz(cond, block1, block2)
@@ -1066,9 +1035,9 @@ test "cross-block copy propagation respects dominance" {
 ///|
 test "common subexpression elimination" {
   let builder = IRBuilder::new("cse_test")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // Same computation twice
@@ -1094,9 +1063,9 @@ test "cross-block common subexpression elimination" {
   // Block 0: v2 = iadd p0, p1; jump block1
   // Block 1: v3 = iadd p0, p1; return v3  <- should become copy of v2
   let builder = IRBuilder::new("cross_block_cse")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let block0 = builder.create_block()
   let block1 = builder.create_block()
   // Block 0: compute p0 + p1, jump to block1
@@ -1152,7 +1121,7 @@ test "cross-block common subexpression elimination" {
 ///|
 test "combined optimizations" {
   let builder = IRBuilder::new("optimize_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // Dead code: unused computation
@@ -1187,7 +1156,7 @@ test "combined optimizations" {
 test "branch simplification: constant brz" {
   // Test that brz with constant 0 condition simplifies to jump to then-target
   let builder = IRBuilder::new("branch_simp_brz")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -1214,7 +1183,7 @@ test "branch simplification: constant brz" {
 test "branch simplification: constant brnz" {
   // Test that brnz with constant 1 condition simplifies to jump to then-target
   let builder = IRBuilder::new("branch_simp_brnz")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -1241,7 +1210,7 @@ test "branch simplification: constant brnz" {
 test "unreachable code elimination" {
   // Create a function with an unreachable block
   let builder = IRBuilder::new("unreachable_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let reachable = builder.create_block()
   let dead_block = builder.create_block()
@@ -1265,7 +1234,7 @@ test "unreachable code elimination" {
 test "basic block merging" {
   // Test merging blocks: b0 -> b1 -> b2 where b1 has single pred and succ
   let builder = IRBuilder::new("merge_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -1290,7 +1259,7 @@ test "basic block merging" {
 test "jump threading" {
   // Test threading through jump-only blocks: b0 -> b1 -> b2 where b1 is just a jump
   let builder = IRBuilder::new("thread_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -1315,7 +1284,7 @@ test "jump threading" {
 ///|
 test "jump threading with block param forwarding" {
   let builder = IRBuilder::new("thread_params_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -1324,12 +1293,12 @@ test "jump threading with block param forwarding" {
   let b = builder.iconst_i32(20)
   builder.jump(b1, [a, b])
   builder.switch_to_block(b1)
-  let p0 = builder.add_block_param(b1, Type::I32)
-  let p1 = builder.add_block_param(b1, Type::I32)
+  let p0 = builder.add_block_param(b1, I32)
+  let p1 = builder.add_block_param(b1, I32)
   builder.jump(b2, [p1, p0])
   builder.switch_to_block(b2)
-  let q0 = builder.add_block_param(b2, Type::I32)
-  builder.add_block_param(b2, Type::I32) |> ignore
+  let q0 = builder.add_block_param(b2, I32)
+  builder.add_block_param(b2, I32) |> ignore
   builder.return_([q0])
   let func = builder.get_function()
   let result = thread_jumps(func)
@@ -1348,7 +1317,7 @@ test "jump threading with block param forwarding" {
 ///|
 test "jump threading composes block param forwarding across chain" {
   let builder = IRBuilder::new("thread_params_chain_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let b0 = builder.create_block()
   let b1 = builder.create_block()
   let b2 = builder.create_block()
@@ -1358,16 +1327,16 @@ test "jump threading composes block param forwarding across chain" {
   let b = builder.iconst_i32(2)
   builder.jump(b1, [a, b])
   builder.switch_to_block(b1)
-  let p0 = builder.add_block_param(b1, Type::I32)
-  let p1 = builder.add_block_param(b1, Type::I32)
+  let p0 = builder.add_block_param(b1, I32)
+  let p1 = builder.add_block_param(b1, I32)
   builder.jump(b2, [p1, p0])
   builder.switch_to_block(b2)
-  let q0 = builder.add_block_param(b2, Type::I32)
-  let q1 = builder.add_block_param(b2, Type::I32)
+  let q0 = builder.add_block_param(b2, I32)
+  let q1 = builder.add_block_param(b2, I32)
   builder.jump(b3, [q1, q0])
   builder.switch_to_block(b3)
-  let r0 = builder.add_block_param(b3, Type::I32)
-  builder.add_block_param(b3, Type::I32) |> ignore
+  let r0 = builder.add_block_param(b3, I32)
+  builder.add_block_param(b3, I32) |> ignore
   builder.return_([r0])
   let func = builder.get_function()
   let result = thread_jumps(func)
@@ -1387,7 +1356,7 @@ test "jump threading composes block param forwarding across chain" {
 test "combined control flow optimizations" {
   // Test that all control flow optimizations work together
   let builder = IRBuilder::new("combined_cf_test")
-  builder.add_result(Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let intermediate1 = builder.create_block()
   let intermediate2 = builder.create_block()
@@ -1427,8 +1396,8 @@ test "combined control flow optimizations" {
 test "loop analysis: find loops" {
   // Create a simple loop: entry -> header <-> body -> exit
   let builder = IRBuilder::new("loop_test")
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let header = builder.create_block()
   let body = builder.create_block()
@@ -1438,7 +1407,7 @@ test "loop analysis: find loops" {
   let init = builder.iconst_i32(0)
   builder.jump(header, [])
   // Header block with loop counter
-  let counter = builder.add_block_param(header, Type::I32)
+  let counter = builder.add_block_param(header, I32)
   builder.switch_to_block(header)
   let cmp = builder.icmp_slt(counter, n)
   builder.brnz(cmp, body, exit)
@@ -1478,8 +1447,8 @@ test "LICM: hoist invariant computation" {
   //         jump header
   // exit:   return x
   let builder = IRBuilder::new("licm_test")
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let header = builder.create_block()
   let body = builder.create_block()
@@ -1492,7 +1461,7 @@ test "LICM: hoist invariant computation" {
   let init_i = builder.iconst_i32(0)
   builder.jump(header, [init_i])
   // Header block
-  let i = builder.add_block_param(header, Type::I32)
+  let i = builder.add_block_param(header, I32)
   builder.switch_to_block(header)
   let c5 = builder.iconst_i32(5)
   let x = builder.iadd(c, c5) // x = c + 5 = 25, loop-invariant!
@@ -1528,9 +1497,9 @@ test "LICM: hoist invariant computation" {
 test "LICM: don't hoist side effects" {
   // Create a loop with a store - should not be hoisted
   let builder = IRBuilder::new("licm_no_hoist")
-  let addr = builder.add_param(Type::I64) // ptr is i64 for store_ptr
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let addr = builder.add_param(I64) // ptr is i64 for store_ptr
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let header = builder.create_block()
   let body = builder.create_block()
@@ -1540,7 +1509,7 @@ test "LICM: don't hoist side effects" {
   let init = builder.iconst_i32(0)
   builder.jump(header, [init])
   // Header
-  let i = builder.add_block_param(header, Type::I32)
+  let i = builder.add_block_param(header, I32)
   builder.switch_to_block(header)
   let cmp = builder.icmp_slt(i, n)
   builder.brnz(cmp, body, exit)
@@ -1548,7 +1517,7 @@ test "LICM: don't hoist side effects" {
   builder.switch_to_block(body)
   let val = builder.iconst_i32(42)
   let offset0 = builder.iconst_i64(0)
-  builder.store_ptr(Type::I32, addr, val, offset0)
+  builder.store_ptr(I32, addr, val, offset0)
   let one = builder.iconst_i32(1)
   let new_i = builder.iadd(i, one)
   builder.jump(header, [new_i])
@@ -1580,8 +1549,8 @@ test "LICM: don't hoist side effects" {
 test "loop unrolling: basic unroll" {
   // Create a simple loop: entry -> header <-> body -> exit
   let builder = IRBuilder::new("unroll_test")
-  let n = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let n = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let header = builder.create_block()
   let body = builder.create_block()
@@ -1591,7 +1560,7 @@ test "loop unrolling: basic unroll" {
   let init = builder.iconst_i32(0)
   builder.jump(header, [init])
   // Header block
-  let i = builder.add_block_param(header, Type::I32)
+  let i = builder.add_block_param(header, I32)
   builder.switch_to_block(header)
   let cmp = builder.icmp_slt(i, n)
   builder.brnz(cmp, body, exit)
@@ -1621,8 +1590,8 @@ test "loop unrolling: basic unroll" {
 ///|
 test "strength reduction: multiply by power of 2" {
   let builder = IRBuilder::new("strength_test")
-  let p0 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   // x * 8 should become x << 3
@@ -1672,20 +1641,13 @@ test "memory guard pages: memory0 has no explicit bounds check" {
   // In JIT, memory 0 (memory32) relies on guard pages for trapping, so IR
   // should not emit explicit bounds checks for load/store.
   let builder = IRBuilder::new("guard_pages_mem0")
-  let vmctx = builder.add_param(Type::I64) // vmctx
-  let addr = builder.add_param(Type::I32) // non-constant address
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64) // vmctx
+  let addr = builder.add_param(I32) // non-constant address
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let func_env = FuncEnvironment::new([], memory_mins=[65536L])
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    0,
-    Type::I32,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 0, I32, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1698,8 +1660,8 @@ test "bounds check elimination: constant address within min memory" {
   // Test that bounds check is eliminated when address is a constant
   // within the minimum guaranteed memory size
   let builder = IRBuilder::new("bounds_elim")
-  let vmctx = builder.add_param(Type::I64) // vmctx
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64) // vmctx
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1711,14 +1673,7 @@ test "bounds check elimination: constant address within min memory" {
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load from address 0 with offset 0, access_size 4 - within 1 page
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I32,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I32, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1733,8 +1688,8 @@ test "bounds check elimination: constant address outside min memory" {
   // Test that bounds check is NOT eliminated when address is outside
   // the minimum guaranteed memory size
   let builder = IRBuilder::new("bounds_not_elim")
-  let vmctx = builder.add_param(Type::I64) // vmctx
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64) // vmctx
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1745,14 +1700,7 @@ test "bounds check elimination: constant address outside min memory" {
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load from address 65536 with access_size 4 - outside 1 page
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I32,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I32, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1764,9 +1712,9 @@ test "bounds check elimination: constant address outside min memory" {
 test "bounds check elimination: non-constant address" {
   // Test that bounds check is NOT eliminated when address is non-constant
   let builder = IRBuilder::new("bounds_non_const")
-  let vmctx = builder.add_param(Type::I64) // vmctx
-  let addr = builder.add_param(Type::I32) // non-constant address
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64) // vmctx
+  let addr = builder.add_param(I32) // non-constant address
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1774,14 +1722,7 @@ test "bounds check elimination: non-constant address" {
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Load with non-constant address - bounds check should NOT be eliminated
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I32,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I32, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1794,8 +1735,8 @@ test "bounds check elimination: offset considered in calculation" {
   // Test that offset is correctly considered in the bounds calculation
   // addr=0, offset=65532, access_size=4 -> end=65536, within 1 page
   let builder = IRBuilder::new("bounds_offset")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
@@ -1806,7 +1747,7 @@ test "bounds check elimination: offset considered in calculation" {
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     addr,
     65532L, // offset
   )
@@ -1822,8 +1763,8 @@ test "bounds check elimination: offset causes overflow" {
   // Test that large offset causes bounds check to be kept
   // addr=0, offset=65533, access_size=4 -> end=65537, exceeds 1 page
   let builder = IRBuilder::new("bounds_offset_overflow")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
@@ -1834,7 +1775,7 @@ test "bounds check elimination: offset causes overflow" {
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     addr,
     65533L,
   )
@@ -1849,7 +1790,7 @@ test "bounds check elimination: offset causes overflow" {
 test "bounds check elimination: store operation" {
   // Test that bounds check elimination works for stores too
   let builder = IRBuilder::new("bounds_store")
-  let vmctx = builder.add_param(Type::I64)
+  let vmctx = builder.add_param(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(100)
@@ -1857,7 +1798,7 @@ test "bounds check elimination: store operation" {
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // Store at address 100, well within 1 page
-  func_env.translate_memory_store(builder, vmctx, 1, Type::I32, addr, value, 0L)
+  func_env.translate_memory_store(builder, vmctx, 1, I32, addr, value, 0L)
   builder.return_([])
   let func = builder.get_function()
 
@@ -1869,8 +1810,8 @@ test "bounds check elimination: store operation" {
 test "bounds check elimination: narrow load i8" {
   // Test bounds check elimination for narrow loads (1 byte)
   let builder = IRBuilder::new("bounds_narrow_i8")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1883,7 +1824,7 @@ test "bounds check elimination: narrow load i8" {
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     8, // 8 bits = 1 byte
     true, // signed
     addr,
@@ -1900,7 +1841,7 @@ test "bounds check elimination: narrow load i8" {
 test "bounds check elimination: narrow store i16" {
   // Test bounds check elimination for narrow stores (2 bytes)
   let builder = IRBuilder::new("bounds_narrow_i16")
-  let vmctx = builder.add_param(Type::I64)
+  let vmctx = builder.add_param(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1925,8 +1866,8 @@ test "bounds check elimination: narrow store i16" {
 test "bounds check elimination: i64 load" {
   // Test bounds check elimination for 8-byte loads
   let builder = IRBuilder::new("bounds_i64")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I64)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -1935,14 +1876,7 @@ test "bounds check elimination: i64 load" {
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // 8-byte load at 65528 -> end = 65536, within bounds
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I64,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I64, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1954,22 +1888,15 @@ test "bounds check elimination: i64 load" {
 test "bounds check elimination: i64 load exceeds" {
   // Test that 8-byte load at wrong position is NOT eliminated
   let builder = IRBuilder::new("bounds_i64_exceed")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I64)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
   // Load at address 65529 -> end = 65537, exceeds 1 page
   let addr = builder.iconst_i32(65529)
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I64,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I64, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -1981,21 +1908,14 @@ test "bounds check elimination: i64 load exceeds" {
 test "bounds check elimination: zero min memory" {
   // Test that no optimization happens when min memory is 0
   let builder = IRBuilder::new("bounds_zero_min")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
   // Empty memory_mins array means no min memory known
   let func_env = FuncEnvironment::new([], memory_mins=[])
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I32,
-    addr,
-    0L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I32, addr, 0L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -2007,8 +1927,8 @@ test "bounds check elimination: zero min memory" {
 test "bounds check elimination: multiple memories" {
   // Test bounds check elimination with multiple memories
   let builder = IRBuilder::new("bounds_multi_mem")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
@@ -2020,7 +1940,7 @@ test "bounds check elimination: multiple memories" {
     builder,
     vmctx,
     1, // memidx = 1
-    Type::I32,
+    I32,
     addr,
     65536L, // offset puts us in second page
   )
@@ -2035,8 +1955,8 @@ test "bounds check elimination: multiple memories" {
 test "bounds check elimination: memory index out of range" {
   // Test that memidx beyond memory_mins array keeps bounds check
   let builder = IRBuilder::new("bounds_memidx_oob")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let addr = builder.iconst_i32(0)
@@ -2048,7 +1968,7 @@ test "bounds check elimination: memory index out of range" {
     builder,
     vmctx,
     1, // memidx = 1, but only memory 0 has min info
-    Type::I32,
+    I32,
     addr,
     0L,
   )
@@ -2063,8 +1983,8 @@ test "bounds check elimination: memory index out of range" {
 test "bounds check elimination: combined addr and offset" {
   // Test edge case: addr + offset combination
   let builder = IRBuilder::new("bounds_combined")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -2075,7 +1995,7 @@ test "bounds check elimination: combined addr and offset" {
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     addr,
     64532L,
   )
@@ -2093,23 +2013,22 @@ test "bounds check elimination: redundant dynamic check in same block" {
   // then a later access using the same addr and a smaller end range can reuse
   // that proof in the same block.
   let builder = IRBuilder::new("bounds_redundant_dynamic")
-  let vmctx = builder.add_param(Type::I64)
-  let addr = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let addr = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
 
   // First check end-range: offset 16 + size 8 => 24 bytes from `addr`.
-  func_env.translate_memory_load(builder, vmctx, 1, Type::I64, addr, 16L)
-  |> ignore
+  func_env.translate_memory_load(builder, vmctx, 1, I64, addr, 16L) |> ignore
   // Second check end-range: offset 4 + size 1 => 5 bytes from `addr`.
   // Should reuse first check and avoid emitting another bounds-check split.
   let loaded = func_env.translate_memory_load_narrow(
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     8,
     true,
     addr,
@@ -2127,9 +2046,9 @@ test "bounds check elimination: wider later access still checks" {
   // Later access requires a larger end-range than the previous proof, so we
   // must keep the second dynamic bounds check.
   let builder = IRBuilder::new("bounds_redundant_dynamic_wider")
-  let vmctx = builder.add_param(Type::I64)
-  let addr = builder.add_param(Type::I32)
-  builder.add_result(Type::I64)
+  let vmctx = builder.add_param(I64)
+  let addr = builder.add_param(I32)
+  builder.add_result(I64)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let func_env = FuncEnvironment::new([], memory_mins=[0L, 65536L])
@@ -2139,7 +2058,7 @@ test "bounds check elimination: wider later access still checks" {
     builder,
     vmctx,
     1,
-    Type::I32,
+    I32,
     8,
     true,
     addr,
@@ -2148,14 +2067,7 @@ test "bounds check elimination: wider later access still checks" {
   |> ignore
   // Second check end-range: offset 16 + size 8 => 24 bytes from `addr`.
   // Must emit another split/check.
-  let loaded = func_env.translate_memory_load(
-    builder,
-    vmctx,
-    1,
-    Type::I64,
-    addr,
-    16L,
-  )
+  let loaded = func_env.translate_memory_load(builder, vmctx, 1, I64, addr, 16L)
   builder.return_([loaded])
   let func = builder.get_function()
 
@@ -2168,8 +2080,8 @@ test "GVN: loads are not CSE'd (can trap)" {
   // LoadPtr has side effects (can trap on null pointer), so they are not CSE'd
   // This is by design - a more sophisticated analysis would be needed to safely CSE loads
   let builder = IRBuilder::new("gvn_load_no_cse")
-  let ptr = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let ptr = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -2177,8 +2089,8 @@ test "GVN: loads are not CSE'd (can trap)" {
   let offset = builder.iconst_i64(0L)
 
   // Two loads from the same pointer with same offset
-  let load1 = builder.load_ptr(Type::I32, ptr, offset)
-  let load2 = builder.load_ptr(Type::I32, ptr, offset)
+  let load1 = builder.load_ptr(I32, ptr, offset)
+  let load2 = builder.load_ptr(I32, ptr, offset)
   // Use both
   let sum = builder.iadd(load1, load2)
   builder.return_([sum])
@@ -2193,37 +2105,37 @@ test "GVN: loads are not CSE'd (can trap)" {
   // Both instructions should still be LoadPtr
   let first_load = func.blocks[0].instructions[1]
   let second_load = func.blocks[0].instructions[2]
-  assert_true(first_load.opcode is Opcode::LoadPtr(_))
-  assert_true(second_load.opcode is Opcode::LoadPtr(_))
+  assert_true(first_load.opcode is LoadPtr(_))
+  assert_true(second_load.opcode is LoadPtr(_))
 }
 
 ///|
 test "GVN: store-to-load forwarding exact address" {
   let builder = IRBuilder::new("gvn_store_forward")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mem0_base = builder.load_mem_base(vmctx, 0)
   let offset = builder.iconst_i64(0L)
   let stored = builder.iconst_i32(42)
-  builder.store_ptr(Type::I32, mem0_base, stored, offset)
-  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  builder.store_ptr(I32, mem0_base, stored, offset)
+  let loaded = builder.load_ptr(I32, mem0_base, offset)
   builder.return_([loaded])
   let func = builder.get_function()
   let result = gvn_global(func)
   assert_true(result.changed)
   let load_inst = func.blocks[0].instructions[4]
-  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_true(load_inst.opcode is Copy)
   assert_eq(load_inst.operands[0].id, stored.id)
 }
 
 ///|
 test "GVN: join path-local store blocks forwarding" {
   let builder = IRBuilder::new("gvn_join_path_local_store")
-  let vmctx = builder.add_param(Type::I64)
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -2233,57 +2145,57 @@ test "GVN: join path-local store blocks forwarding" {
   let mem0_base = builder.load_mem_base(vmctx, 0)
   let offset = builder.iconst_i64(0L)
   let initial = builder.iconst_i32(1)
-  builder.store_ptr(Type::I32, mem0_base, initial, offset)
+  builder.store_ptr(I32, mem0_base, initial, offset)
   builder.brnz(cond, then_block, else_block)
 
   builder.switch_to_block(then_block)
   let updated = builder.iconst_i32(2)
-  builder.store_ptr(Type::I32, mem0_base, updated, offset)
+  builder.store_ptr(I32, mem0_base, updated, offset)
   builder.jump(join_block, [])
 
   builder.switch_to_block(else_block)
   builder.jump(join_block, [])
 
   builder.switch_to_block(join_block)
-  let loaded = builder.load_ptr(Type::I32, mem0_base, offset)
+  let loaded = builder.load_ptr(I32, mem0_base, offset)
   builder.return_([loaded])
 
   let func = builder.get_function()
   let gvn_result = gvn_global(func)
   assert_false(gvn_result.changed)
   let load_inst = func.blocks[3].instructions[0]
-  assert_true(load_inst.opcode is Opcode::LoadPtr(_))
+  assert_true(load_inst.opcode is LoadPtr(_))
 }
 
 ///|
 test "GVN: disjoint memories keep forwarding state" {
   let builder = IRBuilder::new("gvn_disjoint_memory_forward")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mem0_base = builder.load_mem_base(vmctx, 0)
   let mem1_base = builder.load_mem_base(vmctx, 1)
   let offset = builder.iconst_i64(0L)
   let mem1_value = builder.iconst_i32(11)
-  builder.store_ptr(Type::I32, mem1_base, mem1_value, offset)
+  builder.store_ptr(I32, mem1_base, mem1_value, offset)
   let mem0_value = builder.iconst_i32(22)
-  builder.store_ptr(Type::I32, mem0_base, mem0_value, offset)
-  let loaded = builder.load_ptr(Type::I32, mem1_base, offset)
+  builder.store_ptr(I32, mem0_base, mem0_value, offset)
+  let loaded = builder.load_ptr(I32, mem1_base, offset)
   builder.return_([loaded])
   let func = builder.get_function()
   let result = gvn_global(func)
   assert_true(result.changed)
   let load_inst = func.blocks[0].instructions[7]
-  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_true(load_inst.opcode is Copy)
   assert_eq(load_inst.operands[0].id, mem1_value.id)
 }
 
 ///|
 test "GVN: copied mem base keeps memory region" {
   let builder = IRBuilder::new("gvn_copied_mem_base_region")
-  let vmctx = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mem0_base = builder.load_mem_base(vmctx, 0)
@@ -2291,25 +2203,25 @@ test "GVN: copied mem base keeps memory region" {
   let mem1_copy = builder.copy(mem1_base)
   let offset = builder.iconst_i64(0L)
   let mem1_value = builder.iconst_i32(11)
-  builder.store_ptr(Type::I32, mem1_copy, mem1_value, offset)
+  builder.store_ptr(I32, mem1_copy, mem1_value, offset)
   let mem0_value = builder.iconst_i32(22)
-  builder.store_ptr(Type::I32, mem0_base, mem0_value, offset)
-  let loaded = builder.load_ptr(Type::I32, mem1_copy, offset)
+  builder.store_ptr(I32, mem0_base, mem0_value, offset)
+  let loaded = builder.load_ptr(I32, mem1_copy, offset)
   builder.return_([loaded])
   let func = builder.get_function()
   let result = gvn_global(func)
   assert_true(result.changed)
   let load_inst = func.blocks[0].instructions[8]
-  assert_true(load_inst.opcode is Opcode::Copy)
+  assert_true(load_inst.opcode is Copy)
   assert_eq(load_inst.operands[0].id, mem1_value.id)
 }
 
 ///|
 test "mem_base_cse_global: merge keeps dominating mem base" {
   let builder = IRBuilder::new("mem_base_cse_global_merge")
-  let vmctx = builder.add_param(Type::I64)
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -2328,23 +2240,23 @@ test "mem_base_cse_global: merge keeps dominating mem base" {
   builder.switch_to_block(join_block)
   let base1 = builder.load_mem_base(vmctx, 0)
   let off = builder.iconst_i64(0L)
-  let value = builder.load_ptr(Type::I32, base1, off)
+  let value = builder.load_ptr(I32, base1, off)
   builder.return_([value])
 
   let func = builder.get_function()
   let result = eliminate_redundant_mem_base_loads_global(func)
   assert_true(result.changed)
   let join_first = func.blocks[3].instructions[0]
-  assert_true(join_first.opcode is Opcode::Copy)
+  assert_true(join_first.opcode is Copy)
   assert_eq(join_first.operands[0].id, base0.id)
 }
 
 ///|
 test "mem_base_cse_global: merge with memory.grow keeps load" {
   let builder = IRBuilder::new("mem_base_cse_global_invalidate")
-  let vmctx = builder.add_param(Type::I64)
-  let cond = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -2367,22 +2279,22 @@ test "mem_base_cse_global: merge with memory.grow keeps load" {
   builder.switch_to_block(join_block)
   let base1 = builder.load_mem_base(vmctx, 0)
   let off = builder.iconst_i64(0L)
-  let value = builder.load_ptr(Type::I32, base1, off)
+  let value = builder.load_ptr(I32, base1, off)
   builder.return_([value])
 
   let func = builder.get_function()
   let result = eliminate_redundant_mem_base_loads_global(func)
   assert_false(result.changed)
   let join_first = func.blocks[3].instructions[0]
-  assert_true(join_first.opcode is Opcode::LoadMemBase(_))
+  assert_true(join_first.opcode is LoadMemBase(_))
 }
 
 ///|
 test "wasm address reassociation: shared base plus immediate offsets" {
   let builder = IRBuilder::new("wasm_address_reassoc_shared_base")
-  let vmctx = builder.add_param(Type::I64)
-  let dyn_off = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let dyn_off = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -2390,9 +2302,9 @@ test "wasm address reassociation: shared base plus immediate offsets" {
   let base_plus_dyn = builder.iadd(base, dyn_off)
   let addr1 = builder.iadd(base_plus_dyn, builder.iconst_i64(8L))
   let zero = builder.iconst_i64(0L)
-  let load1 = builder.load_ptr(Type::I32, addr1, zero)
+  let load1 = builder.load_ptr(I32, addr1, zero)
   let addr2 = builder.iadd(base_plus_dyn, builder.iconst_i64(16L))
-  let load2 = builder.load_ptr(Type::I32, addr2, zero)
+  let load2 = builder.load_ptr(I32, addr2, zero)
   let sum = builder.iadd(load1, load2)
   builder.return_([sum])
 
@@ -2402,7 +2314,7 @@ test "wasm address reassociation: shared base plus immediate offsets" {
 
   let loads : Array[Inst] = []
   for inst in func.blocks[0].instructions {
-    if inst.opcode is Opcode::LoadPtr(_) {
+    if inst.opcode is LoadPtr(_) {
       loads.push(inst)
     }
   }
@@ -2413,7 +2325,7 @@ test "wasm address reassociation: shared base plus immediate offsets" {
   fn iconst_of(block : Block, value : Value) -> Int64? {
     for inst in block.instructions {
       if inst.first_result() is Some(result) && result.id == value.id {
-        if inst.opcode is Opcode::Iconst(c) {
+        if inst.opcode is Iconst(c) {
           return Some(c)
         }
       }
@@ -2428,15 +2340,15 @@ test "wasm address reassociation: shared base plus immediate offsets" {
 ///|
 test "wasm address reassociation: requires repeated pair usage" {
   let builder = IRBuilder::new("wasm_address_reassoc_single_use")
-  let vmctx = builder.add_param(Type::I64)
-  let dyn_off = builder.add_param(Type::I64)
-  builder.add_result(Type::I32)
+  let vmctx = builder.add_param(I64)
+  let dyn_off = builder.add_param(I64)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
   let base = builder.load_mem_base(vmctx, 0)
   let addr = builder.iadd(builder.iadd(base, dyn_off), builder.iconst_i64(8L))
-  let load = builder.load_ptr(Type::I32, addr, builder.iconst_i64(0L))
+  let load = builder.load_ptr(I32, addr, builder.iconst_i64(0L))
   builder.return_([load])
 
   let func = builder.get_function()
@@ -2448,9 +2360,9 @@ test "wasm address reassociation: requires repeated pair usage" {
 test "GVN: pure arithmetic CSE" {
   // Test that GVN also handles pure arithmetic (same as CSE)
   let builder = IRBuilder::new("gvn_pure_cse")
-  let p0 = builder.add_param(Type::I32)
-  let p1 = builder.add_param(Type::I32)
-  builder.add_result(Type::I32)
+  let p0 = builder.add_param(I32)
+  let p1 = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
 
@@ -2468,5 +2380,5 @@ test "GVN: pure arithmetic CSE" {
 
   // Second add should be replaced with copy
   let second_inst = func.blocks[0].instructions[1]
-  assert_true(second_inst.opcode is Opcode::Copy)
+  assert_true(second_inst.opcode is Copy)
 }

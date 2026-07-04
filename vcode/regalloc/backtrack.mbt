@@ -5,12 +5,12 @@
 /// Check if two register classes are compatible
 fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
   match (a, b) {
-    (@abi.Int, @abi.Int) => true
-    (@abi.Float32, @abi.Float32) => true
-    (@abi.Float32, @abi.Float64) => true
-    (@abi.Float64, @abi.Float32) => true
-    (@abi.Float64, @abi.Float64) => true
-    (@abi.Vector, @abi.Vector) => true
+    (Int, Int) => true
+    (Float32, Float32) => true
+    (Float32, Float64) => true
+    (Float64, Float32) => true
+    (Float64, Float64) => true
+    (Vector, Vector) => true
     _ => false
   }
 }
@@ -514,8 +514,8 @@ fn BacktrackingAllocator::get_reg_allocs(
   class : @abi.RegClass,
 ) -> Array[Array[(Int, OrderedSpan)]] {
   match class {
-    @abi.Int => self.int_reg_allocs
-    @abi.Float32 | @abi.Float64 | @abi.Vector => self.float_reg_allocs
+    Int => self.int_reg_allocs
+    Float32 | Float64 | Vector => self.float_reg_allocs
   }
 }
 
@@ -643,17 +643,17 @@ fn BacktrackingAllocator::get_available_regs(
 ) -> Array[@abi.PReg] {
   if bundle.crosses_call(self.ranges) {
     match bundle.reg_class {
-      @abi.Int => self.callee_saved_int
-      @abi.Float32 | @abi.Float64 => self.callee_saved_float
+      Int => self.callee_saved_int
+      Float32 | Float64 => self.callee_saved_float
       // V8-V15 preservation is only guaranteed for the low 64 bits by AAPCS64.
       // Vector values that cross calls are handled by forced spilling earlier.
-      @abi.Vector => []
+      Vector => []
     }
   } else {
     match bundle.reg_class {
-      @abi.Int => self.int_regs
-      @abi.Float32 | @abi.Float64 => self.float_regs
-      @abi.Vector => self.vector_regs
+      Int => self.int_regs
+      Float32 | Float64 => self.float_regs
+      Vector => self.vector_regs
     }
   }
 }
@@ -800,9 +800,9 @@ fn BacktrackingAllocator::try_allocate(
   let do_preferred_pass = self.enable_backtracking &&
     !bundle.crosses_call(self.ranges) &&
     (
-      bundle.reg_class is @abi.Int ||
-      bundle.reg_class is @abi.Float32 ||
-      bundle.reg_class is @abi.Float64
+      bundle.reg_class is Int ||
+      bundle.reg_class is Float32 ||
+      bundle.reg_class is Float64
     )
   let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
@@ -816,15 +816,15 @@ fn BacktrackingAllocator::try_allocate(
     let phase_regs = if do_preferred_pass {
       if phase == 0 {
         match reg_class {
-          @abi.Int => self.int_caller_saved
-          @abi.Float32 | @abi.Float64 => self.float_caller_saved
-          @abi.Vector => avail_regs
+          Int => self.int_caller_saved
+          Float32 | Float64 => self.float_caller_saved
+          Vector => avail_regs
         }
       } else {
         match reg_class {
-          @abi.Int => self.callee_saved_int
-          @abi.Float32 | @abi.Float64 => self.callee_saved_float
-          @abi.Vector => []
+          Int => self.callee_saved_int
+          Float32 | Float64 => self.callee_saved_float
+          Vector => []
         }
       }
     } else {
@@ -949,9 +949,9 @@ fn BacktrackingAllocator::try_evict(
   let do_preferred_pass = self.enable_backtracking &&
     !bundle.crosses_call(self.ranges) &&
     (
-      bundle.reg_class is @abi.Int ||
-      bundle.reg_class is @abi.Float32 ||
-      bundle.reg_class is @abi.Float64
+      bundle.reg_class is Int ||
+      bundle.reg_class is Float32 ||
+      bundle.reg_class is Float64
     )
   let reg_class = bundle.reg_class
   let phase_count = if do_preferred_pass { 2 } else { 1 }
@@ -973,15 +973,15 @@ fn BacktrackingAllocator::try_evict(
     let phase_regs = if do_preferred_pass {
       if phase == 0 {
         match reg_class {
-          @abi.Int => self.int_caller_saved
-          @abi.Float32 | @abi.Float64 => self.float_caller_saved
-          @abi.Vector => avail_regs
+          Int => self.int_caller_saved
+          Float32 | Float64 => self.float_caller_saved
+          Vector => avail_regs
         }
       } else {
         match reg_class {
-          @abi.Int => self.callee_saved_int
-          @abi.Float32 | @abi.Float64 => self.callee_saved_float
-          @abi.Vector => []
+          Int => self.callee_saved_int
+          Float32 | Float64 => self.callee_saved_float
+          Vector => []
         }
       }
     } else {
@@ -1329,7 +1329,7 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     }
 
     // Vector values live across calls must spill.
-    if bundle.reg_class is @abi.Vector && bundle.crosses_call(self.ranges) {
+    if bundle.reg_class is Vector && bundle.crosses_call(self.ranges) {
       self.force_spill_bundle(bundle)
       continue
     }
@@ -1470,9 +1470,9 @@ pub fn BacktrackingAllocator::generate_result(
 
       // Process use constraints (moves before the instruction)
       for i, constraint in inst.use_constraints {
-        if constraint is @abi.FixedReg(required_preg) {
+        if constraint is FixedReg(required_preg) {
           let use_reg = inst.uses[i]
-          if use_reg is @abi.Virtual(vreg) {
+          if use_reg is Virtual(vreg) {
             // Check if already allocated to the required register
             let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
               assignment_dense[vreg.id]
@@ -1504,7 +1504,7 @@ pub fn BacktrackingAllocator::generate_result(
                 class: vreg.class,
               })
             }
-          } else if use_reg is @abi.Physical(preg) {
+          } else if use_reg is Physical(preg) {
             if preg.index != required_preg.index {
               edits.before.push({
                 from: Reg(preg),
@@ -1518,9 +1518,9 @@ pub fn BacktrackingAllocator::generate_result(
 
       // Process def constraints (moves after the instruction)
       for i, constraint in inst.def_constraints {
-        if constraint is @abi.FixedReg(required_preg) {
+        if constraint is FixedReg(required_preg) {
           let def = inst.defs[i]
-          if def.reg is @abi.Virtual(vreg) {
+          if def.reg is Virtual(vreg) {
             // Check if already allocated to the required register
             let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
               assignment_dense[vreg.id]
@@ -1609,7 +1609,7 @@ fn BacktrackingAllocator::compact_spill_slots(
 ) -> Int {
   fn slots_used(cls : @abi.RegClass) -> Int {
     match cls {
-      @abi.Vector => 2
+      Vector => 2
       _ => 1
     }
   }
@@ -1732,7 +1732,7 @@ fn BacktrackingAllocator::compact_spill_slots(
         if i >= args.length() {
           break
         }
-        guard args[i] is @abi.Virtual(arg_vreg) else { continue }
+        guard args[i] is Virtual(arg_vreg) else { continue }
         if result.spill_slots.get(arg_vreg.id) is Some(src_slot) {
           edge_slots.add(src_slot) |> ignore
         }
@@ -1898,15 +1898,8 @@ pub fn build_bundles_with_merging(
   }
   fn same_fixed_bank(a : @abi.PReg, b : @abi.PReg) -> Bool {
     match (a.class, b.class) {
-      (@abi.Int, @abi.Int) => true
-      (
-        @abi.Float32
-        | @abi.Float64
-        | @abi.Vector,
-        @abi.Float32
-        | @abi.Float64
-        | @abi.Vector,
-      ) => true
+      (Int, Int) => true
+      (Float32 | Float64 | Vector, Float32 | Float64 | Vector) => true
       _ => false
     }
   }
@@ -2397,10 +2390,10 @@ fn BacktrackingAllocator::preassign_params(
   let mut int_idx = 0
   let mut float_idx = 0
   for param in self.func.params {
-    let is_vmctx_param = param.class is @abi.Int && int_idx == 0
+    let is_vmctx_param = param.class is Int && int_idx == 0
     // Determine which ABI register this param comes in
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
-      @abi.Int =>
+      Int =>
         if int_idx == 0 {
           // First integer argument is always vmctx in the internal Wasm ABI.
           (Some(vmctx_preg), true)
@@ -2409,7 +2402,7 @@ fn BacktrackingAllocator::preassign_params(
         } else {
           (None, true) // Stack param
         }
-      @abi.Float32 | @abi.Float64 | @abi.Vector =>
+      Float32 | Float64 | Vector =>
         if float_idx < arg_fprs.length() {
           let base = arg_fprs[float_idx]
           (Some({ index: base.index, class: param.class }), false)
@@ -2457,7 +2450,7 @@ fn BacktrackingAllocator::preassign_params(
         // normal allocation decide.
         let mut assigned = false
         match param.class {
-          @abi.Int =>
+          Int =>
             for callee_preg in self.callee_saved_int {
               if self.is_reg_free(callee_preg, bundle) {
                 self.record_allocation(bundle, callee_preg)
@@ -2465,7 +2458,7 @@ fn BacktrackingAllocator::preassign_params(
                 break
               }
             }
-          @abi.Float32 | @abi.Float64 =>
+          Float32 | Float64 =>
             for callee_preg in self.callee_saved_float {
               if self.is_reg_free(callee_preg, bundle) {
                 self.record_allocation(bundle, callee_preg)
@@ -2473,26 +2466,26 @@ fn BacktrackingAllocator::preassign_params(
                 break
               }
             }
-          @abi.Vector => ()
+          Vector => ()
         }
         if !assigned &&
           bundle.spillset_id >= 0 &&
           bundle.spillset_id < self.spillset_hints.length() {
           // Give split pieces a callee-saved preference when possible.
           let hint = match param.class {
-            @abi.Int =>
+            Int =>
               if self.callee_saved_int.length() > 0 {
                 Some(self.callee_saved_int[0])
               } else {
                 None
               }
-            @abi.Float32 | @abi.Float64 =>
+            Float32 | Float64 =>
               if self.callee_saved_float.length() > 0 {
                 Some(self.callee_saved_float[0])
               } else {
                 None
               }
-            @abi.Vector => None
+            Vector => None
           }
           if hint is Some(hint_preg) {
             self.spillset_hints[bundle.spillset_id] = Some(hint_preg)

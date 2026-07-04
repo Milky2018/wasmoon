@@ -15,17 +15,14 @@ fn ExecContext::exec_struct_new(
   let num_fields = struct_type.fields.length()
 
   // Pop field values from stack (in reverse order)
-  let fields : Array[@types.Value] = Array::make(
-    num_fields,
-    @types.Value::I32(0),
-  )
+  let fields : Array[@types.Value] = Array::make(num_fields, I32(0))
   for i = num_fields - 1; i >= 0; i = i - 1 {
     fields[i] = self.stack.pop()
   }
 
   // Allocate struct in the store
   let ref_idx = self.store.alloc_struct(type_idx, fields)
-  self.stack.push(@types.Value::StructRef(ref_idx))
+  self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -48,7 +45,7 @@ fn ExecContext::exec_struct_new_default(
 
   // Allocate struct in the store
   let ref_idx = self.store.alloc_struct(type_idx, fields)
-  self.stack.push(@types.Value::StructRef(ref_idx))
+  self.stack.push(StructRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -98,7 +95,7 @@ fn ExecContext::exec_struct_get_s(
           } else {
             n & 0xFFFF
           }
-          @types.Value::I32(signed)
+          I32(signed)
         }
         _ => value
       }
@@ -126,7 +123,7 @@ fn ExecContext::exec_struct_get_u(
       // Zero-extend packed types (mask off high bits)
       let extended_value = match (value, storage_type) {
         (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
-        (I32(n), Packed(I16)) => @types.Value::I32(n & 0xFFFF)
+        (I32(n), Packed(I16)) => I32(n & 0xFFFF)
         _ => value
       }
       self.stack.push(extended_value)
@@ -153,7 +150,7 @@ fn ExecContext::exec_struct_set(
       // Mask packed types to their bit width
       let masked_value = match (value, storage_type) {
         (I32(n), Packed(I8)) => @types.Value::I32(n & 0xFF)
-        (I32(n), Packed(I16)) => @types.Value::I32(n & 0xFFFF)
+        (I32(n), Packed(I16)) => I32(n & 0xFFFF)
         _ => value
       }
       self.store.struct_set(ref_idx, field_idx, masked_value)
@@ -185,7 +182,7 @@ fn ExecContext::exec_array_new(
 
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
-  self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -210,7 +207,7 @@ fn ExecContext::exec_array_new_default(
 
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
-  self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -222,14 +219,14 @@ fn ExecContext::exec_array_new_fixed(
   len : Int,
 ) -> Unit raise {
   // Pop elements from stack (in reverse order)
-  let elements : Array[@types.Value] = Array::make(len, @types.Value::I32(0))
+  let elements : Array[@types.Value] = Array::make(len, I32(0))
   for i = len - 1; i >= 0; i = i - 1 {
     elements[i] = self.stack.pop()
   }
 
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
-  self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -282,7 +279,7 @@ fn ExecContext::exec_array_get_s(
                 // Negative: extend with 1s
                 @types.Value::I32(byte_val | -256) // 0xFFFFFF00
               } else {
-                @types.Value::I32(byte_val)
+                I32(byte_val)
               }
             }
             _ => value
@@ -294,9 +291,9 @@ fn ExecContext::exec_array_get_s(
               let short_val = n & 0xffff
               if (short_val & 0x8000) != 0 {
                 // Negative: extend with 1s
-                @types.Value::I32(short_val | -65536) // 0xFFFF0000
+                I32(short_val | -65536) // 0xFFFF0000
               } else {
-                @types.Value::I32(short_val)
+                I32(short_val)
               }
             }
             _ => value
@@ -337,7 +334,7 @@ fn ExecContext::exec_array_get_u(
         Packed(I16) =>
           // Zero-extend from 16 bits (just mask, no sign extension)
           match value {
-            I32(n) => @types.Value::I32(n & 0xffff)
+            I32(n) => I32(n & 0xffff)
             _ => value
           }
         _ => value // Non-packed types don't need extension
@@ -376,7 +373,7 @@ fn ExecContext::exec_array_len(self : ExecContext) -> Unit raise {
   match ref_val {
     ArrayRef(ref_idx) => {
       let len = self.store.array_len(ref_idx)
-      self.stack.push(@types.Value::I32(len))
+      self.stack.push(I32(len))
     }
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
@@ -470,7 +467,7 @@ fn ExecContext::exec_array_new_data(
     }
     // Create empty array
     let ref_idx = self.store.alloc_array(type_idx, [])
-    self.stack.push(@types.Value::ArrayRef(ref_idx))
+    self.stack.push(ArrayRef(ref_idx))
     self.maybe_collect_gc_stress()
     return
   }
@@ -500,7 +497,7 @@ fn ExecContext::exec_array_new_data(
 
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
-  self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -525,13 +522,13 @@ fn ExecContext::exec_array_new_elem(
   // Check if elem segment has been dropped or is declarative
   let elem_segment = self.instance.elem_segments[elem_idx]
   let is_dropped = self.instance.dropped_elems[elem_idx]
-  let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
+  let is_declarative = elem_segment.mode is Declarative
   if (is_dropped || is_declarative) && len != 0 {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
   if is_dropped || is_declarative {
     let ref_idx = self.store.alloc_array(type_idx, [])
-    self.stack.push(@types.Value::ArrayRef(ref_idx))
+    self.stack.push(ArrayRef(ref_idx))
     self.maybe_collect_gc_stress()
     return
   }
@@ -552,7 +549,7 @@ fn ExecContext::exec_array_new_elem(
 
   // Allocate array in the store
   let ref_idx = self.store.alloc_array(type_idx, elements)
-  self.stack.push(@types.Value::ArrayRef(ref_idx))
+  self.stack.push(ArrayRef(ref_idx))
   self.maybe_collect_gc_stress()
 }
 
@@ -652,7 +649,7 @@ fn ExecContext::exec_array_init_elem(
   // Check if elem segment has been dropped or is declarative
   let elem_segment = self.instance.elem_segments[elem_idx]
   let is_dropped = self.instance.dropped_elems[elem_idx]
-  let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
+  let is_declarative = elem_segment.mode is Declarative
   if (is_dropped || is_declarative) && len != 0 {
     raise @runtime.RuntimeError::OutOfBoundsTableAccess
   }
@@ -706,13 +703,13 @@ fn read_value_from_bytes(
   match st {
     Packed(I8) => {
       let b = bytes[offset].to_int()
-      @types.Value::I32(b)
+      I32(b)
     }
     Packed(I16) => {
       let b0 = bytes[offset].to_int()
       let b1 = bytes[offset + 1].to_int()
       let val = b0 | (b1 << 8)
-      @types.Value::I32(val)
+      I32(val)
     }
     Val(I32) => {
       let b0 = bytes[offset].to_int()
@@ -720,14 +717,14 @@ fn read_value_from_bytes(
       let b2 = bytes[offset + 2].to_int()
       let b3 = bytes[offset + 3].to_int()
       let val = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-      @types.Value::I32(val)
+      I32(val)
     }
     Val(I64) => {
       let mut val = 0L
       for i in 0..<8 {
         val = val | (bytes[offset + i].to_int().to_int64() << (i * 8))
       }
-      @types.Value::I64(val)
+      I64(val)
     }
     Val(F32) => {
       let b0 = bytes[offset].to_int()
@@ -735,18 +732,18 @@ fn read_value_from_bytes(
       let b2 = bytes[offset + 2].to_int()
       let b3 = bytes[offset + 3].to_int()
       let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
-      @types.Value::F32(Float::reinterpret_from_int(bits))
+      F32(Float::reinterpret_from_int(bits))
     }
     Val(F64) => {
       let mut bits = 0L
       for i in 0..<8 {
         bits = bits | (bytes[offset + i].to_int().to_int64() << (i * 8))
       }
-      @types.Value::F64(bits.reinterpret_as_double())
+      F64(bits.reinterpret_as_double())
     }
     Val(_) =>
       // Reference types are not valid for data segments
-      @types.Value::Null
+      Null
   }
 }
 
@@ -760,13 +757,13 @@ fn ExecContext::eval_elem_init_expr(
   match init_expr {
     [RefFunc(func_idx)] => {
       let store_addr = self.instance.func_addrs[func_idx]
-      @types.Value::FuncRef(store_addr)
+      FuncRef(store_addr)
     }
-    [RefNull(_)] => @types.Value::Null
+    [RefNull(_)] => Null
     [I32Const(idx)] => {
       // Legacy format: function index as i32
       let store_addr = self.instance.func_addrs[idx]
-      @types.Value::FuncRef(store_addr)
+      FuncRef(store_addr)
     }
     _ => {
       // For complex expressions, execute them through the interpreter
@@ -780,7 +777,7 @@ fn ExecContext::eval_elem_init_expr(
       if self.stack.size() > saved_stack_len {
         self.stack.pop()
       } else {
-        @types.Value::Null
+        Null
       }
     }
   }
@@ -798,7 +795,7 @@ fn ExecContext::exec_ref_i31(self : ExecContext) -> Unit raise {
     I32(n) => {
       // i31 stores only the lower 31 bits
       let i31_val = n & @types.I32_MAX
-      self.stack.push(@types.Value::I31(i31_val))
+      self.stack.push(I31(i31_val))
     }
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
@@ -814,7 +811,7 @@ fn ExecContext::exec_i31_get_s(self : ExecContext) -> Unit raise {
       // If bit 30 is set, we need to set bit 31 (sign bit)
       // -2147483648 = 0x80000000 as signed int
       let extended = if (n & 0x40000000) != 0 { n | @types.I32_MIN } else { n }
-      self.stack.push(@types.Value::I32(extended))
+      self.stack.push(I32(extended))
     }
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
@@ -826,7 +823,7 @@ fn ExecContext::exec_i31_get_s(self : ExecContext) -> Unit raise {
 fn ExecContext::exec_i31_get_u(self : ExecContext) -> Unit raise {
   let val = self.stack.pop()
   match val {
-    I31(n) => self.stack.push(@types.Value::I32(n))
+    I31(n) => self.stack.push(I32(n))
     Null => raise @runtime.RuntimeError::NullReference
     _ => raise @runtime.RuntimeError::TypeMismatch
   }
@@ -842,7 +839,7 @@ fn ExecContext::exec_any_convert_extern(self : ExecContext) -> Unit raise {
   // Unwrap externref back to its internal representation
   let val = self.stack.pop()
   match val {
-    Null => self.stack.push(@types.Value::Null)
+    Null => self.stack.push(Null)
     ExternRef(_) => {
       // Unwrap: host externrefs stay as ExternRef, wrapped internals get unwrapped
       let unwrapped = self.store.unwrap_extern(val)
@@ -858,7 +855,7 @@ fn ExecContext::exec_extern_convert_any(self : ExecContext) -> Unit raise {
   // Wrap internal values as externref
   let val = self.stack.pop()
   match val {
-    Null => self.stack.push(@types.Value::Null)
+    Null => self.stack.push(Null)
     ExternRef(_) =>
       // Already an externref, pass through
       self.stack.push(val)
@@ -899,7 +896,7 @@ fn value_matches_type(
     (Null, _) => false
 
     // i31ref matches i31 and eq types
-    (I31(_), @types.ValueType::RefI31) => true
+    (I31(_), RefI31) => true
     (I31(_), RefNullI31) => true
     (I31(_), RefEq) => true
     (I31(_), RefNullEq) => true
@@ -964,7 +961,7 @@ fn value_matches_type(
     (ArrayRef(_), RefAny) => true
 
     // FuncRef matches func types
-    (FuncRef(_), @types.ValueType::FuncRef) => true
+    (FuncRef(_), FuncRef) => true
     (FuncRef(_), RefFunc) => true // non-null abstract func type
     (FuncRef(func_addr), RefFuncTyped(type_idx)) => {
       // Check if function type matches
@@ -977,7 +974,7 @@ fn value_matches_type(
     }
 
     // ExternRef matches externref and anyref (when converted via any.convert_extern)
-    (ExternRef(_), @types.ValueType::ExternRef) => true
+    (ExternRef(_), ExternRef) => true
     (ExternRef(_), RefExtern) => true
     // When externref is converted to anyref via any.convert_extern, it becomes anyref
     // and should match anyref types
@@ -987,11 +984,11 @@ fn value_matches_type(
     // When anyref values are converted to externref via extern.convert_any,
     // they should match externref types. In our implementation, the underlying
     // value type is preserved, so we need to match them against externref.
-    (I31(_), @types.ValueType::ExternRef) => true
+    (I31(_), ExternRef) => true
     (I31(_), RefExtern) => true
-    (StructRef(_), @types.ValueType::ExternRef) => true
+    (StructRef(_), ExternRef) => true
     (StructRef(_), RefExtern) => true
-    (ArrayRef(_), @types.ValueType::ExternRef) => true
+    (ArrayRef(_), ExternRef) => true
     (ArrayRef(_), RefExtern) => true
     _ => false
   }
@@ -1022,11 +1019,11 @@ fn ExecContext::exec_ref_test(
   let val = self.stack.pop()
   // ref.test returns false for null
   if val is Null {
-    self.stack.push(@types.Value::I32(0))
+    self.stack.push(I32(0))
     return
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
-  self.stack.push(@types.Value::I32(if matches { 1 } else { 0 }))
+  self.stack.push(I32(if matches { 1 } else { 0 }))
 }
 
 ///|
@@ -1038,11 +1035,11 @@ fn ExecContext::exec_ref_test_null(
   let val = self.stack.pop()
   // ref.test null returns true for null (since target is nullable)
   if val is Null {
-    self.stack.push(@types.Value::I32(1))
+    self.stack.push(I32(1))
     return
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
-  self.stack.push(@types.Value::I32(if matches { 1 } else { 0 }))
+  self.stack.push(I32(if matches { 1 } else { 0 }))
 }
 
 ///|
@@ -1072,7 +1069,7 @@ fn ExecContext::exec_ref_cast_null(
   let val = self.stack.pop()
   // ref.cast null allows null
   if val is Null {
-    self.stack.push(@types.Value::Null)
+    self.stack.push(Null)
     return
   }
   let matches = value_matches_type(val, target_type, self.store, self.instance)
@@ -1153,18 +1150,18 @@ fn default_value_for_storage_type(
   storage_type : @types.StorageType,
 ) -> @types.Value {
   match storage_type {
-    Val(I32) => @types.Value::I32(0)
-    Val(I64) => @types.Value::I64(0L)
-    Val(F32) => @types.Value::F32(0.0)
-    Val(F64) => @types.Value::F64(0.0)
-    Val(FuncRef) | Val(RefNullFuncTyped(_)) => @types.Value::Null
-    Val(ExternRef) => @types.Value::Null
-    Val(RefNullStruct(_)) => @types.Value::Null
-    Val(RefNullArray(_)) => @types.Value::Null
-    Val(RefNullI31) => @types.Value::Null
-    Val(RefNullEq) => @types.Value::Null
-    Val(RefAny) | Val(RefNone) => @types.Value::Null
-    Packed(I8) | Packed(I16) => @types.Value::I32(0)
-    _ => @types.Value::Null // Default for other reference types
+    Val(I32) => I32(0)
+    Val(I64) => I64(0L)
+    Val(F32) => F32(0.0)
+    Val(F64) => F64(0.0)
+    Val(FuncRef) | Val(RefNullFuncTyped(_)) => Null
+    Val(ExternRef) => Null
+    Val(RefNullStruct(_)) => Null
+    Val(RefNullArray(_)) => Null
+    Val(RefNullI31) => Null
+    Val(RefNullEq) => Null
+    Val(RefAny) | Val(RefNone) => Null
+    Packed(I8) | Packed(I16) => I32(0)
+    _ => Null // Default for other reference types
   }
 }

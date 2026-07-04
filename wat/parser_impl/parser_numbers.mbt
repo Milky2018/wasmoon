@@ -9,7 +9,7 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       parse_hex_int(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -19,7 +19,7 @@ fn parse_int(s : String) -> Int raise WatError {
       }
       -parse_hex_int(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     // Try signed first, then unsigned (for values like 4294967295 which is -1 in i32)
@@ -27,11 +27,11 @@ fn parse_int(s : String) -> Int raise WatError {
       _ => {
         // Try parsing as unsigned and reinterpret
         let u64 = @string.parse_uint64(trimmed) catch {
-          _ => raise WatError::InvalidNumber(s, default_loc())
+          _ => raise InvalidNumber(s, default_loc())
         }
         // Check if it fits in u32 range
         if u64 > 0xFFFFFFFFUL {
-          raise WatError::InvalidNumber(s, default_loc())
+          raise InvalidNumber(s, default_loc())
         }
         u64.reinterpret_as_int64().to_int()
       }
@@ -50,7 +50,7 @@ fn parse_hex_int(s : String) -> Int raise WatError {
     }
     match hex_digit_value(c) {
       Some(v) => result = result * 16 + v
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   result
@@ -70,16 +70,16 @@ fn parse_u32(s : String) -> Int raise WatError {
       }
       parse_hex_u32(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     // Parse decimal as unsigned 64-bit first to check range
     let u64 = @string.parse_uint64(trimmed) catch {
-      _ => raise WatError::InvalidNumber(s, default_loc())
+      _ => raise InvalidNumber(s, default_loc())
     }
     // Check if value exceeds u32 max
     if u64 > 0xFFFFFFFFUL {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
     u64.reinterpret_as_int64().to_int()
   }
@@ -103,12 +103,12 @@ fn parse_hex_u32(s : String) -> Int raise WatError {
         }
         result = new_result
       }
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   // Check if value exceeds u32 max
   if result > 0xFFFFFFFFUL || overflow {
-    raise WatError::InvalidNumber(s, default_loc())
+    raise InvalidNumber(s, default_loc())
   }
   result.reinterpret_as_int64().to_int()
 }
@@ -126,12 +126,12 @@ fn parse_u64(s : String) -> Int64 raise WatError {
       }
       parse_hex_u64(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     // Parse decimal as unsigned 64-bit
     let u64 = @string.parse_uint64(trimmed) catch {
-      _ => raise WatError::InvalidNumber(s, default_loc())
+      _ => raise InvalidNumber(s, default_loc())
     }
     u64.reinterpret_as_int64()
   }
@@ -155,11 +155,11 @@ fn parse_hex_u64(s : String) -> Int64 raise WatError {
         }
         result = new_result
       }
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   if overflow {
-    raise WatError::InvalidNumber(s, default_loc())
+    raise InvalidNumber(s, default_loc())
   }
   result.reinterpret_as_int64()
 }
@@ -175,7 +175,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       parse_hex_int64(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
@@ -185,7 +185,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       }
       -parse_hex_int64(hex_part.to_string())
     } else {
-      raise WatError::InvalidNumber(s, default_loc())
+      raise InvalidNumber(s, default_loc())
     }
   } else {
     // Try signed first, then unsigned (for values like 18446744073709551615 which is -1 in i64)
@@ -193,7 +193,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
       _ => {
         // Try parsing as unsigned and reinterpret
         let u64 = @string.parse_uint64(trimmed) catch {
-          _ => raise WatError::InvalidNumber(s, default_loc())
+          _ => raise InvalidNumber(s, default_loc())
         }
         u64.reinterpret_as_int64()
       }
@@ -212,7 +212,7 @@ fn parse_hex_int64(s : String) -> Int64 raise WatError {
     }
     match hex_digit_value(c) {
       Some(v) => result = result * 16L + v.to_int64()
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   result
@@ -383,7 +383,7 @@ fn BigUInt::compare(self : BigUInt, other : BigUInt) -> Int {
 
 ///|
 /// Left shift by n bits
-impl Shl for BigUInt with shl(self, n) {
+impl Shl for BigUInt with fn shl(self, n) {
   if n == 0 {
     return { limbs: self.limbs.copy() }
   }
@@ -413,7 +413,7 @@ impl Shl for BigUInt with shl(self, n) {
 
 ///|
 /// Right shift by n bits
-impl Shr for BigUInt with shr(self, n) {
+impl Shr for BigUInt with fn shr(self, n) {
   if n == 0 {
     return { limbs: self.limbs.copy() }
   }
@@ -552,7 +552,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
       idx += 1
     } else if c == '.' {
       if decimal_pos >= 0 {
-        raise WatError::InvalidNumber(s, default_loc())
+        raise InvalidNumber(s, default_loc())
       }
       decimal_pos = digits.length()
       idx += 1
@@ -567,7 +567,7 @@ fn parse_decimal_float32_precise(s : String) -> Float raise WatError {
     }
   }
   if !seen_digit {
-    raise WatError::InvalidNumber(s, default_loc())
+    raise InvalidNumber(s, default_loc())
   }
   if decimal_pos < 0 {
     decimal_pos = digits.length()
@@ -983,7 +983,7 @@ fn parse_hex_float32_precise(s : String) -> Float raise WatError {
         }
         idx += 1
       }
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   if !seen_digit {
@@ -1183,7 +1183,7 @@ fn parse_float64(s : String) -> Double raise WatError {
     return parse_hex_float64(s)
   }
   @string.parse_double(s) catch {
-    _ => raise WatError::InvalidNumber(s, default_loc())
+    _ => raise InvalidNumber(s, default_loc())
   }
 }
 
@@ -1247,7 +1247,7 @@ fn parse_hex_float64(s : String) -> Double raise WatError {
         }
         idx += 1
       }
-      None => raise WatError::InvalidNumber(s, default_loc())
+      None => raise InvalidNumber(s, default_loc())
     }
   }
   if !seen_digit {

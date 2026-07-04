@@ -34,10 +34,10 @@ fn compute_reload_intervals(
     // changes. Therefore, we disable coalescing for any spill slot that is
     // used by multiple vregs within the block.
     let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = {}
-    let conflicting_slots : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let conflicting_slots : @hashset.HashSet[Int] = HashSet([])
     for inst_idx, inst in block.insts {
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) &&
+        if use_reg is Virtual(vreg) &&
           alloc.spill_slots.get(vreg.id) is Some(slot) {
           if conflicting_slots.contains(slot) {
             continue
@@ -45,7 +45,7 @@ fn compute_reload_intervals(
           // Do not reload-coalesce vector values: there is no safe
           // non-allocatable vector scratch register bank, and AAPCS64 only
           // guarantees preserving the low 64 bits of V8-V15.
-          if vreg.class is @abi.Vector {
+          if vreg.class is Vector {
             continue
           }
           match slot_uses.get(slot) {
@@ -95,8 +95,8 @@ fn allocate_reload_registers(
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen. These must never be chosen for reload
   // coalescing.
-  let reserved_int_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
-  let reserved_float_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
+  let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
   let isa = @isa.ISA::current()
   // - The pinned VMContext register (AArch64: x21).
   reserved_int_regs.add(isa.vmctx_reg_index()) |> ignore
@@ -127,7 +127,7 @@ fn allocate_reload_registers(
   let reload_float_regs : Array[Int] = []
   let reload_int_regs_callfree_extra : Array[Int] = []
   match isa {
-    @isa.AArch64 => {
+    AArch64 => {
       // AArch64: use a subset of callee-saved regs that are not used by Wasmoon's ABI roles.
       for idx in [19, 20, 22, 23, 24, 25, 26, 27, 28] {
         reload_int_regs.push(idx)
@@ -142,7 +142,7 @@ fn allocate_reload_registers(
         reload_float_regs.push(idx)
       }
     }
-    @isa.AMD64 => {
+    AMD64 => {
       let env = isa.machine_env(
         reserve_mem0_desc=func.should_cache_mem0_desc(),
         reserve_func_table=func.should_cache_func_table(),
@@ -164,7 +164,7 @@ fn allocate_reload_registers(
     float_used : @hashset.HashSet[Int],
   ) -> Unit {
     match preg.class {
-      @abi.Int => int_used.add(preg.index) |> ignore
+      Int => int_used.add(preg.index) |> ignore
       _ => float_used.add(preg.index) |> ignore
     }
   }
@@ -177,9 +177,9 @@ fn allocate_reload_registers(
   let block_float_used_map : Map[Int, @hashset.HashSet[Int]] = {}
   let block_has_call_map : Map[Int, Bool] = {}
   for block_idx, block in func.blocks {
-    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet([])
-    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet([])
-    let block_referenced_vregs : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let block_int_used : @hashset.HashSet[Int] = HashSet([])
+    let block_float_used : @hashset.HashSet[Int] = HashSet([])
+    let block_referenced_vregs : @hashset.HashSet[Int] = HashSet([])
     let mut block_has_call = false
 
     for param in block.params {
@@ -190,12 +190,12 @@ fn allocate_reload_registers(
     }
 
     for inst in block.insts {
-      if inst.opcode.call_type() is @instr.Regular ||
-        inst.opcode.call_type() is @instr.TailCall {
+      if inst.opcode.call_type() is Regular ||
+        inst.opcode.call_type() is TailCall {
         block_has_call = true
       }
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
+        if use_reg is Virtual(vreg) {
           block_referenced_vregs.add(vreg.id) |> ignore
           if alloc.assignments.get(vreg.id) is Some(preg) {
             mark_used_preg(preg, block_int_used, block_float_used)
@@ -203,7 +203,7 @@ fn allocate_reload_registers(
         }
       }
       for def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
+        if def.reg is Virtual(vreg) {
           block_referenced_vregs.add(vreg.id) |> ignore
           if alloc.assignments.get(vreg.id) is Some(preg) {
             mark_used_preg(preg, block_int_used, block_float_used)
@@ -211,12 +211,12 @@ fn allocate_reload_registers(
         }
       }
       for constraint in inst.use_constraints {
-        if constraint is @abi.FixedReg(preg) {
+        if constraint is FixedReg(preg) {
           mark_used_preg(preg, block_int_used, block_float_used)
         }
       }
       for constraint in inst.def_constraints {
-        if constraint is @abi.FixedReg(preg) {
+        if constraint is FixedReg(preg) {
           mark_used_preg(preg, block_int_used, block_float_used)
         }
       }
@@ -225,26 +225,26 @@ fn allocate_reload_registers(
     if block.terminator is Some(term) {
       let term_regs : Array[@abi.Reg] = []
       match term {
-        @instr.Jump(_, args) =>
+        Jump(_, args) =>
           for arg in args {
             term_regs.push(arg)
           }
-        @instr.Branch(cond, _, _) => term_regs.push(cond)
-        @instr.BranchCmp(lhs, rhs, _, _, _, _) => {
+        Branch(cond, _, _) => term_regs.push(cond)
+        BranchCmp(lhs, rhs, _, _, _, _) => {
           term_regs.push(lhs)
           term_regs.push(rhs)
         }
-        @instr.BranchZero(reg, _, _, _, _) => term_regs.push(reg)
-        @instr.BranchCmpImm(lhs, _, _, _, _, _) => term_regs.push(lhs)
-        @instr.Return(values) =>
+        BranchZero(reg, _, _, _, _) => term_regs.push(reg)
+        BranchCmpImm(lhs, _, _, _, _, _) => term_regs.push(lhs)
+        Return(values) =>
           for value in values {
             term_regs.push(value)
           }
-        @instr.BrTable(index, _, _) => term_regs.push(index)
-        @instr.Trap(_) => ()
+        BrTable(index, _, _) => term_regs.push(index)
+        Trap(_) => ()
       }
       for reg in term_regs {
-        if reg is @abi.Virtual(vreg) {
+        if reg is Virtual(vreg) {
           block_referenced_vregs.add(vreg.id) |> ignore
           if alloc.assignments.get(vreg.id) is Some(preg) {
             mark_used_preg(preg, block_int_used, block_float_used)
@@ -274,11 +274,11 @@ fn allocate_reload_registers(
   for block_idx, _block in func.blocks {
     let block_int_live = match block_int_used_map.get(block_idx) {
       Some(s) => s
-      None => @hashset.HashSet([])
+      None => HashSet([])
     }
     let block_float_live = match block_float_used_map.get(block_idx) {
       Some(s) => s
-      None => @hashset.HashSet([])
+      None => HashSet([])
     }
     let block_has_call = match block_has_call_map.get(block_idx) {
       Some(v) => v
@@ -289,8 +289,8 @@ fn allocate_reload_registers(
     // callee-saved candidate set in call-containing blocks (no caller-saved
     // fallback pool), but still allow interval coalescing within those blocks.
     // Track which reload registers are in use within this block.
-    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet([])
-    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let block_int_used : @hashset.HashSet[Int] = HashSet([])
+    let block_float_used : @hashset.HashSet[Int] = HashSet([])
     // Allocate reload registers for intervals in this block.
     for key, interval in intervals {
       let (b_idx, _) = key
@@ -298,7 +298,7 @@ fn allocate_reload_registers(
         continue
       }
       match interval.vreg_class {
-        @abi.Int => {
+        Int => {
           let int_candidates : Array[Int] = []
           for idx in reload_int_regs {
             int_candidates.push(idx)
@@ -319,7 +319,7 @@ fn allocate_reload_registers(
             break
           }
         }
-        @abi.Vector => ()
+        Vector => ()
         _ =>
           for idx in reload_float_regs {
             if reserved_float_regs.contains(idx) ||

@@ -82,11 +82,11 @@ fn call_core_func(
   ) catch {
     e => {
       match canon_suspend[0] {
-        Some(CanonSuspend::Yield) => {
+        Some(Yield) => {
           canon_suspend[0] = None
           raise AsyncSuspendYield
         }
-        Some(CanonSuspend::Wait(ws)) => {
+        Some(Wait(ws)) => {
           canon_suspend[0] = None
           raise AsyncSuspendWait(ws)
         }

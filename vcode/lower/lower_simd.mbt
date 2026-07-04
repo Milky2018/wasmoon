@@ -167,8 +167,8 @@ fn lower_v128_shuffle(
     let vcode_inst = @instr.VCodeInst::new(SIMDShuffle(lanes))
     vcode_inst.add_def({ reg: Virtual(dst) })
     // Add 2 temp vector defs for the expansion in the emitter.
-    let temp1 = ctx.vcode_func.new_vreg(@abi.Vector)
-    let temp2 = ctx.vcode_func.new_vreg(@abi.Vector)
+    let temp1 = ctx.vcode_func.new_vreg(Vector)
+    let temp2 = ctx.vcode_func.new_vreg(Vector)
     vcode_inst.add_def({ reg: Virtual(temp1) })
     vcode_inst.add_def({ reg: Virtual(temp2) })
     vcode_inst.add_use(Virtual(v1))
@@ -215,7 +215,7 @@ fn lower_v128_unary(
       opcode is SIMDTruncSatF64ToI32UZero ||
       opcode is SIMDConvertLowI32ToF64S ||
       opcode is SIMDConvertLowI32ToF64U {
-      let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+      let tmp = ctx.vcode_func.new_vreg(Vector)
       vcode_inst.add_def({ reg: Virtual(tmp) })
     }
     vcode_inst.add_use(Virtual(src))
@@ -239,11 +239,11 @@ fn lower_v128_binary(
     vcode_inst.add_def({ reg: Virtual(dst) })
     match opcode {
       SIMDMul(D64) => {
-        let t0 = ctx.vcode_func.new_vreg(@abi.Vector)
-        let t1 = ctx.vcode_func.new_vreg(@abi.Vector)
-        let t2 = ctx.vcode_func.new_vreg(@abi.Vector)
-        let t3 = ctx.vcode_func.new_vreg(@abi.Vector)
-        let t4 = ctx.vcode_func.new_vreg(@abi.Vector)
+        let t0 = ctx.vcode_func.new_vreg(Vector)
+        let t1 = ctx.vcode_func.new_vreg(Vector)
+        let t2 = ctx.vcode_func.new_vreg(Vector)
+        let t3 = ctx.vcode_func.new_vreg(Vector)
+        let t4 = ctx.vcode_func.new_vreg(Vector)
         vcode_inst.add_def({ reg: Virtual(t0) })
         vcode_inst.add_def({ reg: Virtual(t1) })
         vcode_inst.add_def({ reg: Virtual(t2) })
@@ -253,7 +253,7 @@ fn lower_v128_binary(
       SIMDRelaxedDot8to16 => {
         // Expanded into multiple AArch64 instructions in the emitter.
         // Provide a temp vector so regalloc accounts for it.
-        let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+        let tmp = ctx.vcode_func.new_vreg(Vector)
         vcode_inst.add_def({ reg: Virtual(tmp) })
       }
       _ => ()
@@ -337,8 +337,8 @@ fn lower_v128_shift(
     let shift = ctx.get_vreg_for_use(inst.operands[1], block)
 
     // Allocate temp registers for broadcast shift
-    let temp_gpr = ctx.vcode_func.new_vreg(@abi.Int) // GPR for masked shift
-    let shift_vec = ctx.vcode_func.new_vreg(@abi.Vector) // FPR for broadcast
+    let temp_gpr = ctx.vcode_func.new_vreg(Int) // GPR for masked shift
+    let shift_vec = ctx.vcode_func.new_vreg(Vector) // FPR for broadcast
 
     // Instruction 1: SIMDBroadcastShift
     // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
@@ -377,21 +377,21 @@ fn lower_v128_to_i32(
     match opcode {
       // These expand to a reduction + move and need a temp vector for the scalar result.
       SIMDAnyTrue => {
-        let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+        let tmp = ctx.vcode_func.new_vreg(Vector)
         vcode_inst.add_def({ reg: Virtual(tmp) })
       }
       SIMDAllTrue(lane_size) =>
         match lane_size {
           D64 => ()
           _ => {
-            let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+            let tmp = ctx.vcode_func.new_vreg(Vector)
             vcode_inst.add_def({ reg: Virtual(tmp) })
           }
         }
       SIMDBitmask(B8) => {
-        let temp_weights = ctx.vcode_func.new_vreg(@abi.Vector)
-        let temp_shift = ctx.vcode_func.new_vreg(@abi.Vector)
-        let temp_work = ctx.vcode_func.new_vreg(@abi.Vector)
+        let temp_weights = ctx.vcode_func.new_vreg(Vector)
+        let temp_shift = ctx.vcode_func.new_vreg(Vector)
+        let temp_work = ctx.vcode_func.new_vreg(Vector)
         vcode_inst.add_def({ reg: Virtual(temp_weights) })
         vcode_inst.add_def({ reg: Virtual(temp_shift) })
         vcode_inst.add_def({ reg: Virtual(temp_work) })
@@ -598,9 +598,7 @@ fn lower_v128_fcmp_ne(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // First do FCMEQ
     let tmp = ctx.new_vreg(Vector)
-    let eq_inst = @instr.VCodeInst::new(
-      SIMDFCmp(is_f32, @instr.SIMDFCmpKind::Eq),
-    )
+    let eq_inst = @instr.VCodeInst::new(SIMDFCmp(is_f32, Eq))
     eq_inst.add_def({ reg: Virtual(tmp) })
     eq_inst.add_use(Virtual(lhs))
     eq_inst.add_use(Virtual(rhs))
@@ -639,11 +637,7 @@ fn lower_v128_fma(
     // Both madd and nmadd use: acc=c, v1=a, v2=b
     // madd: c + a * b = a * b + c
     // nmadd: c - a * b = -(a * b) + c
-    let opcode = if is_sub {
-      @instr.SIMDFMls(is_f32)
-    } else {
-      @instr.SIMDFMla(is_f32)
-    }
+    let opcode = if is_sub { @instr.SIMDFMls(is_f32) } else { SIMDFMla(is_f32) }
     let vcode_inst = @instr.VCodeInst::new(opcode)
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(c)) // accumulator
@@ -665,9 +659,9 @@ fn lower_v128_relaxed_dot_add(
     let a = ctx.get_vreg_for_use(inst.operands[0], block)
     let b = ctx.get_vreg_for_use(inst.operands[1], block)
     let c = ctx.get_vreg_for_use(inst.operands[2], block)
-    let vcode_inst = @instr.VCodeInst::new(@instr.SIMDRelaxedDot8to32Add)
+    let vcode_inst = @instr.VCodeInst::new(SIMDRelaxedDot8to32Add)
     vcode_inst.add_def({ reg: Virtual(dst) })
-    let tmp = ctx.vcode_func.new_vreg(@abi.Vector)
+    let tmp = ctx.vcode_func.new_vreg(Vector)
     vcode_inst.add_def({ reg: Virtual(tmp) })
     vcode_inst.add_use(Virtual(a))
     vcode_inst.add_use(Virtual(b))

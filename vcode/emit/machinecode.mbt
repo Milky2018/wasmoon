@@ -115,26 +115,26 @@ const RUNTIME_FIXUP_EXCEPTION_BASE : Int = -22_000
 ///|
 pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
   let ord = match libcall {
-    @instr.RefTest => 0
-    @instr.RefCast => 1
-    @instr.StructNew => 2
-    @instr.StructGet => 3
-    @instr.StructSet => 4
-    @instr.ArrayNew => 5
-    @instr.ArrayGet => 6
-    @instr.ArraySet => 7
-    @instr.ArrayLen => 8
-    @instr.ArrayFill => 9
-    @instr.ArrayCopy => 10
-    @instr.ArrayNewData => 11
-    @instr.ArrayNewElem => 12
-    @instr.ArrayInitData => 13
-    @instr.ArrayInitElem => 14
-    @instr.TypeCheckSubtype => 15
-    @instr.RegisterStructInline => 16
-    @instr.RegisterArrayInline => 17
-    @instr.AllocStructSlow => 18
-    @instr.AllocArraySlow => 19
+    RefTest => 0
+    RefCast => 1
+    StructNew => 2
+    StructGet => 3
+    StructSet => 4
+    ArrayNew => 5
+    ArrayGet => 6
+    ArraySet => 7
+    ArrayLen => 8
+    ArrayFill => 9
+    ArrayCopy => 10
+    ArrayNewData => 11
+    ArrayNewElem => 12
+    ArrayInitData => 13
+    ArrayInitElem => 14
+    TypeCheckSubtype => 15
+    RegisterStructInline => 16
+    RegisterArrayInline => 17
+    AllocStructSlow => 18
+    AllocArraySlow => 19
   }
   RUNTIME_FIXUP_GC_BASE - ord
 }
@@ -142,20 +142,20 @@ pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
 ///|
 pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
   let ord = match libcall {
-    @instr.MemoryGrow => 0
-    @instr.MemorySize => 1
-    @instr.MemoryFill => 2
-    @instr.MemoryFillMem0 => 3
-    @instr.MemoryCopy => 4
-    @instr.MemoryCopyMem0 => 5
-    @instr.MemoryInit => 6
-    @instr.DataDrop => 7
-    @instr.TableGrow => 8
-    @instr.TableFill => 9
-    @instr.TableCopy => 10
-    @instr.TableInit => 11
-    @instr.ElemDrop => 12
-    @instr.HostCall => 13
+    MemoryGrow => 0
+    MemorySize => 1
+    MemoryFill => 2
+    MemoryFillMem0 => 3
+    MemoryCopy => 4
+    MemoryCopyMem0 => 5
+    MemoryInit => 6
+    DataDrop => 7
+    TableGrow => 8
+    TableFill => 9
+    TableCopy => 10
+    TableInit => 11
+    ElemDrop => 12
+    HostCall => 13
   }
   RUNTIME_FIXUP_JIT_BASE - ord
 }
@@ -163,18 +163,18 @@ pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
 ///|
 pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
   let ord = match libcall {
-    @instr.TryBegin => 0
-    @instr.TryEnd => 1
-    @instr.Throw => 2
-    @instr.ThrowTag => 3
-    @instr.ThrowRef => 4
-    @instr.Delegate => 5
-    @instr.GetTag => 6
-    @instr.GetValue => 7
-    @instr.GetValueCount => 8
-    @instr.Sigsetjmp => 9
-    @instr.SpillLocals => 10
-    @instr.GetSpilledLocal => 11
+    TryBegin => 0
+    TryEnd => 1
+    Throw => 2
+    ThrowTag => 3
+    ThrowRef => 4
+    Delegate => 5
+    GetTag => 6
+    GetValue => 7
+    GetValueCount => 8
+    Sigsetjmp => 9
+    SpillLocals => 10
+    GetSpilledLocal => 11
   }
   RUNTIME_FIXUP_EXCEPTION_BASE - ord
 }
@@ -182,97 +182,97 @@ pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
 ///|
 pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
   match idx {
-    i if i == gc_libcall_fixup_idx(@instr.RefTest) =>
+    i if i == gc_libcall_fixup_idx(RefTest) =>
       Some(@jit_ffi.c_jit_get_gc_ref_test_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.RefCast) =>
+    i if i == gc_libcall_fixup_idx(RefCast) =>
       Some(@jit_ffi.c_jit_get_gc_ref_cast_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.StructNew) =>
+    i if i == gc_libcall_fixup_idx(StructNew) =>
       Some(@jit_ffi.c_jit_get_gc_struct_new_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.StructGet) =>
+    i if i == gc_libcall_fixup_idx(StructGet) =>
       Some(@jit_ffi.c_jit_get_gc_struct_get_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.StructSet) =>
+    i if i == gc_libcall_fixup_idx(StructSet) =>
       Some(@jit_ffi.c_jit_get_gc_struct_set_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayNew) =>
+    i if i == gc_libcall_fixup_idx(ArrayNew) =>
       Some(@jit_ffi.c_jit_get_gc_array_new_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayGet) =>
+    i if i == gc_libcall_fixup_idx(ArrayGet) =>
       Some(@jit_ffi.c_jit_get_gc_array_get_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArraySet) =>
+    i if i == gc_libcall_fixup_idx(ArraySet) =>
       Some(@jit_ffi.c_jit_get_gc_array_set_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayLen) =>
+    i if i == gc_libcall_fixup_idx(ArrayLen) =>
       Some(@jit_ffi.c_jit_get_gc_array_len_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayFill) =>
+    i if i == gc_libcall_fixup_idx(ArrayFill) =>
       Some(@jit_ffi.c_jit_get_gc_array_fill_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayCopy) =>
+    i if i == gc_libcall_fixup_idx(ArrayCopy) =>
       Some(@jit_ffi.c_jit_get_gc_array_copy_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayNewData) =>
+    i if i == gc_libcall_fixup_idx(ArrayNewData) =>
       Some(@jit_ffi.c_jit_get_gc_array_new_data_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayNewElem) =>
+    i if i == gc_libcall_fixup_idx(ArrayNewElem) =>
       Some(@jit_ffi.c_jit_get_gc_array_new_elem_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayInitData) =>
+    i if i == gc_libcall_fixup_idx(ArrayInitData) =>
       Some(@jit_ffi.c_jit_get_gc_array_init_data_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.ArrayInitElem) =>
+    i if i == gc_libcall_fixup_idx(ArrayInitElem) =>
       Some(@jit_ffi.c_jit_get_gc_array_init_elem_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.TypeCheckSubtype) =>
+    i if i == gc_libcall_fixup_idx(TypeCheckSubtype) =>
       Some(@jit_ffi.c_jit_get_gc_type_check_subtype_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.RegisterStructInline) =>
+    i if i == gc_libcall_fixup_idx(RegisterStructInline) =>
       Some(@jit_ffi.c_jit_get_gc_register_struct_inline_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.RegisterArrayInline) =>
+    i if i == gc_libcall_fixup_idx(RegisterArrayInline) =>
       Some(@jit_ffi.c_jit_get_gc_register_array_inline_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.AllocStructSlow) =>
+    i if i == gc_libcall_fixup_idx(AllocStructSlow) =>
       Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
-    i if i == gc_libcall_fixup_idx(@instr.AllocArraySlow) =>
+    i if i == gc_libcall_fixup_idx(AllocArraySlow) =>
       Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryGrow) =>
+    i if i == jit_libcall_fixup_idx(MemoryGrow) =>
       Some(@jit_ffi.c_jit_get_memory_grow_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemorySize) =>
+    i if i == jit_libcall_fixup_idx(MemorySize) =>
       Some(@jit_ffi.c_jit_get_memory_size_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryFill) =>
+    i if i == jit_libcall_fixup_idx(MemoryFill) =>
       Some(@jit_ffi.c_jit_get_memory_fill_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryFillMem0) =>
+    i if i == jit_libcall_fixup_idx(MemoryFillMem0) =>
       Some(@jit_ffi.c_jit_get_memory_fill_mem0_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryCopy) =>
+    i if i == jit_libcall_fixup_idx(MemoryCopy) =>
       Some(@jit_ffi.c_jit_get_memory_copy_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryCopyMem0) =>
+    i if i == jit_libcall_fixup_idx(MemoryCopyMem0) =>
       Some(@jit_ffi.c_jit_get_memory_copy_mem0_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.MemoryInit) =>
+    i if i == jit_libcall_fixup_idx(MemoryInit) =>
       Some(@jit_ffi.c_jit_get_memory_init_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.DataDrop) =>
+    i if i == jit_libcall_fixup_idx(DataDrop) =>
       Some(@jit_ffi.c_jit_get_data_drop_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.TableGrow) =>
+    i if i == jit_libcall_fixup_idx(TableGrow) =>
       Some(@jit_ffi.c_jit_get_table_grow_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.TableFill) =>
+    i if i == jit_libcall_fixup_idx(TableFill) =>
       Some(@jit_ffi.c_jit_get_table_fill_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.TableCopy) =>
+    i if i == jit_libcall_fixup_idx(TableCopy) =>
       Some(@jit_ffi.c_jit_get_table_copy_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.TableInit) =>
+    i if i == jit_libcall_fixup_idx(TableInit) =>
       Some(@jit_ffi.c_jit_get_table_init_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.ElemDrop) =>
+    i if i == jit_libcall_fixup_idx(ElemDrop) =>
       Some(@jit_ffi.c_jit_get_elem_drop_ptr())
-    i if i == jit_libcall_fixup_idx(@instr.HostCall) =>
+    i if i == jit_libcall_fixup_idx(HostCall) =>
       Some(@jit_ffi.c_jit_get_hostcall_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.TryBegin) =>
+    i if i == exception_libcall_fixup_idx(TryBegin) =>
       Some(@jit_ffi.c_jit_get_exception_try_begin_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.TryEnd) =>
+    i if i == exception_libcall_fixup_idx(TryEnd) =>
       Some(@jit_ffi.c_jit_get_exception_try_end_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.Throw) =>
+    i if i == exception_libcall_fixup_idx(Throw) =>
       Some(@jit_ffi.c_jit_get_exception_throw_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.ThrowTag) =>
+    i if i == exception_libcall_fixup_idx(ThrowTag) =>
       Some(@jit_ffi.c_jit_get_exception_throw_tag_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.ThrowRef) =>
+    i if i == exception_libcall_fixup_idx(ThrowRef) =>
       Some(@jit_ffi.c_jit_get_exception_throw_ref_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.Delegate) =>
+    i if i == exception_libcall_fixup_idx(Delegate) =>
       Some(@jit_ffi.c_jit_get_exception_delegate_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.GetTag) =>
+    i if i == exception_libcall_fixup_idx(GetTag) =>
       Some(@jit_ffi.c_jit_get_exception_get_tag_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.GetValue) =>
+    i if i == exception_libcall_fixup_idx(GetValue) =>
       Some(@jit_ffi.c_jit_get_exception_get_value_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.GetValueCount) =>
+    i if i == exception_libcall_fixup_idx(GetValueCount) =>
       Some(@jit_ffi.c_jit_get_exception_get_value_count_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.Sigsetjmp) =>
+    i if i == exception_libcall_fixup_idx(Sigsetjmp) =>
       Some(@jit_ffi.c_jit_get_sigsetjmp_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.SpillLocals) =>
+    i if i == exception_libcall_fixup_idx(SpillLocals) =>
       Some(@jit_ffi.c_jit_get_exception_spill_locals_ptr())
-    i if i == exception_libcall_fixup_idx(@instr.GetSpilledLocal) =>
+    i if i == exception_libcall_fixup_idx(GetSpilledLocal) =>
       Some(@jit_ffi.c_jit_get_exception_get_spilled_local_ptr())
     _ => None
   }

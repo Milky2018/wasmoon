@@ -327,8 +327,8 @@ pub fn VCodeBuilder::load(
 ) -> @abi.VReg {
   let class = match ty {
     F32 => @abi.Float32
-    F64 => @abi.Float64
-    _ => @abi.Int
+    F64 => Float64
+    _ => Int
   }
   let result = self.new_vreg(class)
   let inst = @instr.VCodeInst::new(Load(ty, offset))
@@ -430,9 +430,9 @@ pub fn VCodeBuilder::jump(
   if self.current_block is Some(block) {
     let regs : Array[@abi.Reg] = []
     for v in args {
-      regs.push(@abi.Virtual(v))
+      regs.push(Virtual(v))
     }
-    block.set_terminator(@instr.VCodeTerminator::Jump(target.id, regs))
+    block.set_terminator(Jump(target.id, regs))
   }
 }
 
@@ -444,13 +444,7 @@ pub fn VCodeBuilder::branch(
   else_block : @block.VCodeBlock,
 ) -> Unit {
   if self.current_block is Some(block) {
-    block.set_terminator(
-      @instr.VCodeTerminator::Branch(
-        Virtual(cond),
-        then_block.id,
-        else_block.id,
-      ),
-    )
+    block.set_terminator(Branch(Virtual(cond), then_block.id, else_block.id))
   }
 }
 
@@ -464,13 +458,13 @@ pub fn VCodeBuilder::return_(
     for v in values {
       regs.push(Virtual(v))
     }
-    block.set_terminator(@instr.VCodeTerminator::Return(regs))
+    block.set_terminator(Return(regs))
   }
 }
 
 ///|
 pub fn VCodeBuilder::trap(self : VCodeBuilder, msg : String) -> Unit {
   if self.current_block is Some(block) {
-    block.set_terminator(@instr.VCodeTerminator::Trap(msg))
+    block.set_terminator(Trap(msg))
   }
 }

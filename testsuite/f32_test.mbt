@@ -74,8 +74,8 @@ test "f32 add" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::F32], // param_types
-    [@types.ValueType::F32], // result_types
+    [F32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -176,8 +176,8 @@ test "f64 add" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::F64], // param_types
-    [@types.ValueType::F64], // result_types
+    [F64], // param_types
+    [F64], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -276,8 +276,8 @@ test "f32 sub" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::F32], // param_types
-    [@types.ValueType::F32], // result_types
+    [F32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -305,7 +305,7 @@ test "f32 sub" {
 
 ///|
 test "f32 mul" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -395,8 +395,8 @@ test "f32 mul" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::F32], // param_types
-    [@types.ValueType::F32], // result_types
+    [F32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }

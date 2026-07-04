@@ -11,9 +11,9 @@ pub fn build_machine_env(
   reserve_func_table : Bool,
   reserve_extra_results_ptr : Bool,
 ) -> @spec.MachineEnvData {
-  let mem0_desc_idx = int_reg_index(@spec.IntRegRole::Mem0Desc)
-  let func_table_idx = int_reg_index(@spec.IntRegRole::FuncTable)
-  let extra_results_ptr_idx = int_reg_index(@spec.IntRegRole::ExtraResultsPtr)
+  let mem0_desc_idx = int_reg_index(Mem0Desc)
+  let func_table_idx = int_reg_index(FuncTable)
+  let extra_results_ptr_idx = int_reg_index(ExtraResultsPtr)
   let preferred_int : Array[@abi.PReg] = []
   let nonpreferred_int : Array[@abi.PReg] = []
   let callee_saved_int : Array[@abi.PReg] = []
@@ -73,13 +73,13 @@ pub fn build_machine_env(
   let preferred_vector : Array[@abi.PReg] = []
   let nonpreferred_vector : Array[@abi.PReg] = []
   for r in aapcs64_arg_fprs() {
-    preferred_vector.push({ index: r.index, class: @abi.Vector })
+    preferred_vector.push({ index: r.index, class: Vector })
   }
   for r in allocatable_scratch_fprs() {
     if r.index == 16 || r.index == 17 {
       continue
     }
-    preferred_vector.push({ index: r.index, class: @abi.Vector })
+    preferred_vector.push({ index: r.index, class: Vector })
   }
   {
     preferred_int,
@@ -90,10 +90,7 @@ pub fn build_machine_env(
     nonpreferred_vector,
     callee_saved_int,
     callee_saved_float,
-    scratch_int: [
-      int_reg_index(@spec.IntRegRole::Scratch1),
-      int_reg_index(@spec.IntRegRole::Scratch2),
-    ],
+    scratch_int: [int_reg_index(Scratch1), int_reg_index(Scratch2)],
     scratch_float: [16, 17],
   }
 }

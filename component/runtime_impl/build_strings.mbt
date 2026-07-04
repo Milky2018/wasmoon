@@ -189,10 +189,7 @@ fn encode_string_for_canon(
         let len = (bytes.length().reinterpret_as_uint() | 0x8000_0000U).reinterpret_as_int()
         (Bytes::from_array(bytes), len, 2)
       } else {
-        let (bytes, units, _align) = encode_string_for_canon(
-          s,
-          StringEncoding::Utf16,
-        )
+        let (bytes, units, _align) = encode_string_for_canon(s, Utf16)
         (bytes, units, 2)
       }
     }
@@ -274,25 +271,24 @@ fn synthesize_trivial_instance_import(
     td : TypeDef,
   ) -> ComponentInstance? raise ComponentRuntimeError {
     match td {
-      TypeDef::InstanceTypeEmpty =>
-        Some(make_instance("\{inst_key}::empty", {}))
-      TypeDef::InstanceType(decls) => {
+      InstanceTypeEmpty => Some(make_instance("\{inst_key}::empty", {}))
+      InstanceType(decls) => {
         let local_types : Array[TypeDef?] = []
         let exports : Map[String, ComponentExtern] = {}
         for d in decls {
           match d {
-            InstanceDecl::Type(t) => local_types.push(Some(t))
-            InstanceDecl::AliasOuter(kind, _count, _idx) =>
+            Type(t) => local_types.push(Some(t))
+            AliasOuter(kind, _count, _idx) =>
               if kind == 0x03 {
                 local_types.push(None)
               }
-            InstanceDecl::AliasInstanceExport(kind, _instance_idx, _name) =>
+            AliasInstanceExport(kind, _instance_idx, _name) =>
               if kind == 0x03 {
                 local_types.push(None)
               }
-            InstanceDecl::Export(name, ExternDesc::Type(bound)) =>
+            Export(name, Type(bound)) =>
               match bound {
-                TypeBound::Eq(ti) => {
+                Eq(ti) => {
                   let aliased = if ti >= 0 && ti < local_types.length() {
                     local_types[ti]
                   } else if ti >= 0 && ti < types.length() {
@@ -300,25 +296,24 @@ fn synthesize_trivial_instance_import(
                   } else {
                     None
                   }
-                  exports.set(name, ComponentExtern::Type(aliased))
+                  exports.set(name, Type(aliased))
                   // Type exports also occupy a slot in the local type space.
                   local_types.push(aliased)
                 }
                 // Cannot synthesize abstract resources without a host-supplied identity.
-                TypeBound::SubResource => return None
+                SubResource => return None
               }
-            InstanceDecl::Export(name, ExternDesc::InstanceType(inner)) =>
+            Export(name, InstanceType(inner)) =>
               match resolve_inst_typedef(local_types, inner) {
                 Some(inner_td) =>
                   match
                     synthesize_from_typedef("\{inst_key}::\{name}", inner_td) {
-                    Some(inner_inst) =>
-                      exports.set(name, ComponentExtern::Instance(inner_inst))
+                    Some(inner_inst) => exports.set(name, Instance(inner_inst))
                     None => return None
                   }
                 None => return None
               }
-            InstanceDecl::Export(_, _) => return None
+            Export(_, _) => return None
             _ => return None
           }
         }

@@ -114,7 +114,7 @@ pub fn FuncEnvironment::new(
     memory_page_size_log2,
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
-    bounds_check_cache: @hashmap.HashMap([]),
+    bounds_check_cache: HashMap([]),
   }
 }
 
@@ -134,15 +134,12 @@ pub fn FuncEnvironment::translate_global_get(
   let ty = Type::from_wasm(global_type.value_type)
 
   // Load globals_ptr from vmctx
-  let globals_offset = builder.iconst(
-    Type::I64,
-    VMCTX_GLOBALS_OFFSET.to_int64(),
-  )
-  let globals_ptr = builder.load_ptr(Type::I64, vmctx, globals_offset)
+  let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
   // Load value from globals_ptr + field_offset
   let field_offset = builder.iconst(
-    Type::I64,
+    I64,
     (global_idx * GLOBAL_STRIDE).to_int64(),
   )
   builder.load_ptr(ty, globals_ptr, field_offset)
@@ -163,15 +160,12 @@ pub fn FuncEnvironment::translate_global_set(
   let ty = Type::from_wasm(global_type.value_type)
 
   // Load globals_ptr from vmctx
-  let globals_offset = builder.iconst(
-    Type::I64,
-    VMCTX_GLOBALS_OFFSET.to_int64(),
-  )
-  let globals_ptr = builder.load_ptr(Type::I64, vmctx, globals_offset)
+  let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
   // Store value to globals_ptr + field_offset
   let field_offset = builder.iconst(
-    Type::I64,
+    I64,
     (global_idx * GLOBAL_STRIDE).to_int64(),
   )
   builder.store_ptr(ty, globals_ptr, value, field_offset)
@@ -192,30 +186,24 @@ pub fn FuncEnvironment::translate_table_size(
 ) -> Value {
   if table_idx == 0 {
     // Fast path for table 0
-    let offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64(),
-    )
-    let size_i64 = builder.load_ptr(Type::I64, vmctx, offset)
+    let offset = builder.iconst(I64, VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64())
+    let size_i64 = builder.load_ptr(I64, vmctx, offset)
     // For table64, return i64; for table32, reduce to i32
     if is_table64 {
       size_i64
     } else {
-      builder.ireduce(Type::I32, size_i64)
+      builder.ireduce(I32, size_i64)
     }
   } else {
     // General path: load from table_sizes array
-    let sizes_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE_SIZES_OFFSET.to_int64(),
-    )
-    let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
-    let elem_offset = builder.iconst(Type::I64, (table_idx * 8).to_int64())
-    let size_i64 = builder.load_ptr(Type::I64, sizes_ptr, elem_offset)
+    let sizes_offset = builder.iconst(I64, VMCTX_TABLE_SIZES_OFFSET.to_int64())
+    let sizes_ptr = builder.load_ptr(I64, vmctx, sizes_offset)
+    let elem_offset = builder.iconst(I64, (table_idx * 8).to_int64())
+    let size_i64 = builder.load_ptr(I64, sizes_ptr, elem_offset)
     if is_table64 {
       size_i64
     } else {
-      builder.ireduce(Type::I32, size_i64)
+      builder.ireduce(I32, size_i64)
     }
   }
 }
@@ -238,31 +226,22 @@ pub fn FuncEnvironment::translate_table_get(
   let (table_size, table_base) = if table_idx == 0 {
     // Fast path for table 0
     let size_offset = builder.iconst(
-      Type::I64,
+      I64,
       VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64(),
     )
-    let size = builder.load_ptr(Type::I64, vmctx, size_offset)
-    let base_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE0_BASE_OFFSET.to_int64(),
-    )
-    let base = builder.load_ptr(Type::I64, vmctx, base_offset)
+    let size = builder.load_ptr(I64, vmctx, size_offset)
+    let base_offset = builder.iconst(I64, VMCTX_TABLE0_BASE_OFFSET.to_int64())
+    let base = builder.load_ptr(I64, vmctx, base_offset)
     (size, base)
   } else {
     // General path: load from tables array
-    let sizes_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLE_SIZES_OFFSET.to_int64(),
-    )
-    let sizes_ptr = builder.load_ptr(Type::I64, vmctx, sizes_offset)
-    let idx_offset = builder.iconst(Type::I64, (table_idx * 8).to_int64())
-    let size = builder.load_ptr(Type::I64, sizes_ptr, idx_offset)
-    let tables_offset = builder.iconst(
-      Type::I64,
-      VMCTX_TABLES_OFFSET.to_int64(),
-    )
-    let tables_ptr = builder.load_ptr(Type::I64, vmctx, tables_offset)
-    let base = builder.load_ptr(Type::I64, tables_ptr, idx_offset)
+    let sizes_offset = builder.iconst(I64, VMCTX_TABLE_SIZES_OFFSET.to_int64())
+    let sizes_ptr = builder.load_ptr(I64, vmctx, sizes_offset)
+    let idx_offset = builder.iconst(I64, (table_idx * 8).to_int64())
+    let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
+    let tables_offset = builder.iconst(I64, VMCTX_TABLES_OFFSET.to_int64())
+    let tables_ptr = builder.load_ptr(I64, vmctx, tables_offset)
+    let base = builder.load_ptr(I64, tables_ptr, idx_offset)
     (size, base)
   }
 
@@ -271,9 +250,9 @@ pub fn FuncEnvironment::translate_table_get(
   let elem_idx_i64 = if is_table64 {
     elem_idx
   } else {
-    builder.uextend(Type::I64, elem_idx)
+    builder.uextend(I64, elem_idx)
   }
-  let in_bounds = builder.icmp(IntCC::Ult, elem_idx_i64, table_size)
+  let in_bounds = builder.icmp(Ult, elem_idx_i64, table_size)
 
   // Create trap and continue blocks
   let trap_block = builder.create_block()
@@ -288,13 +267,13 @@ pub fn FuncEnvironment::translate_table_get(
   builder.switch_to_block(continue_block)
 
   // Calculate address: table_base + elem_idx * 16
-  let stride = builder.iconst(Type::I64, TABLE_ENTRY_STRIDE.to_int64())
+  let stride = builder.iconst(I64, TABLE_ENTRY_STRIDE.to_int64())
   let byte_offset = builder.imul(elem_idx_i64, stride)
   let addr = builder.iadd(table_base, byte_offset)
 
   // Load the funcref value (first 8 bytes of entry)
-  let zero_offset = builder.iconst(Type::I64, 0L)
-  builder.load_ptr(Type::I64, addr, zero_offset)
+  let zero_offset = builder.iconst(I64, 0L)
+  builder.load_ptr(I64, addr, zero_offset)
 }
 
 ///|
@@ -332,25 +311,19 @@ pub fn FuncEnvironment::translate_table_set(
 fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
   if memidx == 0 {
     let mem0_size_off = builder.iconst(
-      Type::I64,
+      I64,
       VMCTX_MEMORY0_SIZE_OFFSET.to_int64(),
     )
-    return builder.load_ptr(Type::I64, vmctx, mem0_size_off)
+    return builder.load_ptr(I64, vmctx, mem0_size_off)
   }
   let mem_ptr = {
-    let memories_off = builder.iconst(
-      Type::I64,
-      VMCTX_MEMORIES_OFFSET.to_int64(),
-    )
-    let memories_ptr = builder.load_ptr(Type::I64, vmctx, memories_off)
-    let idx_off = builder.iconst(Type::I64, (memidx * 8).to_int64())
-    builder.load_ptr(Type::I64, memories_ptr, idx_off)
+    let memories_off = builder.iconst(I64, VMCTX_MEMORIES_OFFSET.to_int64())
+    let memories_ptr = builder.load_ptr(I64, vmctx, memories_off)
+    let idx_off = builder.iconst(I64, (memidx * 8).to_int64())
+    builder.load_ptr(I64, memories_ptr, idx_off)
   }
-  let size_off = builder.iconst(
-    Type::I64,
-    MEMORY_CURRENT_LENGTH_OFFSET.to_int64(),
-  )
-  builder.load_ptr(Type::I64, mem_ptr, size_off)
+  let size_off = builder.iconst(I64, MEMORY_CURRENT_LENGTH_OFFSET.to_int64())
+  builder.load_ptr(I64, mem_ptr, size_off)
 }
 
 ///|
@@ -444,14 +417,14 @@ pub fn FuncEnvironment::emit_atomic_alignment_check(
   let addr_i64 = if is_memory64 {
     wasm_addr
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
-  let mask = builder.iconst(Type::I64, (access_size - 1).to_int64())
+  let mask = builder.iconst(I64, (access_size - 1).to_int64())
   let masked = builder.band(addr_plus_offset, mask)
-  let zero = builder.iconst(Type::I64, 0L)
-  let is_aligned = builder.icmp(IntCC::Eq, masked, zero)
+  let zero = builder.iconst(I64, 0L)
+  let is_aligned = builder.icmp(Eq, masked, zero)
   let trap_block = self.get_or_create_atomic_unaligned_trap_block(builder)
   let continue_block = builder.create_block()
   builder.brnz(is_aligned, continue_block, trap_block)
@@ -589,8 +562,8 @@ pub fn FuncEnvironment::emit_bounds_check(
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = builder.load_mem_base(vmctx, memidx)
-    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
-    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_i64 = builder.uextend(I64, wasm_addr)
+    let offset_val = builder.iconst(I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
     return builder.iadd(memory_base, addr_plus_offset)
   }
@@ -614,15 +587,15 @@ pub fn FuncEnvironment::emit_bounds_check(
   let addr_i64 = if is_memory64 {
     wasm_addr // Already i64
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
 
   // Calculate addr + offset for effective address
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
     // Need runtime bounds check
-    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
 
     // For memory64, we need overflow-safe bounds checking
@@ -630,23 +603,23 @@ pub fn FuncEnvironment::emit_bounds_check(
     let continue_block = builder.create_block()
     if is_memory64 {
       // Check for overflow in addr + offset
-      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let no_overflow1 = builder.icmp(Uge, addr_plus_offset, addr_i64)
       let check1_block = builder.create_block()
       builder.brnz(no_overflow1, check1_block, trap_block)
       builder.switch_to_block(check1_block)
 
       // Check for overflow in (addr + offset) + size
-      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let no_overflow2 = builder.icmp(Uge, end_addr, addr_plus_offset)
       let check2_block = builder.create_block()
       builder.brnz(no_overflow2, check2_block, trap_block)
       builder.switch_to_block(check2_block)
 
       // Check end_addr <= memory_size
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     } else {
       // For memory32, no overflow possible
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     }
 
@@ -679,11 +652,11 @@ pub fn FuncEnvironment::translate_memory_load(
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = builder.load_mem_base(vmctx, memidx)
-    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
-    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_i64 = builder.uextend(I64, wasm_addr)
+    let offset_val = builder.iconst(I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
     let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-    let zero_offset = builder.iconst(Type::I64, 0L)
+    let zero_offset = builder.iconst(I64, 0L)
     return builder.load_ptr(ty, effective_addr, zero_offset)
   }
 
@@ -706,15 +679,15 @@ pub fn FuncEnvironment::translate_memory_load(
   let addr_i64 = if is_memory64 {
     wasm_addr // Already i64
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
 
   // Calculate addr + offset for effective address
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
     // Need runtime bounds check
-    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
 
     // For memory64, we need overflow-safe bounds checking.
@@ -727,24 +700,24 @@ pub fn FuncEnvironment::translate_memory_load(
     let continue_block = builder.create_block()
     if is_memory64 {
       // Check for overflow in addr + offset
-      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let no_overflow1 = builder.icmp(Uge, addr_plus_offset, addr_i64)
       let check1_block = builder.create_block()
       builder.brnz(no_overflow1, check1_block, trap_block)
       builder.switch_to_block(check1_block)
 
       // Check for overflow in (addr + offset) + size
-      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let no_overflow2 = builder.icmp(Uge, end_addr, addr_plus_offset)
       let check2_block = builder.create_block()
       builder.brnz(no_overflow2, check2_block, trap_block)
       builder.switch_to_block(check2_block)
 
       // Check end_addr <= memory_size
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     } else {
       // For memory32, addr is u32 extended to u64, offset is u32, size is small
       // No overflow possible, simple check suffices
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     }
 
@@ -755,7 +728,7 @@ pub fn FuncEnvironment::translate_memory_load(
 
   // Calculate effective address: memory_base + addr + offset
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-  let zero_offset = builder.iconst(Type::I64, 0L)
+  let zero_offset = builder.iconst(I64, 0L)
   builder.load_ptr(ty, effective_addr, zero_offset)
 }
 
@@ -780,11 +753,11 @@ pub fn FuncEnvironment::translate_memory_store(
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = builder.load_mem_base(vmctx, memidx)
-    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
-    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_i64 = builder.uextend(I64, wasm_addr)
+    let offset_val = builder.iconst(I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
     let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-    let zero_offset = builder.iconst(Type::I64, 0L)
+    let zero_offset = builder.iconst(I64, 0L)
     return builder.store_ptr(ty, effective_addr, value, zero_offset)
   }
 
@@ -807,15 +780,15 @@ pub fn FuncEnvironment::translate_memory_store(
   let addr_i64 = if is_memory64 {
     wasm_addr // Already i64
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
 
   // Calculate addr + offset for effective address
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
     // Need runtime bounds check
-    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
 
     // For memory64, we need overflow-safe bounds checking
@@ -823,23 +796,23 @@ pub fn FuncEnvironment::translate_memory_store(
     let continue_block = builder.create_block()
     if is_memory64 {
       // Check for overflow in addr + offset
-      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let no_overflow1 = builder.icmp(Uge, addr_plus_offset, addr_i64)
       let check1_block = builder.create_block()
       builder.brnz(no_overflow1, check1_block, trap_block)
       builder.switch_to_block(check1_block)
 
       // Check for overflow in (addr + offset) + size
-      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let no_overflow2 = builder.icmp(Uge, end_addr, addr_plus_offset)
       let check2_block = builder.create_block()
       builder.brnz(no_overflow2, check2_block, trap_block)
       builder.switch_to_block(check2_block)
 
       // Check end_addr <= memory_size
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     } else {
       // For memory32, no overflow possible
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     }
 
@@ -850,7 +823,7 @@ pub fn FuncEnvironment::translate_memory_store(
 
   // Calculate effective address: memory_base + addr + offset
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-  let zero_offset = builder.iconst(Type::I64, 0L)
+  let zero_offset = builder.iconst(I64, 0L)
   builder.store_ptr(ty, effective_addr, value, zero_offset)
 }
 
@@ -871,11 +844,11 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = builder.load_mem_base(vmctx, memidx)
-    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
-    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_i64 = builder.uextend(I64, wasm_addr)
+    let offset_val = builder.iconst(I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
     let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-    let zero_offset = builder.iconst(Type::I64, 0L)
+    let zero_offset = builder.iconst(I64, 0L)
     return builder.load_ptr_narrow(
       result_ty, narrow_bits, signed, effective_addr, zero_offset,
     )
@@ -900,15 +873,15 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   let addr_i64 = if is_memory64 {
     wasm_addr // Already i64
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
 
   // Calculate addr + offset for effective address
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
     // Need runtime bounds check
-    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
 
     // For memory64, we need overflow-safe bounds checking
@@ -916,23 +889,23 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
     let continue_block = builder.create_block()
     if is_memory64 {
       // Check for overflow in addr + offset
-      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let no_overflow1 = builder.icmp(Uge, addr_plus_offset, addr_i64)
       let check1_block = builder.create_block()
       builder.brnz(no_overflow1, check1_block, trap_block)
       builder.switch_to_block(check1_block)
 
       // Check for overflow in (addr + offset) + size
-      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let no_overflow2 = builder.icmp(Uge, end_addr, addr_plus_offset)
       let check2_block = builder.create_block()
       builder.brnz(no_overflow2, check2_block, trap_block)
       builder.switch_to_block(check2_block)
 
       // Check end_addr <= memory_size
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     } else {
       // For memory32, no overflow possible
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     }
 
@@ -943,7 +916,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
 
   // Calculate effective address
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-  let zero_offset = builder.iconst(Type::I64, 0L)
+  let zero_offset = builder.iconst(I64, 0L)
   builder.load_ptr_narrow(
     result_ty, narrow_bits, signed, effective_addr, zero_offset,
   )
@@ -965,11 +938,11 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   if self.use_guard_pages(memidx) {
     // Guard pages (memory32, memidx=0): rely on SIGSEGV for OOB trapping.
     let memory_base = builder.load_mem_base(vmctx, memidx)
-    let addr_i64 = builder.uextend(Type::I64, wasm_addr)
-    let offset_val = builder.iconst(Type::I64, offset)
+    let addr_i64 = builder.uextend(I64, wasm_addr)
+    let offset_val = builder.iconst(I64, offset)
     let addr_plus_offset = builder.iadd(addr_i64, offset_val)
     let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-    let zero_offset = builder.iconst(Type::I64, 0L)
+    let zero_offset = builder.iconst(I64, 0L)
     return builder.store_ptr_narrow(
       narrow_bits, effective_addr, value, zero_offset,
     )
@@ -994,15 +967,15 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   let addr_i64 = if is_memory64 {
     wasm_addr // Already i64
   } else {
-    builder.uextend(Type::I64, wasm_addr)
+    builder.uextend(I64, wasm_addr)
   }
 
   // Calculate addr + offset for effective address
-  let offset_val = builder.iconst(Type::I64, offset)
+  let offset_val = builder.iconst(I64, offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_val)
   if !skip_bounds_check {
     // Need runtime bounds check
-    let size_val = builder.iconst(Type::I64, access_size.to_int64())
+    let size_val = builder.iconst(I64, access_size.to_int64())
     let end_addr = builder.iadd(addr_plus_offset, size_val)
 
     // For memory64, we need overflow-safe bounds checking
@@ -1010,23 +983,23 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
     let continue_block = builder.create_block()
     if is_memory64 {
       // Check for overflow in addr + offset
-      let no_overflow1 = builder.icmp(IntCC::Uge, addr_plus_offset, addr_i64)
+      let no_overflow1 = builder.icmp(Uge, addr_plus_offset, addr_i64)
       let check1_block = builder.create_block()
       builder.brnz(no_overflow1, check1_block, trap_block)
       builder.switch_to_block(check1_block)
 
       // Check for overflow in (addr + offset) + size
-      let no_overflow2 = builder.icmp(IntCC::Uge, end_addr, addr_plus_offset)
+      let no_overflow2 = builder.icmp(Uge, end_addr, addr_plus_offset)
       let check2_block = builder.create_block()
       builder.brnz(no_overflow2, check2_block, trap_block)
       builder.switch_to_block(check2_block)
 
       // Check end_addr <= memory_size
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     } else {
       // For memory32, no overflow possible
-      let in_bounds = builder.icmp(IntCC::Ule, end_addr, memory_size)
+      let in_bounds = builder.icmp(Ule, end_addr, memory_size)
       builder.brnz(in_bounds, continue_block, trap_block)
     }
 
@@ -1037,7 +1010,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
 
   // Calculate effective address
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
-  let zero_offset = builder.iconst(Type::I64, 0L)
+  let zero_offset = builder.iconst(I64, 0L)
   builder.store_ptr_narrow(narrow_bits, effective_addr, value, zero_offset)
 }
 

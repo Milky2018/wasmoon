@@ -1,6 +1,6 @@
 ///|
 test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -138,8 +138,8 @@ test "A critical bug (fixed) as in data/f32_br_2locals_simp" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32], // param_types
-    [@types.ValueType::F32], // result_types
+    [I32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -227,8 +227,8 @@ test "A critical bug as in data/f32_br_2locals" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32], // param_types
-    [@types.ValueType::F32], // result_types
+    [I32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }

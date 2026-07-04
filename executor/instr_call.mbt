@@ -11,7 +11,7 @@ fn ExecContext::exec_call(self : ExecContext, func_idx : Int) -> Unit raise {
 
   // Pop arguments from stack in reverse order
   let num_params = func_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -103,7 +103,7 @@ fn ExecContext::exec_call_indirect(
 
   // Pop arguments from stack in reverse order
   let num_params = expected_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -177,7 +177,7 @@ fn ExecContext::exec_call_ref(self : ExecContext, type_idx : Int) -> Unit raise 
 
   // Pop arguments from stack in reverse order
   let num_params = expected_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -356,7 +356,7 @@ pub fn ExecContext::exec_tail_call(
 
   // Pop arguments from stack into array (in reverse order)
   let num_params = func_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -446,7 +446,7 @@ pub fn ExecContext::exec_tail_call_indirect(
 
   // Pop arguments from stack
   let num_params = expected_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }
@@ -524,7 +524,7 @@ pub fn ExecContext::exec_tail_call_ref(
 
   // Pop arguments from stack
   let num_params = expected_type.params.length()
-  let args : Array[@types.Value] = Array::make(num_params, @types.Value::I32(0))
+  let args : Array[@types.Value] = Array::make(num_params, I32(0))
   for i = num_params - 1; i >= 0; i = i - 1 {
     args[i] = self.stack.pop()
   }

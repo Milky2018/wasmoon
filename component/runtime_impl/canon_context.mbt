@@ -25,10 +25,10 @@ fn instantiate_canon_context_get(
           None =>
             // Default 0 per value type.
             match _vt {
-              @types.ValueType::I32 => [@types.Value::I32(0)]
-              @types.ValueType::I64 => [@types.Value::I64(0L)]
-              @types.ValueType::F32 => [@types.Value::F32(0.0)]
-              @types.ValueType::F64 => [@types.Value::F64(0.0)]
+              I32 => [I32(0)]
+              I64 => [I64(0L)]
+              F32 => [F32(0.0)]
+              F64 => [F64(0.0)]
               _ => {
                 trap_canon("unsupported context type")
                 []
@@ -37,10 +37,10 @@ fn instantiate_canon_context_get(
         }
       None =>
         match _vt {
-          @types.ValueType::I32 => [@types.Value::I32(0)]
-          @types.ValueType::I64 => [@types.Value::I64(0L)]
-          @types.ValueType::F32 => [@types.Value::F32(0.0)]
-          @types.ValueType::F64 => [@types.Value::F64(0.0)]
+          I32 => [I32(0)]
+          I64 => [I64(0L)]
+          F32 => [F32(0.0)]
+          F64 => [F64(0.0)]
           _ => {
             trap_canon("unsupported context type")
             []

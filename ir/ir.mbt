@@ -29,7 +29,7 @@ pub(all) enum Type {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for Type with output(self, logger) {
+pub impl Show for Type with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -37,28 +37,27 @@ pub impl Show for Type with output(self, logger) {
 /// Convert from WASM ValueType to IR Type
 pub fn Type::from_wasm(wasm_type : @types.ValueType) -> Type {
   match wasm_type {
-    I32 => Type::I32
-    I64 => Type::I64
-    F32 => Type::F32
-    F64 => Type::F64
-    FuncRef => Type::FuncRef
-    ExternRef => Type::ExternRef
+    I32 => I32
+    I64 => I64
+    F32 => F32
+    F64 => F64
+    FuncRef => FuncRef
+    ExternRef => ExternRef
     // Function references use a dedicated IR type so null checks are correct.
-    RefFuncTyped(_) | RefNullFuncTyped(_) | RefFunc | NullFuncRef =>
-      Type::FuncRef
+    RefFuncTyped(_) | RefNullFuncTyped(_) | RefFunc | NullFuncRef => FuncRef
     // External references use a dedicated IR type as well.
-    RefExtern | NullExternRef => Type::ExternRef
+    RefExtern | NullExternRef => ExternRef
     // GC reference types - all use 64-bit representation (heap index)
-    AnyRef | NullRef | ExnRef | NullExnRef => Type::I64
+    AnyRef | NullRef | ExnRef | NullExnRef => I64
     // Struct and array references - use I64 (heap index)
-    RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => Type::I64
+    RefStruct(_) | RefNullStruct(_) | RefArray(_) | RefNullArray(_) => I64
     // i31 references - use I64 (tagged small integer)
-    RefI31 | RefNullI31 => Type::I64
+    RefI31 | RefNullI31 => I64
     // Eq and any abstract types
-    RefEq | RefNullEq | RefAny => Type::I64
+    RefEq | RefNullEq | RefAny => I64
     // SIMD 128-bit vector
-    V128 => Type::V128
-    _ => Type::I32 // Fallback for future types
+    V128 => V128
+    _ => I32 // Fallback for future types
   }
 }
 
@@ -107,7 +106,7 @@ pub struct Inst {
 
 ///|
 /// Hash for CSE/GVN - based on opcode and operand IDs (not result)
-pub impl Hash for Inst with hash_combine(self, hasher) {
+pub impl Hash for Inst with fn hash_combine(self, hasher) {
   self.opcode.hash_combine(hasher)
   for op in self.operands {
     op.id.hash_combine(hasher)
@@ -116,7 +115,7 @@ pub impl Hash for Inst with hash_combine(self, hasher) {
 
 ///|
 /// Eq for CSE/GVN - two instructions are equal if same opcode and operand IDs
-pub impl Eq for Inst with equal(self, other) {
+pub impl Eq for Inst with fn equal(self, other) {
   if self.opcode != other.opcode {
     return false
   }
@@ -678,7 +677,7 @@ pub enum Opcode {
 } derive(Debug, Eq, Hash)
 
 ///|
-pub impl Show for Opcode with output(self, logger) {
+pub impl Show for Opcode with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 

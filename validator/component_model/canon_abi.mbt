@@ -10,21 +10,12 @@ fn core_valtypes_for_component_valtype(
   let visiting : Map[Int, Unit] = {}
   fn scalar_prim(p : @component.PrimValType) -> Array[@types.ValueType]? {
     match p {
-      @component.PrimValType::Bool
-      | @component.PrimValType::S8
-      | @component.PrimValType::U8
-      | @component.PrimValType::S16
-      | @component.PrimValType::U16
-      | @component.PrimValType::S32
-      | @component.PrimValType::U32
-      | @component.PrimValType::Char => Some([@types.ValueType::I32])
-      @component.PrimValType::S64 | @component.PrimValType::U64 =>
-        Some([@types.ValueType::I64])
-      @component.PrimValType::F32 => Some([@types.ValueType::F32])
-      @component.PrimValType::F64 => Some([@types.ValueType::F64])
+      Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => Some([I32])
+      S64 | U64 => Some([I64])
+      F32 => Some([F32])
+      F64 => Some([F64])
       // Strings/results need canonical ABI memory rules.
-      @component.PrimValType::String | @component.PrimValType::ErrorContext =>
-        None
+      String | ErrorContext => None
     }
   }
 
@@ -36,23 +27,18 @@ fn core_valtypes_for_component_valtype(
     // shapes. Mixed integer/float representations fall back to integer bit
     // patterns (I32/I64) to preserve bits and allow masking.
     match (a, b) {
-      (@types.ValueType::I64, _)
-      | (_, @types.ValueType::I64)
-      | (@types.ValueType::F64, _)
-      | (_, @types.ValueType::F64) => @types.ValueType::I64
-      (@types.ValueType::F32, @types.ValueType::I32)
-      | (@types.ValueType::I32, @types.ValueType::F32) => @types.ValueType::I32
-      (@types.ValueType::I32, _) | (_, @types.ValueType::I32) =>
-        @types.ValueType::I32
+      (I64, _) | (_, I64) | (F64, _) | (_, F64) => I64
+      (F32, I32) | (I32, F32) => I32
+      (I32, _) | (_, I32) => I32
       // Default to I64 for any other mixed case (conservative).
-      _ => @types.ValueType::I64
+      _ => I64
     }
   }
 
   fn scalar_flat_valtype(vt : @component.ValType) -> Array[@types.ValueType]? {
     match vt {
-      @component.ValType::Prim(p) => scalar_prim(p)
-      @component.ValType::TypeIdx(idx) => {
+      Prim(p) => scalar_prim(p)
+      TypeIdx(idx) => {
         if idx < 0 || idx >= type_table.length() {
           return None
         }
@@ -64,8 +50,8 @@ fn core_valtypes_for_component_valtype(
               None => None
               Some(td) =>
                 match td {
-                  @component.TypeDef::DefValType(p) => scalar_prim(p)
-                  @component.TypeDef::Tuple(tys) => {
+                  DefValType(p) => scalar_prim(p)
+                  Tuple(tys) => {
                     let out : Array[@types.ValueType] = []
                     for t in tys {
                       match scalar_flat_valtype(t) {
@@ -81,7 +67,7 @@ fn core_valtypes_for_component_valtype(
                     }
                     Some(out)
                   }
-                  @component.TypeDef::Record(fields) => {
+                  Record(fields) => {
                     let out : Array[@types.ValueType] = []
                     for f in fields {
                       match scalar_flat_valtype(f.ty) {
@@ -97,7 +83,7 @@ fn core_valtypes_for_component_valtype(
                     }
                     Some(out)
                   }
-                  @component.TypeDef::Variant(cases) => {
+                  Variant(cases) => {
                     let payloads : Array[Array[@types.ValueType]] = []
                     let mut max_len = 0
                     for c in cases {
@@ -133,20 +119,20 @@ fn core_valtypes_for_component_valtype(
                     if 1 + joined.length() > 16 {
                       None
                     } else {
-                      Some([@types.ValueType::I32] + joined)
+                      Some([I32] + joined)
                     }
                   }
-                  @component.TypeDef::Option(v) =>
+                  Option(v) =>
                     match scalar_flat_valtype(v) {
                       Some(payload) =>
                         if 1 + payload.length() > 16 {
                           None
                         } else {
-                          Some([@types.ValueType::I32] + payload)
+                          Some([I32] + payload)
                         }
                       None => None
                     }
-                  @component.TypeDef::Result(ok, err) => {
+                  Result(ok, err) => {
                     let ok_flat = match ok {
                       None => []
                       Some(v) =>
@@ -187,26 +173,21 @@ fn core_valtypes_for_component_valtype(
                     if 1 + joined.length() > 16 {
                       None
                     } else {
-                      Some([@types.ValueType::I32] + joined)
+                      Some([I32] + joined)
                     }
                   }
-                  @component.TypeDef::Flags(labels) =>
+                  Flags(labels) =>
                     if labels.length() <= 32 {
-                      Some([@types.ValueType::I32])
+                      Some([I32])
                     } else if labels.length() <= 64 {
-                      Some([@types.ValueType::I64])
+                      Some([I64])
                     } else {
                       None
                     }
-                  @component.TypeDef::Enum(_labels) =>
-                    Some([@types.ValueType::I32])
-                  @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) =>
-                    Some([@types.ValueType::I32])
-                  @component.TypeDef::ResourceType(_, _, _, _) =>
-                    Some([@types.ValueType::I32])
-                  @component.TypeDef::Future(_)
-                  | @component.TypeDef::Stream(_) =>
-                    Some([@types.ValueType::I32])
+                  Enum(_labels) => Some([I32])
+                  Own(_) | Borrow(_) => Some([I32])
+                  ResourceType(_, _, _, _) => Some([I32])
+                  Future(_) | Stream(_) => Some([I32])
                   // Lists/strings/resources with non-scalar reps require memory.
                   _ => None
                 }
@@ -289,26 +270,18 @@ fn core_functype_for_canon(
   type_table : Array[@component.TypeDef?],
 ) -> @types.FuncType? {
   match c {
-    BackpressureSet => Some({ params: [@types.ValueType::I32], results: [] })
+    BackpressureSet => Some({ params: [I32], results: [] })
     BackpressureInc | BackpressureDec | TaskCancel =>
       Some({ params: [], results: [] })
     TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
-    WaitableSetNew => Some({ params: [], results: [@types.ValueType::I32] })
+    WaitableSetNew => Some({ params: [], results: [I32] })
     WaitableSetWait(_, _) | WaitableSetPoll(_, _) =>
-      Some({
-        params: [@types.ValueType::I32, @types.ValueType::I32],
-        results: [@types.ValueType::I32],
-      })
-    WaitableSetDrop => Some({ params: [@types.ValueType::I32], results: [] })
-    WaitableJoin =>
-      Some({
-        params: [@types.ValueType::I32, @types.ValueType::I32],
-        results: [],
-      })
-    SubtaskDrop => Some({ params: [@types.ValueType::I32], results: [] })
-    SubtaskCancel(_) =>
-      Some({ params: [@types.ValueType::I32], results: [@types.ValueType::I32] })
-    ThreadYield(_) => Some({ params: [], results: [@types.ValueType::I32] })
+      Some({ params: [I32, I32], results: [I32] })
+    WaitableSetDrop => Some({ params: [I32], results: [] })
+    WaitableJoin => Some({ params: [I32, I32], results: [] })
+    SubtaskDrop => Some({ params: [I32], results: [] })
+    SubtaskCancel(_) => Some({ params: [I32], results: [I32] })
+    ThreadYield(_) => Some({ params: [], results: [I32] })
     ContextGet(vt, _) => Some({ params: [], results: [vt] })
     ContextSet(vt, _) => Some({ params: [vt], results: [] })
     _ => None
@@ -363,19 +336,14 @@ fn validate_canon(
       check_typeidx(tyidx, type_bound)
       let td = type_table[tyidx]
       match td {
-        Some(@component.TypeDef::FuncType(ft)) => {
+        Some(FuncType(ft)) => {
           match canon_realloc_idx(opts) {
             Some(idx) =>
               match core_func_types[idx] {
                 Some(core_ft) => {
                   let expected : @types.FuncType = {
-                    params: [
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                    ],
-                    results: [@types.ValueType::I32],
+                    params: [I32, I32, I32, I32],
+                    results: [I32],
                   }
                   if core_ft != expected {
                     raise CanonCoreFuncTypeMismatch(
@@ -471,13 +439,8 @@ fn validate_canon(
               match core_func_types[idx] {
                 Some(core_ft) => {
                   let expected : @types.FuncType = {
-                    params: [
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                      @types.ValueType::I32,
-                    ],
-                    results: [@types.ValueType::I32],
+                    params: [I32, I32, I32, I32],
+                    results: [I32],
                   }
                   if core_ft != expected {
                     raise CanonCoreFuncTypeMismatch(
@@ -514,7 +477,7 @@ fn validate_canon(
         raise SectionParseError(8, "not a local resource")
       }
       match type_table[tyidx] {
-        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        Some(ResourceType(_, _, _, _)) => ()
         _ => raise SectionParseError(8, "not a resource type")
       }
     }
@@ -531,7 +494,7 @@ fn validate_canon(
         raise SectionParseError(8, "not a local resource")
       }
       match type_table[tyidx] {
-        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        Some(ResourceType(_, _, _, _)) => ()
         _ => raise SectionParseError(8, "not a resource type")
       }
     }
@@ -545,7 +508,7 @@ fn validate_canon(
       // `resource.drop` is allowed for both local resource types and imported
       // `(sub resource)` types (which we currently model as None).
       match type_table[tyidx] {
-        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        Some(ResourceType(_, _, _, _)) => ()
         None => ()
         Some(_) => raise SectionParseError(8, "not a resource type")
       }
@@ -554,13 +517,10 @@ fn validate_canon(
       validate_canon_opts(opts)
       for opt in opts {
         match opt {
-          @component.CanonOpt::Async => raise CanonOptionNotAllowed("async")
-          @component.CanonOpt::Callback(_) =>
-            raise CanonOptionNotAllowed("callback")
-          @component.CanonOpt::PostReturn(_) =>
-            raise CanonOptionNotAllowed("post-return")
-          @component.CanonOpt::Realloc(_) =>
-            raise CanonOptionNotAllowed("realloc")
+          Async => raise CanonOptionNotAllowed("async")
+          Callback(_) => raise CanonOptionNotAllowed("callback")
+          PostReturn(_) => raise CanonOptionNotAllowed("post-return")
+          Realloc(_) => raise CanonOptionNotAllowed("realloc")
           _ => ()
         }
       }
@@ -576,8 +536,8 @@ fn valtype_refers_to_resource(
   visiting : Map[Int, Int],
 ) -> Bool {
   match ty {
-    @component.ValType::Prim(_) => false
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => false
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
         false
       } else if visiting.get(idx) is Some(_) {
@@ -601,22 +561,18 @@ fn externdesc_refers_to_resource(
   visiting : Map[Int, Int],
 ) -> Bool {
   match desc {
-    @component.ExternDesc::Type(b) =>
+    Type(b) =>
       match b {
-        @component.TypeBound::Eq(idx) =>
-          valtype_refers_to_resource(
-            @component.ValType::TypeIdx(idx),
-            type_table,
-            visiting,
-          )
-        @component.TypeBound::SubResource => true
+        Eq(idx) =>
+          valtype_refers_to_resource(TypeIdx(idx), type_table, visiting)
+        SubResource => true
       }
-    @component.ExternDesc::FuncType(tyidx) =>
+    FuncType(tyidx) =>
       if tyidx < 0 || tyidx >= type_table.length() {
         false
       } else {
         match type_table[tyidx] {
-          Some(@component.TypeDef::FuncType(ft)) => {
+          Some(FuncType(ft)) => {
             let mut any = false
             for p in ft.params {
               if valtype_refers_to_resource(p.ty, type_table, visiting) {
@@ -638,21 +594,21 @@ fn externdesc_refers_to_resource(
           _ => false
         }
       }
-    @component.ExternDesc::InstanceType(tyidx) =>
+    InstanceType(tyidx) =>
       if tyidx < 0 || tyidx >= type_table.length() {
         false
       } else {
         match type_table[tyidx] {
-          Some(@component.TypeDef::InstanceType(decls)) => {
+          Some(InstanceType(decls)) => {
             let mut any = false
             for d in decls {
               match d {
-                @component.InstanceDecl::Type(td) =>
+                Type(td) =>
                   if typedef_refers_to_resource(td, type_table, visiting) {
                     any = true
                     break
                   }
-                @component.InstanceDecl::Export(_name, desc) =>
+                Export(_name, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -665,26 +621,26 @@ fn externdesc_refers_to_resource(
           _ => false
         }
       }
-    @component.ExternDesc::ComponentType(tyidx) =>
+    ComponentType(tyidx) =>
       if tyidx < 0 || tyidx >= type_table.length() {
         false
       } else {
         match type_table[tyidx] {
-          Some(@component.TypeDef::ComponentType(decls)) => {
+          Some(ComponentType(decls)) => {
             let mut any = false
             for d in decls {
               match d {
-                @component.ComponentDecl::Type(td) =>
+                Type(td) =>
                   if typedef_refers_to_resource(td, type_table, visiting) {
                     any = true
                     break
                   }
-                @component.ComponentDecl::Import(_name, desc) =>
+                Import(_name, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
                   }
-                @component.ComponentDecl::Export(_name, desc) =>
+                Export(_name, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -708,10 +664,10 @@ fn typedef_refers_to_resource(
   visiting : Map[Int, Int],
 ) -> Bool {
   match td {
-    @component.TypeDef::ResourceType(_, _, _, _) => true
-    @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) => true
-    @component.TypeDef::DefValType(_) => false
-    @component.TypeDef::Tuple(tys) => {
+    ResourceType(_, _, _, _) => true
+    Own(_) | Borrow(_) => true
+    DefValType(_) => false
+    Tuple(tys) => {
       let mut any = false
       for t in tys {
         if valtype_refers_to_resource(t, type_table, visiting) {
@@ -721,7 +677,7 @@ fn typedef_refers_to_resource(
       }
       any
     }
-    @component.TypeDef::Record(fields) => {
+    Record(fields) => {
       let mut any = false
       for f in fields {
         if valtype_refers_to_resource(f.ty, type_table, visiting) {
@@ -731,7 +687,7 @@ fn typedef_refers_to_resource(
       }
       any
     }
-    @component.TypeDef::Variant(cases) => {
+    Variant(cases) => {
       let mut any = false
       for c in cases {
         match c.ty {
@@ -745,9 +701,8 @@ fn typedef_refers_to_resource(
       }
       any
     }
-    @component.TypeDef::Option(v) =>
-      valtype_refers_to_resource(v, type_table, visiting)
-    @component.TypeDef::Result(ok, err) => {
+    Option(v) => valtype_refers_to_resource(v, type_table, visiting)
+    Result(ok, err) => {
       let ok_any = match ok {
         None => false
         Some(v) => valtype_refers_to_resource(v, type_table, visiting)
@@ -758,14 +713,13 @@ fn typedef_refers_to_resource(
       }
       ok_any || err_any
     }
-    @component.TypeDef::List(v) =>
-      valtype_refers_to_resource(v, type_table, visiting)
-    @component.TypeDef::Stream(v) | @component.TypeDef::Future(v) =>
+    List(v) => valtype_refers_to_resource(v, type_table, visiting)
+    Stream(v) | Future(v) =>
       match v {
         None => false
         Some(inner) => valtype_refers_to_resource(inner, type_table, visiting)
       }
-    @component.TypeDef::FuncType(ft) => {
+    FuncType(ft) => {
       let mut any = false
       for p in ft.params {
         if valtype_refers_to_resource(p.ty, type_table, visiting) {
@@ -784,21 +738,21 @@ fn typedef_refers_to_resource(
       }
       any
     }
-    @component.TypeDef::ComponentType(decls) => {
+    ComponentType(decls) => {
       let mut any = false
       for d in decls {
         match d {
-          @component.ComponentDecl::Type(td2) =>
+          Type(td2) =>
             if typedef_refers_to_resource(td2, type_table, visiting) {
               any = true
               break
             }
-          @component.ComponentDecl::Import(_name, desc) =>
+          Import(_name, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
             }
-          @component.ComponentDecl::Export(_name, desc) =>
+          Export(_name, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -808,16 +762,16 @@ fn typedef_refers_to_resource(
       }
       any
     }
-    @component.TypeDef::InstanceType(decls) => {
+    InstanceType(decls) => {
       let mut any = false
       for d in decls {
         match d {
-          @component.InstanceDecl::Type(td2) =>
+          Type(td2) =>
             if typedef_refers_to_resource(td2, type_table, visiting) {
               any = true
               break
             }
-          @component.InstanceDecl::Export(_name, desc) =>
+          Export(_name, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -869,14 +823,12 @@ fn externdesc_type_size(
   local_sizes : Array[Int],
 ) -> Int {
   match desc {
-    @component.ExternDesc::ComponentType(tyidx) =>
-      local_type_size_of(tyidx, local_sizes)
-    @component.ExternDesc::InstanceType(tyidx) =>
-      local_type_size_of(tyidx, local_sizes)
-    @component.ExternDesc::FuncType(_) => 1
-    @component.ExternDesc::CoreModuleType(_) => 1
-    @component.ExternDesc::Type(_) => 1
-    @component.ExternDesc::Value(_) => 1
+    ComponentType(tyidx) => local_type_size_of(tyidx, local_sizes)
+    InstanceType(tyidx) => local_type_size_of(tyidx, local_sizes)
+    FuncType(_) => 1
+    CoreModuleType(_) => 1
+    Type(_) => 1
+    Value(_) => 1
   }
 }
 
@@ -887,20 +839,19 @@ fn effective_typedef_size(
 ) -> Int {
   fn valtype_size(ty : @component.ValType) -> Int {
     match ty {
-      @component.ValType::Prim(_) => 1
-      @component.ValType::TypeIdx(idx) => local_type_size_of(idx, outer_sizes)
+      Prim(_) => 1
+      TypeIdx(idx) => local_type_size_of(idx, outer_sizes)
     }
   }
 
   match td {
-    @component.TypeDef::ComponentType(decls) => {
+    ComponentType(decls) => {
       let local_sizes : Array[Int] = []
       let mut total = 1
       for d in decls {
         match d {
-          @component.ComponentDecl::Type(t) =>
-            local_sizes.push(effective_typedef_size(t, outer_sizes))
-          @component.ComponentDecl::AliasOuter(kind, count, idx) =>
+          Type(t) => local_sizes.push(effective_typedef_size(t, outer_sizes))
+          AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
               let s = if count == 1 && idx >= 0 && idx < outer_sizes.length() {
                 outer_sizes[idx]
@@ -911,24 +862,23 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+          AliasInstanceExport(kind, _inst, _name) =>
             if kind == 0x03 {
               local_sizes.push(1)
             } else {
               ()
             }
-          @component.ComponentDecl::Import(_name, desc)
-          | @component.ComponentDecl::Export(_name, desc) => {
+          Import(_name, desc) | Export(_name, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),
             )
             // Importing/exporting a type introduces a fresh local type index.
-            if desc is @component.ExternDesc::Type(_) {
+            if desc is Type(_) {
               local_sizes.push(1)
             }
           }
-          @component.ComponentDecl::CoreType(_) => ()
+          CoreType(_) => ()
         }
         if total > 100000 {
           return 100001
@@ -936,14 +886,13 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::InstanceType(decls) => {
+    InstanceType(decls) => {
       let local_sizes : Array[Int] = []
       let mut total = 1
       for d in decls {
         match d {
-          @component.InstanceDecl::Type(t) =>
-            local_sizes.push(effective_typedef_size(t, outer_sizes))
-          @component.InstanceDecl::AliasOuter(kind, count, idx) =>
+          Type(t) => local_sizes.push(effective_typedef_size(t, outer_sizes))
+          AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
               let s = if count == 1 && idx >= 0 && idx < outer_sizes.length() {
                 outer_sizes[idx]
@@ -954,22 +903,22 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          @component.InstanceDecl::AliasInstanceExport(kind, _inst, _name) =>
+          AliasInstanceExport(kind, _inst, _name) =>
             if kind == 0x03 {
               local_sizes.push(1)
             } else {
               ()
             }
-          @component.InstanceDecl::Export(_name, desc) => {
+          Export(_name, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),
             )
-            if desc is @component.ExternDesc::Type(_) {
+            if desc is Type(_) {
               local_sizes.push(1)
             }
           }
-          @component.InstanceDecl::CoreType(_) => ()
+          CoreType(_) => ()
         }
         if total > 100000 {
           return 100001
@@ -977,8 +926,8 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::DefValType(_) => 1
-    @component.TypeDef::FuncType(ft) => {
+    DefValType(_) => 1
+    FuncType(ft) => {
       let mut total = 1
       for p in ft.params {
         total = add_type_size(total, valtype_size(p.ty))
@@ -991,7 +940,7 @@ fn effective_typedef_size(
         None => total
       }
     }
-    @component.TypeDef::Tuple(tys) => {
+    Tuple(tys) => {
       let mut total = 1
       for t in tys {
         total = add_type_size(total, valtype_size(t))
@@ -1001,7 +950,7 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::Record(fields) => {
+    Record(fields) => {
       let mut total = 1
       for f in fields {
         total = add_type_size(total, valtype_size(f.ty))
@@ -1011,7 +960,7 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::Variant(cases) => {
+    Variant(cases) => {
       let mut total = 1
       for c in cases {
         match c.ty {
@@ -1024,8 +973,8 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::Option(v) => add_type_size(1, valtype_size(v))
-    @component.TypeDef::Result(ok, err) => {
+    Option(v) => add_type_size(1, valtype_size(v))
+    Result(ok, err) => {
       let mut total = 1
       match ok {
         Some(v) => total = add_type_size(total, valtype_size(v))
@@ -1037,9 +986,9 @@ fn effective_typedef_size(
       }
       total
     }
-    @component.TypeDef::List(v) => add_type_size(1, valtype_size(v))
-    @component.TypeDef::Flags(labels) => add_type_size(1, labels.length())
-    @component.TypeDef::Enum(labels) => add_type_size(1, labels.length())
+    List(v) => add_type_size(1, valtype_size(v))
+    Flags(labels) => add_type_size(1, labels.length())
+    Enum(labels) => add_type_size(1, labels.length())
     _ => 1
   }
 }

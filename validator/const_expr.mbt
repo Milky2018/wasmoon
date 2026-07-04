@@ -30,11 +30,11 @@ fn validate_const_expr(
   }
   for instr in expr {
     match instr {
-      I32Const(_) => type_stack.push(@types.ValueType::I32)
-      I64Const(_) => type_stack.push(@types.ValueType::I64)
-      F32Const(_) => type_stack.push(@types.ValueType::F32)
-      F64Const(_) => type_stack.push(@types.ValueType::F64)
-      V128Const(_) => type_stack.push(@types.ValueType::V128)
+      I32Const(_) => type_stack.push(I32)
+      I64Const(_) => type_stack.push(I64)
+      F32Const(_) => type_stack.push(F32)
+      F64Const(_) => type_stack.push(F64)
+      V128Const(_) => type_stack.push(V128)
       RefNull(t) => type_stack.push(t)
       RefFunc(func_idx) => {
         if func_idx >= funcs.length() {
@@ -42,7 +42,7 @@ fn validate_const_expr(
         }
         // ref.func produces (ref $t) where $t is the function's type index
         let type_idx = funcs[func_idx]
-        type_stack.push(@types.ValueType::RefFuncTyped(type_idx))
+        type_stack.push(RefFuncTyped(type_idx))
       }
       GlobalGet(idx) => {
         if idx >= globals.length() {
@@ -55,16 +55,16 @@ fn validate_const_expr(
         type_stack.push(global.value_type)
       }
       RefI31 => {
-        pop_expected(@types.ValueType::I32, "ref.i31")
-        type_stack.push(@types.ValueType::RefI31)
+        pop_expected(I32, "ref.i31")
+        type_stack.push(RefI31)
       }
       AnyConvertExtern => {
-        pop_expected(@types.ValueType::ExternRef, "any.convert_extern")
-        type_stack.push(@types.ValueType::AnyRef)
+        pop_expected(ExternRef, "any.convert_extern")
+        type_stack.push(AnyRef)
       }
       ExternConvertAny => {
-        pop_expected(@types.ValueType::AnyRef, "extern.convert_any")
-        type_stack.push(@types.ValueType::ExternRef)
+        pop_expected(AnyRef, "extern.convert_any")
+        type_stack.push(ExternRef)
       }
       StructNew(type_idx) => {
         let struct_type = get_const_expr_struct_type(types, type_idx)
@@ -74,25 +74,25 @@ fn validate_const_expr(
           )
           pop_expected(field_ty, "struct.new")
         }
-        type_stack.push(@types.ValueType::RefStruct(type_idx))
+        type_stack.push(RefStruct(type_idx))
       }
       StructNewDefault(type_idx) => {
         ignore(get_const_expr_struct_type(types, type_idx))
-        type_stack.push(@types.ValueType::RefStruct(type_idx))
+        type_stack.push(RefStruct(type_idx))
       }
       ArrayNew(type_idx) => {
         let array_type = get_const_expr_array_type(types, type_idx)
-        pop_expected(@types.ValueType::I32, "array.new length")
+        pop_expected(I32, "array.new length")
         let elem_ty = const_expr_storage_type_to_value_type(
           array_type.element.storage_type,
         )
         pop_expected(elem_ty, "array.new value")
-        type_stack.push(@types.ValueType::RefArray(type_idx))
+        type_stack.push(RefArray(type_idx))
       }
       ArrayNewDefault(type_idx) => {
         ignore(get_const_expr_array_type(types, type_idx))
-        pop_expected(@types.ValueType::I32, "array.new_default length")
-        type_stack.push(@types.ValueType::RefArray(type_idx))
+        pop_expected(I32, "array.new_default length")
+        type_stack.push(RefArray(type_idx))
       }
       ArrayNewFixed(type_idx, len) => {
         let array_type = get_const_expr_array_type(types, type_idx)
@@ -102,7 +102,7 @@ fn validate_const_expr(
         for _ in 0..<len {
           pop_expected(elem_ty, "array.new_fixed value")
         }
-        type_stack.push(@types.ValueType::RefArray(type_idx))
+        type_stack.push(RefArray(type_idx))
       }
       // Extended-const: i32 arithmetic
       I32Add | I32Sub | I32Mul => {
@@ -111,10 +111,10 @@ fn validate_const_expr(
         }
         let b = type_stack.pop().unwrap()
         let a = type_stack.pop().unwrap()
-        if a != @types.ValueType::I32 || b != @types.ValueType::I32 {
+        if a != I32 || b != I32 {
           raise TypeMismatch("i32 arithmetic requires i32 operands")
         }
-        type_stack.push(@types.ValueType::I32)
+        type_stack.push(I32)
       }
       // Extended-const: i64 arithmetic
       I64Add | I64Sub | I64Mul => {
@@ -123,10 +123,10 @@ fn validate_const_expr(
         }
         let b = type_stack.pop().unwrap()
         let a = type_stack.pop().unwrap()
-        if a != @types.ValueType::I64 || b != @types.ValueType::I64 {
+        if a != I64 || b != I64 {
           raise TypeMismatch("i64 arithmetic requires i64 operands")
         }
-        type_stack.push(@types.ValueType::I64)
+        type_stack.push(I64)
       }
       _ =>
         // Any other instruction is not allowed in constant expressions
@@ -156,7 +156,7 @@ fn const_expr_storage_type_to_value_type(
 ) -> @types.ValueType {
   match storage_type {
     Val(v) => v
-    Packed(_) => @types.ValueType::I32
+    Packed(_) => I32
   }
 }
 

@@ -69,9 +69,7 @@ fn lower_get_func_ref(
   } else {
     // Large func-table indices exceed AArch64 LDR unsigned-imm range.
     let offset_vreg = materialize_imm(ctx, block, offset.to_int64())
-    let load_ptr = @instr.VCodeInst::new(
-      LoadPtrRegOffset(I64, @instr.IndexExtend::None, 0, 0),
-    )
+    let load_ptr = @instr.VCodeInst::new(LoadPtrRegOffset(I64, None, 0, 0))
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
     load_ptr.add_use(Virtual(offset_vreg))
@@ -143,7 +141,7 @@ fn lower_memory_grow(
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)
-  let is_memory64 = result.ty is @ir.Type::I64
+  let is_memory64 = result.ty is I64
 
   // Lower to a C call:
   //   wasmoon_jit_memory_grow(vmctx, memidx, delta(i64), max_pages) -> i32
@@ -199,7 +197,7 @@ fn lower_memory_size(
   let result_vreg = ctx.get_vreg(result)
 
   // Check if result type is I64 (memory64)
-  let is_memory64 = result.ty is @ir.Type::I64
+  let is_memory64 = result.ty is I64
 
   // Lower to a C call:
   //   wasmoon_jit_memory_size(vmctx, memidx) -> i32
@@ -261,11 +259,11 @@ fn lower_memory_fill(
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
-  if memidx == 0 && @isa.ISA::current() is @isa.AArch64 {
+  if memidx == 0 && @isa.ISA::current() is AArch64 {
     lower_c_libcall_direct(
       ctx,
       block,
-      jit_direct_call_func_idx(@instr.MemoryFillMem0),
+      jit_direct_call_func_idx(MemoryFillMem0),
       [vmctx_vreg, dst, val, size],
       None,
     )
@@ -323,11 +321,11 @@ fn lower_memory_copy(
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
   block.add_inst(vmctx_mov)
-  if dst_memidx == 0 && src_memidx == 0 && @isa.ISA::current() is @isa.AArch64 {
+  if dst_memidx == 0 && src_memidx == 0 && @isa.ISA::current() is AArch64 {
     lower_c_libcall_direct(
       ctx,
       block,
-      jit_direct_call_func_idx(@instr.MemoryCopyMem0),
+      jit_direct_call_func_idx(MemoryCopyMem0),
       [vmctx_vreg, dst, src, size],
       None,
     )

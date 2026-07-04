@@ -12,7 +12,7 @@ fn instantiate_canon_resource_new(
     raise InvalidTypeIndex(tyidx)
   }
   let (type_id, kind, dtor) = match state.types[tyidx] {
-    Some(TypeDef::ResourceType(id, rep, dtor_idx, kind)) => {
+    Some(ResourceType(id, rep, dtor_idx, kind)) => {
       if rep != 0x7f {
         raise UnsupportedComponent("resources can only be represented by `i32`")
       }
@@ -29,10 +29,7 @@ fn instantiate_canon_resource_new(
     }
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
@@ -41,9 +38,9 @@ fn instantiate_canon_resource_new(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(rep)] => {
+      [I32(rep)] => {
         let handle = table.alloc({ type_id, rep, dtor, kind })
-        [@types.Value::I32(handle)]
+        [I32(handle)]
       }
       _ => {
         trap_canon("type mismatch")
@@ -64,13 +61,10 @@ fn instantiate_canon_resource_rep(
     raise InvalidTypeIndex(tyidx)
   }
   let (type_id, expected_kind) = match state.types[tyidx] {
-    Some(TypeDef::ResourceType(id, _, _, kind)) => (id, kind)
+    Some(ResourceType(id, _, _, kind)) => (id, kind)
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
@@ -79,7 +73,7 @@ fn instantiate_canon_resource_rep(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.get(handle) {
           Some(entry) =>
             if entry.type_id < 0 {
@@ -88,12 +82,12 @@ fn instantiate_canon_resource_rep(
               )
               []
             } else if entry.type_id != type_id {
-              let expected_desc = if expected_kind == ResourceKind::GuestDefined {
+              let expected_desc = if expected_kind == GuestDefined {
                 "guest-defined resource"
               } else {
                 "host-defined resource"
               }
-              let found_desc = if entry.kind == ResourceKind::GuestDefined {
+              let found_desc = if entry.kind == GuestDefined {
                 "guest-defined resource"
               } else {
                 "host-defined resource"
@@ -108,7 +102,7 @@ fn instantiate_canon_resource_rep(
               )
               []
             } else {
-              [@types.Value::I32(entry.rep)]
+              [I32(entry.rep)]
             }
           None => {
             trap_canon(
@@ -136,13 +130,10 @@ fn instantiate_canon_resource_drop(
     raise InvalidTypeIndex(tyidx)
   }
   let (type_id, expected_kind) = match state.types[tyidx] {
-    Some(TypeDef::ResourceType(id, _, _, kind)) => (id, kind)
+    Some(ResourceType(id, _, _, kind)) => (id, kind)
     _ => raise InvalidTypeDef(tyidx)
   }
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let table = state.resource_table
   let host = fn(
     args : Array[@types.Value],
@@ -151,7 +142,7 @@ fn instantiate_canon_resource_drop(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match table.get(handle) {
           Some(entry) =>
             if entry.type_id < 0 {
@@ -160,12 +151,12 @@ fn instantiate_canon_resource_drop(
               )
               []
             } else if entry.type_id != type_id {
-              let expected_desc = if expected_kind == ResourceKind::GuestDefined {
+              let expected_desc = if expected_kind == GuestDefined {
                 "guest-defined resource"
               } else {
                 "host-defined resource"
               }
-              let found_desc = if entry.kind == ResourceKind::GuestDefined {
+              let found_desc = if entry.kind == GuestDefined {
                 "guest-defined resource"
               } else {
                 "host-defined resource"
@@ -190,7 +181,7 @@ fn instantiate_canon_resource_drop(
                         store,
                         d.instance,
                         d.func_idx,
-                        [@types.Value::I32(real.rep)],
+                        [I32(real.rep)],
                       ) catch {
                         e => {
                           trap_canon(e.to_string())

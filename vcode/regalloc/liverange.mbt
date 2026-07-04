@@ -20,7 +20,7 @@ fn ProgPointRange::to_string(self : ProgPointRange) -> String {
 }
 
 ///|
-pub impl Show for ProgPointRange with output(self, logger) {
+pub impl Show for ProgPointRange with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -67,7 +67,7 @@ fn UseKind::to_string(self : UseKind) -> String {
 }
 
 ///|
-pub impl Show for UseKind with output(self, logger) {
+pub impl Show for UseKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -87,7 +87,7 @@ fn OperandConstraint::to_string(self : OperandConstraint) -> String {
 }
 
 ///|
-pub impl Show for OperandConstraint with output(self, logger) {
+pub impl Show for OperandConstraint with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -114,7 +114,7 @@ fn UsePosition::to_string(self : UsePosition) -> String {
 }
 
 ///|
-pub impl Show for UsePosition with output(self, logger) {
+pub impl Show for UsePosition with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -136,7 +136,7 @@ fn Allocation::to_string(self : Allocation) -> String {
 }
 
 ///|
-pub impl Show for Allocation with output(self, logger) {
+pub impl Show for Allocation with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -198,7 +198,7 @@ pub fn LiveRange::has_fixed_constraint(self : LiveRange) -> Bool {
 /// Get the fixed register constraint if all uses require the same fixed reg
 pub fn LiveRange::get_fixed_reg(self : LiveRange) -> @abi.PReg? {
   fn is_allocatable_fixed(preg : @abi.PReg) -> Bool {
-    if preg.class is @abi.Int {
+    if preg.class is Int {
       // Keep architectural reserved/scratch regs out of fixed allocation.
       // Argument regs (x0-x7) are allowed so fixed-arg constraints can be
       // satisfied by allocation when profitable, matching regalloc2 style.
@@ -319,7 +319,7 @@ fn LiveRange::to_string(self : LiveRange) -> String {
 }
 
 ///|
-pub impl Show for LiveRange with output(self, logger) {
+pub impl Show for LiveRange with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -465,12 +465,12 @@ pub fn build_live_ranges(
     call_prog_point_orders.push(call_ord)
     if call_point.block >= 0 && call_point.block < num_blocks {
       block_call_point_orders[call_point.block].push(call_ord)
-      if call_conv is @instr.C {
+      if call_conv is C {
         block_c_call_point_orders[call_point.block].push(call_ord)
       }
     }
     let prev = c_call_prefix[c_call_prefix.length() - 1]
-    let add = if call_conv is @instr.C { 1 } else { 0 }
+    let add = if call_conv is C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
   }
   let calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
@@ -1003,7 +1003,7 @@ pub fn build_live_ranges(
         if i >= args.length() {
           break
         }
-        guard args[i] is @abi.Virtual(arg_vreg) else { continue }
+        guard args[i] is Virtual(arg_vreg) else { continue }
         guard result.get_range_index_by_vreg(param.id) is Some(param_idx) else {
           continue
         }

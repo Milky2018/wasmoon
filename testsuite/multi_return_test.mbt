@@ -37,8 +37,8 @@ test "multi return: 3 integers" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32],
-    [@types.ValueType::I32, @types.ValueType::I32, @types.ValueType::I32],
+    [I32],
+    [I32, I32, I32],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -95,13 +95,8 @@ test "multi return: 4 integers" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32],
-    [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
+    [I32],
+    [I32, I32, I32, I32],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -153,7 +148,7 @@ test "multi return: 3 floats" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::F64, @types.ValueType::F64, @types.ValueType::F64],
+    [F64, F64, F64],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -205,13 +200,8 @@ test "multi return: mixed int and float" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32],
-    [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::F64,
-    ],
+    [I32],
+    [I32, I32, I32, F64],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -262,7 +252,7 @@ test "multi return: 2 integers (no extra buffer)" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::I32, @types.ValueType::I32],
+    [I32, I32],
     4096L,
   )
   guard jit_module is Some(jm) else { return }

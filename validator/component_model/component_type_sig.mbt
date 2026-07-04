@@ -15,54 +15,44 @@ fn componenttype_import_func_sigs_of_decls(
     }
   }
   fn record_type_slot() -> Unit {
-    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+    local_types.push(InstanceTypeEmpty)
     local_resource_ids.push(None)
   }
 
   fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
     match b {
-      @component.TypeBound::SubResource => {
-        local_types.push(
-          @component.TypeDef::ResourceType(
-            -1,
-            0x7f,
-            None,
-            @component.ResourceKind::HostDefined,
-          ),
-        )
+      SubResource => {
+        local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
         local_resource_ids.push(Some(next_rid))
         next_rid += 1
       }
-      @component.TypeBound::Eq(_idx) => record_type_slot()
+      Eq(_idx) => record_type_slot()
     }
   }
 
   for d in decls {
     match d {
-      @component.ComponentDecl::Type(t) => {
+      Type(t) => {
         local_types.push(t)
         match t {
-          @component.TypeDef::ResourceType(_, _, _, _) => {
+          ResourceType(_, _, _, _) => {
             local_resource_ids.push(Some(next_rid))
             next_rid += 1
           }
           _ => local_resource_ids.push(None)
         }
       }
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      AliasOuter(kind, _count, _idx) => if kind == 0x03 { record_type_slot() }
+      AliasInstanceExport(kind, _inst, _name) =>
         if kind == 0x03 {
           record_type_slot()
         }
-      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot()
-        }
-      @component.ComponentDecl::Import(name, desc) => {
+      Import(name, desc) => {
         match desc {
-          @component.ExternDesc::FuncType(tyidx) =>
+          FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
               match local_types[tyidx] {
-                @component.TypeDef::FuncType(ft) =>
+                FuncType(ft) =>
                   out.set(
                     name,
                     funcsig_of_functype_lg(
@@ -73,7 +63,7 @@ fn componenttype_import_func_sigs_of_decls(
               }
             } else if tyidx >= 0 && tyidx < global_types.length() {
               match global_types[tyidx] {
-                Some(@component.TypeDef::FuncType(ft)) =>
+                Some(FuncType(ft)) =>
                   out.set(
                     name,
                     funcsig_of_functype_lg(
@@ -90,16 +80,16 @@ fn componenttype_import_func_sigs_of_decls(
           _ => ()
         }
         match desc {
-          @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
+          Type(b) => record_type_slot_for_bound(b)
           _ => ()
         }
       }
-      @component.ComponentDecl::Export(_name, desc) =>
+      Export(_name, desc) =>
         match desc {
-          @component.ExternDesc::Type(b) => record_type_slot_for_bound(b)
+          Type(b) => record_type_slot_for_bound(b)
           _ => ()
         }
-      @component.ComponentDecl::CoreType(_) => ()
+      CoreType(_) => ()
     }
   }
   out
@@ -124,18 +114,11 @@ fn componenttype_import_type_sigs_of_decls(
   fn record_type_slot(as_resource : Bool) -> Int {
     let idx = local_types.length()
     if as_resource {
-      local_types.push(
-        @component.TypeDef::ResourceType(
-          -1,
-          0x7f,
-          None,
-          @component.ResourceKind::HostDefined,
-        ),
-      )
+      local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
       local_resource_ids.push(Some(next_rid))
       next_rid += 1
     } else {
-      local_types.push(@component.TypeDef::InstanceTypeEmpty)
+      local_types.push(InstanceTypeEmpty)
       local_resource_ids.push(None)
     }
     idx
@@ -143,34 +126,34 @@ fn componenttype_import_type_sigs_of_decls(
 
   for d in decls {
     match d {
-      @component.ComponentDecl::Type(t) => {
+      Type(t) => {
         local_types.push(t)
         match t {
-          @component.TypeDef::ResourceType(_, _, _, _) => {
+          ResourceType(_, _, _, _) => {
             local_resource_ids.push(Some(next_rid))
             next_rid += 1
           }
           _ => local_resource_ids.push(None)
         }
       }
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      AliasOuter(kind, _count, _idx) =>
         if kind == 0x03 {
           record_type_slot(false) |> ignore
         }
-      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+      AliasInstanceExport(kind, _inst, _name) =>
         if kind == 0x03 {
           record_type_slot(false) |> ignore
         }
-      @component.ComponentDecl::Import(name, desc) =>
+      Import(name, desc) =>
         match desc {
-          @component.ExternDesc::Type(bound) =>
+          Type(bound) =>
             match bound {
-              @component.TypeBound::Eq(tyidx) => {
+              Eq(tyidx) => {
                 // Compute the bound signature in the current local/global environment.
                 out.set(
                   name,
                   type_sig_of_valtype_lg(
-                    @component.ValType::TypeIdx(tyidx),
+                    TypeIdx(tyidx),
                     local_types,
                     local_resource_ids,
                     global_types,
@@ -180,12 +163,12 @@ fn componenttype_import_type_sigs_of_decls(
                 )
                 record_type_slot(false) |> ignore
               }
-              @component.TypeBound::SubResource => {
+              SubResource => {
                 let new_idx = record_type_slot(true)
                 out.set(
                   name,
                   type_sig_of_valtype_lg(
-                    @component.ValType::TypeIdx(new_idx),
+                    TypeIdx(new_idx),
                     local_types,
                     local_resource_ids,
                     global_types,
@@ -195,23 +178,18 @@ fn componenttype_import_type_sigs_of_decls(
                 )
               }
             }
-          _ =>
-            if desc is @component.ExternDesc::Type(_) {
-              record_type_slot(false) |> ignore
-            }
+          _ => if desc is Type(_) { record_type_slot(false) |> ignore }
         }
-      @component.ComponentDecl::Export(_name, desc) =>
+      Export(_name, desc) =>
         match desc {
-          @component.ExternDesc::Type(bound) =>
+          Type(bound) =>
             match bound {
-              @component.TypeBound::SubResource =>
-                record_type_slot(true) |> ignore
-              @component.TypeBound::Eq(_tyidx) =>
-                record_type_slot(false) |> ignore
+              SubResource => record_type_slot(true) |> ignore
+              Eq(_tyidx) => record_type_slot(false) |> ignore
             }
           _ => ()
         }
-      @component.ComponentDecl::CoreType(_) => ()
+      CoreType(_) => ()
     }
   }
   out
@@ -223,8 +201,7 @@ fn componenttype_import_type_bounds_of_decls(
 ) -> Map[String, @component.TypeBound] {
   let out : Map[String, @component.TypeBound] = {}
   for d in decls {
-    if d
-      is @component.ComponentDecl::Import(name, @component.ExternDesc::Type(b)) {
+    if d is Import(name, Type(b)) {
       out.set(name, b)
     }
   }
@@ -248,62 +225,51 @@ fn componenttype_export_func_sigs_of_decls(
     }
   }
   fn record_type_slot() -> Unit {
-    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+    local_types.push(InstanceTypeEmpty)
     local_resource_ids.push(None)
   }
 
   fn record_type_slot_for_bound(b : @component.TypeBound) -> Unit {
     match b {
-      @component.TypeBound::SubResource => {
-        local_types.push(
-          @component.TypeDef::ResourceType(
-            -1,
-            0x7f,
-            None,
-            @component.ResourceKind::HostDefined,
-          ),
-        )
+      SubResource => {
+        local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
         local_resource_ids.push(Some(next_rid))
         next_rid += 1
       }
-      @component.TypeBound::Eq(_idx) => record_type_slot()
+      Eq(_idx) => record_type_slot()
     }
   }
 
   fn record_type_slots_for_desc(desc : @component.ExternDesc) -> Unit {
-    if desc is @component.ExternDesc::Type(b) {
+    if desc is Type(b) {
       record_type_slot_for_bound(b)
     }
   }
 
   for d in decls {
     match d {
-      @component.ComponentDecl::Type(t) => {
+      Type(t) => {
         local_types.push(t)
         match t {
-          @component.TypeDef::ResourceType(_, _, _, _) => {
+          ResourceType(_, _, _, _) => {
             local_resource_ids.push(Some(next_rid))
             next_rid += 1
           }
           _ => local_resource_ids.push(None)
         }
       }
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      AliasOuter(kind, _count, _idx) => if kind == 0x03 { record_type_slot() }
+      AliasInstanceExport(kind, _inst, _name) =>
         if kind == 0x03 {
           record_type_slot()
         }
-      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot()
-        }
-      @component.ComponentDecl::Import(_name, desc) =>
-        record_type_slots_for_desc(desc)
-      @component.ComponentDecl::Export(name, desc) => {
+      Import(_name, desc) => record_type_slots_for_desc(desc)
+      Export(name, desc) => {
         match desc {
-          @component.ExternDesc::FuncType(tyidx) =>
+          FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
               match local_types[tyidx] {
-                @component.TypeDef::FuncType(ft) =>
+                FuncType(ft) =>
                   out.set(
                     name,
                     funcsig_of_functype_lg(
@@ -314,7 +280,7 @@ fn componenttype_export_func_sigs_of_decls(
               }
             } else if tyidx >= 0 && tyidx < global_types.length() {
               match global_types[tyidx] {
-                Some(@component.TypeDef::FuncType(ft)) =>
+                Some(FuncType(ft)) =>
                   out.set(
                     name,
                     funcsig_of_functype_lg(
@@ -332,7 +298,7 @@ fn componenttype_export_func_sigs_of_decls(
         }
         record_type_slots_for_desc(desc)
       }
-      @component.ComponentDecl::CoreType(_) => ()
+      CoreType(_) => ()
     }
   }
   out
@@ -354,7 +320,7 @@ fn component_import_core_module_exports_of(
   let result : Map[String, Map[String, Int]] = {}
   for i in c.imports {
     if (importname_to_string(i.name), i.desc)
-      is (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) &&
+      is (Some(name), CoreModuleType(tyidx)) &&
       tyidx >= 0 &&
       tyidx < core_type_exports.length() &&
       core_type_exports[tyidx] is Some(map) {
@@ -385,7 +351,7 @@ fn component_import_core_module_import_sigs_of(
   let result : Map[String, Map[String, CoreExternType]] = {}
   for i in c.imports {
     if (importname_to_string(i.name), i.desc)
-      is (Some(name), @component.ExternDesc::CoreModuleType(tyidx)) &&
+      is (Some(name), CoreModuleType(tyidx)) &&
       tyidx >= 0 &&
       tyidx < core_type_imports.length() &&
       core_type_imports[tyidx] is Some(imps) {
@@ -408,7 +374,7 @@ fn componenttype_import_core_module_sigs_of_decls(
   let mut core_type_bound = 0
   for d in decls {
     match d {
-      @component.ComponentDecl::CoreType(bytes) => {
+      CoreType(bytes) => {
         let r = CoreTypeReader::new(bytes)
         let op = r.read_u8()
         if op == 0x50 {
@@ -441,14 +407,14 @@ fn componenttype_import_core_module_sigs_of_decls(
         }
         core_type_bound += 1
       }
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      AliasOuter(kind, _count, _idx) =>
         if kind != 0x03 {
           // Core-type aliases consume a core-type index.
           local_core_import_sigs.push(None)
           local_core_export_kinds.push(None)
           core_type_bound += 1
         }
-      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
+      AliasInstanceExport(kind, _inst, _name) =>
         if kind != 0x03 {
           local_core_import_sigs.push(None)
           local_core_export_kinds.push(None)
@@ -460,8 +426,8 @@ fn componenttype_import_core_module_sigs_of_decls(
   let import_sigs : Map[String, Map[String, CoreExternType]] = {}
   let export_kinds : Map[String, Map[String, Int]] = {}
   for d in decls {
-    if d is @component.ComponentDecl::Import(name, desc) &&
-      desc is @component.ExternDesc::CoreModuleType(tyidx) &&
+    if d is Import(name, desc) &&
+      desc is CoreModuleType(tyidx) &&
       tyidx >= 0 &&
       tyidx < local_core_import_sigs.length() {
       if local_core_import_sigs[tyidx] is Some(map) {
@@ -555,12 +521,12 @@ fn count_import(desc : @component.ExternDesc, counts : Counts) -> Unit {
 ///|
 fn sort_of_externdesc(desc : @component.ExternDesc) -> @component.Sort {
   match desc {
-    CoreModuleType(_) => @component.Sort::Core(0x11)
-    FuncType(_) => @component.Sort::Func
-    Value(_) => @component.Sort::Value
-    Type(_) => @component.Sort::Type
-    ComponentType(_) => @component.Sort::Component
-    InstanceType(_) => @component.Sort::Instance
+    CoreModuleType(_) => Core(0x11)
+    FuncType(_) => Func
+    Value(_) => Value
+    Type(_) => Type
+    ComponentType(_) => Component
+    InstanceType(_) => Instance
   }
 }
 
@@ -609,11 +575,10 @@ fn validate_valtype(
     match type_table[idx] {
       // Component valtypes may reference any defined type (not function,
       // component, or instance types).
-      Some(@component.TypeDef::FuncType(_))
-      | Some(@component.TypeDef::ComponentType(_))
-      | Some(@component.TypeDef::InstanceTypeEmpty)
-      | Some(@component.TypeDef::InstanceType(_)) =>
-        raise TypeIndexNotDefinedType(idx)
+      Some(FuncType(_))
+      | Some(ComponentType(_))
+      | Some(InstanceTypeEmpty)
+      | Some(InstanceType(_)) => raise TypeIndexNotDefinedType(idx)
       Some(_) => ()
       None => ()
     }
@@ -665,8 +630,8 @@ fn valtype_contains_borrow(
   visiting : Map[Int, Int],
 ) -> Bool {
   match ty {
-    @component.ValType::Prim(_) => false
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => false
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
         false
       } else if visiting.get(idx) is Some(_) {
@@ -674,8 +639,8 @@ fn valtype_contains_borrow(
       } else {
         visiting.set(idx, 1)
         let any = match type_table[idx] {
-          Some(@component.TypeDef::Borrow(_)) => true
-          Some(@component.TypeDef::Tuple(xs)) => {
+          Some(Borrow(_)) => true
+          Some(Tuple(xs)) => {
             let mut any = false
             for v in xs {
               if valtype_contains_borrow(v, type_table, visiting) {
@@ -685,7 +650,7 @@ fn valtype_contains_borrow(
             }
             any
           }
-          Some(@component.TypeDef::Record(fields)) => {
+          Some(Record(fields)) => {
             let mut any = false
             for f in fields {
               if valtype_contains_borrow(f.ty, type_table, visiting) {
@@ -695,7 +660,7 @@ fn valtype_contains_borrow(
             }
             any
           }
-          Some(@component.TypeDef::Variant(cases)) => {
+          Some(Variant(cases)) => {
             let mut any = false
             for c in cases {
               match c.ty {
@@ -709,9 +674,8 @@ fn valtype_contains_borrow(
             }
             any
           }
-          Some(@component.TypeDef::Option(v)) =>
-            valtype_contains_borrow(v, type_table, visiting)
-          Some(@component.TypeDef::Result(ok, err)) => {
+          Some(Option(v)) => valtype_contains_borrow(v, type_table, visiting)
+          Some(Result(ok, err)) => {
             let ok_any = match ok {
               None => false
               Some(v) => valtype_contains_borrow(v, type_table, visiting)
@@ -722,21 +686,15 @@ fn valtype_contains_borrow(
             }
             ok_any || err_any
           }
-          Some(@component.TypeDef::List(v)) =>
-            valtype_contains_borrow(v, type_table, visiting)
-          Some(@component.TypeDef::Stream(v))
-          | Some(@component.TypeDef::Future(v)) =>
+          Some(List(v)) => valtype_contains_borrow(v, type_table, visiting)
+          Some(Stream(v)) | Some(Future(v)) =>
             match v {
               None => false
               Some(inner) =>
                 valtype_contains_borrow(inner, type_table, visiting)
             }
-          Some(@component.TypeDef::Own(idx2)) =>
-            valtype_contains_borrow(
-              @component.ValType::TypeIdx(idx2),
-              type_table,
-              visiting,
-            )
+          Some(Own(idx2)) =>
+            valtype_contains_borrow(TypeIdx(idx2), type_table, visiting)
           _ => false
         }
         visiting.remove(idx) |> ignore
@@ -880,7 +838,7 @@ fn validate_typedef(
         raise SectionParseError(7, "type index out of bounds")
       }
       match type_table[ti] {
-        Some(@component.TypeDef::ResourceType(_, _, _, _)) => ()
+        Some(ResourceType(_, _, _, _)) => ()
         None => ()
         Some(_) => raise SectionParseError(7, "not a resource type")
       }
@@ -916,7 +874,7 @@ fn validate_typedef(
       let local_core_type_exports : Array[Map[String, Int]?] = []
       for d in decls {
         match d {
-          @component.ComponentDecl::CoreType(bytes) => {
+          CoreType(bytes) => {
             local_core_type_exports.push(
               validate_single_core_type(
                 bytes, local_core_type_bound, outer_core_type_bounds,
@@ -924,7 +882,7 @@ fn validate_typedef(
             )
             local_core_type_bound += 1
           }
-          @component.ComponentDecl::AliasOuter(kind, count, idx) =>
+          AliasOuter(kind, count, idx) =>
             // Component-model extern kinds use the same discriminants as the
             // component export kind encoding; `Type` is 0x03.
             if kind == 0x03 {
@@ -938,11 +896,7 @@ fn validate_typedef(
               )
               local_core_type_bound += 1
             }
-          @component.ComponentDecl::AliasInstanceExport(
-            kind,
-            _instance_idx,
-            _name
-          ) =>
+          AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
               local_resource_ids.push(None)
@@ -950,7 +904,7 @@ fn validate_typedef(
               local_core_type_exports.push(None)
               local_core_type_bound += 1
             }
-          @component.ComponentDecl::Type(t) => {
+          Type(t) => {
             validate_typedef(
               t,
               cfg,
@@ -961,7 +915,7 @@ fn validate_typedef(
             local_type_table.push(Some(t))
             local_resource_ids.push(None)
           }
-          @component.ComponentDecl::Import(name, desc) => {
+          Import(name, desc) => {
             validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_imports.get(key) {
@@ -978,7 +932,7 @@ fn validate_typedef(
             }
             validate_externdesc(desc, local_type_table, local_core_type_bound)
             match desc {
-              @component.ExternDesc::CoreModuleType(tyidx) =>
+              CoreModuleType(tyidx) =>
                 if tyidx < 0 ||
                   tyidx >= local_core_type_exports.length() ||
                   local_core_type_exports[tyidx] is None {
@@ -987,10 +941,10 @@ fn validate_typedef(
               _ => ()
             }
             match desc {
-              @component.ExternDesc::Type(bound) => {
+              Type(bound) => {
                 let new_idx = local_type_table.length()
                 match bound {
-                  @component.TypeBound::Eq(tyidx) =>
+                  Eq(tyidx) =>
                     if tyidx >= 0 && tyidx < local_type_table.length() {
                       local_type_table.push(local_type_table[tyidx])
                       local_resource_ids.push(local_resource_ids[tyidx])
@@ -998,30 +952,23 @@ fn validate_typedef(
                       local_type_table.push(None)
                       local_resource_ids.push(None)
                     }
-                  @component.TypeBound::SubResource => {
+                  SubResource => {
                     local_type_table.push(
-                      Some(
-                        @component.TypeDef::ResourceType(
-                          -1,
-                          0x7f,
-                          None,
-                          @component.ResourceKind::HostDefined,
-                        ),
-                      ),
+                      Some(ResourceType(-1, 0x7f, None, HostDefined)),
                     )
                     local_resource_ids.push(None)
                   }
                 }
                 local_named_types.set(new_idx, 1)
                 match bound {
-                  @component.TypeBound::SubResource => {
+                  SubResource => {
                     local_import_resource_names.set(name, new_idx)
                     local_import_resource_type_idxs.set(new_idx, 1)
                   }
                   _ => ()
                 }
                 if !valtype_valid_for_type_import_export(
-                    @component.ValType::TypeIdx(new_idx),
+                    TypeIdx(new_idx),
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
@@ -1032,10 +979,10 @@ fn validate_typedef(
                   )
                 }
               }
-              @component.ExternDesc::FuncType(tyidx) =>
+              FuncType(tyidx) =>
                 if tyidx >= 0 && tyidx < local_type_table.length() {
                   match local_type_table[tyidx] {
-                    Some(@component.TypeDef::FuncType(ft)) => {
+                    Some(FuncType(ft)) => {
                       validate_bracketed_func_name(
                         7, name, ft, local_type_table, local_resource_ids, local_import_resource_names,
                       )
@@ -1060,7 +1007,7 @@ fn validate_typedef(
               _ => ()
             }
           }
-          @component.ComponentDecl::Export(name, desc) => {
+          Export(name, desc) => {
             validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
@@ -1077,7 +1024,7 @@ fn validate_typedef(
             }
             validate_externdesc(desc, local_type_table, local_core_type_bound)
             match desc {
-              @component.ExternDesc::CoreModuleType(tyidx) =>
+              CoreModuleType(tyidx) =>
                 if tyidx < 0 ||
                   tyidx >= local_core_type_exports.length() ||
                   local_core_type_exports[tyidx] is None {
@@ -1086,10 +1033,10 @@ fn validate_typedef(
               _ => ()
             }
             match desc {
-              @component.ExternDesc::Type(bound) => {
+              Type(bound) => {
                 let new_idx = local_type_table.length()
                 match bound {
-                  @component.TypeBound::Eq(tyidx) =>
+                  Eq(tyidx) =>
                     if tyidx >= 0 && tyidx < local_type_table.length() {
                       local_type_table.push(local_type_table[tyidx])
                       local_resource_ids.push(local_resource_ids[tyidx])
@@ -1097,30 +1044,23 @@ fn validate_typedef(
                       local_type_table.push(None)
                       local_resource_ids.push(None)
                     }
-                  @component.TypeBound::SubResource => {
+                  SubResource => {
                     local_type_table.push(
-                      Some(
-                        @component.TypeDef::ResourceType(
-                          -1,
-                          0x7f,
-                          None,
-                          @component.ResourceKind::HostDefined,
-                        ),
-                      ),
+                      Some(ResourceType(-1, 0x7f, None, HostDefined)),
                     )
                     local_resource_ids.push(None)
                   }
                 }
                 local_named_types.set(new_idx, 1)
                 match bound {
-                  @component.TypeBound::SubResource => {
+                  SubResource => {
                     local_export_resource_names.set(name, new_idx)
                     local_export_resource_type_idxs.set(new_idx, 1)
                   }
                   _ => ()
                 }
                 if !valtype_valid_for_type_import_export(
-                    @component.ValType::TypeIdx(new_idx),
+                    TypeIdx(new_idx),
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
@@ -1131,10 +1071,10 @@ fn validate_typedef(
                   )
                 }
               }
-              @component.ExternDesc::FuncType(tyidx) =>
+              FuncType(tyidx) =>
                 if tyidx >= 0 && tyidx < local_type_table.length() {
                   match local_type_table[tyidx] {
-                    Some(@component.TypeDef::FuncType(ft)) => {
+                    Some(FuncType(ft)) => {
                       validate_bracketed_func_name(
                         7, name, ft, local_type_table, local_resource_ids, local_export_resource_names,
                       )
@@ -1165,7 +1105,7 @@ fn validate_typedef(
       let local_core_type_exports : Array[Map[String, Int]?] = []
       for d in decls {
         match d {
-          @component.InstanceDecl::CoreType(bytes) => {
+          CoreType(bytes) => {
             let r = CoreTypeReader::new(bytes)
             let op = r.read_u8()
             if op == 0x50 {
@@ -1185,7 +1125,7 @@ fn validate_typedef(
             }
             local_core_type_bound += 1
           }
-          @component.InstanceDecl::AliasOuter(kind, count, idx) =>
+          AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
               local_type_table.push(
                 outer_type_of_alias(type_outers, count, idx),
@@ -1196,18 +1136,14 @@ fn validate_typedef(
               )
               local_core_type_bound += 1
             }
-          @component.InstanceDecl::AliasInstanceExport(
-            kind,
-            _instance_idx,
-            _name
-          ) =>
+          AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
             } else {
               local_core_type_exports.push(None)
               local_core_type_bound += 1
             }
-          @component.InstanceDecl::Type(t) => {
+          Type(t) => {
             validate_typedef(
               t,
               cfg,
@@ -1217,7 +1153,7 @@ fn validate_typedef(
             )
             local_type_table.push(Some(t))
           }
-          @component.InstanceDecl::Export(name, desc) => {
+          Export(name, desc) => {
             validate_extern_name_string(name, cfg)
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
@@ -1234,7 +1170,7 @@ fn validate_typedef(
             }
             validate_externdesc(desc, local_type_table, local_core_type_bound)
             match desc {
-              @component.ExternDesc::CoreModuleType(tyidx) =>
+              CoreModuleType(tyidx) =>
                 if tyidx < 0 ||
                   tyidx >= local_core_type_exports.length() ||
                   local_core_type_exports[tyidx] is None {
@@ -1288,22 +1224,21 @@ fn validate_externdesc(
     FuncType(tyidx) => {
       check_typeidx(tyidx, type_table.length())
       match type_table[tyidx] {
-        Some(@component.TypeDef::FuncType(_)) => ()
+        Some(FuncType(_)) => ()
         Some(_) | None => raise TypeIndexNotFuncType(tyidx)
       }
     }
     ComponentType(tyidx) => {
       check_typeidx(tyidx, type_table.length())
       match type_table[tyidx] {
-        Some(@component.TypeDef::ComponentType(_)) => ()
+        Some(ComponentType(_)) => ()
         Some(_) | None => raise TypeIndexNotComponentType(tyidx)
       }
     }
     InstanceType(tyidx) => {
       check_typeidx(tyidx, type_table.length())
       match type_table[tyidx] {
-        Some(@component.TypeDef::InstanceType(_))
-        | Some(@component.TypeDef::InstanceTypeEmpty) => ()
+        Some(InstanceType(_)) | Some(InstanceTypeEmpty) => ()
         Some(_) | None => raise TypeIndexNotInstanceType(tyidx)
       }
     }

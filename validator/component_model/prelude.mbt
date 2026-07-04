@@ -59,7 +59,7 @@ pub(all) suberror ComponentValidationError {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for ComponentValidationError with output(self, logger) {
+pub impl Show for ComponentValidationError with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -194,10 +194,10 @@ fn valtype_of_typesig(
   resource_ids : Array[Int?],
 ) -> @component.ValType? {
   match sig {
-    TypeSig::Prim(p) => Some(@component.ValType::Prim(p))
+    Prim(p) => Some(Prim(p))
     _ =>
       match typeidx_of_typesig(sig, type_table, resource_ids) {
-        Some(idx) => Some(@component.ValType::TypeIdx(idx))
+        Some(idx) => Some(TypeIdx(idx))
         None => None
       }
   }
@@ -210,8 +210,8 @@ fn typedef_of_typesig(
   resource_ids : Array[Int?],
 ) -> @component.TypeDef? {
   match sig {
-    TypeSig::Prim(p) => Some(@component.TypeDef::DefValType(p))
-    TypeSig::Tuple(ts) => {
+    Prim(p) => Some(DefValType(p))
+    Tuple(ts) => {
       let out : Array[@component.ValType] = []
       for t in ts {
         match valtype_of_typesig(t, type_table, resource_ids) {
@@ -219,9 +219,9 @@ fn typedef_of_typesig(
           None => return None
         }
       }
-      Some(@component.TypeDef::Tuple(out))
+      Some(Tuple(out))
     }
-    TypeSig::Record(fields) => {
+    Record(fields) => {
       let out : Array[@component.RecordField] = []
       for f in fields {
         match valtype_of_typesig(f.ty, type_table, resource_ids) {
@@ -229,9 +229,9 @@ fn typedef_of_typesig(
           None => return None
         }
       }
-      Some(@component.TypeDef::Record(out))
+      Some(Record(out))
     }
-    TypeSig::Variant(cases) => {
+    Variant(cases) => {
       let out : Array[@component.VariantCase] = []
       for c in cases {
         let ty = match c.ty {
@@ -244,14 +244,14 @@ fn typedef_of_typesig(
         }
         out.push({ label: c.name, ty, refines: None })
       }
-      Some(@component.TypeDef::Variant(out))
+      Some(Variant(out))
     }
-    TypeSig::Option(t) =>
+    Option(t) =>
       match valtype_of_typesig(t, type_table, resource_ids) {
-        Some(v) => Some(@component.TypeDef::Option(v))
+        Some(v) => Some(Option(v))
         None => None
       }
-    TypeSig::Result(ok, err) => {
+    Result(ok, err) => {
       let ok_v = match ok {
         None => None
         Some(t) =>
@@ -268,15 +268,15 @@ fn typedef_of_typesig(
             None => return None
           }
       }
-      Some(@component.TypeDef::Result(ok_v, err_v))
+      Some(Result(ok_v, err_v))
     }
-    TypeSig::List(t) =>
+    List(t) =>
       match valtype_of_typesig(t, type_table, resource_ids) {
-        Some(v) => Some(@component.TypeDef::List(v))
+        Some(v) => Some(List(v))
         None => None
       }
-    TypeSig::Flags(labels) => Some(@component.TypeDef::Flags(labels))
-    TypeSig::Enum(labels) => Some(@component.TypeDef::Enum(labels))
+    Flags(labels) => Some(Flags(labels))
+    Enum(labels) => Some(Enum(labels))
     _ => None
   }
 }
@@ -294,10 +294,9 @@ fn typesig_contains(sig : TypeSig, hay : Array[TypeSig]) -> Bool {
 ///|
 fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
   match sig {
-    TypeSig::Prim(_) | TypeSig::Other => true
-    TypeSig::Resource(_) | TypeSig::Flags(_) | TypeSig::Enum(_) =>
-      typesig_contains(sig, named)
-    TypeSig::Record(fields) =>
+    Prim(_) | Other => true
+    Resource(_) | Flags(_) | Enum(_) => typesig_contains(sig, named)
+    Record(fields) =>
       if !typesig_contains(sig, named) {
         false
       } else {
@@ -308,7 +307,7 @@ fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
         }
         true
       }
-    TypeSig::Variant(cases) =>
+    Variant(cases) =>
       if !typesig_contains(sig, named) {
         false
       } else {
@@ -320,7 +319,7 @@ fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
         }
         true
       }
-    TypeSig::Tuple(ts) => {
+    Tuple(ts) => {
       for t in ts {
         if !typesig_valid_in_interface(t, named) {
           return false
@@ -328,8 +327,8 @@ fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
       }
       true
     }
-    TypeSig::Option(t) => typesig_valid_in_interface(t, named)
-    TypeSig::Result(ok, err) => {
+    Option(t) => typesig_valid_in_interface(t, named)
+    Result(ok, err) => {
       match ok {
         None => ()
         Some(t) => if !typesig_valid_in_interface(t, named) { return false }
@@ -340,7 +339,7 @@ fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
       }
       true
     }
-    TypeSig::List(t) => typesig_valid_in_interface(t, named)
+    List(t) => typesig_valid_in_interface(t, named)
   }
 }
 
@@ -371,7 +370,7 @@ fn InstanceSig::empty() -> InstanceSig {
 fn core_func_type_of_idx(m : @types.Module, func_idx : Int) -> @types.FuncType? {
   let mut imported = 0
   for imp in m.imports {
-    if imp.desc is @types.ImportDesc::Func(tyidx) {
+    if imp.desc is Func(tyidx) {
       if imported == func_idx {
         return Some(m.get_func_type(tyidx))
       }
@@ -393,7 +392,7 @@ fn core_table_type_of_idx(
 ) -> @types.TableType? {
   let mut imported = 0
   for imp in m.imports {
-    if imp.desc is @types.ImportDesc::Table(tt) {
+    if imp.desc is Table(tt) {
       if imported == table_idx {
         return Some(tt)
       }
@@ -414,7 +413,7 @@ fn core_memory_type_of_idx(
 ) -> @types.MemoryType? {
   let mut imported = 0
   for imp in m.imports {
-    if imp.desc is @types.ImportDesc::Memory(mt) {
+    if imp.desc is Memory(mt) {
       if imported == mem_idx {
         return Some(mt)
       }
@@ -435,7 +434,7 @@ fn core_global_type_of_idx(
 ) -> @types.GlobalType? {
   let mut imported = 0
   for imp in m.imports {
-    if imp.desc is @types.ImportDesc::Global(gt) {
+    if imp.desc is Global(gt) {
       if imported == global_idx {
         return Some(gt)
       }
@@ -455,23 +454,17 @@ fn core_export_type_of_module(
   ex : @types.Export,
 ) -> CoreExternType? {
   match ex.desc {
-    @types.ExportDesc::Func(func_idx) =>
+    Func(func_idx) =>
       match core_func_type_of_idx(m, func_idx) {
-        Some(ft) => Some(CoreExternType::Func(ft))
+        Some(ft) => Some(Func(ft))
         None => None
       }
-    @types.ExportDesc::Table(table_idx) =>
-      core_table_type_of_idx(m, table_idx).map(fn(tt) {
-        CoreExternType::Table(tt)
-      })
-    @types.ExportDesc::Memory(mem_idx) =>
-      core_memory_type_of_idx(m, mem_idx).map(fn(mt) {
-        CoreExternType::Memory(mt)
-      })
-    @types.ExportDesc::Global(global_idx) =>
-      core_global_type_of_idx(m, global_idx).map(fn(gt) {
-        CoreExternType::Global(gt)
-      })
+    Table(table_idx) =>
+      core_table_type_of_idx(m, table_idx).map(fn(tt) { Table(tt) })
+    Memory(mem_idx) =>
+      core_memory_type_of_idx(m, mem_idx).map(fn(mt) { Memory(mt) })
+    Global(global_idx) =>
+      core_global_type_of_idx(m, global_idx).map(fn(gt) { Global(gt) })
     _ => None
   }
 }
@@ -482,11 +475,10 @@ fn core_import_type_of_module(
   desc : @types.ImportDesc,
 ) -> CoreExternType? {
   match desc {
-    @types.ImportDesc::Func(tyidx) =>
-      Some(CoreExternType::Func(m.get_func_type(tyidx)))
-    @types.ImportDesc::Table(tt) => Some(CoreExternType::Table(tt))
-    @types.ImportDesc::Memory(mt) => Some(CoreExternType::Memory(mt))
-    @types.ImportDesc::Global(gt) => Some(CoreExternType::Global(gt))
+    Func(tyidx) => Some(Func(m.get_func_type(tyidx)))
+    Table(tt) => Some(Table(tt))
+    Memory(mt) => Some(Memory(mt))
+    Global(gt) => Some(Global(gt))
     _ => None
   }
 }
@@ -1514,13 +1506,13 @@ fn CoreTypeReader::read_core_valtype(
 ) -> @types.ValueType raise ComponentValidationError {
   let op = self.read_u8()
   match op {
-    0x7f => @types.ValueType::I32
-    0x7e => @types.ValueType::I64
-    0x7d => @types.ValueType::F32
-    0x7c => @types.ValueType::F64
-    0x7b => @types.ValueType::V128
-    0x70 => @types.ValueType::FuncRef
-    0x6f => @types.ValueType::ExternRef
+    0x7f => I32
+    0x7e => I64
+    0x7d => F32
+    0x7c => F64
+    0x7b => V128
+    0x70 => FuncRef
+    0x6f => ExternRef
     _ => raise SectionParseError(3, "unsupported core valtype: \{op}")
   }
 }
@@ -1561,7 +1553,7 @@ fn CoreTypeReader::read_extern_type_sig(
       }
       if idx >= 0 && idx < func_types.length() {
         match func_types[idx] {
-          Some(ft) => Some(CoreExternType::Func(ft))
+          Some(ft) => Some(Func(ft))
           None => None
         }
       } else {
@@ -1573,7 +1565,7 @@ fn CoreTypeReader::read_extern_type_sig(
       let elem = self.read_u8()
       let elem_ty = match elem {
         0x70 => @types.ValueType::FuncRef
-        0x6f => @types.ValueType::ExternRef
+        0x6f => ExternRef
         _ =>
           raise SectionParseError(3, "unsupported core table elemtype: \{elem}")
       }
@@ -1591,9 +1583,7 @@ fn CoreTypeReader::read_extern_type_sig(
           None => None
         },
       }
-      Some(
-        CoreExternType::Table({ elem_type: elem_ty, limits, is_table64: false }),
-      )
+      Some(Table({ elem_type: elem_ty, limits, is_table64: false }))
     }
     0x02 => {
       // memtype: flags + limits (track memory64 when present)
@@ -1619,14 +1609,14 @@ fn CoreTypeReader::read_extern_type_sig(
         },
       }
       let is_memory64 = (flags & 0x04) != 0
-      Some(CoreExternType::Memory({ limits, is_memory64, page_size_log2: 16 }))
+      Some(Memory({ limits, is_memory64, page_size_log2: 16 }))
     }
     0x03 => {
       // globaltype: valtype + mut
       let vt = self.read_core_valtype()
       let mut_ = self.read_u8()
       let mutable = mut_ != 0
-      Some(CoreExternType::Global({ value_type: vt, mutable }))
+      Some(Global({ value_type: vt, mutable }))
     }
     _ => {
       self.validate_extern_type(kind, func_type_bound)

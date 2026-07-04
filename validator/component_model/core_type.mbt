@@ -403,10 +403,10 @@ fn own_target_of_valtype(
   type_table : Array[@component.TypeDef?],
 ) -> Int? {
   match ty {
-    @component.ValType::TypeIdx(idx) =>
+    TypeIdx(idx) =>
       if idx >= 0 && idx < type_table.length() {
         match type_table[idx] {
-          Some(@component.TypeDef::Own(t)) => Some(t)
+          Some(Own(t)) => Some(t)
           _ => None
         }
       } else {
@@ -422,10 +422,10 @@ fn borrow_target_of_valtype(
   type_table : Array[@component.TypeDef?],
 ) -> Int? {
   match ty {
-    @component.ValType::TypeIdx(idx) =>
+    TypeIdx(idx) =>
       if idx >= 0 && idx < type_table.length() {
         match type_table[idx] {
-          Some(@component.TypeDef::Borrow(t)) => Some(t)
+          Some(Borrow(t)) => Some(t)
           _ => None
         }
       } else {
@@ -471,10 +471,10 @@ fn validate_bracketed_func_name(
                       )
                     None =>
                       match r {
-                        @component.ValType::TypeIdx(idx) =>
+                        TypeIdx(idx) =>
                           if idx >= 0 && idx < type_table.length() {
                             match type_table[idx] {
-                              Some(@component.TypeDef::Result(ok, _err)) =>
+                              Some(Result(ok, _err)) =>
                                 match ok {
                                   Some(v) =>
                                     match own_target_of_valtype(v, type_table) {
@@ -540,8 +540,8 @@ fn valtype_uses_disallowed_resources(
   visiting : Map[Int, Int],
 ) -> Bool {
   match ty {
-    @component.ValType::Prim(_) => false
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => false
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
         false
       } else if visiting.get(idx) is Some(_) {
@@ -549,10 +549,9 @@ fn valtype_uses_disallowed_resources(
       } else {
         visiting.set(idx, 1)
         let bad = match type_table[idx] {
-          Some(@component.TypeDef::Own(t))
-          | Some(@component.TypeDef::Borrow(t)) =>
+          Some(Own(t)) | Some(Borrow(t)) =>
             allowed_resource_type_idxs.get(t) is None
-          Some(@component.TypeDef::Tuple(tys)) => {
+          Some(Tuple(tys)) => {
             let mut bad = false
             for t in tys {
               if valtype_uses_disallowed_resources(
@@ -564,7 +563,7 @@ fn valtype_uses_disallowed_resources(
             }
             bad
           }
-          Some(@component.TypeDef::Record(fields)) => {
+          Some(Record(fields)) => {
             let mut bad = false
             for f in fields {
               if valtype_uses_disallowed_resources(
@@ -579,7 +578,7 @@ fn valtype_uses_disallowed_resources(
             }
             bad
           }
-          Some(@component.TypeDef::Variant(cases)) => {
+          Some(Variant(cases)) => {
             let mut bad = false
             for c in cases {
               match c.ty {
@@ -595,11 +594,11 @@ fn valtype_uses_disallowed_resources(
             }
             bad
           }
-          Some(@component.TypeDef::Option(v)) =>
+          Some(Option(v)) =>
             valtype_uses_disallowed_resources(
               v, type_table, allowed_resource_type_idxs, visiting,
             )
-          Some(@component.TypeDef::Result(ok, err)) => {
+          Some(Result(ok, err)) => {
             let ok_bad = match ok {
               None => false
               Some(v) =>
@@ -616,12 +615,11 @@ fn valtype_uses_disallowed_resources(
             }
             ok_bad || err_bad
           }
-          Some(@component.TypeDef::List(v)) =>
+          Some(List(v)) =>
             valtype_uses_disallowed_resources(
               v, type_table, allowed_resource_type_idxs, visiting,
             )
-          Some(@component.TypeDef::Stream(v))
-          | Some(@component.TypeDef::Future(v)) =>
+          Some(Stream(v)) | Some(Future(v)) =>
             match v {
               None => false
               Some(inner) =>
@@ -695,8 +693,8 @@ fn type_sig_of_typedef_lg(
   visiting : Map[Int, Int],
 ) -> TypeSig {
   match td {
-    @component.TypeDef::DefValType(p) => TypeSig::Prim(p)
-    @component.TypeDef::Tuple(tys) => {
+    DefValType(p) => Prim(p)
+    Tuple(tys) => {
       let out : Array[TypeSig] = []
       for t in tys {
         out.push(
@@ -706,9 +704,9 @@ fn type_sig_of_typedef_lg(
           ),
         )
       }
-      TypeSig::Tuple(out)
+      Tuple(out)
     }
-    @component.TypeDef::Record(fields) => {
+    Record(fields) => {
       let out : Array[TypeFieldSig] = []
       for f in fields {
         out.push({
@@ -723,9 +721,9 @@ fn type_sig_of_typedef_lg(
           ),
         })
       }
-      TypeSig::Record(out)
+      Record(out)
     }
-    @component.TypeDef::Variant(cases) => {
+    Variant(cases) => {
       let out : Array[TypeCaseSig] = []
       for c in cases {
         let payload = match c.ty {
@@ -740,16 +738,16 @@ fn type_sig_of_typedef_lg(
         }
         out.push({ name: c.label, ty: payload })
       }
-      TypeSig::Variant(out)
+      Variant(out)
     }
-    @component.TypeDef::Option(v) =>
-      TypeSig::Option(
+    Option(v) =>
+      Option(
         type_sig_of_valtype_lg(
           v, local_types, local_resource_ids, global_types, global_resource_ids,
           visiting,
         ),
       )
-    @component.TypeDef::Result(ok, err) => {
+    Result(ok, err) => {
       let ok_sig = ok.map(fn(v) {
         type_sig_of_valtype_lg(
           v, local_types, local_resource_ids, global_types, global_resource_ids,
@@ -762,27 +760,27 @@ fn type_sig_of_typedef_lg(
           visiting,
         )
       })
-      TypeSig::Result(ok_sig, err_sig)
+      Result(ok_sig, err_sig)
     }
-    @component.TypeDef::List(v) =>
-      TypeSig::List(
+    List(v) =>
+      List(
         type_sig_of_valtype_lg(
           v, local_types, local_resource_ids, global_types, global_resource_ids,
           visiting,
         ),
       )
-    @component.TypeDef::Flags(labels) => TypeSig::Flags(labels)
-    @component.TypeDef::Enum(labels) => TypeSig::Enum(labels)
-    @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
+    Flags(labels) => Flags(labels)
+    Enum(labels) => Enum(labels)
+    Own(idx) | Borrow(idx) =>
       type_sig_of_valtype_lg(
-        @component.ValType::TypeIdx(idx),
+        TypeIdx(idx),
         local_types,
         local_resource_ids,
         global_types,
         global_resource_ids,
         visiting,
       )
-    _ => TypeSig::Other
+    _ => Other
   }
 }
 
@@ -796,12 +794,12 @@ fn type_sig_of_valtype_lg(
   visiting : Map[Int, Int],
 ) -> TypeSig {
   match ty {
-    @component.ValType::Prim(p) => TypeSig::Prim(p)
-    @component.ValType::TypeIdx(idx) =>
+    Prim(p) => Prim(p)
+    TypeIdx(idx) =>
       if idx < 0 {
-        TypeSig::Other
+        Other
       } else if visiting.get(idx) is Some(_) {
-        TypeSig::Other
+        Other
       } else {
         visiting.set(idx, 1)
         let td = if idx < local_types.length() {
@@ -819,17 +817,17 @@ fn type_sig_of_valtype_lg(
           None
         }
         let sig = match td {
-          Some(@component.TypeDef::ResourceType(_, _, _, _)) =>
+          Some(ResourceType(_, _, _, _)) =>
             match rid {
               Some(v) => TypeSig::Resource(v)
-              None => TypeSig::Resource(-1)
+              None => Resource(-1)
             }
           Some(def) =>
             type_sig_of_typedef_lg(
               def, local_types, local_resource_ids, global_types, global_resource_ids,
               visiting,
             )
-          None => TypeSig::Other
+          None => Other
         }
         visiting.remove(idx) |> ignore
         sig
@@ -881,15 +879,15 @@ fn type_sig_of_typedef(
   visiting : Map[Int, Int],
 ) -> TypeSig {
   match td {
-    @component.TypeDef::DefValType(p) => TypeSig::Prim(p)
-    @component.TypeDef::Tuple(tys) => {
+    DefValType(p) => Prim(p)
+    Tuple(tys) => {
       let out : Array[TypeSig] = []
       for t in tys {
         out.push(type_sig_of_valtype(t, type_table, resource_ids, visiting))
       }
-      TypeSig::Tuple(out)
+      Tuple(out)
     }
-    @component.TypeDef::Record(fields) => {
+    Record(fields) => {
       let out : Array[TypeFieldSig] = []
       for f in fields {
         out.push({
@@ -897,9 +895,9 @@ fn type_sig_of_typedef(
           ty: type_sig_of_valtype(f.ty, type_table, resource_ids, visiting),
         })
       }
-      TypeSig::Record(out)
+      Record(out)
     }
-    @component.TypeDef::Variant(cases) => {
+    Variant(cases) => {
       let out : Array[TypeCaseSig] = []
       for c in cases {
         let payload = match c.ty {
@@ -909,34 +907,26 @@ fn type_sig_of_typedef(
         }
         out.push({ name: c.label, ty: payload })
       }
-      TypeSig::Variant(out)
+      Variant(out)
     }
-    @component.TypeDef::Option(v) =>
-      TypeSig::Option(
-        type_sig_of_valtype(v, type_table, resource_ids, visiting),
-      )
-    @component.TypeDef::Result(ok, err) => {
+    Option(v) =>
+      Option(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    Result(ok, err) => {
       let ok_sig = ok.map(fn(v) {
         type_sig_of_valtype(v, type_table, resource_ids, visiting)
       })
       let err_sig = err.map(fn(v) {
         type_sig_of_valtype(v, type_table, resource_ids, visiting)
       })
-      TypeSig::Result(ok_sig, err_sig)
+      Result(ok_sig, err_sig)
     }
-    @component.TypeDef::List(v) =>
-      TypeSig::List(type_sig_of_valtype(v, type_table, resource_ids, visiting))
-    @component.TypeDef::Flags(labels) => TypeSig::Flags(labels)
-    @component.TypeDef::Enum(labels) => TypeSig::Enum(labels)
+    List(v) => List(type_sig_of_valtype(v, type_table, resource_ids, visiting))
+    Flags(labels) => Flags(labels)
+    Enum(labels) => Enum(labels)
     // Own/borrow wrappers are nominally tied to the underlying resource type.
-    @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
-      type_sig_of_valtype(
-        @component.ValType::TypeIdx(idx),
-        type_table,
-        resource_ids,
-        visiting,
-      )
-    _ => TypeSig::Other
+    Own(idx) | Borrow(idx) =>
+      type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, visiting)
+    _ => Other
   }
 }
 
@@ -948,23 +938,23 @@ fn type_sig_of_valtype(
   visiting : Map[Int, Int],
 ) -> TypeSig {
   match ty {
-    @component.ValType::Prim(p) => TypeSig::Prim(p)
-    @component.ValType::TypeIdx(idx) =>
+    Prim(p) => Prim(p)
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
-        TypeSig::Other
+        Other
       } else if visiting.get(idx) is Some(_) {
-        TypeSig::Other
+        Other
       } else {
         visiting.set(idx, 1)
         let sig = match type_table[idx] {
-          Some(@component.TypeDef::ResourceType(_, _, _, _)) =>
+          Some(ResourceType(_, _, _, _)) =>
             match resource_ids.get(idx) {
               Some(Some(rid)) => TypeSig::Resource(rid)
-              _ => TypeSig::Resource(-1)
+              _ => Resource(-1)
             }
           Some(td) =>
             type_sig_of_typedef(td, type_table, resource_ids, visiting)
-          None => TypeSig::Other
+          None => Other
         }
         visiting.remove(idx) |> ignore
         sig
@@ -978,28 +968,22 @@ fn type_sig_of_typeidx(
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
 ) -> TypeSig {
-  type_sig_of_valtype(
-    @component.ValType::TypeIdx(idx),
-    type_table,
-    resource_ids,
-    {},
-  )
+  type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, {})
 }
 
 ///|
 fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
   match sig {
-    TypeSig::Prim(p) => TypeSig::Prim(p)
-    TypeSig::Tuple(xs) =>
-      TypeSig::Tuple(xs.map(fn(x) { type_sig_subst_resources(x, subst) }))
-    TypeSig::Record(fs) =>
-      TypeSig::Record(
+    Prim(p) => Prim(p)
+    Tuple(xs) => Tuple(xs.map(fn(x) { type_sig_subst_resources(x, subst) }))
+    Record(fs) =>
+      Record(
         fs.map(fn(f) {
           { name: f.name, ty: type_sig_subst_resources(f.ty, subst) }
         }),
       )
-    TypeSig::Variant(cs) =>
-      TypeSig::Variant(
+    Variant(cs) =>
+      Variant(
         cs.map(fn(c) {
           let ty = match c.ty {
             None => None
@@ -1008,29 +992,29 @@ fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
           { name: c.name, ty }
         }),
       )
-    TypeSig::Option(v) => TypeSig::Option(type_sig_subst_resources(v, subst))
-    TypeSig::Result(ok, err) => {
+    Option(v) => Option(type_sig_subst_resources(v, subst))
+    Result(ok, err) => {
       let ok2 = ok.map(fn(v) { type_sig_subst_resources(v, subst) })
       let err2 = err.map(fn(v) { type_sig_subst_resources(v, subst) })
-      TypeSig::Result(ok2, err2)
+      Result(ok2, err2)
     }
-    TypeSig::List(v) => TypeSig::List(type_sig_subst_resources(v, subst))
-    TypeSig::Flags(labels) => TypeSig::Flags(labels)
-    TypeSig::Enum(labels) => TypeSig::Enum(labels)
-    TypeSig::Resource(rid) =>
+    List(v) => List(type_sig_subst_resources(v, subst))
+    Flags(labels) => Flags(labels)
+    Enum(labels) => Enum(labels)
+    Resource(rid) =>
       match subst.get(rid) {
-        Some(v) => TypeSig::Resource(v)
-        None => TypeSig::Resource(rid)
+        Some(v) => Resource(v)
+        None => Resource(rid)
       }
-    TypeSig::Other => TypeSig::Other
+    Other => Other
   }
 }
 
 ///|
 fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool {
   match (expected, actual) {
-    (TypeSig::Resource(a), TypeSig::Resource(b)) => a != b
-    (TypeSig::Tuple(xs), TypeSig::Tuple(ys)) =>
+    (Resource(a), Resource(b)) => a != b
+    (Tuple(xs), Tuple(ys)) =>
       xs.length() == ys.length() &&
       ({
         let mut mismatch = false
@@ -1042,7 +1026,7 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
         }
         mismatch
       })
-    (TypeSig::Record(xs), TypeSig::Record(ys)) =>
+    (Record(xs), Record(ys)) =>
       xs.length() == ys.length() &&
       ({
         let mut mismatch = false
@@ -1055,7 +1039,7 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
         }
         mismatch
       })
-    (TypeSig::Variant(xs), TypeSig::Variant(ys)) =>
+    (Variant(xs), Variant(ys)) =>
       xs.length() == ys.length() &&
       ({
         let mut mismatch = false
@@ -1075,11 +1059,9 @@ fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool 
         }
         mismatch
       })
-    (TypeSig::Option(a), TypeSig::Option(b)) =>
-      a != b && type_sig_has_resource_mismatch(a, b)
-    (TypeSig::List(a), TypeSig::List(b)) =>
-      a != b && type_sig_has_resource_mismatch(a, b)
-    (TypeSig::Result(a1, a2), TypeSig::Result(b1, b2)) => {
+    (Option(a), Option(b)) => a != b && type_sig_has_resource_mismatch(a, b)
+    (List(a), List(b)) => a != b && type_sig_has_resource_mismatch(a, b)
+    (Result(a1, a2), Result(b1, b2)) => {
       if a1 != b1 {
         match (a1, b1) {
           (Some(x), Some(y)) =>
@@ -1145,11 +1127,8 @@ fn funcsig_has_resource_mismatch(
 ///|
 fn typedef_requires_name_for_interface(td : @component.TypeDef) -> Bool {
   match td {
-    @component.TypeDef::Record(_)
-    | @component.TypeDef::Variant(_)
-    | @component.TypeDef::Flags(_)
-    | @component.TypeDef::Enum(_)
-    | @component.TypeDef::ResourceType(_, _, _, _) => true
+    Record(_) | Variant(_) | Flags(_) | Enum(_) | ResourceType(_, _, _, _) =>
+      true
     _ => false
   }
 }
@@ -1163,8 +1142,8 @@ fn valtype_valid_in_interface(
   visiting : Map[Int, Int],
 ) -> Bool {
   match ty {
-    @component.ValType::Prim(_) => true
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => true
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
         true
       } else if visiting.get(idx) is Some(_) {
@@ -1177,7 +1156,7 @@ fn valtype_valid_in_interface(
               named_types.get(idx) is None {
               let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
               let mut ok = false
-              if sig != TypeSig::Other {
+              if sig != Other {
                 for kv in named_types.iter() {
                   let (k, _v) = kv
                   if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
@@ -1192,8 +1171,8 @@ fn valtype_valid_in_interface(
             }
             visiting.set(idx, 1)
             let ok = match td {
-              @component.TypeDef::DefValType(_) => true
-              @component.TypeDef::Tuple(tys) => {
+              DefValType(_) => true
+              Tuple(tys) => {
                 let mut ok = true
                 for t in tys {
                   if !valtype_valid_in_interface(
@@ -1205,7 +1184,7 @@ fn valtype_valid_in_interface(
                 }
                 ok
               }
-              @component.TypeDef::Record(fields) => {
+              Record(fields) => {
                 let mut ok = true
                 for f in fields {
                   if !valtype_valid_in_interface(
@@ -1221,7 +1200,7 @@ fn valtype_valid_in_interface(
                 }
                 ok
               }
-              @component.TypeDef::Variant(cases) => {
+              Variant(cases) => {
                 let mut ok = true
                 for c in cases {
                   match c.ty {
@@ -1237,11 +1216,11 @@ fn valtype_valid_in_interface(
                 }
                 ok
               }
-              @component.TypeDef::Option(v) =>
+              Option(v) =>
                 valtype_valid_in_interface(
                   v, type_table, resource_ids, named_types, visiting,
                 )
-              @component.TypeDef::Result(ok, err) => {
+              Result(ok, err) => {
                 let ok_ok = match ok {
                   None => true
                   Some(v) =>
@@ -1258,20 +1237,20 @@ fn valtype_valid_in_interface(
                 }
                 ok_ok && err_ok
               }
-              @component.TypeDef::List(v) =>
+              List(v) =>
                 valtype_valid_in_interface(
                   v, type_table, resource_ids, named_types, visiting,
                 )
-              @component.TypeDef::Own(idx) | @component.TypeDef::Borrow(idx) =>
+              Own(idx) | Borrow(idx) =>
                 valtype_valid_in_interface(
-                  @component.ValType::TypeIdx(idx),
+                  TypeIdx(idx),
                   type_table,
                   resource_ids,
                   named_types,
                   visiting,
                 )
               // Nominal-ish types still need their payloads checked.
-              @component.TypeDef::Future(v) | @component.TypeDef::Stream(v) =>
+              Future(v) | Stream(v) =>
                 match v {
                   None => true
                   Some(inner) =>
@@ -1298,8 +1277,8 @@ fn valtype_valid_for_type_import_export(
   visiting : Map[Int, Int],
 ) -> Bool {
   match ty {
-    @component.ValType::Prim(_) => true
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => true
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_table.length() {
         true
       } else if visiting.get(idx) is Some(_) {
@@ -1309,9 +1288,8 @@ fn valtype_valid_for_type_import_export(
           None => true
           Some(td) => {
             match td {
-              @component.TypeDef::Own(_) | @component.TypeDef::Borrow(_) =>
-                return false
-              @component.TypeDef::FuncType(ft) =>
+              Own(_) | Borrow(_) => return false
+              FuncType(ft) =>
                 return functype_valid_in_interface(
                   ft, type_table, resource_ids, named_types,
                 )
@@ -1321,7 +1299,7 @@ fn valtype_valid_for_type_import_export(
               named_types.get(idx) is None {
               let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
               let mut ok = false
-              if sig != TypeSig::Other {
+              if sig != Other {
                 for kv in named_types.iter() {
                   let (k, _v) = kv
                   if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
@@ -1336,8 +1314,8 @@ fn valtype_valid_for_type_import_export(
             }
             visiting.set(idx, 1)
             let ok = match td {
-              @component.TypeDef::DefValType(_) => true
-              @component.TypeDef::Tuple(tys) => {
+              DefValType(_) => true
+              Tuple(tys) => {
                 let mut ok = true
                 for t in tys {
                   if !valtype_valid_for_type_import_export(
@@ -1349,7 +1327,7 @@ fn valtype_valid_for_type_import_export(
                 }
                 ok
               }
-              @component.TypeDef::Record(fields) => {
+              Record(fields) => {
                 let mut ok = true
                 for f in fields {
                   if !valtype_valid_for_type_import_export(
@@ -1365,7 +1343,7 @@ fn valtype_valid_for_type_import_export(
                 }
                 ok
               }
-              @component.TypeDef::Variant(cases) => {
+              Variant(cases) => {
                 let mut ok = true
                 for c in cases {
                   match c.ty {
@@ -1381,11 +1359,11 @@ fn valtype_valid_for_type_import_export(
                 }
                 ok
               }
-              @component.TypeDef::Option(v) =>
+              Option(v) =>
                 valtype_valid_for_type_import_export(
                   v, type_table, resource_ids, named_types, visiting,
                 )
-              @component.TypeDef::Result(ok_v, err_v) => {
+              Result(ok_v, err_v) => {
                 let ok_ok = match ok_v {
                   None => true
                   Some(v) =>
@@ -1402,13 +1380,13 @@ fn valtype_valid_for_type_import_export(
                 }
                 ok_ok && err_ok
               }
-              @component.TypeDef::List(v) =>
+              List(v) =>
                 valtype_valid_for_type_import_export(
                   v, type_table, resource_ids, named_types, visiting,
                 )
-              @component.TypeDef::Flags(_) | @component.TypeDef::Enum(_) => true
-              @component.TypeDef::ResourceType(_, _, _, _) => true
-              @component.TypeDef::Future(v) | @component.TypeDef::Stream(v) =>
+              Flags(_) | Enum(_) => true
+              ResourceType(_, _, _, _) => true
+              Future(v) | Stream(v) =>
                 match v {
                   None => true
                   Some(inner) =>
@@ -1416,9 +1394,9 @@ fn valtype_valid_for_type_import_export(
                       inner, type_table, resource_ids, named_types, visiting,
                     )
                 }
-              @component.TypeDef::InstanceTypeEmpty => true
-              @component.TypeDef::InstanceType(_) => true
-              @component.TypeDef::ComponentType(_) => true
+              InstanceTypeEmpty => true
+              InstanceType(_) => true
+              ComponentType(_) => true
               _ => false
             }
             visiting.remove(idx) |> ignore
@@ -1464,8 +1442,8 @@ fn instancetype_sig_of_typedef(
   visiting_global : Map[Int, Int],
 ) -> InstanceSig {
   match td {
-    @component.TypeDef::InstanceTypeEmpty => InstanceSig::empty()
-    @component.TypeDef::InstanceType(decls) =>
+    InstanceTypeEmpty => InstanceSig::empty()
+    InstanceType(decls) =>
       instancetype_sig_of_decls(decls, type_table, visiting_global)
     _ => InstanceSig::empty()
   }
@@ -1534,12 +1512,12 @@ fn instancetype_sig_of_decls(
   let visiting_local : Map[Int, Int] = {}
   for d in decls {
     match d {
-      @component.InstanceDecl::Type(t) => local_types.push(t)
-      @component.InstanceDecl::Export(name, desc) => {
+      Type(t) => local_types.push(t)
+      Export(name, desc) => {
         let sort = sort_of_externdesc(desc)
         exports.set(name, sort)
         match desc {
-          @component.ExternDesc::InstanceType(child_tyidx) => {
+          InstanceType(child_tyidx) => {
             let child = instancetype_sig_of_local_idx(
               child_tyidx, local_types, type_table, visiting_local, visiting_global,
             )
@@ -1564,8 +1542,8 @@ fn instancetype_valid_for_use_as_interface(
     return true
   }
   match type_table[tyidx] {
-    Some(@component.TypeDef::InstanceTypeEmpty) => true
-    Some(@component.TypeDef::InstanceType(decls)) => {
+    Some(InstanceTypeEmpty) => true
+    Some(InstanceType(decls)) => {
       let local_type_table : Array[@component.TypeDef?] = []
       let local_resource_ids : Array[Int?] = []
       let local_named_types : Map[Int, Int] = {}
@@ -1573,7 +1551,7 @@ fn instancetype_valid_for_use_as_interface(
       fn push_local(td : @component.TypeDef?) -> Unit {
         local_type_table.push(td)
         match td {
-          Some(@component.TypeDef::ResourceType(_, _, _, _)) => {
+          Some(ResourceType(_, _, _, _)) => {
             local_resource_ids.push(Some(next_rid))
             next_rid += 1
           }
@@ -1583,44 +1561,35 @@ fn instancetype_valid_for_use_as_interface(
 
       for d in decls {
         match d {
-          @component.InstanceDecl::Type(t) => push_local(Some(t))
-          @component.InstanceDecl::AliasOuter(kind, count, idx) =>
+          Type(t) => push_local(Some(t))
+          AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
               let td = outer_type_of_alias(type_outers, count, idx) catch {
                 _ => None
               }
               push_local(td)
             }
-          @component.InstanceDecl::AliasInstanceExport(kind, _inst, _name) =>
+          AliasInstanceExport(kind, _inst, _name) =>
             if kind == 0x03 {
               push_local(None)
             }
-          @component.InstanceDecl::Export(_name, desc) =>
+          Export(_name, desc) =>
             match desc {
-              @component.ExternDesc::Type(bound) => {
+              Type(bound) => {
                 let new_idx = local_type_table.length()
                 match bound {
-                  @component.TypeBound::Eq(src) =>
+                  Eq(src) =>
                     if src >= 0 && src < local_type_table.length() {
                       push_local(local_type_table[src])
                     } else {
                       push_local(None)
                     }
-                  @component.TypeBound::SubResource =>
-                    push_local(
-                      Some(
-                        @component.TypeDef::ResourceType(
-                          -1,
-                          0x7f,
-                          None,
-                          @component.ResourceKind::HostDefined,
-                        ),
-                      ),
-                    )
+                  SubResource =>
+                    push_local(Some(ResourceType(-1, 0x7f, None, HostDefined)))
                 }
                 local_named_types.set(new_idx, 1)
                 if !valtype_valid_for_type_import_export(
-                    @component.ValType::TypeIdx(new_idx),
+                    TypeIdx(new_idx),
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
@@ -1629,10 +1598,10 @@ fn instancetype_valid_for_use_as_interface(
                   return false
                 }
               }
-              @component.ExternDesc::FuncType(ft_idx) =>
+              FuncType(ft_idx) =>
                 if ft_idx >= 0 && ft_idx < local_type_table.length() {
                   match local_type_table[ft_idx] {
-                    Some(@component.TypeDef::FuncType(ft)) =>
+                    Some(FuncType(ft)) =>
                       if !functype_valid_in_interface(
                           ft, local_type_table, local_resource_ids, local_named_types,
                         ) {
@@ -1673,24 +1642,21 @@ fn componenttype_signature_of_decls(
   let visiting_global : Map[Int, Int] = {}
   fn record_type_slot() -> Unit {
     // Placeholder for a type index introduced by an alias/import/export decl.
-    local_types.push(@component.TypeDef::InstanceTypeEmpty)
+    local_types.push(InstanceTypeEmpty)
   }
 
   for d in decls {
     match d {
-      @component.ComponentDecl::Type(t) => local_types.push(t)
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      Type(t) => local_types.push(t)
+      AliasOuter(kind, _count, _idx) => if kind == 0x03 { record_type_slot() }
+      AliasInstanceExport(kind, _inst, _name) =>
         if kind == 0x03 {
           record_type_slot()
         }
-      @component.ComponentDecl::AliasInstanceExport(kind, _inst, _name) =>
-        if kind == 0x03 {
-          record_type_slot()
-        }
-      @component.ComponentDecl::Import(name, desc) => {
+      Import(name, desc) => {
         import_sorts.set(name, sort_of_externdesc(desc))
         match desc {
-          @component.ExternDesc::InstanceType(tyidx) => {
+          InstanceType(tyidx) => {
             let sig = instancetype_sig_of_local_idx(
               tyidx, local_types, type_table, visiting_local, visiting_global,
             )
@@ -1698,14 +1664,14 @@ fn componenttype_signature_of_decls(
           }
           _ => ()
         }
-        if desc is @component.ExternDesc::Type(_) {
+        if desc is Type(_) {
           record_type_slot()
         }
       }
-      @component.ComponentDecl::Export(name, desc) => {
+      Export(name, desc) => {
         export_sorts.set(name, sort_of_externdesc(desc))
         match desc {
-          @component.ExternDesc::InstanceType(tyidx) => {
+          InstanceType(tyidx) => {
             let sig = instancetype_sig_of_local_idx(
               tyidx, local_types, type_table, visiting_local, visiting_global,
             )
@@ -1713,11 +1679,11 @@ fn componenttype_signature_of_decls(
           }
           _ => ()
         }
-        if desc is @component.ExternDesc::Type(_) {
+        if desc is Type(_) {
           record_type_slot()
         }
       }
-      @component.ComponentDecl::CoreType(_) => ()
+      CoreType(_) => ()
     }
   }
   (import_sorts, import_instance_sigs, export_sorts, export_instance_sigs)

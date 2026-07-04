@@ -99,7 +99,7 @@ pub fn Translator::new(
   // Note: add vmctx as explicit param (Cranelift-style special param)
   // - params[0] = vmctx (X0)
   // This is referenced for desugaring global/table/memory operations
-  let vmctx = builder.add_param(Type::I64)
+  let vmctx = builder.add_param(I64)
 
   // Create function environment for desugaring Wasm operations
   let func_env = FuncEnvironment::new(
@@ -244,7 +244,7 @@ pub fn Translator::from_module(
         // Fall back to export name
         let mut export_name = ""
         for exp in mod_.exports {
-          if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
+          if exp.desc is Func(idx) && idx == func_idx {
             export_name = exp.name
             break
           }
@@ -264,7 +264,7 @@ pub fn Translator::from_module(
   let code = mod_.codes[func_local_idx]
   let all_tags : Array[@types.TagType] = []
   for imp in mod_.imports {
-    if imp.desc is @types.ImportDesc::Tag(tag_type_idx) {
+    if imp.desc is Tag(tag_type_idx) {
       all_tags.push({ type_idx: tag_type_idx })
     }
   }
@@ -362,7 +362,7 @@ fn Translator::spill_words_to_v128(
   lo : Value,
   hi : Value,
 ) -> Value {
-  let zero = self.builder.iconst(Type::I64, 0L)
+  let zero = self.builder.iconst(I64, 0L)
   let v0 = self.builder.v128_splat64(zero)
   let v1 = self.builder.v128_replace64(v0, lo, 0)
   self.builder.v128_replace64(v1, hi, 1)
@@ -402,7 +402,7 @@ fn Translator::get_struct_field_count(self : Translator, type_idx : Int) -> Int 
   }
   let subtype = self.module_types[type_idx]
   match subtype.composite {
-    @types.CompositeType::Struct(st) => st.fields.length()
+    Struct(st) => st.fields.length()
     _ => abort("Type \{type_idx} is not a struct type")
   }
 }
@@ -415,18 +415,18 @@ fn Translator::get_array_element_ir_type(
 ) -> Type {
   if type_idx >= self.module_types.length() {
     // Default to I64 for unknown types
-    return Type::I64
+    return I64
   }
   let subtype = self.module_types[type_idx]
   match subtype.composite {
-    @types.CompositeType::Array(arr) =>
+    Array(arr) =>
       match arr.element.storage_type {
-        @types.StorageType::Val(vt) => Type::from_wasm(vt)
+        Val(vt) => Type::from_wasm(vt)
         // Packed types (i8, i16) are extended to i32
-        @types.StorageType::Packed(_) => Type::I32
+        Packed(_) => I32
       }
     // Not an array type, default to I64
-    _ => Type::I64
+    _ => I64
   }
 }
 
@@ -438,21 +438,21 @@ fn Translator::get_struct_field_ir_type(
   field_idx : Int,
 ) -> Type {
   if type_idx >= self.module_types.length() {
-    return Type::I64
+    return I64
   }
   let subtype = self.module_types[type_idx]
   match subtype.composite {
-    @types.CompositeType::Struct(st) => {
+    Struct(st) => {
       if field_idx >= st.fields.length() {
-        return Type::I64
+        return I64
       }
       match st.fields[field_idx].storage_type {
-        @types.StorageType::Val(vt) => Type::from_wasm(vt)
+        Val(vt) => Type::from_wasm(vt)
         // Packed types (i8, i16) are extended to i32
-        @types.StorageType::Packed(_) => Type::I32
+        Packed(_) => I32
       }
     }
-    _ => Type::I64
+    _ => I64
   }
 }
 
@@ -469,16 +469,16 @@ fn Translator::get_struct_field_byte_width(
   }
   let subtype = self.module_types[type_idx]
   match subtype.composite {
-    @types.CompositeType::Struct(st) => {
+    Struct(st) => {
       if field_idx >= st.fields.length() {
         return 0
       }
       match st.fields[field_idx].storage_type {
-        @types.StorageType::Val(_) => 0 // Not a packed type
-        @types.StorageType::Packed(packed) =>
+        Val(_) => 0 // Not a packed type
+        Packed(packed) =>
           match packed {
-            @types.PackedType::I8 => 1
-            @types.PackedType::I16 => 2
+            I8 => 1
+            I16 => 2
           }
       }
     }
@@ -498,13 +498,13 @@ fn Translator::get_array_element_byte_width(
   }
   let subtype = self.module_types[type_idx]
   match subtype.composite {
-    @types.CompositeType::Array(arr) =>
+    Array(arr) =>
       match arr.element.storage_type {
-        @types.StorageType::Val(_) => 0 // Not a packed type
-        @types.StorageType::Packed(packed) =>
+        Val(_) => 0 // Not a packed type
+        Packed(packed) =>
           match packed {
-            @types.PackedType::I8 => 1
-            @types.PackedType::I16 => 2
+            I8 => 1
+            I16 => 2
           }
       }
     _ => 0
@@ -526,21 +526,10 @@ fn Translator::extract_type_idx(
   // -8 = nullref, -9 = nofunc, -10 = noextern
   match value_type {
     // Concrete struct types (idx >= 0) or abstract struct (-1 -> -4)
-    @types.ValueType::RefStruct(idx) | @types.ValueType::RefNullStruct(idx) =>
-      if idx < 0 {
-        -4
-      } else {
-        idx
-      }
+    RefStruct(idx) | RefNullStruct(idx) => if idx < 0 { -4 } else { idx }
     // Concrete array types (idx >= 0) or abstract array (-1 -> -5)
-    @types.ValueType::RefArray(idx) | @types.ValueType::RefNullArray(idx) =>
-      if idx < 0 {
-        -5
-      } else {
-        idx
-      }
-    @types.ValueType::RefFuncTyped(idx)
-    | @types.ValueType::RefNullFuncTyped(idx) => idx
+    RefArray(idx) | RefNullArray(idx) => if idx < 0 { -5 } else { idx }
+    RefFuncTyped(idx) | RefNullFuncTyped(idx) => idx
     AnyRef | RefAny => -1
     RefEq | RefNullEq => -2
     RefI31 | RefNullI31 => -3
@@ -684,7 +673,7 @@ pub fn Translator::translate(
           if init_funcref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(Type::FuncRef, @types.NULL_REF)
+            let v = self.builder.iconst(FuncRef, @types.NULL_REF)
             init_funcref = Some(v)
             v
           }
@@ -692,7 +681,7 @@ pub fn Translator::translate(
           if init_externref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(Type::ExternRef, @types.NULL_REF)
+            let v = self.builder.iconst(ExternRef, @types.NULL_REF)
             init_externref = Some(v)
             v
           }
@@ -798,14 +787,14 @@ fn Translator::emit_catch_branch(
     let val_i64 = self.builder.get_exception_value(i)
     // Convert i64 to appropriate type
     let val = match ty {
-      @types.ValueType::I32 => self.builder.ireduce(Type::I32, val_i64)
-      @types.ValueType::I64 => val_i64
-      @types.ValueType::F32 => {
+      I32 => self.builder.ireduce(I32, val_i64)
+      I64 => val_i64
+      F32 => {
         // Reinterpret bits: i64 -> i32 -> f32
-        let val_i32 = self.builder.ireduce(Type::I32, val_i64)
-        self.builder.bitcast(Type::F32, val_i32)
+        let val_i32 = self.builder.ireduce(I32, val_i64)
+        self.builder.bitcast(F32, val_i32)
       }
-      @types.ValueType::F64 => self.builder.bitcast(Type::F64, val_i64)
+      F64 => self.builder.bitcast(F64, val_i64)
       _ => val_i64 // Reference types use i64 representation
     }
     args.push(val)
@@ -849,13 +838,13 @@ fn Translator::emit_catch_ref_branch(
     let val_i64 = self.builder.get_exception_value(i)
     // Convert i64 to appropriate type
     let val = match ty {
-      @types.ValueType::I32 => self.builder.ireduce(Type::I32, val_i64)
-      @types.ValueType::I64 => val_i64
-      @types.ValueType::F32 => {
-        let val_i32 = self.builder.ireduce(Type::I32, val_i64)
-        self.builder.bitcast(Type::F32, val_i32)
+      I32 => self.builder.ireduce(I32, val_i64)
+      I64 => val_i64
+      F32 => {
+        let val_i32 = self.builder.ireduce(I32, val_i64)
+        self.builder.bitcast(F32, val_i32)
       }
-      @types.ValueType::F64 => self.builder.bitcast(Type::F64, val_i64)
+      F64 => self.builder.bitcast(F64, val_i64)
       _ => val_i64
     }
     args.push(val)

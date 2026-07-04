@@ -61,8 +61,8 @@ fn typeexpr_of_valtype(
               Id("other")
             ExportedType(n, bound) =>
               match bound {
-                @component.TypeBound::SubResource => Id(n) // resources are value-level via own/borrow, see below
-                @component.TypeBound::Eq(_ti) => Id(n)
+                SubResource => Id(n) // resources are value-level via own/borrow, see below
+                Eq(_ti) => Id(n)
               }
           }
       }
@@ -247,14 +247,13 @@ fn build_instancetype_type_slots(
         }
       Export(name, desc) =>
         match desc {
-          @component.ExternDesc::Type(bound) => {
+          Type(bound) => {
             let idx = slots.length()
             slots.push(ExportedType(name, bound))
             exported_idx_by_name.set(name, idx)
             export_name_by_idx.set(idx, name)
             match bound {
-              @component.TypeBound::SubResource =>
-                resource_by_idx.set(idx, name)
+              SubResource => resource_by_idx.set(idx, name)
               _ => ()
             }
           }
@@ -275,7 +274,7 @@ fn decode_interface_from_componenttype(
   let mut full_name : String? = None
   let mut inst_tyidx : Int? = None
   for d in decls {
-    if d is Export(name, @component.ExternDesc::InstanceType(ti)) {
+    if d is Export(name, InstanceType(ti)) {
       full_name = Some(name)
       inst_tyidx = Some(ti)
     }
@@ -296,20 +295,17 @@ fn decode_interface_from_componenttype(
   let mut cur_instidx = 0
   for d in decls {
     match d {
-      @component.ComponentDecl::Type(_td) => cur_typeidx = cur_typeidx + 1
-      @component.ComponentDecl::Import(
-        _n,
-        @component.ExternDesc::InstanceType(ti)
-      ) => {
+      Type(_td) => cur_typeidx = cur_typeidx + 1
+      Import(_n, InstanceType(ti)) => {
         inst_sig_typeidx_by_inst.set(cur_instidx, ti)
         cur_instidx = cur_instidx + 1
       }
-      @component.ComponentDecl::AliasInstanceExport(kind, inst, n) =>
+      AliasInstanceExport(kind, inst, n) =>
         if kind == 0x03 {
           alias_export_by_typeidx.set(cur_typeidx, (inst, n))
           cur_typeidx = cur_typeidx + 1
         }
-      @component.ComponentDecl::AliasOuter(kind, _count, _idx) =>
+      AliasOuter(kind, _count, _idx) =>
         if kind == 0x03 {
           cur_typeidx = cur_typeidx + 1
         }
@@ -320,15 +316,14 @@ fn decode_interface_from_componenttype(
     Some(i) =>
       match type_space[i] {
         Some(td) => td
-        None => raise WitError::Error("missing instancetype for `" + full + "`")
+        None => raise Error("missing instancetype for `" + full + "`")
       }
-    None =>
-      raise WitError::Error("missing instancetype export for `" + full + "`")
+    None => raise Error("missing instancetype export for `" + full + "`")
   }
   let inst_decls = match inst_td {
-    @component.TypeDef::InstanceType(xs) => xs
-    @component.TypeDef::InstanceTypeEmpty => []
-    _ => raise WitError::Error("expected instancetype for `" + full + "`")
+    InstanceType(xs) => xs
+    InstanceTypeEmpty => []
+    _ => raise Error("expected instancetype for `" + full + "`")
   }
   let (slots, idx_by_name, export_name_by_idx, resource_by_idx0) = build_instancetype_type_slots(
     inst_decls,
@@ -355,12 +350,12 @@ fn decode_interface_from_componenttype(
           .unwrap_or_else(() => raise WitError::Error("missing import sig"))
         let sig_td = match type_space[sig_ti] {
           Some(td) => td
-          None => raise WitError::Error("missing instancetype signature")
+          None => raise Error("missing instancetype signature")
         }
         let sig_decls = match sig_td {
-          @component.TypeDef::InstanceType(xs) => xs
-          @component.TypeDef::InstanceTypeEmpty => []
-          _ => raise WitError::Error("expected instancetype signature")
+          InstanceType(xs) => xs
+          InstanceTypeEmpty => []
+          _ => raise Error("expected instancetype signature")
         }
         let (slots2, idx_by_name2, _export_name_by_idx2, _resource_by_idx2) = build_instancetype_type_slots(
           sig_decls,
@@ -371,8 +366,8 @@ fn decode_interface_from_componenttype(
             match slots2[exp_idx] {
               ExportedType(_n, bound) =>
                 match bound {
-                  @component.TypeBound::SubResource => Some((None, Some(bound)))
-                  @component.TypeBound::Eq(ti) =>
+                  SubResource => Some((None, Some(bound)))
+                  Eq(ti) =>
                     match slots2[ti] {
                       Def(td2) => Some((Some(td2), Some(bound)))
                       _ => Some((None, Some(bound)))
@@ -395,8 +390,7 @@ fn decode_interface_from_componenttype(
   // Collect named types.
   let type_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(tname, @component.ExternDesc::Type(bound)) &&
-      bound is @component.TypeBound::Eq(ti) {
+    if d is Export(tname, Type(bound)) && bound is Eq(ti) {
       // If this is an alias to an outer type, try to resolve it through
       // the imported instance signature.
       match slots[ti] {
@@ -406,7 +400,7 @@ fn decode_interface_from_componenttype(
               resolve_outer_export_typedef(
                 type_space, inst_sig_typeidx_by_inst, alias_export_by_typeidx, outer_idx,
               ) {
-              Some((None, Some(@component.TypeBound::SubResource))) => {
+              Some((None, Some(SubResource))) => {
                 // Treat as a re-exported resource.
                 resources.set(tname, { name: tname, methods: [] })
                 // Also treat this exported nominal type index as a resource for own/borrow decoding.
@@ -417,7 +411,7 @@ fn decode_interface_from_componenttype(
               }
               Some((Some(td2), _b)) =>
                 match td2 {
-                  @component.TypeDef::Record(fields) => {
+                  Record(fields) => {
                     let fs : Array[(String, TypeExpr)] = []
                     for f in fields {
                       fs.push(
@@ -434,11 +428,10 @@ fn decode_interface_from_componenttype(
                     }
                     type_items.push(Record({ name: tname, fields: fs }))
                   }
-                  @component.TypeDef::Flags(xs) =>
+                  Flags(xs) =>
                     type_items.push(Flags({ name: tname, flags: xs }))
-                  @component.TypeDef::Enum(xs) =>
-                    type_items.push(Enum({ name: tname, cases: xs }))
-                  @component.TypeDef::Variant(cases) => {
+                  Enum(xs) => type_items.push(Enum({ name: tname, cases: xs }))
+                  Variant(cases) => {
                     let cs : Array[VariantCase] = []
                     for c in cases {
                       let payload = match c.ty {
@@ -468,7 +461,7 @@ fn decode_interface_from_componenttype(
           }
         Def(td2) =>
           match td2 {
-            @component.TypeDef::Record(fields) => {
+            Record(fields) => {
               let fs : Array[(String, TypeExpr)] = []
               for f in fields {
                 fs.push(
@@ -485,11 +478,9 @@ fn decode_interface_from_componenttype(
               }
               type_items.push(Record({ name: tname, fields: fs }))
             }
-            @component.TypeDef::Flags(xs) =>
-              type_items.push(Flags({ name: tname, flags: xs }))
-            @component.TypeDef::Enum(xs) =>
-              type_items.push(Enum({ name: tname, cases: xs }))
-            @component.TypeDef::Variant(cases) => {
+            Flags(xs) => type_items.push(Flags({ name: tname, flags: xs }))
+            Enum(xs) => type_items.push(Enum({ name: tname, cases: xs }))
+            Variant(cases) => {
               let cs : Array[VariantCase] = []
               for c in cases {
                 let payload = match c.ty {
@@ -520,8 +511,7 @@ fn decode_interface_from_componenttype(
   // Collect exported funcs and resource methods.
   let func_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(fname, @component.ExternDesc::FuncType(ti)) &&
-      slots[ti] is Def(@component.TypeDef::FuncType(ft)) {
+    if d is Export(fname, FuncType(ti)) && slots[ti] is Def(FuncType(ft)) {
       if fname.has_prefix("[method]") {
         let rest = slice_ascii(fname, 8, fname.length())
         if find_last_code_unit(rest, 46) is Some(dot) { // '.'
@@ -629,7 +619,7 @@ fn decode_world_from_componenttype(
   let mut full_name : String? = None
   let mut comp_tyidx : Int? = None
   for d in decls {
-    if d is Export(name, @component.ExternDesc::ComponentType(ti)) {
+    if d is Export(name, ComponentType(ti)) {
       full_name = Some(name)
       comp_tyidx = Some(ti)
     }
@@ -652,22 +642,20 @@ fn decode_world_from_componenttype(
     Some(i) =>
       match type_space[i] {
         Some(td) => td
-        None =>
-          raise WitError::Error("missing componenttype for `" + full + "`")
+        None => raise Error("missing componenttype for `" + full + "`")
       }
-    None =>
-      raise WitError::Error("missing componenttype export for `" + full + "`")
+    None => raise Error("missing componenttype export for `" + full + "`")
   }
   let inner_decls = match inner_td {
-    @component.TypeDef::ComponentType(xs) => xs
-    _ => raise WitError::Error("expected componenttype for `" + full + "`")
+    ComponentType(xs) => xs
+    _ => raise Error("expected componenttype for `" + full + "`")
   }
   let items : Array[WorldItem] = []
   for d in inner_decls {
     match d {
-      Import(n, @component.ExternDesc::InstanceType(_ti)) =>
+      Import(n, InstanceType(_ti)) =>
         items.push(Import({ raw: normalize_inst_name(n) }))
-      Export(n, @component.ExternDesc::InstanceType(_ti)) =>
+      Export(n, InstanceType(_ti)) =>
         items.push(Export({ raw: normalize_inst_name(n) }))
       _ => ()
     }
@@ -680,17 +668,17 @@ pub fn decode_wit_package_from_component(
   bytes : Bytes,
 ) -> Package raise WitError {
   let c = @component.parse_component(bytes) catch {
-    e => raise WitError::Error("parsing component: " + e.to_string())
+    e => raise Error("parsing component: " + e.to_string())
   }
   let mut pkg_name : String? = None
   let mut pkg_ver : String? = None
   let items : Array[TopItem] = []
   for e in c.exports {
-    if e.sortidx.sort != @component.Sort::Type {
+    if e.sortidx.sort != Type {
       continue
     }
     let short = match e.name {
-      @component.ExportName::Plain(b) => {
+      Plain(b) => {
         // ASCII
         let sb = StringBuilder::new()
         for i in 0..<b.length() {
@@ -698,7 +686,7 @@ pub fn decode_wit_package_from_component(
         }
         sb.to_string()
       }
-      @component.ExportName::WithVersion(b, _vs) => {
+      WithVersion(b, _vs) => {
         let sb = StringBuilder::new()
         for i in 0..<b.length() {
           sb.write_char(b[i].to_int().unsafe_to_char())
@@ -714,20 +702,14 @@ pub fn decode_wit_package_from_component(
     if tdef_idx < 0 || tdef_idx >= c.types.length() {
       continue
     }
-    if c.types[tdef_idx] is @component.TypeDef::ComponentType(decls) {
+    if c.types[tdef_idx] is ComponentType(decls) {
       // Heuristic: interface wrappers export an instance; world wrappers export a component.
       let mut has_instance_export = false
       let mut has_component_export = false
       for d in decls {
         match d {
-          @component.ComponentDecl::Export(
-            _,
-            @component.ExternDesc::InstanceType(_)
-          ) => has_instance_export = true
-          @component.ComponentDecl::Export(
-            _,
-            @component.ExternDesc::ComponentType(_)
-          ) => has_component_export = true
+          Export(_, InstanceType(_)) => has_instance_export = true
+          Export(_, ComponentType(_)) => has_component_export = true
           _ => ()
         }
       }

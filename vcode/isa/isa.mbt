@@ -164,55 +164,55 @@ pub fn ISA::int_reg_index(self : ISA, role : @spec.IntRegRole) -> Int {
 ///|
 /// Convenience: get an integer physical register for a role.
 pub fn ISA::int_reg(self : ISA, role : @spec.IntRegRole) -> @abi.PReg {
-  { index: self.int_reg_index(role), class: @abi.Int }
+  { index: self.int_reg_index(role), class: Int }
 }
 
 ///|
 pub fn ISA::vmctx_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::Vmctx)
+  self.int_reg_index(Vmctx)
 }
 
 ///|
 pub fn ISA::mem0_desc_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::Mem0Desc)
+  self.int_reg_index(Mem0Desc)
 }
 
 ///|
 pub fn ISA::func_table_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::FuncTable)
+  self.int_reg_index(FuncTable)
 }
 
 ///|
 pub fn ISA::extra_results_ptr_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::ExtraResultsPtr)
+  self.int_reg_index(ExtraResultsPtr)
 }
 
 ///|
 pub fn ISA::scratch_reg_1_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::Scratch1)
+  self.int_reg_index(Scratch1)
 }
 
 ///|
 pub fn ISA::scratch_reg_2_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::Scratch2)
+  self.int_reg_index(Scratch2)
 }
 
 ///|
 pub fn ISA::fp_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::FP)
+  self.int_reg_index(FP)
 }
 
 ///|
 pub fn ISA::lr_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::LR)
+  self.int_reg_index(LR)
 }
 
 ///|
 pub fn ISA::sret_reg_index(self : ISA) -> Int {
-  self.int_reg_index(@spec.IntRegRole::SRet)
+  self.int_reg_index(SRet)
 }
 
 ///|
 pub fn ISA::vmctx_preg(self : ISA) -> @abi.PReg {
-  { index: self.vmctx_reg_index(), class: @abi.Int }
+  { index: self.vmctx_reg_index(), class: Int }
 }

@@ -19,7 +19,7 @@ test "cross-module: simple function import" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "call_add",
-    [@types.Value::I32(3), @types.Value::I32(5)],
+    [I32(3), I32(5)],
   )
   inspect(result.matched, content="true")
 }
@@ -33,7 +33,7 @@ test "cross-module: multiple function imports" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "add_then_sub",
-    [@types.Value::I32(10), @types.Value::I32(5), @types.Value::I32(3)],
+    [I32(10), I32(5), I32(3)],
   )
   inspect(result.matched, content="true")
 }
@@ -47,7 +47,7 @@ test "cross-module: float function import" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "call_addf",
-    [@types.Value::F32(1.5), @types.Value::F32(2.5)],
+    [F32(1.5), F32(2.5)],
   )
   inspect(result.matched, content="true")
 }
@@ -62,7 +62,7 @@ test "cross-module: chain imports" {
     [("mod_a", mod_a_src), ("mod_b", mod_b_src)],
     mod_c_src,
     "octuple",
-    [@types.Value::I32(1)],
+    [I32(1)],
   )
   // 1 * 8 = 8
   inspect(result.matched, content="true")
@@ -103,8 +103,7 @@ test "cross-module: shared memory export/import (jit + interp)" {
   }
 
   // Interpreter writes, interpreter reads through import.
-  @executor.call_exported_func(store, inst_a, "set0", [@types.Value::I32(11)])
-  |> ignore
+  @executor.call_exported_func(store, inst_a, "set0", [I32(11)]) |> ignore
   let b0 = @executor.call_exported_func(store, inst_b, "read0", [])
   debug_inspect(b0, content="[I32(11)]")
 
@@ -317,7 +316,7 @@ fn run_cross_module_jit(
     let base = module_func_base[i]
     let mod_exports : Map[String, Int] = {}
     for exp in mod_.exports {
-      guard exp.desc is @types.ExportDesc::Func(local_idx) else { continue }
+      guard exp.desc is Func(local_idx) else { continue }
       mod_exports.set(exp.name, base + local_idx)
     }
     export_map.set(name, mod_exports)
@@ -453,7 +452,7 @@ fn run_cross_module_jit(
 ///|
 fn get_exported_func_name(mod_ : @types.Module, func_idx : Int) -> String {
   for exp in mod_.exports {
-    if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
+    if exp.desc is Func(idx) && idx == func_idx {
       return exp.name
     }
   }

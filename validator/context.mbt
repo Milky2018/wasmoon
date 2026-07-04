@@ -74,7 +74,7 @@ fn storage_type_to_value_type(
 ) -> @types.ValueType {
   match storage_type {
     Val(vt) => vt
-    Packed(_) => @types.ValueType::I32 // Packed types are accessed as i32
+    Packed(_) => I32 // Packed types are accessed as i32
   }
 }
 
@@ -181,7 +181,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   }
 
   // Collect declared functions from elem segments and global inits
-  let declared_funcs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let declared_funcs : @hashset.HashSet[Int] = HashSet([])
   // Functions referenced in element segments
   for elem in mod.elems {
     for init in elem.init {

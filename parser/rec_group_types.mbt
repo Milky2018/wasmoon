@@ -7,13 +7,13 @@ fn Parser::read_field_type(self : Parser) -> @types.FieldType raise ParserError 
   let storage_type : @types.StorageType = match self.peek_byte() {
     0x78 => {
       self.skip(1)
-      @types.StorageType::Packed(@types.PackedType::I8)
+      Packed(I8)
     }
     0x77 => {
       self.skip(1)
-      @types.StorageType::Packed(@types.PackedType::I16)
+      Packed(I16)
     }
-    _ => @types.StorageType::Val(self.read_value_type())
+    _ => Val(self.read_value_type())
   }
   let mutability = self.read_byte()
   if mutability != 0x00 && mutability != 0x01 {
@@ -45,10 +45,10 @@ fn Parser::read_composite_type(
     0x60 => {
       let params = self.read_vec(() => self.read_value_type())
       let results = self.read_vec(() => self.read_value_type())
-      @types.CompositeType::Func({ params, results })
+      Func({ params, results })
     }
-    0x5f => @types.CompositeType::Struct(self.read_struct_type())
-    0x5e => @types.CompositeType::Array(self.read_array_type())
+    0x5f => Struct(self.read_struct_type())
+    0x5e => Array(self.read_array_type())
     _ => raise ParseError("unknown composite type tag: \{tag}")
   }
 }
@@ -108,14 +108,14 @@ fn Parser::read_rec_group(
     composite_tag : Int,
   ) -> @types.SubType raise ParserError {
     let composite : @types.CompositeType = match composite_tag {
-      0x60 => @types.CompositeType::Func({ params: [], results: [] })
-      0x5f => @types.CompositeType::Struct({ fields: [] })
+      0x60 => Func({ params: [], results: [] })
+      0x5f => Struct({ fields: [] })
       0x5e => {
         let element : @types.FieldType = {
-          storage_type: @types.StorageType::Val(@types.ValueType::I32),
+          storage_type: Val(I32),
           mutable: false,
         }
-        @types.CompositeType::Array({ element, })
+        Array({ element, })
       }
       _ => raise ParseError("unknown composite type tag: \{composite_tag}")
     }

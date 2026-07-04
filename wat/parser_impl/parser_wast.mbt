@@ -19,7 +19,7 @@ pub fn parse_wast(input : String) -> WastScript raise WatError {
       commands.push((cmd, line))
     }
   }
-  WastScript::{ commands, }
+  { commands, }
 }
 
 ///|
@@ -301,7 +301,7 @@ fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
         self.advance()
         self.parse_module_field_inner(mod_)
       }
-      _ => raise WatError::UnexpectedToken("expected '(' in module", self.loc())
+      _ => raise UnexpectedToken("expected '(' in module", self.loc())
     }
   }
   // Populate func_names with reverse mapping (index -> name)
@@ -337,14 +337,14 @@ fn Parser::parse_module_field_inner(
           mod_.funcs.push(type_idx)
           mod_.codes.push(code)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Func(func_idx) })
+            mod_.exports.push({ name, desc: Func(func_idx) })
           }
         }
         InlineImport(imp, export_names) => {
           let func_idx = count_func_imports(mod_.imports)
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Func(func_idx) })
+            mod_.exports.push({ name, desc: Func(func_idx) })
           }
         }
       }
@@ -354,36 +354,33 @@ fn Parser::parse_module_field_inner(
           let mem_idx = mod_.memories.length()
           mod_.memories.push(mem)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Memory(mem_idx) })
+            mod_.exports.push({ name, desc: Memory(mem_idx) })
           }
         }
         MemoryImport(imp, export_names) => {
           let mut memory_import_count = 0
           for existing in mod_.imports {
-            if existing.desc is @types.ImportDesc::Memory(_) {
+            if existing.desc is Memory(_) {
               memory_import_count += 1
             }
           }
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({
-              name,
-              desc: @types.ExportDesc::Memory(memory_import_count),
-            })
+            mod_.exports.push({ name, desc: Memory(memory_import_count) })
           }
         }
         MemoryWithData(mem, export_names, data_bytes) => {
           let mem_idx = mod_.memories.length()
           mod_.memories.push(mem)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Memory(mem_idx) })
+            mod_.exports.push({ name, desc: Memory(mem_idx) })
           }
           mod_.datas.push({
             memory_idx: mem_idx,
             offset: if mem.is_memory64 {
-              [@types.Instruction::I64Const(0L)]
+              [I64Const(0L)]
             } else {
-              [@types.Instruction::I32Const(0)]
+              [I32Const(0)]
             },
             init: data_bytes,
           })
@@ -394,32 +391,26 @@ fn Parser::parse_module_field_inner(
         GlobalDef(global, export_names) => {
           let mut num_global_imports = 0
           for existing in mod_.imports {
-            if existing.desc is @types.ImportDesc::Global(_) {
+            if existing.desc is Global(_) {
               num_global_imports += 1
             }
           }
           let global_idx = num_global_imports + mod_.globals.length()
           mod_.globals.push(global)
           for name in export_names {
-            mod_.exports.push({
-              name,
-              desc: @types.ExportDesc::Global(global_idx),
-            })
+            mod_.exports.push({ name, desc: Global(global_idx) })
           }
         }
         GlobalImport(imp, export_names) => {
           let mut global_import_count = 0
           for existing in mod_.imports {
-            if existing.desc is @types.ImportDesc::Global(_) {
+            if existing.desc is Global(_) {
               global_import_count += 1
             }
           }
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({
-              name,
-              desc: @types.ExportDesc::Global(global_import_count),
-            })
+            mod_.exports.push({ name, desc: Global(global_import_count) })
           }
         }
       }
@@ -441,7 +432,7 @@ fn Parser::parse_module_field_inner(
         self.table_names.set(name, table_idx)
       }
       if export_name is Some(name) {
-        mod_.exports.push({ name, desc: @types.ExportDesc::Table(table_idx) })
+        mod_.exports.push({ name, desc: Table(table_idx) })
       }
       if inline_elem is Some(elem) {
         mod_.elems.push(elem)
@@ -469,23 +460,20 @@ fn Parser::parse_module_field_inner(
           let tag_idx = count_tag_imports(mod_.imports) + mod_.tags.length()
           mod_.tags.push(tag)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Tag(tag_idx) })
+            mod_.exports.push({ name, desc: Tag(tag_idx) })
           }
         }
         TagImport(imp, export_names) => {
           let tag_idx = count_tag_imports(mod_.imports)
           mod_.imports.push(imp)
           for name in export_names {
-            mod_.exports.push({ name, desc: @types.ExportDesc::Tag(tag_idx) })
+            mod_.exports.push({ name, desc: Tag(tag_idx) })
           }
         }
       }
     Keyword(kw) =>
-      raise WatError::UnexpectedToken(
-        "unexpected module field: \{kw}",
-        self.loc(),
-      )
-    _ => raise WatError::UnexpectedToken("expected module field", self.loc())
+      raise UnexpectedToken("unexpected module field: \{kw}", self.loc())
+    _ => raise UnexpectedToken("expected module field", self.loc())
   }
 }
 
@@ -508,7 +496,7 @@ fn Parser::parse_wast_command(self : Parser) -> WastCommand raise WatError {
       Action(action)
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "unexpected command: \{self.current.token}",
         self.loc(),
       )
@@ -585,10 +573,7 @@ fn Parser::parse_wast_module_command(
           s
         }
         _ =>
-          raise WatError::UnexpectedToken(
-            "expected module definition name",
-            self.loc(),
-          )
+          raise UnexpectedToken("expected module definition name", self.loc())
       }
       self.expect_rparen()
       ModuleInstance(instance_name, def_name)
@@ -755,7 +740,7 @@ fn Parser::parse_wast_string(self : Parser) -> String raise WatError {
       self.advance()
       s
     }
-    _ => raise WatError::UnexpectedToken("expected string", self.loc())
+    _ => raise UnexpectedToken("expected string", self.loc())
   }
 }
 
@@ -901,7 +886,7 @@ fn Parser::parse_wast_module_source(
         }
       }
     }
-    _ => raise WatError::UnexpectedToken("expected 'module'", self.loc())
+    _ => raise UnexpectedToken("expected 'module'", self.loc())
   }
 }
 
@@ -936,8 +921,7 @@ fn Parser::parse_wast_action(self : Parser) -> WastAction raise WatError {
       let global_name = self.parse_wast_string()
       Get(module_name, global_name)
     }
-    _ =>
-      raise WatError::UnexpectedToken("expected 'invoke' or 'get'", self.loc())
+    _ => raise UnexpectedToken("expected 'invoke' or 'get'", self.loc())
   }
 }
 
@@ -1055,8 +1039,7 @@ fn Parser::parse_wast_const_value(self : Parser) -> WastValue raise WatError {
       }
       Either(alternatives)
     }
-    _ =>
-      raise WatError::UnexpectedToken("expected const instruction", self.loc())
+    _ => raise UnexpectedToken("expected const instruction", self.loc())
   }
 }
 
@@ -1068,7 +1051,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
       self.advance()
       match lane_type {
         "i8x16" => {
-          let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(size_hint=16)
           for _ in 0..<16 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -1076,7 +1059,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i16x8" => {
-          let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(size_hint=16)
           for _ in 0..<8 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -1085,7 +1068,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i32x4" => {
-          let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(size_hint=16)
           for _ in 0..<4 {
             let v = self.parse_wast_i32()
             buf.write_byte(v.to_byte())
@@ -1096,7 +1079,7 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           V128(buf.contents())
         }
         "i64x2" => {
-          let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+          let buf : @buffer.Buffer = Buffer(size_hint=16)
           for _ in 0..<2 {
             let v = self.parse_wast_i64()
             buf.write_byte(v.to_byte())
@@ -1118,17 +1101,17 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             match self.current.token {
               Keyword("nan:canonical") => {
                 self.advance()
-                lanes.push(WastLaneValue::F32CanonicalNan)
+                lanes.push(F32CanonicalNan)
                 has_nan = true
               }
               Keyword("nan:arithmetic") => {
                 self.advance()
-                lanes.push(WastLaneValue::F32ArithmeticNan)
+                lanes.push(F32ArithmeticNan)
                 has_nan = true
               }
               _ => {
                 let f = self.parse_wast_f32()
-                lanes.push(WastLaneValue::F32(f))
+                lanes.push(F32(f))
               }
             }
           }
@@ -1136,10 +1119,10 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             V128Pattern(lanes)
           } else {
             // Build bytes from float values
-            let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+            let buf : @buffer.Buffer = Buffer(size_hint=16)
             for lane in lanes {
               match lane {
-                WastLaneValue::F32(f) => {
+                F32(f) => {
                   let v = f.reinterpret_as_int()
                   buf.write_byte(v.to_byte())
                   buf.write_byte((v >> 8).to_byte())
@@ -1160,17 +1143,17 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             match self.current.token {
               Keyword("nan:canonical") => {
                 self.advance()
-                lanes.push(WastLaneValue::F64CanonicalNan)
+                lanes.push(F64CanonicalNan)
                 has_nan = true
               }
               Keyword("nan:arithmetic") => {
                 self.advance()
-                lanes.push(WastLaneValue::F64ArithmeticNan)
+                lanes.push(F64ArithmeticNan)
                 has_nan = true
               }
               _ => {
                 let f = self.parse_wast_f64()
-                lanes.push(WastLaneValue::F64(f))
+                lanes.push(F64(f))
               }
             }
           }
@@ -1178,10 +1161,10 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
             V128Pattern(lanes)
           } else {
             // Build bytes from double values
-            let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
+            let buf : @buffer.Buffer = Buffer(size_hint=16)
             for lane in lanes {
               match lane {
-                WastLaneValue::F64(f) => {
+                F64(f) => {
                   let v = f.reinterpret_as_int64()
                   buf.write_byte(v.to_byte())
                   buf.write_byte((v >> 8).to_byte())
@@ -1199,14 +1182,14 @@ fn Parser::parse_wast_v128_const(self : Parser) -> WastValue raise WatError {
           }
         }
         _ =>
-          raise WatError::ParseError(
+          raise ParseError(
             "invalid v128.const lane type: \{lane_type}",
             self.loc(),
           )
       }
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected lane type (i8x16, i16x8, etc), got \{self.current}",
         self.loc(),
       )
@@ -1220,7 +1203,7 @@ fn Parser::parse_wast_i32(self : Parser) -> Int raise WatError {
       self.advance()
       parse_wast_int(s)
     }
-    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+    _ => raise UnexpectedToken("expected number", self.loc())
   }
 }
 
@@ -1231,7 +1214,7 @@ fn Parser::parse_wast_i64(self : Parser) -> Int64 raise WatError {
       self.advance()
       parse_wast_int64(s)
     }
-    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+    _ => raise UnexpectedToken("expected number", self.loc())
   }
 }
 
@@ -1255,9 +1238,9 @@ fn Parser::parse_wast_f32(self : Parser) -> Float raise WatError {
         self.advance()
         parse_float32(k)
       } else {
-        raise WatError::UnexpectedToken("expected number", self.loc())
+        raise UnexpectedToken("expected number", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+    _ => raise UnexpectedToken("expected number", self.loc())
   }
 }
 
@@ -1281,16 +1264,16 @@ fn Parser::parse_wast_f64(self : Parser) -> Double raise WatError {
         self.advance()
         parse_float64(k)
       } else {
-        raise WatError::UnexpectedToken("expected number", self.loc())
+        raise UnexpectedToken("expected number", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected number", self.loc())
+    _ => raise UnexpectedToken("expected number", self.loc())
   }
 }
 
 ///|
 fn parse_wast_int(s : String) -> Int raise WatError {
   if s.length() == 0 {
-    raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    raise InvalidNumber(s, { line: 0, column: 0 })
   }
   let mut start = 0
   let mut negative = false
@@ -1317,7 +1300,7 @@ fn parse_wast_int(s : String) -> Int raise WatError {
         continue
       }
       if c < '0' || c > '9' {
-        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+        raise InvalidNumber(s, { line: 0, column: 0 })
       }
       result = result * 10 + (c.to_int() - '0'.to_int())
     }
@@ -1344,7 +1327,7 @@ fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
     } else if c >= 'A' && c <= 'F' {
       c.to_int() - 'A'.to_int() + 10
     } else {
-      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+      raise InvalidNumber(s, { line: 0, column: 0 })
     }
     result = result * 16 + digit
   }
@@ -1354,7 +1337,7 @@ fn parse_wast_hex_int(s : String, start : Int) -> Int raise WatError {
 ///|
 fn parse_wast_int64(s : String) -> Int64 raise WatError {
   if s.length() == 0 {
-    raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+    raise InvalidNumber(s, { line: 0, column: 0 })
   }
   let mut start = 0
   let mut negative = false
@@ -1381,7 +1364,7 @@ fn parse_wast_int64(s : String) -> Int64 raise WatError {
         continue
       }
       if c < '0' || c > '9' {
-        raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+        raise InvalidNumber(s, { line: 0, column: 0 })
       }
       result = result * 10L + (c.to_int() - '0'.to_int()).to_int64()
     }
@@ -1408,7 +1391,7 @@ fn parse_wast_hex_int64(s : String, start : Int) -> Int64 raise WatError {
     } else if c >= 'A' && c <= 'F' {
       c.to_int() - 'A'.to_int() + 10
     } else {
-      raise WatError::InvalidNumber(s, { line: 0, column: 0 })
+      raise InvalidNumber(s, { line: 0, column: 0 })
     }
     result = result * 16L + digit.to_int64()
   }

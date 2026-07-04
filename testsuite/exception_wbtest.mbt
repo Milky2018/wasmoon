@@ -35,7 +35,7 @@ fn create_throw_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "throw_it", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "throw_it", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [throw_func],
@@ -66,10 +66,7 @@ fn create_catch_module() -> @types.Module {
   let tag0 : @types.TagType = { type_idx: 0 }
   let tag_type : @types.FuncType = { params: [], results: [] }
   // Function type: () -> i32
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   // Function: catch_it() {
   //   block $handler (result)
   //     try_table (catch $e0 $handler)
@@ -82,10 +79,8 @@ fn create_catch_module() -> @types.Module {
   let catch_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Empty, [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          Throw(0),
-        ]),
+      Block(Empty, [
+        TryTable(Empty, [Catch(0, 0)], [Throw(0)]),
         I32Const(0),
         Return,
       ]),
@@ -103,7 +98,7 @@ fn create_catch_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "catch_it", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "catch_it", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [catch_func],
@@ -126,15 +121,9 @@ test "exception: try_table with catch handles exception" {
 fn create_throw_param_module() -> @types.Module {
   // tag $e-i32 (param i32)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [I32], results: [] }
   // Function type: (i32) -> i32
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32], results: [I32] }
   // Function: catch_param(n) {
   //   block $handler (result i32)
   //     try_table (catch $e-i32 $handler)
@@ -147,11 +136,8 @@ fn create_throw_param_module() -> @types.Module {
   let catch_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          LocalGet(0),
-          Throw(0),
-        ]),
+      Block(Value(I32), [
+        TryTable(Empty, [Catch(0, 0)], [LocalGet(0), Throw(0)]),
         I32Const(0),
       ]),
     ],
@@ -167,7 +153,7 @@ fn create_throw_param_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "catch_param", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "catch_param", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [catch_func],
@@ -205,10 +191,7 @@ fn create_catch_all_module() -> @types.Module {
   let tag0 : @types.TagType = { type_idx: 0 }
   let tag_type : @types.FuncType = { params: [], results: [] }
   // Function type: () -> i32
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   // Function: catch_all_test() {
   //   block $handler (result)
   //     try_table (catch_all $handler)
@@ -221,10 +204,8 @@ fn create_catch_all_module() -> @types.Module {
   let catch_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Empty, [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::CatchAll(0)], [
-          Throw(0),
-        ]),
+      Block(Empty, [
+        TryTable(Empty, [CatchAll(0)], [Throw(0)]),
         I32Const(0),
         Return,
       ]),
@@ -242,7 +223,7 @@ fn create_catch_all_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "catch_all_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "catch_all_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [catch_func],
@@ -265,15 +246,9 @@ test "exception: catch_all catches any exception" {
 fn create_catch_ref_module() -> @types.Module {
   // tag $e-i32 (param i32)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [I32], results: [] }
   // Function type: (i32) -> (i32, exnref)
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32, @types.ValueType::ExnRef],
-  }
+  let func_type : @types.FuncType = { params: [I32], results: [I32, ExnRef] }
   // Function: catch_ref_test(n) {
   //   block $handler (result i32 exnref)
   //     try_table (catch_ref $e-i32 $handler)
@@ -286,20 +261,10 @@ fn create_catch_ref_module() -> @types.Module {
   let catch_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(
-        @types.BlockType::MultiValue([
-          @types.ValueType::I32,
-          @types.ValueType::ExnRef,
-        ]),
-        [
-          TryTable(
-            @types.BlockType::Empty,
-            [@types.CatchHandler::CatchRef(0, 0)],
-            [LocalGet(0), Throw(0)],
-          ),
-          Unreachable,
-        ],
-      ),
+      Block(MultiValue([I32, ExnRef]), [
+        TryTable(Empty, [CatchRef(0, 0)], [LocalGet(0), Throw(0)]),
+        Unreachable,
+      ]),
     ],
   }
   {
@@ -313,7 +278,7 @@ fn create_catch_ref_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "catch_ref_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "catch_ref_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [catch_func],
@@ -364,10 +329,7 @@ fn create_catch_all_ref_module() -> @types.Module {
   let tag0 : @types.TagType = { type_idx: 0 }
   let tag_type : @types.FuncType = { params: [], results: [] }
   // Function type: () -> exnref
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::ExnRef],
-  }
+  let func_type : @types.FuncType = { params: [], results: [ExnRef] }
   // Function: catch_all_ref_test() {
   //   block $handler (result exnref)
   //     try_table (catch_all_ref $handler)
@@ -379,12 +341,8 @@ fn create_catch_all_ref_module() -> @types.Module {
   let catch_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::ExnRef), [
-        TryTable(
-          @types.BlockType::Empty,
-          [@types.CatchHandler::CatchAllRef(0)],
-          [Throw(0)],
-        ),
+      Block(Value(ExnRef), [
+        TryTable(Empty, [CatchAllRef(0)], [Throw(0)]),
         Unreachable,
       ]),
     ],
@@ -400,7 +358,7 @@ fn create_catch_all_ref_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "catch_all_ref_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "catch_all_ref_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [catch_func],
@@ -428,15 +386,9 @@ test "exception: catch_all_ref captures exnref" {
 fn create_throw_ref_module() -> @types.Module {
   // tag $e-i32 (param i32)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [I32], results: [] }
   // Function type: (i32) -> i32
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32], results: [I32] }
   // Function: throw_ref_test(n) {
   //   block $outer (result i32)
   //     block $inner (result i32 exnref)
@@ -461,28 +413,16 @@ fn create_throw_ref_module() -> @types.Module {
   let throw_ref_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        Block(
-          @types.BlockType::MultiValue([
-            @types.ValueType::I32,
-            @types.ValueType::ExnRef,
-          ]),
-          [
-            TryTable(
-              @types.BlockType::Empty,
-              [@types.CatchHandler::CatchRef(0, 0)],
-              [LocalGet(0), Throw(0)],
-            ),
-            Unreachable,
-          ],
-        ),
+      Block(Value(I32), [
+        Block(MultiValue([I32, ExnRef]), [
+          TryTable(Empty, [CatchRef(0, 0)], [LocalGet(0), Throw(0)]),
+          Unreachable,
+        ]),
         // Stack: i32 exnref
         // Save the exnref to local 0 temporarily
         // Actually we need another local for this
         // Let's simplify: just re-throw and catch the original value
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 1)], [
-          ThrowRef,
-        ]),
+        TryTable(Empty, [Catch(0, 1)], [ThrowRef]),
         Unreachable,
       ]),
     ],
@@ -498,7 +438,7 @@ fn create_throw_ref_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "throw_ref_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "throw_ref_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [throw_ref_func],
@@ -541,15 +481,9 @@ fn create_multi_tag_module() -> @types.Module {
   // tag $e1 (param i32)
   let tag1 : @types.TagType = { type_idx: 1 }
   let tag0_type : @types.FuncType = { params: [], results: [] }
-  let tag1_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let tag1_type : @types.FuncType = { params: [I32], results: [] }
   // Function type: (i32) -> i32
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32], results: [I32] }
   // Function: selective_catch(which) {
   //   block $h1 (result i32)
   //     block $h0 (result)
@@ -569,16 +503,12 @@ fn create_multi_tag_module() -> @types.Module {
   let selective_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        Block(@types.BlockType::Empty, [
-          TryTable(
-            @types.BlockType::Empty,
-            [@types.CatchHandler::Catch(0, 0), @types.CatchHandler::Catch(1, 1)],
-            [
-              LocalGet(0),
-              If(@types.BlockType::Empty, [I32Const(100), Throw(1)], [Throw(0)]),
-            ],
-          ),
+      Block(Value(I32), [
+        Block(Empty, [
+          TryTable(Empty, [Catch(0, 0), Catch(1, 1)], [
+            LocalGet(0),
+            If(Empty, [I32Const(100), Throw(1)], [Throw(0)]),
+          ]),
           Unreachable,
         ]),
         I32Const(0),
@@ -597,7 +527,7 @@ fn create_multi_tag_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "selective_catch", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "selective_catch", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [selective_func],
@@ -636,16 +566,10 @@ fn create_propagate_module() -> @types.Module {
   let tag0 : @types.TagType = { type_idx: 0 }
   // tag $e-other (no params) - won't match
   let tag1 : @types.TagType = { type_idx: 1 }
-  let tag0_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let tag0_type : @types.FuncType = { params: [I32], results: [] }
   let tag1_type : @types.FuncType = { params: [], results: [] }
   // Function type: (i32) -> i32
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32], results: [I32] }
   // Function: propagate(n) {
   //   block $outer (result i32)
   //     try_table (catch $e-i32 $outer)
@@ -661,14 +585,10 @@ fn create_propagate_module() -> @types.Module {
   let propagate_func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          Block(@types.BlockType::Empty, [
-            TryTable(
-              @types.BlockType::Empty,
-              [@types.CatchHandler::Catch(1, 0)],
-              [LocalGet(0), Throw(0)],
-            ),
+      Block(Value(I32), [
+        TryTable(Empty, [Catch(0, 0)], [
+          Block(Empty, [
+            TryTable(Empty, [Catch(1, 0)], [LocalGet(0), Throw(0)]),
             Unreachable,
           ]),
           Unreachable,
@@ -689,7 +609,7 @@ fn create_propagate_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "propagate", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "propagate", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [propagate_func],
@@ -718,15 +638,9 @@ test "exception: exception propagates through non-matching handlers" {
 fn create_multi_value_exception_module() -> @types.Module {
   // tag $e-multi (param i32 i32)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [I32, I32], results: [] }
   // Function type: (i32, i32) -> (i32, i32)
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32, I32] }
   // Function: multi_value_test(a, b) {
   //   block $h (result i32 i32)
   //     try_table (catch $e-multi $h)
@@ -740,20 +654,10 @@ fn create_multi_value_exception_module() -> @types.Module {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(
-        @types.BlockType::MultiValue([
-          @types.ValueType::I32,
-          @types.ValueType::I32,
-        ]),
-        [
-          TryTable(
-            @types.BlockType::Empty,
-            [@types.CatchHandler::Catch(0, 0)],
-            [LocalGet(0), LocalGet(1), Throw(0)],
-          ),
-          Unreachable,
-        ],
-      ),
+      Block(MultiValue([I32, I32]), [
+        TryTable(Empty, [Catch(0, 0)], [LocalGet(0), LocalGet(1), Throw(0)]),
+        Unreachable,
+      ]),
     ],
   }
   {
@@ -767,7 +671,7 @@ fn create_multi_value_exception_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "multi_value_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "multi_value_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -820,10 +724,7 @@ fn create_no_exception_module() -> @types.Module {
   let tag0 : @types.TagType = { type_idx: 0 }
   let tag_type : @types.FuncType = { params: [], results: [] }
   // Function type: () -> i32
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   // Function: no_throw() {
   //   try_table (catch $e0 ...)
   //     i32.const 42
@@ -831,13 +732,7 @@ fn create_no_exception_module() -> @types.Module {
   // }
   let func : @types.FunctionCode = {
     locals: [],
-    body: [
-      TryTable(
-        @types.BlockType::Value(@types.ValueType::I32),
-        [@types.CatchHandler::Catch(0, 0)],
-        [I32Const(42)],
-      ),
-    ],
+    body: [TryTable(Value(I32), [Catch(0, 0)], [I32Const(42)])],
   }
   {
     types: [
@@ -850,7 +745,7 @@ fn create_no_exception_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "no_throw", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "no_throw", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -877,10 +772,7 @@ fn create_uncaught_module() -> @types.Module {
   let tag1 : @types.TagType = { type_idx: 0 }
   let tag_type : @types.FuncType = { params: [], results: [] }
   // Function type: () -> i32
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   // Function: uncaught() {
   //   try_table (catch $e1 ...)  ;; catches $e1, not $e0
   //     throw $e0
@@ -890,10 +782,8 @@ fn create_uncaught_module() -> @types.Module {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Empty, [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(1, 0)], [
-          Throw(0),
-        ]),
+      Block(Empty, [
+        TryTable(Empty, [Catch(1, 0)], [Throw(0)]),
         I32Const(0),
         Return,
       ]),
@@ -911,7 +801,7 @@ fn create_uncaught_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "uncaught", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "uncaught", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -940,15 +830,9 @@ test "exception: uncaught exception propagates out" {
 fn create_f32_exception_module() -> @types.Module {
   // tag $e-f32 (param f32)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [F32], results: [] }
   // Function type: (f32) -> f32
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [@types.ValueType::F32],
-  }
+  let func_type : @types.FuncType = { params: [F32], results: [F32] }
   // Function: f32_test(x) {
   //   block $h (result f32)
   //     try_table (catch $e-f32 $h)
@@ -961,11 +845,8 @@ fn create_f32_exception_module() -> @types.Module {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::F32), [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          LocalGet(0),
-          Throw(0),
-        ]),
+      Block(Value(F32), [
+        TryTable(Empty, [Catch(0, 0)], [LocalGet(0), Throw(0)]),
         Unreachable,
       ]),
     ],
@@ -981,7 +862,7 @@ fn create_f32_exception_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "f32_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "f32_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1010,15 +891,9 @@ test "exception: f32 exception parameter" {
 fn create_i64_exception_module() -> @types.Module {
   // tag $e-i64 (param i64)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::I64],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [I64], results: [] }
   // Function type: (i64) -> i64
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64],
-    results: [@types.ValueType::I64],
-  }
+  let func_type : @types.FuncType = { params: [I64], results: [I64] }
   // Function: i64_test(x) {
   //   block $h (result i64)
   //     try_table (catch $e-i64 $h)
@@ -1031,11 +906,8 @@ fn create_i64_exception_module() -> @types.Module {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I64), [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          LocalGet(0),
-          Throw(0),
-        ]),
+      Block(Value(I64), [
+        TryTable(Empty, [Catch(0, 0)], [LocalGet(0), Throw(0)]),
         Unreachable,
       ]),
     ],
@@ -1051,7 +923,7 @@ fn create_i64_exception_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "i64_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "i64_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1092,15 +964,9 @@ test "exception: i64 exception with large values" {
 fn create_f64_exception_module() -> @types.Module {
   // tag $e-f64 (param f64)
   let tag0 : @types.TagType = { type_idx: 0 }
-  let tag_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [],
-  }
+  let tag_type : @types.FuncType = { params: [F64], results: [] }
   // Function type: (f64) -> f64
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [@types.ValueType::F64],
-  }
+  let func_type : @types.FuncType = { params: [F64], results: [F64] }
   // Function: f64_test(x) {
   //   block $h (result f64)
   //     try_table (catch $e-f64 $h)
@@ -1113,11 +979,8 @@ fn create_f64_exception_module() -> @types.Module {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::F64), [
-        TryTable(@types.BlockType::Empty, [@types.CatchHandler::Catch(0, 0)], [
-          LocalGet(0),
-          Throw(0),
-        ]),
+      Block(Value(F64), [
+        TryTable(Empty, [Catch(0, 0)], [LocalGet(0), Throw(0)]),
         Unreachable,
       ]),
     ],
@@ -1133,7 +996,7 @@ fn create_f64_exception_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "f64_test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "f64_test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],

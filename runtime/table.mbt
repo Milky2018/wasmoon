@@ -13,7 +13,7 @@ pub fn Table::new(
   elem_type : @types.ValueType,
   min : Int,
   max : Int?,
-  init_value? : @types.Value = @types.Value::Null,
+  init_value? : @types.Value = Null,
   is_table64? : Bool = false,
 ) -> Table {
   let elements : Array[@types.Value] = []

@@ -25,13 +25,13 @@ priv struct RematDef {
 ///|
 fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
-    @instr.LoadConst(_)
-    | @instr.LoadConstF32(_)
-    | @instr.LoadConstF64(_)
-    | @instr.LoadGCFuncPtr(_)
-    | @instr.LoadJITFuncPtr(_)
-    | @instr.LoadExceptionFuncPtr(_)
-    | @instr.LoadFuncAddr(_) => true
+    LoadConst(_)
+    | LoadConstF32(_)
+    | LoadConstF64(_)
+    | LoadGCFuncPtr(_)
+    | LoadJITFuncPtr(_)
+    | LoadExceptionFuncPtr(_)
+    | LoadFuncAddr(_) => true
     _ => false
   }
 }
@@ -39,13 +39,13 @@ fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
 ///|
 fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
-    @instr.LoadConst(_)
-    | @instr.LoadConstF32(_)
-    | @instr.LoadConstF64(_)
-    | @instr.LoadGCFuncPtr(_)
-    | @instr.LoadJITFuncPtr(_)
-    | @instr.LoadExceptionFuncPtr(_)
-    | @instr.LoadFuncAddr(_) => true
+    LoadConst(_)
+    | LoadConstF32(_)
+    | LoadConstF64(_)
+    | LoadGCFuncPtr(_)
+    | LoadJITFuncPtr(_)
+    | LoadExceptionFuncPtr(_)
+    | LoadFuncAddr(_) => true
     _ => false
   }
 }
@@ -53,13 +53,13 @@ fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
 ///|
 fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.VCodeInst {
   let inst = @instr.VCodeInst::new(def.opcode)
-  inst.add_def({ reg: @abi.Virtual(dst) })
+  inst.add_def({ reg: Virtual(dst) })
   for i in 0..<def.uses.length() {
     let use_reg = def.uses[i]
     let constraint = def.use_constraints[i]
     match constraint {
-      @abi.FixedReg(preg) => inst.add_use_fixed(use_reg, preg)
-      @abi.Any => inst.add_use(use_reg)
+      FixedReg(preg) => inst.add_use_fixed(use_reg, preg)
+      Any => inst.add_use(use_reg)
     }
   }
   inst
@@ -79,8 +79,8 @@ pub fn rematerialize_long_distance_constants(
       if is_long_distance_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
-        inst.def_constraints[0] is @abi.Any &&
-        inst.defs[0].reg is @abi.Virtual(vreg) &&
+        inst.def_constraints[0] is Any &&
+        inst.defs[0].reg is Virtual(vreg) &&
         remat_defs.get(vreg.id) is None {
         remat_defs.set(vreg.id, {
           opcode: inst.opcode,
@@ -117,7 +117,7 @@ pub fn rematerialize_long_distance_constants(
       per_vreg_clone_cap : Int,
     ) -> @abi.Reg {
       match reg {
-        @abi.Virtual(v) =>
+        Virtual(v) =>
           match remat_defs.get(v.id) {
             Some(def) => {
               if def.def_block_id != block_id {
@@ -134,7 +134,7 @@ pub fn rematerialize_long_distance_constants(
               let inst = clone_remat_inst(def, nv)
               new_block.insts.push(inst)
               clone_count.set(v.id, cloned + 1)
-              @abi.Virtual(nv)
+              Virtual(nv)
             }
             None => reg
           }
@@ -161,7 +161,7 @@ pub fn rematerialize_long_distance_constants(
     if block.terminator is Some(term) {
       let term_idx = block.insts.length()
       let new_term = match term {
-        @instr.Jump(target, args) => {
+        Jump(target, args) => {
           let new_args : Array[@abi.Reg] = []
           for a in args {
             new_args.push(
@@ -180,8 +180,8 @@ pub fn rematerialize_long_distance_constants(
           }
           @instr.Jump(target, new_args)
         }
-        @instr.Branch(cond, t, e) =>
-          @instr.Branch(
+        Branch(cond, t, e) =>
+          Branch(
             maybe_remat_use(
               func,
               cond,
@@ -196,8 +196,8 @@ pub fn rematerialize_long_distance_constants(
             t,
             e,
           )
-        @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
-          @instr.BranchCmp(
+        BranchCmp(lhs, rhs, cond, is64, t, e) =>
+          BranchCmp(
             maybe_remat_use(
               func,
               lhs,
@@ -225,8 +225,8 @@ pub fn rematerialize_long_distance_constants(
             t,
             e,
           )
-        @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
-          @instr.BranchCmpImm(
+        BranchCmpImm(lhs, imm, cond, is64, t, e) =>
+          BranchCmpImm(
             maybe_remat_use(
               func,
               lhs,
@@ -244,8 +244,8 @@ pub fn rematerialize_long_distance_constants(
             t,
             e,
           )
-        @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
-          @instr.BranchZero(
+        BranchZero(reg, is_nonzero, is64, t, e) =>
+          BranchZero(
             maybe_remat_use(
               func,
               reg,
@@ -262,8 +262,8 @@ pub fn rematerialize_long_distance_constants(
             t,
             e,
           )
-        @instr.BrTable(index, targets, default) =>
-          @instr.BrTable(
+        BrTable(index, targets, default) =>
+          BrTable(
             maybe_remat_use(
               func,
               index,
@@ -278,7 +278,7 @@ pub fn rematerialize_long_distance_constants(
             targets,
             default,
           )
-        @instr.Return(vals) => {
+        Return(vals) => {
           let new_vals : Array[@abi.Reg] = []
           for v in vals {
             new_vals.push(
@@ -295,9 +295,9 @@ pub fn rematerialize_long_distance_constants(
               ),
             )
           }
-          @instr.Return(new_vals)
+          Return(new_vals)
         }
-        @instr.Trap(msg) => @instr.Trap(msg)
+        Trap(msg) => Trap(msg)
       }
       new_block.set_terminator(new_term)
     }
@@ -327,8 +327,8 @@ pub fn rematerialize_cross_block_constants(
       if is_cross_block_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
-        inst.def_constraints[0] is @abi.Any &&
-        inst.defs[0].reg is @abi.Virtual(vreg) &&
+        inst.def_constraints[0] is Any &&
+        inst.defs[0].reg is Virtual(vreg) &&
         remat_defs.get(vreg.id) is None {
         remat_defs.set(vreg.id, {
           opcode: inst.opcode,
@@ -363,9 +363,9 @@ pub fn rematerialize_cross_block_constants(
       new_block : @block.VCodeBlock,
     ) -> @abi.Reg {
       match reg {
-        @abi.Virtual(v) =>
+        Virtual(v) =>
           match local_map.get(v.id) {
-            Some(nv) => @abi.Virtual(nv)
+            Some(nv) => Virtual(nv)
             None =>
               match remat_defs.get(v.id) {
                 Some(def) =>
@@ -373,7 +373,7 @@ pub fn rematerialize_cross_block_constants(
                     let nv = func.new_vreg(def.cls)
                     local_map.set(v.id, nv)
                     new_block.insts.push(clone_remat_inst(def, nv))
-                    @abi.Virtual(nv)
+                    Virtual(nv)
                   } else {
                     reg
                   }
@@ -399,7 +399,7 @@ pub fn rematerialize_cross_block_constants(
     }
     if block.terminator is Some(term) {
       let new_term = match term {
-        @instr.Jump(target, args) => {
+        Jump(target, args) => {
           let new_args : Array[@abi.Reg] = []
           for a in args {
             new_args.push(
@@ -415,8 +415,8 @@ pub fn rematerialize_cross_block_constants(
           }
           @instr.Jump(target, new_args)
         }
-        @instr.Branch(cond, t, e) =>
-          @instr.Branch(
+        Branch(cond, t, e) =>
+          Branch(
             rewrite_use_with_local_remat(
               func,
               cond,
@@ -428,8 +428,8 @@ pub fn rematerialize_cross_block_constants(
             t,
             e,
           )
-        @instr.BranchCmp(lhs, rhs, cond, is64, t, e) =>
-          @instr.BranchCmp(
+        BranchCmp(lhs, rhs, cond, is64, t, e) =>
+          BranchCmp(
             rewrite_use_with_local_remat(
               func,
               lhs,
@@ -451,8 +451,8 @@ pub fn rematerialize_cross_block_constants(
             t,
             e,
           )
-        @instr.BranchZero(reg, is_nonzero, is64, t, e) =>
-          @instr.BranchZero(
+        BranchZero(reg, is_nonzero, is64, t, e) =>
+          BranchZero(
             rewrite_use_with_local_remat(
               func,
               reg,
@@ -466,8 +466,8 @@ pub fn rematerialize_cross_block_constants(
             t,
             e,
           )
-        @instr.BranchCmpImm(lhs, imm, cond, is64, t, e) =>
-          @instr.BranchCmpImm(
+        BranchCmpImm(lhs, imm, cond, is64, t, e) =>
+          BranchCmpImm(
             rewrite_use_with_local_remat(
               func,
               lhs,
@@ -482,7 +482,7 @@ pub fn rematerialize_cross_block_constants(
             t,
             e,
           )
-        @instr.Return(vals) => {
+        Return(vals) => {
           let new_vals : Array[@abi.Reg] = []
           for r in vals {
             new_vals.push(
@@ -496,10 +496,10 @@ pub fn rematerialize_cross_block_constants(
               ),
             )
           }
-          @instr.Return(new_vals)
+          Return(new_vals)
         }
-        @instr.BrTable(index, targets, default) =>
-          @instr.BrTable(
+        BrTable(index, targets, default) =>
+          BrTable(
             rewrite_use_with_local_remat(
               func,
               index,
@@ -511,7 +511,7 @@ pub fn rematerialize_cross_block_constants(
             targets,
             default,
           )
-        @instr.Trap(msg) => @instr.Trap(msg)
+        Trap(msg) => Trap(msg)
       }
       new_block.set_terminator(new_term)
     }

@@ -117,7 +117,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     for param in block.params {
       let (v, _) = param
       if v.id >= 0 && v.id < value_count {
-        state[v.id] = Some(PhiAbstractValue::None)
+        state[v.id] = Some(None)
         has_params = true
       }
     }
@@ -189,17 +189,17 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
     if formal_id < 0 || formal_id >= value_count {
       continue
     }
-    let old_absval = state[formal_id].unwrap_or(PhiAbstractValue::None)
-    if old_absval is PhiAbstractValue::Many {
+    let old_absval = state[formal_id].unwrap_or(None)
+    if old_absval is Many {
       continue
     }
     let actual_absval = if actual_id >= 0 && actual_id < value_count {
       match state[actual_id] {
         Some(absval) => absval
-        None => PhiAbstractValue::One(actual_id)
+        None => One(actual_id)
       }
     } else {
-      PhiAbstractValue::One(actual_id)
+      One(actual_id)
     }
     let new_absval = old_absval.join(actual_absval)
     if new_absval != old_absval {
@@ -223,7 +223,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
       let (v, _) = param
       if v.id >= 0 && v.id < value_count {
         match state[v.id] {
-          Some(PhiAbstractValue::One(replacement_id)) => {
+          Some(One(replacement_id)) => {
             replace_ids[v.id] = replacement_id
             will_change = true
           }
@@ -275,7 +275,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
             new_args.push(args[idx])
           }
         }
-        block.terminator = Some(Terminator::Jump(target, new_args))
+        block.terminator = Some(Jump(target, new_args))
         result.mark_changed()
       }
     }
@@ -321,7 +321,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
             }
           }
           if new_args is Some(updated_args) {
-            block.terminator = Some(Terminator::Jump(target, updated_args))
+            block.terminator = Some(Jump(target, updated_args))
             result.mark_changed()
           }
         }
@@ -329,9 +329,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
           if cond.id >= 0 && cond.id < value_count {
             if replace_values[cond.id] is Some(resolved) &&
               resolved.id != cond.id {
-              block.terminator = Some(
-                Terminator::Brz(resolved, then_target, else_target),
-              )
+              block.terminator = Some(Brz(resolved, then_target, else_target))
               result.mark_changed()
             }
           }
@@ -339,9 +337,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
           if cond.id >= 0 && cond.id < value_count {
             if replace_values[cond.id] is Some(resolved) &&
               resolved.id != cond.id {
-              block.terminator = Some(
-                Terminator::Brnz(resolved, then_target, else_target),
-              )
+              block.terminator = Some(Brnz(resolved, then_target, else_target))
               result.mark_changed()
             }
           }
@@ -350,7 +346,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
             if replace_values[index.id] is Some(resolved) &&
               resolved.id != index.id {
               block.terminator = Some(
-                Terminator::BrTable(resolved, targets, default_target),
+                BrTable(resolved, targets, default_target),
               )
               result.mark_changed()
             }
@@ -371,7 +367,7 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
             }
           }
           if new_values is Some(updated_values) {
-            block.terminator = Some(Terminator::Return(updated_values))
+            block.terminator = Some(Return(updated_values))
             result.mark_changed()
           }
         }
@@ -470,7 +466,7 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
               new_args.push(args[idx])
             }
           }
-          block.terminator = Some(Terminator::Jump(target, new_args))
+          block.terminator = Some(Jump(target, new_args))
           result.mark_changed()
         }
       }
@@ -596,14 +592,14 @@ fn compute_used_block_params(
 pub fn simplify_branches(func : Function) -> OptResult {
   let result = OptResult::new()
   // Build constant map from constant folding
-  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.HashMap([])
+  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
         if r.ty is I32 {
-          constants.set(r.id, ConstValue::I32(v.to_int()))
+          constants.set(r.id, I32(v.to_int()))
         } else {
-          constants.set(r.id, ConstValue::I64(v))
+          constants.set(r.id, I64(v))
         }
       }
     }
@@ -614,22 +610,22 @@ pub fn simplify_branches(func : Function) -> OptResult {
       if constants.get(cond.id) is Some(I32(v)) {
         // brz: branch if zero
         let target = if v == 0 { then_target } else { else_target }
-        block.terminator = Some(Terminator::Jump(target, []))
+        block.terminator = Some(Jump(target, []))
         result.mark_changed()
       } else if constants.get(cond.id) is Some(I64(v)) {
         let target = if v == 0L { then_target } else { else_target }
-        block.terminator = Some(Terminator::Jump(target, []))
+        block.terminator = Some(Jump(target, []))
         result.mark_changed()
       }
     } else if block.terminator is Some(Brnz(cond, then_target, else_target)) {
       if constants.get(cond.id) is Some(I32(v)) {
         // brnz: branch if not zero
         let target = if v != 0 { then_target } else { else_target }
-        block.terminator = Some(Terminator::Jump(target, []))
+        block.terminator = Some(Jump(target, []))
         result.mark_changed()
       } else if constants.get(cond.id) is Some(I64(v)) {
         let target = if v != 0L { then_target } else { else_target }
-        block.terminator = Some(Terminator::Jump(target, []))
+        block.terminator = Some(Jump(target, []))
         result.mark_changed()
       }
     } else if block.terminator is Some(BrTable(index, targets, default_target)) {
@@ -640,7 +636,7 @@ pub fn simplify_branches(func : Function) -> OptResult {
         } else {
           default_target
         }
-        block.terminator = Some(Terminator::Jump(target, []))
+        block.terminator = Some(Jump(target, []))
         result.mark_changed()
       }
     }
@@ -659,7 +655,7 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
     return result
   }
   // Mark reachable blocks using DFS from entry
-  let reachable : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
+  let reachable : @hashmap.HashMap[Int, Bool] = HashMap([])
   let worklist : Array[Int] = [0] // Start from entry block (block 0)
   while worklist.length() > 0 {
     let block_id = worklist.pop().unwrap()
@@ -705,9 +701,9 @@ pub fn merge_blocks(func : Function) -> OptResult {
     return result
   }
   // Build predecessor and successor counts
-  let pred_count : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
-  let succ_count : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
-  let single_pred : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([]) // block -> its single predecessor
+  let pred_count : @hashmap.HashMap[Int, Int] = HashMap([])
+  let succ_count : @hashmap.HashMap[Int, Int] = HashMap([])
+  let single_pred : @hashmap.HashMap[Int, Int] = HashMap([]) // block -> its single predecessor
   for block in func.blocks {
     pred_count.set(block.id, 0)
     succ_count.set(block.id, 0)
@@ -808,7 +804,7 @@ fn rewrite_jump_args_through_block(
   if block_params.length() != incoming_args.length() {
     return None
   }
-  let param_to_arg : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
+  let param_to_arg : @hashmap.HashMap[Int, Value] = HashMap([])
   for i in 0..<block_params.length() {
     let (param, _) = block_params[i]
     param_to_arg.set(param.id, incoming_args[i])
@@ -827,7 +823,7 @@ fn resolve_jump_target_with_args(
   func : Function,
   block_idx : @hashmap.HashMap[Int, Int],
 ) -> (Int, Array[Value]) {
-  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
+  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
   let mut current_target = target
   let mut current_args = args
   let mut done = false
@@ -864,7 +860,7 @@ fn resolve_jump_target_with_args(
 /// Bypasses blocks that only contain an unconditional jump
 pub fn thread_jumps(func : Function) -> OptResult {
   let result = OptResult::new()
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
+  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
@@ -876,7 +872,7 @@ pub fn thread_jumps(func : Function) -> OptResult {
           target, args, func, block_idx,
         )
         if final_target != target || !block_arg_arrays_equal(final_args, args) {
-          block.terminator = Some(Terminator::Jump(final_target, final_args))
+          block.terminator = Some(Jump(final_target, final_args))
           result.mark_changed()
         }
       }
@@ -904,7 +900,7 @@ pub fn thread_jumps(func : Function) -> OptResult {
           else_target
         }
         if new_then != then_target || new_else != else_target {
-          block.terminator = Some(Terminator::Brz(cond, new_then, new_else))
+          block.terminator = Some(Brz(cond, new_then, new_else))
           result.mark_changed()
         }
       }
@@ -932,7 +928,7 @@ pub fn thread_jumps(func : Function) -> OptResult {
           else_target
         }
         if new_then != then_target || new_else != else_target {
-          block.terminator = Some(Terminator::Brnz(cond, new_then, new_else))
+          block.terminator = Some(Brnz(cond, new_then, new_else))
           result.mark_changed()
         }
       }
@@ -967,9 +963,7 @@ pub fn thread_jumps(func : Function) -> OptResult {
           any_changed = true
         }
         if any_changed {
-          block.terminator = Some(
-            Terminator::BrTable(index, new_targets, new_default),
-          )
+          block.terminator = Some(BrTable(index, new_targets, new_default))
           result.mark_changed()
         }
       }

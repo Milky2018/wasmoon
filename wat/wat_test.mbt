@@ -268,7 +268,7 @@ test "format_wat_error shows source context" {
     #|    invalid.instruction
     #|  )
     #|)
-  let err = WatError::InvalidInstruction("invalid.instruction", SourceLoc::{
+  let err = WatError::InvalidInstruction("invalid.instruction", {
     line: 3,
     column: 5,
   })
@@ -294,7 +294,7 @@ test "format_wat_error with undefined identifier" {
     #|    call $undefined_func
     #|  )
     #|)
-  let err = WatError::UndefinedIdentifier("func $undefined_func", SourceLoc::{
+  let err = WatError::UndefinedIdentifier("func $undefined_func", {
     line: 3,
     column: 10,
   })
@@ -306,7 +306,7 @@ test "format_wat_error with undefined identifier" {
 ///|
 test "format_wat_error with unexpected token" {
   let source = "(module unexpected)"
-  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", SourceLoc::{
+  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", {
     line: 1,
     column: 9,
   })
@@ -950,7 +950,7 @@ test "parse memory64 import" {
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="mem")
-  if mod_.imports[0].desc is @types.ImportDesc::Memory(mem_type) {
+  if mod_.imports[0].desc is Memory(mem_type) {
     inspect(mem_type.is_memory64, content="true")
     inspect(mem_type.limits.min, content="1")
     inspect(@debug.to_string(mem_type.limits.max), content="Some(2)")
@@ -1036,7 +1036,7 @@ test "parse table64 import" {
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="tbl")
-  if mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) {
+  if mod_.imports[0].desc is Table(tbl_type) {
     inspect(tbl_type.is_table64, content="true")
     inspect(tbl_type.limits.min, content="1")
     inspect(@debug.to_string(tbl_type.limits.max), content="Some(10)")
@@ -1057,7 +1057,7 @@ test "parse table64 elem segment with i64 offset" {
   inspect(mod_.tables[0].type_.is_table64, content="true")
   inspect(mod_.elems.length(), content="1")
   // Check elem mode offset expression
-  if mod_.elems[0].mode is @types.ElemMode::Active(_, offset_expr) {
+  if mod_.elems[0].mode is Active(_, offset_expr) {
     inspect(offset_expr[0], content="I64Const(0)")
   } else {
     panic()
@@ -1142,9 +1142,7 @@ test "parse table64 import with large 64-bit limits" {
     #|  (import "m" "t" (table i64 0xffff_ffff_ffff 0x1_0000_0000_0000 funcref))
     #|)
   let mod_ = parse(wat)
-  guard mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) else {
-    return
-  }
+  guard mod_.imports[0].desc is Table(tbl_type) else { return }
   inspect(tbl_type.is_table64, content="true")
   // 0xffffffffffff = 281474976710655
   inspect(tbl_type.limits.min, content="281474976710655")
