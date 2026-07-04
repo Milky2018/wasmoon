@@ -503,6 +503,19 @@ test "select available registers for call-crossing bundles" {
 }
 
 ///|
+test "select caller saved registers from callee saved set" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let invalid : PhysicalReg = { id: -1, class: Int }
+  inspect(max_physical_reg_id([r0, r2]), content="2")
+  debug_inspect(
+    select_caller_saved_regs([r0, r1, invalid, r2], [r1]),
+    content="[{ id: 0, class: Int }, { id: 2, class: Int }]",
+  )
+}
+
+///|
 test "eviction policy chooses cutoff, best conflict, and later split" {
   debug_inspect(eviction_cutoff(Some(3), Some(5)), content="Some(5)")
   debug_inspect(eviction_cutoff(Some(3), None), content="Some(3)")

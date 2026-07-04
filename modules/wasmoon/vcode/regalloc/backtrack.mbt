@@ -258,13 +258,7 @@ fn BacktrackingAllocator::queue_pop(
 
 ///|
 fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
-  let mut max_idx = -1
-  for preg in regs {
-    if preg.index > max_idx {
-      max_idx = preg.index
-    }
-  }
-  max_idx
+  @core_regalloc.max_physical_reg_id(backtrack_core_pregs(regs))
 }
 
 ///|
@@ -272,15 +266,6 @@ fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, OrderedSpan)]] {
   let table : Array[Array[(Int, OrderedSpan)]] = []
   for _ in 0..<cap {
     table.push([])
-  }
-  table
-}
-
-///|
-fn make_bool_table(cap : Int) -> Array[Bool] {
-  let table : Array[Bool] = []
-  for _ in 0..<cap {
-    table.push(false)
   }
   table
 }
@@ -332,33 +317,31 @@ pub fn BacktrackingAllocator::new(
     }
     max_idx
   }
-  let int_is_callee_saved = make_bool_table(int_max + 1)
-  for preg in callee_saved_int {
-    if preg.index >= 0 && preg.index < int_is_callee_saved.length() {
-      int_is_callee_saved[preg.index] = true
-    }
-  }
-  let float_is_callee_saved = make_bool_table(float_max + 1)
-  for preg in callee_saved_float {
-    if preg.index >= 0 && preg.index < float_is_callee_saved.length() {
-      float_is_callee_saved[preg.index] = true
-    }
-  }
   let int_caller_saved : Array[@abi.PReg] = []
-  for preg in int_regs {
-    if preg.index >= 0 &&
-      preg.index < int_is_callee_saved.length() &&
-      !int_is_callee_saved[preg.index] {
-      int_caller_saved.push(preg)
-    }
+  for
+    preg in @core_regalloc.select_caller_saved_regs(
+      backtrack_core_pregs(int_regs),
+      backtrack_core_pregs(callee_saved_int),
+    ) {
+    int_caller_saved.push(
+      backtrack_preg_from_probe(preg, Int, int_regs, [], callee_saved_int),
+    )
   }
   let float_caller_saved : Array[@abi.PReg] = []
-  for preg in float_regs {
-    if preg.index >= 0 &&
-      preg.index < float_is_callee_saved.length() &&
-      !float_is_callee_saved[preg.index] {
-      float_caller_saved.push(preg)
-    }
+  for
+    preg in @core_regalloc.select_caller_saved_regs(
+      backtrack_core_pregs(float_regs),
+      backtrack_core_pregs(callee_saved_float),
+    ) {
+    float_caller_saved.push(
+      backtrack_preg_from_probe(
+        preg,
+        Float64,
+        float_regs,
+        [],
+        callee_saved_float,
+      ),
+    )
   }
   {
     ranges,

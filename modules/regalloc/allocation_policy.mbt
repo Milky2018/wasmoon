@@ -37,3 +37,41 @@ pub fn select_available_regs_for_bundle(
     available_regs
   }
 }
+
+///|
+pub fn max_physical_reg_id(regs : Array[PhysicalReg]) -> Int {
+  let mut max_id = -1
+  for preg in regs {
+    if preg.id > max_id {
+      max_id = preg.id
+    }
+  }
+  max_id
+}
+
+///|
+pub fn select_caller_saved_regs(
+  allocatable_regs : Array[PhysicalReg],
+  callee_saved_regs : Array[PhysicalReg],
+) -> Array[PhysicalReg] {
+  let mut max_id = max_physical_reg_id(allocatable_regs)
+  let callee_max_id = max_physical_reg_id(callee_saved_regs)
+  if callee_max_id > max_id {
+    max_id = callee_max_id
+  }
+  let is_callee_saved = Array::make(max_id + 1, false)
+  for preg in callee_saved_regs {
+    if preg.id >= 0 && preg.id < is_callee_saved.length() {
+      is_callee_saved[preg.id] = true
+    }
+  }
+  let caller_saved : Array[PhysicalReg] = []
+  for preg in allocatable_regs {
+    if preg.id >= 0 &&
+      preg.id < is_callee_saved.length() &&
+      !is_callee_saved[preg.id] {
+      caller_saved.push(preg)
+    }
+  }
+  caller_saved
+}
