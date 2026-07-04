@@ -1,11 +1,90 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon_jit"
 
+import {
+  "Milky2018/machv",
+  "Milky2018/machv_emit",
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn default_native_glue() -> Array[NativeGlueBinding]
+
+pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+
+pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan
 
 // Errors
+pub suberror LinkError {
+  UnknownRuntimeSymbol(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for LinkError
 
 // Types and methods
+pub(all) struct CwasmArtifact {
+  version : Int
+  code : Array[Int]
+  functions : Array[CwasmFunctionRecord]
+  runtime_relocations : Array[ResolvedRuntimeRelocation]
+  block_fixups : Array[@machv_emit.Fixup]
+  stack_maps : Array[@machv_emit.StackMap]
+  debug_entries : Array[@machv_emit.DebugEntry]
+} derive(@debug.Debug)
+pub fn CwasmArtifact::from_linked_code(LinkedCode, Int) -> Self
+pub fn CwasmArtifact::manifest(Self) -> Array[String]
+
+pub(all) struct CwasmFunctionRecord {
+  function_index : Int
+  code_offset : Int
+  code_size : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct JitIntegrationPlan {
+  entry_symbol : String
+  native_glue : Array[NativeGlueBinding]
+  object : @machv_emit.CodeObject
+} derive(@debug.Debug)
+
+pub(all) struct LinkedCode {
+  code : Array[Int]
+  runtime_relocations : Array[ResolvedRuntimeRelocation]
+  block_fixups : Array[@machv_emit.Fixup]
+  stack_maps : Array[@machv_emit.StackMap]
+  debug_entries : Array[@machv_emit.DebugEntry]
+} derive(@debug.Debug)
+
+pub(all) struct NativeGlueBinding {
+  kind : NativeGlueKind
+  symbol : String
+} derive(Eq, @debug.Debug)
+
+pub(all) enum NativeGlueKind {
+  ExecutableMemory
+  TrapHandler
+  StackSwitch
+  HostCallBridge
+  WasmMemoryOp
+  WasiPreview1
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ResolvedRuntimeRelocation {
+  offset : Int
+  symbol : String
+  address : Int64
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimeSymbol {
+  name : String
+  address : Int64
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimeSymbolResolver {
+  symbols : Array[RuntimeSymbol]
+} derive(@debug.Debug)
+pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
+pub fn RuntimeSymbolResolver::new() -> Self
+pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
 
 // Type aliases
 
