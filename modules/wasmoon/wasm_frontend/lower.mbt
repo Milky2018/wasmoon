@@ -83,3 +83,12 @@ pub fn lower_function(
   )
   legacy_func.to_milkir_with_signature(signature)
 }
+
+///|
+pub fn try_lower_native_function(
+  env : EmbeddingEnvironment,
+  mod_ : @types.Module,
+  func_local_idx : Int,
+) -> @milkir.Function? raise LowerError {
+  try_lower_linear_function(env, mod_, func_local_idx)
+}

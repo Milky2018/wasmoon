@@ -1474,6 +1474,122 @@ pub fn compile_module(
 }
 
 ///|
+fn normalize_opt_level(opt_level : Int) -> Int {
+  if opt_level < 0 {
+    0
+  } else if opt_level > 3 {
+    3
+  } else {
+    opt_level
+  }
+}
+
+///|
+fn current_emit_target(isa : @isa.ISA) -> @machv_emit.EmitTarget {
+  match isa {
+    AArch64 => AArch64
+    AMD64 => X64
+  }
+}
+
+///|
+priv struct ReusableCompiledFunction {
+  entry : @cwasm.CompiledEntry
+  milk_dump : String
+  mach_dump : String
+  mc_dump : String
+  instruction_count : Int
+  code_size : Int
+}
+
+///|
+fn reusable_body_signature_supported(
+  func_type : @types.FuncType,
+  isa : @isa.ISA,
+) -> Bool {
+  let mut int_params = 1 // hidden VMContext parameter
+  let mut float_params = 0
+  for param in func_type.params {
+    match param {
+      V128 => return false
+      F32 | F64 => float_params = float_params + 1
+      _ => int_params = int_params + 1
+    }
+  }
+  if func_type.results.length() > 1 {
+    return false
+  }
+  for result in func_type.results {
+    if result is V128 {
+      return false
+    }
+  }
+  let max_int_params = match isa {
+    AArch64 => 8
+    AMD64 => 6
+  }
+  int_params <= max_int_params && float_params <= 8
+}
+
+///|
+fn try_compile_with_reusable_pipeline(
+  mod_ : @types.Module,
+  func_local_idx : Int,
+  func_idx : Int,
+  func_type : @types.FuncType,
+  isa : @isa.ISA,
+  target : @machv_emit.EmitTarget,
+  normalized_opt_level : Int,
+) -> ReusableCompiledFunction? {
+  if !reusable_body_signature_supported(func_type, isa) {
+    return None
+  }
+  let env = @wasm_frontend.EmbeddingEnvironment::new()
+  let milk = @wasm_frontend.try_lower_native_function(env, mod_, func_local_idx) catch {
+    _ => return None
+  }
+  guard milk is Some(milk_func) else { return None }
+  let instruction_count = @milkir.instruction_count(milk_func)
+  @milkir.optimize_with_level(
+    milk_func,
+    @milkir.OptLevel::from_int(normalized_opt_level),
+  )
+  |> ignore
+  let milk_dump = milk_func.print()
+  let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+    milk_func, target,
+  ) catch {
+    _ => return None
+  }
+  let mach_dump = plan.object.debug_entries
+    .map(fn(entry) {
+      "\{entry.offset}: block\{entry.block_id} inst\{entry.inst_id} \{entry.opcode}"
+    })
+    .join("\n")
+  let artifact = @wasmoon_jit.CwasmArtifact::from_jit_plan_with_signature(
+    plan,
+    @wasmoon_jit.RuntimeSymbolResolver::new(),
+    func_idx,
+    func_type.params.length(),
+    func_type.results.length(),
+  ) catch {
+    _ => return None
+  }
+  let compiled = artifact.to_precompiled_module()
+  if compiled.functions.length() != 1 {
+    return None
+  }
+  Some({
+    entry: compiled.functions[0],
+    milk_dump,
+    mach_dump,
+    mc_dump: artifact.manifest().join("\n"),
+    instruction_count,
+    code_size: artifact.code.length(),
+  })
+}
+
+///|
 /// Compile a WASM module to precompiled format in memory
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 fn compile_module_to_jit(
@@ -1496,6 +1612,7 @@ fn compile_module_to_jit(
     AArch64 => AArch64
     AMD64 => X86_64
   }
+  let emit_target = current_emit_target(isa)
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(@wasmoon_jit.JITDebugDB::new())
@@ -1632,8 +1749,90 @@ fn compile_module_to_jit(
     )
     // TODO(ISS-022): switch production JIT compilation to the reusable
     // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
-    // function-body entry ABI, .cwasm metadata, direct calls, GC stackmaps,
-    // exceptions, and dump-on-trap diagnostics are installed end-to-end.
+    // function-body entry ABI, direct calls, GC stackmaps, exceptions, and
+    // dump-on-trap diagnostics are installed end-to-end. The fast path below
+    // uses the reusable pipeline for the conservative native-frontend subset.
+    let normalized_opt_level = normalize_opt_level(opt_level)
+    if try_compile_with_reusable_pipeline(
+        mod_, i, func_idx, func_type, isa, emit_target, normalized_opt_level,
+      )
+      is Some(reusable) {
+      emit_compile_progress(
+        on_progress,
+        Optimize,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      emit_compile_progress(
+        on_progress,
+        Lower,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      emit_compile_progress(
+        on_progress,
+        Regalloc,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      emit_compile_progress(
+        on_progress,
+        Codegen,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      precompiled.add_function(reusable.entry)
+      emit_compile_progress(
+        on_progress,
+        Link,
+        progress_start,
+        total_compile_funcs,
+        compiled_count + 1,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      if perf_on {
+        @perf.begin_function(
+          func_idx,
+          func_name,
+          normalized_opt_level,
+          reusable.instruction_count,
+        )
+        @perf.finish_function(reusable.instruction_count, reusable.code_size)
+      }
+      if debug_db is Some(db) {
+        db.set(
+          func_idx,
+          @wasmoon_jit.JITFunctionDebug::new(
+            reusable.milk_dump,
+            reusable.mach_dump,
+            "",
+            reusable.mc_dump,
+          ),
+        )
+      }
+      compiled_count = compiled_count + 1
+      if @logger.is_debug_enabled() &&
+        total_compile_funcs > 10 &&
+        (compiled_count % 10 == 0 || compiled_count == total_compile_funcs) {
+        @logger.debug(
+          "JIT: Compiled \{compiled_count}/\{total_compile_funcs} functions",
+        )
+      }
+      continue
+    }
     // Stage 1: Translate WASM to IR.
     // Reuse per-module metadata across all function translations (Cranelift-style
     // module-environment reuse) to avoid rebuilding import/global/type vectors in
@@ -1659,13 +1858,6 @@ fn compile_module_to_jit(
     )
     let ir_func = translator.translate(code.body)
     // Stage 2: Optimize IR (configurable level)
-    let normalized_opt_level = if opt_level < 0 {
-      0
-    } else if opt_level > 3 {
-      3
-    } else {
-      opt_level
-    }
     emit_compile_progress(
       on_progress,
       Optimize,

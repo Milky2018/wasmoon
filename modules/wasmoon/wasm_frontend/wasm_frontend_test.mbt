@@ -86,6 +86,25 @@ test "lower branchless blocks through native linear fast path" {
 }
 
 ///|
+test "try lower native function does not use legacy fallback" {
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let linear = @types.Module::simple(
+    [I32, I32],
+    [I32],
+    [LocalGet(0), LocalGet(1), I32Add],
+    "linear",
+  )
+  let structured = @types.Module::simple(
+    [],
+    [],
+    [Block(Empty, [Br(0)])],
+    "structured_branch",
+  )
+  inspect(try_lower_native_function(env, linear, 0) is Some(_), content="true")
+  inspect(try_lower_native_function(env, structured, 0) is None, content="true")
+}
+
+///|
 test "lower globals through native VMContext loads and stores" {
   let mod_ = {
     ..@types.Module::simple(

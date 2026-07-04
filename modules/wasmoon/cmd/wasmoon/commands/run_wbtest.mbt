@@ -29,6 +29,11 @@ test "compile api: emits stage progress and returns artifact" {
   let last = events[events.length() - 1]
   inspect(last.stage.to_string(), content="done")
   inspect(last.compiled_funcs, content="1")
+  guard compiled is Some(precompiled) else { return }
+  inspect(precompiled.functions.length(), content="1")
+  inspect(precompiled.functions[0].name, content="wasm_func_0")
+  inspect(precompiled.functions[0].code.length() > 0, content="true")
+  inspect(precompiled.functions[0].num_results, content="1")
 }
 
 ///|

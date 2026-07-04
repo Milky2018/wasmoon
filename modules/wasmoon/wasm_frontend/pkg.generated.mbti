@@ -10,6 +10,8 @@ import {
 // Values
 pub fn lower_function(EmbeddingEnvironment, @types.Module, Int) -> @milkir.Function raise LowerError
 
+pub fn try_lower_native_function(EmbeddingEnvironment, @types.Module, Int) -> @milkir.Function? raise LowerError
+
 // Errors
 pub suberror LowerError {
   FunctionIndexOutOfRange(index~ : Int)
