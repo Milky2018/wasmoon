@@ -161,6 +161,27 @@ test "build dense CFG edges from sparse block ids" {
 }
 
 ///|
+test "compute dense live sets over reusable CFG model" {
+  let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
+  let live_sets = compute_dense_live_sets(3, 2, cfg, [
+    {
+      vreg_id: 0,
+      def_point: Some(ProgramPoint::new(0, 1)),
+      is_entry_param_def: false,
+      use_points: [ProgramPoint::new(2, 0)],
+    },
+    {
+      vreg_id: 1,
+      def_point: Some(ProgramPoint::new(0, -2)),
+      is_entry_param_def: true,
+      use_points: [ProgramPoint::new(1, 0)],
+    },
+  ])
+  debug_inspect(live_sets.live_in, content="[[1], [1, 0], [0]]")
+  debug_inspect(live_sets.live_out, content="[[1, 0], [0], []]")
+}
+
+///|
 test "linear scan evicts longer active interval for shorter current interval" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }

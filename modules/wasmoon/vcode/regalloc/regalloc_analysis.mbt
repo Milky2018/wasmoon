@@ -221,39 +221,6 @@ fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
   { preds: edges.preds, succs: edges.succs }
 }
 
-// ============ Worklist ============
-
-///|
-/// Worklist with O(1) membership check
-priv struct LivenessWorklist {
-  queue : Array[Int]
-  in_worklist : Array[Bool]
-}
-
-///|
-fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
-  { queue: [], in_worklist: Array::make(size, false) }
-}
-
-///|
-fn LivenessWorklist::push(self : LivenessWorklist, block_id : Int) -> Unit {
-  if !self.in_worklist[block_id] {
-    self.queue.push(block_id)
-    self.in_worklist[block_id] = true
-  }
-}
-
-///|
-fn LivenessWorklist::pop(self : LivenessWorklist) -> Int? {
-  match self.queue.pop() {
-    Some(id) => {
-      self.in_worklist[id] = false
-      Some(id)
-    }
-    None => None
-  }
-}
-
 ///|
 /// Debug: print liveness info
 pub fn debug_liveness(liveness : LivenessResult) -> String {
@@ -567,30 +534,8 @@ fn compute_live_sets(
   result : LivenessResult,
   materialize_sets : Bool,
 ) -> Unit {
-  // Fixed-point iteration for dataflow analysis
-  // live_in[B] = use[B] ∪ (live_out[B] - def[B])
-  // live_out[B] = ∪{S ∈ succ[B]} live_in[S]
   let num_blocks = func.blocks.length()
   let num_vregs = func.next_vreg_id
-
-  fn mask_index(block_idx : Int, vreg_id : Int, row_width : Int) -> Int {
-    block_idx * row_width + vreg_id
-  }
-
-  // First, compute per-block use/def sets from collected SSA use-def info.
-  // This avoids a second full instruction walk after collect_defs_uses().
-  // Use contiguous block×vreg bit-matrices to avoid allocating one FixedArray
-  // per block row in the hot liveness path.
-  let matrix_size = num_blocks * num_vregs
-  let block_def_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_in_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_out_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_in_list : Array[Array[Int]] = []
-  let live_out_list : Array[Array[Int]] = []
-  for _ in 0..<num_blocks {
-    live_in_list.push([])
-    live_out_list.push([])
-  }
   let is_func_param_vreg : FixedArray[Bool] = FixedArray::make(num_vregs, false)
   for param in func.params {
     if param.id >= 0 && param.id < num_vregs {
@@ -598,124 +543,52 @@ fn compute_live_sets(
     }
   }
 
-  fn point_before(a : ProgPoint, b : ProgPoint) -> Bool {
-    if a.inst < b.inst {
-      true
-    } else if a.inst > b.inst {
-      false
-    } else {
-      match (a.pos, b.pos) {
-        (Before, After) => true
-        _ => false
-      }
+  fn to_core_point(point : ProgPoint) -> @core_regalloc.ProgramPoint {
+    let pos = match point.pos {
+      Before => 0
+      After => 1
     }
+    @core_regalloc.ProgramPoint::new(point.block, point.inst * 2 + pos)
   }
 
+  let use_defs : Array[@core_regalloc.LiveSetUseDef] = []
   for vreg_id in 0..<result.use_def_dense.length() {
     if result.use_def_dense[vreg_id] is Some(info) {
-      let mut def_point : ProgPoint? = None
+      let mut def_point : @core_regalloc.ProgramPoint? = None
+      let mut is_entry_param_def = false
       if info.def_point is Some((def, _)) {
-        let is_entry_param_def = def.block == 0 &&
+        is_entry_param_def = def.block == 0 &&
           def.inst == -1 &&
           vreg_id >= 0 &&
           vreg_id < num_vregs &&
           is_func_param_vreg[vreg_id]
-        if !is_entry_param_def {
-          def_point = Some(def)
-        }
-        if !is_entry_param_def && def.block >= 0 && def.block < num_blocks {
-          let idx = mask_index(def.block, vreg_id, num_vregs)
-          if idx >= 0 && idx < block_def_mask.length() {
-            block_def_mask[idx] = true
-          }
-        }
+        def_point = Some(to_core_point(def))
       }
+      let use_points : Array[@core_regalloc.ProgramPoint] = []
       for use_entry in info.use_points {
-        let use_point = use_entry.0
-        let block_idx = use_point.block
-        if block_idx < 0 || block_idx >= num_blocks {
-          continue
-        }
-        let include_use = match def_point {
-          Some(def) =>
-            if def.block != block_idx {
-              true
-            } else {
-              point_before(use_point, def)
-            }
-          None => true
-        }
-        if include_use {
-          let idx = mask_index(block_idx, vreg_id, num_vregs)
-          if idx >= 0 && idx < live_in_mask.length() && !live_in_mask[idx] {
-            live_in_mask[idx] = true
-            live_in_list[block_idx].push(vreg_id)
-          }
-        }
+        use_points.push(to_core_point(use_entry.0))
       }
+      use_defs.push({ vreg_id, def_point, is_entry_param_def, use_points })
     }
   }
-
-  // Pre-compute CFG edges (O(B + E), only once)
   let cfg = build_cfg_edges(func)
+  let live_sets = @core_regalloc.compute_dense_live_sets(
+    num_blocks,
+    num_vregs,
+    { preds: cfg.preds, succs: cfg.succs },
+    use_defs,
+  )
 
-  // Worklist-based dataflow with incremental update
-  let worklist = LivenessWorklist::new(num_blocks)
-
-  // Initialize worklist - push in forward order so pop() gives reverse order
-  // (pop removes from end, so queue [0,1,..,n-1] pops n-1, n-2, .., 0)
-  // For backward dataflow, we want to process successors before predecessors
-  for i in 0..<num_blocks {
-    worklist.push(i)
-  }
-  while worklist.pop() is Some(block_idx) {
-    let old_live_in_size = live_in_list[block_idx].length()
-    let row_base = block_idx * num_vregs
-
-    // live_out[B] = ∪ live_in[S] for S in succs[B]
-    // Monotone: only adds, never removes
-    for succ in cfg.succs[block_idx] {
-      for vreg_id in live_in_list[succ] {
-        let out_idx = row_base + vreg_id
-        if out_idx < 0 || out_idx >= live_out_mask.length() {
-          continue
-        }
-        if !live_out_mask[out_idx] {
-          live_out_mask[out_idx] = true
-          live_out_list[block_idx].push(vreg_id)
-          let def_idx = row_base + vreg_id
-          let in_idx = row_base + vreg_id
-          if def_idx >= 0 &&
-            def_idx < block_def_mask.length() &&
-            !block_def_mask[def_idx] &&
-            in_idx >= 0 &&
-            in_idx < live_in_mask.length() &&
-            !live_in_mask[in_idx] {
-            live_in_mask[in_idx] = true
-            live_in_list[block_idx].push(vreg_id)
-          }
-        }
-      }
-    }
-
-    // If live_in grew, propagate to predecessors
-    if live_in_list[block_idx].length() > old_live_in_size {
-      for pred in cfg.preds[block_idx] {
-        worklist.push(pred)
-      }
-    }
-  }
-
-  result.live_in_dense = Some(live_in_list)
-  result.live_out_dense = Some(live_out_list)
+  result.live_in_dense = Some(live_sets.live_in)
+  result.live_out_dense = Some(live_sets.live_out)
 
   // Materialize to set-backed API only for full/debug liveness mode.
   if materialize_sets {
     for block_idx in 0..<num_blocks {
-      for vreg_id in live_in_list[block_idx] {
+      for vreg_id in live_sets.live_in[block_idx] {
         result.live_in[block_idx].add(vreg_id)
       }
-      for vreg_id in live_out_list[block_idx] {
+      for vreg_id in live_sets.live_out[block_idx] {
         result.live_out[block_idx].add(vreg_id)
       }
     }

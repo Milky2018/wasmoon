@@ -24,6 +24,8 @@ pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
 
+pub fn compute_dense_live_sets(Int, Int, DenseCfgEdges, Array[LiveSetUseDef]) -> DenseLiveSets
+
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
 
 pub fn compute_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
@@ -179,6 +181,11 @@ pub(all) struct DenseCfgEdges {
   succs : Array[Array[Int]]
 } derive(@debug.Debug)
 
+pub(all) struct DenseLiveSets {
+  live_in : Array[Array[Int]]
+  live_out : Array[Array[Int]]
+} derive(@debug.Debug)
+
 pub(all) struct FixedConstraint {
   operand : FixedConstraintOperand
   required : PhysicalReg
@@ -249,6 +256,13 @@ pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
 pub fn LiveRangeSet::new(Array[Int]) -> Self
+
+pub(all) struct LiveSetUseDef {
+  vreg_id : Int
+  def_point : ProgramPoint?
+  is_entry_param_def : Bool
+  use_points : Array[ProgramPoint]
+} derive(@debug.Debug)
 
 pub(all) enum Location {
   Reg(PhysicalReg)
