@@ -86,6 +86,50 @@ pub fn get_last_trap_details() -> TrapDetails {
 }
 
 ///|
+pub fn jit_trap_message(code : Int) -> String {
+  match code {
+    1 => "out of bounds memory access"
+    2 => "call stack exhausted"
+    3 => "unreachable"
+    4 => "indirect call type mismatch"
+    5 => "invalid conversion to integer"
+    6 => "integer divide by zero"
+    7 => "integer overflow"
+    8 => "jit backend trap"
+    9 => "out of memory"
+    10 => "gc precise roots unavailable"
+    _ => "unknown trap"
+  }
+}
+
+///|
+pub fn take_pending_trap_message() -> String? {
+  let code = @jit_ffi.c_jit_get_trap_code()
+  if code == 0 {
+    None
+  } else {
+    @jit_ffi.c_jit_clear_trap()
+    Some(jit_trap_message(code))
+  }
+}
+
+///|
+pub fn is_wasi_exit_trap_code(code : Int) -> Bool {
+  code == 100
+}
+
+///|
+pub fn take_wasi_exit_code(ctx_ptr : Int64) -> Int {
+  let raw_code = @jit_ffi.c_jit_get_wasi_exit_code(ctx_ptr)
+  @jit_ffi.c_jit_clear_wasi_exit(ctx_ptr)
+  if raw_code < 0 {
+    0
+  } else {
+    raw_code
+  }
+}
+
+///|
 /// Get the runtime store function address for the current JIT -> hostcall.
 ///
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the

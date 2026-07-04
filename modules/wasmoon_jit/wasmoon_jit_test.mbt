@@ -28,6 +28,15 @@ test "resolve function-address fixup targets in wasmoon_jit" {
 }
 
 ///|
+test "JIT trap code policy lives in wasmoon_jit" {
+  inspect(jit_trap_message(1), content="out of bounds memory access")
+  inspect(jit_trap_message(10), content="gc precise roots unavailable")
+  inspect(jit_trap_message(99), content="unknown trap")
+  inspect(is_wasi_exit_trap_code(100), content="true")
+  inspect(is_wasi_exit_trap_code(1), content="false")
+}
+
+///|
 test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()

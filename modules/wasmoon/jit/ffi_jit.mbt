@@ -22,9 +22,6 @@ pub impl Show for JITTrap with fn output(self, logger) {
 }
 
 ///|
-let wasi_exit_trap_code : Int = 100
-
-///|
 pub type TrapDetails = @wasmoon_jit.TrapDetails
 
 ///|
@@ -49,23 +46,9 @@ pub fn get_last_trap_details() -> TrapDetails {
 /// 10 = gc precise roots unavailable
 /// 99 = unknown trap
 pub fn check_trap() -> Unit raise JITTrap {
-  let code = @jit_ffi.c_jit_get_trap_code()
-  if code != 0 {
-    @jit_ffi.c_jit_clear_trap()
-    let msg = match code {
-      1 => "out of bounds memory access"
-      2 => "call stack exhausted"
-      3 => "unreachable"
-      4 => "indirect call type mismatch"
-      5 => "invalid conversion to integer"
-      6 => "integer divide by zero"
-      7 => "integer overflow"
-      8 => "jit backend trap"
-      9 => "out of memory"
-      10 => "gc precise roots unavailable"
-      _ => "unknown trap"
-    }
-    raise JITTrap(msg)
+  match @wasmoon_jit.take_pending_trap_message() {
+    Some(msg) => raise JITTrap(msg)
+    None => ()
   }
 }
 
@@ -941,26 +924,10 @@ fn JITContext::call_multi_return(
     )
   }
   if trap_code != 0 {
-    if trap_code == wasi_exit_trap_code {
-      let raw_code = @jit_ffi.c_jit_get_wasi_exit_code(self.ptr())
-      @jit_ffi.c_jit_clear_wasi_exit(self.ptr())
-      let exit_code = if raw_code < 0 { 0 } else { raw_code }
-      raise JITExit(exit_code)
+    if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
+      raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.ptr()))
     }
-    let msg = match trap_code {
-      1 => "out of bounds memory access"
-      2 => "call stack exhausted"
-      3 => "unreachable"
-      4 => "indirect call type mismatch"
-      5 => "invalid conversion to integer"
-      6 => "integer divide by zero"
-      7 => "integer overflow"
-      8 => "jit backend trap"
-      9 => "out of memory"
-      10 => "gc precise roots unavailable"
-      _ => "unknown trap"
-    }
-    raise JITTrap(msg)
+    raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
   }
 
   // Copy results back from values_vec (results start after args)
