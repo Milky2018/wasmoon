@@ -32,6 +32,8 @@ pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.V
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
+pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
 pub fn decode_externref(Int64) -> Int?
@@ -315,6 +317,8 @@ pub fn take_wasi_exit_code(Int64) -> Int
 pub fn untag_funcref_ptr(Int64) -> Int64
 
 pub fn value_to_i64(@types.Value) -> Int64
+
+pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
 // Errors
 pub(all) suberror CHeapError {

@@ -611,53 +611,6 @@ pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
 }
 
 ///|
-fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
-  match ty {
-    AnyRef
-    | ExnRef
-    | StructRef
-    | ArrayRef
-    | RefStruct(_)
-    | RefNullStruct(_)
-    | RefArray(_)
-    | RefNullArray(_)
-    | RefAny
-    | RefEq
-    | RefNullEq
-    | RefI31
-    | RefNullI31
-    | RefStructAbs
-    | RefArrayAbs
-    | NullRef => true
-    _ => false
-  }
-}
-
-///|
-fn collect_gc_root_args(
-  args : Array[Int64],
-  param_types : Array[@types.ValueType],
-) -> Array[Int64] {
-  let roots : Array[Int64] = []
-  let upto = if args.length() < param_types.length() {
-    args.length()
-  } else {
-    param_types.length()
-  }
-  for i in 0..<upto {
-    let ty = param_types[i]
-    if !value_type_may_hold_gc_ref(ty) {
-      continue
-    }
-    let value = args[i]
-    if value > 0L && (value & 1L) == 0L {
-      roots.push(value)
-    }
-  }
-  roots
-}
-
-///|
 /// Call a function using the JIT context (for functions that need to call other functions)
 /// Returns Array[Int64] where each element corresponds to a return value:
 /// - For I32/I64: the value is directly in Int64
@@ -682,7 +635,10 @@ pub fn JITModule::call_with_context(
       }
       let results : Array[Int64] = Array::make(num_result_slots, 0L)
       let mut call_error : JITTrap? = None
-      let frame_roots = collect_gc_root_args(args, func.param_types)
+      let frame_roots = @wasmoon_jit.collect_gc_root_args(
+        args,
+        func.param_types,
+      )
       self.gc_set_root_scratch(frame_roots) |> ignore
       self.gc_use_func_safepoints(func.func_idx)
       self.gc_begin_frame(func.func_idx.to_int64())

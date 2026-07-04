@@ -38,7 +38,7 @@ test "collect_gc_root_args filters non-gc values" {
     RefArray(2),
     FuncRef,
   ]
-  let roots = collect_gc_root_args(args, param_types)
+  let roots = @wasmoon_jit.collect_gc_root_args(args, param_types)
   inspect(roots.length(), content="2")
   inspect(roots[0], content="2")
   inspect(roots[1], content="10")

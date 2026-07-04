@@ -50,6 +50,53 @@ pub fn is_null(value : Int64) -> Bool {
 }
 
 ///|
+pub fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
+  match ty {
+    AnyRef
+    | ExnRef
+    | StructRef
+    | ArrayRef
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefAny
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefStructAbs
+    | RefArrayAbs
+    | NullRef => true
+    _ => false
+  }
+}
+
+///|
+pub fn collect_gc_root_args(
+  args : Array[Int64],
+  param_types : Array[@types.ValueType],
+) -> Array[Int64] {
+  let roots : Array[Int64] = []
+  let upto = if args.length() < param_types.length() {
+    args.length()
+  } else {
+    param_types.length()
+  }
+  for i in 0..<upto {
+    let ty = param_types[i]
+    if !value_type_may_hold_gc_ref(ty) {
+      continue
+    }
+    let value = args[i]
+    if value > 0L && (value & 1L) == 0L {
+      roots.push(value)
+    }
+  }
+  roots
+}
+
+///|
 /// Encode a heap reference (struct or array) for JIT
 /// heap_idx is 0-based (from MoonBit Store/CHeap)
 /// JIT uses 1-based gc_ref internally to avoid collision with null (0)
