@@ -405,45 +405,6 @@ fn add_vreg(values : Array[VirtualReg], vreg : VirtualReg) -> Unit {
 }
 
 ///|
-fn union_vregs(target : Array[VirtualReg], source : Array[VirtualReg]) -> Bool {
-  let mut changed = false
-  for vreg in source {
-    if !contains_vreg(target, vreg) {
-      target.push(vreg)
-      changed = true
-    }
-  }
-  changed
-}
-
-///|
-fn remove_defs(
-  values : Array[VirtualReg],
-  defs : Array[VirtualReg],
-) -> Array[VirtualReg] {
-  let out : Array[VirtualReg] = []
-  for vreg in values {
-    if !contains_vreg(defs, vreg) {
-      out.push(vreg)
-    }
-  }
-  out
-}
-
-///|
-fn same_vreg_set(lhs : Array[VirtualReg], rhs : Array[VirtualReg]) -> Bool {
-  if lhs.length() != rhs.length() {
-    return false
-  }
-  for vreg in lhs {
-    if !contains_vreg(rhs, vreg) {
-      return false
-    }
-  }
-  true
-}
-
-///|
 fn collect_block_uses_defs(
   block : Block,
 ) -> (Array[VirtualReg], Array[VirtualReg]) {
@@ -470,70 +431,105 @@ fn collect_block_uses_defs(
 }
 
 ///|
-fn build_block_id_to_index(program : Program) -> Array[Int] {
-  let mut max_block_id = -1
-  for block in program.blocks {
-    if block.id > max_block_id {
-      max_block_id = block.id
-    }
-  }
-  if max_block_id < 0 {
-    return []
-  }
-  let out = Array::make(max_block_id + 1, -1)
-  for index, block in program.blocks {
-    if block.id >= 0 && block.id < out.length() {
-      out[block.id] = index
-    }
-  }
-  out
-}
-
-///|
 fn compute_live_sets(
   program : Program,
 ) -> (Array[Array[VirtualReg]], Array[Array[VirtualReg]]) {
   let uses_by_block : Array[Array[VirtualReg]] = []
   let defs_by_block : Array[Array[VirtualReg]] = []
-  let live_in : Array[Array[VirtualReg]] = []
-  let live_out : Array[Array[VirtualReg]] = []
+  let block_ids : Array[Int] = []
+  let block_successor_ids : Array[Array[Int]] = []
+  let mut max_vreg_id = -1
   for block in program.blocks {
     let (uses, defs) = collect_block_uses_defs(block)
+    for vreg in uses {
+      if vreg.id > max_vreg_id {
+        max_vreg_id = vreg.id
+      }
+    }
+    for vreg in defs {
+      if vreg.id > max_vreg_id {
+        max_vreg_id = vreg.id
+      }
+    }
     uses_by_block.push(uses)
     defs_by_block.push(defs)
-    live_in.push([])
-    live_out.push([])
+    block_ids.push(block.id)
+    block_successor_ids.push(block.successors)
   }
-  let block_id_to_index = build_block_id_to_index(program)
-  let mut changed = true
-  while changed {
-    changed = false
-    for offset in 0..<program.blocks.length() {
-      let block_index = program.blocks.length() - 1 - offset
-      let block = program.blocks[block_index]
-      let next_out : Array[VirtualReg] = []
-      for succ_id in block.successors {
-        if succ_id >= 0 && succ_id < block_id_to_index.length() {
-          let succ_index = block_id_to_index[succ_id]
-          if succ_index >= 0 {
-            union_vregs(next_out, live_in[succ_index]) |> ignore
-          }
+  if max_vreg_id < 0 {
+    let empty_live_in : Array[Array[VirtualReg]] = []
+    let empty_live_out : Array[Array[VirtualReg]] = []
+    for _ in program.blocks {
+      empty_live_in.push([])
+      empty_live_out.push([])
+    }
+    return (empty_live_in, empty_live_out)
+  }
+
+  let vregs_by_id : Array[VirtualReg?] = Array::make(max_vreg_id + 1, None)
+  let def_points : Array[ProgramPoint?] = Array::make(max_vreg_id + 1, None)
+  let use_points_by_vreg : Array[Array[ProgramPoint]] = []
+  for _ in 0..<=max_vreg_id {
+    use_points_by_vreg.push([])
+  }
+  for block_index, block in program.blocks {
+    for vreg in uses_by_block[block_index] {
+      if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
+        vregs_by_id[vreg.id] = Some(vreg)
+        use_points_by_vreg[vreg.id].push(ProgramPoint::new(block.id, 0))
+      }
+    }
+    for vreg in defs_by_block[block_index] {
+      if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
+        vregs_by_id[vreg.id] = Some(vreg)
+        if def_points[vreg.id] is None {
+          def_points[vreg.id] = Some(ProgramPoint::new(block.id, 0))
         }
-      }
-      let next_in = uses_by_block[block_index].copy()
-      union_vregs(next_in, remove_defs(next_out, defs_by_block[block_index]))
-      |> ignore
-      if !same_vreg_set(live_out[block_index], next_out) {
-        live_out[block_index] = next_out
-        changed = true
-      }
-      if !same_vreg_set(live_in[block_index], next_in) {
-        live_in[block_index] = next_in
-        changed = true
       }
     }
   }
-  (live_in, live_out)
+
+  let use_defs : Array[LiveSetUseDef] = []
+  for vreg_id in 0..<=max_vreg_id {
+    if vregs_by_id[vreg_id] is Some(_) {
+      use_defs.push({
+        vreg_id,
+        def_point: def_points[vreg_id],
+        is_entry_param_def: false,
+        use_points: use_points_by_vreg[vreg_id],
+      })
+    }
+  }
+  let dense = compute_dense_live_sets(
+    program.blocks.length(),
+    max_vreg_id + 1,
+    build_dense_successor_edges(block_ids, block_successor_ids),
+    use_defs,
+  )
+
+  fn materialize(
+    dense_sets : Array[Array[Int]],
+    vregs_by_id : Array[VirtualReg?],
+  ) -> Array[Array[VirtualReg]] {
+    let out : Array[Array[VirtualReg]] = []
+    for dense_row in dense_sets {
+      let row : Array[VirtualReg] = []
+      for vreg_id in dense_row {
+        if vreg_id >= 0 &&
+          vreg_id < vregs_by_id.length() &&
+          vregs_by_id[vreg_id] is Some(vreg) {
+          row.push(vreg)
+        }
+      }
+      out.push(row)
+    }
+    out
+  }
+
+  (
+    materialize(dense.live_in, vregs_by_id),
+    materialize(dense.live_out, vregs_by_id),
+  )
 }
 
 ///|
