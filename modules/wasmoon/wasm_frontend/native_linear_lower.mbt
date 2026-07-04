@@ -41,6 +41,18 @@ fn emit_op(
 }
 
 ///|
+fn emit_void_op(
+  builder : @milkir.IRBuilder,
+  opcode : @milkir.Opcode,
+  operands : Array[@milkir.Value],
+) -> Bool {
+  guard builder.current_block() is Some(block) else { return false }
+  let func = builder.get_function()
+  block.append_inst(func.new_inst(opcode, operands, []))
+  true
+}
+
+///|
 fn push_unary_opcode(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -127,6 +139,169 @@ fn push_select(
 }
 
 ///|
+fn get_global_func_type(
+  mod_ : @types.Module,
+  func_idx : Int,
+) -> @types.FuncType? {
+  if func_idx < 0 {
+    return None
+  }
+  if func_idx < mod_.imports.length() {
+    match mod_.imports[func_idx].desc {
+      Func(type_idx) =>
+        if type_idx >= 0 && type_idx < mod_.types.length() {
+          match mod_.types[type_idx].composite {
+            Func(func_type) => Some(func_type)
+            _ => None
+          }
+        } else {
+          None
+        }
+      _ => None
+    }
+  } else {
+    let local_idx = func_idx - mod_.imports.length()
+    if local_idx >= 0 && local_idx < mod_.funcs.length() {
+      let type_idx = mod_.funcs[local_idx]
+      if type_idx >= 0 && type_idx < mod_.types.length() {
+        match mod_.types[type_idx].composite {
+          Func(func_type) => Some(func_type)
+          _ => None
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+  }
+}
+
+///|
+fn push_direct_call(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  mod_ : @types.Module,
+  func_idx : Int,
+) -> Bool {
+  guard get_global_func_type(mod_, func_idx) is Some(func_type) else {
+    return false
+  }
+  let args : Array[@milkir.Value] = []
+  for _ in 0..<func_type.params.length() {
+    guard pop_value(stack) is Some(value) else { return false }
+    args.push(value)
+  }
+  args.rev_in_place()
+  let result_types = func_type.results.map(wasm_value_type_to_milkir)
+  let symbol = @milkir.ExternalSymbol::new("wasm.func.\{func_idx}")
+  if result_types.length() == 0 {
+    emit_void_op(builder, Call(symbol), args)
+  } else {
+    let results = builder.call_multi(symbol, result_types, args)
+    for result in results {
+      stack.push(result)
+    }
+    true
+  }
+}
+
+///|
+fn push_memory_base(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
+  memidx : Int,
+) -> @milkir.Value? {
+  emit_op(builder, I64, Custom("wasmoon.LoadMemBase(\{memidx})"), [vmctx])
+}
+
+///|
+fn extend_memory32_addr(
+  builder : @milkir.IRBuilder,
+  addr : @milkir.Value,
+) -> @milkir.Value? {
+  if addr.ty == I64 {
+    Some(addr)
+  } else {
+    emit_op(builder, I64, Uextend, [addr])
+  }
+}
+
+///|
+fn memory32_effective_addr(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
+  memidx : Int,
+  wasm_addr : @milkir.Value,
+  offset : Int64,
+) -> @milkir.Value? {
+  guard push_memory_base(builder, vmctx, memidx) is Some(base) else {
+    return None
+  }
+  guard extend_memory32_addr(builder, wasm_addr) is Some(addr_i64) else {
+    return None
+  }
+  let offset_value = builder.iconst_i64(offset)
+  let addr_plus_offset = builder.iadd(addr_i64, offset_value)
+  Some(builder.iadd(base, addr_plus_offset))
+}
+
+///|
+fn push_memory_load(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  mod_ : @types.Module,
+  memidx : Int,
+  ty : @milkir.Type,
+  offset : Int64,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if memidx != 0 ||
+    memidx >= mod_.memories.length() ||
+    mod_.memories[memidx].is_memory64 {
+    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
+    // for memory64 and non-zero memories into the native MilkIR frontend.
+    return false
+  }
+  guard pop_value(stack) is Some(wasm_addr) else { return false }
+  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+    is Some(effective_addr) else {
+    return false
+  }
+  stack.push(builder.load_ptr(ty, effective_addr, builder.iconst_i64(0L)))
+  true
+}
+
+///|
+fn push_memory_store(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  mod_ : @types.Module,
+  memidx : Int,
+  ty : @milkir.Type,
+  offset : Int64,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if memidx != 0 ||
+    memidx >= mod_.memories.length() ||
+    mod_.memories[memidx].is_memory64 {
+    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
+    // for memory64 and non-zero memories into the native MilkIR frontend.
+    return false
+  }
+  guard pop_value(stack) is Some(value) else { return false }
+  guard pop_value(stack) is Some(wasm_addr) else { return false }
+  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+    is Some(effective_addr) else {
+    return false
+  }
+  builder.store_ptr(ty, effective_addr, value, builder.iconst_i64(0L))
+  true
+}
+
+///|
 fn finish_linear_return(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -159,8 +334,9 @@ fn try_lower_linear_function(
   let code = mod_.codes[func_local_idx]
   let builder = @milkir.IRBuilder::new(function_name(mod_, func_local_idx))
   let locals : Array[@milkir.Value] = []
+  let mut vmctx : @milkir.Value? = None
   if env.hidden_context_param() is Some(hidden_context_type) {
-    builder.add_param(hidden_context_type) |> ignore
+    vmctx = Some(builder.add_param(hidden_context_type))
   }
   for param in func_type.params {
     locals.push(builder.add_param(wasm_value_type_to_milkir(param)))
@@ -458,6 +634,42 @@ fn try_lower_linear_function(
         }
       F64ReinterpretI64 =>
         if !push_unary_opcode_as(builder, stack, F64, Bitcast) {
+          return None
+        }
+      Call(func_idx) =>
+        if !push_direct_call(builder, stack, mod_, func_idx) {
+          return None
+        }
+      I32Load(memidx, _, offset) =>
+        if !push_memory_load(builder, stack, vmctx, mod_, memidx, I32, offset) {
+          return None
+        }
+      I64Load(memidx, _, offset) =>
+        if !push_memory_load(builder, stack, vmctx, mod_, memidx, I64, offset) {
+          return None
+        }
+      F32Load(memidx, _, offset) =>
+        if !push_memory_load(builder, stack, vmctx, mod_, memidx, F32, offset) {
+          return None
+        }
+      F64Load(memidx, _, offset) =>
+        if !push_memory_load(builder, stack, vmctx, mod_, memidx, F64, offset) {
+          return None
+        }
+      I32Store(memidx, _, offset) =>
+        if !push_memory_store(builder, stack, vmctx, mod_, memidx, I32, offset) {
+          return None
+        }
+      I64Store(memidx, _, offset) =>
+        if !push_memory_store(builder, stack, vmctx, mod_, memidx, I64, offset) {
+          return None
+        }
+      F32Store(memidx, _, offset) =>
+        if !push_memory_store(builder, stack, vmctx, mod_, memidx, F32, offset) {
+          return None
+        }
+      F64Store(memidx, _, offset) =>
+        if !push_memory_store(builder, stack, vmctx, mod_, memidx, F64, offset) {
           return None
         }
       Select | SelectTyped(_) => if !push_select(builder, stack) { return None }
