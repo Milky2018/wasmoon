@@ -443,6 +443,70 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([Ptr, V128], [])
+  let milk = @milkir.Function::new("vector_mem_x64", signature)
+  let ptr = milk.new_value(Ptr)
+  let value = milk.new_value(V128)
+  let loaded = milk.new_value(V128)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
+  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.set_terminator(Return([]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_movdqu_store = false
+  let mut has_movdqu_load = false
+  for i in 0..<(plan.object.code.length() - 2) {
+    if plan.object.code[i] == 0xf3 &&
+      plan.object.code[i + 1] == 0x0f &&
+      plan.object.code[i + 2] == 0x7f {
+      has_movdqu_store = true
+    }
+    if plan.object.code[i] == 0xf3 &&
+      plan.object.code[i + 1] == 0x0f &&
+      plan.object.code[i + 2] == 0x6f {
+      has_movdqu_load = true
+    }
+  }
+  inspect(has_movdqu_store, content="true")
+  inspect(has_movdqu_load, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([Ptr, V128], [])
+  let milk = @milkir.Function::new("vector_mem_aarch64", signature)
+  let ptr = milk.new_value(Ptr)
+  let value = milk.new_value(V128)
+  let loaded = milk.new_value(V128)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
+  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.set_terminator(Return([]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_str_q = false
+  let mut has_ldr_q = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if plan.object.code[i + 3] == 0x3d {
+      if (plan.object.code[i + 2] & 0xc0) == 0xc0 {
+        has_ldr_q = true
+      } else if (plan.object.code[i + 2] & 0x80) == 0x80 {
+        has_str_q = true
+      }
+    }
+  }
+  inspect(has_str_q, content="true")
+  inspect(has_ldr_q, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "emit MachV regalloc stack spills through reusable x64 pipeline" {
   let func = @machv.Function::new("spilled_x64")
   let entry = func.new_block()

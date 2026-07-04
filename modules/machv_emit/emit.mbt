@@ -408,6 +408,36 @@ fn emit_x64_float_store_base_disp32(
 }
 
 ///|
+fn emit_x64_vector_load_base_disp32(
+  object : CodeObject,
+  dst : Int,
+  base : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf3)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (base >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x6f)
+  emit_x64_modrm(object, 2, dst, base)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_vector_store_base_disp32(
+  object : CodeObject,
+  base : Int,
+  src : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf3)
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, (base >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x7f)
+  emit_x64_modrm(object, 2, src, base)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn emit_x64_int_stack_load(
   object : CodeObject,
   dst : Int,
@@ -1351,9 +1381,24 @@ fn emit_aarch64_load_ptr(
     }
     None => {
       if mem_type == MemV128 {
-        // TODO(machv_emit): add vector memory encoding once MachV carries
-        // alignment and vector lane metadata.
-        raise UnsupportedOperand(message="AArch64 vector memory is TODO")
+        let (dst, dst_class) = require_physical_preg(
+          find_operand(inst, Def, 0, "load_ptr"),
+          "load_ptr destination",
+        )
+        if dst_class != Vector {
+          raise UnsupportedOperand(
+            message="AArch64 v128 load requires a vector destination",
+          )
+        }
+        let base = 0x3dc00000
+        emit_u32_le(
+          object,
+          base |
+          ((imm12 & 0xfff) << 10) |
+          ((base_reg & 0x1f) << 5) |
+          (dst & 0x1f),
+        )
+        return
       }
       let dst = require_int_preg(
         find_operand(inst, Def, 0, "load_ptr"),
@@ -1405,9 +1450,24 @@ fn emit_aarch64_store_ptr(
     }
     None => {
       if mem_type == MemV128 {
-        // TODO(machv_emit): add vector memory encoding once MachV carries
-        // alignment and vector lane metadata.
-        raise UnsupportedOperand(message="AArch64 vector memory is TODO")
+        let (src, src_class) = require_physical_preg(
+          find_operand(inst, Use, 1, "store_ptr"),
+          "store_ptr source",
+        )
+        if src_class != Vector {
+          raise UnsupportedOperand(
+            message="AArch64 v128 store requires a vector source",
+          )
+        }
+        let base = 0x3d800000
+        emit_u32_le(
+          object,
+          base |
+          ((imm12 & 0xfff) << 10) |
+          ((base_reg & 0x1f) << 5) |
+          (src & 0x1f),
+        )
+        return
       }
       let src = require_int_preg(
         find_operand(inst, Use, 1, "store_ptr"),
@@ -1713,9 +1773,17 @@ fn emit_x64_load_ptr(
     }
     None => {
       if mem_type == MemV128 {
-        // TODO(machv_emit): add vector memory encoding once MachV carries
-        // alignment and vector lane metadata.
-        raise UnsupportedOperand(message="X64 vector memory is TODO")
+        let (dst, dst_class) = require_physical_preg(
+          find_operand(inst, Def, 0, "load_ptr"),
+          "load_ptr destination",
+        )
+        if dst_class != Vector {
+          raise UnsupportedOperand(
+            message="X64 v128 load requires a vector destination",
+          )
+        }
+        emit_x64_vector_load_base_disp32(object, dst, base, offset)
+        return
       }
       let dst = require_int_preg(
         find_operand(inst, Def, 0, "load_ptr"),
@@ -1756,9 +1824,17 @@ fn emit_x64_store_ptr(
     }
     None => {
       if mem_type == MemV128 {
-        // TODO(machv_emit): add vector memory encoding once MachV carries
-        // alignment and vector lane metadata.
-        raise UnsupportedOperand(message="X64 vector memory is TODO")
+        let (src, src_class) = require_physical_preg(
+          find_operand(inst, Use, 1, "store_ptr"),
+          "store_ptr source",
+        )
+        if src_class != Vector {
+          raise UnsupportedOperand(
+            message="X64 v128 store requires a vector source",
+          )
+        }
+        emit_x64_vector_store_base_disp32(object, base, src, offset)
+        return
       }
       let src = require_int_preg(
         find_operand(inst, Use, 1, "store_ptr"),
