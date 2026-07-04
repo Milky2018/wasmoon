@@ -2,7 +2,7 @@
 /// Register allocation verifier (Cranelift-inspired)
 ///
 /// This is a best-effort consistency check over:
-/// - physical register overlaps (no two live ranges overlap in same preg bank)
+/// - core regalloc assignment invariants via `@core_regalloc.verify_allocation`
 /// - call-clobber safety (values live across calls not placed in caller-saved regs)
 /// - reserved/scratch registers not assigned
 ///
@@ -10,16 +10,111 @@
 /// constraint move insertions.
 
 ///|
-fn reg_kind(preg : @abi.PReg) -> Int {
-  match preg.class {
-    Int => 0
-    Float32 | Float64 | Vector => 1
+fn checker_reg_class_to_core(class : @abi.RegClass) -> @core_regalloc.RegClass {
+  match class {
+    Int => Int
+    Float32 | Float64 => Float
+    Vector => Vector
   }
 }
 
 ///|
-fn alias_key(preg : @abi.PReg) -> Int {
-  preg.index * 2 + reg_kind(preg)
+fn checker_preg_to_core(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+  { id: preg.index, class: checker_reg_class_to_core(preg.class) }
+}
+
+///|
+fn remember_vreg_class(
+  classes : Map[Int, @abi.RegClass],
+  reg : @abi.Reg,
+) -> Unit {
+  if reg is Virtual(vreg) && classes.get(vreg.id) is None {
+    classes.set(vreg.id, vreg.class)
+  }
+}
+
+///|
+fn remember_vreg_classes_from_term(
+  classes : Map[Int, @abi.RegClass],
+  term : @instr.VCodeTerminator,
+) -> Unit {
+  match term {
+    Jump(_, args) | Return(args) =>
+      for arg in args {
+        remember_vreg_class(classes, arg)
+      }
+    Branch(cond, _, _) => remember_vreg_class(classes, cond)
+    BranchCmp(lhs, rhs, _, _, _, _) => {
+      remember_vreg_class(classes, lhs)
+      remember_vreg_class(classes, rhs)
+    }
+    BranchCmpImm(lhs, _, _, _, _, _)
+    | BranchZero(lhs, _, _, _, _)
+    | BrTable(lhs, _, _) => remember_vreg_class(classes, lhs)
+    Trap(_) => ()
+  }
+}
+
+///|
+fn collect_vreg_classes(func : VCodeFunction) -> Map[Int, @abi.RegClass] {
+  let classes : Map[Int, @abi.RegClass] = {}
+  for param in func.params {
+    classes.set(param.id, param.class)
+  }
+  for block in func.blocks {
+    for param in block.params {
+      classes.set(param.id, param.class)
+    }
+    for inst in block.insts {
+      for def in inst.defs {
+        remember_vreg_class(classes, def.reg)
+      }
+      for use_ in inst.uses {
+        remember_vreg_class(classes, use_)
+      }
+    }
+    if block.terminator is Some(term) {
+      remember_vreg_classes_from_term(classes, term)
+    }
+  }
+  classes
+}
+
+///|
+fn checker_vreg_to_core(
+  vreg_id : Int,
+  classes : Map[Int, @abi.RegClass],
+  fallback : @abi.RegClass,
+) -> @core_regalloc.VirtualReg {
+  let class = classes.get(vreg_id).unwrap_or(fallback)
+  { id: vreg_id, class: checker_reg_class_to_core(class) }
+}
+
+///|
+fn allocation_to_core(
+  alloc : RegAllocResult,
+  classes : Map[Int, @abi.RegClass],
+) -> @core_regalloc.Allocation {
+  let out = @core_regalloc.Allocation::new()
+  for vreg_id, preg in alloc.assignments {
+    out.assign(
+      checker_vreg_to_core(vreg_id, classes, preg.class),
+      Reg(checker_preg_to_core(preg)),
+    )
+  }
+  for vreg_id, slot in alloc.spill_slots {
+    out.assign(checker_vreg_to_core(vreg_id, classes, Int), Spill(slot))
+  }
+  out
+}
+
+///|
+fn verify_core_allocation(func : VCodeFunction, alloc : RegAllocResult) -> Unit {
+  let program = @machv_regalloc.project_function(func.to_machv(), [])
+  let core_alloc = allocation_to_core(alloc, collect_vreg_classes(func))
+  @core_regalloc.verify_allocation(program, core_alloc) catch {
+    _ => abort("regalloc verifier: core verifier rejected allocation")
+  }
 }
 
 ///|
@@ -59,9 +154,10 @@ pub fn verify_allocation(
   isa : @isa.ISA,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
+  verify_core_allocation(func, alloc)
+
   // Rebuild live ranges to verify with holes.
   let ranges = build_live_ranges(func, liveness)
-  let block_order = liveness.block_order
 
   // Rebuild MachineEnv to compute allocatable + scratch sets.
   let calls_multi = func.calls_multi_value_function()
@@ -146,8 +242,6 @@ pub fn verify_allocation(
     false
   }
 
-  // Build per-preg span lists for overlap checking.
-  let preg_spans : Map[Int, Array[(Int, ProgPointRange)]] = {}
   for entry in alloc.assignments {
     let (vreg_id, preg) = entry
     if ranges.get_by_vreg(vreg_id) is Some(lr) {
@@ -224,34 +318,6 @@ pub fn verify_allocation(
             )
           }
         }
-      }
-      let key = alias_key(preg)
-      if preg_spans.get(key) is None {
-        preg_spans.set(key, [])
-      }
-      let spans = preg_spans.get(key).unwrap()
-      for span in lr.ranges {
-        spans.push((vreg_id, span))
-      }
-    }
-  }
-
-  // Overlap check: for each physical register location (bank+index), spans must not overlap.
-  for entry in preg_spans {
-    let (key, spans) = entry
-    if spans.length() <= 1 {
-      continue
-    }
-    spans.sort_by(fn(a, b) {
-      a.1.start.compare_with_order(b.1.start, block_order)
-    })
-    for i in 1..<spans.length() {
-      let prev = spans[i - 1]
-      let cur = spans[i]
-      if prev.1.overlaps(cur.1, block_order) {
-        abort(
-          "regalloc verifier: overlapping allocations in same preg (key=\{key}, v\{prev.0} \{prev.1} overlaps v\{cur.0} \{cur.1})",
-        )
       }
     }
   }

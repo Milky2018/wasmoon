@@ -1,5 +1,6 @@
 import {
   "Milky2018/machv",
+  "Milky2018/machv_regalloc",
   "Milky2018/regalloc" @core_regalloc,
   "Milky2018/wasmoon/ir",
   "Milky2018/wasmoon/perf",
