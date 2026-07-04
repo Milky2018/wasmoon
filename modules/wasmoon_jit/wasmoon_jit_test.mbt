@@ -1631,6 +1631,32 @@ test "wrap reusable JIT plan as cwasm artifact" {
 }
 
 ///|
+test "wrap reusable JIT plan preserves cwasm signature metadata" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("add64_artifact_sig", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let sum = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.set_terminator(Return([sum]))
+  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let artifact = try! CwasmArtifact::from_jit_plan_with_signature(
+    plan,
+    RuntimeSymbolResolver::new(),
+    4,
+    2,
+    1,
+  )
+  inspect(artifact.functions[0].num_params, content="2")
+  inspect(artifact.functions[0].num_results, content="1")
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].func_idx, content="4")
+  inspect(restored.functions[0].num_params, content="2")
+  inspect(restored.functions[0].num_results, content="1")
+}
+
+///|
 test "reference encoding helpers roundtrip JIT values" {
   inspect(is_null_ref(encode_null_ref()), content="true")
   debug_inspect(decode_funcref_idx(encode_funcref_idx(7)), content="Some(7)")

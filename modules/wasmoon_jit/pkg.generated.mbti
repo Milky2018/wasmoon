@@ -482,7 +482,9 @@ pub(all) struct CwasmArtifact {
   debug_entries : Array[@machv_emit.DebugEntry]
 } derive(@debug.Debug)
 pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
+pub fn CwasmArtifact::from_jit_plan_with_signature(JitIntegrationPlan, RuntimeSymbolResolver, Int, Int, Int) -> Self raise LinkError
 pub fn CwasmArtifact::from_linked_code_for_target(LinkedCode, Int, @cwasm.TargetArch, String) -> Self
+pub fn CwasmArtifact::from_linked_code_for_target_with_signature(LinkedCode, Int, @cwasm.TargetArch, String, Int, Int) -> Self
 pub fn CwasmArtifact::manifest(Self) -> Array[String]
 pub fn CwasmArtifact::serialize(Self) -> Array[Int]
 pub fn CwasmArtifact::to_precompiled_module(Self) -> @cwasm.PrecompiledModule
@@ -492,6 +494,8 @@ pub(all) struct CwasmFunctionRecord {
   code_offset : Int
   code_size : Int
   frame_size : Int
+  num_params : Int
+  num_results : Int
 } derive(Eq, @debug.Debug)
 
 pub struct DWARFBuilder {

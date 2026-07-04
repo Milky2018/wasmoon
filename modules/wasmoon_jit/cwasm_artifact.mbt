@@ -4,6 +4,8 @@ pub(all) struct CwasmFunctionRecord {
   code_offset : Int
   code_size : Int
   frame_size : Int
+  num_params : Int
+  num_results : Int
 } derive(Eq, Debug)
 
 ///|
@@ -45,6 +47,20 @@ pub fn CwasmArtifact::from_linked_code_for_target(
   target : @cwasm.TargetArch,
   entry_symbol : String,
 ) -> CwasmArtifact {
+  CwasmArtifact::from_linked_code_for_target_with_signature(
+    linked, function_index, target, entry_symbol, 0, 0,
+  )
+}
+
+///|
+pub fn CwasmArtifact::from_linked_code_for_target_with_signature(
+  linked : LinkedCode,
+  function_index : Int,
+  target : @cwasm.TargetArch,
+  entry_symbol : String,
+  num_params : Int,
+  num_results : Int,
+) -> CwasmArtifact {
   {
     version: 1,
     target,
@@ -56,6 +72,8 @@ pub fn CwasmArtifact::from_linked_code_for_target(
         code_offset: 0,
         code_size: linked.code.length(),
         frame_size: linked.frame_size,
+        num_params,
+        num_results,
       },
     ],
     runtime_relocations: linked.runtime_relocations,
@@ -71,11 +89,26 @@ pub fn CwasmArtifact::from_jit_plan(
   resolver : RuntimeSymbolResolver,
   function_index : Int,
 ) -> CwasmArtifact raise LinkError {
-  CwasmArtifact::from_linked_code_for_target(
+  CwasmArtifact::from_jit_plan_with_signature(
+    plan, resolver, function_index, 0, 0,
+  )
+}
+
+///|
+pub fn CwasmArtifact::from_jit_plan_with_signature(
+  plan : JitIntegrationPlan,
+  resolver : RuntimeSymbolResolver,
+  function_index : Int,
+  num_params : Int,
+  num_results : Int,
+) -> CwasmArtifact raise LinkError {
+  CwasmArtifact::from_linked_code_for_target_with_signature(
     link_code_object(plan.object, resolver),
     function_index,
     emit_target_to_cwasm_target(plan.target),
     plan.entry_symbol,
+    num_params,
+    num_results,
   )
 }
 
@@ -292,8 +325,8 @@ pub fn CwasmArtifact::to_precompiled_module(
 ) -> @cwasm.PrecompiledModule {
   let module_ = @cwasm.PrecompiledModule::new(self.target)
   for record in self.functions {
-    // TODO(wasmoon_jit): carry real per-function signatures, fixups, and GC
-    // stack maps from the production JIT pipeline.
+    // TODO(ISS-022): carry real per-function fixups and GC stack maps from the
+    // production JIT pipeline.
     module_.add_function(
       @cwasm.CompiledEntry::new(
         record.function_index,
@@ -301,8 +334,8 @@ pub fn CwasmArtifact::to_precompiled_module(
         self.function_code(record),
         record.frame_size,
         0,
-        0,
-        0,
+        record.num_params,
+        record.num_results,
       ),
     )
   }
