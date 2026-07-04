@@ -15,6 +15,8 @@ pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> Linked
 
 pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan raise @machv_emit.EmitError
 
+pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
+
 // Errors
 pub suberror LinkError {
   UnknownRuntimeSymbol(String)
@@ -42,6 +44,7 @@ pub(all) struct CwasmFunctionRecord {
 
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
+  target : @machv_emit.EmitTarget
   native_glue : Array[NativeGlueBinding]
   object : @machv_emit.CodeObject
 } derive(@debug.Debug)

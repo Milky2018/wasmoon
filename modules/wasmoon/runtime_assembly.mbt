@@ -55,7 +55,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
     signature,
     machv_function,
     regalloc_program: @machv_regalloc.project_function(machv_function, x64_regs),
-    code_object: @machv_emit.emit_function(machv_function),
+    code_object: @machv_emit.emit_function_for_target(machv_function, AArch64),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),
     jit_glue: @wasmoon_jit.default_native_glue(),
