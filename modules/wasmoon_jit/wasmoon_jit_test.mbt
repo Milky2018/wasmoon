@@ -87,6 +87,27 @@ test "default wasmoon runtime resolver maps bulk memory fixups" {
 }
 
 ///|
+test "default wasmoon runtime resolver maps segment and table fixups" {
+  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+  let names = [
+    ("wasmoon.runtime.memory_init", -21006),
+    ("wasmoon.runtime.data_drop", -21007),
+    ("wasmoon.runtime.table_grow", -21008),
+    ("wasmoon.runtime.table_fill", -21009),
+    ("wasmoon.runtime.table_copy", -21010),
+    ("wasmoon.runtime.table_init", -21011),
+    ("wasmoon.runtime.elem_drop", -21012),
+  ]
+  for item in names {
+    let (name, fixup_idx) = item
+    guard resolver.resolve_symbol(name) is Some(symbol) else {
+      fail("missing runtime symbol \{name}")
+    }
+    debug_inspect(symbol.fixup_idx, content="Some(\{fixup_idx})")
+  }
+}
+
+///|
 test "resolve function-address fixup targets in wasmoon_jit" {
   inspect(resolve_func_addr_fixup_target(-20000, 0L) is Some(_), content="true")
   debug_inspect(resolve_func_addr_fixup_target(3, 0L), content="None")

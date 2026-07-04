@@ -299,7 +299,7 @@ test "lower table size and get through native VMContext loads" {
 }
 
 ///|
-test "lower table set through native table fill custom shape" {
+test "lower table set through native table fill runtime call" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
@@ -320,7 +320,8 @@ test "lower table set through native table fill custom shape" {
   let env = EmbeddingEnvironment::new()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("wasmoon.TableFill"), content="true")
+  inspect(text.contains("wasmoon.TableFill"), content="false")
+  inspect(text.contains("call wasmoon.runtime.table_fill"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -808,8 +809,10 @@ test "lower memory grow size and bulk helpers as native custom ops" {
   inspect(text.contains("wasmoon.MemoryCopy"), content="false")
   inspect(text.contains("call wasmoon.runtime.memory_fill"), content="true")
   inspect(text.contains("call wasmoon.runtime.memory_copy"), content="true")
-  inspect(text.contains("wasmoon.MemoryInit"), content="true")
-  inspect(text.contains("wasmoon.DataDrop"), content="true")
+  inspect(text.contains("wasmoon.MemoryInit"), content="false")
+  inspect(text.contains("wasmoon.DataDrop"), content="false")
+  inspect(text.contains("call wasmoon.runtime.memory_init"), content="true")
+  inspect(text.contains("call wasmoon.runtime.data_drop"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -962,14 +965,19 @@ test "lower table bulk helpers as native custom ops" {
     tables: [table],
   }
   let env = EmbeddingEnvironment::new()
-  inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
+  inspect(try_lower_native_function(env, mod_, 0) is Some(_), content="true")
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("wasmoon.TableGrow"), content="true")
-  inspect(text.contains("wasmoon.TableFill"), content="true")
-  inspect(text.contains("wasmoon.TableCopy"), content="true")
-  inspect(text.contains("wasmoon.TableInit"), content="true")
-  inspect(text.contains("wasmoon.ElemDrop"), content="true")
+  inspect(text.contains("wasmoon.TableGrow"), content="false")
+  inspect(text.contains("wasmoon.TableFill"), content="false")
+  inspect(text.contains("wasmoon.TableCopy"), content="false")
+  inspect(text.contains("wasmoon.TableInit"), content="false")
+  inspect(text.contains("wasmoon.ElemDrop"), content="false")
+  inspect(text.contains("call wasmoon.runtime.table_grow"), content="true")
+  inspect(text.contains("call wasmoon.runtime.table_fill"), content="true")
+  inspect(text.contains("call wasmoon.runtime.table_copy"), content="true")
+  inspect(text.contains("call wasmoon.runtime.table_init"), content="true")
+  inspect(text.contains("call wasmoon.runtime.elem_drop"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }

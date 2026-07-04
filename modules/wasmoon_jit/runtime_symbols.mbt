@@ -61,6 +61,41 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     @jit_ffi.c_jit_get_memory_copy_ptr(),
     jit_runtime_fixup_idx(4),
   )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_init",
+    @jit_ffi.c_jit_get_memory_init_ptr(),
+    jit_runtime_fixup_idx(6),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.data_drop",
+    @jit_ffi.c_jit_get_data_drop_ptr(),
+    jit_runtime_fixup_idx(7),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.table_grow",
+    @jit_ffi.c_jit_get_table_grow_ptr(),
+    jit_runtime_fixup_idx(8),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.table_fill",
+    @jit_ffi.c_jit_get_table_fill_ptr(),
+    jit_runtime_fixup_idx(9),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.table_copy",
+    @jit_ffi.c_jit_get_table_copy_ptr(),
+    jit_runtime_fixup_idx(10),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.table_init",
+    @jit_ffi.c_jit_get_table_init_ptr(),
+    jit_runtime_fixup_idx(11),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.elem_drop",
+    @jit_ffi.c_jit_get_elem_drop_ptr(),
+    jit_runtime_fixup_idx(12),
+  )
   resolver
 }
 

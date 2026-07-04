@@ -281,6 +281,110 @@ test "compile api: reusable pipeline lowers memory fill and copy runtime calls" 
 }
 
 ///|
+test "compile api: reusable pipeline lowers memory segment runtime calls" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [],
+      [I32Const(0), I32Const(0), I32Const(0), MemoryInit(0, 0), DataDrop(0)],
+      "memory_segment_ops",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("memory segment ops did not compile through reusable pipeline")
+  }
+  inspect(reusable.milk_dump.contains("wasmoon.MemoryInit"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.DataDrop"), content="false")
+  inspect(
+    reusable.milk_dump.contains("call wasmoon.runtime.memory_init"),
+    content="true",
+  )
+  inspect(
+    reusable.milk_dump.contains("call wasmoon.runtime.data_drop"),
+    content="true",
+  )
+  inspect(reusable.entry.call_fixups.length(), content="2")
+  inspect(reusable.entry.call_fixups[0].func_idx, content="-21006")
+  inspect(reusable.entry.call_fixups[1].func_idx, content="-21007")
+}
+
+///|
+test "compile api: reusable pipeline lowers table runtime calls" {
+  let table : @types.Table = {
+    type_: {
+      elem_type: FuncRef,
+      limits: { min: 2, max: None },
+      is_table64: false,
+    },
+    init: None,
+  }
+  let mod_ = {
+    ..@types.Module::simple(
+      [I64],
+      [],
+      [
+        LocalGet(0),
+        I32Const(1),
+        TableGrow(0),
+        Drop,
+        I32Const(0),
+        LocalGet(0),
+        I32Const(1),
+        TableFill(0),
+        I32Const(0),
+        I32Const(1),
+        I32Const(1),
+        TableCopy(0, 0),
+        I32Const(0),
+        I32Const(0),
+        I32Const(1),
+        TableInit(0, 0),
+        ElemDrop(0),
+      ],
+      "table_runtime_ops",
+    ),
+    tables: [table],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("table ops did not compile through reusable pipeline")
+  }
+  inspect(reusable.milk_dump.contains("wasmoon.TableGrow"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.TableFill"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.TableCopy"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.TableInit"), content="false")
+  inspect(reusable.milk_dump.contains("wasmoon.ElemDrop"), content="false")
+  inspect(reusable.entry.call_fixups.length(), content="5")
+  inspect(reusable.entry.call_fixups[0].func_idx, content="-21008")
+  inspect(reusable.entry.call_fixups[1].func_idx, content="-21009")
+  inspect(reusable.entry.call_fixups[2].func_idx, content="-21010")
+  inspect(reusable.entry.call_fixups[3].func_idx, content="-21011")
+  inspect(reusable.entry.call_fixups[4].func_idx, content="-21012")
+}
+
+///|
 test "compile api: reusable pipeline lowers non-zero memory load store" {
   let mod_ = {
     ..@types.Module::simple(

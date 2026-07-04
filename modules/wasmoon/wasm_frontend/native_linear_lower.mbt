@@ -600,9 +600,11 @@ fn push_table_get(
 fn push_table_set(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
   guard pop_value(stack) is Some(value) else { return false }
   guard pop_value(stack) is Some(elem_idx) else { return false }
@@ -611,27 +613,43 @@ fn push_table_set(
   } else {
     builder.iconst_i64(1L)
   }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy TableFill custom opcode shape.
-  emit_void_op(builder, Custom("wasmoon.TableFill(\{table_idx})"), [
-    elem_idx, value, one,
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.table_fill")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(table_idx),
+    elem_idx,
+    value,
+    one,
   ])
+  |> ignore
+  true
 }
 
 ///|
 fn push_table_fill(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, value, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy TableFill opcode shape.
-  emit_void_op(builder, Custom("wasmoon.TableFill(\{table_idx})"), [
-    dst, value, size,
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.table_fill")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(table_idx),
+    dst,
+    value,
+    size,
   ])
+  |> ignore
+  true
 }
 
 ///|
@@ -874,43 +892,88 @@ fn push_memory_copy(
 fn push_memory_init(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
   data_idx : Int,
 ) -> Bool {
-  guard memory_index_type(memory_types, memidx) is Some(_) else { return false }
+  guard vmctx is Some(context) else { return false }
+  guard memory_index_type(memory_types, memidx) is Some(I32) else {
+    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // this reusable call path for memory64 memory.init.
+    return false
+  }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy MemoryInit opcode shape.
-  emit_void_op(builder, Custom("wasmoon.MemoryInit(\{memidx},\{data_idx})"), [
-    dst, src, size,
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.memory_init")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(memidx),
+    builder.iconst_i32(data_idx),
+    dst,
+    src,
+    size,
   ])
+  |> ignore
+  true
 }
 
 ///|
-fn push_data_drop(builder : @milkir.IRBuilder, data_idx : Int) -> Bool {
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy DataDrop opcode shape.
-  emit_void_op(builder, Custom("wasmoon.DataDrop(\{data_idx})"), [])
+fn push_data_drop(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value?,
+  data_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.data_drop")
+  builder.call(symbol, None, [context, builder.iconst_i32(data_idx)]) |> ignore
+  true
 }
 
 ///|
 fn push_table_grow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
 ) -> Bool {
-  guard table_is_64(table_types, table_idx) is Some(_) else { return false }
+  guard vmctx is Some(context) else { return false }
+  guard table_is_64(table_types, table_idx) is Some(is_table64) else {
+    return false
+  }
   guard pop_value(stack) is Some(delta) else { return false }
   guard pop_value(stack) is Some(init_value) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy TableGrow opcode shape.
-  guard emit_op(builder, I32, Custom("wasmoon.TableGrow(\{table_idx})"), [
-      delta, init_value,
+  let delta_i64 = if delta.ty == I64 {
+    delta
+  } else {
+    guard emit_op(builder, I64, Uextend, [delta]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.table_grow")
+  guard builder.call(symbol, Some(I32), [
+      context,
+      builder.iconst_i32(table_idx),
+      delta_i64,
+      init_value,
     ])
-    is Some(result) else {
+    is Some(call_result_i32) else {
     return false
+  }
+  let result = if is_table64 {
+    guard emit_op(builder, I64, Sextend, [call_result_i32]) is Some(extended) else {
+      return false
+    }
+    extended
+  } else {
+    call_result_i32
   }
   stack.push(result)
   true
@@ -920,44 +983,69 @@ fn push_table_grow(
 fn push_table_copy(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   dst_table_idx : Int,
   src_table_idx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, dst_table_idx) is Some(_) else { return false }
   guard table_is_64(table_types, src_table_idx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy TableCopy opcode shape.
-  emit_void_op(
-    builder,
-    Custom("wasmoon.TableCopy(\{dst_table_idx},\{src_table_idx})"),
-    [dst, src, size],
-  )
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.table_copy")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(dst_table_idx),
+    builder.iconst_i32(src_table_idx),
+    dst,
+    src,
+    size,
+  ])
+  |> ignore
+  true
 }
 
 ///|
 fn push_table_init(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
   elem_idx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard table_is_64(table_types, table_idx) is Some(_) else { return false }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy TableInit opcode shape.
-  emit_void_op(builder, Custom("wasmoon.TableInit(\{table_idx},\{elem_idx})"), [
-    dst, src, size,
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.table_init")
+  builder.call(symbol, None, [
+    context,
+    builder.iconst_i32(table_idx),
+    builder.iconst_i32(elem_idx),
+    dst,
+    src,
+    size,
   ])
+  |> ignore
+  true
 }
 
 ///|
-fn push_elem_drop(builder : @milkir.IRBuilder, elem_idx : Int) -> Bool {
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
-  // of preserving the legacy ElemDrop opcode shape.
-  emit_void_op(builder, Custom("wasmoon.ElemDrop(\{elem_idx})"), [])
+fn push_elem_drop(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value?,
+  elem_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  let symbol = builder
+    .get_function()
+    .declare_external_symbol("wasmoon.runtime.elem_drop")
+  builder.call(symbol, None, [context, builder.iconst_i32(elem_idx)]) |> ignore
+  true
 }
 
 ///|
@@ -1713,7 +1801,7 @@ fn try_lower_linear_function(
           return None
         }
       TableSet(idx) =>
-        if !push_table_set(builder, stack, table_types, idx) {
+        if !push_table_set(builder, stack, vmctx, table_types, idx) {
           return None
         }
       I32Const(value) => stack.push(builder.iconst_i32(value))
@@ -2234,33 +2322,37 @@ fn try_lower_linear_function(
           return None
         }
       MemoryInit(memidx, data_idx) =>
-        if !push_memory_init(builder, stack, memory_types, memidx, data_idx) {
+        if !push_memory_init(
+            builder, stack, vmctx, memory_types, memidx, data_idx,
+          ) {
           return None
         }
       DataDrop(data_idx) =>
-        if !push_data_drop(builder, data_idx) {
+        if !push_data_drop(builder, vmctx, data_idx) {
           return None
         }
       TableGrow(table_idx) =>
-        if !push_table_grow(builder, stack, table_types, table_idx) {
+        if !push_table_grow(builder, stack, vmctx, table_types, table_idx) {
           return None
         }
       TableFill(table_idx) =>
-        if !push_table_fill(builder, stack, table_types, table_idx) {
+        if !push_table_fill(builder, stack, vmctx, table_types, table_idx) {
           return None
         }
       TableCopy(dst_table_idx, src_table_idx) =>
         if !push_table_copy(
-            builder, stack, table_types, dst_table_idx, src_table_idx,
+            builder, stack, vmctx, table_types, dst_table_idx, src_table_idx,
           ) {
           return None
         }
       TableInit(table_idx, elem_idx) =>
-        if !push_table_init(builder, stack, table_types, table_idx, elem_idx) {
+        if !push_table_init(
+            builder, stack, vmctx, table_types, table_idx, elem_idx,
+          ) {
           return None
         }
       ElemDrop(elem_idx) =>
-        if !push_elem_drop(builder, elem_idx) {
+        if !push_elem_drop(builder, vmctx, elem_idx) {
           return None
         }
       RefNull(ref_type) =>
