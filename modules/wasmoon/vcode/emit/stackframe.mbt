@@ -208,6 +208,7 @@ fn JITStackFrame::to_layout(
     frame_size: self.frame_size,
     saved_gprs: self.saved_gprs,
     saved_fprs: self.saved_fprs,
+    spill_slot_offsets: [],
     has_setup_area: self.has_setup_area,
   }
 }

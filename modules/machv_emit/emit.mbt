@@ -494,6 +494,36 @@ fn emit_x64_float_stack_store(
 }
 
 ///|
+fn emit_x64_vector_stack_load(
+  object : CodeObject,
+  dst : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf3)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, 0)
+  object.code.push(0x0f)
+  object.code.push(0x6f)
+  emit_x64_modrm(object, 2, dst, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_vector_stack_store(
+  object : CodeObject,
+  src : Int,
+  offset : Int,
+) -> Unit {
+  object.code.push(0xf3)
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, 0)
+  object.code.push(0x0f)
+  object.code.push(0x7f)
+  emit_x64_modrm(object, 2, src, 4)
+  object.code.push(0x24)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn x64_jcc_opcode(cond : @machv.Cond) -> Int {
   match cond {
     Eq => 0x84
@@ -1529,12 +1559,15 @@ fn emit_aarch64_stack_load(
         0xfd400000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (dst & 0x1f),
       )
     }
-    // TODO(machv_emit): add 16-byte vector spill load emission once MachV
-    // frame emission owns vector spill alignment and Q/XMM stack traffic.
-    Vector =>
-      raise UnsupportedOperand(
-        message="AArch64 vector stack load is TODO until MachV frame emission owns 16-byte vector spills",
+    Vector => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 16, "AArch64 vector stack load",
       )
+      emit_u32_le(
+        object,
+        0x3dc00000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (dst & 0x1f),
+      )
+    }
   }
 }
 
@@ -1567,12 +1600,15 @@ fn emit_aarch64_stack_store(
         0xfd000000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
       )
     }
-    // TODO(machv_emit): add 16-byte vector spill store emission once MachV
-    // frame emission owns vector spill alignment and Q/XMM stack traffic.
-    Vector =>
-      raise UnsupportedOperand(
-        message="AArch64 vector stack store is TODO until MachV frame emission owns 16-byte vector spills",
+    Vector => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 16, "AArch64 vector stack store",
       )
+      emit_u32_le(
+        object,
+        0x3d800000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
   }
 }
 
@@ -2436,12 +2472,7 @@ fn emit_x64_stack_load(
   match dst_class {
     Int => emit_x64_int_stack_load(object, dst, offset)
     Float32 | Float64 => emit_x64_float_stack_load(object, dst, offset)
-    // TODO(machv_emit): add 16-byte vector spill load emission once MachV
-    // frame emission owns vector spill alignment and Q/XMM stack traffic.
-    Vector =>
-      raise UnsupportedOperand(
-        message="X64 vector stack load is TODO until MachV frame emission owns 16-byte vector spills",
-      )
+    Vector => emit_x64_vector_stack_load(object, dst, offset)
   }
 }
 
@@ -2460,12 +2491,7 @@ fn emit_x64_stack_store(
   match src_class {
     Int => emit_x64_int_stack_store(object, src, offset)
     Float32 | Float64 => emit_x64_float_stack_store(object, src, offset)
-    // TODO(machv_emit): add 16-byte vector spill store emission once MachV
-    // frame emission owns vector spill alignment and Q/XMM stack traffic.
-    Vector =>
-      raise UnsupportedOperand(
-        message="X64 vector stack store is TODO until MachV frame emission owns 16-byte vector spills",
-      )
+    Vector => emit_x64_vector_stack_store(object, src, offset)
   }
 }
 
@@ -3063,14 +3089,25 @@ pub fn emit_function_for_target(
   target : EmitTarget,
 ) -> CodeObject raise EmitError {
   let object = CodeObject::new()
-  let frame = StackFrameLayout::build(
-    [],
-    [],
-    func.get_num_spill_slots(),
-    false,
-    0,
-    outgoing_args_size=func.get_max_outgoing_args_size(),
-  )
+  let frame = if func.stack_slots.length() > 0 {
+    StackFrameLayout::build_with_slots(
+      [],
+      [],
+      func.stack_slots,
+      false,
+      0,
+      outgoing_args_size=func.get_max_outgoing_args_size(),
+    )
+  } else {
+    StackFrameLayout::build(
+      [],
+      [],
+      func.get_num_spill_slots(),
+      false,
+      0,
+      outgoing_args_size=func.get_max_outgoing_args_size(),
+    )
+  }
   let block_offsets : Array[(Int, Int)] = []
   for block in func.blocks {
     block_offsets.push((block.id, object.current_offset()))

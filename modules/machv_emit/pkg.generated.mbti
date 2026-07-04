@@ -71,9 +71,11 @@ pub(all) struct StackFrameLayout {
   frame_size : Int
   saved_gprs : Array[Int]
   saved_fprs : Array[Int]
+  spill_slot_offsets : Array[(Int, Int)]
   has_setup_area : Bool
 } derive(Eq, @debug.Debug)
 pub fn StackFrameLayout::build(Array[Int], Array[Int], Int, Bool, Int, outgoing_args_size? : Int) -> Self
+pub fn StackFrameLayout::build_with_slots(Array[Int], Array[Int], Array[@machv.StackSlot], Bool, Int, outgoing_args_size? : Int) -> Self
 pub fn StackFrameLayout::get_fpr_save_offset(Self, Int) -> Int
 pub fn StackFrameLayout::get_gpr_save_offset(Self, Int) -> Int
 pub fn StackFrameLayout::get_outgoing_arg_offset(Self, Int) -> Int

@@ -1629,6 +1629,72 @@ test "emit X64 stack spill load store bytes" {
 }
 
 ///|
+test "emit AArch64 vector stack spill load store bytes" {
+  let func = @machv.Function::new("aarch64_vector_stack_spill")
+  let entry = func.new_block()
+  let slot0 = func.new_stack_slot(16, 16)
+  let slot1 = func.new_stack_slot(16, 16)
+  let load = func.new_inst(Load(slot0))
+  load.add_operand(@machv.Operand::def(Physical({ index: 1, class: Vector })))
+  entry.append(load)
+  let store = func.new_inst(Store(slot1))
+  store.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Vector })),
+  )
+  entry.append(store)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[225, 3, 192, 61, 226, 7, 128, 61, 192, 3, 95, 214]",
+  )
+}
+
+///|
+test "emit X64 vector stack spill load store bytes" {
+  let func = @machv.Function::new("x64_vector_stack_spill")
+  let entry = func.new_block()
+  let slot0 = func.new_stack_slot(16, 16)
+  let slot1 = func.new_stack_slot(16, 16)
+  let load = func.new_inst(Load(slot0))
+  load.add_operand(@machv.Operand::def(Physical({ index: 1, class: Vector })))
+  entry.append(load)
+  let store = func.new_inst(Store(slot1))
+  store.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Vector })),
+  )
+  entry.append(store)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  243,
+      #|  15,
+      #|  111,
+      #|  140,
+      #|  36,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  243,
+      #|  15,
+      #|  127,
+      #|  148,
+      #|  36,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  195,
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
@@ -1687,4 +1753,26 @@ test "stack frame layout supports x64 setup size" {
   inspect(frame.spill_size, content="48")
   inspect(frame.total_size, content="56")
   inspect(frame.total_size % 16, content="8")
+}
+
+///|
+test "stack frame layout honors real spill slot size and alignment" {
+  let slots : Array[@machv.StackSlot] = [
+    { id: 0, size: 16, align: 16 },
+    { id: 1, size: 8, align: 8 },
+    { id: 2, size: 16, align: 16 },
+  ]
+  let frame = StackFrameLayout::build_with_slots(
+    [],
+    [],
+    slots,
+    false,
+    0,
+    outgoing_args_size=16,
+  )
+  inspect(frame.spill_size, content="48")
+  inspect(frame.frame_size, content="64")
+  inspect(frame.get_spill_offset(0), content="16")
+  inspect(frame.get_spill_offset(1), content="32")
+  inspect(frame.get_spill_offset(2), content="48")
 }

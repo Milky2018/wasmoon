@@ -33,6 +33,23 @@ test "apply materializes MachV spill slots" {
 }
 
 ///|
+test "apply materializes aligned vector spill slots" {
+  let func = @machv.Function::new("vector_spill")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Vector)
+  let v1 = func.new_vreg(Vector)
+  let inst = func.new_inst(Target("vector_pair"))
+  inst.add_operand(@machv.Operand::def(Virtual(v0)))
+  inst.add_operand(@machv.Operand::def(Virtual(v1)))
+  entry.append(inst)
+  let p0 : @machv.PReg = { index: 0, class: Vector }
+  let result = allocate_and_apply(func, [p0])
+  inspect(result.allocation.spill_count, content="1")
+  inspect(result.spill_slots[0].size, content="16")
+  inspect(result.spill_slots[0].align, content="16")
+}
+
+///|
 test "apply rewrites allocated virtual operands to physical registers" {
   let func = @machv.Function::new("rewrite")
   let entry = func.new_block()
