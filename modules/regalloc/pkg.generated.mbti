@@ -30,6 +30,8 @@ pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int
 
 pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
 
+pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedConstraintInstEdits]
+
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
 
 pub fn plan_register_probe_order(Array[PhysicalReg], Array[PhysicalReg], Array[PhysicalReg], Bool, Int, Int, PhysicalReg?) -> Array[PhysicalReg]
@@ -130,6 +132,36 @@ pub(all) struct ConflictScanResult {
   max_conflict_weight : Int
   first_conflict_point : ProgramPoint?
   rejected : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct FixedConstraint {
+  operand : FixedConstraintOperand
+  required : PhysicalReg
+} derive(Eq, @debug.Debug)
+
+pub(all) struct FixedConstraintInst {
+  block_index : Int
+  inst_index : Int
+  uses : Array[FixedConstraint]
+  defs : Array[FixedConstraint]
+} derive(@debug.Debug)
+
+pub(all) struct FixedConstraintInstEdits {
+  block_index : Int
+  inst_index : Int
+  before : Array[FixedConstraintMove]
+  after : Array[FixedConstraintMove]
+} derive(@debug.Debug)
+
+pub(all) struct FixedConstraintMove {
+  from : Location
+  to : Location
+  class_tag : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum FixedConstraintOperand {
+  Virtual(Location?, Int)
+  Physical(PhysicalReg, Int)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Instruction {

@@ -586,6 +586,62 @@ test "allocation policy covers retry and vector call spilling" {
 }
 
 ///|
+test "fixed constraint edit planner emits before and after moves" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let edits = plan_fixed_constraint_edits([
+    {
+      block_index: 1,
+      inst_index: 2,
+      uses: [
+        { operand: Virtual(Some(Reg(r0)), 10), required: r1 },
+        { operand: Virtual(Some(Spill(3)), 11), required: r2 },
+        { operand: Physical(r2, 12), required: r0 },
+      ],
+      defs: [
+        { operand: Virtual(Some(Reg(r0)), 13), required: r1 },
+        { operand: Virtual(Some(Spill(4)), 14), required: r2 },
+      ],
+    },
+  ])
+  inspect(edits.length(), content="1")
+  inspect(edits[0].block_index, content="1")
+  inspect(edits[0].inst_index, content="2")
+  debug_inspect(
+    edits[0].before,
+    content=(
+      #|[
+      #|  {
+      #|    from: Reg({ id: 0, class: Int }),
+      #|    to: Reg({ id: 1, class: Int }),
+      #|    class_tag: 10,
+      #|  },
+      #|  { from: Spill(3), to: Reg({ id: 2, class: Int }), class_tag: 11 },
+      #|  {
+      #|    from: Reg({ id: 2, class: Int }),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    class_tag: 12,
+      #|  },
+      #|]
+    ),
+  )
+  debug_inspect(
+    edits[0].after,
+    content=(
+      #|[
+      #|  {
+      #|    from: Reg({ id: 1, class: Int }),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    class_tag: 13,
+      #|  },
+      #|  { from: Reg({ id: 2, class: Int }), to: Spill(4), class_tag: 14 },
+      #|]
+    ),
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

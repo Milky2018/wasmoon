@@ -16,6 +16,46 @@ fn backtrack_core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
 }
 
 ///|
+fn backtrack_abi_class_tag(class : @abi.RegClass) -> Int {
+  match class {
+    Int => 0
+    Float32 => 1
+    Float64 => 2
+    Vector => 3
+  }
+}
+
+///|
+fn backtrack_abi_class_from_tag(tag : Int) -> @abi.RegClass {
+  match tag {
+    0 => Int
+    1 => Float32
+    2 => Float64
+    3 => Vector
+    _ => Int
+  }
+}
+
+///|
+fn backtrack_core_loc(loc : Loc) -> @core_regalloc.Location {
+  match loc {
+    Reg(preg) => Reg(backtrack_core_preg(preg))
+    Spill(slot) => Spill(slot)
+  }
+}
+
+///|
+fn backtrack_old_loc(
+  loc : @core_regalloc.Location,
+  class : @abi.RegClass,
+) -> Loc {
+  match loc {
+    Reg(preg) => Reg({ index: preg.id, class })
+    Spill(slot) => Spill(slot)
+  }
+}
+
+///|
 fn backtrack_core_pregs(
   regs : Array[@abi.PReg],
 ) -> Array[@core_regalloc.PhysicalReg] {
@@ -1388,111 +1428,102 @@ pub fn BacktrackingAllocator::generate_result(
     }
   }
 
-  // Generate moves for FixedReg constraints
-  // When a vreg is used/defined with a FixedReg constraint, we need to
-  // insert moves if the vreg is allocated to a different register
+  fn virtual_location(vreg_id : Int) -> @core_regalloc.Location? {
+    let assigned_opt = if vreg_id >= 0 && vreg_id < max_vreg_id {
+      assignment_dense[vreg_id]
+    } else {
+      result.assignments.get(vreg_id)
+    }
+    if assigned_opt is Some(preg) {
+      return Some(backtrack_core_loc(Reg(preg)))
+    }
+    let spill_slot = if vreg_id >= 0 && vreg_id < max_vreg_id {
+      spill_slot_dense[vreg_id]
+    } else {
+      match result.spill_slots.get(vreg_id) {
+        Some(slot) => slot
+        None => -1
+      }
+    }
+    if spill_slot >= 0 {
+      Some(Spill(spill_slot))
+    } else {
+      None
+    }
+  }
+
+  let fixed_insts : Array[@core_regalloc.FixedConstraintInst] = []
   for block_idx, block in self.func.blocks {
     for inst_idx, inst in block.insts {
-      // Skip if no constraints
       if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
         continue
       }
-      let edits = InstEdits::new()
-
-      // Process use constraints (moves before the instruction)
+      let uses : Array[@core_regalloc.FixedConstraint] = []
+      let defs : Array[@core_regalloc.FixedConstraint] = []
       for i, constraint in inst.use_constraints {
         if constraint is FixedReg(required_preg) {
           let use_reg = inst.uses[i]
           if use_reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              assignment_dense[vreg.id]
-            } else {
-              result.assignments.get(vreg.id)
-            }
-            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              spill_slot_dense[vreg.id]
-            } else {
-              match result.spill_slots.get(vreg.id) {
-                Some(slot) => slot
-                None => -1
-              }
-            }
-            if assigned_opt is Some(assigned_preg) {
-              if assigned_preg.index != required_preg.index {
-                // Need to move from assigned to required
-                edits.before.push({
-                  from: Reg(assigned_preg),
-                  to: Reg(required_preg),
-                  class: vreg.class,
-                })
-              }
-            } else if spill_slot >= 0 {
-              // Spilled: need to reload to the required register
-              edits.before.push({
-                from: Spill(spill_slot),
-                to: Reg(required_preg),
-                class: vreg.class,
-              })
-            }
+            uses.push({
+              operand: Virtual(
+                virtual_location(vreg.id),
+                backtrack_abi_class_tag(vreg.class),
+              ),
+              required: backtrack_core_preg(required_preg),
+            })
           } else if use_reg is Physical(preg) {
-            if preg.index != required_preg.index {
-              edits.before.push({
-                from: Reg(preg),
-                to: Reg(required_preg),
-                class: preg.class,
-              })
-            }
+            uses.push({
+              operand: Physical(
+                backtrack_core_preg(preg),
+                backtrack_abi_class_tag(preg.class),
+              ),
+              required: backtrack_core_preg(required_preg),
+            })
           }
         }
       }
-
-      // Process def constraints (moves after the instruction)
       for i, constraint in inst.def_constraints {
         if constraint is FixedReg(required_preg) {
           let def = inst.defs[i]
           if def.reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              assignment_dense[vreg.id]
-            } else {
-              result.assignments.get(vreg.id)
-            }
-            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              spill_slot_dense[vreg.id]
-            } else {
-              match result.spill_slots.get(vreg.id) {
-                Some(slot) => slot
-                None => -1
-              }
-            }
-            if assigned_opt is Some(assigned_preg) {
-              if assigned_preg.index != required_preg.index {
-                // Need to move from required to assigned
-                // (the instruction produces in required_preg, we need to move to assigned)
-                edits.after.push({
-                  from: Reg(required_preg),
-                  to: Reg(assigned_preg),
-                  class: vreg.class,
-                })
-              }
-            } else if spill_slot >= 0 {
-              // Spilled: need to store from required register to spill slot
-              edits.after.push({
-                from: Reg(required_preg),
-                to: Spill(spill_slot),
-                class: vreg.class,
-              })
-            }
+            defs.push({
+              operand: Virtual(
+                virtual_location(vreg.id),
+                backtrack_abi_class_tag(vreg.class),
+              ),
+              required: backtrack_core_preg(required_preg),
+            })
           }
         }
       }
-
-      // Store edits if any
-      if !edits.before.is_empty() || !edits.after.is_empty() {
-        result.inst_edits.push((block_idx, inst_idx, edits))
-      }
+      fixed_insts.push({
+        block_index: block_idx,
+        inst_index: inst_idx,
+        uses,
+        defs,
+      })
     }
+  }
+  let fixed_edits = @core_regalloc.plan_fixed_constraint_edits(fixed_insts)
+  for edit in fixed_edits {
+    let edits = InstEdits::new()
+    for mv in edit.before {
+      let class = backtrack_abi_class_from_tag(mv.class_tag)
+      edits.before.push({
+        from: backtrack_old_loc(mv.from, class),
+        to: backtrack_old_loc(mv.to, class),
+        class,
+      })
+    }
+    for mv in edit.after {
+      let class = backtrack_abi_class_from_tag(mv.class_tag)
+      edits.after.push({
+        from: backtrack_old_loc(mv.from, class),
+        to: backtrack_old_loc(mv.to, class),
+        class,
+      })
+    }
+    result.inst_edits.push((edit.block_index, edit.inst_index, edits))
   }
 
   // Reuse spill slots across non-overlapping spilled bundles (regalloc2-style).
