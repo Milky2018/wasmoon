@@ -76,6 +76,8 @@ pub fn format_signal_name(Int) -> String
 
 pub fn format_trap_report_message(TrapReport) -> String
 
+pub fn format_u64_hex(Int64) -> String
+
 pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit
@@ -305,6 +307,8 @@ pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
 
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
+
+pub fn sanitize_debug_filename(String) -> String
 
 pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
 

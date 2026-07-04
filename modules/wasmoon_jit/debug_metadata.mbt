@@ -75,7 +75,7 @@ pub fn JITDebugDB::get(self : JITDebugDB, func_idx : Int) -> JITFunctionDebug? {
 }
 
 ///|
-fn to_hex_u64(v : Int64) -> String {
+pub fn format_u64_hex(v : Int64) -> String {
   let u = v.reinterpret_as_uint64()
   let b7 = (u >> 56).reinterpret_as_int64().to_int() & 0xFF
   let b6 = (u >> 48).reinterpret_as_int64().to_int() & 0xFF
@@ -97,22 +97,41 @@ fn to_hex_u64(v : Int64) -> String {
 }
 
 ///|
+pub fn sanitize_debug_filename(s : String) -> String {
+  let mut out = ""
+  for c in s {
+    let ok = (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c == '_' ||
+      c == '-' ||
+      c == '.'
+    out = out + (if ok { c.to_string() } else { "_" })
+  }
+  if out.is_empty() {
+    "unknown"
+  } else {
+    out
+  }
+}
+
+///|
 pub fn format_trap_report_message(report : TrapReport) -> String {
   let fields : Array[String] = []
   if report.signal != 0 {
     fields.push("sig=\{report.signal_name}")
   }
   if report.pc != 0L {
-    fields.push("pc=\{to_hex_u64(report.pc)}")
+    fields.push("pc=\{format_u64_hex(report.pc)}")
   }
   if report.lr != 0L {
-    fields.push("lr=\{to_hex_u64(report.lr)}")
+    fields.push("lr=\{format_u64_hex(report.lr)}")
   }
   if report.frame_lr != 0L {
-    fields.push("frame_lr=\{to_hex_u64(report.frame_lr)}")
+    fields.push("frame_lr=\{format_u64_hex(report.frame_lr)}")
   }
   if report.fault_addr != 0L {
-    fields.push("addr=\{to_hex_u64(report.fault_addr)}")
+    fields.push("addr=\{format_u64_hex(report.fault_addr)}")
   }
   if report.brk_imm >= 0 {
     fields.push("brk_imm=\{report.brk_imm}")

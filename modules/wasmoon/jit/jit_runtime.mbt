@@ -787,7 +787,7 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
       Some(f) => f.name
       None => "func\{func_idx}"
     }
-    let path = "target/jit-trap-\{func_idx}-\{sanitize_filename(name)}.log"
+    let path = "target/jit-trap-\{func_idx}-\{@wasmoon_jit.sanitize_debug_filename(name)}.log"
     let mut ctx_mem0_ptr = 0L
     let mut ctx_mem0_size = 0L
     match self.context {
@@ -800,24 +800,24 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
     let content = "func_idx: \{func_idx}\n" +
       "name: \{name}\n" +
       "signal: \{details.signal}\n" +
-      "pc: \{to_hex_u64(details.pc)}\n" +
-      "lr: \{to_hex_u64(details.lr)}\n" +
-      "frame_lr: \{to_hex_u64(details.frame_lr)}\n" +
-      "fault_addr: \{to_hex_u64(details.fault_addr)}\n" +
+      "pc: \{@wasmoon_jit.format_u64_hex(details.pc)}\n" +
+      "lr: \{@wasmoon_jit.format_u64_hex(details.lr)}\n" +
+      "frame_lr: \{@wasmoon_jit.format_u64_hex(details.frame_lr)}\n" +
+      "fault_addr: \{@wasmoon_jit.format_u64_hex(details.fault_addr)}\n" +
       "brk_imm: \{details.brk_imm}\n\n" +
-      "ctx_mem0_ptr: \{to_hex_u64(ctx_mem0_ptr)}\n" +
+      "ctx_mem0_ptr: \{@wasmoon_jit.format_u64_hex(ctx_mem0_ptr)}\n" +
       "ctx_mem0_size: \{ctx_mem0_size}\n\n" +
-      "x0: \{to_hex_u64(details.x0)}\n" +
-      "x1: \{to_hex_u64(details.x1)}\n" +
-      "x2: \{to_hex_u64(details.x2)}\n" +
-      "x3: \{to_hex_u64(details.x3)}\n" +
-      "x6: \{to_hex_u64(details.x6)}\n" +
-      "x7: \{to_hex_u64(details.x7)}\n" +
-      "x8: \{to_hex_u64(details.x8)}\n" +
-      "x9: \{to_hex_u64(details.x9)}\n" +
-      "x10: \{to_hex_u64(details.x10)}\n" +
-      "x11: \{to_hex_u64(details.x11)}\n" +
-      "x15: \{to_hex_u64(details.x15)}\n\n" +
+      "x0: \{@wasmoon_jit.format_u64_hex(details.x0)}\n" +
+      "x1: \{@wasmoon_jit.format_u64_hex(details.x1)}\n" +
+      "x2: \{@wasmoon_jit.format_u64_hex(details.x2)}\n" +
+      "x3: \{@wasmoon_jit.format_u64_hex(details.x3)}\n" +
+      "x6: \{@wasmoon_jit.format_u64_hex(details.x6)}\n" +
+      "x7: \{@wasmoon_jit.format_u64_hex(details.x7)}\n" +
+      "x8: \{@wasmoon_jit.format_u64_hex(details.x8)}\n" +
+      "x9: \{@wasmoon_jit.format_u64_hex(details.x9)}\n" +
+      "x10: \{@wasmoon_jit.format_u64_hex(details.x10)}\n" +
+      "x11: \{@wasmoon_jit.format_u64_hex(details.x11)}\n" +
+      "x15: \{@wasmoon_jit.format_u64_hex(details.x15)}\n\n" +
       "== IR ==\n" +
       dbg.ir +
       "\n\n" +
@@ -847,7 +847,7 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
             "\n== Caller ==\n" +
             "caller_func_idx: \{caller_idx}\n" +
             "caller_name: \{caller_name}\n" +
-            "caller_pc: \{to_hex_u64(caller_pc)}\n\n" +
+            "caller_pc: \{@wasmoon_jit.format_u64_hex(caller_pc)}\n\n" +
             "== Caller IR ==\n" +
             cdbg.ir +
             "\n\n" +
@@ -888,47 +888,6 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
     wasm_frames,
     host_frames: [],
     dump_path,
-  }
-}
-
-///|
-fn to_hex_u64(v : Int64) -> String {
-  let u = v.reinterpret_as_uint64()
-  let b7 = (u >> 56).reinterpret_as_int64().to_int() & 0xFF
-  let b6 = (u >> 48).reinterpret_as_int64().to_int() & 0xFF
-  let b5 = (u >> 40).reinterpret_as_int64().to_int() & 0xFF
-  let b4 = (u >> 32).reinterpret_as_int64().to_int() & 0xFF
-  let b3 = (u >> 24).reinterpret_as_int64().to_int() & 0xFF
-  let b2 = (u >> 16).reinterpret_as_int64().to_int() & 0xFF
-  let b1 = (u >> 8).reinterpret_as_int64().to_int() & 0xFF
-  let b0 = u.reinterpret_as_int64().to_int() & 0xFF
-  "0x" +
-  @types.to_hex_byte(b7) +
-  @types.to_hex_byte(b6) +
-  @types.to_hex_byte(b5) +
-  @types.to_hex_byte(b4) +
-  @types.to_hex_byte(b3) +
-  @types.to_hex_byte(b2) +
-  @types.to_hex_byte(b1) +
-  @types.to_hex_byte(b0)
-}
-
-///|
-fn sanitize_filename(s : String) -> String {
-  let mut out = ""
-  for c in s {
-    let ok = (c >= 'a' && c <= 'z') ||
-      (c >= 'A' && c <= 'Z') ||
-      (c >= '0' && c <= '9') ||
-      c == '_' ||
-      c == '-' ||
-      c == '.'
-    out = out + (if ok { c.to_string() } else { "_" })
-  }
-  if out.is_empty() {
-    "unknown"
-  } else {
-    out
   }
 }
 

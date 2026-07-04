@@ -63,6 +63,9 @@ test "legacy trap immediates are classified in wasmoon_jit" {
 
 ///|
 test "trap report message formatting lives in wasmoon_jit" {
+  inspect(format_u64_hex(-1L), content="0xffffffffffffffff")
+  inspect(sanitize_debug_filename("a/b:c"), content="a_b_c")
+  inspect(sanitize_debug_filename(""), content="unknown")
   let report : TrapReport = {
     trap_kind: "integer overflow",
     message: "integer overflow",
