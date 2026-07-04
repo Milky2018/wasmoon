@@ -3463,52 +3463,65 @@ fn require_word_aligned_delta(
 }
 
 ///|
-fn patch_x64_block_branch(
-  object : CodeObject,
+pub fn patch_x64_branch_bytes(
+  code : Array[Int],
   branch_offset : Int,
   target_offset : Int,
 ) -> Unit raise EmitError {
-  if branch_offset < 0 || branch_offset >= object.code.length() {
+  if branch_offset < 0 || branch_offset >= code.length() {
     raise BranchFixupError(message="X64 branch offset out of code bounds")
   }
-  let opcode = object.code[branch_offset]
+  let opcode = code[branch_offset]
   if opcode == 0xe9 {
     let displacement = target_offset - (branch_offset + 5)
-    write_i32_le_at(object.code, branch_offset + 1, displacement)
-  } else if opcode == 0x0f && branch_offset + 5 < object.code.length() {
+    write_i32_le_at(code, branch_offset + 1, displacement)
+  } else if opcode == 0x0f && branch_offset + 5 < code.length() {
     let displacement = target_offset - (branch_offset + 6)
-    write_i32_le_at(object.code, branch_offset + 2, displacement)
+    write_i32_le_at(code, branch_offset + 2, displacement)
   } else {
     raise BranchFixupError(message="X64 branch fixup does not point at jmp/jcc")
   }
 }
 
 ///|
-fn patch_aarch64_block_branch(
-  object : CodeObject,
+pub fn patch_x64_rel32_disp(
+  code : Array[Int],
+  disp_offset : Int,
+  next_ip_offset : Int,
+  target_offset : Int,
+) -> Unit raise EmitError {
+  if disp_offset < 0 || disp_offset + 3 >= code.length() {
+    raise BranchFixupError(message="X64 rel32 displacement out of code bounds")
+  }
+  write_i32_le_at(code, disp_offset, target_offset - next_ip_offset)
+}
+
+///|
+pub fn patch_aarch64_branch_bytes(
+  code : Array[Int],
   branch_offset : Int,
   target_offset : Int,
 ) -> Unit raise EmitError {
-  if branch_offset < 0 || branch_offset + 3 >= object.code.length() {
+  if branch_offset < 0 || branch_offset + 3 >= code.length() {
     raise BranchFixupError(message="AArch64 branch offset out of code bounds")
   }
-  let word = read_u32_le_at(object.code, branch_offset)
+  let word = read_u32_le_at(code, branch_offset)
   let delta = target_offset - branch_offset
   if (word & 0x7c000000) == 0x14000000 {
     let imm26 = require_word_aligned_delta(delta, "AArch64 B/BL")
     signed_range_check(imm26, 26, "AArch64 B/BL")
     let patched = (word & 0xfc000000) | (imm26 & 0x03ffffff)
-    write_i32_le_at(object.code, branch_offset, patched)
+    write_i32_le_at(code, branch_offset, patched)
   } else if (word & 0xff000010) == 0x54000000 {
     let imm19 = require_word_aligned_delta(delta, "AArch64 B.cond")
     signed_range_check(imm19, 19, "AArch64 B.cond")
     let patched = (word & 0xff00001f) | ((imm19 & 0x7ffff) << 5)
-    write_i32_le_at(object.code, branch_offset, patched)
+    write_i32_le_at(code, branch_offset, patched)
   } else if (word & 0x7e000000) == 0x34000000 {
     let imm19 = require_word_aligned_delta(delta, "AArch64 CBZ/CBNZ")
     signed_range_check(imm19, 19, "AArch64 CBZ/CBNZ")
     let patched = (word & 0xff00001f) | ((imm19 & 0x7ffff) << 5)
-    write_i32_le_at(object.code, branch_offset, patched)
+    write_i32_le_at(code, branch_offset, patched)
   } else {
     raise BranchFixupError(
       message="AArch64 branch fixup does not point at branch",
@@ -3528,8 +3541,9 @@ fn patch_block_fixups(
       raise BranchFixupError(message="unknown block target \{fixup.block_id}")
     }
     match target {
-      AArch64 => patch_aarch64_block_branch(object, fixup.offset, target_offset)
-      X64 => patch_x64_block_branch(object, fixup.offset, target_offset)
+      AArch64 =>
+        patch_aarch64_branch_bytes(object.code, fixup.offset, target_offset)
+      X64 => patch_x64_branch_bytes(object.code, fixup.offset, target_offset)
     }
   }
 }

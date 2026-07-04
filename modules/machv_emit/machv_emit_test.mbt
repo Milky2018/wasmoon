@@ -1978,3 +1978,17 @@ test "stack frame layout honors real spill slot size and alignment" {
   inspect(frame.get_spill_offset(1), content="32")
   inspect(frame.get_spill_offset(2), content="48")
 }
+
+///|
+test "patch X64 rel32 displacement bytes" {
+  let code = [0xe9, 0, 0, 0, 0, 0x90]
+  try! patch_x64_rel32_disp(code, 1, 5, 6)
+  debug_inspect(code, content="[233, 1, 0, 0, 0, 144]")
+}
+
+///|
+test "patch AArch64 branch bytes" {
+  let code = [0, 0, 0, 0x14, 0x1f, 0x20, 0x03, 0xd5]
+  try! patch_aarch64_branch_bytes(code, 0, 8)
+  debug_inspect(code, content="[2, 0, 0, 20, 31, 32, 3, 213]")
+}

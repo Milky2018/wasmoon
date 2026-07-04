@@ -13,6 +13,12 @@ pub fn fits_signed_i32(Int) -> Bool
 
 pub fn fits_signed_i8(Int) -> Bool
 
+pub fn patch_aarch64_branch_bytes(Array[Int], Int, Int) -> Unit raise EmitError
+
+pub fn patch_x64_branch_bytes(Array[Int], Int, Int) -> Unit raise EmitError
+
+pub fn patch_x64_rel32_disp(Array[Int], Int, Int, Int) -> Unit raise EmitError
+
 pub fn plan_signed_i8_chunks(Int) -> Array[Int]
 
 pub fn plan_stack_pointer_adjustment(Int, page_size? : Int) -> Array[StackAdjustStep]
