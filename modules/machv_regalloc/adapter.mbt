@@ -312,6 +312,22 @@ fn rewrite_allocated_operand(
 }
 
 ///|
+fn rewrite_allocated_reg(
+  allocation : @regalloc.Allocation,
+  reg : @machv.Reg,
+) -> @machv.Reg {
+  match reg {
+    Virtual(vreg) =>
+      match allocation.location_of(vreg_to_regalloc(vreg)) {
+        Some(Reg(preg)) =>
+          Physical(preg_from_regalloc_for_class(preg, vreg.class))
+        _ => reg
+      }
+    Physical(_) => reg
+  }
+}
+
+///|
 fn rewrite_spilled_operand(
   func : @machv.Function,
   allocation : @regalloc.Allocation,
@@ -350,6 +366,185 @@ fn rewrite_spilled_operand(
 }
 
 ///|
+fn rewrite_spilled_reg(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  reg : @machv.Reg,
+  before : Array[@machv.Instruction],
+) -> @machv.Reg {
+  match reg {
+    Virtual(vreg) =>
+      match allocation.location_of(vreg_to_regalloc(vreg)) {
+        Some(Spill(slot)) =>
+          match find_scratch_reg(physical_regs, vreg.class) {
+            Some(scratch) => {
+              // TODO(machv_regalloc): reserve distinct terminator reload
+              // temporaries when multiple spilled terminator operands of the
+              // same register class are live at the same edge.
+              let physical : @machv.Reg = Physical(scratch)
+              let reload = func.new_inst(Load(spill_slots[slot]))
+              reload.add_operand(@machv.Operand::def(physical))
+              before.push(reload)
+              physical
+            }
+            None => reg
+          }
+        _ => rewrite_allocated_reg(allocation, reg)
+      }
+    Physical(_) => reg
+  }
+}
+
+///|
+fn rewrite_reg_array(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  regs : Array[@machv.Reg],
+  before : Array[@machv.Instruction],
+) -> Array[@machv.Reg] {
+  let out : Array[@machv.Reg] = []
+  for reg in regs {
+    out.push(
+      rewrite_spilled_reg(
+        func, allocation, spill_slots, physical_regs, reg, before,
+      ),
+    )
+  }
+  out
+}
+
+///|
+fn rewrite_terminator(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  term : @machv.Terminator,
+  before : Array[@machv.Instruction],
+) -> @machv.Terminator {
+  match term {
+    TermJump(target, args) =>
+      TermJump(
+        target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, args, before,
+        ),
+      )
+    TermBranch(cond, true_target, true_args, false_target, false_args) =>
+      TermBranch(
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, cond, before,
+        ),
+        true_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, true_args, before,
+        ),
+        false_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, false_args, before,
+        ),
+      )
+    TermBranchCmp(
+      lhs,
+      rhs,
+      cond,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) =>
+      TermBranchCmp(
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, lhs, before,
+        ),
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, rhs, before,
+        ),
+        cond,
+        is_64,
+        true_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, true_args, before,
+        ),
+        false_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, false_args, before,
+        ),
+      )
+    TermBranchZero(
+      value,
+      is_nonzero,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) =>
+      TermBranchZero(
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, value, before,
+        ),
+        is_nonzero,
+        is_64,
+        true_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, true_args, before,
+        ),
+        false_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, false_args, before,
+        ),
+      )
+    TermBranchCmpImm(
+      value,
+      imm,
+      cond,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) =>
+      TermBranchCmpImm(
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, value, before,
+        ),
+        imm,
+        cond,
+        is_64,
+        true_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, true_args, before,
+        ),
+        false_target,
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, false_args, before,
+        ),
+      )
+    TermReturn(results) =>
+      TermReturn(
+        rewrite_reg_array(
+          func, allocation, spill_slots, physical_regs, results, before,
+        ),
+      )
+    TermTrap(_) => term
+    TermBrTable(value, targets, default_target) =>
+      TermBrTable(
+        rewrite_spilled_reg(
+          func, allocation, spill_slots, physical_regs, value, before,
+        ),
+        targets,
+        default_target,
+      )
+  }
+}
+
+///|
 fn rewrite_operands_and_spills(
   func : @machv.Function,
   allocation : @regalloc.Allocation,
@@ -372,6 +567,17 @@ fn rewrite_operands_and_spills(
       rewritten.push(inst)
       for spill in after {
         rewritten.push(spill)
+      }
+    }
+    if block.terminator is Some(term) {
+      let before : Array[@machv.Instruction] = []
+      block.terminator = Some(
+        rewrite_terminator(
+          func, allocation, spill_slots, physical_regs, term, before,
+        ),
+      )
+      for reload in before {
+        rewritten.push(reload)
       }
     }
     block.instructions.clear()

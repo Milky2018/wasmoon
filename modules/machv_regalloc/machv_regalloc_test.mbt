@@ -237,6 +237,62 @@ test "projected MachV successors extend live ranges across empty blocks" {
 }
 
 ///|
+test "apply rewrites terminator virtual registers" {
+  let func = @machv.Function::new("term_rewrite")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let def_v0 = func.new_inst(Target("def_v0"))
+  def_v0.add_operand(@machv.Operand::def(Virtual(v0)))
+  entry.append(def_v0)
+  entry.set_terminator(TermReturn([Virtual(v0)]))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  allocate_and_apply(func, [p0]) |> ignore
+  debug_inspect(
+    entry.terminator,
+    content="Some(TermReturn([Physical({ index: 0, class: Int })]))",
+  )
+}
+
+///|
+test "apply reloads spilled terminator operands before terminator" {
+  let func = @machv.Function::new("term_reload")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let v2 = func.new_vreg(Int)
+  let def_v0 = func.new_inst(Target("def_v0"))
+  def_v0.add_operand(@machv.Operand::def(Virtual(v0)))
+  def_v0.add_operand(@machv.Operand::use_reg(Virtual(v0)))
+  entry.append(def_v0)
+  let def_v1 = func.new_inst(Target("def_v1"))
+  def_v1.add_operand(@machv.Operand::def(Virtual(v1)))
+  def_v1.add_operand(@machv.Operand::use_reg(Virtual(v1)))
+  entry.append(def_v1)
+  let def_v2 = func.new_inst(Target("def_v2"))
+  def_v2.add_operand(@machv.Operand::def(Virtual(v2)))
+  def_v2.add_operand(@machv.Operand::use_reg(Virtual(v2)))
+  entry.append(def_v2)
+  entry.set_terminator(TermReturn([Virtual(v0), Virtual(v1), Virtual(v2)]))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let result = allocate_and_apply(func, [p0, p1])
+  inspect(result.allocation.spill_count > 0, content="true")
+  inspect(
+    entry.instructions[entry.instructions.length() - 1].opcode is Load(_),
+    content="true",
+  )
+  let mut virtual_terms = 0
+  if entry.terminator is Some(TermReturn(regs)) {
+    for reg in regs {
+      if reg is Virtual(_) {
+        virtual_terms = virtual_terms + 1
+      }
+    }
+  }
+  inspect(virtual_terms, content="0")
+}
+
+///|
 test "apply inserts reloads and spills for stack allocated operands" {
   let func = @machv.Function::new("reload_spill")
   let entry = func.new_block()
