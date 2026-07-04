@@ -47,248 +47,103 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   let isa = @isa.ISA::current()
   let machine_env = isa.machine_env()
 
-  fn class_bank(cls : @abi.RegClass) -> Int {
+  fn to_core_class(cls : @abi.RegClass) -> @core_regalloc.RegClass {
     match cls {
-      Int => 0
-      Float32 | Float64 | Vector => 1
+      Int => Int
+      Float32 | Float64 => Float
+      Vector => Vector
     }
   }
 
-  let mut has_int = false
-  let mut has_fp = false
-  for mv in moves {
-    if class_bank(mv.class) == 0 {
-      has_int = true
-    } else {
-      has_fp = true
-    }
-  }
-  // Resolve integer and FP/vector move graphs independently.
-  // Mixing classes in one graph can incorrectly couple cycle-breaking through
-  // shared spill slots and pick a temp register in the wrong bank.
-  if has_int && has_fp {
-    let int_moves : Array[RegMove] = []
-    let fp_moves : Array[RegMove] = []
-    for mv in moves {
-      if class_bank(mv.class) == 0 {
-        int_moves.push(mv)
-      } else {
-        fp_moves.push(mv)
-      }
-    }
-    let resolved = resolve_parallel_moves(int_moves)
-    let resolved_fp = resolve_parallel_moves(fp_moves)
-    for mv in resolved_fp {
-      resolved.push(mv)
-    }
-    return resolved
-  }
-  let result : Array[RegMove] = []
-  let pending : Array[RegMove] = []
-  let seen : Set[Int] = Set([])
-  fn same_loc(a : Loc, b : Loc) -> Bool {
-    match (a, b) {
-      (Reg(ra), Reg(rb)) => ra.index == rb.index && ra.class == rb.class
-      (Spill(sa), Spill(sb)) => sa == sb
-      _ => false
-    }
+  fn to_core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+    { id: preg.index, class: to_core_class(preg.class) }
   }
 
-  fn class_key(cls : @abi.RegClass) -> Int {
-    match cls {
-      Int => 0
-      Float32 => 1
-      Float64 => 2
-      Vector => 3
-    }
-  }
-
-  fn loc_exact_key(loc : Loc) -> Int {
+  fn to_core_loc(loc : Loc) -> @core_regalloc.Location {
     match loc {
-      Reg(preg) => 1_000_000 + preg.index * 4 + class_key(preg.class)
-      Spill(slot) => slot
+      Reg(preg) => Reg(to_core_preg(preg))
+      Spill(slot) => Spill(slot)
     }
   }
 
-  fn pick_scratch_loc(class : @abi.RegClass, avoid_loc : Loc?) -> Loc {
-    let mut avoid_idx : Int? = None
-    if avoid_loc is Some(Reg(preg)) {
-      avoid_idx = Some(preg.index)
-    }
-
-    fn pick_two(a : Int, b : Int, avoid_idx : Int?) -> Int {
-      match avoid_idx {
-        Some(v) => if v == a { b } else { a }
-        None => a
-      }
-    }
-
-    let idx = match class {
-      Int => {
-        guard machine_env.scratch_int.length() >= 2 else {
-          abort("resolve_parallel_moves: missing integer scratch registers")
-        }
-        pick_two(
-          machine_env.scratch_int[0],
-          machine_env.scratch_int[1],
-          avoid_idx,
-        )
-      }
-      Float32 | Float64 | Vector => {
-        guard machine_env.scratch_float.length() >= 2 else {
-          abort("resolve_parallel_moves: missing float scratch registers")
-        }
-        pick_two(
-          machine_env.scratch_float[0],
-          machine_env.scratch_float[1],
-          avoid_idx,
-        )
-      }
-    }
-    Reg({ index: idx, class })
-  }
-
-  fn emit_stack_to_stack(mv : RegMove, result : Array[RegMove]) -> Unit {
-    guard mv.from is Spill(from_slot) else { abort("expected stack src") }
-    guard mv.to is Spill(to_slot) else { abort("expected stack dst") }
-    let tmp = pick_scratch_loc(mv.class, None)
-    // Load then store; keep them adjacent so the scratch value is not clobbered.
-    result.push({ from: Spill(from_slot), to: tmp, class: mv.class })
-    result.push({ from: tmp, to: Spill(to_slot), class: mv.class })
-  }
-
-  for mv in moves {
-    // Skip identity moves.
-    if !same_loc(mv.from, mv.to) {
-      let k = (loc_exact_key(mv.from) * 131071 + loc_exact_key(mv.to)) * 8 +
-        class_key(mv.class)
-      if !seen.contains(k) {
-        seen.add(k) |> ignore
-        pending.push(mv)
-      }
-    }
-  }
-  if pending.length() <= 1 {
-    if pending.length() == 1 &&
-      pending[0].from is Spill(_) &&
-      pending[0].to is Spill(_) {
-      // Eliminate stack-to-stack even in the single-move case.
-      let out : Array[RegMove] = []
-      emit_stack_to_stack(pending[0], out)
-      return out
-    }
-    return pending
-  }
-
-  // Float32/Float64 registers alias the same Vn hardware register.
-  // When resolving parallel moves we must treat them as the same location to
-  // avoid clobbering (e.g. D1 <- D0 would overwrite S1).
-  fn reg_kind(preg : @abi.PReg) -> Int {
-    match preg.class {
-      Int => 0
-      Float32 | Float64 | Vector => 1 // Vector uses same Vn registers
+  fn to_core_move(mv : RegMove) -> @core_regalloc.ParallelMove {
+    {
+      from: to_core_loc(mv.from),
+      to: to_core_loc(mv.to),
+      class: to_core_class(mv.class),
     }
   }
 
-  fn loc_key(loc : Loc, cls : @abi.RegClass) -> Int {
-    match loc {
-      Reg(preg) => preg.index * 2 + reg_kind(preg)
-      Spill(slot) => 1_000_000 + slot * 4 + class_key(cls)
-    }
-  }
-
-  fn aliases(
-    a : Loc,
-    a_cls : @abi.RegClass,
-    b : Loc,
-    b_cls : @abi.RegClass,
-  ) -> Bool {
-    loc_key(a, a_cls) == loc_key(b, b_cls)
-  }
-
-  // Build a set of source registers for quick lookup
-  fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
-    let srcs : Set[Int] = Set([])
-    for mv in pending {
-      srcs.add(loc_key(mv.from, mv.class))
-    }
-    srcs
-  }
-
-  fn pick_cycle_scratch_loc(
+  fn from_core_loc(
+    loc : @core_regalloc.Location,
     class : @abi.RegClass,
-    src_set : Set[Int],
-    avoid_a : Loc,
-    avoid_b : Loc,
   ) -> Loc {
-    let candidates = match class {
-      Int => machine_env.scratch_int
-      Float32 | Float64 | Vector => machine_env.scratch_float
+    match loc {
+      Reg(preg) => Reg({ index: preg.id, class })
+      Spill(slot) => Spill(slot)
     }
-    for idx in candidates {
-      let candidate = Loc::Reg({ index: idx, class })
-      let key = loc_key(candidate, class)
-      if src_set.contains(key) {
-        continue
-      }
-      if aliases(candidate, class, avoid_a, class) ||
-        aliases(candidate, class, avoid_b, class) {
-        continue
-      }
-      return candidate
-    }
-    abort("resolve_parallel_moves: no safe scratch register for cycle")
   }
 
-  // Iterate until all moves are resolved
-  while pending.length() > 0 {
-    let src_set = rebuild_src_set(pending)
-
-    // Find a move whose destination is not a source of any other pending move
-    let mut found_idx : Int? = None
-    for i, mv in pending {
-      let dest_key = loc_key(mv.to, mv.class)
-      if !src_set.contains(dest_key) {
-        found_idx = Some(i)
-        break
-      }
+  fn from_core_move(
+    mv : @core_regalloc.ParallelMove,
+    class : @abi.RegClass,
+  ) -> RegMove {
+    {
+      from: from_core_loc(mv.from, class),
+      to: from_core_loc(mv.to, class),
+      class,
     }
-    match found_idx {
-      Some(idx) => {
-        // Safe to emit this move.
-        let mv = pending.remove(idx)
-        if mv.from is Spill(_) && mv.to is Spill(_) {
-          emit_stack_to_stack(mv, result)
-        } else {
-          result.push(mv)
-        }
-      }
-      None => {
-        // All remaining moves form cycles. Break the cycle by saving one
-        // destination register to a reserved scratch register, then continue.
-        let mv = pending.remove(0)
-        // Select a scratch register in the right bank that doesn't alias mv.to
-        // and doesn't clobber any pending source.
-        let temp_loc = pick_cycle_scratch_loc(mv.class, src_set, mv.from, mv.to)
+  }
 
-        // Save the destination's original value: temp <- dst
-        result.push({ from: mv.to, to: temp_loc, class: mv.class })
+  let core_moves : Array[@core_regalloc.ParallelMove] = []
+  for mv in moves {
+    core_moves.push(to_core_move(mv))
+  }
 
-        // Redirect all uses of the saved destination as a source to read from temp.
-        for i in 0..<pending.length() {
-          if aliases(pending[i].from, pending[i].class, mv.to, mv.class) {
-            pending[i] = {
-              from: temp_loc,
-              to: pending[i].to,
-              class: pending[i].class,
-            }
+  fn scratch_int_regs() -> Array[@core_regalloc.PhysicalReg] {
+    machine_env.scratch_int.map(fn(id) { { id, class: Int } })
+  }
+
+  fn scratch_float_regs() -> Array[@core_regalloc.PhysicalReg] {
+    machine_env.scratch_float.map(fn(id) { { id, class: Float } })
+  }
+
+  let resolved = @core_regalloc.resolve_parallel_moves(
+    core_moves,
+    scratch_int_regs(),
+    scratch_float_regs(),
+  )
+  let result : Array[RegMove] = []
+
+  fn fallback_class(class : @core_regalloc.RegClass) -> @abi.RegClass {
+    match class {
+      Int => Int
+      Float => {
+        for old in moves {
+          if old.class is Float32 || old.class is Float64 {
+            return old.class
           }
         }
+        Float64
+      }
+      Vector => Vector
+    }
+  }
 
-        // Re-add the original move; it should now be schedulable.
-        pending.push(mv)
+  fn class_for_resolved_move(
+    mv : @core_regalloc.ParallelMove,
+  ) -> @abi.RegClass {
+    for old in moves {
+      if to_core_loc(old.from) == mv.from && to_core_loc(old.to) == mv.to {
+        return old.class
       }
     }
+    fallback_class(mv.class)
+  }
+
+  for mv in resolved {
+    let class = class_for_resolved_move(mv)
+    result.push(from_core_move(mv, class))
   }
   result
 }

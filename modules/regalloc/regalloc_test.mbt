@@ -182,3 +182,33 @@ test "verify_allocation rejects overlapping physical register assignments" {
     _ => fail("expected overlap")
   }
 }
+
+///|
+test "resolve_parallel_moves breaks register cycles with scratch" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let moves : Array[ParallelMove] = [
+    { from: Reg(r0), to: Reg(r1), class: Int },
+    { from: Reg(r1), to: Reg(r0), class: Int },
+  ]
+  let resolved = resolve_parallel_moves(moves, [r2], [])
+  inspect(resolved.length(), content="3")
+  inspect(resolved[0].from == Reg(r1), content="true")
+  inspect(resolved[0].to == Reg(r2), content="true")
+  inspect(resolved[2].to == Reg(r0), content="true")
+}
+
+///|
+test "resolve_parallel_moves lowers stack to stack through scratch" {
+  let scratch : PhysicalReg = { id: 10, class: Int }
+  let moves : Array[ParallelMove] = [
+    { from: Spill(0), to: Spill(1), class: Int },
+  ]
+  let resolved = resolve_parallel_moves(moves, [scratch], [])
+  inspect(resolved.length(), content="2")
+  inspect(resolved[0].from == Spill(0), content="true")
+  inspect(resolved[0].to == Reg(scratch), content="true")
+  inspect(resolved[1].from == Reg(scratch), content="true")
+  inspect(resolved[1].to == Spill(1), content="true")
+}
