@@ -183,7 +183,7 @@ test "emit X64 conditional branch terminator" {
   let object = try! emit_function_for_target(func, X64)
   debug_inspect(
     object.code,
-    content="[72, 133, 192, 15, 133, 0, 0, 0, 0, 233, 0, 0, 0, 0, 195, 195]",
+    content="[72, 133, 192, 15, 133, 5, 0, 0, 0, 233, 1, 0, 0, 0, 195, 195]",
   )
   inspect(object.relocations.length(), content="2")
   inspect(object.fixups.length(), content="2")
@@ -219,11 +219,11 @@ test "emit AArch64 compare branch terminator" {
       #|  0,
       #|  1,
       #|  235,
-      #|  0,
+      #|  64,
       #|  0,
       #|  0,
       #|  84,
-      #|  0,
+      #|  2,
       #|  0,
       #|  0,
       #|  20,
@@ -319,7 +319,7 @@ test "emit generic relocations and stack maps" {
   let object = try! emit_function(func)
   debug_inspect(
     object.code,
-    content="[0, 0, 0, 148, 0, 0, 0, 20, 192, 3, 95, 214]",
+    content="[0, 0, 0, 148, 1, 0, 0, 20, 192, 3, 95, 214]",
   )
   inspect(object.relocations.length(), content="2")
   inspect(object.fixups.length(), content="1")
