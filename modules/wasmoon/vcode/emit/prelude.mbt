@@ -220,86 +220,34 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
     return
   }
   if @isaregs.current_isa() is AMD64 {
-    let (abs_amount, is_sub) = if amount < 0 {
-      (-amount, true)
-    } else {
-      (amount, false)
-    }
-    let step = 4096
     let scratch = @isaregs.scratch1_index()
-    if is_sub {
-      // Probe only when crossing at least one full page, matching Cranelift's
-      // inline-probestack rule (probe_count = frame_size / guard_size).
-      if abs_amount < step {
-        self.x86_emit_sub_rsp_imm32(abs_amount)
-        return
+    for step in @machv_emit.plan_stack_pointer_adjustment(amount) {
+      if step.amount < 0 {
+        self.x86_emit_sub_rsp_imm32(-step.amount)
+      } else {
+        self.x86_emit_add_rsp_imm32(step.amount)
       }
-      // Probe in 4KB steps to avoid skipping over a stack guard page.
-      let mut remaining = abs_amount
-      while remaining >= step {
-        self.x86_emit_sub_rsp_imm32(step)
-        self.x86_emit_mov_m64_r64(4, 0, scratch)
-        remaining = remaining - step
-      }
-      if remaining > 0 {
-        self.x86_emit_sub_rsp_imm32(remaining)
+      if step.probe_after {
         self.x86_emit_mov_m64_r64(4, 0, scratch)
       }
-      return
-    }
-    // Stack deallocation (or other upward adjustment): no probing needed.
-    let mut remaining = abs_amount
-    while remaining >= step {
-      self.x86_emit_add_rsp_imm32(step)
-      remaining = remaining - step
-    }
-    if remaining > 0 {
-      self.x86_emit_add_rsp_imm32(remaining)
     }
     return
   }
-  let (abs_amount, is_sub) = if amount < 0 {
-    (-amount, true)
-  } else {
-    (amount, false)
-  }
-  let step = 4096
-  if is_sub {
-    // Stack allocation: touch stack pages so a guard page can't be skipped by a
-    // single large SP adjustment (e.g. large frames on the independent WASM stack).
-    //
-    // We probe in 4KB steps only when crossing at least one full page.
-    // This follows Cranelift's `probe_count = frame_size / guard_size` behavior
-    // and avoids an extra store for small stack frames.
-    if abs_amount < step {
-      self.emit_sub_imm(31, 31, abs_amount)
-      return
-    }
-    // abs_amount >= 4096
-    let mut remaining = abs_amount
-    while remaining >= step {
-      self.emit_sub_imm_shifted12(31, 31, 1)
-      self.emit_str_imm(31, 31, 0)
-      remaining = remaining - step
-    }
-    if remaining > 0 {
-      // remaining < step, so it fits in imm12
-      self.emit_sub_imm(31, 31, remaining)
-      self.emit_str_imm(31, 31, 0)
-    }
-    return
-  }
-  // Stack deallocation (or other upward adjustment): no probing needed.
-  if abs_amount <= 4095 {
-    self.emit_add_imm(31, 31, abs_amount)
-  } else {
-    let mut remaining = abs_amount
-    while remaining >= step {
+  for step in @machv_emit.plan_stack_pointer_adjustment(amount) {
+    if step.amount < 0 {
+      let sub_amount = -step.amount
+      if sub_amount == 4096 {
+        self.emit_sub_imm_shifted12(31, 31, 1)
+      } else {
+        self.emit_sub_imm(31, 31, sub_amount)
+      }
+    } else if step.amount == 4096 {
       self.emit_add_imm_shifted12(31, 31, 1)
-      remaining = remaining - step
+    } else {
+      self.emit_add_imm(31, 31, step.amount)
     }
-    if remaining > 0 {
-      self.emit_add_imm(31, 31, remaining)
+    if step.probe_after {
+      self.emit_str_imm(31, 31, 0)
     }
   }
 }

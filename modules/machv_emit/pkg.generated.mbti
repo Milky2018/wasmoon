@@ -9,6 +9,8 @@ import {
 // Values
 pub fn emit_function_for_target(@machv.Function, EmitTarget) -> CodeObject raise EmitError
 
+pub fn plan_stack_pointer_adjustment(Int, page_size? : Int) -> Array[StackAdjustStep]
+
 // Errors
 pub suberror EmitError {
   UnsupportedOpcode(opcode~ : String)
@@ -54,6 +56,11 @@ pub(all) struct Relocation {
 pub(all) enum RelocationKind {
   ExternalSymbol(String)
   BlockTarget(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct StackAdjustStep {
+  amount : Int
+  probe_after : Bool
 } derive(Eq, @debug.Debug)
 
 pub(all) struct StackFrameLayout {

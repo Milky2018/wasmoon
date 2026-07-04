@@ -1,4 +1,31 @@
 ///|
+test "plan stack pointer adjustments with guard-page probes" {
+  debug_inspect(plan_stack_pointer_adjustment(0), content="[]")
+  debug_inspect(
+    plan_stack_pointer_adjustment(-4095),
+    content="[{ amount: -4095, probe_after: false }]",
+  )
+  debug_inspect(
+    plan_stack_pointer_adjustment(-5000),
+    content=(
+      #|[
+      #|  { amount: -4096, probe_after: true },
+      #|  { amount: -904, probe_after: true },
+      #|]
+    ),
+  )
+  debug_inspect(
+    plan_stack_pointer_adjustment(5000),
+    content=(
+      #|[
+      #|  { amount: 4096, probe_after: false },
+      #|  { amount: 904, probe_after: false },
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit AArch64 move, add, and return bytes" {
   let func = @machv.Function::new("entry")
   let entry = func.new_block()
