@@ -55,6 +55,21 @@ fn push_unary_opcode(
 }
 
 ///|
+fn push_unary_opcode_as(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  ty : @milkir.Type,
+  opcode : @milkir.Opcode,
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  guard emit_op(builder, ty, opcode, [value]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
 fn push_binary_opcode(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -319,12 +334,132 @@ fn try_lower_linear_function(
         if !push_unary_opcode(builder, stack, Fsqrt) {
           return None
         }
+      F32Ceil | F64Ceil =>
+        if !push_unary_opcode(builder, stack, Fceil) {
+          return None
+        }
+      F32Floor | F64Floor =>
+        if !push_unary_opcode(builder, stack, Ffloor) {
+          return None
+        }
+      F32Trunc | F64Trunc =>
+        if !push_unary_opcode(builder, stack, Ftrunc) {
+          return None
+        }
+      F32Nearest | F64Nearest =>
+        if !push_unary_opcode(builder, stack, Fnearest) {
+          return None
+        }
       F32Eq | F64Eq => if !push_float_cmp(builder, stack, Eq) { return None }
       F32Ne | F64Ne => if !push_float_cmp(builder, stack, Ne) { return None }
       F32Lt | F64Lt => if !push_float_cmp(builder, stack, Lt) { return None }
       F32Gt | F64Gt => if !push_float_cmp(builder, stack, Gt) { return None }
       F32Le | F64Le => if !push_float_cmp(builder, stack, Le) { return None }
       F32Ge | F64Ge => if !push_float_cmp(builder, stack, Ge) { return None }
+      I32WrapI64 =>
+        if !push_unary_opcode_as(builder, stack, I32, Ireduce) {
+          return None
+        }
+      I64ExtendI32S =>
+        if !push_unary_opcode_as(builder, stack, I64, Sextend) {
+          return None
+        }
+      I64ExtendI32U =>
+        if !push_unary_opcode_as(builder, stack, I64, Uextend) {
+          return None
+        }
+      I32Extend8S =>
+        if !push_unary_opcode_as(builder, stack, I32, Sextend8) {
+          return None
+        }
+      I32Extend16S =>
+        if !push_unary_opcode_as(builder, stack, I32, Sextend16) {
+          return None
+        }
+      I64Extend8S =>
+        if !push_unary_opcode_as(builder, stack, I64, Sextend8) {
+          return None
+        }
+      I64Extend16S =>
+        if !push_unary_opcode_as(builder, stack, I64, Sextend16) {
+          return None
+        }
+      I64Extend32S =>
+        if !push_unary_opcode_as(builder, stack, I64, Sextend32) {
+          return None
+        }
+      F32DemoteF64 =>
+        if !push_unary_opcode_as(builder, stack, F32, Fdemote) {
+          return None
+        }
+      F64PromoteF32 =>
+        if !push_unary_opcode_as(builder, stack, F64, Fpromote) {
+          return None
+        }
+      I32TruncF32S | I32TruncF64S =>
+        if !push_unary_opcode_as(builder, stack, I32, FcvtToSint) {
+          return None
+        }
+      I32TruncF32U | I32TruncF64U =>
+        if !push_unary_opcode_as(builder, stack, I32, FcvtToUint) {
+          return None
+        }
+      I64TruncF32S | I64TruncF64S =>
+        if !push_unary_opcode_as(builder, stack, I64, FcvtToSint) {
+          return None
+        }
+      I64TruncF32U | I64TruncF64U =>
+        if !push_unary_opcode_as(builder, stack, I64, FcvtToUint) {
+          return None
+        }
+      F32ConvertI32S | F32ConvertI64S =>
+        if !push_unary_opcode_as(builder, stack, F32, SintToFcvt) {
+          return None
+        }
+      F32ConvertI32U | F32ConvertI64U =>
+        if !push_unary_opcode_as(builder, stack, F32, UintToFcvt) {
+          return None
+        }
+      F64ConvertI32S | F64ConvertI64S =>
+        if !push_unary_opcode_as(builder, stack, F64, SintToFcvt) {
+          return None
+        }
+      F64ConvertI32U | F64ConvertI64U =>
+        if !push_unary_opcode_as(builder, stack, F64, UintToFcvt) {
+          return None
+        }
+      I32TruncSatF32S | I32TruncSatF64S =>
+        if !push_unary_opcode_as(builder, stack, I32, FcvtToSintSat) {
+          return None
+        }
+      I32TruncSatF32U | I32TruncSatF64U =>
+        if !push_unary_opcode_as(builder, stack, I32, FcvtToUintSat) {
+          return None
+        }
+      I64TruncSatF32S | I64TruncSatF64S =>
+        if !push_unary_opcode_as(builder, stack, I64, FcvtToSintSat) {
+          return None
+        }
+      I64TruncSatF32U | I64TruncSatF64U =>
+        if !push_unary_opcode_as(builder, stack, I64, FcvtToUintSat) {
+          return None
+        }
+      I32ReinterpretF32 =>
+        if !push_unary_opcode_as(builder, stack, I32, Bitcast) {
+          return None
+        }
+      I64ReinterpretF64 =>
+        if !push_unary_opcode_as(builder, stack, I64, Bitcast) {
+          return None
+        }
+      F32ReinterpretI32 =>
+        if !push_unary_opcode_as(builder, stack, F32, Bitcast) {
+          return None
+        }
+      F64ReinterpretI64 =>
+        if !push_unary_opcode_as(builder, stack, F64, Bitcast) {
+          return None
+        }
       Select | SelectTyped(_) => if !push_select(builder, stack) { return None }
       Drop => {
         guard pop_value(stack) is Some(_) else { return None }

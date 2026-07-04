@@ -134,7 +134,7 @@ test "lower linear float compare and unary ops natively" {
   let mod_ = @types.Module::simple(
     [F64],
     [I32],
-    [LocalGet(0), F64Neg, F64Abs, F64Const(1.0), F64Ge],
+    [LocalGet(0), F64Neg, F64Abs, F64Ceil, F64Const(1.0), F64Ge],
     "float_cmp",
   )
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
@@ -142,7 +142,93 @@ test "lower linear float compare and unary ops natively" {
   let text = func.print()
   inspect(text.contains("fneg"), content="true")
   inspect(text.contains("fabs"), content="true")
+  inspect(text.contains("fceil"), content="true")
   inspect(text.contains("fcmp.ge"), content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear integer extensions and reduction natively" {
+  let mod_ = @types.Module::simple(
+    [I64],
+    [I32],
+    [LocalGet(0), I32WrapI64, I32Extend8S],
+    "extend_i32",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("ireduce"), content="true")
+  inspect(text.contains("sextend8"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear i64 extensions natively" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I64],
+    [LocalGet(0), I64ExtendI32U, I64Extend32S],
+    "extend_i64",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("uextend"), content="true")
+  inspect(text.contains("sextend32"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear float promotion and demotion natively" {
+  let mod_ = @types.Module::simple(
+    [F64],
+    [F32],
+    [LocalGet(0), F32DemoteF64, F64PromoteF32, F32DemoteF64],
+    "float_resize",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("fdemote"), content="true")
+  inspect(text.contains("fpromote"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear numeric conversions natively" {
+  let mod_ = @types.Module::simple(
+    [F64, I64],
+    [F32],
+    [LocalGet(0), I32TruncF64S, Drop, LocalGet(1), F32ConvertI64U],
+    "numeric_convert",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("fcvt_to_sint"), content="true")
+  inspect(text.contains("uint_to_fcvt"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear saturating conversion and reinterpret natively" {
+  let mod_ = @types.Module::simple(
+    [F32, I64],
+    [F64],
+    [LocalGet(0), I32TruncSatF32U, Drop, LocalGet(1), F64ReinterpretI64],
+    "sat_bitcast",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("fcvt_to_uint_sat"), content="true")
+  inspect(text.contains("bitcast"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
 
