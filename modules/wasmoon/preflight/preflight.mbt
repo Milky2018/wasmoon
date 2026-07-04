@@ -202,7 +202,8 @@ pub fn validate_jit(
         @milkir.OptLevel::from_int(normalized_opt_level),
       )
       |> ignore
-      @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) |> ignore
+      @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, X64)
+      |> ignore
       report.checked_funcs = report.checked_funcs + 1
     } catch {
       err =>
