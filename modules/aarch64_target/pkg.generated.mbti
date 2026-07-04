@@ -1,11 +1,44 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/aarch64_target"
 
+import {
+  "Milky2018/machv",
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn abi_policy() -> AbiPolicy
+
+pub fn allocatable_regs() -> Array[@machv.PReg]
+
+pub fn lower_function(@milkir.Function) -> @machv.Function
+
+pub fn target() -> Target
 
 // Errors
 
 // Types and methods
+pub(all) struct AbiPolicy {
+  pointer_size : Int
+  stack_alignment : Int
+  int_argument_regs : Array[@machv.PReg]
+  float_argument_regs : Array[@machv.PReg]
+  int_return_regs : Array[@machv.PReg]
+  float_return_regs : Array[@machv.PReg]
+  caller_saved_regs : Array[@machv.PReg]
+  callee_saved_regs : Array[@machv.PReg]
+} derive(@debug.Debug)
+
+pub(all) enum CallingConvention {
+  Aapcs64
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Target {
+  triple : String
+  calling_convention : CallingConvention
+  abi : AbiPolicy
+} derive(@debug.Debug)
 
 // Type aliases
 
