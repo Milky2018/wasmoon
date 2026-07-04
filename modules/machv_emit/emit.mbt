@@ -1423,6 +1423,7 @@ fn write_aarch64_inst_bytes(
           "ushr"
         },
       )
+    IntRotr => emit_aarch64_int_shift(object, inst, 11, "rotr")
     FloatAdd => emit_aarch64_float_binop3(object, inst, 0x2028, 0x6028, "fadd")
     FloatSub => emit_aarch64_float_binop3(object, inst, 0x2038, 0x6038, "fsub")
     FloatMul => emit_aarch64_float_binop3(object, inst, 0x2008, 0x6008, "fmul")

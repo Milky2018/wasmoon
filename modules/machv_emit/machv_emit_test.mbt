@@ -671,6 +671,20 @@ test "emit AArch64 integer shift bytes" {
 }
 
 ///|
+test "emit AArch64 integer rotate-right bytes" {
+  let func = @machv.Function::new("int_rotr")
+  let entry = func.new_block()
+  let rotr = func.new_inst(IntRotr)
+  rotr.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  rotr.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  rotr.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(rotr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(object.code, content="[32, 44, 194, 154, 192, 3, 95, 214]")
+}
+
+///|
 test "emit AArch64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
