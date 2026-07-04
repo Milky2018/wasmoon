@@ -52,7 +52,7 @@ test "x64 lowers MilkIR arithmetic into MachV" {
   entry.set_terminator(Return([sum]))
   let lowered = lower_function(func)
   inspect(lowered.blocks.length(), content="1")
-  inspect(lowered.blocks[0].instructions.length(), content="1")
+  inspect(lowered.blocks[0].instructions.length(), content="2")
   inspect(lowered.blocks[0].instructions[0].opcode == IntAdd, content="true")
   inspect(lowered.blocks[0].terminator is Some(TermReturn(_)), content="true")
   inspect(lowered.verify(), content="()")
@@ -154,7 +154,7 @@ test "x64 lowers floating point select through integer MachV select" {
   )
   entry.set_terminator(Return([output]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Bitcast, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Bitcast, content="true")
   let select = lowered.blocks[0].instructions[2]
@@ -180,7 +180,7 @@ test "x64 legalizes integer division fixed-register operands" {
   entry.append_inst(func.new_inst(Sdiv, [lhs, rhs], [quotient]))
   entry.set_terminator(Return([quotient]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
   let div = lowered.blocks[0].instructions[2]
@@ -217,7 +217,7 @@ test "x64 legalizes integer remainder fixed-register operands" {
   entry.append_inst(func.new_inst(Srem, [lhs, rhs], [rem]))
   entry.set_terminator(Return([rem]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
   let rem_inst = lowered.blocks[0].instructions[2]
@@ -254,7 +254,7 @@ test "x64 legalizes multiply-high fixed-register operands" {
   entry.append_inst(func.new_inst(Umulh, [lhs, rhs], [high]))
   entry.set_terminator(Return([high]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
   let mul = lowered.blocks[0].instructions[2]
@@ -291,7 +291,7 @@ test "x64 legalizes shift count into rcx" {
   entry.append_inst(func.new_inst(Ishl, [value, count], [shifted]))
   entry.set_terminator(Return([shifted]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
   let shift = lowered.blocks[0].instructions[2]
@@ -316,7 +316,7 @@ test "x64 legalizes rotate count into rcx" {
   entry.append_inst(func.new_inst(Rotl, [value, count], [rotated]))
   entry.set_terminator(Return([rotated]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
   let rotate = lowered.blocks[0].instructions[2]
@@ -458,7 +458,7 @@ test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   let lowered = lower_function(func)
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
-  inspect(call.constraints.length(), content="5")
+  inspect(call.constraints.length(), content="4")
   inspect(
     call.constraints[0].allowed_regs[0] == { index: 11, class: Int },
     content="true",
@@ -473,10 +473,6 @@ test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   )
   inspect(
     call.constraints[3].allowed_regs[0] == { index: 0, class: Float64 },
-    content="true",
-  )
-  inspect(
-    call.constraints[4].allowed_regs[0] == { index: 0, class: Int },
     content="true",
   )
   inspect(call.clobbers.length() > 0, content="true")

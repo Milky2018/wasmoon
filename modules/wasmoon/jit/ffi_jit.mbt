@@ -112,9 +112,9 @@ pub type MemoryInfo = @wasmoon_jit.MemoryInfo
 ///|
 /// JIT execution context (JIT ABI) - GC managed
 /// TODO(ISS-022): move entry trampoline generation to
-/// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
-/// MilkIR/MachV path materializes function-entry ABI parameter registers, then
-/// move this context into `wasmoon_jit`.
+/// `wasmoon_jit.plan_entry_trampoline_for_target` after `machv_emit` emits
+/// prologue/epilogue callee-saved preservation for reusable MachV functions,
+/// then move this context into `wasmoon_jit`.
 /// Uses Standard on-demand loading from vmctx:
 /// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
 /// +24: func_table, +32: table0_base.
@@ -897,9 +897,9 @@ fn JITContext::call_multi_return(
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.ptr()
     None => {
-      // TODO(ISS-022): replace this legacy VCode trampoline once the reusable
-      // MilkIR/MachV path materializes the C-entry ABI for vmctx, values_vec,
-      // and func_ptr before lowering the host-to-Wasm call.
+      // TODO(ISS-022): replace this legacy VCode trampoline once reusable
+      // MachV emission preserves callee-saved registers around C-callable
+      // entry functions and MilkIR has V128 lane extract/insert operations.
       let param_codes_arr : Array[Int] = []
       for i in 0..<num_params {
         param_codes_arr.push(param_type_codes[i])

@@ -131,6 +131,8 @@ pub fn allocatable_regs() -> Array[@machv.PReg] {
   for r in env.preferred_int {
     regs.push(r)
   }
+  regs.push(int_reg(int_reg_index(Scratch1)))
+  regs.push(int_reg(int_reg_index(Scratch2)))
   for r in env.nonpreferred_int {
     regs.push(r)
   }
@@ -187,6 +189,151 @@ fn add_uses(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
 fn add_defs(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
   for value in values {
     inst.add_operand(@machv.Operand::def(reg_for_value(value)))
+  }
+}
+
+///|
+fn add_return_moves(
+  out : @machv.Function,
+  block : @machv.Block,
+  values : Array[@milkir.Value],
+) -> Unit {
+  let abi = abi_policy()
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for value in values {
+    let preg : @machv.PReg? = match class_for_type(value.ty) {
+      Int =>
+        if int_result_idx < abi.int_return_regs.length() {
+          let out = Some(abi.int_return_regs[int_result_idx])
+          int_result_idx = int_result_idx + 1
+          out
+        } else {
+          // TODO(aarch64_target): lower overflow return values through an
+          // explicit multi-value return area once MachV models it.
+          None
+        }
+      Float32 | Float64 | Vector =>
+        if float_result_idx < abi.float_return_regs.length() {
+          let class = class_for_type(value.ty)
+          let out = Some(
+            preg_with_class(abi.float_return_regs[float_result_idx], class),
+          )
+          float_result_idx = float_result_idx + 1
+          out
+        } else {
+          // TODO(aarch64_target): lower overflow FP/vector return values
+          // through an explicit multi-value return area once MachV models it.
+          None
+        }
+    }
+    if preg is Some(dst) {
+      let move_inst = out.new_inst(Move)
+      move_inst.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
+      move_inst.add_operand(@machv.Operand::def(Physical(dst)))
+      block.append(move_inst)
+    }
+  }
+}
+
+///|
+fn add_wasm_call_result_moves(
+  out : @machv.Function,
+  block : @machv.Block,
+  values : Array[@milkir.Value],
+) -> Unit {
+  let ret_gprs = wasm_ret_gprs()
+  let ret_fprs = wasm_ret_fprs()
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for value in values {
+    let preg : @machv.PReg? = match class_for_type(value.ty) {
+      Int =>
+        if int_result_idx < ret_gprs.length() {
+          let out = Some(ret_gprs[int_result_idx])
+          int_result_idx = int_result_idx + 1
+          out
+        } else {
+          // TODO(aarch64_target): lower overflow Wasm call results through the
+          // extra-results pointer once MachV models multi-value return areas.
+          None
+        }
+      Float32 | Float64 | Vector =>
+        if float_result_idx < ret_fprs.length() {
+          let class = class_for_type(value.ty)
+          let out = Some(preg_with_class(ret_fprs[float_result_idx], class))
+          float_result_idx = float_result_idx + 1
+          out
+        } else {
+          // TODO(aarch64_target): lower overflow Wasm FP/vector call results
+          // through the extra-results pointer once MachV models it.
+          None
+        }
+    }
+    if preg is Some(src) {
+      let move_inst = out.new_inst(Move)
+      move_inst.add_operand(@machv.Operand::use_reg(Physical(src)))
+      move_inst.add_operand(@machv.Operand::def(reg_for_value(value)))
+      block.append(move_inst)
+    }
+  }
+}
+
+///|
+fn signature_param_preg(
+  ty : @milkir.Type,
+  int_arg_idx : Int,
+  float_arg_idx : Int,
+) -> (@machv.PReg?, Int, Int) {
+  let abi = abi_policy()
+  match class_for_type(ty) {
+    Int =>
+      if int_arg_idx < abi.int_argument_regs.length() {
+        (
+          Some(abi.int_argument_regs[int_arg_idx]),
+          int_arg_idx + 1,
+          float_arg_idx,
+        )
+      } else {
+        // TODO(aarch64_target): materialize stack-passed entry parameters once
+        // MachV carries function-entry stack argument slots.
+        (None, int_arg_idx, float_arg_idx)
+      }
+    Float32 | Float64 | Vector =>
+      if float_arg_idx < abi.float_argument_regs.length() {
+        let class = class_for_type(ty)
+        (
+          Some(preg_with_class(abi.float_argument_regs[float_arg_idx], class)),
+          int_arg_idx,
+          float_arg_idx + 1,
+        )
+      } else {
+        // TODO(aarch64_target): materialize stack-passed FP/vector entry
+        // parameters once MachV carries function-entry stack argument slots.
+        (None, int_arg_idx, float_arg_idx)
+      }
+  }
+}
+
+///|
+fn add_function_signature(
+  func : @milkir.Function,
+  out : @machv.Function,
+) -> Unit {
+  let mut int_arg_idx = 0
+  let mut float_arg_idx = 0
+  for i, ty in func.signature.params {
+    let vreg : @machv.VReg = { id: i, class: class_for_type(ty) }
+    out.push_param(vreg)
+    let (preg, next_int, next_float) = signature_param_preg(
+      ty, int_arg_idx, float_arg_idx,
+    )
+    out.add_param_preg(preg)
+    int_arg_idx = next_int
+    float_arg_idx = next_float
+  }
+  for result_ty in func.signature.results {
+    out.add_result(class_for_type(result_ty))
   }
 }
 
@@ -273,7 +420,7 @@ fn add_call_abi_constraints(
 fn add_callptr_abi_constraints(
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
-  results : Array[@milkir.Value],
+  _results : Array[@milkir.Value],
 ) -> Unit {
   guard args.length() >= 2 else { return }
   add_fixed_constraint(inst, 0, int_reg(int_reg_index(Scratch2)))
@@ -299,30 +446,6 @@ fn add_callptr_abi_constraints(
             preg_with_class(user_arg_fprs[float_arg_idx], class),
           )
           float_arg_idx = float_arg_idx + 1
-        }
-    }
-  }
-  let ret_gprs = wasm_ret_gprs()
-  let ret_fprs = wasm_ret_fprs()
-  let mut int_result_idx = 0
-  let mut float_result_idx = 0
-  for result_index, result in results {
-    let operand_index = args.length() + result_index
-    match class_for_type(result.ty) {
-      Int =>
-        if int_result_idx < ret_gprs.length() {
-          add_fixed_constraint(inst, operand_index, ret_gprs[int_result_idx])
-          int_result_idx = int_result_idx + 1
-        }
-      Float32 | Float64 | Vector =>
-        if float_result_idx < ret_fprs.length() {
-          let class = class_for_type(result.ty)
-          add_fixed_constraint(
-            inst,
-            operand_index,
-            preg_with_class(ret_fprs[float_result_idx], class),
-          )
-          float_result_idx = float_result_idx + 1
         }
     }
   }
@@ -797,6 +920,14 @@ fn lower_inst(
       return
     }
     Select => if lower_float_select(out, block, inst) { return }
+    CallPtr(_, _) => {
+      let lowered = out.new_inst(opcode_for(inst.opcode))
+      add_uses(lowered, inst.args)
+      add_callptr_abi_constraints(lowered, inst.args, inst.results)
+      block.append(lowered)
+      add_wasm_call_result_moves(out, block, inst.results)
+      return
+    }
     _ => ()
   }
   let lowered = match inst.opcode {
@@ -868,11 +999,15 @@ fn lower_inst(
 
 ///|
 fn lower_terminator(
+  out : @machv.Function,
   block : @machv.Block,
   terminator : @milkir.Terminator,
 ) -> Unit {
   match terminator {
-    Return(values) => block.set_terminator(TermReturn(regs_for_values(values)))
+    Return(values) => {
+      add_return_moves(out, block, values)
+      block.set_terminator(TermReturn([]))
+    }
     Jump(target, values) =>
       block.set_terminator(TermJump(target, regs_for_values(values)))
     Branch(cond, true_target, true_args, false_target, false_args) =>
@@ -921,6 +1056,7 @@ fn lower_terminator(
 pub fn lower_function(func : @milkir.Function) -> @machv.Function {
   let out = @machv.Function::new(func.name)
   out.next_vreg_id = func.next_value_id
+  add_function_signature(func, out)
   for slot in func.stack_slots {
     out.new_stack_slot(slot.size, slot.align) |> ignore
   }
@@ -933,7 +1069,7 @@ pub fn lower_function(func : @milkir.Function) -> @machv.Function {
       lower_inst(func, out, block, inst)
     }
     if milk_block.terminator is Some(terminator) {
-      lower_terminator(block, terminator)
+      lower_terminator(out, block, terminator)
     }
   }
   out

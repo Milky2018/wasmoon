@@ -34,7 +34,7 @@ test "AArch64 lowers MilkIR arithmetic into MachV" {
   entry.set_terminator(Return([sum]))
   let lowered = lower_function(func)
   inspect(lowered.blocks.length(), content="1")
-  inspect(lowered.blocks[0].instructions.length(), content="1")
+  inspect(lowered.blocks[0].instructions.length(), content="2")
   inspect(lowered.blocks[0].instructions[0].opcode == IntAdd, content="true")
   inspect(lowered.blocks[0].terminator is Some(TermReturn(_)), content="true")
   inspect(lowered.verify(), content="()")
@@ -91,7 +91,7 @@ test "AArch64 lowers integer remainder to generic arithmetic sequence" {
   entry.append_inst(func.new_inst(Urem, [lhs, rhs], [rem]))
   entry.set_terminator(Return([rem]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="3")
+  inspect(lowered.blocks[0].instructions.length(), content="4")
   inspect(
     lowered.blocks[0].instructions[0].opcode == IntDiv(false),
     content="true",
@@ -157,7 +157,7 @@ test "AArch64 lowers floating point select through integer MachV select" {
   )
   entry.set_terminator(Return([output]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions.length(), content="5")
   inspect(lowered.blocks[0].instructions[0].opcode == Bitcast, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Bitcast, content="true")
   let select = lowered.blocks[0].instructions[2]
@@ -205,7 +205,7 @@ test "AArch64 lowers rotate-left through explicit rotate-right count transform" 
   entry.append_inst(func.new_inst(Rotl, [value, count], [rotated]))
   entry.set_terminator(Return([rotated]))
   let lowered = lower_function(func)
-  inspect(lowered.blocks[0].instructions.length(), content="3")
+  inspect(lowered.blocks[0].instructions.length(), content="4")
   inspect(
     lowered.blocks[0].instructions[0].opcode == IntConst(0L),
     content="true",
@@ -320,7 +320,7 @@ test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   let lowered = lower_function(func)
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
-  inspect(call.constraints.length(), content="5")
+  inspect(call.constraints.length(), content="4")
   inspect(
     call.constraints[0].allowed_regs[0] == { index: 17, class: Int },
     content="true",
@@ -335,10 +335,6 @@ test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   )
   inspect(
     call.constraints[3].allowed_regs[0] == { index: 0, class: Float64 },
-    content="true",
-  )
-  inspect(
-    call.constraints[4].allowed_regs[0] == { index: 0, class: Int },
     content="true",
   )
   inspect(call.clobbers.length() > 0, content="true")

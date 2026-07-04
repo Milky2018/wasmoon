@@ -98,6 +98,20 @@ fn block_params_to_regalloc(block : @machv.Block) -> @regalloc.Instruction? {
 }
 
 ///|
+fn function_params_to_regalloc(
+  func : @machv.Function,
+) -> @regalloc.Instruction? {
+  if func.params.length() == 0 {
+    return None
+  }
+  let out = @regalloc.Instruction::new(-20_000)
+  for param in func.params {
+    out.add_operand(@regalloc.Operand::def(vreg_to_regalloc(param)))
+  }
+  Some(out)
+}
+
+///|
 fn add_terminator_use(out : @regalloc.Instruction, reg : @machv.Reg) -> Unit {
   if reg is Virtual(vreg) {
     out.add_operand(@regalloc.Operand::use_reg(vreg_to_regalloc(vreg)))
@@ -159,6 +173,9 @@ pub fn project_function(
   let program = @regalloc.Program::new(regs)
   for block in func.blocks {
     let out_block = @regalloc.Block::new(block.id)
+    if block.id == 0 && function_params_to_regalloc(func) is Some(param_defs) {
+      out_block.append(param_defs)
+    }
     if block_params_to_regalloc(block) is Some(param_defs) {
       out_block.append(param_defs)
     }
@@ -1021,6 +1038,84 @@ fn rewrite_operands_and_spills(
 }
 
 ///|
+fn materialize_entry_param_transfers(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+) -> Unit raise @regalloc.VerifyError {
+  if func.blocks.length() == 0 || func.params.length() == 0 {
+    return
+  }
+  let entry = func.blocks[0]
+  let int_moves : Array[@regalloc.ParallelMove] = []
+  let f32_moves : Array[@regalloc.ParallelMove] = []
+  let f64_moves : Array[@regalloc.ParallelMove] = []
+  let vector_moves : Array[@regalloc.ParallelMove] = []
+  for i, param in func.params {
+    if i >= func.param_pregs.length() {
+      continue
+    }
+    guard func.param_pregs[i] is Some(src_preg) else {
+      // TODO(machv_regalloc): materialize stack-passed function-entry
+      // parameters once MachV target lowering records incoming stack slots.
+      continue
+    }
+    guard allocation.location_of(vreg_to_regalloc(param)) is Some(to) else {
+      continue
+    }
+    let transfer : @regalloc.ParallelMove = {
+      from: Reg(preg_to_regalloc(src_preg)),
+      to,
+      class: class_to_regalloc(param.class),
+    }
+    match param.class {
+      Int => int_moves.push(transfer)
+      Float32 => f32_moves.push(transfer)
+      Float64 => f64_moves.push(transfer)
+      Vector => vector_moves.push(transfer)
+    }
+  }
+  let resolved : Array[@machv.Instruction] = []
+  resolve_edge_moves(func, spill_slots, physical_regs, Int, int_moves, resolved)
+  resolve_edge_moves(
+    func,
+    spill_slots,
+    physical_regs,
+    Float32,
+    f32_moves,
+    resolved,
+  )
+  resolve_edge_moves(
+    func,
+    spill_slots,
+    physical_regs,
+    Float64,
+    f64_moves,
+    resolved,
+  )
+  resolve_edge_moves(
+    func,
+    spill_slots,
+    physical_regs,
+    Vector,
+    vector_moves,
+    resolved,
+  )
+  if resolved.length() == 0 {
+    return
+  }
+  let old = entry.instructions.copy()
+  entry.instructions.clear()
+  for inst in resolved {
+    entry.instructions.push(inst)
+  }
+  for inst in old {
+    entry.instructions.push(inst)
+  }
+}
+
+///|
 pub fn allocate_and_apply(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
@@ -1028,6 +1123,9 @@ pub fn allocate_and_apply(
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
+  materialize_entry_param_transfers(
+    func, allocation, spill_slots, physical_regs,
+  )
   materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
   { allocation, spill_slots }
 }

@@ -92,8 +92,33 @@ test "plan MilkIR through reusable JIT pipeline" {
   }
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  debug_inspect(plan.object.code, content="[72, 137, 240, 72, 1, 248, 195]")
-  inspect(plan.object.debug_entries.length(), content="2")
+  debug_inspect(
+    plan.object.code,
+    content=(
+      #|[
+      #|  72,
+      #|  137,
+      #|  240,
+      #|  72,
+      #|  137,
+      #|  254,
+      #|  72,
+      #|  137,
+      #|  199,
+      #|  72,
+      #|  137,
+      #|  240,
+      #|  72,
+      #|  1,
+      #|  248,
+      #|  72,
+      #|  137,
+      #|  192,
+      #|  195,
+      #|]
+    ),
+  )
+  inspect(plan.object.debug_entries.length(), content="6")
 }
 
 ///|
@@ -146,8 +171,33 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
   }
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="callptr64")
-  debug_inspect(plan.object.code, content="[73, 255, 211, 195]")
-  inspect(plan.object.debug_entries.length(), content="2")
+  debug_inspect(
+    plan.object.code,
+    content=(
+      #|[
+      #|  73,
+      #|  137,
+      #|  251,
+      #|  72,
+      #|  137,
+      #|  247,
+      #|  72,
+      #|  137,
+      #|  214,
+      #|  73,
+      #|  255,
+      #|  211,
+      #|  72,
+      #|  137,
+      #|  198,
+      #|  72,
+      #|  137,
+      #|  240,
+      #|  195,
+      #|]
+    ),
+  )
+  inspect(plan.object.debug_entries.length(), content="7")
 }
 
 ///|
@@ -169,6 +219,18 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   inspect(restored.functions[0].func_idx, content="11")
   inspect(restored.functions[0].name, content="entry_trampoline")
   inspect(restored.functions[0].code.length() > 0, content="true")
+  let aarch64_plan = plan_entry_trampoline_for_target(params, results, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(aarch64_plan.object.code.length() > 0, content="true")
+  inspect(
+    aarch64_plan.object.code[aarch64_plan.object.code.length() - 4],
+    content="192",
+  )
+  inspect(
+    aarch64_plan.object.code[aarch64_plan.object.code.length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -198,9 +260,9 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
   inspect(plan.entry_symbol, content="fadd64")
   debug_inspect(
     plan.object.code,
-    content="[242, 15, 16, 208, 242, 15, 88, 209, 195]",
+    content="[242, 15, 16, 208, 242, 15, 88, 209, 242, 15, 16, 194, 195]",
   )
-  inspect(plan.object.debug_entries.length(), content="2")
+  inspect(plan.object.debug_entries.length(), content="3")
 }
 
 ///|
@@ -1311,7 +1373,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   inspect(artifact.functions.length(), content="1")
   inspect(artifact.functions[0].function_index, content="3")
   inspect(artifact.code.length() > 0, content="true")
-  inspect(artifact.debug_entries.length(), content="2")
+  inspect(artifact.debug_entries.length(), content="6")
   let restored = try! @cwasm.deserialize(artifact.serialize())
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="3")
