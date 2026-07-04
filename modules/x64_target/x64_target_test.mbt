@@ -88,6 +88,43 @@ test "x64 legalizes integer division fixed-register operands" {
 }
 
 ///|
+test "x64 legalizes integer remainder fixed-register operands" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("srem64", signature)
+  let lhs = func.new_value(I64)
+  let rhs = func.new_value(I64)
+  let rem = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Srem, [lhs, rhs], [rem]))
+  entry.set_terminator(Return([rem]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
+  let rem_inst = lowered.blocks[0].instructions[2]
+  inspect(rem_inst.opcode == IntRem(true), content="true")
+  inspect(rem_inst.operands.length(), content="4")
+  inspect(rem_inst.constraints.length(), content="4")
+  inspect(
+    rem_inst.constraints[0].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    rem_inst.constraints[1].allowed_regs[0] == { index: 8, class: Int },
+    content="true",
+  )
+  inspect(
+    rem_inst.constraints[2].allowed_regs[0] == { index: 3, class: Int },
+    content="true",
+  )
+  inspect(
+    rem_inst.constraints[3].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[3].opcode == Move, content="true")
+}
+
+///|
 test "x64 legalizes shift count into rcx" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("shl64", signature)

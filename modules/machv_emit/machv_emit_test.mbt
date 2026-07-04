@@ -153,6 +153,46 @@ test "emit X64 integer division bytes" {
 }
 
 ///|
+test "emit X64 integer remainder bytes" {
+  let func = @machv.Function::new("x64_int_rem")
+  let entry = func.new_block()
+  let signed_rem = func.new_inst(IntRem(true))
+  signed_rem.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  signed_rem.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 10, class: Int })),
+  )
+  signed_rem.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  signed_rem.add_operand(
+    @machv.Operand::def(Physical({ index: 0, class: Int })),
+  )
+  entry.append(signed_rem)
+  let unsigned_rem = func.new_inst(IntRem(false))
+  unsigned_rem.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  unsigned_rem.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 11, class: Int })),
+  )
+  unsigned_rem.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  unsigned_rem.add_operand(
+    @machv.Operand::def(Physical({ index: 0, class: Int })),
+  )
+  entry.append(unsigned_rem)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[72, 153, 73, 247, 250, 49, 210, 73, 247, 243, 195]",
+  )
+}
+
+///|
 test "emit X64 integer not bytes" {
   let func = @machv.Function::new("x64_int_not")
   let entry = func.new_block()

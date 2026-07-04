@@ -1147,6 +1147,51 @@ fn emit_x64_int_div(
 }
 
 ///|
+fn emit_x64_int_rem(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  signed : Bool,
+) -> Unit raise EmitError {
+  let context = if signed { "irem" } else { "urem" }
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} dividend",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} divisor",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} remainder",
+  )
+  let rax = require_int_preg(
+    find_operand(inst, Def, 1, context),
+    "\{context} rax side effect",
+  )
+  if lhs != 0 || rax != 0 || dst != 3 {
+    raise UnsupportedOperand(
+      message="\{context} requires dividend/quotient in rax and remainder in rdx",
+    )
+  }
+  if rhs == 0 || rhs == 3 {
+    raise UnsupportedOperand(
+      message="\{context} divisor must not be rax or rdx",
+    )
+  }
+  if signed {
+    // cqo: sign-extend RAX into RDX:RAX before IDIV.
+    object.code.push(0x48)
+    object.code.push(0x99)
+  } else {
+    // xor edx, edx: zero the high dividend half before DIV.
+    object.code.push(0x31)
+    object.code.push(0xd2)
+  }
+  emit_x64_div_r64(object, rhs, signed)
+}
+
+///|
 fn emit_x64_int_not(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1294,6 +1339,7 @@ fn write_x64_inst_bytes(
     IntSub => emit_x64_int_binop3(object, inst, emit_x64_sub_rr, "sub")
     IntMul => emit_x64_int_binop3(object, inst, emit_x64_imul_rr, "mul")
     IntDiv(signed) => emit_x64_int_div(object, inst, signed)
+    IntRem(signed) => emit_x64_int_rem(object, inst, signed)
     IntNot => emit_x64_int_not(object, inst)
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")

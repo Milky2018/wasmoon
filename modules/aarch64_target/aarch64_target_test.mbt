@@ -55,6 +55,26 @@ test "AArch64 lowers extended MilkIR ops into structured MachV opcodes" {
 }
 
 ///|
+test "AArch64 lowers integer remainder to generic arithmetic sequence" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("rem64", signature)
+  let lhs = func.new_value(I64)
+  let rhs = func.new_value(I64)
+  let rem = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Urem, [lhs, rhs], [rem]))
+  entry.set_terminator(Return([rem]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="3")
+  inspect(
+    lowered.blocks[0].instructions[0].opcode == IntDiv(false),
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[1].opcode == IntMul, content="true")
+  inspect(lowered.blocks[0].instructions[2].opcode == IntSub, content="true")
+}
+
+///|
 test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
   let builder = @milkir.IRBuilder::new("mem")
   let ptr = builder.add_param(Ptr)

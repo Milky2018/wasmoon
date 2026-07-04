@@ -401,12 +401,52 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
 }
 
 ///|
+fn lower_int_rem(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  signed : Bool,
+) -> Unit {
+  // TODO(aarch64_target): lower i64 remainder to SDIV/UDIV + MSUB once MachV
+  // has a structured fused multiply-subtract opcode. This correctness-first
+  // expansion intentionally uses generic MachV arithmetic today.
+  let quotient = out.new_vreg(Int)
+  let product = out.new_vreg(Int)
+  let div = out.new_inst(IntDiv(signed))
+  div.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  div.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  div.add_operand(@machv.Operand::def(Virtual(quotient)))
+  block.append(div)
+  let mul = out.new_inst(IntMul)
+  mul.add_operand(@machv.Operand::use_reg(Virtual(quotient)))
+  mul.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  mul.add_operand(@machv.Operand::def(Virtual(product)))
+  block.append(mul)
+  let sub = out.new_inst(IntSub)
+  sub.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  sub.add_operand(@machv.Operand::use_reg(Virtual(product)))
+  add_defs(sub, inst.results)
+  block.append(sub)
+}
+
+///|
 fn lower_inst(
   func : @milkir.Function,
   out : @machv.Function,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
+  match inst.opcode {
+    Srem => {
+      lower_int_rem(out, block, inst, true)
+      return
+    }
+    Urem => {
+      lower_int_rem(out, block, inst, false)
+      return
+    }
+    _ => ()
+  }
   let lowered = match inst.opcode {
     LoadPtr(ty) => {
       let offset = const_offset_arg(func, inst.args, 1)

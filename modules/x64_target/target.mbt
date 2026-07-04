@@ -351,6 +351,43 @@ fn lower_int_div(
 }
 
 ///|
+fn lower_int_rem(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  signed : Bool,
+) -> Unit {
+  let lhs_tmp = out.new_vreg(Int)
+  let rhs_tmp = out.new_vreg(Int)
+  let lhs_move = out.new_inst(Move)
+  lhs_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  lhs_move.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
+  block.append(lhs_move)
+  let rhs_move = out.new_inst(Move)
+  rhs_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  rhs_move.add_operand(@machv.Operand::def(Virtual(rhs_tmp)))
+  block.append(rhs_move)
+
+  let rem = out.new_inst(IntRem(signed))
+  rem.add_operand(@machv.Operand::use_reg(Virtual(lhs_tmp)))
+  rem.add_operand(@machv.Operand::use_reg(Virtual(rhs_tmp)))
+  let rdx_tmp = out.new_vreg(Int)
+  rem.add_operand(@machv.Operand::def(Virtual(rdx_tmp)))
+  // TODO(x64_target): make the RAX quotient side effect a first-class MachV
+  // tied/clobber operand once regalloc models clobbers during live ranges.
+  rem.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
+  add_fixed_constraint(rem, 0, int_reg(0))
+  add_fixed_constraint(rem, 1, int_reg(8))
+  add_fixed_constraint(rem, 2, int_reg(3))
+  add_fixed_constraint(rem, 3, int_reg(0))
+  block.append(rem)
+  let result_move = out.new_inst(Move)
+  result_move.add_operand(@machv.Operand::use_reg(Virtual(rdx_tmp)))
+  add_defs(result_move, inst.results)
+  block.append(result_move)
+}
+
+///|
 fn lower_int_shift(
   out : @machv.Function,
   block : @machv.Block,
@@ -466,6 +503,14 @@ fn lower_inst(
     }
     Udiv => {
       lower_int_div(out, block, inst, false)
+      return
+    }
+    Srem => {
+      lower_int_rem(out, block, inst, true)
+      return
+    }
+    Urem => {
+      lower_int_rem(out, block, inst, false)
       return
     }
     Ishl => {
