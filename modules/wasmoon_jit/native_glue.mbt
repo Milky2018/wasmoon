@@ -61,15 +61,6 @@ pub fn plan_integration_for_target(
 }
 
 ///|
-pub fn plan_integration(
-  func : @milkir.Function,
-  machv_func : @machv.Function,
-) -> JitIntegrationPlan raise @machv_emit.EmitError {
-  // TODO(wasmoon_jit): select the target from the configured JIT ISA instead of defaulting to AArch64.
-  plan_integration_for_target(func, machv_func, AArch64)
-}
-
-///|
 pub fn lower_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,

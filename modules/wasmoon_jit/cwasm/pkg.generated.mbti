@@ -133,7 +133,7 @@ pub(all) enum TargetArch {
   Unknown
   X86_64
   AArch64
-}
+} derive(@debug.Debug)
 pub impl Show for TargetArch
 
 pub(all) struct TypeEntry {

@@ -28,9 +28,17 @@ test "wrap linked code as cwasm artifact" {
   let object = try! @machv_emit.emit_function_for_target(func, X64)
   let resolver = RuntimeSymbolResolver::new()
   let linked = try! link_code_object(object, resolver)
-  let artifact = CwasmArtifact::from_linked_code(linked, 7)
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    7,
+    X86_64,
+    "caller",
+  )
   inspect(artifact.functions.length(), content="1")
-  inspect(artifact.manifest().length(), content="5")
+  inspect(artifact.manifest().length(), content="7")
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.function_count(), content="1")
+  inspect(restored.functions[0].name, content="caller")
 }
 
 ///|
@@ -51,12 +59,16 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
   let mach = @machv.Function::new("entry")
   let entry = mach.new_block()
   entry.append(mach.new_inst(Return))
-  let plan = try! plan_integration_for_target(milk, mach, X64)
-  inspect(plan.entry_symbol, content="entry")
-  debug_inspect(plan.target, content="X64")
-  inspect(plan.native_glue.length(), content="6")
-  inspect(plan.object.debug_entries.length(), content="1")
-  inspect(plan.object.code.length(), content="1")
+  let x64_plan = try! plan_integration_for_target(milk, mach, X64)
+  inspect(x64_plan.entry_symbol, content="entry")
+  debug_inspect(x64_plan.target, content="X64")
+  inspect(x64_plan.native_glue.length(), content="6")
+  inspect(x64_plan.object.debug_entries.length(), content="1")
+  inspect(x64_plan.object.code.length(), content="1")
+  debug_inspect(x64_plan.object.code, content="[195]")
+  let aarch64_plan = try! plan_integration_for_target(milk, mach, AArch64)
+  debug_inspect(aarch64_plan.target, content="AArch64")
+  debug_inspect(aarch64_plan.object.code, content="[192, 3, 95, 214]")
 }
 
 ///|
@@ -1261,6 +1273,14 @@ test "wrap reusable JIT plan as cwasm artifact" {
   inspect(artifact.functions[0].function_index, content="3")
   inspect(artifact.code.length() > 0, content="true")
   inspect(artifact.debug_entries.length(), content="2")
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.function_count(), content="1")
+  inspect(restored.functions[0].func_idx, content="3")
+  inspect(restored.functions[0].name, content="add64_artifact")
+  inspect(
+    restored.functions[0].code.length(),
+    content=artifact.code.length().to_string(),
+  )
 }
 
 ///|

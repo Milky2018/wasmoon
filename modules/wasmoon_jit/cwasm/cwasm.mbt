@@ -53,7 +53,7 @@ pub(all) enum TargetArch {
   Unknown
   X86_64
   AArch64
-}
+} derive(Debug)
 
 ///|
 fn TargetArch::to_byte(self : TargetArch) -> Int {

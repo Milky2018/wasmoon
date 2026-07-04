@@ -6,6 +6,7 @@ import {
   "Milky2018/machv_emit",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
 }
@@ -243,8 +244,6 @@ pub fn memory_read(Int64, Int64, Int) -> Bytes
 
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
 
-pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan raise @machv_emit.EmitError
-
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
@@ -391,6 +390,8 @@ pub impl Show for CompilationStrategy
 
 pub(all) struct CwasmArtifact {
   version : Int
+  target : @cwasm.TargetArch
+  entry_symbol : String
   code : Array[Int]
   functions : Array[CwasmFunctionRecord]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
@@ -399,8 +400,10 @@ pub(all) struct CwasmArtifact {
   debug_entries : Array[@machv_emit.DebugEntry]
 } derive(@debug.Debug)
 pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
-pub fn CwasmArtifact::from_linked_code(LinkedCode, Int) -> Self
+pub fn CwasmArtifact::from_linked_code_for_target(LinkedCode, Int, @cwasm.TargetArch, String) -> Self
 pub fn CwasmArtifact::manifest(Self) -> Array[String]
+pub fn CwasmArtifact::serialize(Self) -> Array[Int]
+pub fn CwasmArtifact::to_precompiled_module(Self) -> @cwasm.PrecompiledModule
 
 pub(all) struct CwasmFunctionRecord {
   function_index : Int
