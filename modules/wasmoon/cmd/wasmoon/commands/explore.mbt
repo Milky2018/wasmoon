@@ -189,9 +189,7 @@ pub fn run_explore(
 
     if !html_output &&
       (show_milkir || show_opt_milkir || show_machv || show_machv_mc) {
-      let env = @wasm_frontend.EmbeddingEnvironment::new(
-        hidden_context_type=None,
-      )
+      let env = @wasm_frontend.EmbeddingEnvironment::new()
       let milk = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
         err => {
           println("")
@@ -213,7 +211,7 @@ pub fn run_explore(
         println(milk.print())
       }
       if show_machv {
-        let mach = @wasmoon_jit.lower_milkir_for_target(milk, X64)
+        let mach = @wasmoon_jit.lower_wasm_body_milkir_for_target(milk, X64)
         println("")
         println("── MachV ──")
         println(mach.print())
@@ -221,7 +219,10 @@ pub fn run_explore(
       if show_machv_mc {
         println("")
         println("── MachV Machine Code ──")
-        let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
+        let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+          milk,
+          X64,
+        ) catch {
           err => {
             println("error: \{to_repr(err)}")
             return
