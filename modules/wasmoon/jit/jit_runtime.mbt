@@ -230,7 +230,7 @@ fn apply_func_addr_fixups(
           }
           c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
         } else {
-          match @emit.resolve_runtime_func_fixup_idx(fixup.func_idx) {
+          match @wasmoon_jit.resolve_runtime_func_fixup_idx(fixup.func_idx) {
             Some(ptr) => ptr
             None => abort("unknown runtime func fixup idx \{fixup.func_idx}")
           }
@@ -415,7 +415,9 @@ pub fn JITModule::load_with_imports(
                       )
                     } else {
                       match
-                        @emit.resolve_runtime_func_fixup_idx(fixup.func_idx) {
+                        @wasmoon_jit.resolve_runtime_func_fixup_idx(
+                          fixup.func_idx,
+                        ) {
                         Some(ptr) => ptr
                         None =>
                           abort(

@@ -13,6 +13,14 @@ test "resolve runtime helper relocations into linked code" {
 }
 
 ///|
+test "resolve legacy runtime fixup ids in wasmoon_jit" {
+  inspect(resolve_runtime_func_fixup_idx(-20000) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-21013) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-22011) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-1) is None, content="true")
+}
+
+///|
 test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()

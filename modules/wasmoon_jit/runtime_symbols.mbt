@@ -47,6 +47,63 @@ pub fn RuntimeSymbolResolver::resolve(
 }
 
 ///|
+/// Resolve the legacy negative runtime-helper fixup id used by the old VCode
+/// emitter. New MachV emission should prefer named external-symbol relocations.
+/// TODO(ISS-021): delete this compatibility entry once the production JIT
+/// loader consumes `machv_emit` relocations end-to-end.
+pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
+  match idx {
+    -20000 => Some(@jit_ffi.c_jit_get_gc_ref_test_ptr())
+    -20001 => Some(@jit_ffi.c_jit_get_gc_ref_cast_ptr())
+    -20002 => Some(@jit_ffi.c_jit_get_gc_struct_new_ptr())
+    -20003 => Some(@jit_ffi.c_jit_get_gc_struct_get_ptr())
+    -20004 => Some(@jit_ffi.c_jit_get_gc_struct_set_ptr())
+    -20005 => Some(@jit_ffi.c_jit_get_gc_array_new_ptr())
+    -20006 => Some(@jit_ffi.c_jit_get_gc_array_get_ptr())
+    -20007 => Some(@jit_ffi.c_jit_get_gc_array_set_ptr())
+    -20008 => Some(@jit_ffi.c_jit_get_gc_array_len_ptr())
+    -20009 => Some(@jit_ffi.c_jit_get_gc_array_fill_ptr())
+    -20010 => Some(@jit_ffi.c_jit_get_gc_array_copy_ptr())
+    -20011 => Some(@jit_ffi.c_jit_get_gc_array_new_data_ptr())
+    -20012 => Some(@jit_ffi.c_jit_get_gc_array_new_elem_ptr())
+    -20013 => Some(@jit_ffi.c_jit_get_gc_array_init_data_ptr())
+    -20014 => Some(@jit_ffi.c_jit_get_gc_array_init_elem_ptr())
+    -20015 => Some(@jit_ffi.c_jit_get_gc_type_check_subtype_ptr())
+    -20016 => Some(@jit_ffi.c_jit_get_gc_register_struct_inline_ptr())
+    -20017 => Some(@jit_ffi.c_jit_get_gc_register_array_inline_ptr())
+    -20018 => Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+    -20019 => Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+    -21000 => Some(@jit_ffi.c_jit_get_memory_grow_ptr())
+    -21001 => Some(@jit_ffi.c_jit_get_memory_size_ptr())
+    -21002 => Some(@jit_ffi.c_jit_get_memory_fill_ptr())
+    -21003 => Some(@jit_ffi.c_jit_get_memory_fill_mem0_ptr())
+    -21004 => Some(@jit_ffi.c_jit_get_memory_copy_ptr())
+    -21005 => Some(@jit_ffi.c_jit_get_memory_copy_mem0_ptr())
+    -21006 => Some(@jit_ffi.c_jit_get_memory_init_ptr())
+    -21007 => Some(@jit_ffi.c_jit_get_data_drop_ptr())
+    -21008 => Some(@jit_ffi.c_jit_get_table_grow_ptr())
+    -21009 => Some(@jit_ffi.c_jit_get_table_fill_ptr())
+    -21010 => Some(@jit_ffi.c_jit_get_table_copy_ptr())
+    -21011 => Some(@jit_ffi.c_jit_get_table_init_ptr())
+    -21012 => Some(@jit_ffi.c_jit_get_elem_drop_ptr())
+    -21013 => Some(@jit_ffi.c_jit_get_hostcall_ptr())
+    -22000 => Some(@jit_ffi.c_jit_get_exception_try_begin_ptr())
+    -22001 => Some(@jit_ffi.c_jit_get_exception_try_end_ptr())
+    -22002 => Some(@jit_ffi.c_jit_get_exception_throw_ptr())
+    -22003 => Some(@jit_ffi.c_jit_get_exception_throw_tag_ptr())
+    -22004 => Some(@jit_ffi.c_jit_get_exception_throw_ref_ptr())
+    -22005 => Some(@jit_ffi.c_jit_get_exception_delegate_ptr())
+    -22006 => Some(@jit_ffi.c_jit_get_exception_get_tag_ptr())
+    -22007 => Some(@jit_ffi.c_jit_get_exception_get_value_ptr())
+    -22008 => Some(@jit_ffi.c_jit_get_exception_get_value_count_ptr())
+    -22009 => Some(@jit_ffi.c_jit_get_sigsetjmp_ptr())
+    -22010 => Some(@jit_ffi.c_jit_get_exception_spill_locals_ptr())
+    -22011 => Some(@jit_ffi.c_jit_get_exception_get_spilled_local_ptr())
+    _ => None
+  }
+}
+
+///|
 pub(all) struct ResolvedRuntimeRelocation {
   offset : Int
   symbol : String
