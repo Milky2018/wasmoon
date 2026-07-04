@@ -196,6 +196,49 @@ fn floatcc_to_machv(cc : @milkir.FloatCC) -> @machv.Cond {
 }
 
 ///|
+fn mem_type_for_type(ty : @milkir.Type) -> @machv.MemType {
+  match ty {
+    I32 => MemI32
+    I64 => MemI64
+    F32 => MemF32
+    F64 => MemF64
+    V128 => MemV128
+    Ptr | Ref => MemPtr
+  }
+}
+
+///|
+fn find_iconst(func : @milkir.Function, value : @milkir.Value) -> Int64? {
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.results.length() == 1 && inst.results[0].id == value.id {
+        if inst.opcode is Iconst(offset) {
+          return Some(offset)
+        }
+        return None
+      }
+    }
+  }
+  None
+}
+
+///|
+fn const_offset_arg(
+  func : @milkir.Function,
+  args : Array[@milkir.Value],
+  index : Int,
+) -> Int {
+  if index < args.length() {
+    match find_iconst(func, args[index]) {
+      Some(offset) => offset.to_int()
+      None => 0
+    }
+  } else {
+    0
+  }
+}
+
+///|
 fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
   match opcode {
     Iadd => IntAdd
@@ -252,10 +295,10 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     Sextend32 => Sextend32
     Select => Select
     Copy => Move
-    Load => LoadMemory
-    Store => StoreMemory
-    LoadPtr(_) => LoadPtr
-    StorePtr(_) => StorePtr
+    Load => LoadMemory(MemI64, 0)
+    Store => StoreMemory(MemI64, 0)
+    LoadPtr(ty) => LoadPtr(mem_type_for_type(ty), 0)
+    StorePtr(ty) => StorePtr(mem_type_for_type(ty), 0)
     StackAddr(slot) => StackAddr(slot.id)
     Iconst(value) => IntConst(value)
     Fconst(value) => FloatConst(value)
@@ -269,13 +312,63 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
 
 ///|
 fn lower_inst(
+  func : @milkir.Function,
   out : @machv.Function,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
-  let lowered = out.new_inst(opcode_for(inst.opcode))
-  add_uses(lowered, inst.args)
-  add_defs(lowered, inst.results)
+  let lowered = match inst.opcode {
+    LoadPtr(ty) => {
+      let offset = const_offset_arg(func, inst.args, 1)
+      out.new_inst(LoadPtr(mem_type_for_type(ty), offset))
+    }
+    StorePtr(ty) => {
+      let offset = const_offset_arg(func, inst.args, 2)
+      out.new_inst(StorePtr(mem_type_for_type(ty), offset))
+    }
+    _ => out.new_inst(opcode_for(inst.opcode))
+  }
+  match inst.opcode {
+    LoadPtr(_) => {
+      if inst.args.length() > 0 {
+        lowered.add_operand(
+          @machv.Operand::use_reg(reg_for_value(inst.args[0])),
+        )
+      }
+      if inst.args.length() > 1 && find_iconst(func, inst.args[1]) is None {
+        // TODO(aarch64_target): lower non-constant pointer offsets to extended
+        // register-offset addressing instead of keeping the offset as a generic use.
+        lowered.add_operand(
+          @machv.Operand::use_reg(reg_for_value(inst.args[1])),
+        )
+      }
+      add_defs(lowered, inst.results)
+    }
+    StorePtr(_) => {
+      if inst.args.length() > 0 {
+        lowered.add_operand(
+          @machv.Operand::use_reg(reg_for_value(inst.args[0])),
+        )
+      }
+      if inst.args.length() > 1 {
+        lowered.add_operand(
+          @machv.Operand::use_reg(reg_for_value(inst.args[1])),
+        )
+      }
+      if inst.args.length() > 2 && find_iconst(func, inst.args[2]) is None {
+        // TODO(aarch64_target): lower non-constant pointer offsets to extended
+        // register-offset addressing instead of keeping the offset as a generic use.
+        lowered.add_operand(
+          @machv.Operand::use_reg(reg_for_value(inst.args[2])),
+        )
+      }
+      add_defs(lowered, inst.results)
+    }
+    _ => {
+      add_uses(lowered, inst.args)
+      add_defs(lowered, inst.results)
+    }
+  }
   // TODO(aarch64_target): replace textual target opcodes with selected AArch64
   // machine operations, target constraints, and legalization for non-trivial memory ops.
   block.append(lowered)
@@ -338,7 +431,7 @@ pub fn lower_function(func : @milkir.Function) -> @machv.Function {
   for milk_block in func.blocks {
     let block = out.new_block()
     for inst in milk_block.instructions {
-      lower_inst(out, block, inst)
+      lower_inst(func, out, block, inst)
     }
     if milk_block.terminator is Some(terminator) {
       lower_terminator(block, terminator)

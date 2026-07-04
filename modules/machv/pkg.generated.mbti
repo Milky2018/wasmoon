@@ -110,6 +110,15 @@ pub(all) struct Loop {
   latch : Int
 }
 
+pub(all) enum MemType {
+  MemI32
+  MemI64
+  MemF32
+  MemF64
+  MemV128
+  MemPtr
+} derive(Eq, @debug.Debug)
+
 pub(all) enum Opcode {
   Target(String)
   Move
@@ -163,10 +172,10 @@ pub(all) enum Opcode {
   Sextend16
   Sextend32
   Select
-  LoadMemory
-  StoreMemory
-  LoadPtr
-  StorePtr
+  LoadMemory(MemType, Int)
+  StoreMemory(MemType, Int)
+  LoadPtr(MemType, Int)
+  StorePtr(MemType, Int)
   StackAddr(Int)
   CallIndirect
   CallPtr(Int, Int)

@@ -52,10 +52,10 @@ pub(all) enum Opcode {
   Sextend16
   Sextend32
   Select
-  LoadMemory
-  StoreMemory
-  LoadPtr
-  StorePtr
+  LoadMemory(MemType, Int)
+  StoreMemory(MemType, Int)
+  LoadPtr(MemType, Int)
+  StorePtr(MemType, Int)
   StackAddr(Int)
   CallIndirect
   CallPtr(Int, Int)
@@ -67,6 +67,16 @@ pub(all) enum Opcode {
   Jump(Int)
   Branch(Int, Int)
   Return
+} derive(Eq, Debug)
+
+///|
+pub(all) enum MemType {
+  MemI32
+  MemI64
+  MemF32
+  MemF64
+  MemV128
+  MemPtr
 } derive(Eq, Debug)
 
 ///|
