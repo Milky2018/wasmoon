@@ -27,6 +27,7 @@ pub suberror VerifyError {
   OverlappingAllocation(left~ : VirtualReg, right~ : VirtualReg, location~ : Location)
   RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
   ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
+  TiedConstraintViolation(left~ : VirtualReg, right~ : VirtualReg, left_location~ : Location, right_location~ : Location)
 }
 
 // Types and methods
@@ -75,6 +76,7 @@ pub fn LiveRange::end(Self) -> ProgramPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
 pub fn LiveRange::new(Int, VirtualReg) -> Self
+pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::start(Self) -> ProgramPoint?
 pub fn LiveRange::total_length(Self) -> Int
@@ -99,10 +101,12 @@ pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
   constraint : OperandConstraint
+  tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
+pub fn Operand::with_tie(Self, Int) -> Self
 
 pub(all) enum OperandConstraint {
   AnyReg
@@ -205,8 +209,10 @@ pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
+  tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn UsePosition::new(ProgramPoint, UseKind, OperandConstraint) -> Self
+pub fn UsePosition::with_tie(Self, Int) -> Self
 
 pub(all) struct VirtualReg {
   id : Int

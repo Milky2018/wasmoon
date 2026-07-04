@@ -195,10 +195,12 @@ pub(all) enum Opcode {
 pub(all) struct Operand {
   reg : Reg
   role : OperandRole
+  tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(Reg) -> Self
 pub fn Operand::use_def(Reg) -> Self
 pub fn Operand::use_reg(Reg) -> Self
+pub fn Operand::with_tie(Self, Int) -> Self
 
 pub(all) enum OperandConstraint {
   Any

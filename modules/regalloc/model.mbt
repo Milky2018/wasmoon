@@ -29,16 +29,17 @@ pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
   constraint : OperandConstraint
+  tie_id : Int
 } derive(Eq, Debug)
 
 ///|
 pub fn Operand::use_reg(vreg : VirtualReg) -> Operand {
-  { vreg, role: Use, constraint: AnyReg }
+  { vreg, role: Use, constraint: AnyReg, tie_id: -1 }
 }
 
 ///|
 pub fn Operand::def(vreg : VirtualReg) -> Operand {
-  { vreg, role: Def, constraint: AnyReg }
+  { vreg, role: Def, constraint: AnyReg, tie_id: -1 }
 }
 
 ///|
@@ -46,7 +47,12 @@ pub fn Operand::with_constraint(
   self : Operand,
   constraint : OperandConstraint,
 ) -> Operand {
-  { vreg: self.vreg, role: self.role, constraint }
+  { vreg: self.vreg, role: self.role, constraint, tie_id: self.tie_id }
+}
+
+///|
+pub fn Operand::with_tie(self : Operand, tie_id : Int) -> Operand {
+  { vreg: self.vreg, role: self.role, constraint: self.constraint, tie_id }
 }
 
 ///|

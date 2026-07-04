@@ -13,6 +13,12 @@ pub suberror VerifyError {
   )
   RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
   ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
+  TiedConstraintViolation(
+    left~ : VirtualReg,
+    right~ : VirtualReg,
+    left_location~ : Location,
+    right_location~ : Location
+  )
 }
 
 ///|
@@ -71,6 +77,42 @@ fn verify_clobber_safety(
 }
 
 ///|
+fn verify_tied_operands(
+  program : Program,
+  allocation : Allocation,
+) -> Unit raise VerifyError {
+  for block in program.blocks {
+    for inst in block.instructions {
+      for i, lhs in inst.operands {
+        if lhs.tie_id < 0 {
+          continue
+        }
+        guard allocation.location_of(lhs.vreg) is Some(lhs_location) else {
+          raise Unassigned(vreg=lhs.vreg)
+        }
+        for j in (i + 1)..<inst.operands.length() {
+          let rhs = inst.operands[j]
+          if rhs.tie_id != lhs.tie_id {
+            continue
+          }
+          guard allocation.location_of(rhs.vreg) is Some(rhs_location) else {
+            raise Unassigned(vreg=rhs.vreg)
+          }
+          if lhs_location != rhs_location {
+            raise TiedConstraintViolation(
+              left=lhs.vreg,
+              right=rhs.vreg,
+              left_location=lhs_location,
+              right_location=rhs_location,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
 pub fn verify_allocation(
   program : Program,
   allocation : Allocation,
@@ -87,6 +129,7 @@ pub fn verify_allocation(
       None => raise Unassigned(vreg=range.vreg)
     }
   }
+  verify_tied_operands(program, allocation)
   for i in 0..<allocation.assignments.length() {
     let lhs = allocation.assignments[i]
     guard ranges.get_by_vreg(lhs.vreg) is Some(lhs_range) else { continue }
@@ -94,7 +137,8 @@ pub fn verify_allocation(
       let rhs = allocation.assignments[j]
       if same_location(lhs.location, rhs.location) &&
         ranges.get_by_vreg(rhs.vreg) is Some(rhs_range) &&
-        lhs_range.overlaps(rhs_range, ranges.block_order) {
+        lhs_range.overlaps(rhs_range, ranges.block_order) &&
+        !lhs_range.overlap_allowed_by_tie(rhs_range, ranges.block_order) {
         raise OverlappingAllocation(
           left=lhs.vreg,
           right=rhs.vreg,

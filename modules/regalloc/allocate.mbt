@@ -82,13 +82,16 @@ fn expire_old_intervals(
 }
 
 ///|
-fn is_reg_active(
+fn reg_conflicts_with_active(
   active : Array[(LiveRange, PhysicalReg)],
+  current : LiveRange,
   preg : PhysicalReg,
+  block_order : Array[Int],
 ) -> Bool {
   for item in active {
-    let (_, active_reg) = item
-    if active_reg == preg {
+    let (active_range, active_reg) = item
+    if active_reg == preg &&
+      !active_range.overlap_allowed_by_tie(current, block_order) {
       return true
     }
   }
@@ -96,13 +99,34 @@ fn is_reg_active(
 }
 
 ///|
+fn find_tied_active_reg(
+  regs : Array[PhysicalReg],
+  active : Array[(LiveRange, PhysicalReg)],
+  current : LiveRange,
+  block_order : Array[Int],
+) -> PhysicalReg? {
+  for item in active {
+    let (active_range, preg) = item
+    if contains_reg(regs, preg) &&
+      active_range.overlaps(current, block_order) &&
+      active_range.overlap_allowed_by_tie(current, block_order) &&
+      !reg_conflicts_with_active(active, current, preg, block_order) {
+      return Some(preg)
+    }
+  }
+  None
+}
+
+///|
 fn choose_free_reg(
   regs : Array[PhysicalReg],
   active : Array[(LiveRange, PhysicalReg)],
+  current : LiveRange,
   fixed : PhysicalReg?,
+  block_order : Array[Int],
 ) -> PhysicalReg? {
   if fixed is Some(preg) {
-    if !is_reg_active(active, preg) {
+    if !reg_conflicts_with_active(active, current, preg, block_order) {
       for reg in regs {
         if reg == preg {
           return Some(preg)
@@ -111,8 +135,11 @@ fn choose_free_reg(
     }
     return None
   }
+  if find_tied_active_reg(regs, active, current, block_order) is Some(preg) {
+    return Some(preg)
+  }
   for preg in regs {
-    if !is_reg_active(active, preg) {
+    if !reg_conflicts_with_active(active, current, preg, block_order) {
       return Some(preg)
     }
   }
@@ -181,7 +208,14 @@ pub fn allocate(program : Program) -> Allocation {
   for interval in ranges.ranges {
     expire_old_intervals(active, interval, ranges.block_order)
     let regs = available_regs_for_range(program, interval, ranges.block_order)
-    match choose_free_reg(regs, active, interval.get_fixed_reg()) {
+    match
+      choose_free_reg(
+        regs,
+        active,
+        interval,
+        interval.get_fixed_reg(),
+        ranges.block_order,
+      ) {
       Some(preg) => {
         allocation.assign(interval.vreg, Reg(preg))
         interval.allocation = Some(Reg(preg))

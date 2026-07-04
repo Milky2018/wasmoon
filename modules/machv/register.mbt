@@ -147,19 +147,25 @@ pub(all) enum OperandRole {
 pub(all) struct Operand {
   reg : Reg
   role : OperandRole
+  tie_id : Int
 } derive(Eq, Debug)
 
 ///|
 pub fn Operand::use_reg(reg : Reg) -> Operand {
-  { reg, role: Use }
+  { reg, role: Use, tie_id: -1 }
 }
 
 ///|
 pub fn Operand::def(reg : Reg) -> Operand {
-  { reg, role: Def }
+  { reg, role: Def, tie_id: -1 }
 }
 
 ///|
 pub fn Operand::use_def(reg : Reg) -> Operand {
-  { reg, role: UseDef }
+  { reg, role: UseDef, tie_id: -1 }
+}
+
+///|
+pub fn Operand::with_tie(self : Operand, tie_id : Int) -> Operand {
+  { reg: self.reg, role: self.role, tie_id }
 }

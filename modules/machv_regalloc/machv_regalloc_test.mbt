@@ -111,6 +111,35 @@ test "projected MachV constraints guide fixed register allocation" {
 }
 
 ///|
+test "projected MachV ties co-locate use-def operands" {
+  let func = @machv.Function::new("tied")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let def_inst = func.new_inst(Target("def"))
+  def_inst.add_operand(@machv.Operand::def(Virtual(v0)))
+  entry.append(def_inst)
+  let tied_inst = func.new_inst(Target("tied"))
+  tied_inst.add_operand(@machv.Operand::use_reg(Virtual(v0)).with_tie(0))
+  tied_inst.add_operand(@machv.Operand::def(Virtual(v1)).with_tie(0))
+  entry.append(tied_inst)
+  let use_inst = func.new_inst(Target("use"))
+  use_inst.add_operand(@machv.Operand::use_reg(Virtual(v1)))
+  entry.append(use_inst)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let allocation = allocate_function(func, [p0, p1])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) ==
+    allocation.location_of({ id: v1.id, class: Int }),
+    content="true",
+  )
+  allocate_and_apply(func, [p0, p1]) |> ignore
+  inspect(entry.instructions[1].operands[0].reg, content="x0")
+  inspect(entry.instructions[1].operands[1].reg, content="x0")
+}
+
+///|
 test "allocate_function rejects unsatisfied projected fixed constraint" {
   let func = @machv.Function::new("fixed_reject")
   let entry = func.new_block()

@@ -88,6 +88,7 @@ pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
+  tie_id : Int
 } derive(Eq, Debug)
 
 ///|
@@ -96,7 +97,12 @@ pub fn UsePosition::new(
   kind : UseKind,
   constraint : OperandConstraint,
 ) -> UsePosition {
-  { point, kind, constraint }
+  { point, kind, constraint, tie_id: -1 }
+}
+
+///|
+pub fn UsePosition::with_tie(self : UsePosition, tie_id : Int) -> UsePosition {
+  { point: self.point, kind: self.kind, constraint: self.constraint, tie_id }
 }
 
 ///|
@@ -188,6 +194,73 @@ pub fn LiveRange::overlaps(
     }
   }
   false
+}
+
+///|
+fn later_point(
+  lhs : ProgramPoint,
+  rhs : ProgramPoint,
+  block_order : Array[Int],
+) -> ProgramPoint {
+  if lhs.compare_with_order(rhs, block_order) >= 0 {
+    lhs
+  } else {
+    rhs
+  }
+}
+
+///|
+fn earlier_point(
+  lhs : ProgramPoint,
+  rhs : ProgramPoint,
+  block_order : Array[Int],
+) -> ProgramPoint {
+  if lhs.compare_with_order(rhs, block_order) <= 0 {
+    lhs
+  } else {
+    rhs
+  }
+}
+
+///|
+fn LiveRange::has_tie_at(
+  self : LiveRange,
+  other : LiveRange,
+  point : ProgramPoint,
+) -> Bool {
+  for lhs in self.uses {
+    if lhs.tie_id < 0 || lhs.point != point {
+      continue
+    }
+    for rhs in other.uses {
+      if rhs.point == point && rhs.tie_id == lhs.tie_id {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+pub fn LiveRange::overlap_allowed_by_tie(
+  self : LiveRange,
+  other : LiveRange,
+  block_order : Array[Int],
+) -> Bool {
+  for lhs in self.ranges {
+    for rhs in other.ranges {
+      if !lhs.overlaps(rhs, block_order) {
+        continue
+      }
+      let start = later_point(lhs.start, rhs.start, block_order)
+      let end = earlier_point(lhs.end, rhs.end, block_order)
+      if start.compare_with_order(end, block_order) != 0 ||
+        !self.has_tie_at(other, start) {
+        return false
+      }
+    }
+  }
+  true
 }
 
 ///|
@@ -321,13 +394,12 @@ pub fn build_live_ranges(program : Program) -> LiveRangeSet {
       for operand in inst.operands {
         let range = find_or_create_live_range(ranges, operand.vreg)
         range.touch(point)
-        range.add_use(
-          UsePosition::new(
-            point,
-            use_kind_of_role(operand.role),
-            operand.constraint,
-          ),
-        )
+        let use_pos = UsePosition::new(
+          point,
+          use_kind_of_role(operand.role),
+          operand.constraint,
+        ).with_tie(operand.tie_id)
+        range.add_use(use_pos)
       }
     }
   }

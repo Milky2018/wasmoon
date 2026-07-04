@@ -51,10 +51,21 @@ fn operand_to_regalloc(
       let base = match operand.role {
         Use => @regalloc.Operand::use_reg(vreg_to_regalloc(vreg))
         Def => @regalloc.Operand::def(vreg_to_regalloc(vreg))
-        UseDef =>
-          { vreg: vreg_to_regalloc(vreg), role: UseDef, constraint: AnyReg }
+        UseDef => {
+          let out = @regalloc.Operand::use_reg(vreg_to_regalloc(vreg))
+          {
+            vreg: out.vreg,
+            role: UseDef,
+            constraint: out.constraint,
+            tie_id: out.tie_id,
+          }
+        }
       }
-      Some(base.with_constraint(constraint_for_operand(inst, operand_index)))
+      Some(
+        base
+        .with_constraint(constraint_for_operand(inst, operand_index))
+        .with_tie(operand.tie_id),
+      )
     }
     Physical(_) => None
   }
@@ -233,6 +244,7 @@ fn rewrite_allocated_operand(
           {
             reg: Physical(preg_from_regalloc_for_class(preg, vreg.class)),
             role: operand.role,
+            tie_id: operand.tie_id,
           }
         Some(Spill(_)) | None => operand
       }
@@ -268,7 +280,7 @@ fn rewrite_spilled_operand(
                 spill.add_operand(@machv.Operand::use_reg(physical))
                 after.push(spill)
               }
-              { reg: physical, role: operand.role }
+              { reg: physical, role: operand.role, tie_id: operand.tie_id }
             }
             None => operand
           }
