@@ -161,11 +161,6 @@ pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
 }
 
 ///|
-pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
-  @wasmoon_jit.resolve_runtime_func_fixup_idx(idx)
-}
-
-///|
 pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
   {
     bytes: [],
