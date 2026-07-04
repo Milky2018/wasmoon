@@ -548,6 +548,46 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 }
 
 ///|
+/// Remove blocks that cannot be reached from the entry block.
+pub fn eliminate_unreachable_blocks(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("eliminate_unreachable")
+  if func.blocks.length() == 0 {
+    return result
+  }
+  let cfg = CFG::build(func)
+  let reachable = Array::make(cfg.size, false)
+  let worklist : Array[Int] = [func.blocks[0].id]
+  while worklist.length() > 0 {
+    let block_id = worklist.pop().unwrap()
+    if !cfg.is_valid(block_id) || reachable[block_id] {
+      continue
+    }
+    reachable[block_id] = true
+    for succ in cfg.get_successors(block_id) {
+      if !reachable[succ] {
+        worklist.push(succ)
+      }
+    }
+  }
+  let kept : Array[Block] = []
+  for block in func.blocks {
+    if block.id >= 0 && block.id < reachable.length() && reachable[block.id] {
+      kept.push(block)
+    } else {
+      result.mark_changed()
+    }
+  }
+  if result.changed {
+    func.blocks.clear()
+    for block in kept {
+      func.blocks.push(block)
+    }
+  }
+  result
+}
+
+///|
 fn merge_opt_result(result : OptResult, pass_result : OptResult) -> Unit {
   if pass_result.changed {
     result.mark_changed()
@@ -568,6 +608,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, eliminate_common_subexpressions(func))
       merge_opt_result(result, eliminate_dead_code(func))
       merge_opt_result(result, eliminate_dead_block_params(func))
+      merge_opt_result(result, eliminate_unreachable_blocks(func))
       result
     }
   }

@@ -14,6 +14,8 @@ pub fn eliminate_dead_block_params(Function) -> OptResult
 
 pub fn eliminate_dead_code(Function) -> OptResult
 
+pub fn eliminate_unreachable_blocks(Function) -> OptResult
+
 pub fn fold_constants(Function) -> OptResult
 
 pub fn instruction_count(Function) -> Int

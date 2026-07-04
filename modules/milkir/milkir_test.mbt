@@ -387,6 +387,40 @@ test "optimizer keeps block params forwarded through jump args" {
 }
 
 ///|
+test "optimizer removes unreachable blocks" {
+  let builder = IRBuilder::new("unreachable")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let exit = builder.create_block()
+  let dead = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  let result_value = builder.iconst_i32(1)
+  builder.return_([result_value])
+  builder.switch_to_block(dead)
+  let dead_value = builder.iconst_i32(99)
+  builder.return_([dead_value])
+  let func = builder.get_function()
+  let result = eliminate_unreachable_blocks(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function unreachable() -> i32 {
+      #|block0:
+      #|    jump block1
+      #|block1:
+      #|    v0:i32 = iconst 1
+      #|    return v0
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "CSE keeps duplicate loads without alias metadata" {
   let builder = IRBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)
