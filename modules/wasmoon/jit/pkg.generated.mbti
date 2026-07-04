@@ -23,51 +23,9 @@ pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn check_trap() -> Unit raise JITTrap
 
-pub fn decode_externref(Int64) -> Int?
-
-pub fn decode_funcref_idx(Int64) -> Int?
-
-pub fn decode_gc_heap_ref(Int64) -> Int?
-
-pub fn decode_heap_ref(Int64) -> Int
-
-pub fn decode_i31(Int64) -> Int
-
-pub fn encode_externref(Int) -> Int64
-
-pub fn encode_funcref_idx(Int) -> Int64
-
-pub fn encode_gc_heap_ref(Int) -> Int64
-
-pub fn encode_heap_ref(Int) -> Int64
-
-pub fn encode_i31(Int) -> Int64
-
-pub fn encode_null_ref() -> Int64
-
 pub fn free_memory(Int64) -> Unit
 
 pub fn free_memory_desc(Int64) -> Unit
-
-pub fn gc_begin_frame(Int64, Int64) -> Unit
-
-pub fn gc_clear_heap(Int64) -> Unit
-
-pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
-
-pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
-
-pub fn gc_end_frame(Int64) -> Unit
-
-pub fn gc_set_heap(Int64, @wasmoon_jit.CHeap) -> Unit
-
-pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
-
-pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
-
-pub fn gc_setup(@wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise @wasmoon_jit.GCSetupError
-
-pub fn gc_teardown(Int64) -> Unit
 
 pub fn get_args_get_ptr() -> Int64
 
@@ -122,30 +80,6 @@ pub fn get_fd_sync_ptr() -> Int64
 pub fn get_fd_tell_ptr() -> Int64
 
 pub fn get_fd_write_ptr() -> Int64
-
-pub fn get_gc_array_copy_ptr() -> Int64
-
-pub fn get_gc_array_fill_ptr() -> Int64
-
-pub fn get_gc_array_get_ptr() -> Int64
-
-pub fn get_gc_array_len_ptr() -> Int64
-
-pub fn get_gc_array_new_ptr() -> Int64
-
-pub fn get_gc_array_set_ptr() -> Int64
-
-pub fn get_gc_ref_cast_ptr() -> Int64
-
-pub fn get_gc_ref_test_ptr() -> Int64
-
-pub fn get_gc_struct_get_ptr() -> Int64
-
-pub fn get_gc_struct_new_ptr() -> Int64
-
-pub fn get_gc_struct_set_ptr() -> Int64
-
-pub fn get_gc_type_check_subtype_ptr() -> Int64
 
 pub fn get_hostcall_func_addr() -> Int
 
@@ -213,33 +147,15 @@ pub fn get_spectest_print_i64_ptr() -> Int64
 
 pub fn get_spectest_print_ptr() -> Int64
 
-pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
-
-pub fn is_funcref_ptr(Int64) -> Bool
-
-pub fn is_i31(Int64) -> Bool
-
 pub fn is_jit_supported_module(String) -> Bool
-
-pub fn is_null(Int64) -> Bool
-
-pub fn is_null_ref(Int64) -> Bool
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
 
-pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
-
-pub fn tag_funcref_ptr(Int64) -> Int64
-
 pub fn throw_exception_tag(Int64, Int) -> Unit
 
 pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
-
-pub fn untag_funcref_ptr(Int64) -> Int64
-
-pub fn value_to_i64(@types.Value) -> Int64
 
 // Errors
 pub suberror JITModuleLoadError {
@@ -323,19 +239,7 @@ pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
 
 // Type aliases
-pub using @wasmoon_jit {type BacktraceFrame}
-
-pub using @wasmoon_jit {type CHeap}
-
-pub using @wasmoon_jit {type CHeapError}
-
-pub using @wasmoon_jit {type DWARFBuilder}
-
 pub using @wasmoon_jit {type ExecCode}
-
-pub using @wasmoon_jit {type FunctionInfo}
-
-pub using @wasmoon_jit {type GCSetupError}
 
 pub using @wasmoon_jit {type JITDebugDB}
 

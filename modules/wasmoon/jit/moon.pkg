@@ -21,11 +21,8 @@ import {
 
 options(
   targets: {
-    "c_heap.mbt": [ "native" ],
-    "dwarf.mbt": [ "native" ],
     "execution_wbtest.mbt": [ "native" ],
     "ffi_jit.mbt": [ "native" ],
-    "gc_helpers.mbt": [ "native" ],
     "jit_runtime.mbt": [ "native" ],
   },
 )

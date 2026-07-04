@@ -1309,9 +1309,9 @@ pub fn JITModule::init_shared_tables(
         if ptr == 0L {
           // Keep ref.func semantics even when this local function is not
           // currently compiled into a concrete machine-code pointer.
-          encode_funcref_idx(idx)
+          @wasmoon_jit.encode_funcref_idx(idx)
         } else {
-          tag_funcref_ptr(ptr)
+          @wasmoon_jit.tag_funcref_ptr(ptr)
         }
       }
       None => @types.NULL_REF
@@ -1330,8 +1330,8 @@ pub fn JITModule::init_shared_tables(
 pub fn JITModule::register_dwarf(
   self : JITModule,
   verbose? : Bool = false,
-) -> DWARFBuilder {
-  let dwarf = DWARFBuilder::new()
+) -> @wasmoon_jit.DWARFBuilder {
+  let dwarf = @wasmoon_jit.DWARFBuilder::new()
   for func_idx, func in self.functions {
     let addr = self.get_func_ptr(func_idx)
     dwarf.add_function(func.name, addr, func.code_size, func_idx)
