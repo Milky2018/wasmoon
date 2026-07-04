@@ -615,6 +615,317 @@ pub fn propagate_copies_global(func : Function) -> OptResult {
 }
 
 ///|
+fn collect_definition_blocks(
+  func : Function,
+) -> (@hashmap.HashMap[Int, Int], @hashmap.HashMap[Int, Inst]) {
+  let def_block : @hashmap.HashMap[Int, Int] = HashMap([])
+  let def_inst : @hashmap.HashMap[Int, Inst] = HashMap([])
+  if func.blocks.length() > 0 {
+    let entry_id = func.blocks[0].id
+    for i, ty in func.signature.params {
+      def_block.set(i, entry_id)
+      ignore(ty)
+    }
+  }
+  for block in func.blocks {
+    for param in block.params {
+      def_block.set(param.id, block.id)
+    }
+    for inst in block.instructions {
+      if inst.results.length() == 1 {
+        let value = inst.results[0]
+        def_block.set(value.id, block.id)
+        def_inst.set(value.id, inst)
+      }
+    }
+  }
+  (def_block, def_inst)
+}
+
+///|
+fn collect_iconst_ids(func : Function) -> @hashmap.HashMap[Int, Unit] {
+  let values : @hashmap.HashMap[Int, Unit] = HashMap([])
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Iconst(_) && inst.results.length() == 1 {
+        values.set(inst.results[0].id, ())
+      }
+    }
+  }
+  values
+}
+
+///|
+fn is_remat_candidate(
+  inst : Inst,
+  iconst_values : @hashmap.HashMap[Int, Unit],
+) -> Bool {
+  guard inst.results.length() == 1 else { return false }
+  match inst.opcode {
+    Iconst(_) | Fconst(_) | Bnot => true
+    Iadd | Isub | Band | Bor | Bxor =>
+      if inst.args.length() == 2 {
+        iconst_values.get(inst.args[0].id) is Some(_) ||
+        iconst_values.get(inst.args[1].id) is Some(_)
+      } else {
+        false
+      }
+    _ => false
+  }
+}
+
+///|
+fn collect_remat_values(
+  func : Function,
+  iconst_values : @hashmap.HashMap[Int, Unit],
+) -> @hashmap.HashMap[Int, Unit] {
+  let values : @hashmap.HashMap[Int, Unit] = HashMap([])
+  for block in func.blocks {
+    for inst in block.instructions {
+      if is_remat_candidate(inst, iconst_values) {
+        values.set(inst.results[0].id, ())
+      }
+    }
+  }
+  values
+}
+
+///|
+fn clone_remat_inst(func : Function, inst : Inst, result : Value) -> Inst {
+  let cloned = func.new_inst(inst.opcode, inst.args.copy(), [result])
+  for metadata in inst.metadata {
+    cloned.metadata.push(metadata)
+  }
+  cloned
+}
+
+///|
+fn rematerialize_value(
+  func : Function,
+  use_block_id : Int,
+  value : Value,
+  remat_values : @hashmap.HashMap[Int, Unit],
+  def_block : @hashmap.HashMap[Int, Int],
+  def_inst : @hashmap.HashMap[Int, Inst],
+  cache : @hashmap.HashMap[Int, Value],
+  insertion_point : Array[Inst],
+  result : OptResult,
+) -> Value {
+  if remat_values.get(value.id) is None {
+    return value
+  }
+  match def_block.get(value.id) {
+    Some(block_id) => if block_id == use_block_id { return value }
+    None => return value
+  }
+  match cache.get(value.id) {
+    Some(existing) => existing
+    None => {
+      let inst = match def_inst.get(value.id) {
+        Some(inst) => inst
+        None => return value
+      }
+      if inst.results.length() != 1 {
+        return value
+      }
+      let new_value = func.new_value(value.ty)
+      insertion_point.push(clone_remat_inst(func, inst, new_value))
+      cache.set(value.id, new_value)
+      result.mark_changed()
+      new_value
+    }
+  }
+}
+
+///|
+fn rematerialize_values(
+  func : Function,
+  use_block_id : Int,
+  values : Array[Value],
+  remat_values : @hashmap.HashMap[Int, Unit],
+  def_block : @hashmap.HashMap[Int, Int],
+  def_inst : @hashmap.HashMap[Int, Inst],
+  cache : @hashmap.HashMap[Int, Value],
+  insertion_point : Array[Inst],
+  result : OptResult,
+) -> Array[Value]? {
+  let mut updated : Array[Value]? = None
+  for i, value in values {
+    let remat = rematerialize_value(
+      func, use_block_id, value, remat_values, def_block, def_inst, cache, insertion_point,
+      result,
+    )
+    if remat.id != value.id {
+      if updated is None {
+        updated = Some(values.copy())
+      }
+      if updated is Some(items) {
+        items[i] = remat
+      }
+    }
+  }
+  updated
+}
+
+///|
+fn rematerialize_terminator_values(
+  func : Function,
+  use_block_id : Int,
+  term : Terminator,
+  remat_values : @hashmap.HashMap[Int, Unit],
+  def_block : @hashmap.HashMap[Int, Int],
+  def_inst : @hashmap.HashMap[Int, Inst],
+  cache : @hashmap.HashMap[Int, Value],
+  insertion_point : Array[Inst],
+  result : OptResult,
+) -> Terminator? {
+  match term {
+    Return(values) =>
+      match
+        rematerialize_values(
+          func, use_block_id, values, remat_values, def_block, def_inst, cache, insertion_point,
+          result,
+        ) {
+        Some(updated) => Some(Return(updated))
+        None => None
+      }
+    Jump(target, args) =>
+      match
+        rematerialize_values(
+          func, use_block_id, args, remat_values, def_block, def_inst, cache, insertion_point,
+          result,
+        ) {
+        Some(updated) => Some(Jump(target, updated))
+        None => None
+      }
+    Branch(cond, true_target, true_args, false_target, false_args) => {
+      let new_cond = rematerialize_value(
+        func, use_block_id, cond, remat_values, def_block, def_inst, cache, insertion_point,
+        result,
+      )
+      let new_true_args = rematerialize_values(
+        func, use_block_id, true_args, remat_values, def_block, def_inst, cache,
+        insertion_point, result,
+      ).unwrap_or(true_args)
+      let new_false_args = rematerialize_values(
+        func, use_block_id, false_args, remat_values, def_block, def_inst, cache,
+        insertion_point, result,
+      ).unwrap_or(false_args)
+      if new_cond.id != cond.id ||
+        !value_arrays_equal(new_true_args, true_args) ||
+        !value_arrays_equal(new_false_args, false_args) {
+        Some(
+          Branch(
+            new_cond, true_target, new_true_args, false_target, new_false_args,
+          ),
+        )
+      } else {
+        None
+      }
+    }
+    Brz(cond, true_target, false_target) => {
+      let remat = rematerialize_value(
+        func, use_block_id, cond, remat_values, def_block, def_inst, cache, insertion_point,
+        result,
+      )
+      if remat.id != cond.id {
+        Some(Brz(remat, true_target, false_target))
+      } else {
+        None
+      }
+    }
+    Brnz(cond, true_target, false_target) => {
+      let remat = rematerialize_value(
+        func, use_block_id, cond, remat_values, def_block, def_inst, cache, insertion_point,
+        result,
+      )
+      if remat.id != cond.id {
+        Some(Brnz(remat, true_target, false_target))
+      } else {
+        None
+      }
+    }
+    BrTable(index, targets, default_target) => {
+      let remat = rematerialize_value(
+        func, use_block_id, index, remat_values, def_block, def_inst, cache, insertion_point,
+        result,
+      )
+      if remat.id != index.id {
+        Some(BrTable(remat, targets, default_target))
+      } else {
+        None
+      }
+    }
+    TrapExit(_) => None
+  }
+}
+
+///|
+/// Rematerialize cheap, pure SSA definitions into each cross-block use.
+///
+/// This mirrors Cranelift's non-recursive rematerialization shape: constants,
+/// bit-not, and integer ALU-with-constant definitions are cloned in the use
+/// block once, immediately before their first use in that block.
+pub fn rematerialize_across_blocks(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("remat")
+  let (def_block, def_inst) = collect_definition_blocks(func)
+  let iconst_values = collect_iconst_ids(func)
+  let remat_values = collect_remat_values(func, iconst_values)
+  if remat_values.length() == 0 {
+    return result
+  }
+  for block in func.blocks {
+    let cache : @hashmap.HashMap[Int, Value] = HashMap([])
+    let new_insts : Array[Inst] = []
+    let old_len = block.instructions.length()
+    for inst in block.instructions {
+      if rematerialize_values(
+          func,
+          block.id,
+          inst.args,
+          remat_values,
+          def_block,
+          def_inst,
+          cache,
+          new_insts,
+          result,
+        )
+        is Some(updated_args) {
+        inst.args.clear()
+        for arg in updated_args {
+          inst.args.push(arg)
+        }
+      }
+      new_insts.push(inst)
+    }
+    if block.terminator is Some(term) {
+      if rematerialize_terminator_values(
+          func,
+          block.id,
+          term,
+          remat_values,
+          def_block,
+          def_inst,
+          cache,
+          new_insts,
+          result,
+        )
+        is Some(updated) {
+        block.terminator = Some(updated)
+      }
+    }
+    if new_insts.length() != old_len {
+      block.instructions.clear()
+      for inst in new_insts {
+        block.instructions.push(inst)
+      }
+    }
+  }
+  result
+}
+
+///|
 pub fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::new()
   result.add_pass("dce")

@@ -32,6 +32,8 @@ pub fn propagate_copies(Function) -> OptResult
 
 pub fn propagate_copies_global(Function) -> OptResult
 
+pub fn rematerialize_across_blocks(Function) -> OptResult
+
 pub fn simplify_branches(Function) -> OptResult
 
 pub fn thread_jumps(Function) -> OptResult
