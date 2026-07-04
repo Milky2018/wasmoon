@@ -1,11 +1,26 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/machv_regalloc"
 
+import {
+  "Milky2018/machv",
+  "Milky2018/regalloc",
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn allocate_and_apply(@machv.Function, Array[@machv.PReg]) -> ApplyResult
+
+pub fn allocate_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation
+
+pub fn project_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Program
 
 // Errors
 
 // Types and methods
+pub(all) struct ApplyResult {
+  allocation : @regalloc.Allocation
+  spill_slots : Array[@machv.StackSlot]
+} derive(@debug.Debug)
 
 // Type aliases
 
