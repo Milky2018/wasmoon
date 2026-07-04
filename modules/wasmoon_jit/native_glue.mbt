@@ -111,3 +111,23 @@ pub fn plan_milkir_integration_for_target(
     err => raise PipelineFailure(message=to_repr(err).to_string())
   }
 }
+
+///|
+pub fn plan_wasm_body_milkir_integration_for_target(
+  func : @milkir.Function,
+  target : @machv_emit.EmitTarget,
+) -> JitIntegrationPlan raise JitPipelineError {
+  let machv_func = lower_wasm_body_milkir_for_target(func, target)
+  try {
+    @machv_regalloc.allocate_and_apply(
+      machv_func,
+      allocatable_regs_for_target(target),
+    )
+    |> ignore
+    // TODO(ISS-022): install emitted CodeObject bytes through jit_ffi and
+    // replace the legacy VCode JIT execution path end-to-end.
+    plan_integration_for_target(func, machv_func, target)
+  } catch {
+    err => raise PipelineFailure(message=to_repr(err).to_string())
+  }
+}

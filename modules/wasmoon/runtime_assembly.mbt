@@ -84,7 +84,7 @@ pub fn plan_wasm_function_with_compiler_infra(
     let milk = @wasm_frontend.lower_function(env, mod_, func_local_idx)
     @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
     |> ignore
-    @wasmoon_jit.plan_milkir_integration_for_target(milk, target)
+    @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, target)
   } catch {
     err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
   }

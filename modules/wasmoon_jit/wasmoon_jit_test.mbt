@@ -285,6 +285,34 @@ test "Wasmoon JIT can request Wasm body ABI lowering" {
 }
 
 ///|
+test "plan Wasm body MilkIR through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([Ptr, I64, I64], [I64])
+  let milk = @milkir.Function::new("wasm_body_add64", signature)
+  let vmctx = milk.new_value(Ptr)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let sum = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.set_terminator(Return([sum]))
+  let plan = plan_wasm_body_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  debug_inspect(plan.target, content="X64")
+  inspect(plan.entry_symbol, content="wasm_body_add64")
+  inspect(plan.object.code.length() > 0, content="true")
+  inspect(plan.object.debug_entries.length() > 0, content="true")
+  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
+  guard lowered.param_pregs[0] is Some(vmctx_preg) else {
+    fail("missing vmctx")
+  }
+  guard lowered.param_pregs[1] is Some(arg0_preg) else { fail("missing arg0") }
+  inspect(vmctx_preg.index, content="7")
+  inspect(arg0_preg.index, content="6")
+  inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
+}
+
+///|
 test "plan MilkIR branch block params through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([], [I64])
   let milk = @milkir.Function::new("branch_block_params", signature)
