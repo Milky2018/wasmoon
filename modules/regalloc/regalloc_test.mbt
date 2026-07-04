@@ -538,6 +538,44 @@ test "bundle merge planner coalesces only compatible non-overlapping ranges" {
 }
 
 ///|
+test "bundle split planner partitions around split point and handles fallbacks" {
+  let ranges : Array[BundleSplitRange] = [
+    {
+      range_id: 0,
+      start: Some(ProgramPoint::new(0, 0)),
+      end: Some(ProgramPoint::new(0, 2)),
+    },
+    {
+      range_id: 1,
+      start: Some(ProgramPoint::new(0, 4)),
+      end: Some(ProgramPoint::new(0, 8)),
+    },
+  ]
+  let split = plan_bundle_split(
+    ranges,
+    Some(ProgramPoint::new(0, 3)),
+    [0],
+    0,
+    8,
+  )
+  match split {
+    Split(before, after) => {
+      debug_inspect(before, content="[0]")
+      debug_inspect(after, content="[1]")
+    }
+    _ => abort("expected split")
+  }
+  match plan_bundle_split(ranges, Some(ProgramPoint::new(0, 9)), [0], 0, 8) {
+    Minimal => ()
+    _ => abort("expected minimal fallback")
+  }
+  match plan_bundle_split(ranges, None, [0], 0, 8) {
+    SpillWhole => ()
+    _ => abort("expected whole-bundle spill")
+  }
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

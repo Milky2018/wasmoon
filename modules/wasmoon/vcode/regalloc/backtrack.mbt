@@ -1023,53 +1023,45 @@ fn BacktrackingAllocator::split_bundle(
   // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
   // Once a spillset exceeds this cap, fall back to direct spilling.
   let spillset_id = bundle.spillset_id
-  if spillset_id >= 0 &&
+  let split_count = if spillset_id >= 0 &&
+    spillset_id < self.spillset_split_counts.length() {
+    self.spillset_split_counts[spillset_id]
+  } else {
+    0
+  }
+  let split_ranges : Array[@core_regalloc.BundleSplitRange] = []
+  for range_id in bundle.range_ids {
+    let range = self.ranges.get(range_id)
+    split_ranges.push({
+      range_id,
+      start: range.start(self.block_order).map(backtrack_core_point),
+      end: range.end(self.block_order).map(backtrack_core_point),
+    })
+  }
+  let split_plan = @core_regalloc.plan_bundle_split(
+    split_ranges,
+    split_opt.map(fn(pair) {
+      let (point, _) = pair
+      backtrack_core_point(point)
+    }),
+    backtrack_core_block_order(self.block_order),
+    split_count,
+    self.max_splits_per_spillset,
+  )
+  if split_opt is Some(_) &&
+    spillset_id >= 0 &&
     spillset_id < self.spillset_split_counts.length() &&
-    self.spillset_split_counts[spillset_id] >= self.max_splits_per_spillset {
-    self.split_into_minimal_bundles(bundle, split_hint)
-    return
+    split_count < self.max_splits_per_spillset {
+    self.spillset_split_counts[spillset_id] = split_count + 1
   }
 
-  match split_opt {
-    Some((split_point, split_hint_reg)) => {
-      if spillset_id >= 0 && spillset_id < self.spillset_split_counts.length() {
-        self.spillset_split_counts[spillset_id] = self.spillset_split_counts[spillset_id] +
-          1
+  match split_plan {
+    Split(before_ranges, after_ranges) => {
+      let split_hint_reg = match split_opt {
+        Some((_, hint)) => hint
+        None => abort("regalloc split plan lost split hint")
       }
-      // Split the bundle at this point
-      // Create two new bundles: before and after the split point
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
-
-      // Partition ranges into before/after split point
-      let before_ranges : Array[Int] = []
-      let after_ranges : Array[Int] = []
-      for range_id in bundle.range_ids {
-        let range = self.ranges.get(range_id)
-        if range.end(self.block_order) is Some(end_point) {
-          if end_point.compare_with_order(split_point, self.block_order) <= 0 {
-            before_ranges.push(range_id)
-          } else if range.start(self.block_order) is Some(start_point) {
-            if start_point.compare_with_order(split_point, self.block_order) >=
-              0 {
-              after_ranges.push(range_id)
-            } else {
-              // Range spans the split point - assign to after for simplicity
-              // A more sophisticated implementation would split the range itself
-              after_ranges.push(range_id)
-            }
-          } else {
-            after_ranges.push(range_id)
-          }
-        } else {
-          after_ranges.push(range_id)
-        }
-      }
-
-      // If we couldn't split effectively, just spill
-      if before_ranges.is_empty() || after_ranges.is_empty() {
-        self.split_into_minimal_bundles(bundle, Some(split_hint_reg))
-        return
-      }
 
       // Before bundle
       let before_bundle = Bundle::new(
@@ -1132,7 +1124,8 @@ fn BacktrackingAllocator::split_bundle(
       // Mark original bundle as processed (it's been split)
       bundle.allocation = Spill(spill_bundle.slot)
     }
-    None => {
+    Minimal => self.split_into_minimal_bundles(bundle, split_hint)
+    SpillWhole => {
       // No conflict point found, just spill the entire bundle
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
       let slot = spill_bundle.slot

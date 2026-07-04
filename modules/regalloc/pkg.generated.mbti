@@ -24,6 +24,8 @@ pub fn eviction_cutoff(Int?, Int?) -> Int?
 
 pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
 
+pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
+
 pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
 
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
@@ -98,6 +100,18 @@ pub(all) struct BundleMergeRange {
   has_fixed_conflict : Bool
   has_fixed_def : Bool
 } derive(@debug.Debug)
+
+pub(all) enum BundleSplitPlan {
+  Split(Array[Int], Array[Int])
+  Minimal
+  SpillWhole
+} derive(@debug.Debug)
+
+pub(all) struct BundleSplitRange {
+  range_id : Int
+  start : ProgramPoint?
+  end : ProgramPoint?
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CompactSpillSet {
   old_slot : Int
