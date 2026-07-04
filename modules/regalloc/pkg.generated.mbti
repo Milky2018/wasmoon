@@ -8,6 +8,8 @@ import {
 // Values
 pub fn allocate(Program) -> Allocation
 
+pub fn build_live_ranges(Program) -> LiveRangeSet
+
 // Errors
 
 // Types and methods
@@ -15,12 +17,13 @@ pub(all) struct Allocation {
   assignments : Array[Assignment]
   mut spill_count : Int
 } derive(@debug.Debug)
+pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
 pub fn Allocation::location_of(Self, VirtualReg) -> Location?
 pub fn Allocation::new() -> Self
 
 pub(all) struct Assignment {
   vreg : VirtualReg
-  location : Location
+  mut location : Location
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Block {
@@ -40,6 +43,36 @@ pub fn Instruction::add_clobber(Self, PhysicalReg) -> Unit
 pub fn Instruction::add_operand(Self, Operand) -> Unit
 pub fn Instruction::new(Int) -> Self
 
+pub(all) struct LiveRange {
+  id : Int
+  vreg : VirtualReg
+  ranges : Array[ProgramRange]
+  uses : Array[UsePosition]
+  mut bundle_id : Int
+  mut allocation : Location?
+  mut crosses_call : Bool
+} derive(@debug.Debug)
+pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
+pub fn LiveRange::add_use(Self, UsePosition) -> Unit
+pub fn LiveRange::end(Self) -> ProgramPoint?
+pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
+pub fn LiveRange::has_fixed_constraint(Self) -> Bool
+pub fn LiveRange::new(Int, VirtualReg) -> Self
+pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
+pub fn LiveRange::start(Self) -> ProgramPoint?
+pub fn LiveRange::total_length(Self) -> Int
+pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
+
+pub(all) struct LiveRangeSet {
+  ranges : Array[LiveRange]
+  block_order : Array[Int]
+} derive(@debug.Debug)
+pub fn LiveRangeSet::add_range(Self, LiveRange) -> Unit
+pub fn LiveRangeSet::get(Self, Int) -> LiveRange
+pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
+pub fn LiveRangeSet::length(Self) -> Int
+pub fn LiveRangeSet::new(Array[Int]) -> Self
+
 pub(all) enum Location {
   Reg(PhysicalReg)
   Spill(Int)
@@ -51,6 +84,11 @@ pub(all) struct Operand {
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::use_reg(VirtualReg) -> Self
+
+pub(all) enum OperandConstraint {
+  AnyReg
+  FixedReg(PhysicalReg)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum OperandRole {
   Use
@@ -70,11 +108,39 @@ pub(all) struct Program {
 pub fn Program::add_block(Self, Block) -> Unit
 pub fn Program::new(Array[PhysicalReg]) -> Self
 
+pub(all) struct ProgramPoint {
+  block : Int
+  inst : Int
+} derive(Eq, @debug.Debug)
+pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int]) -> Int
+pub fn ProgramPoint::new(Int, Int) -> Self
+
+pub(all) struct ProgramRange {
+  start : ProgramPoint
+  end : ProgramPoint
+} derive(Eq, @debug.Debug)
+pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int]) -> Bool
+pub fn ProgramRange::new(ProgramPoint, ProgramPoint) -> Self
+pub fn ProgramRange::overlaps(Self, Self, Array[Int]) -> Bool
+
 pub(all) enum RegClass {
   Int
   Float
   Vector
 } derive(Eq, @debug.Debug)
+
+pub(all) enum UseKind {
+  LiveDef
+  LiveUse
+  LiveUseDef
+} derive(Eq, @debug.Debug)
+
+pub(all) struct UsePosition {
+  point : ProgramPoint
+  kind : UseKind
+  constraint : OperandConstraint
+} derive(Eq, @debug.Debug)
+pub fn UsePosition::new(ProgramPoint, UseKind, OperandConstraint) -> Self
 
 pub(all) struct VirtualReg {
   id : Int

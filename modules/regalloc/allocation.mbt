@@ -7,7 +7,7 @@ pub(all) enum Location {
 ///|
 pub(all) struct Assignment {
   vreg : VirtualReg
-  location : Location
+  mut location : Location
 } derive(Eq, Debug)
 
 ///|
@@ -19,6 +19,21 @@ pub(all) struct Allocation {
 ///|
 pub fn Allocation::new() -> Allocation {
   { assignments: [], spill_count: 0 }
+}
+
+///|
+pub fn Allocation::assign(
+  self : Allocation,
+  vreg : VirtualReg,
+  location : Location,
+) -> Unit {
+  for assignment in self.assignments {
+    if assignment.vreg == vreg {
+      assignment.location = location
+      return
+    }
+  }
+  self.assignments.push({ vreg, location })
 }
 
 ///|

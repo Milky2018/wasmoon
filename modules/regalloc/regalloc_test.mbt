@@ -53,3 +53,50 @@ test "linear scan reuses registers for non-overlapping intervals" {
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
   inspect(allocation.spill_count, content="0")
 }
+
+///|
+test "build_live_ranges records spans and uses" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0])
+  let block = Block::new(0)
+  let def_inst = Instruction::new(0)
+  def_inst.add_operand(Operand::def(v0))
+  block.append(def_inst)
+  let use_inst = Instruction::new(1)
+  use_inst.add_operand(Operand::use_reg(v0))
+  block.append(use_inst)
+  program.add_block(block)
+  let ranges = build_live_ranges(program)
+  inspect(ranges.length(), content="1")
+  let range = ranges.get_by_vreg(v0).unwrap()
+  inspect(range.start() == Some(ProgramPoint::new(0, 0)), content="true")
+  inspect(range.end() == Some(ProgramPoint::new(0, 1)), content="true")
+  inspect(range.uses.length(), content="2")
+  inspect(range.uses[0].kind == LiveDef, content="true")
+  inspect(range.uses[1].kind == LiveUse, content="true")
+}
+
+///|
+test "linear scan evicts longer active interval for shorter current interval" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let v1 : VirtualReg = { id: 1, class: Int }
+  let program = Program::new([r0])
+  let block = Block::new(0)
+  let long_def = Instruction::new(0)
+  long_def.add_operand(Operand::def(v0))
+  block.append(long_def)
+  let short_live = Instruction::new(1)
+  short_live.add_operand(Operand::def(v1))
+  short_live.add_operand(Operand::use_reg(v1))
+  block.append(short_live)
+  let long_use = Instruction::new(2)
+  long_use.add_operand(Operand::use_reg(v0))
+  block.append(long_use)
+  program.add_block(block)
+  let allocation = allocate(program)
+  inspect(allocation.location_of(v0) == Some(Spill(0)), content="true")
+  inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
+  inspect(allocation.spill_count, content="1")
+}
