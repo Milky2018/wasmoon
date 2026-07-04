@@ -305,30 +305,18 @@ pub fn JITModule::load_with_imports(
                 Some(ec) => {
                   // AArch64 hostcall trampolines may carry runtime func-address
                   // fixups (LoadJITFuncPtr). Patch them before first execution.
+                  let func_table_ptr = ctx.get_func_table_ptr()
                   for fixup in mc.get_func_addr_fixups() {
-                    let target_ptr = if fixup.func_idx >= 0 {
-                      let func_table_ptr = ctx.get_func_table_ptr()
-                      if func_table_ptr == 0L {
-                        abort(
-                          "missing function table for hostcall import fixup idx \{fixup.func_idx}",
-                        )
-                      }
-                      c_jit_read_i64(
-                        func_table_ptr + fixup.func_idx.to_int64() * 8L,
-                      )
-                    } else {
-                      match
-                        @wasmoon_jit.resolve_runtime_func_fixup_idx(
-                          fixup.func_idx,
-                        ) {
-                        Some(ptr) => ptr
-                        None =>
-                          abort(
-                            "unknown runtime func fixup idx \{fixup.func_idx}",
-                          )
-                      }
+                    let target_ptr = match
+                      @wasmoon_jit.resolve_func_addr_fixup_target(
+                        fixup.func_idx,
+                        func_table_ptr,
+                      ) {
+                      Some(ptr) => ptr
+                      None =>
+                        abort("unknown func addr fixup idx \{fixup.func_idx}")
                     }
-                    @wasmoon_jit.patch_aarch64_load_imm64_fixed(
+                    @wasmoon_jit.patch_aarch64_func_addr_fixup_parts(
                       ec.ptr(),
                       fixup.offset,
                       fixup.reg,

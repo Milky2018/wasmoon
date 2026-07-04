@@ -711,7 +711,22 @@ pub fn patch_aarch64_func_addr_fixup(
   fixup : @cwasm.FuncAddrFixup,
   target_ptr : Int64,
 ) -> Unit {
-  patch_aarch64_load_imm64_fixed(exec_ptr, fixup.offset, fixup.reg, target_ptr)
+  patch_aarch64_func_addr_fixup_parts(
+    exec_ptr,
+    fixup.offset,
+    fixup.reg,
+    target_ptr,
+  )
+}
+
+///|
+pub fn patch_aarch64_func_addr_fixup_parts(
+  exec_ptr : Int64,
+  offset : Int,
+  reg : Int,
+  target_ptr : Int64,
+) -> Unit {
+  patch_aarch64_load_imm64_fixed(exec_ptr, offset, reg, target_ptr)
 }
 
 ///|

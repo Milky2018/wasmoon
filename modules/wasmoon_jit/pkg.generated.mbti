@@ -268,6 +268,8 @@ pub fn patch_aarch64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
 
 pub fn patch_aarch64_func_addr_fixup(Int64, @cwasm.FuncAddrFixup, Int64) -> Unit
 
+pub fn patch_aarch64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
+
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
