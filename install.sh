@@ -5,6 +5,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")" && pwd)"
+wasmoon_module="${repo_root}/modules/wasmoon"
 build_dir="${repo_root}/target/moon-install-build"
 install_dir="${repo_root}/target/moon-install-bin"
 
@@ -13,7 +14,7 @@ mkdir -p "$install_dir"
 
 # Build release artifacts first, then copy selected executables.
 # This mirrors Wasmtime's release-artifact pipeline style.
-moon build --target native --release --target-dir "$build_dir"
+moon -C "$wasmoon_module" build --target native --release --target-dir "$build_dir"
 
 main_bin_src="${build_dir}/native/release/build/cmd/wasmoon/wasmoon.exe"
 tools_bin_src="${build_dir}/native/release/build/cmd/wasmoon-tools/wasmoon-tools.exe"

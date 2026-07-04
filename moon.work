@@ -1,0 +1,12 @@
+members = [
+  "./modules/wasm_core",
+  "./modules/milkir",
+  "./modules/machv",
+  "./modules/regalloc",
+  "./modules/machv_regalloc",
+  "./modules/machv_emit",
+  "./modules/x64_target",
+  "./modules/aarch64_target",
+  "./modules/wasmoon_jit",
+  "./modules/wasmoon",
+]
