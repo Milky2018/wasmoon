@@ -224,6 +224,10 @@ pub fn get_spectest_print_ptr() -> Int64
 
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
+pub fn hostcall_value_byte_count(@types.ValueType) -> Int
+
+pub fn hostcall_value_slot_count(@types.ValueType) -> Int
+
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn is_funcref_ptr(Int64) -> Bool
@@ -247,6 +251,8 @@ pub fn memory_read(Int64, Int64, Int) -> Bytes
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
 
@@ -444,6 +450,14 @@ pub(all) enum FunctionTemperature {
   Hot
 }
 pub impl Show for FunctionTemperature
+
+pub(all) struct HostcallImportTrampolineLayout {
+  arg_slots : Int
+  result_slots : Int
+  values_vec_bytes : Int
+  int_overflow_count : Int
+  float_overflow_types : Array[@types.ValueType]
+}
 
 pub(all) struct HotThreshold {
   warm_threshold : Int

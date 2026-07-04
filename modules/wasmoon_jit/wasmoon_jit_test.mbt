@@ -258,6 +258,29 @@ test "entry trampoline production gate is conservative" {
 }
 
 ///|
+test "plan hostcall import trampoline values_vec layout" {
+  let params : Array[@types.ValueType] = [
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    ExternRef,
+    I64,
+  ]
+  let results : Array[@types.ValueType] = [I64, V128, F32]
+  let layout = plan_hostcall_import_trampoline_layout(params, results, 2, 2)
+  inspect(layout.arg_slots, content="8")
+  inspect(layout.result_slots, content="4")
+  inspect(layout.values_vec_bytes, content="96")
+  inspect(layout.int_overflow_count, content="2")
+  debug_inspect(layout.float_overflow_types, content="[V128]")
+  inspect(hostcall_value_slot_count(V128), content="2")
+  inspect(hostcall_value_byte_count(V128), content="16")
+  inspect(hostcall_value_slot_count(ExternRef), content="1")
+}
+
+///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([F64, F64], [F64])
   let milk = @milkir.Function::new("fadd64", signature)

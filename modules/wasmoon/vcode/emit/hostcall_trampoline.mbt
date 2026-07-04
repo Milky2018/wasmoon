@@ -39,19 +39,6 @@ fn value_type_to_ir_type(ty : @types.ValueType) -> @ir.Type {
 }
 
 ///|
-fn slot_count_for_type(ty : @types.ValueType) -> Int {
-  match ty {
-    V128 => 2
-    _ => 1
-  }
-}
-
-///|
-fn bytes_for_type(ty : @types.ValueType) -> Int {
-  slot_count_for_type(ty) * 8
-}
-
-///|
 fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   let isa = @isa.ISA::current()
   for preg in isa.call_clobbered_gprs() {
@@ -80,41 +67,22 @@ pub fn emit_hostcall_import_trampoline(
   // Pre-compute stack overflow layout for incoming params.
   let max_int_reg = isa.wasm_user_arg_gprs().length()
   let max_float_reg = isa.wasm_arg_fprs().length()
-  let mut total_int = 0
-  let mut total_float = 0
-  for ty in param_types {
-    let cls = value_type_to_reg_class(ty)
-    if cls is Int {
-      total_int = total_int + 1
-    } else {
-      total_float = total_float + 1
-    }
-  }
-  let int_overflow = if total_int > max_int_reg {
-    total_int - max_int_reg
-  } else {
-    0
-  }
+  let layout = @wasmoon_jit.plan_hostcall_import_trampoline_layout(
+    param_types, result_types, max_int_reg, max_float_reg,
+  )
   let float_overflow_classes : Array[@abi.RegClass] = []
-  let mut float_seen = 0
-  for ty in param_types {
-    let cls = value_type_to_reg_class(ty)
-    if cls is Int {
-      continue
-    }
-    if float_seen >= max_float_reg {
-      float_overflow_classes.push(cls)
-    }
-    float_seen = float_seen + 1
+  for ty in layout.float_overflow_types {
+    float_overflow_classes.push(value_type_to_reg_class(ty))
   }
   let (int_offsets, float_offsets, _) = @abi.wasm_layout_overflow_stack(
-    int_overflow, float_overflow_classes,
+    layout.int_overflow_count,
+    float_overflow_classes,
   )
 
   // Track which params are passed in registers so prologue can move them.
   let param_vregs : Array[@abi.VReg?] = Array::make(param_types.length(), None)
   let mut int_seen = 0
-  float_seen = 0
+  let mut float_seen = 0
   for i, ty in param_types {
     let cls = value_type_to_reg_class(ty)
     if cls is Int {
@@ -137,16 +105,7 @@ pub fn emit_hostcall_import_trampoline(
   }
 
   // Reserve outgoing args area for our values_vec buffer.
-  let mut arg_slots = 0
-  for ty in param_types {
-    arg_slots = arg_slots + slot_count_for_type(ty)
-  }
-  let mut result_slots = 0
-  for ty in result_types {
-    result_slots = result_slots + slot_count_for_type(ty)
-  }
-  let values_vec_bytes = (arg_slots + result_slots) * 8
-  func.update_max_outgoing_args_size(values_vec_bytes)
+  func.update_max_outgoing_args_size(layout.values_vec_bytes)
 
   // Single-block trampoline.
   let block = func.new_block()
@@ -206,7 +165,7 @@ pub fn emit_hostcall_import_trampoline(
         block.add_inst(st)
       }
     }
-    slot_off = slot_off + bytes_for_type(ty)
+    slot_off = slot_off + @wasmoon_jit.hostcall_value_byte_count(ty)
 
     // Update class counters (used to compute stack offsets).
     if cls is Int {
@@ -233,11 +192,15 @@ pub fn emit_hostcall_import_trampoline(
   c_host.add_def({ reg: Virtual(host_addr_vreg) })
   block.add_inst(c_host)
   let arg_slots_vreg = func.new_vreg(Int)
-  let c_arg_slots = @instr.VCodeInst::new(LoadConst(arg_slots.to_int64()))
+  let c_arg_slots = @instr.VCodeInst::new(
+    LoadConst(layout.arg_slots.to_int64()),
+  )
   c_arg_slots.add_def({ reg: Virtual(arg_slots_vreg) })
   block.add_inst(c_arg_slots)
   let result_slots_vreg = func.new_vreg(Int)
-  let c_res_slots = @instr.VCodeInst::new(LoadConst(result_slots.to_int64()))
+  let c_res_slots = @instr.VCodeInst::new(
+    LoadConst(layout.result_slots.to_int64()),
+  )
   c_res_slots.add_def({ reg: Virtual(result_slots_vreg) })
   block.add_inst(c_res_slots)
   let call = @instr.VCodeInst::new(CallPtr(5, 0, C))
@@ -305,7 +268,7 @@ pub fn emit_hostcall_import_trampoline(
         ret_regs.push(Virtual(dst))
       }
     }
-    res_off = res_off + bytes_for_type(ty)
+    res_off = res_off + @wasmoon_jit.hostcall_value_byte_count(ty)
   }
   block.set_terminator(Return(ret_regs))
 
