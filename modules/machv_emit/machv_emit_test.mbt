@@ -711,6 +711,50 @@ test "emit AArch64 compare branch terminator" {
 }
 
 ///|
+test "reject unmaterialized terminator edge arguments" {
+  let func = @machv.Function::new("edge_args")
+  let entry = func.new_block()
+  let target = func.new_block()
+  entry.set_terminator(
+    TermJump(target.id, [Physical({ index: 0, class: Int })]),
+  )
+  target.set_terminator(TermReturn([]))
+  try emit_function_for_target(func, X64) catch {
+    UnsupportedOperand(_) => inspect("unsupported", content="unsupported")
+    _ => fail("unexpected emit error")
+  } noraise {
+    _ => fail("expected unsupported edge arguments")
+  }
+}
+
+///|
+test "reject unmaterialized conditional edge arguments" {
+  let func = @machv.Function::new("branch_edge_args")
+  let entry = func.new_block()
+  let then_block = func.new_block()
+  let else_block = func.new_block()
+  entry.set_terminator(
+    TermBranchZero(
+      Physical({ index: 0, class: Int }),
+      true,
+      true,
+      then_block.id,
+      [Physical({ index: 1, class: Int })],
+      else_block.id,
+      [],
+    ),
+  )
+  then_block.set_terminator(TermReturn([]))
+  else_block.set_terminator(TermReturn([]))
+  try emit_function_for_target(func, X64) catch {
+    UnsupportedOperand(_) => inspect("unsupported", content="unsupported")
+    _ => fail("unexpected emit error")
+  } noraise {
+    _ => fail("expected unsupported edge arguments")
+  }
+}
+
+///|
 test "emit AArch64 integer constants and arithmetic bytes" {
   let func = @machv.Function::new("int_ops")
   let entry = func.new_block()

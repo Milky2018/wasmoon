@@ -2899,9 +2899,28 @@ fn opcode_for_terminator(
 ) -> @machv.Opcode raise EmitError {
   match term {
     TermReturn(_) => Return
-    TermJump(target, _) => Jump(target)
+    TermJump(target, args) => {
+      guard args.length() == 0 else {
+        raise UnsupportedOperand(
+          message="terminator edge arguments require machv_regalloc materialization before emission",
+        )
+      }
+      Jump(target)
+    }
     TermTrap(reason) => Trap(reason)
     _ => raise UnsupportedOpcode(opcode=terminator_debug_name(term))
+  }
+}
+
+///|
+fn require_no_edge_args(
+  args : Array[@machv.Reg],
+  context : String,
+) -> Unit raise EmitError {
+  guard args.length() == 0 else {
+    raise UnsupportedOperand(
+      message="\{context} edge arguments require machv_regalloc materialization before emission",
+    )
   }
 }
 
@@ -3023,24 +3042,61 @@ fn emit_conditional_terminator(
   target : EmitTarget,
   term : @machv.Terminator,
 ) -> Unit raise EmitError {
-  // TODO(machv_emit): materialize block argument transfers before branch emission.
   match term {
-    TermBranch(cond, true_target, _, false_target, _) =>
+    TermBranch(cond, true_target, true_args, false_target, false_args) => {
+      require_no_edge_args(true_args, "branch true")
+      require_no_edge_args(false_args, "branch false")
       emit_branch_zero(
         object, target, cond, true, true, true_target, false_target,
       )
-    TermBranchZero(reg, is_nonzero, is_64, true_target, _, false_target, _) =>
+    }
+    TermBranchZero(
+      reg,
+      is_nonzero,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) => {
+      require_no_edge_args(true_args, "branch-zero true")
+      require_no_edge_args(false_args, "branch-zero false")
       emit_branch_zero(
         object, target, reg, is_nonzero, is_64, true_target, false_target,
       )
-    TermBranchCmp(lhs, rhs, cond, is_64, true_target, _, false_target, _) =>
+    }
+    TermBranchCmp(
+      lhs,
+      rhs,
+      cond,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) => {
+      require_no_edge_args(true_args, "branch-cmp true")
+      require_no_edge_args(false_args, "branch-cmp false")
       emit_branch_cmp(
         object, target, lhs, rhs, cond, is_64, true_target, false_target,
       )
-    TermBranchCmpImm(lhs, imm, cond, is_64, true_target, _, false_target, _) =>
+    }
+    TermBranchCmpImm(
+      lhs,
+      imm,
+      cond,
+      is_64,
+      true_target,
+      true_args,
+      false_target,
+      false_args
+    ) => {
+      require_no_edge_args(true_args, "branch-cmp-imm true")
+      require_no_edge_args(false_args, "branch-cmp-imm false")
       emit_branch_cmp_imm(
         object, target, lhs, imm, cond, is_64, true_target, false_target,
       )
+    }
     _ => raise UnsupportedOpcode(opcode=terminator_debug_name(term))
   }
 }
