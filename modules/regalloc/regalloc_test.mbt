@@ -236,3 +236,32 @@ test "reserve spill slots aligns vector slots" {
   inspect(vector_slot.next_slot, content="4")
   inspect(vector_slot.slots_used, content="2")
 }
+
+///|
+test "stack frame allocates spill slots" {
+  let frame = StackFrame::new(16)
+  let offset1 = frame.alloc_spill_slot({ id: 0, class: Int }, 8, 8)
+  inspect(offset1, content="-8")
+  let offset2 = frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8)
+  inspect(offset2, content="-16")
+  frame.finalize()
+  inspect(frame.size(), content="16")
+}
+
+///|
+test "stack frame aligns mixed slots" {
+  let frame = StackFrame::new(16)
+  inspect(frame.alloc_spill_slot({ id: 0, class: Int }, 4, 4), content="-4")
+  inspect(frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8), content="-16")
+  frame.finalize()
+  inspect(frame.size(), content="16")
+}
+
+///|
+test "stack frame records callee saved registers" {
+  let frame = StackFrame::new(16)
+  inspect(frame.add_callee_saved({ id: 19, class: Int }), content="-8")
+  inspect(frame.add_callee_saved({ id: 20, class: Int }), content="-16")
+  frame.finalize()
+  inspect(frame.get_callee_saved().length(), content="2")
+}

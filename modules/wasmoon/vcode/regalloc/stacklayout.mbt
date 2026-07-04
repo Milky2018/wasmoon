@@ -7,89 +7,46 @@
 // 3. Caller/callee-saved register handling
 // 4. Stack pointer adjustment
 
-// ============ Stack Slot ============
-
-///|
-/// A stack slot - a location on the stack
-struct StackSlot {
-  // Offset from frame pointer (negative = below FP, positive = above FP)
-  offset : Int
-  // Size in bytes
-  size : Int
-  // Alignment requirement
-  align : Int
-  // What the slot is used for
-  kind : StackSlotKind
-}
-
-///|
-/// Kind of stack slot
-pub enum StackSlotKind {
-  // Spilled register
-  Spill(@abi.VReg)
-  // Local variable
-  Local(Int) // Local index
-  // Outgoing argument (for calls)
-  OutgoingArg(Int) // Argument index
-  // Saved callee-saved register
-  CalleeSaved(@abi.PReg)
-}
-
-///|
-fn StackSlotKind::to_string(self : StackSlotKind) -> String {
-  match self {
-    Spill(vreg) => "spill(\{vreg})"
-    Local(idx) => "local\{idx}"
-    OutgoingArg(idx) => "arg\{idx}"
-    CalleeSaved(preg) => "saved(\{preg})"
-  }
-}
-
-///|
-pub impl Show for StackSlotKind with fn output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
-///|
-fn StackSlot::to_string(self : StackSlot) -> String {
-  let sign = if self.offset >= 0 { "+" } else { "" }
-  "[fp\{sign}\{self.offset}] \{self.kind} (\{self.size}B, align \{self.align})"
-}
-
-///|
-pub impl Show for StackSlot with fn output(self, logger) {
-  logger.write_string(self.to_string())
-}
-
 // ============ Stack Frame ============
 
 ///|
 /// Stack frame layout for a function
 struct StackFrame {
-  // All stack slots
-  slots : Array[StackSlot]
-  // Total frame size (must be aligned)
-  mut frame_size : Int
-  // Required alignment for the frame
-  frame_align : Int
-  // Offset for the next spill slot
-  mut next_spill_offset : Int
-  // Offset for the next outgoing arg
-  mut next_arg_offset : Int
-  // Callee-saved registers used in this function
-  callee_saved_regs : Array[@abi.PReg]
+  inner : @core_regalloc.StackFrame
+}
+
+///|
+fn reg_class_to_core(class : @abi.RegClass) -> @core_regalloc.RegClass {
+  match class {
+    Int => Int
+    Float32 | Float64 => Float
+    Vector => Vector
+  }
+}
+
+///|
+fn vreg_to_core(vreg : @abi.VReg) -> @core_regalloc.VirtualReg {
+  { id: vreg.id, class: reg_class_to_core(vreg.class) }
+}
+
+///|
+fn preg_to_core(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+  { id: preg.index, class: reg_class_to_core(preg.class) }
+}
+
+///|
+fn preg_from_core(preg : @core_regalloc.PhysicalReg) -> @abi.PReg {
+  let class : @abi.RegClass = match preg.class {
+    Int => Int
+    Float => Float64
+    Vector => Vector
+  }
+  { index: preg.id, class }
 }
 
 ///|
 pub fn StackFrame::new(frame_align : Int) -> StackFrame {
-  {
-    slots: [],
-    frame_size: 0,
-    frame_align,
-    next_spill_offset: 0,
-    next_arg_offset: 0,
-    callee_saved_regs: [],
-  }
+  { inner: @core_regalloc.StackFrame::new(frame_align) }
 }
 
 ///|
@@ -100,17 +57,7 @@ pub fn StackFrame::alloc_spill_slot(
   size : Int,
   align : Int,
 ) -> Int {
-  // Align the offset
-  let aligned_offset = align_up(self.next_spill_offset, align)
-  let slot = StackSlot::{
-    offset: -aligned_offset - size, // Negative = below FP
-    size,
-    align,
-    kind: Spill(vreg),
-  }
-  self.slots.push(slot)
-  self.next_spill_offset = aligned_offset + size
-  slot.offset
+  self.inner.alloc_spill_slot(vreg_to_core(vreg), size, align)
 }
 
 ///|
@@ -121,16 +68,7 @@ pub fn StackFrame::alloc_local(
   size : Int,
   align : Int,
 ) -> Int {
-  let aligned_offset = align_up(self.next_spill_offset, align)
-  let slot = StackSlot::{
-    offset: -aligned_offset - size,
-    size,
-    align,
-    kind: Local(local_idx),
-  }
-  self.slots.push(slot)
-  self.next_spill_offset = aligned_offset + size
-  slot.offset
+  self.inner.alloc_local(local_idx, size, align)
 }
 
 ///|
@@ -141,92 +79,42 @@ pub fn StackFrame::alloc_outgoing_arg(
   size : Int,
   align : Int,
 ) -> Int {
-  let aligned_offset = align_up(self.next_arg_offset, align)
-  let slot = StackSlot::{
-    offset: aligned_offset, // Positive = above current SP for outgoing args
-    size,
-    align,
-    kind: OutgoingArg(arg_idx),
-  }
-  self.slots.push(slot)
-  self.next_arg_offset = aligned_offset + size
-  slot.offset
+  self.inner.alloc_outgoing_arg(arg_idx, size, align)
 }
 
 ///|
 /// Record a callee-saved register that needs to be saved
 pub fn StackFrame::add_callee_saved(self : StackFrame, preg : @abi.PReg) -> Int {
-  let size = 8 // 64-bit registers
-  let align = 8
-  let aligned_offset = align_up(self.next_spill_offset, align)
-  let slot = StackSlot::{
-    offset: -aligned_offset - size,
-    size,
-    align,
-    kind: CalleeSaved(preg),
-  }
-  self.slots.push(slot)
-  self.callee_saved_regs.push(preg)
-  self.next_spill_offset = aligned_offset + size
-  slot.offset
+  self.inner.add_callee_saved(preg_to_core(preg))
 }
 
 ///|
 /// Finalize the frame layout and compute total size
 pub fn StackFrame::finalize(self : StackFrame) -> Unit {
-  // Frame size is the larger of spill area and outgoing arg area
-  let spill_size = self.next_spill_offset
-  let arg_size = self.next_arg_offset
-
-  // Total size includes both areas
-  let total = spill_size + arg_size
-
-  // Align to frame alignment
-  self.frame_size = align_up(total, self.frame_align)
+  self.inner.finalize()
 }
 
 ///|
 /// Get the total frame size
 pub fn StackFrame::size(self : StackFrame) -> Int {
-  self.frame_size
+  self.inner.size()
 }
 
 ///|
 /// Get all callee-saved registers that were used
 pub fn StackFrame::get_callee_saved(self : StackFrame) -> Array[@abi.PReg] {
-  self.callee_saved_regs
+  self.inner.get_callee_saved().map(preg_from_core)
 }
 
 ///|
 /// Print the frame layout
 pub fn StackFrame::print(self : StackFrame) -> String {
-  let mut result = "Stack Frame (size=\{self.frame_size}, align=\{self.frame_align}):\n"
-  for slot in self.slots {
-    result = result + "  \{slot}\n"
-  }
-  if self.callee_saved_regs.length() > 0 {
-    result = result + "Callee-saved: "
-    for i, preg in self.callee_saved_regs {
-      if i > 0 {
-        result = result + ", "
-      }
-      result = result + preg.to_string()
-    }
-    result = result + "\n"
-  }
-  result
+  self.inner.print()
 }
 
 ///|
 pub impl Show for StackFrame with fn output(self, logger) {
   logger.write_string(self.print())
-}
-
-// ============ Helper Functions ============
-
-///|
-fn align_up(value : Int, align : Int) -> Int {
-  (value + align - 1) & -align
 }
 
 // ============ AArch64 Stack Frame ============

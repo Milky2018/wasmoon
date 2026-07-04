@@ -246,17 +246,6 @@ pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
 pub impl Show for StackFrame
 
-type StackSlot
-pub impl Show for StackSlot
-
-pub enum StackSlotKind {
-  Spill(@machv.VReg)
-  Local(Int)
-  OutgoingArg(Int)
-  CalleeSaved(@machv.PReg)
-}
-pub impl Show for StackSlotKind
-
 type UseDefInfo
 
 type UseKind

@@ -157,6 +157,41 @@ pub(all) struct SpillSlotReservation {
   slots_used : Int
 } derive(Eq, @debug.Debug)
 
+pub(all) struct StackFrame {
+  slots : Array[StackSlot]
+  mut frame_size : Int
+  frame_align : Int
+  mut next_spill_offset : Int
+  mut next_arg_offset : Int
+  callee_saved_regs : Array[PhysicalReg]
+}
+pub fn StackFrame::add_callee_saved(Self, PhysicalReg) -> Int
+pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_spill_slot(Self, VirtualReg, Int, Int) -> Int
+pub fn StackFrame::finalize(Self) -> Unit
+pub fn StackFrame::get_callee_saved(Self) -> Array[PhysicalReg]
+pub fn StackFrame::new(Int) -> Self
+pub fn StackFrame::print(Self) -> String
+pub fn StackFrame::size(Self) -> Int
+pub impl Show for StackFrame
+
+pub(all) struct StackSlot {
+  offset : Int
+  size : Int
+  align : Int
+  kind : StackSlotKind
+} derive(Eq, @debug.Debug)
+pub impl Show for StackSlot
+
+pub(all) enum StackSlotKind {
+  Spill(VirtualReg)
+  Local(Int)
+  OutgoingArg(Int)
+  CalleeSaved(PhysicalReg)
+} derive(Eq, @debug.Debug)
+pub impl Show for StackSlotKind
+
 pub(all) enum UseKind {
   LiveDef
   LiveUse
