@@ -84,6 +84,7 @@ pub fn Function::new_block(Self) -> Block
 pub fn Function::new_inst(Self, Opcode) -> Instruction
 pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
 pub fn Function::new_vreg(Self, RegClass) -> VReg
+pub fn Function::print(Self) -> String
 pub fn Function::push_param(Self, VReg) -> Unit
 pub fn Function::set_int_stack_params(Self, Int) -> Unit
 pub fn Function::set_num_spill_slots(Self, Int) -> Unit

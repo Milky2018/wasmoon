@@ -29,6 +29,10 @@ pub fn run_explore(
   let show_vcode = show_all || stages.contains("vcode")
   let show_regalloc = show_all || stages.contains("regalloc")
   let show_mc = show_all || stages.contains("mc")
+  let show_milkir = show_all || stages.contains("milkir")
+  let show_opt_milkir = show_all || stages.contains("opt-milkir")
+  let show_machv = show_all || stages.contains("machv")
+  let show_machv_mc = show_all || stages.contains("machv-mc")
   if !html_output {
     println("Exploring compilation: \{wasm_path}")
     println("=".repeat(60))
@@ -181,6 +185,50 @@ pub fn run_explore(
       println("")
       println("── Machine Code ──")
       println(mc_text)
+    }
+
+    if !html_output &&
+      (show_milkir || show_opt_milkir || show_machv || show_machv_mc) {
+      let env = @wasm_frontend.EmbeddingEnvironment::new(
+        hidden_context_type=None,
+      )
+      let milk = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
+        err => {
+          println("")
+          println("── Compiler Infrastructure ──")
+          println("error: \{to_repr(err)}")
+          return
+        }
+      }
+      if show_milkir {
+        println("")
+        println("── MilkIR ──")
+        println(milk.print())
+      }
+      @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
+      |> ignore
+      if show_opt_milkir {
+        println("")
+        println("── Optimized MilkIR ──")
+        println(milk.print())
+      }
+      if show_machv {
+        let mach = @wasmoon_jit.lower_milkir_for_target(milk, X64)
+        println("")
+        println("── MachV ──")
+        println(mach.print())
+      }
+      if show_machv_mc {
+        println("")
+        println("── MachV Machine Code ──")
+        let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
+          err => {
+            println("error: \{to_repr(err)}")
+            return
+          }
+        }
+        println(to_repr(plan.object.code).to_string())
+      }
     }
 
     // Collect for HTML

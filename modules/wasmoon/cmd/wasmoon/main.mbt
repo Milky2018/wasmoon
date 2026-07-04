@@ -2,7 +2,8 @@
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
-    "source", "ir", "opt-ir", "vcode", "regalloc", "mc",
+    "source", "ir", "opt-ir", "vcode", "regalloc", "mc", "milkir", "opt-milkir",
+    "machv", "machv-mc",
   ])
 
   // Define choices for config action
@@ -99,7 +100,7 @@ fn main {
         "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
       "explore": @clap.SubCommand::new(
-        help="Explore WASM compilation process (WASM -> IR -> VCode)",
+        help="Explore WASM compilation process",
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
           "func": @clap.Arg::named(
@@ -110,7 +111,7 @@ fn main {
             short='s',
             nargs=Any,
             choices=stage_choices,
-            help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default all)",
+            help="Stages to show: source, ir, opt-ir, vcode, regalloc, mc, milkir, opt-milkir, machv, machv-mc (default all)",
           ),
           "html": @clap.Arg::flag(help="Output HTML report"),
           "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
