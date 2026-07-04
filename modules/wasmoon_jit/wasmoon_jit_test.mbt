@@ -124,6 +124,32 @@ test "wrap linked code as cwasm artifact" {
 }
 
 ///|
+test "cwasm artifact preserves reusable stack map offsets" {
+  let func = @machv.Function::new("caller")
+  let entry = func.new_block()
+  let call = func.new_inst(Call("wasmoon.runtime.helper"))
+  call.set_stack_effect(CallFrame(16))
+  entry.append(call)
+  entry.append(func.new_inst(Return))
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let resolver = RuntimeSymbolResolver::new()
+  resolver.add_symbol("wasmoon.runtime.helper", 4096L)
+  let linked = try! link_code_object(object, resolver)
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    7,
+    X86_64,
+    "caller",
+  )
+  inspect(artifact.stack_maps.length(), content="1")
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].gc_safepoints.length(), content="1")
+  inspect(restored.functions[0].gc_safepoints[0].code_offset, content="0")
+  inspect(restored.functions[0].gc_safepoints[0].metadata, content="0")
+  inspect(restored.functions[0].gc_stackmap_blob.length(), content="12")
+}
+
+///|
 test "build moved cwasm entry from emitted code parts" {
   let entry = build_cwasm_entry_from_code(
     9,

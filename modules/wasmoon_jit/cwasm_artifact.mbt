@@ -126,6 +126,22 @@ fn CwasmArtifact::function_code(
 }
 
 ///|
+fn CwasmArtifact::function_gc_safepoints(
+  self : CwasmArtifact,
+  record : CwasmFunctionRecord,
+) -> Array[@cwasm.GcSafepoint] {
+  let out : Array[@cwasm.GcSafepoint] = []
+  let start = record.code_offset
+  let end = record.code_offset + record.code_size
+  for stack_map in self.stack_maps {
+    if stack_map.offset >= start && stack_map.offset < end {
+      out.push(@cwasm.GcSafepoint::new(stack_map.offset - start, [], 0L))
+    }
+  }
+  out
+}
+
+///|
 fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
   buf.push((value & 0xFF).to_byte())
   buf.push(((value >> 8) & 0xFF).to_byte())
@@ -325,10 +341,12 @@ pub fn CwasmArtifact::to_precompiled_module(
 ) -> @cwasm.PrecompiledModule {
   let module_ = @cwasm.PrecompiledModule::new(self.target)
   for record in self.functions {
-    // TODO(ISS-022): carry real per-function fixups and GC stack maps from the
-    // production JIT pipeline.
+    let gc_safepoints = self.function_gc_safepoints(record)
+    let gc_root_counts = Array::make(gc_safepoints.length(), 0)
+    // TODO(ISS-022): carry real live-root indices/root counts and per-function
+    // fixups from the production JIT pipeline.
     module_.add_function(
-      @cwasm.CompiledEntry::new(
+      build_cwasm_entry_from_code(
         record.function_index,
         self.entry_symbol,
         self.function_code(record),
@@ -336,6 +354,8 @@ pub fn CwasmArtifact::to_precompiled_module(
         0,
         record.num_params,
         record.num_results,
+        gc_safepoints~,
+        gc_safepoint_root_counts=gc_root_counts,
       ),
     )
   }
