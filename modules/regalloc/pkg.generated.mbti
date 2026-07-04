@@ -1,11 +1,85 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/regalloc"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn allocate(Program) -> Allocation
 
 // Errors
 
 // Types and methods
+pub(all) struct Allocation {
+  assignments : Array[Assignment]
+  mut spill_count : Int
+} derive(@debug.Debug)
+pub fn Allocation::location_of(Self, VirtualReg) -> Location?
+pub fn Allocation::new() -> Self
+
+pub(all) struct Assignment {
+  vreg : VirtualReg
+  location : Location
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Block {
+  id : Int
+  instructions : Array[Instruction]
+  successors : Array[Int]
+} derive(@debug.Debug)
+pub fn Block::append(Self, Instruction) -> Unit
+pub fn Block::new(Int) -> Self
+
+pub(all) struct Instruction {
+  id : Int
+  operands : Array[Operand]
+  clobbers : Array[PhysicalReg]
+} derive(@debug.Debug)
+pub fn Instruction::add_clobber(Self, PhysicalReg) -> Unit
+pub fn Instruction::add_operand(Self, Operand) -> Unit
+pub fn Instruction::new(Int) -> Self
+
+pub(all) enum Location {
+  Reg(PhysicalReg)
+  Spill(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Operand {
+  vreg : VirtualReg
+  role : OperandRole
+} derive(Eq, @debug.Debug)
+pub fn Operand::def(VirtualReg) -> Self
+pub fn Operand::use_reg(VirtualReg) -> Self
+
+pub(all) enum OperandRole {
+  Use
+  Def
+  UseDef
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PhysicalReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Program {
+  blocks : Array[Block]
+  physical_regs : Array[PhysicalReg]
+} derive(@debug.Debug)
+pub fn Program::add_block(Self, Block) -> Unit
+pub fn Program::new(Array[PhysicalReg]) -> Self
+
+pub(all) enum RegClass {
+  Int
+  Float
+  Vector
+} derive(Eq, @debug.Debug)
+
+pub(all) struct VirtualReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 
