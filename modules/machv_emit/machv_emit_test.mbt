@@ -153,6 +153,35 @@ test "emit X64 integer division bytes" {
 }
 
 ///|
+test "emit X64 integer multiply-high bytes" {
+  let func = @machv.Function::new("x64_int_mul_high")
+  let entry = func.new_block()
+  let unsigned = func.new_inst(IntMulHigh(false))
+  unsigned.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  unsigned.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 10, class: Int })),
+  )
+  unsigned.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  unsigned.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(unsigned)
+  let signed = func.new_inst(IntMulHigh(true))
+  signed.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  signed.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 11, class: Int })),
+  )
+  signed.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  signed.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(signed)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[73, 247, 226, 73, 247, 235, 195]")
+}
+
+///|
 test "emit X64 integer remainder bytes" {
   let func = @machv.Function::new("x64_int_rem")
   let entry = func.new_block()

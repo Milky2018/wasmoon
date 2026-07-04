@@ -172,6 +172,29 @@ test "plan MilkIR signed integer remainder through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR signed multiply-high through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("smulh64", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let high = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Smulh, [lhs, rhs], [high]))
+  entry.set_terminator(Return([high]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_mul_opcode = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0xf7 && (plan.object.code[i + 1] & 0x38) == 0x28 {
+      has_mul_opcode = true
+    }
+  }
+  inspect(has_mul_opcode, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR integer not through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [I64])
   let milk = @milkir.Function::new("bnot64", signature)

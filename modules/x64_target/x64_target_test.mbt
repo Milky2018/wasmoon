@@ -125,6 +125,43 @@ test "x64 legalizes integer remainder fixed-register operands" {
 }
 
 ///|
+test "x64 legalizes multiply-high fixed-register operands" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("umulh64", signature)
+  let lhs = func.new_value(I64)
+  let rhs = func.new_value(I64)
+  let high = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Umulh, [lhs, rhs], [high]))
+  entry.set_terminator(Return([high]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="4")
+  inspect(lowered.blocks[0].instructions[0].opcode == Move, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == Move, content="true")
+  let mul = lowered.blocks[0].instructions[2]
+  inspect(mul.opcode == IntMulHigh(false), content="true")
+  inspect(mul.operands.length(), content="4")
+  inspect(mul.constraints.length(), content="4")
+  inspect(
+    mul.constraints[0].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    mul.constraints[1].allowed_regs[0] == { index: 8, class: Int },
+    content="true",
+  )
+  inspect(
+    mul.constraints[2].allowed_regs[0] == { index: 3, class: Int },
+    content="true",
+  )
+  inspect(
+    mul.constraints[3].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[3].opcode == Move, content="true")
+}
+
+///|
 test "x64 legalizes shift count into rcx" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("shl64", signature)

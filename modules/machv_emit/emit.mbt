@@ -115,6 +115,13 @@ fn emit_x64_div_r64(object : CodeObject, rhs : Int, signed : Bool) -> Unit {
 }
 
 ///|
+fn emit_x64_mul_high_r64(object : CodeObject, rhs : Int, signed : Bool) -> Unit {
+  emit_x64_rex_w(object, 0, (rhs >> 3) & 1)
+  object.code.push(0xf7)
+  emit_x64_modrm(object, 3, if signed { 5 } else { 4 }, rhs)
+}
+
+///|
 fn emit_x64_not_r64(object : CodeObject, reg : Int) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: not r/m64.
   emit_x64_rex_w(object, 0, (reg >> 3) & 1)
@@ -1269,6 +1276,40 @@ fn emit_x64_int_rem(
 }
 
 ///|
+fn emit_x64_int_mul_high(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  signed : Bool,
+) -> Unit raise EmitError {
+  let context = if signed { "smulh" } else { "umulh" }
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} high result",
+  )
+  let rax = require_int_preg(
+    find_operand(inst, Def, 1, context),
+    "\{context} rax side effect",
+  )
+  if lhs != 0 || rax != 0 || dst != 3 {
+    raise UnsupportedOperand(
+      message="\{context} requires lhs/low result in rax and high result in rdx",
+    )
+  }
+  if rhs == 0 || rhs == 3 {
+    raise UnsupportedOperand(message="\{context} rhs must not be rax or rdx")
+  }
+  emit_x64_mul_high_r64(object, rhs, signed)
+}
+
+///|
 fn emit_x64_int_not(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1418,6 +1459,7 @@ fn write_x64_inst_bytes(
     IntAdd => emit_x64_int_add(object, inst)
     IntSub => emit_x64_int_binop3(object, inst, emit_x64_sub_rr, "sub")
     IntMul => emit_x64_int_binop3(object, inst, emit_x64_imul_rr, "mul")
+    IntMulHigh(signed) => emit_x64_int_mul_high(object, inst, signed)
     IntDiv(signed) => emit_x64_int_div(object, inst, signed)
     IntRem(signed) => emit_x64_int_rem(object, inst, signed)
     IntNot => emit_x64_int_not(object, inst)
