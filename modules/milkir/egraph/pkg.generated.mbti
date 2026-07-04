@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/ir/egraph"
+package "Milky2018/milkir/egraph"
 
 import {
   "moonbitlang/core/debug",

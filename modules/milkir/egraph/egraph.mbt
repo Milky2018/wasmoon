@@ -125,12 +125,12 @@ pub(all) enum EOpcode {
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
 pub impl Show for EClassId with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(to_repr(self).to_string())
 }
 
 ///|
 pub impl Show for EOpcode with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+  logger.write_string(to_repr(self).to_string())
 }
 
 ///|
