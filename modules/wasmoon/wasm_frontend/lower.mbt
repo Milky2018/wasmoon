@@ -71,6 +71,8 @@ pub fn lower_function(
   let func_type = get_func_type(mod_, func_local_idx)
   get_code(mod_, func_local_idx)
   let signature = wasm_func_type_to_signature(env, func_type)
+  // TODO(ISS-023): replace this bridge with a native Wasm-to-MilkIR frontend
+  // so reusable MilkIR no longer depends on the legacy Wasmoon IR translator.
   let legacy_func = @ir.translate_function(
     mod_,
     func_local_idx,
