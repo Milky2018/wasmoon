@@ -331,6 +331,62 @@ test "optimizer CSE reuses expressions from dominating blocks" {
 }
 
 ///|
+test "optimizer removes unused block params and jump args" {
+  let builder = IRBuilder::new("dead_block_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let target = builder.create_block()
+  builder.switch_to_block(entry)
+  let used_arg = builder.iconst_i32(1)
+  let dead_arg = builder.iconst_i32(2)
+  builder.jump(target, [used_arg, dead_arg])
+  let used_param = builder.add_block_param(target, I32)
+  builder.add_block_param(target, I32) |> ignore
+  builder.switch_to_block(target)
+  builder.return_([used_param])
+  let func = builder.get_function()
+  let result = eliminate_dead_block_params(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function dead_block_params() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i32 = iconst 2
+      #|    jump block1(v0)
+      #|block1(v2:i32):
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer keeps block params forwarded through jump args" {
+  let builder = IRBuilder::new("forwarded_block_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let middle = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  let arg = builder.iconst_i32(7)
+  builder.jump(middle, [arg])
+  let middle_param = builder.add_block_param(middle, I32)
+  builder.switch_to_block(middle)
+  builder.jump(exit, [middle_param])
+  let exit_param = builder.add_block_param(exit, I32)
+  builder.switch_to_block(exit)
+  builder.return_([exit_param])
+  let func = builder.get_function()
+  let result = eliminate_dead_block_params(func)
+  inspect(result.changed, content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "CSE keeps duplicate loads without alias metadata" {
   let builder = IRBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)

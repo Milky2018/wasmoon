@@ -448,6 +448,106 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
 }
 
 ///|
+fn keep_values_by_index(
+  values : Array[Value],
+  keep_indices : Array[Int],
+) -> Array[Value] {
+  let kept : Array[Value] = []
+  for index in keep_indices {
+    if index >= 0 && index < values.length() {
+      kept.push(values[index])
+    }
+  }
+  kept
+}
+
+///|
+fn rewrite_target_args(
+  target : Int,
+  args : Array[Value],
+  block_id : Int,
+  keep_indices : Array[Int],
+) -> Array[Value] {
+  if target == block_id {
+    keep_values_by_index(args, keep_indices)
+  } else {
+    args
+  }
+}
+
+///|
+fn rewrite_terminator_args_for_block(
+  term : Terminator,
+  block_id : Int,
+  keep_indices : Array[Int],
+) -> Terminator {
+  match term {
+    Jump(target, args) =>
+      Jump(target, rewrite_target_args(target, args, block_id, keep_indices))
+    Branch(cond, true_target, true_args, false_target, false_args) =>
+      Branch(
+        cond,
+        true_target,
+        rewrite_target_args(true_target, true_args, block_id, keep_indices),
+        false_target,
+        rewrite_target_args(false_target, false_args, block_id, keep_indices),
+      )
+    _ => term
+  }
+}
+
+///|
+/// Remove block parameters that are not used by any instruction or terminator,
+/// and drop the corresponding incoming edge arguments.
+///
+/// TODO(milkir): add a dataflow variant that can remove parameters which are
+/// only forwarded through other block parameters and never reach a real use.
+pub fn eliminate_dead_block_params(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("dead_block_param_elim")
+  let used : @hashmap.HashMap[Int, Bool] = HashMap([])
+  for block in func.blocks {
+    for inst in block.instructions {
+      for arg in inst.args {
+        used.set(arg.id, true)
+      }
+    }
+    if block.terminator is Some(term) {
+      record_terminator_uses(used, term)
+    }
+  }
+  for block in func.blocks {
+    if block.params.length() == 0 {
+      continue
+    }
+    let keep_indices : Array[Int] = []
+    let kept_params : Array[Value] = []
+    for i, param in block.params {
+      if used.get(param.id).unwrap_or(false) {
+        keep_indices.push(i)
+        kept_params.push(param)
+      }
+    }
+    if kept_params.length() == block.params.length() {
+      continue
+    }
+    block.params.clear()
+    for param in kept_params {
+      block.params.push(param)
+    }
+    for pred in func.blocks {
+      if pred.terminator is Some(term) {
+        pred.terminator = Some(
+          rewrite_terminator_args_for_block(term, block.id, keep_indices),
+        )
+      }
+    }
+    result.mark_changed()
+  }
+  result
+}
+
+///|
 fn merge_opt_result(result : OptResult, pass_result : OptResult) -> Unit {
   if pass_result.changed {
     result.mark_changed()
@@ -467,6 +567,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, fold_constants(func))
       merge_opt_result(result, eliminate_common_subexpressions(func))
       merge_opt_result(result, eliminate_dead_code(func))
+      merge_opt_result(result, eliminate_dead_block_params(func))
       result
     }
   }
