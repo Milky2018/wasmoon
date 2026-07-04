@@ -121,6 +121,33 @@ test "wrap linked code as cwasm artifact" {
 }
 
 ///|
+test "build moved cwasm entry from emitted code parts" {
+  let entry = build_cwasm_entry_from_code(
+    9,
+    "compiled",
+    [1, 2, 3, 4],
+    16,
+    0,
+    2,
+    1,
+    func_addr_fixups=[{ offset: 4, func_idx: 7, reg: 16 }],
+    call_fixups=[{ offset: 8, func_idx: -1000, veneer_offset: 12 }],
+    gc_safepoint_offsets=[20],
+    gc_safepoint_root_counts=[2],
+    gc_safepoint_root_indices=[[0, 3]],
+  )
+  inspect(entry.func_idx, content="9")
+  inspect(entry.code.length(), content="4")
+  inspect(entry.frame_size, content="16")
+  inspect(entry.func_addr_fixups[0].func_idx, content="7")
+  inspect(entry.call_fixups[0].veneer_offset, content="12")
+  inspect(entry.gc_safepoints.length(), content="1")
+  inspect(entry.gc_safepoints[0].code_offset, content="20")
+  inspect(entry.gc_safepoints[0].metadata, content="2")
+  inspect(entry.gc_stackmap_blob.length(), content="24")
+}
+
+///|
 test "build AArch64 direct-call stubs in wasmoon_jit" {
   let load = build_aarch64_load_imm64_fixed_bytes(16, 0L)
   inspect(load.length(), content="16")

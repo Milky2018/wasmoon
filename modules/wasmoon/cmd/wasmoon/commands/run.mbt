@@ -1806,12 +1806,41 @@ fn compile_module_to_jit(
       mc_dump = Some(mc.dump_disasm())
     }
     // Stage 6: Add to precompiled module
-    let code_size = mc.get_bytes().length()
-    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    let code_bytes = mc.get_bytes()
+    let code_size = code_bytes.length()
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
+    let func_addr_fixups : Array[@cwasm.FuncAddrFixup] = []
+    for fixup in mc.get_func_addr_fixups() {
+      func_addr_fixups.push({
+        offset: fixup.offset,
+        func_idx: fixup.func_idx,
+        reg: fixup.reg,
+      })
+    }
+    let call_fixups : Array[@cwasm.CallFixup] = []
+    for fixup in mc.get_call_fixups() {
+      call_fixups.push({
+        offset: fixup.offset,
+        func_idx: fixup.func_idx,
+        veneer_offset: fixup.veneer_offset,
+      })
+    }
     precompiled.add_function(
-      compiled.to_cwasm_entry(func_idx, func_name, num_params, num_results),
+      @wasmoon_jit.build_cwasm_entry_from_code(
+        func_idx,
+        func_name,
+        code_bytes,
+        0,
+        0,
+        num_params,
+        num_results,
+        func_addr_fixups~,
+        call_fixups~,
+        gc_safepoint_offsets=mc.get_gc_safepoint_offsets(),
+        gc_safepoint_root_counts=mc.get_gc_safepoint_root_counts(),
+        gc_safepoint_root_indices=mc.get_gc_safepoint_root_indices(),
+      ),
     )
     emit_compile_progress(
       on_progress,

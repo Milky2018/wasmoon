@@ -93,6 +93,200 @@ fn CwasmArtifact::function_code(
 }
 
 ///|
+fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
+  buf.push((value & 0xFF).to_byte())
+  buf.push(((value >> 8) & 0xFF).to_byte())
+  buf.push(((value >> 16) & 0xFF).to_byte())
+  buf.push(((value >> 24) & 0xFF).to_byte())
+}
+
+///|
+pub fn build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
+  if root_counts.length() == 0 {
+    b""
+  } else {
+    let bytes : Array[Byte] = []
+    append_u32_le(bytes, 1)
+    append_u32_le(bytes, root_counts.length())
+    for count in root_counts {
+      append_u32_le(bytes, count)
+    }
+    Bytes::from_array(bytes)
+  }
+}
+
+///|
+pub fn gc_safepoint_metadata_to_root_count(metadata : Int64) -> Int {
+  if metadata <= 0L {
+    0
+  } else if metadata > @types.I32_MAX.to_int64() {
+    @types.I32_MAX
+  } else {
+    metadata.to_int()
+  }
+}
+
+///|
+fn encode_stackmap_root_count(root_count : Int) -> Int {
+  if root_count <= 0 {
+    0
+  } else if root_count > @types.I32_MAX {
+    @types.I32_MAX
+  } else {
+    root_count
+  }
+}
+
+///|
+fn has_stackmap_live_ref_indices(
+  safepoints : Array[@cwasm.GcSafepoint],
+) -> Bool {
+  let mut found = false
+  for safepoint in safepoints {
+    if safepoint.live_refs.length() > 0 {
+      found = true
+    }
+  }
+  found
+}
+
+///|
+pub fn build_gc_stackmap_blob_v2(
+  safepoints : Array[@cwasm.GcSafepoint],
+  fallback_root_counts : Array[Int],
+) -> Bytes {
+  if safepoints.length() == 0 {
+    b""
+  } else {
+    let bytes : Array[Byte] = []
+    append_u32_le(bytes, 2)
+    append_u32_le(bytes, safepoints.length())
+    for i, safepoint in safepoints {
+      let fallback_root_count = if i < fallback_root_counts.length() {
+        fallback_root_counts[i]
+      } else {
+        safepoint.live_refs.length()
+      }
+      let metadata_root_count = gc_safepoint_metadata_to_root_count(
+        safepoint.metadata,
+      )
+      let mut root_count = encode_stackmap_root_count(
+        if metadata_root_count > 0 {
+          metadata_root_count
+        } else {
+          fallback_root_count
+        },
+      )
+      let valid_indices : Array[Int] = []
+      for live_ref in safepoint.live_refs {
+        if live_ref >= 0 && live_ref <= @types.I32_MAX {
+          valid_indices.push(live_ref)
+        }
+      }
+      if valid_indices.length() > 0 {
+        if root_count <= 0 || root_count > valid_indices.length() {
+          root_count = valid_indices.length()
+        }
+        append_u32_le(bytes, root_count)
+        append_u32_le(bytes, root_count)
+        for idx in 0..<root_count {
+          append_u32_le(bytes, valid_indices[idx])
+        }
+      } else {
+        append_u32_le(bytes, root_count)
+        append_u32_le(bytes, 0)
+      }
+    }
+    Bytes::from_array(bytes)
+  }
+}
+
+///|
+pub fn derive_gc_safepoints(
+  offsets : Array[Int],
+  root_counts : Array[Int],
+  root_indices : Array[Array[Int]],
+) -> Array[@cwasm.GcSafepoint] {
+  let safepoints : Array[@cwasm.GcSafepoint] = []
+  for i, offset in offsets {
+    let metadata = if i < root_counts.length() {
+      root_counts[i].to_int64()
+    } else {
+      0L
+    }
+    let live_refs = if i < root_indices.length() { root_indices[i] } else { [] }
+    safepoints.push(@cwasm.GcSafepoint::new(offset, live_refs, metadata))
+  }
+  safepoints
+}
+
+///|
+pub fn build_gc_stackmap_blob_for_safepoints(
+  safepoints : Array[@cwasm.GcSafepoint],
+  root_counts : Array[Int],
+  explicit_blob? : Bytes = b"",
+) -> Bytes {
+  if explicit_blob.length() > 0 {
+    explicit_blob
+  } else if has_stackmap_live_ref_indices(safepoints) {
+    build_gc_stackmap_blob_v2(safepoints, root_counts)
+  } else if root_counts.length() > 0 {
+    build_gc_stackmap_blob(root_counts)
+  } else if safepoints.length() > 0 {
+    let counts : Array[Int] = []
+    for safepoint in safepoints {
+      counts.push(gc_safepoint_metadata_to_root_count(safepoint.metadata))
+    }
+    build_gc_stackmap_blob(counts)
+  } else {
+    b""
+  }
+}
+
+///|
+pub fn build_cwasm_entry_from_code(
+  func_idx : Int,
+  name : String,
+  code : Array[Int],
+  frame_size : Int,
+  entry_offset : Int,
+  num_params : Int,
+  num_results : Int,
+  func_addr_fixups? : Array[@cwasm.FuncAddrFixup] = [],
+  call_fixups? : Array[@cwasm.CallFixup] = [],
+  gc_safepoint_offsets? : Array[Int] = [],
+  gc_safepoint_root_counts? : Array[Int] = [],
+  gc_safepoint_root_indices? : Array[Array[Int]] = [],
+  gc_safepoints? : Array[@cwasm.GcSafepoint] = [],
+  gc_stackmap_blob? : Bytes = b"",
+) -> @cwasm.CompiledEntry {
+  let resolved_gc_safepoints = if gc_safepoints.length() > 0 {
+    gc_safepoints
+  } else {
+    derive_gc_safepoints(
+      gc_safepoint_offsets, gc_safepoint_root_counts, gc_safepoint_root_indices,
+    )
+  }
+  @cwasm.CompiledEntry::new(
+    func_idx,
+    name,
+    code,
+    frame_size,
+    entry_offset,
+    num_params,
+    num_results,
+    func_addr_fixups~,
+    call_fixups~,
+    gc_safepoints=resolved_gc_safepoints,
+    gc_stackmap_blob=build_gc_stackmap_blob_for_safepoints(
+      resolved_gc_safepoints,
+      gc_safepoint_root_counts,
+      explicit_blob=gc_stackmap_blob,
+    ),
+  )
+}
+
+///|
 pub fn CwasmArtifact::to_precompiled_module(
   self : CwasmArtifact,
 ) -> @cwasm.PrecompiledModule {

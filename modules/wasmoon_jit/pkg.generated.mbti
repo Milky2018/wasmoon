@@ -22,6 +22,14 @@ pub fn build_aarch64_direct_call_stub(Int64) -> Array[Int]
 
 pub fn build_aarch64_load_imm64_fixed_bytes(Int, Int64) -> Array[Int]
 
+pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
+
+pub fn build_gc_stackmap_blob(Array[Int]) -> Bytes
+
+pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[Int], explicit_blob? : Bytes) -> Bytes
+
+pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
+
 pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
@@ -47,6 +55,8 @@ pub fn decode_heap_ref(Int64) -> Int
 pub fn decode_i31(Int64) -> Int
 
 pub fn default_native_glue() -> Array[NativeGlueBinding]
+
+pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[@cwasm.GcSafepoint]
 
 pub fn direct_call_idx_memory_copy_mem0() -> Int
 
@@ -91,6 +101,8 @@ pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
 pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
 
 pub fn gc_end_frame(Int64) -> Unit
+
+pub fn gc_safepoint_metadata_to_root_count(Int64) -> Int
 
 pub fn gc_set_heap(Int64, CHeap) -> Unit
 
