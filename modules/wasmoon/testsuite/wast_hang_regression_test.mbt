@@ -159,7 +159,7 @@ fn try_compile_jit(
   }
   for imp in mod_.imports {
     if imp.desc is Func(_) &&
-      @jit.get_import_trampoline(imp.mod_name, imp.name) is None {
+      @wasmoon_jit.get_import_trampoline(imp.mod_name, imp.name) is None {
       return Err("missing import trampoline")
     }
   }

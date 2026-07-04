@@ -168,7 +168,7 @@ pub fn has_cross_module_imports(mod_ : @types.Module) -> Bool {
   for imp in mod_.imports {
     // JIT-supported modules are handled by trampolines
     // Other modules are user modules that need state sharing
-    if !@jit.is_jit_supported_module(imp.mod_name) {
+    if !@wasmoon_jit.is_jit_supported_module(imp.mod_name) {
       // User module import - globals and tables still need sharing.
       // Memories are descriptor-backed and can be shared safely.
       if imp.desc is (Global(_) | Table(_)) {
@@ -1331,7 +1331,7 @@ pub fn build_external_imports_for_jit(
         continue
       }
       // Prefer built-in trampolines when available.
-      if @jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
+      if @wasmoon_jit.get_import_trampoline(imp.mod_name, imp.name) is Some(_) {
         continue
       }
       if store.get_func_inst_opt(func_addr) is None {

@@ -157,6 +157,8 @@ pub fn get_hostcall_num_result_slots() -> Int
 
 pub fn get_hostcall_values_ptr() -> Int64
 
+pub fn get_import_trampoline(String, String) -> Int64?
+
 pub fn get_last_trap_details() -> TrapDetails
 
 pub fn get_path_create_directory_ptr() -> Int64
@@ -220,6 +222,8 @@ pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 pub fn is_funcref_ptr(Int64) -> Bool
 
 pub fn is_i31(Int64) -> Bool
+
+pub fn is_jit_supported_module(String) -> Bool
 
 pub fn is_null(Int64) -> Bool
 

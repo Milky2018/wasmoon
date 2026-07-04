@@ -1964,7 +1964,10 @@ fn check_jit_import_support(
   let mut func_imp_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(_) {
-      let has_builtin = @jit.get_import_trampoline(imp.mod_name, imp.name)
+      let has_builtin = @wasmoon_jit.get_import_trampoline(
+          imp.mod_name,
+          imp.name,
+        )
         is Some(_)
       if !has_builtin {
         let func_addr = if func_imp_idx < instance.func_addrs.length() {
