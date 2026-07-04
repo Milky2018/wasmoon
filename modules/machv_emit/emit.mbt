@@ -115,6 +115,14 @@ fn emit_x64_div_r64(object : CodeObject, rhs : Int, signed : Bool) -> Unit {
 }
 
 ///|
+fn emit_x64_not_r64(object : CodeObject, reg : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: not r/m64.
+  emit_x64_rex_w(object, 0, (reg >> 3) & 1)
+  object.code.push(0xf7)
+  emit_x64_modrm(object, 3, 2, reg)
+}
+
+///|
 fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
   emit_x64_rex_w(object, 0, (dst >> 3) & 1)
@@ -448,6 +456,27 @@ fn emit_aarch64_int_mul(
     (31 << 10) |
     ((lhs & 0x1f) << 5) |
     (dst & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_int_not(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let src = require_int_preg(find_operand(inst, Use, 0, "not"), "not source")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "not"),
+    "not destination",
+  )
+  // TODO(machv_emit): encode 32-bit integer not once MachV carries lane width.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((31 & 7) << 5) |
+    (((31 >> 3) & 3) << 8) |
+    (((src & 31) | 32) << 16) |
+    (170 << 24),
   )
 }
 
@@ -1021,6 +1050,23 @@ fn emit_x64_int_div(
 }
 
 ///|
+fn emit_x64_int_not(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let src = require_int_preg(find_operand(inst, Use, 0, "not"), "not source")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "not"),
+    "not destination",
+  )
+  // TODO(machv_emit): encode 32-bit integer not once MachV carries lane width.
+  if dst != src {
+    emit_x64_mov_rr(object, dst, src)
+  }
+  emit_x64_not_r64(object, dst)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1046,6 +1092,7 @@ fn write_aarch64_inst_bytes(
           "udiv"
         },
       )
+    IntNot => emit_aarch64_int_not(object, inst)
     IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
@@ -1086,6 +1133,7 @@ fn write_x64_inst_bytes(
     IntSub => emit_x64_int_binop3(object, inst, emit_x64_sub_rr, "sub")
     IntMul => emit_x64_int_binop3(object, inst, emit_x64_imul_rr, "mul")
     IntDiv(signed) => emit_x64_int_div(object, inst, signed)
+    IntNot => emit_x64_int_not(object, inst)
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")

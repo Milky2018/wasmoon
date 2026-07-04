@@ -153,6 +153,19 @@ test "emit X64 integer division bytes" {
 }
 
 ///|
+test "emit X64 integer not bytes" {
+  let func = @machv.Function::new("x64_int_not")
+  let entry = func.new_block()
+  let not = func.new_inst(IntNot)
+  not.add_operand(@machv.Operand::use_reg(Physical({ index: 10, class: Int })))
+  not.add_operand(@machv.Operand::def(Physical({ index: 11, class: Int })))
+  entry.append(not)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[77, 137, 211, 73, 247, 211, 195]")
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -358,6 +371,19 @@ test "emit AArch64 integer division bytes" {
     object.code,
     content="[2, 12, 193, 154, 67, 8, 193, 154, 192, 3, 95, 214]",
   )
+}
+
+///|
+test "emit AArch64 integer not bytes" {
+  let func = @machv.Function::new("int_not")
+  let entry = func.new_block()
+  let not = func.new_inst(IntNot)
+  not.add_operand(@machv.Operand::use_reg(Physical({ index: 4, class: Int })))
+  not.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  entry.append(not)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(object.code, content="[227, 3, 36, 170, 192, 3, 95, 214]")
 }
 
 ///|

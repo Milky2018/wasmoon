@@ -142,6 +142,28 @@ test "plan MilkIR signed integer division through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer not through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([I64], [I64])
+  let milk = @milkir.Function::new("bnot64", signature)
+  let input = milk.new_value(I64)
+  let inverted = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Bnot, [input], [inverted]))
+  entry.set_terminator(Return([inverted]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_not_opcode = false
+  for byte in plan.object.code {
+    if byte == 0xf7 {
+      has_not_opcode = true
+    }
+  }
+  inspect(has_not_opcode, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)
