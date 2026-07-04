@@ -30,6 +30,8 @@ pub fn c_jit_write_u32(Int64, Int) -> Unit
 
 pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 
+pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
+
 pub fn decode_externref(Int64) -> Int?
 
 pub fn decode_funcref_idx(Int64) -> Int?
@@ -55,6 +57,12 @@ pub fn encode_heap_ref(Int) -> Int64
 pub fn encode_i31(Int) -> Int64
 
 pub fn encode_null_ref() -> Int64
+
+pub fn entry_trampoline_signature_hash(Array[@types.ValueType], Array[@types.ValueType]) -> Int64
+
+pub fn entry_trampoline_type_codes(Array[@types.ValueType]) -> Array[Int]
+
+pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
 
 pub fn free_memory(Int64) -> Unit
 

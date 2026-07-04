@@ -275,6 +275,25 @@ test "entry trampoline production gate is conservative" {
 }
 
 ///|
+test "entry trampoline signature planning lives in wasmoon_jit" {
+  debug_inspect(
+    entry_trampoline_type_codes([I32, I64, F32, F64, V128, ExternRef]),
+    content="[0, 1, 2, 3, 4, 1]",
+  )
+  inspect(count_entry_trampoline_slots([I64, V128, ExternRef]), content="4")
+  inspect(
+    entry_trampoline_signature_hash([I64, I64], [I64]) ==
+    entry_trampoline_signature_hash([I64, I64], [I64]),
+    content="true",
+  )
+  inspect(
+    entry_trampoline_signature_hash([I64, I64], [I64]) ==
+    entry_trampoline_signature_hash([I64], [I64, I64]),
+    content="false",
+  )
+}
+
+///|
 test "plan hostcall import trampoline values_vec layout" {
   let params : Array[@types.ValueType] = [
     I32,

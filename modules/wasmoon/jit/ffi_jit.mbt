@@ -863,38 +863,12 @@ fn JITContext::call_multi_return(
   result_types : Array[@types.ValueType],
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
-  let num_params = param_types.length() // Number of actual WASM parameters
   let use_reusable_trampoline = @wasmoon_jit.can_use_reusable_entry_trampoline(
     param_types, result_types,
   )
-
-  // For results, V128 needs 2 slots
-  let mut num_result_slots = 0
-  for result_type in result_types {
-    if result_type is V128 {
-      num_result_slots = num_result_slots + 2
-    } else {
-      num_result_slots = num_result_slots + 1
-    }
-  }
-
-  // Convert param_types to int codes for trampoline generation
-  // Note: param_type_codes uses the original parameter count, not expanded slot count
-  let param_type_codes = FixedArray::make(num_params.max(1), 0)
-  for i in 0..<num_params {
-    param_type_codes[i] = value_type_to_code(param_types[i])
-  }
-
-  // Convert result_types to int codes for trampoline generation
-  let result_type_codes = FixedArray::make(result_types.length().max(1), 0)
-  for i in 0..<result_types.length() {
-    result_type_codes[i] = value_type_to_code(result_types[i])
-  }
-
-  // Compute signature hash for trampoline cache lookup
-  let num_results = result_types.length()
-  let sig_hash = compute_signature_hash(
-    param_type_codes, num_params, result_type_codes, num_results,
+  let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
+  let sig_hash = @wasmoon_jit.entry_trampoline_signature_hash(
+    param_types, result_types,
   )
 
   // Get or generate trampoline
@@ -917,14 +891,12 @@ fn JITContext::call_multi_return(
         // scalar register-only slice: stack-passed entry params, overflow Wasm
         // call args/results, reference-root handling, FP packing, and V128 lane
         // extract/insert operations.
-        let param_codes_arr : Array[Int] = []
-        for i in 0..<num_params {
-          param_codes_arr.push(param_type_codes[i])
-        }
-        let result_codes_arr : Array[Int] = []
-        for i in 0..<num_results {
-          result_codes_arr.push(result_type_codes[i])
-        }
+        let param_codes_arr = @wasmoon_jit.entry_trampoline_type_codes(
+          param_types,
+        )
+        let result_codes_arr = @wasmoon_jit.entry_trampoline_type_codes(
+          result_types,
+        )
         @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr).get_bytes()
       }
       let trampoline = ExecCode::new(code_ints)
@@ -996,84 +968,4 @@ fn JITContext::call_multi_return(
   for i in 0..<num_result_slots {
     results[i] = values_vec[num_arg_slots + i]
   }
-}
-
-///|
-/// Convert ValueType to type code for trampoline generation
-/// 0=I32, 1=I64, 2=F32, 3=F64, 4=V128
-fn value_type_to_code(ty : @types.ValueType) -> Int {
-  match ty {
-    I32 => 0
-    I64 => 1
-    F32 => 2
-    F64 => 3
-    V128 => 4
-    // Reference types are 64-bit integer values (indices/pointers)
-    FuncRef
-    | ExternRef
-    | RefFunc
-    | RefExtern
-    | RefFuncTyped(_)
-    | RefNullFuncTyped(_)
-    | AnyRef
-    | ExnRef
-    | NullRef
-    | NullFuncRef
-    | NullExnRef
-    | NullExternRef
-    // GC reference types - also 64-bit
-    | RefStruct(_)
-    | RefNullStruct(_)
-    | RefArray(_)
-    | RefNullArray(_)
-    | RefAny
-    | RefEq
-    | RefNullEq
-    | RefI31
-    | RefNullI31
-    | RefStructAbs
-    | RefArrayAbs
-    | StructRef
-    | ArrayRef
-    | RefNone => 1
-  }
-}
-
-///|
-/// Compute a hash for function signature (param_types, result_types)
-/// Used for trampoline cache lookup
-fn compute_signature_hash(
-  param_types : FixedArray[Int],
-  num_params : Int,
-  result_types : FixedArray[Int],
-  num_results : Int,
-) -> Int64 {
-  // Simple FNV-1a hash
-  let mut hash = 0xcbf29ce484222325L // FNV offset basis
-  let fnv_prime = 0x100000001b3L
-
-  // Hash number of params
-  hash = hash ^ num_params.to_int64()
-  hash = hash * fnv_prime
-
-  // Hash param types
-  for i in 0..<num_params {
-    hash = hash ^ param_types[i].to_int64()
-    hash = hash * fnv_prime
-  }
-
-  // Hash separator
-  hash = hash ^ 0xffL
-  hash = hash * fnv_prime
-
-  // Hash number of results
-  hash = hash ^ num_results.to_int64()
-  hash = hash * fnv_prime
-
-  // Hash result types
-  for i in 0..<num_results {
-    hash = hash ^ result_types[i].to_int64()
-    hash = hash * fnv_prime
-  }
-  hash
 }
