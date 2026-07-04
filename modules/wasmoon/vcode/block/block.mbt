@@ -1,5 +1,7 @@
 ///|
 /// VCode block - a basic block in VCode
+/// TODO(wasmoon_vcode): replace this legacy block container with `@machv.Block`
+/// once `VCodeInst` is reduced to a Wasmoon adapter opcode layer.
 pub struct VCodeBlock {
   id : Int
   insts : Array[@instr.VCodeInst] // Instructions in this block

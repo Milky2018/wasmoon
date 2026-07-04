@@ -2,6 +2,9 @@
 
 ///|
 /// VCode function - a complete function in VCode form
+/// TODO(wasmoon_vcode): replace this legacy function container with
+/// `@machv.Function` after Wasmoon-specific result-type and runtime-helper
+/// queries move into adapter metadata.
 pub struct VCodeFunction {
   name : String
   params : Array[@abi.VReg] // Function parameters

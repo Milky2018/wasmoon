@@ -102,6 +102,9 @@ pub impl Show for ExceptionLibcall with fn output(self, logger) {
 ///|
 /// VCode instruction - a machine-level instruction with virtual registers
 /// Operand constraints for fixed register allocation
+/// TODO(wasmoon_vcode): keep this as a Wasmoon adapter over MachV while
+/// runtime-helper, GC, exception, and ISA-specific opcodes are split into
+/// `isa_target`, `machv_emit`, and `wasmoon_jit`.
 pub struct VCodeInst {
   opcode : VCodeOpcode
   defs : Array[@abi.Writable] // Registers defined (written)
@@ -198,6 +201,10 @@ pub impl Show for VCodeInst with fn output(self, logger) {
 
 ///|
 /// VCode opcode - machine-level operation (target-independent subset)
+/// TODO(wasmoon_vcode): this enum still mixes generic machine operations with
+/// Wasmoon runtime helpers and target-specific pseudos. Do not move these
+/// Wasmoon-specific constructors into MachV core; lower generic operations to
+/// MachV and keep runtime-specific variants in Wasmoon adapters.
 pub(all) enum VCodeOpcode {
   // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
