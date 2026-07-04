@@ -7,23 +7,11 @@
 pub struct JITFunction {
   func_idx : Int
   name : String
-  priv exec_code : ExecCode
+  priv exec_code : @wasmoon_jit.ExecCode
   priv code_size : Int
   param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
 }
-
-///|
-pub type WasmTrapFrame = @wasmoon_jit.WasmTrapFrame
-
-///|
-pub type TrapReport = @wasmoon_jit.TrapReport
-
-///|
-pub type JITFunctionDebug = @wasmoon_jit.JITFunctionDebug
-
-///|
-pub type JITDebugDB = @wasmoon_jit.JITDebugDB
 
 ///|
 /// Error when loading a precompiled JIT module
@@ -58,7 +46,7 @@ pub impl Show for JITModuleLoadError with fn output(self, logger) {
 fn JITFunction::new(
   func_idx : Int,
   name : String,
-  exec_code : ExecCode,
+  exec_code : @wasmoon_jit.ExecCode,
   code_size : Int,
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
@@ -82,10 +70,10 @@ struct JITModule {
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
   mut context_ptr : Int64
-  mut debug_db : JITDebugDB?
-  mut last_trap_report : TrapReport?
+  mut debug_db : @wasmoon_jit.JITDebugDB?
+  mut last_trap_report : @wasmoon_jit.TrapReport?
   // Keep generated import trampolines alive (GC-managed executable memory).
-  import_exec_codes : Array[ExecCode]
+  import_exec_codes : Array[@wasmoon_jit.ExecCode]
   // Pseudo direct-call function indices -> near stub entry points.
   direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
@@ -131,7 +119,7 @@ fn install_direct_call_stubs(
         code_size=0,
       )
     }
-    match ExecCode::new(stub_code) {
+    match @wasmoon_jit.ExecCode::new(stub_code) {
       Some(ec) => {
         jit_module.import_exec_codes.push(ec)
         jit_module.direct_call_targets.set(pseudo_idx, ec.ptr())
@@ -212,7 +200,7 @@ fn apply_call_fixups(
 pub fn JITModule::load(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
-  debug_db? : JITDebugDB? = None,
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
 }
@@ -225,7 +213,7 @@ pub fn JITModule::load_with_imports(
   precompiled : @cwasm.PrecompiledModule,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
-  debug_db? : JITDebugDB? = None,
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   let jit_module = JITModule::new()
   let total_funcs = @wasmoon_jit.required_context_function_count(
@@ -265,7 +253,7 @@ pub fn JITModule::load_with_imports(
               param_types, result_types, host_func_addr,
             )
             let code_ints = mc.get_bytes()
-            let exec = ExecCode::new(code_ints)
+            let exec = @wasmoon_jit.ExecCode::new(code_ints)
             match exec {
               Some(ec) => {
                 // AArch64 hostcall trampolines may carry runtime func-address
@@ -311,7 +299,7 @@ pub fn JITModule::load_with_imports(
       // Step 2: Load compiled functions and populate their pointers
       for entry in precompiled.functions {
         // Allocate executable memory directly from code array
-        let exec_code = ExecCode::new(entry.code)
+        let exec_code = @wasmoon_jit.ExecCode::new(entry.code)
         match exec_code {
           Some(ec) => {
             // Get function signature
@@ -399,7 +387,7 @@ pub fn JITModule::from_single_function(
       }
       ctx.set_memory(mem_ptr)
       // Create executable code
-      let exec_code = ExecCode::new(code_bytes)
+      let exec_code = @wasmoon_jit.ExecCode::new(code_bytes)
       match exec_code {
         None => return None
         Some(ec) => {
@@ -602,7 +590,9 @@ pub fn JITModule::export_functions(self : JITModule) -> Map[String, Int64] {
 ///|
 /// Returns the last structured trap report from `call_with_context`.
 /// Returns `None` if no trap has been observed on this module.
-pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
+pub fn JITModule::get_last_trap_report(
+  self : JITModule,
+) -> @wasmoon_jit.TrapReport? {
   self.last_trap_report
 }
 
@@ -684,12 +674,15 @@ fn JITModule::flush_wasi_output(self : JITModule, ctx : JITContext) -> Unit {
 }
 
 ///|
-fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
+fn JITModule::build_trap_report(
+  self : JITModule,
+  msg : String,
+) -> @wasmoon_jit.TrapReport {
   let details = get_last_trap_details()
   let mut wasm_func_idx : Int? = None
   let mut wasm_func_name : String? = None
   let mut wasm_offset : Int64? = None
-  let wasm_frames : Array[WasmTrapFrame] = []
+  let wasm_frames : Array[@wasmoon_jit.WasmTrapFrame] = []
   let signal_name = if details.signal != 0 {
     @wasmoon_jit.format_signal_name(details.signal)
   } else {
@@ -697,8 +690,8 @@ fn JITModule::build_trap_report(self : JITModule, msg : String) -> TrapReport {
   }
 
   fn add_unique_frame(
-    frames : Array[WasmTrapFrame],
-    frame : WasmTrapFrame,
+    frames : Array[@wasmoon_jit.WasmTrapFrame],
+    frame : @wasmoon_jit.WasmTrapFrame,
   ) -> Unit {
     for existing in frames {
       if existing.func_idx == frame.func_idx &&
@@ -1061,7 +1054,7 @@ pub fn JITModule::alloc_guarded_memory(
 /// Set multiple memories for the JIT context (multi-memory support)
 pub fn JITModule::set_memory_pointers(
   self : JITModule,
-  memories : Array[MemoryInfo],
+  memories : Array[@wasmoon_jit.MemoryInfo],
 ) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_memory_pointers(memories)
@@ -1280,7 +1273,7 @@ pub fn JITModule::clear_segments(self : JITModule) -> Unit {
 /// elem_init: Array of (table_idx, elem_idx, func_idx?, type_hash) tuples
 pub fn JITModule::init_shared_tables(
   self : JITModule,
-  jit_tables : Array[JITTable?],
+  jit_tables : Array[@wasmoon_jit.JITTable?],
   elem_init : Array[(Int, Int, Int?, Int)],
 ) -> Unit {
   if self.context is None {

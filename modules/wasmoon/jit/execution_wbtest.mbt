@@ -11,9 +11,9 @@
 
 ///|
 test "exec code allocation scales beyond 1024 blocks" {
-  let blocks : Array[ExecCode] = []
+  let blocks : Array[@wasmoon_jit.ExecCode] = []
   for _ in 0..<1100 {
-    match ExecCode::new([0x00]) {
+    match @wasmoon_jit.ExecCode::new([0x00]) {
       Some(ec) => blocks.push(ec)
       None => fail("ExecCode allocation failed before 1100 blocks")
     }

@@ -22,12 +22,9 @@ pub impl Show for JITTrap with fn output(self, logger) {
 }
 
 ///|
-pub type TrapDetails = @wasmoon_jit.TrapDetails
-
-///|
 /// Get the last captured trap details (best-effort).
 /// These fields are reset at the start of each JIT call.
-pub fn get_last_trap_details() -> TrapDetails {
+pub fn get_last_trap_details() -> @wasmoon_jit.TrapDetails {
   @wasmoon_jit.get_last_trap_details()
 }
 
@@ -85,11 +82,6 @@ pub fn get_hostcall_num_result_slots() -> Int {
   @wasmoon_jit.get_hostcall_num_result_slots()
 }
 
-// ============ Memory Info ============
-
-///|
-pub type MemoryInfo = @wasmoon_jit.MemoryInfo
-
 // ============ JIT Context Wrapper ============
 
 ///|
@@ -107,7 +99,7 @@ priv struct JITContext {
   ctx : @jit_ffi.JITContext
   // Trampoline cache: maps signature hash to generated trampoline
   // Signature hash = hash of (param_types, result_types)
-  trampoline_cache : Map[Int64, ExecCode]
+  trampoline_cache : Map[Int64, @wasmoon_jit.ExecCode]
 }
 
 ///|
@@ -194,7 +186,7 @@ fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
 /// This enables proper multi-table support where each call_indirect can specify which table to use
 fn JITContext::set_table_pointers(
   self : JITContext,
-  jit_tables : Array[JITTable?],
+  jit_tables : Array[@wasmoon_jit.JITTable?],
 ) -> Unit {
   if jit_tables.is_empty() {
     return
@@ -230,7 +222,7 @@ fn JITContext::set_table_pointers(
 /// Set multiple memories (for multi-memory support)
 fn JITContext::set_memory_pointers(
   self : JITContext,
-  memories : Array[MemoryInfo],
+  memories : Array[@wasmoon_jit.MemoryInfo],
 ) -> Unit {
   if memories.is_empty() {
     return
@@ -503,12 +495,6 @@ fn JITContext::take_wasi_stdout(self : JITContext) -> Bytes {
 fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
   @jit_ffi.c_jit_take_wasi_stderr(self.ptr())
 }
-
-///|
-pub type JITTable = @wasmoon_jit.JITTable
-
-///|
-pub type ExecCode = @wasmoon_jit.ExecCode
 
 ///|
 pub fn alloc_memory(size : Int64) -> Int64 {
@@ -882,7 +868,7 @@ fn JITContext::call_multi_return(
         )
         @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr).get_bytes()
       }
-      let trampoline = ExecCode::new(code_ints)
+      let trampoline = @wasmoon_jit.ExecCode::new(code_ints)
       match trampoline {
         Some(t) => {
           let ptr = t.ptr()

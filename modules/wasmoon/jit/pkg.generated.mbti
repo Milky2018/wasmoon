@@ -239,21 +239,6 @@ pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
 pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
 
 // Type aliases
-pub using @wasmoon_jit {type ExecCode}
-
-pub using @wasmoon_jit {type JITDebugDB}
-
-pub using @wasmoon_jit {type JITFunctionDebug}
-
-pub using @wasmoon_jit {type JITTable}
-
-pub using @wasmoon_jit {type MemoryInfo}
-
-pub using @wasmoon_jit {type TrapDetails}
-
-pub using @wasmoon_jit {type TrapReport}
-
-pub using @wasmoon_jit {type WasmTrapFrame}
 
 // Traits
 pub trait DynamicArgs {
