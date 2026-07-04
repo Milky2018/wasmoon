@@ -20,6 +20,24 @@ pub impl Show for LinkError with fn output(self, logger) {
 }
 
 ///|
+/// Reserve negative function-index values for legacy runtime helper fixups.
+pub fn gc_runtime_fixup_idx(ordinal : Int) -> Int {
+  -20_000 - ordinal
+}
+
+///|
+/// Reserve negative function-index values for legacy runtime helper fixups.
+pub fn jit_runtime_fixup_idx(ordinal : Int) -> Int {
+  -21_000 - ordinal
+}
+
+///|
+/// Reserve negative function-index values for legacy runtime helper fixups.
+pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
+  -22_000 - ordinal
+}
+
+///|
 pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
   { symbols: [] }
 }

@@ -103,16 +103,6 @@ pub(all) enum FixupKind {
 }
 
 ///|
-/// Reserve negative func_idx values for runtime helper pointer fixups.
-const RUNTIME_FIXUP_GC_BASE : Int = -20_000
-
-///|
-const RUNTIME_FIXUP_JIT_BASE : Int = -21_000
-
-///|
-const RUNTIME_FIXUP_EXCEPTION_BASE : Int = -22_000
-
-///|
 pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
   let ord = match libcall {
     RefTest => 0
@@ -136,7 +126,7 @@ pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
     AllocStructSlow => 18
     AllocArraySlow => 19
   }
-  RUNTIME_FIXUP_GC_BASE - ord
+  @wasmoon_jit.gc_runtime_fixup_idx(ord)
 }
 
 ///|
@@ -157,7 +147,7 @@ pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
     ElemDrop => 12
     HostCall => 13
   }
-  RUNTIME_FIXUP_JIT_BASE - ord
+  @wasmoon_jit.jit_runtime_fixup_idx(ord)
 }
 
 ///|
@@ -176,7 +166,7 @@ pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
     SpillLocals => 10
     GetSpilledLocal => 11
   }
-  RUNTIME_FIXUP_EXCEPTION_BASE - ord
+  @wasmoon_jit.exception_runtime_fixup_idx(ord)
 }
 
 ///|

@@ -14,6 +14,9 @@ test "resolve runtime helper relocations into linked code" {
 
 ///|
 test "resolve legacy runtime fixup ids in wasmoon_jit" {
+  inspect(gc_runtime_fixup_idx(0), content="-20000")
+  inspect(jit_runtime_fixup_idx(13), content="-21013")
+  inspect(exception_runtime_fixup_idx(11), content="-22011")
   inspect(resolve_runtime_func_fixup_idx(-20000) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-21013) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-22011) is Some(_), content="true")
