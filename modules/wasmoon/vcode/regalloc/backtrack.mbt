@@ -351,51 +351,35 @@ fn BacktrackingAllocator::constraint_hint_preg(
   if avail_regs.is_empty() {
     return None
   }
-  let mut max_idx = -1
-  for preg in avail_regs {
-    if preg.index > max_idx {
-      max_idx = preg.index
+
+  fn to_core_preg(preg : @abi.PReg) -> @core_regalloc.PhysicalReg {
+    let class : @core_regalloc.RegClass = match preg.class {
+      Int => Int
+      Float32 | Float64 => Float
+      Vector => Vector
     }
-  }
-  if max_idx < 0 {
-    return None
-  }
-  let avail_idx = Array::make(max_idx + 1, false)
-  let counts = Array::make(max_idx + 1, 0)
-  for preg in avail_regs {
-    avail_idx[preg.index] = true
+    { id: preg.index, class }
   }
 
-  // Count how often each fixed preg appears in uses.
+  fn from_core_preg(preg : @core_regalloc.PhysicalReg) -> @abi.PReg {
+    { index: preg.id, class: bundle.reg_class }
+  }
+
+  let available : Array[@core_regalloc.PhysicalReg] = []
+  for preg in avail_regs {
+    available.push(to_core_preg(preg))
+  }
+
+  let fixed : Array[@core_regalloc.PhysicalReg] = []
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     for use_pos in range.uses {
       if use_pos.constraint is FixedReg(preg) && preg.class == bundle.reg_class {
-        if preg.index >= 0 &&
-          preg.index < avail_idx.length() &&
-          avail_idx[preg.index] {
-          counts[preg.index] = counts[preg.index] + 1
-        }
+        fixed.push(to_core_preg(preg))
       }
     }
   }
-
-  let mut best_idx = -1
-  let mut best_cnt = 0
-  for preg in avail_regs {
-    let idx = preg.index
-    let cnt = counts[idx]
-    if cnt > best_cnt ||
-      (cnt == best_cnt && cnt > 0 && (best_idx < 0 || idx < best_idx)) {
-      best_idx = idx
-      best_cnt = cnt
-    }
-  }
-  if best_idx >= 0 && best_cnt > 0 {
-    Some({ index: best_idx, class: bundle.reg_class })
-  } else {
-    None
-  }
+  @core_regalloc.choose_fixed_reg_hint(available, fixed).map(from_core_preg)
 }
 
 ///|

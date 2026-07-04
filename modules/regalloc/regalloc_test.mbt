@@ -333,6 +333,25 @@ test "priority work queue pops by priority with stable tie-breaks" {
 }
 
 ///|
+test "choose fixed register hint by frequency and low-id tie break" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  debug_inspect(
+    choose_fixed_reg_hint([r0, r1, r2], [r2, r1, r2]),
+    content="Some({ id: 2, class: Int })",
+  )
+  debug_inspect(
+    choose_fixed_reg_hint([r0, r1, r2], [r2, r1]),
+    content="Some({ id: 1, class: Int })",
+  )
+  debug_inspect(
+    choose_fixed_reg_hint([r0], [{ id: 9, class: Int }]),
+    content="None",
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
