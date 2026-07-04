@@ -489,7 +489,7 @@ pub fn JITModule::load_with_imports(
             // Install per-function GC safepoint metadata (if present).
             jit_module.gc_set_func_safepoints(
               entry.func_idx,
-              @vcode.gc_safepoints_from_cwasm(entry.gc_safepoints),
+              entry.gc_safepoints,
               entry.gc_stackmap_blob,
             )
             |> ignore
@@ -1281,7 +1281,7 @@ pub fn JITModule::gc_set_safepoint_table(
 pub fn JITModule::gc_set_func_safepoints(
   self : JITModule,
   func_idx : Int,
-  safepoints : Array[@vcode.GcSafepoint],
+  safepoints : Array[@cwasm.GcSafepoint],
   stackmap_blob : Bytes,
 ) -> Bool {
   if self.context_ptr == 0L {
