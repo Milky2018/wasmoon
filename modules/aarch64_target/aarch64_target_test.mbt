@@ -90,6 +90,28 @@ test "AArch64 lowers integer bitcount ops into structured MachV opcodes" {
 }
 
 ///|
+test "AArch64 lowers multiply-high ops into structured MachV opcodes" {
+  let func = @milkir.Function::new_empty("mulhigh")
+  let lhs = func.new_value(I64)
+  let rhs = func.new_value(I64)
+  let unsigned = func.new_value(I64)
+  let signed = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Umulh, [lhs, rhs], [unsigned]))
+  entry.append_inst(func.new_inst(Smulh, [lhs, rhs], [signed]))
+  entry.set_terminator(Return([unsigned, signed]))
+  let lowered = lower_function(func)
+  inspect(
+    lowered.blocks[0].instructions[0].opcode == IntMulHigh(false),
+    content="true",
+  )
+  inspect(
+    lowered.blocks[0].instructions[1].opcode == IntMulHigh(true),
+    content="true",
+  )
+}
+
+///|
 test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
   let builder = @milkir.IRBuilder::new("mem")
   let ptr = builder.add_param(Ptr)

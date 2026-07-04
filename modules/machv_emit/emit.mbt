@@ -625,6 +625,36 @@ fn emit_aarch64_int_shift(
 }
 
 ///|
+fn emit_aarch64_int_mul_high(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  signed : Bool,
+) -> Unit raise EmitError {
+  let context = if signed { "smulh" } else { "umulh" }
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): encode 32-bit multiply-high lowering once MachV carries lane width.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((lhs & 7) << 5) |
+    ((((lhs >> 3) & 3) | 0x7c) << 8) |
+    (((if signed { 0x40 } else { 0xc0 }) | (rhs & 31)) << 16) |
+    (0x9b << 24),
+  )
+}
+
+///|
 fn emit_aarch64_movz(
   object : CodeObject,
   rd : Int,
@@ -1313,6 +1343,7 @@ fn write_aarch64_inst_bytes(
     IntAdd => emit_aarch64_int_add(object, inst)
     IntSub => emit_aarch64_int_binop3(object, inst, 0xcb000000, "sub")
     IntMul => emit_aarch64_int_mul(object, inst)
+    IntMulHigh(signed) => emit_aarch64_int_mul_high(object, inst, signed)
     IntDiv(signed) =>
       emit_aarch64_int_binop3(
         object,

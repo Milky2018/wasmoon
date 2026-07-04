@@ -274,6 +274,32 @@ test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR unsigned multiply-high through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("umulh64", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let high = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Umulh, [lhs, rhs], [high]))
+  entry.set_terminator(Return([high]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_umulh = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if (plan.object.code[i + 1] & 0x7c) == 0x7c &&
+      (plan.object.code[i + 2] & 0xc0) == 0xc0 &&
+      plan.object.code[i + 3] == 0x9b {
+      has_umulh = true
+    }
+  }
+  inspect(has_umulh, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)

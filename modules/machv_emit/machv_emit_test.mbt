@@ -458,6 +458,36 @@ test "emit AArch64 integer division bytes" {
 }
 
 ///|
+test "emit AArch64 integer multiply-high bytes" {
+  let func = @machv.Function::new("int_mul_high")
+  let entry = func.new_block()
+  let unsigned = func.new_inst(IntMulHigh(false))
+  unsigned.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  unsigned.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  unsigned.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(unsigned)
+  let signed = func.new_inst(IntMulHigh(true))
+  signed.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Int })),
+  )
+  signed.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 5, class: Int })),
+  )
+  signed.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  entry.append(signed)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[32, 124, 194, 155, 131, 124, 69, 155, 192, 3, 95, 214]",
+  )
+}
+
+///|
 test "emit AArch64 integer not bytes" {
   let func = @machv.Function::new("int_not")
   let entry = func.new_block()
