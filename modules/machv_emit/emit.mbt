@@ -1270,6 +1270,9 @@ fn mem_access_is_64(mem_type : @machv.MemType) -> Bool raise EmitError {
   match mem_type {
     MemI32 => false
     MemI64 | MemPtr => true
+    // TODO(machv_emit): add floating-point and vector memory encodings once
+    // generic LoadMemory/StoreMemory carries enough alignment and volatility
+    // metadata for non-integer memory operations.
     _ =>
       raise UnsupportedOperand(
         message="machv_emit memory access currently supports only i32, i64, and ptr",
@@ -2346,6 +2349,10 @@ fn write_aarch64_inst_bytes(
     Sextend16 => emit_aarch64_sign_extend(object, inst, 16)
     Sextend32 => emit_aarch64_sign_extend(object, inst, 32)
     Select => emit_aarch64_select(object, inst)
+    LoadMemory(mem_type, offset) =>
+      emit_aarch64_load_ptr(object, inst, mem_type, offset)
+    StoreMemory(mem_type, offset) =>
+      emit_aarch64_store_ptr(object, inst, mem_type, offset)
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -2426,6 +2433,10 @@ fn write_x64_inst_bytes(
     Sextend16 => emit_x64_sign_extend(object, inst, 16)
     Sextend32 => emit_x64_sign_extend(object, inst, 32)
     Select => emit_x64_select(object, inst)
+    LoadMemory(mem_type, offset) =>
+      emit_x64_load_ptr(object, inst, mem_type, offset)
+    StoreMemory(mem_type, offset) =>
+      emit_x64_store_ptr(object, inst, mem_type, offset)
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>

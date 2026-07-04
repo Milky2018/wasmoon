@@ -158,6 +158,27 @@ test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
 }
 
 ///|
+test "AArch64 lowers generic load and store with value widths" {
+  let func = @milkir.Function::new_empty("generic_mem")
+  let ptr = func.new_value(Ptr)
+  let value = func.new_value(I32)
+  let loaded = func.new_value(I32)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(func.new_inst(Store, [ptr, value], []))
+  entry.set_terminator(Return([loaded]))
+  let lowered = lower_function(func)
+  inspect(
+    lowered.blocks[0].instructions[0].opcode == LoadMemory(MemI32, 0),
+    content="true",
+  )
+  inspect(
+    lowered.blocks[0].instructions[1].opcode == StoreMemory(MemI32, 0),
+    content="true",
+  )
+}
+
+///|
 test "AArch64 lowers direct calls with AAPCS64 ABI constraints" {
   let func = @milkir.Function::new_empty("call")
   let int0 = func.new_value(I64)

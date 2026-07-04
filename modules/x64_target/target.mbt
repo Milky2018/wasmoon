@@ -509,6 +509,18 @@ fn lower_fcmp(
 }
 
 ///|
+fn load_mem_type(inst : @milkir.Inst) -> @machv.MemType {
+  guard inst.results.length() == 1 else { return MemI64 }
+  mem_type_for_type(inst.results[0].ty)
+}
+
+///|
+fn store_mem_type(inst : @milkir.Inst) -> @machv.MemType {
+  guard inst.args.length() >= 2 else { return MemI64 }
+  mem_type_for_type(inst.args[1].ty)
+}
+
+///|
 fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
   match opcode {
     Iadd => IntAdd
@@ -651,6 +663,8 @@ fn lower_inst(
       let offset = const_offset_arg(func, inst.args, 2)
       out.new_inst(StorePtr(mem_type_for_type(ty), offset))
     }
+    Load => out.new_inst(LoadMemory(load_mem_type(inst), 0))
+    Store => out.new_inst(StoreMemory(store_mem_type(inst), 0))
     _ => out.new_inst(opcode_for(inst.opcode))
   }
   match inst.opcode {
