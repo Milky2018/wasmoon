@@ -74,6 +74,28 @@ test "compile api: reusable pipeline preserves direct wasm call fixups" {
 }
 
 ///|
+test "compile api: reusable pipeline lowers ref.func without legacy custom" {
+  let mod_ = @types.Module::simple([], [FuncRef], [RefFunc(0)], "make_ref")
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("ref.func did not compile through reusable pipeline")
+  }
+  inspect(reusable.entry.func_idx, content="0")
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.GetFuncRef"), content="false")
+  inspect(reusable.milk_dump.contains("load_ptr.ref"), content="true")
+}
+
+///|
 test "compile api: parse failure emits failed stage" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(Bytes::from_array([0x00, 0x01, 0x02]), on_progress=fn(

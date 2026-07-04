@@ -1,4 +1,7 @@
 ///|
+const VMCTX_FUNC_TABLE_OFFSET : Int = 24
+
+///|
 const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
@@ -18,6 +21,9 @@ const GLOBAL_STRIDE : Int = 16
 
 ///|
 const TABLE_ENTRY_STRIDE : Int = 16
+
+///|
+const FUNC_TABLE_ENTRY_STRIDE : Int = 8
 
 ///|
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
@@ -841,12 +847,24 @@ fn push_ref_is_null(
 fn push_ref_func(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   func_idx : Int,
 ) -> Bool {
-  // TODO(ISS-023): lower this custom helper to a reusable runtime call or
-  // relocation instead of preserving the legacy GetFuncRef opcode shape.
-  guard emit_op(builder, Ref, Custom("wasmoon.GetFuncRef(\{func_idx})"), [])
-    is Some(result) else {
+  guard vmctx is Some(context) else { return false }
+  // TODO(ISS-023): source VMContext function-table layout from the reusable
+  // embedding ABI instead of copy-first constants from legacy VCode lowering.
+  let func_table = builder.load_ptr(
+    I64,
+    context,
+    builder.iconst_i64(VMCTX_FUNC_TABLE_OFFSET.to_int64()),
+  )
+  let raw_func_ptr = builder.load_ptr(
+    Ref,
+    func_table,
+    builder.iconst_i64((func_idx * FUNC_TABLE_ENTRY_STRIDE).to_int64()),
+  )
+  let tag = builder.iconst(Ref, @types.FUNCREF_TAG)
+  guard emit_op(builder, Ref, Bor, [raw_func_ptr, tag]) is Some(result) else {
     return false
   }
   stack.push(result)
@@ -2036,7 +2054,7 @@ fn try_lower_linear_function(
         }
       RefIsNull => if !push_ref_is_null(builder, stack) { return None }
       RefFunc(func_idx) =>
-        if !push_ref_func(builder, stack, func_idx) {
+        if !push_ref_func(builder, stack, vmctx, func_idx) {
           return None
         }
       RefAsNonNull => if !push_ref_as_non_null(builder, stack) { return None }
