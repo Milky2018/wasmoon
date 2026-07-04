@@ -103,6 +103,28 @@ pub fn jit_trap_message(code : Int) -> String {
 }
 
 ///|
+pub fn legacy_trap_immediate_from_message(msg : String) -> Int {
+  // Keep this mapping in sync with `jit_ffi/trap.c` BRK/UD2 immediate decoding:
+  // 0 unreachable, 1 out of bounds, 2 type mismatch, 3 invalid conversion,
+  // 4 divide by zero, 5 overflow, 6 backend/unknown JIT trap.
+  if msg == "unreachable" {
+    0
+  } else if msg.contains("out of bounds") {
+    1
+  } else if msg.contains("type mismatch") {
+    2
+  } else if msg.contains("invalid conversion") {
+    3
+  } else if msg.contains("divide by zero") {
+    4
+  } else if msg.contains("overflow") {
+    5
+  } else {
+    6
+  }
+}
+
+///|
 pub fn take_pending_trap_message() -> String? {
   let code = @jit_ffi.c_jit_get_trap_code()
   if code == 0 {

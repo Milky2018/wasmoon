@@ -14,24 +14,6 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
   _shared_exit_block : Int?,
 ) -> Unit {
   let isa = @isa.ISA::current()
-  fn trap_msg_to_imm16(msg : String) -> Int {
-    if msg == "unreachable" {
-      0
-    } else if msg.contains("out of bounds") {
-      1
-    } else if msg.contains("type mismatch") {
-      2
-    } else if msg.contains("invalid conversion") {
-      3
-    } else if msg.contains("divide by zero") {
-      4
-    } else if msg.contains("overflow") {
-      5
-    } else {
-      6
-    }
-  }
-
   self.annotate(term.to_string())
   match term {
     Branch(cond, then_b, else_b) => {
@@ -117,7 +99,10 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       if args.length() > 0 || next_block != Some(target) {
         self.x86_emit_jmp_rel32(target)
       }
-    Trap(msg) => self.x86_emit_trap_imm16(trap_msg_to_imm16(msg))
+    Trap(msg) =>
+      self.x86_emit_trap_imm16(
+        @wasmoon_jit.legacy_trap_immediate_from_message(msg),
+      )
     BrTable(index, targets, default) => {
       // Jump table implementation for br_table (Cranelift-style rel32 table).
       //
