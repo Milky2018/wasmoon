@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/vcode/regalloc/unionfind"
+package "Milky2018/regalloc/unionfind"
 
 // Values
 
