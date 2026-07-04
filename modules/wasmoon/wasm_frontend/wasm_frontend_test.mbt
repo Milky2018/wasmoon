@@ -405,6 +405,48 @@ test "lower pure if expression bodies into native MilkIR select" {
 }
 
 ///|
+test "lower pure if copysign and wide multiply expression bodies" {
+  let float_mod = @types.Module::simple(
+    [I32, F32, F32],
+    [F32],
+    [
+      LocalGet(0),
+      If(Value(F32), [LocalGet(1), LocalGet(2), F32Copysign], [
+        LocalGet(2),
+        LocalGet(1),
+        F32Copysign,
+      ]),
+    ],
+    "select_copysign_body",
+  )
+  let wide_mod = @types.Module::simple(
+    [I32, I64, I64],
+    [I64],
+    [
+      LocalGet(0),
+      If(Value(I64), [LocalGet(1), LocalGet(2), I64MulWideU], [
+        LocalGet(1),
+        LocalGet(2),
+        I64MulWideS,
+      ]),
+    ],
+    "select_wide_mul_body",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let float_func = lower_function(env, float_mod, 0)
+  let wide_func = lower_function(env, wide_mod, 0)
+  inspect(float_func.print().contains("bor"), content="true")
+  inspect(float_func.print().contains("select"), content="true")
+  inspect(float_func.print().contains("TODO(wasm_frontend)"), content="false")
+  inspect(wide_func.print().contains("umulh"), content="true")
+  inspect(wide_func.print().contains("smulh"), content="true")
+  inspect(wide_func.print().contains("select"), content="true")
+  inspect(wide_func.print().contains("TODO(wasm_frontend)"), content="false")
+  inspect(float_func.verify(), content="()")
+  inspect(wide_func.verify(), content="()")
+}
+
+///|
 test "lower trap without wasm_frontend skeleton fallback" {
   let mod_ = @types.Module::simple([], [], [Unreachable], "trap")
   let env = EmbeddingEnvironment::new(hidden_context_type=None)

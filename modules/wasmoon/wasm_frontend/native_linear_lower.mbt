@@ -876,6 +876,8 @@ fn push_simple_expr_instr(
       push_binary(expr_stack, fn(lhs, rhs) { builder.isub(lhs, rhs) })
     I32Mul | I64Mul =>
       push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
+    I64MulWideU => push_binary_opcode(builder, expr_stack, Umulh)
+    I64MulWideS => push_binary_opcode(builder, expr_stack, Smulh)
     I32And | I64And => push_binary_opcode(builder, expr_stack, Band)
     I32Or | I64Or => push_binary_opcode(builder, expr_stack, Bor)
     I32Xor | I64Xor => push_binary_opcode(builder, expr_stack, Bxor)
@@ -916,6 +918,24 @@ fn push_simple_expr_instr(
     F32Div | F64Div => push_binary_opcode(builder, expr_stack, Fdiv)
     F32Min | F64Min => push_binary_opcode(builder, expr_stack, Fmin)
     F32Max | F64Max => push_binary_opcode(builder, expr_stack, Fmax)
+    F32Copysign =>
+      push_float_copysign(
+        builder,
+        expr_stack,
+        F32,
+        I32,
+        0x7FFFFFFFL,
+        0x80000000U.reinterpret_as_int().to_int64(),
+      )
+    F64Copysign =>
+      push_float_copysign(
+        builder,
+        expr_stack,
+        F64,
+        I64,
+        0x7FFFFFFFFFFFFFFFL,
+        0x8000000000000000UL.reinterpret_as_int64(),
+      )
     F32Neg | F64Neg => push_unary_opcode(builder, expr_stack, Fneg)
     F32Abs | F64Abs => push_unary_opcode(builder, expr_stack, Fabs)
     F32Sqrt | F64Sqrt => push_unary_opcode(builder, expr_stack, Fsqrt)
