@@ -21,6 +21,13 @@ test "resolve legacy runtime fixup ids in wasmoon_jit" {
 }
 
 ///|
+test "resolve function-address fixup targets in wasmoon_jit" {
+  inspect(resolve_func_addr_fixup_target(-20000, 0L) is Some(_), content="true")
+  debug_inspect(resolve_func_addr_fixup_target(3, 0L), content="None")
+  debug_inspect(resolve_func_addr_fixup_target(-1, 0L), content="None")
+}
+
+///|
 test "wrap linked code as cwasm artifact" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
