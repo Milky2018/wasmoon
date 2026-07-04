@@ -85,6 +85,88 @@ test "emit MachV terminators as target bytes" {
 }
 
 ///|
+test "emit X64 conditional branch terminator" {
+  let func = @machv.Function::new("branch")
+  let entry = func.new_block()
+  let then_block = func.new_block()
+  let else_block = func.new_block()
+  entry.set_terminator(
+    TermBranchZero(
+      Physical({ index: 0, class: Int }),
+      true,
+      true,
+      then_block.id,
+      [],
+      else_block.id,
+      [],
+    ),
+  )
+  then_block.set_terminator(TermReturn([]))
+  else_block.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[72, 133, 192, 15, 133, 0, 0, 0, 0, 233, 0, 0, 0, 0, 195, 195]",
+  )
+  inspect(object.relocations.length(), content="2")
+  inspect(object.fixups.length(), content="2")
+  inspect(object.debug_entries.length(), content="3")
+}
+
+///|
+test "emit AArch64 compare branch terminator" {
+  let func = @machv.Function::new("branch_cmp")
+  let entry = func.new_block()
+  let then_block = func.new_block()
+  let else_block = func.new_block()
+  entry.set_terminator(
+    TermBranchCmp(
+      Physical({ index: 0, class: Int }),
+      Physical({ index: 1, class: Int }),
+      Eq,
+      true,
+      then_block.id,
+      [],
+      else_block.id,
+      [],
+    ),
+  )
+  then_block.set_terminator(TermReturn([]))
+  else_block.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  31,
+      #|  0,
+      #|  1,
+      #|  235,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  84,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  20,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
+  inspect(object.relocations.length(), content="2")
+  inspect(object.fixups.length(), content="2")
+  inspect(object.debug_entries.length(), content="3")
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
