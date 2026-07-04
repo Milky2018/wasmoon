@@ -86,6 +86,59 @@ fn instruction_to_regalloc(inst : @machv.Instruction) -> @regalloc.Instruction {
 }
 
 ///|
+fn add_terminator_use(out : @regalloc.Instruction, reg : @machv.Reg) -> Unit {
+  if reg is Virtual(vreg) {
+    out.add_operand(@regalloc.Operand::use_reg(vreg_to_regalloc(vreg)))
+  }
+}
+
+///|
+fn add_terminator_uses(
+  out : @regalloc.Instruction,
+  regs : Array[@machv.Reg],
+) -> Unit {
+  for reg in regs {
+    add_terminator_use(out, reg)
+  }
+}
+
+///|
+fn terminator_to_regalloc(
+  block_id : Int,
+  term : @machv.Terminator,
+) -> @regalloc.Instruction {
+  let out = @regalloc.Instruction::new(-1 - block_id)
+  match term {
+    TermJump(_, args) => add_terminator_uses(out, args)
+    TermBranch(cond, _, true_args, _, false_args) => {
+      add_terminator_use(out, cond)
+      add_terminator_uses(out, true_args)
+      add_terminator_uses(out, false_args)
+    }
+    TermBranchCmp(lhs, rhs, _, _, _, true_args, _, false_args) => {
+      add_terminator_use(out, lhs)
+      add_terminator_use(out, rhs)
+      add_terminator_uses(out, true_args)
+      add_terminator_uses(out, false_args)
+    }
+    TermBranchZero(value, _, _, _, true_args, _, false_args) => {
+      add_terminator_use(out, value)
+      add_terminator_uses(out, true_args)
+      add_terminator_uses(out, false_args)
+    }
+    TermBranchCmpImm(value, _, _, _, _, true_args, _, false_args) => {
+      add_terminator_use(out, value)
+      add_terminator_uses(out, true_args)
+      add_terminator_uses(out, false_args)
+    }
+    TermReturn(results) => add_terminator_uses(out, results)
+    TermTrap(_) => ()
+    TermBrTable(value, _, _) => add_terminator_use(out, value)
+  }
+  out
+}
+
+///|
 pub fn project_function(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
@@ -96,6 +149,12 @@ pub fn project_function(
     let out_block = @regalloc.Block::new(block.id)
     for inst in block.instructions {
       out_block.append(instruction_to_regalloc(inst))
+    }
+    if block.terminator is Some(term) {
+      out_block.append(terminator_to_regalloc(block.id, term))
+    }
+    for succ in block.successors {
+      out_block.add_successor(succ)
     }
     program.add_block(out_block)
   }

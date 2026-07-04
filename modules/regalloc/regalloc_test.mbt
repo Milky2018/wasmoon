@@ -78,6 +78,66 @@ test "build_live_ranges records spans and uses" {
 }
 
 ///|
+test "build_live_ranges extends values across successor blocks" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0])
+  let entry = Block::new(0)
+  let def_inst = Instruction::new(0)
+  def_inst.add_operand(Operand::def(v0))
+  entry.append(def_inst)
+  entry.add_successor(1)
+  program.add_block(entry)
+  let middle = Block::new(1)
+  middle.add_successor(2)
+  program.add_block(middle)
+  let exit = Block::new(2)
+  let use_inst = Instruction::new(1)
+  use_inst.add_operand(Operand::use_reg(v0))
+  exit.append(use_inst)
+  program.add_block(exit)
+  let ranges = build_live_ranges(program)
+  let range = ranges.get_by_vreg(v0).unwrap()
+  inspect(
+    range.ranges[0].contains(ProgramPoint::new(1, 0), ranges.block_order),
+    content="true",
+  )
+}
+
+///|
+test "linear scan keeps successor-live values from reusing a register" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let v1 : VirtualReg = { id: 1, class: Int }
+  let program = Program::new([r0, r1])
+  let entry = Block::new(0)
+  let def_v0 = Instruction::new(0)
+  def_v0.add_operand(Operand::def(v0))
+  entry.append(def_v0)
+  entry.add_successor(1)
+  program.add_block(entry)
+  let middle = Block::new(1)
+  let def_v1 = Instruction::new(1)
+  def_v1.add_operand(Operand::def(v1))
+  def_v1.add_operand(Operand::use_reg(v1))
+  middle.append(def_v1)
+  middle.add_successor(2)
+  program.add_block(middle)
+  let exit = Block::new(2)
+  let use_v0 = Instruction::new(2)
+  use_v0.add_operand(Operand::use_reg(v0))
+  exit.append(use_v0)
+  program.add_block(exit)
+  let allocation = allocate(program)
+  inspect(
+    allocation.location_of(v0) != allocation.location_of(v1),
+    content="true",
+  )
+  inspect(verify_allocation(program, allocation), content="()")
+}
+
+///|
 test "linear scan evicts longer active interval for shorter current interval" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }

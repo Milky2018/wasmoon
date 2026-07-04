@@ -185,6 +185,58 @@ test "allocate_function avoids projected clobbered registers" {
 }
 
 ///|
+test "projected MachV terminator return keeps result live" {
+  let func = @machv.Function::new("return_live")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let def_v0 = func.new_inst(Target("def_v0"))
+  def_v0.add_operand(@machv.Operand::def(Virtual(v0)))
+  entry.append(def_v0)
+  let def_v1 = func.new_inst(Target("def_v1"))
+  def_v1.add_operand(@machv.Operand::def(Virtual(v1)))
+  def_v1.add_operand(@machv.Operand::use_reg(Virtual(v1)))
+  entry.append(def_v1)
+  entry.set_terminator(TermReturn([Virtual(v0)]))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let allocation = allocate_function(func, [p0, p1])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) !=
+    allocation.location_of({ id: v1.id, class: Int }),
+    content="true",
+  )
+}
+
+///|
+test "projected MachV successors extend live ranges across empty blocks" {
+  let func = @machv.Function::new("successor_live")
+  let entry = func.new_block()
+  let middle = func.new_block()
+  let exit = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let def_v0 = func.new_inst(Target("def_v0"))
+  def_v0.add_operand(@machv.Operand::def(Virtual(v0)))
+  entry.append(def_v0)
+  entry.set_terminator(TermJump(middle.id, []))
+  let def_v1 = func.new_inst(Target("def_v1"))
+  def_v1.add_operand(@machv.Operand::def(Virtual(v1)))
+  def_v1.add_operand(@machv.Operand::use_reg(Virtual(v1)))
+  middle.append(def_v1)
+  middle.set_terminator(TermJump(exit.id, []))
+  exit.set_terminator(TermReturn([Virtual(v0)]))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let allocation = allocate_function(func, [p0, p1])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) !=
+    allocation.location_of({ id: v1.id, class: Int }),
+    content="true",
+  )
+}
+
+///|
 test "apply inserts reloads and spills for stack allocated operands" {
   let func = @machv.Function::new("reload_spill")
   let entry = func.new_block()

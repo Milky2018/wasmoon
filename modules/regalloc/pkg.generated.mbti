@@ -49,6 +49,7 @@ pub(all) struct Block {
   instructions : Array[Instruction]
   successors : Array[Int]
 } derive(@debug.Debug)
+pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
 pub fn Block::new(Int) -> Self
 
@@ -81,6 +82,7 @@ pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::start(Self) -> ProgramPoint?
 pub fn LiveRange::total_length(Self) -> Int
 pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
+pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int]) -> Unit
 
 pub(all) struct LiveRangeSet {
   ranges : Array[LiveRange]

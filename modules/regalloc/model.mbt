@@ -95,6 +95,11 @@ pub fn Block::append(self : Block, inst : Instruction) -> Unit {
 }
 
 ///|
+pub fn Block::add_successor(self : Block, block_id : Int) -> Unit {
+  self.successors.push(block_id)
+}
+
+///|
 pub(all) struct Program {
   blocks : Array[Block]
   physical_regs : Array[PhysicalReg]
