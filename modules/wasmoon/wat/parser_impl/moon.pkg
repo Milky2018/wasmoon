@@ -1,5 +1,5 @@
 import {
-  "Milky2018/wasmoon/types",
+  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/parser",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",

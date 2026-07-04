@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/wat"
 
 import {
-  "Milky2018/wasmoon/types",
+  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/wat/parser_impl",
 }
 

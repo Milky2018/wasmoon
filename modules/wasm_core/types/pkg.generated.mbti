@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/types"
+package "Milky2018/wasm_core/types"
 
 import {
   "moonbitlang/core/debug",

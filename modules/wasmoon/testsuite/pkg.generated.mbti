@@ -2,10 +2,10 @@
 package "Milky2018/wasmoon/testsuite"
 
 import {
+  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/cwasm",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon/runtime",
-  "Milky2018/wasmoon/types",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }

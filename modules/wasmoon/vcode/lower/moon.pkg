@@ -12,5 +12,5 @@ import {
 
 import {
   "Milky2018/wasmoon/wat",
-  "Milky2018/wasmoon/types",
+  "Milky2018/wasm_core/types",
 } for "wbtest"

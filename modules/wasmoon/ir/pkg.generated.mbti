@@ -2,8 +2,8 @@
 package "Milky2018/wasmoon/ir"
 
 import {
+  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/ir/egraph",
-  "Milky2018/wasmoon/types",
   "moonbitlang/core/debug",
 }
 

@@ -5,6 +5,7 @@ version = "0.6.4"
 import {
   "moonbitlang/x@0.4.38",
   "TheWaWaR/clap@0.2.6",
+  "Milky2018/wasm_core@0.1.0",
 }
 
 readme = "README.mbt.md"

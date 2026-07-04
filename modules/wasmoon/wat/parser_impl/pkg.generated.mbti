@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/wat/parser_impl"
 
 import {
-  "Milky2018/wasmoon/types",
+  "Milky2018/wasm_core/types",
   "moonbitlang/core/debug",
 }
 
