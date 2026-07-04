@@ -341,41 +341,39 @@ pub fn compute_spill_weight(
   ranges : LiveRangeSet,
   loop_depths : Array[Int],
 ) -> Int {
-  let mut weight = 0
+  let uses : Array[@core_regalloc.UsePosition] = []
   for range_id in bundle.range_ids {
     let range = ranges.get(range_id)
     for use_pos in range.uses {
-      // Cranelift/regalloc2-like spill weights:
-      // - hot loop bonus: 1000 * 4^depth (capped)
-      // - def bonus: +2000
-      // - operand constraint bonus: Any=+1000, FixedReg=+2000
-      let mut depth = loop_depths[use_pos.point.block]
-      if depth < 0 {
-        depth = 0
+      let kind : @core_regalloc.UseKind = match use_pos.kind {
+        Def => LiveDef
+        Use => LiveUse
       }
-      if depth > 10 {
-        depth = 10
+      let constraint : @core_regalloc.OperandConstraint = match
+        use_pos.constraint {
+        AnyReg => AnyReg
+        FixedReg(preg) => {
+          let class : @core_regalloc.RegClass = match preg.class {
+            Int => Int
+            Float32 | Float64 => Float
+            Vector => Vector
+          }
+          FixedReg({ id: preg.index, class })
+        }
       }
-      let mut hot_bonus = 1000
-      for _ in 0..<depth {
-        hot_bonus = hot_bonus * 4
-      }
-      let def_bonus = match use_pos.kind {
-        Def => 2000
-        Use => 0
-      }
-      let constraint_bonus = match use_pos.constraint {
-        AnyReg => 1000
-        FixedReg(_) => 2000
-      }
-      weight = weight + hot_bonus + def_bonus + constraint_bonus
+      uses.push(
+        @core_regalloc.UsePosition::new(
+          @core_regalloc.ProgramPoint::new(
+            use_pos.point.block,
+            use_pos.point.inst,
+          ),
+          kind,
+          constraint,
+        ),
+      )
     }
   }
-  if weight <= 0 {
-    1
-  } else {
-    weight
-  }
+  @core_regalloc.compute_spill_weight(uses, loop_depths)
 }
 
 ///|

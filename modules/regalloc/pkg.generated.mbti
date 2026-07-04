@@ -12,6 +12,8 @@ pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
+pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
+
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]

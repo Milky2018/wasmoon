@@ -265,3 +265,18 @@ test "stack frame records callee saved registers" {
   frame.finalize()
   inspect(frame.get_callee_saved().length(), content="2")
 }
+
+///|
+test "spill weight applies loop and constraint bonuses" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let uses = [
+    UsePosition::new(ProgramPoint::new(0, 0), LiveDef, AnyReg),
+    UsePosition::new(ProgramPoint::new(1, 0), LiveUse, FixedReg(r0)),
+  ]
+  inspect(compute_spill_weight(uses, [0, 2]), content="22000")
+}
+
+///|
+test "spill weight has minimum one" {
+  inspect(compute_spill_weight([], []), content="1")
+}
