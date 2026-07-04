@@ -111,9 +111,10 @@ pub type MemoryInfo = @wasmoon_jit.MemoryInfo
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(ISS-022): switch `call_multi_return` to
-/// `wasmoon_jit.plan_entry_trampoline_for_target`, then move this context into
-/// `wasmoon_jit`.
+/// TODO(ISS-022): move entry trampoline generation to
+/// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
+/// MilkIR/MachV path materializes function-entry ABI parameter registers, then
+/// move this context into `wasmoon_jit`.
 /// Uses Standard on-demand loading from vmctx:
 /// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
 /// +24: func_table, +32: table0_base.
@@ -863,7 +864,6 @@ fn JITContext::call_multi_return(
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
   let num_params = param_types.length() // Number of actual WASM parameters
-
   // For results, V128 needs 2 slots
   let mut num_result_slots = 0
   for result_type in result_types {
@@ -897,7 +897,9 @@ fn JITContext::call_multi_return(
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.ptr()
     None => {
-      // Generate trampoline using emit_entry_trampoline
+      // TODO(ISS-022): replace this legacy VCode trampoline once the reusable
+      // MilkIR/MachV path materializes the C-entry ABI for vmctx, values_vec,
+      // and func_ptr before lowering the host-to-Wasm call.
       let param_codes_arr : Array[Int] = []
       for i in 0..<num_params {
         param_codes_arr.push(param_type_codes[i])
@@ -906,8 +908,9 @@ fn JITContext::call_multi_return(
       for i in 0..<num_results {
         result_codes_arr.push(result_type_codes[i])
       }
-      let mc = @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr)
-      let code_ints = mc.get_bytes()
+      let code_ints = @emit.emit_entry_trampoline(
+        param_codes_arr, result_codes_arr,
+      ).get_bytes()
       let trampoline = ExecCode::new(code_ints)
       match trampoline {
         Some(t) => {
