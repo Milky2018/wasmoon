@@ -652,6 +652,32 @@ test "temp register pool prefers scratch and high-index candidates" {
 }
 
 ///|
+test "temp register choice rotates pool and steals with preserve slot" {
+  debug_inspect(
+    choose_temp_register(Int, [3], [3, 4], [5], [], true, 0, 7),
+    content=(
+      #|{
+      #|  preg: { id: 4, class: Int },
+      #|  next_cursor: 1,
+      #|  save_slot: None,
+      #|  next_spill_slot: 7,
+      #|}
+    ),
+  )
+  debug_inspect(
+    choose_temp_register(Vector, [3, 4], [3, 4], [5], [], true, 0, 7),
+    content=(
+      #|{
+      #|  preg: { id: 5, class: Vector },
+      #|  next_cursor: 1,
+      #|  save_slot: Some(8),
+      #|  next_spill_slot: 10,
+      #|}
+    ),
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

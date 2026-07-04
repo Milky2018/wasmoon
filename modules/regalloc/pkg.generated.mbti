@@ -14,6 +14,8 @@ pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
 
+pub fn choose_temp_register(RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
+
 pub fn compact_spill_slots(Array[CompactSpillSet], Array[SpillSlotNoShareEdge], Array[Int]) -> SpillSlotCompaction
 
 pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
@@ -395,6 +397,13 @@ pub(all) enum StackSlotKind {
   CalleeSaved(PhysicalReg)
 } derive(Eq, @debug.Debug)
 pub impl Show for StackSlotKind
+
+pub(all) struct TempRegisterChoice {
+  preg : PhysicalReg
+  next_cursor : Int
+  save_slot : Int?
+  next_spill_slot : Int
+} derive(Eq, @debug.Debug)
 
 pub(all) enum UseKind {
   LiveDef

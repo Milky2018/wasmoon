@@ -115,11 +115,6 @@ fn mark_used(used_marks : Array[Int], idx : Int, epoch : Int) -> Unit {
 }
 
 ///|
-fn is_used(used_marks : Array[Int], idx : Int, epoch : Int) -> Bool {
-  idx >= 0 && idx < used_marks.length() && used_marks[idx] == epoch
-}
-
-///|
 fn add_used_reg_marks(
   used_int_marks : Array[Int],
   used_fp_marks : Array[Int],
@@ -188,140 +183,79 @@ fn pick_temp_preg(
   need_preserve : Bool,
   cursor : Int,
 ) -> (@abi.PReg, Int, Int?) {
-  let scratch1 = isa.scratch_reg_1_index()
-  let scratch2 = isa.scratch_reg_2_index()
-  let vmctx = isa.vmctx_reg_index()
-  let mem0_desc = isa.mem0_desc_reg_index()
-  let func_table = isa.func_table_reg_index()
-  let extra_results_ptr = isa.extra_results_ptr_reg_index()
-  fn alloc_temp_spill_slot(out : Output, cls : @abi.RegClass) -> Int {
-    // Spill slots are counted in 8-byte units.
-    // Keep the same rules as BundleSet::new_spill_bundle.
-    match cls {
-      Vector => {
-        if out.num_spillslots % 2 != 0 {
-          out.num_spillslots += 1
-        }
-        let slot = out.num_spillslots
-        out.num_spillslots += 2
-        slot
-      }
-      _ => {
-        let slot = out.num_spillslots
-        out.num_spillslots += 1
-        slot
-      }
+  fn core_class(class : @abi.RegClass) -> @core_regalloc.RegClass {
+    match class {
+      Int => Int
+      Float32 | Float64 => Float
+      Vector => Vector
     }
   }
 
-  match cls {
-    Int => {
-      for i in 0..<temp_int_pool.length() {
-        let idx = temp_int_pool[(cursor + i) % temp_int_pool.length()]
-        if !is_used(used_int_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: Int }
-          mark_used(used_int_marks, idx, used_epoch)
-          return (preg, cursor + 1, None)
-        }
+  fn used_ids(marks : Array[Int], epoch : Int) -> Array[Int] {
+    let ids : Array[Int] = []
+    for idx, mark in marks {
+      if mark == epoch {
+        ids.push(idx)
       }
-      // Fallback: steal any allocatable GPR not used by this instruction,
-      // save/restore via a fresh spill slot.
-      let candidates : Array[@abi.PReg] = []
-      for p in env.preferred_int {
-        candidates.push(p)
-      }
-      for p in env.nonpreferred_int {
-        candidates.push(p)
-      }
-      for p in candidates {
-        let idx = p.index
-        // Skip special-purpose registers.
-        if idx == scratch1 ||
-          idx == scratch2 ||
-          idx == func_table ||
-          idx == vmctx ||
-          idx == mem0_desc ||
-          idx == extra_results_ptr {
-          continue
-        }
-        if !is_used(used_int_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: Int }
-          mark_used(used_int_marks, idx, used_epoch)
-          if need_preserve {
-            let save_slot = alloc_temp_spill_slot(out, Int)
-            return (preg, cursor + 1, Some(save_slot))
-          } else {
-            return (preg, cursor + 1, None)
-          }
-        }
-      }
-      abort("no free integer temp register (even after stealing)")
     }
-    Vector => {
-      for i in 0..<temp_vec_pool.length() {
-        let idx = temp_vec_pool[(cursor + i) % temp_vec_pool.length()]
-        if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: Vector }
-          mark_used(used_fp_marks, idx, used_epoch)
-          return (preg, cursor + 1, None)
-        }
-      }
-      // Fallback: steal any allocatable vector reg not used by this instruction.
-      let candidates : Array[@abi.PReg] = []
-      for p in env.preferred_vector {
-        candidates.push(p)
-      }
-      for p in env.nonpreferred_vector {
-        candidates.push(p)
-      }
-      for p in candidates {
-        let idx = p.index
-        if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: Vector }
-          mark_used(used_fp_marks, idx, used_epoch)
-          if need_preserve {
-            let save_slot = alloc_temp_spill_slot(out, Vector)
-            return (preg, cursor + 1, Some(save_slot))
-          } else {
-            return (preg, cursor + 1, None)
-          }
-        }
-      }
-      abort("no free vector temp register (even after stealing)")
-    }
-    _ => {
-      for i in 0..<temp_fp_pool.length() {
-        let idx = temp_fp_pool[(cursor + i) % temp_fp_pool.length()]
-        if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: cls }
-          mark_used(used_fp_marks, idx, used_epoch)
-          return (preg, cursor + 1, None)
-        }
-      }
-      // Fallback: steal any allocatable FPR not used by this instruction.
-      let candidates : Array[@abi.PReg] = []
-      for p in env.preferred_float {
-        candidates.push(p)
-      }
-      for p in env.nonpreferred_float {
-        candidates.push(p)
-      }
-      for p in candidates {
-        let idx = p.index
-        if !is_used(used_fp_marks, idx, used_epoch) {
-          let preg = @abi.PReg::{ index: idx, class: cls }
-          mark_used(used_fp_marks, idx, used_epoch)
-          if need_preserve {
-            let save_slot = alloc_temp_spill_slot(out, cls)
-            return (preg, cursor + 1, Some(save_slot))
-          } else {
-            return (preg, cursor + 1, None)
-          }
-        }
-      }
-      abort("no free float temp register (even after stealing)")
+    ids
+  }
+
+  fn append_indices(out : Array[Int], regs : Array[@abi.PReg]) -> Unit {
+    for reg in regs {
+      out.push(reg.index)
     }
   }
+
+  let (used, pool, fallback, reserved) = match cls {
+    Int => {
+      let candidates : Array[Int] = []
+      append_indices(candidates, env.preferred_int)
+      append_indices(candidates, env.nonpreferred_int)
+      (
+        used_ids(used_int_marks, used_epoch),
+        temp_int_pool,
+        candidates,
+        [
+          isa.scratch_reg_1_index(),
+          isa.scratch_reg_2_index(),
+          isa.func_table_reg_index(),
+          isa.vmctx_reg_index(),
+          isa.mem0_desc_reg_index(),
+          isa.extra_results_ptr_reg_index(),
+        ],
+      )
+    }
+    Vector => {
+      let candidates : Array[Int] = []
+      append_indices(candidates, env.preferred_vector)
+      append_indices(candidates, env.nonpreferred_vector)
+      (used_ids(used_fp_marks, used_epoch), temp_vec_pool, candidates, [])
+    }
+    _ => {
+      let candidates : Array[Int] = []
+      append_indices(candidates, env.preferred_float)
+      append_indices(candidates, env.nonpreferred_float)
+      (used_ids(used_fp_marks, used_epoch), temp_fp_pool, candidates, [])
+    }
+  }
+  let choice = @core_regalloc.choose_temp_register(
+    core_class(cls),
+    used,
+    pool,
+    fallback,
+    reserved,
+    need_preserve,
+    cursor,
+    out.num_spillslots,
+  )
+  out.num_spillslots = choice.next_spill_slot
+  let preg : @abi.PReg = { index: choice.preg.id, class: cls }
+  match cls {
+    Int => mark_used(used_int_marks, preg.index, used_epoch)
+    _ => mark_used(used_fp_marks, preg.index, used_epoch)
+  }
+  (preg, choice.next_cursor, choice.save_slot)
 }
 
 ///|
