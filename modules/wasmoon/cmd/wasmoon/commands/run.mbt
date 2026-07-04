@@ -1658,10 +1658,10 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // TODO(ISS-022): switch production JIT compilation to the
-    // wasm_frontend -> MilkIR -> MachV -> machv_emit path once the new path
-    // produces complete .cwasm metadata for imports, direct calls, GC stackmaps,
-    // exceptions, and dump-on-trap diagnostics.
+    // TODO(ISS-022): switch production JIT compilation to the reusable
+    // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
+    // function-body entry ABI, .cwasm metadata, direct calls, GC stackmaps,
+    // exceptions, and dump-on-trap diagnostics are installed end-to-end.
     // Stage 1: Translate WASM to IR.
     // Reuse per-module metadata across all function translations (Cranelift-style
     // module-environment reuse) to avoid rebuilding import/global/type vectors in
