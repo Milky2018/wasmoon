@@ -776,6 +776,24 @@ fn emit_aarch64_mov_w(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_aarch64_fmov_reg(
+  object : CodeObject,
+  dst : Int,
+  src : Int,
+  class : @machv.RegClass,
+) -> Unit raise EmitError {
+  let base = match class {
+    Float32 => 0x1e204000
+    Float64 => 0x1e604000
+    _ =>
+      raise UnsupportedOperand(
+        message="AArch64 float move requires f32/f64 physical registers",
+      )
+  }
+  emit_u32_le(object, base | ((src & 0x1f) << 5) | (dst & 0x1f))
+}
+
+///|
 fn emit_aarch64_clz(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: CLZ Xd, Xn.
   emit_u32_le(
@@ -920,13 +938,27 @@ fn emit_aarch64_move(
   object : CodeObject,
   inst : @machv.Instruction,
 ) -> Unit raise EmitError {
-  let src = require_int_preg(find_operand(inst, Use, 0, "mov"), "mov source")
-  let dst = require_int_preg(
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "mov"),
+    "mov source",
+  )
+  let (dst, dst_class) = require_physical_preg(
     find_operand(inst, Def, 0, "mov"),
     "mov destination",
   )
-  // TODO(machv_emit): choose 32-bit or floating-register encodings from MachV value width.
-  emit_u32_le(object, 0xaa0003e0 | (src << 16) | dst)
+  guard src_class == dst_class else {
+    raise UnsupportedOperand(message="mov requires matching register classes")
+  }
+  match dst_class {
+    Int =>
+      // TODO(machv_emit): choose 32-bit encodings from MachV value width.
+      emit_u32_le(object, 0xaa0003e0 | (src << 16) | dst)
+    Float32 | Float64 => emit_aarch64_fmov_reg(object, dst, src, dst_class)
+    Vector =>
+      // TODO(machv_emit): encode vector register copies once MachV carries
+      // lane-width metadata for SIMD moves.
+      raise UnsupportedOperand(message="mov does not support vector registers")
+  }
 }
 
 ///|
@@ -1765,13 +1797,27 @@ fn emit_x64_move(
   object : CodeObject,
   inst : @machv.Instruction,
 ) -> Unit raise EmitError {
-  let src = require_int_preg(find_operand(inst, Use, 0, "mov"), "mov source")
-  let dst = require_int_preg(
+  let (src, src_class) = require_physical_preg(
+    find_operand(inst, Use, 0, "mov"),
+    "mov source",
+  )
+  let (dst, dst_class) = require_physical_preg(
     find_operand(inst, Def, 0, "mov"),
     "mov destination",
   )
-  // TODO(machv_emit): choose 32-bit or floating-register encodings from MachV value width.
-  emit_x64_mov_rr(object, dst, src)
+  guard src_class == dst_class else {
+    raise UnsupportedOperand(message="mov requires matching register classes")
+  }
+  match dst_class {
+    Int =>
+      // TODO(machv_emit): choose 32-bit encodings from MachV value width.
+      emit_x64_mov_rr(object, dst, src)
+    Float32 | Float64 => emit_x64_float_move(object, dst, src, dst_class)
+    Vector =>
+      // TODO(machv_emit): encode vector register copies once MachV carries
+      // lane-width metadata for SIMD moves.
+      raise UnsupportedOperand(message="mov does not support vector registers")
+  }
 }
 
 ///|

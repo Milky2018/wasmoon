@@ -86,6 +86,18 @@ fn instruction_to_regalloc(inst : @machv.Instruction) -> @regalloc.Instruction {
 }
 
 ///|
+fn block_params_to_regalloc(block : @machv.Block) -> @regalloc.Instruction? {
+  if block.params.length() == 0 {
+    return None
+  }
+  let out = @regalloc.Instruction::new(-10_000 - block.id)
+  for param in block.params {
+    out.add_operand(@regalloc.Operand::def(vreg_to_regalloc(param)))
+  }
+  Some(out)
+}
+
+///|
 fn add_terminator_use(out : @regalloc.Instruction, reg : @machv.Reg) -> Unit {
   if reg is Virtual(vreg) {
     out.add_operand(@regalloc.Operand::use_reg(vreg_to_regalloc(vreg)))
@@ -147,6 +159,9 @@ pub fn project_function(
   let program = @regalloc.Program::new(regs)
   for block in func.blocks {
     let out_block = @regalloc.Block::new(block.id)
+    if block_params_to_regalloc(block) is Some(param_defs) {
+      out_block.append(param_defs)
+    }
     for inst in block.instructions {
       out_block.append(instruction_to_regalloc(inst))
     }
@@ -545,6 +560,304 @@ fn rewrite_terminator(
 }
 
 ///|
+fn find_block(func : @machv.Function, block_id : Int) -> @machv.Block? {
+  for block in func.blocks {
+    if block.id == block_id {
+      return Some(block)
+    }
+  }
+  None
+}
+
+///|
+fn source_location(
+  reg : @machv.Reg,
+  allocation : @regalloc.Allocation,
+) -> @regalloc.Location? {
+  match reg {
+    Physical(preg) => Some(Reg(preg_to_regalloc(preg)))
+    Virtual(vreg) => allocation.location_of(vreg_to_regalloc(vreg))
+  }
+}
+
+///|
+fn scratch_regs_for_class(
+  physical_regs : Array[@machv.PReg],
+  class : @regalloc.RegClass,
+) -> Array[@regalloc.PhysicalReg] {
+  let out : Array[@regalloc.PhysicalReg] = []
+  for preg in physical_regs {
+    let reg = preg_to_regalloc(preg)
+    if reg.class == class {
+      out.push(reg)
+    }
+  }
+  out
+}
+
+///|
+fn machv_class_for_move(class : @regalloc.RegClass) -> @machv.RegClass {
+  match class {
+    Int => Int
+    Float =>
+      // TODO(machv_regalloc): preserve Float32 vs Float64 lane width through
+      // the pure regalloc move resolver instead of defaulting edge copies to F64.
+      Float64
+    Vector => Vector
+  }
+}
+
+///|
+fn append_location_move(
+  func : @machv.Function,
+  spill_slots : Array[@machv.StackSlot],
+  class : @machv.RegClass,
+  from : @regalloc.Location,
+  to : @regalloc.Location,
+  out : Array[@machv.Instruction],
+) -> Unit {
+  match (from, to) {
+    (Reg(src), Reg(dst)) => {
+      let src_reg = preg_from_regalloc_for_class(src, class)
+      let dst_reg = preg_from_regalloc_for_class(dst, class)
+      if src_reg == dst_reg {
+        return
+      }
+      let move_inst = func.new_inst(Move)
+      move_inst.add_operand(@machv.Operand::def(Physical(dst_reg)))
+      move_inst.add_operand(@machv.Operand::use_reg(Physical(src_reg)))
+      out.push(move_inst)
+    }
+    (Spill(slot), Reg(dst)) => {
+      let load = func.new_inst(Load(spill_slots[slot]))
+      load.add_operand(
+        @machv.Operand::def(Physical(preg_from_regalloc_for_class(dst, class))),
+      )
+      out.push(load)
+    }
+    (Reg(src), Spill(slot)) => {
+      let store = func.new_inst(Store(spill_slots[slot]))
+      store.add_operand(
+        @machv.Operand::use_reg(
+          Physical(preg_from_regalloc_for_class(src, class)),
+        ),
+      )
+      out.push(store)
+    }
+    (Spill(_), Spill(_)) =>
+      // TODO(machv_regalloc): route stack-to-stack edge copies through a
+      // reserved scratch register that is proven dead on the edge.
+      ()
+  }
+}
+
+///|
+fn edge_transfer_insts(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  target_id : Int,
+  args : Array[@machv.Reg],
+) -> Array[@machv.Instruction] {
+  let out : Array[@machv.Instruction] = []
+  if args.length() == 0 {
+    return out
+  }
+  guard find_block(func, target_id) is Some(target) else { return out }
+  guard target.params.length() == args.length() else { return out }
+  let moves : Array[@regalloc.ParallelMove] = []
+  for i in 0..<args.length() {
+    let param = target.params[i]
+    guard source_location(args[i], allocation) is Some(from) else { continue }
+    guard allocation.location_of(vreg_to_regalloc(param)) is Some(to) else {
+      continue
+    }
+    moves.push({ from, to, class: class_to_regalloc(param.class) })
+  }
+  if moves.length() == 0 {
+    return out
+  }
+  let scratch_int = scratch_regs_for_class(physical_regs, Int)
+  let scratch_float = scratch_regs_for_class(physical_regs, Float)
+  let resolved = @regalloc.resolve_parallel_moves(
+    moves, scratch_int, scratch_float,
+  )
+  for mv in resolved {
+    append_location_move(
+      func,
+      spill_slots,
+      machv_class_for_move(mv.class),
+      mv.from,
+      mv.to,
+      out,
+    )
+  }
+  out
+}
+
+///|
+fn append_edge_transfers(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  block : @machv.Block,
+  target_id : Int,
+  args : Array[@machv.Reg],
+) -> Unit {
+  for
+    inst in edge_transfer_insts(
+      func, allocation, spill_slots, physical_regs, target_id, args,
+    ) {
+    block.instructions.push(inst)
+  }
+}
+
+///|
+fn make_edge_transfer_block(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  target_id : Int,
+  args : Array[@machv.Reg],
+) -> Int {
+  let edge = func.new_block()
+  for
+    inst in edge_transfer_insts(
+      func, allocation, spill_slots, physical_regs, target_id, args,
+    ) {
+    edge.append(inst)
+  }
+  edge.set_terminator(TermJump(target_id, []))
+  edge.id
+}
+
+///|
+fn materialize_edge_transfers(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+) -> Unit {
+  let original_blocks = func.blocks.length()
+  for block_index in 0..<original_blocks {
+    let block = func.blocks[block_index]
+    guard block.terminator is Some(term) else { continue }
+    match term {
+      TermJump(target, args) => {
+        append_edge_transfers(
+          func, allocation, spill_slots, physical_regs, block, target, args,
+        )
+        block.set_terminator(TermJump(target, []))
+      }
+      TermBranch(cond, true_target, true_args, false_target, false_args) => {
+        let next_true = if true_args.length() == 0 {
+          true_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, true_target, true_args,
+          )
+        }
+        let next_false = if false_args.length() == 0 {
+          false_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, false_target, false_args,
+          )
+        }
+        block.set_terminator(TermBranch(cond, next_true, [], next_false, []))
+      }
+      TermBranchCmp(
+        lhs,
+        rhs,
+        cond,
+        is_64,
+        true_target,
+        true_args,
+        false_target,
+        false_args
+      ) => {
+        let next_true = if true_args.length() == 0 {
+          true_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, true_target, true_args,
+          )
+        }
+        let next_false = if false_args.length() == 0 {
+          false_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, false_target, false_args,
+          )
+        }
+        block.set_terminator(
+          TermBranchCmp(lhs, rhs, cond, is_64, next_true, [], next_false, []),
+        )
+      }
+      TermBranchZero(
+        value,
+        is_nonzero,
+        is_64,
+        true_target,
+        true_args,
+        false_target,
+        false_args
+      ) => {
+        let next_true = if true_args.length() == 0 {
+          true_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, true_target, true_args,
+          )
+        }
+        let next_false = if false_args.length() == 0 {
+          false_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, false_target, false_args,
+          )
+        }
+        block.set_terminator(
+          TermBranchZero(value, is_nonzero, is_64, next_true, [], next_false, []),
+        )
+      }
+      TermBranchCmpImm(
+        value,
+        imm,
+        cond,
+        is_64,
+        true_target,
+        true_args,
+        false_target,
+        false_args
+      ) => {
+        let next_true = if true_args.length() == 0 {
+          true_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, true_target, true_args,
+          )
+        }
+        let next_false = if false_args.length() == 0 {
+          false_target
+        } else {
+          make_edge_transfer_block(
+            func, allocation, spill_slots, physical_regs, false_target, false_args,
+          )
+        }
+        block.set_terminator(
+          TermBranchCmpImm(value, imm, cond, is_64, next_true, [], next_false, []),
+        )
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 fn rewrite_operands_and_spills(
   func : @machv.Function,
   allocation : @regalloc.Allocation,
@@ -595,5 +908,6 @@ pub fn allocate_and_apply(
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
+  materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
   { allocation, spill_slots }
 }

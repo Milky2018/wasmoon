@@ -162,8 +162,13 @@ fn class_for_type(ty : @milkir.Type) -> @machv.RegClass {
 }
 
 ///|
+fn vreg_for_value(value : @milkir.Value) -> @machv.VReg {
+  { id: value.id, class: class_for_type(value.ty) }
+}
+
+///|
 fn reg_for_value(value : @milkir.Value) -> @machv.Reg {
-  Virtual({ id: value.id, class: class_for_type(value.ty) })
+  Virtual(vreg_for_value(value))
 }
 
 ///|
@@ -921,6 +926,9 @@ pub fn lower_function(func : @milkir.Function) -> @machv.Function {
   }
   for milk_block in func.blocks {
     let block = out.new_block()
+    for param in milk_block.params {
+      block.add_param(vreg_for_value(param))
+    }
     for inst in milk_block.instructions {
       lower_inst(func, out, block, inst)
     }

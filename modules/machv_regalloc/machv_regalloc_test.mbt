@@ -254,6 +254,106 @@ test "apply rewrites terminator virtual registers" {
 }
 
 ///|
+test "apply materializes jump edge args for block params" {
+  let func = @machv.Function::new("edge_jump")
+  let entry = func.new_block()
+  let target = func.new_block()
+  let source = func.new_vreg(Int)
+  let param = func.new_vreg(Int)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  target.add_param(param)
+  let def_source = func.new_inst(Target("def_source"))
+  def_source.add_operand(@machv.Operand::def(Virtual(source)))
+  def_source.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  entry.append(def_source)
+  entry.set_terminator(TermJump(target.id, [Virtual(source)]))
+  let use_param = func.new_inst(Target("use_param"))
+  use_param.add_operand(@machv.Operand::use_reg(Virtual(param)))
+  use_param.add_constraint({ operand_index: 0, allowed_regs: [p1] })
+  target.append(use_param)
+  target.set_terminator(TermReturn([]))
+  allocate_and_apply(func, [p0, p1]) |> ignore
+  inspect(entry.terminator == Some(TermJump(target.id, [])), content="true")
+  inspect(
+    entry.instructions[entry.instructions.length() - 1].opcode is Move,
+    content="true",
+  )
+  debug_inspect(
+    entry.instructions[entry.instructions.length() - 1].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 1, class: Int }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 0, class: Int }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+}
+
+///|
+test "apply splits conditional branch edge args through copy blocks" {
+  let func = @machv.Function::new("edge_branch")
+  let entry = func.new_block()
+  let then_block = func.new_block()
+  let else_block = func.new_block()
+  let source = func.new_vreg(Int)
+  let param = func.new_vreg(Int)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let cond : @machv.Reg = Physical({ index: 2, class: Int })
+  then_block.add_param(param)
+  let def_source = func.new_inst(Target("def_source"))
+  def_source.add_operand(@machv.Operand::def(Virtual(source)))
+  def_source.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  entry.append(def_source)
+  entry.set_terminator(
+    TermBranchZero(
+      cond,
+      true,
+      true,
+      then_block.id,
+      [Virtual(source)],
+      else_block.id,
+      [],
+    ),
+  )
+  let use_param = func.new_inst(Target("use_param"))
+  use_param.add_operand(@machv.Operand::use_reg(Virtual(param)))
+  use_param.add_constraint({ operand_index: 0, allowed_regs: [p1] })
+  then_block.append(use_param)
+  then_block.set_terminator(TermReturn([]))
+  else_block.set_terminator(TermReturn([]))
+  allocate_and_apply(func, [p0, p1]) |> ignore
+  inspect(func.blocks.length(), content="4")
+  guard entry.terminator
+    is Some(
+      TermBranchZero(
+        _,
+        _,
+        _,
+        rewritten_then,
+        true_args,
+        rewritten_else,
+        false_args
+      )
+    ) else {
+    inspect(false, content="true")
+    return
+  }
+  inspect(rewritten_then != then_block.id, content="true")
+  inspect(rewritten_else == else_block.id, content="true")
+  inspect(true_args.length(), content="0")
+  inspect(false_args.length(), content="0")
+  let edge_block = func.blocks[3]
+  inspect(edge_block.instructions.length(), content="1")
+  inspect(edge_block.instructions[0].opcode is Move, content="true")
+  inspect(
+    edge_block.terminator == Some(TermJump(then_block.id, [])),
+    content="true",
+  )
+}
+
+///|
 test "apply reloads spilled terminator operands before terminator" {
   let func = @machv.Function::new("term_reload")
   let entry = func.new_block()

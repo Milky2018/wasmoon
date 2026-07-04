@@ -79,6 +79,38 @@ test "plan MilkIR through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR branch block params through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([], [I64])
+  let milk = @milkir.Function::new("branch_block_params", signature)
+  let cond = milk.new_value(I64)
+  let true_value = milk.new_value(I64)
+  let false_value = milk.new_value(I64)
+  let true_param = milk.new_value(I64)
+  let false_param = milk.new_value(I64)
+  let entry = milk.new_block([])
+  let then_block = milk.new_block([true_param])
+  let else_block = milk.new_block([false_param])
+  entry.append_inst(milk.new_inst(Iconst(1L), [], [cond]))
+  entry.append_inst(milk.new_inst(Iconst(42L), [], [true_value]))
+  entry.append_inst(milk.new_inst(Iconst(7L), [], [false_value]))
+  entry.set_terminator(
+    Branch(cond, then_block.id, [true_value], else_block.id, [false_value]),
+  )
+  then_block.set_terminator(Return([true_param]))
+  else_block.set_terminator(Return([false_param]))
+  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  inspect(plan.object.fixups.length() >= 4, content="true")
+  inspect(plan.object.debug_entries.length() >= 7, content="true")
+  let mut has_ret = false
+  for byte in plan.object.code {
+    if byte == 195 {
+      has_ret = true
+    }
+  }
+  inspect(has_ret, content="true")
+}
+
+///|
 test "plan MilkIR CallPtr through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([Ptr, Ptr, I64], [I64])
   let milk = @milkir.Function::new("callptr64", signature)
