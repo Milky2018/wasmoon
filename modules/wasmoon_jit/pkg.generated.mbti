@@ -42,6 +42,10 @@ pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.V
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
+pub fn clear_wasi_stdin_buffer(Int64) -> Unit
+
+pub fn clear_wasi_stdin_callback(Int64) -> Unit
+
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
@@ -274,6 +278,8 @@ pub fn hostcall_value_slot_count(@types.ValueType) -> Int
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
+pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
+
 pub fn is_funcref_ptr(Int64) -> Bool
 
 pub fn is_i31(Int64) -> Bool
@@ -299,6 +305,8 @@ pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> Linked
 pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
 
 pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
+pub fn make_cstring(String) -> FixedArray[Byte]
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
@@ -360,6 +368,14 @@ pub fn resolve_wasm_func_symbol(String) -> Int?
 
 pub fn sanitize_debug_filename(String) -> String
 
+pub fn set_wasi_stderr_capture(Int64, Bool) -> Unit
+
+pub fn set_wasi_stdin_buffer(Int64, Bytes) -> Unit
+
+pub fn set_wasi_stdin_callback(Int64, () -> Bytes) -> Unit
+
+pub fn set_wasi_stdout_capture(Int64, Bool) -> Unit
+
 pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
 
 pub fn tag_funcref_ptr(Int64) -> Int64
@@ -367,6 +383,10 @@ pub fn tag_funcref_ptr(Int64) -> Int64
 pub fn take_pending_trap_message() -> String?
 
 pub fn take_wasi_exit_code(Int64) -> Int
+
+pub fn take_wasi_stderr(Int64) -> Bytes
+
+pub fn take_wasi_stdout(Int64) -> Bytes
 
 pub fn untag_funcref_ptr(Int64) -> Int64
 

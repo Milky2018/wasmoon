@@ -1947,6 +1947,17 @@ test "wrap reusable JIT plan preserves cwasm signature metadata" {
 }
 
 ///|
+test "native runtime cstring encoding lives in wasmoon_jit" {
+  let encoded = make_cstring("wasi")
+  inspect(encoded.length(), content="5")
+  inspect(encoded[0].to_int(), content="119")
+  inspect(encoded[1].to_int(), content="97")
+  inspect(encoded[2].to_int(), content="115")
+  inspect(encoded[3].to_int(), content="105")
+  inspect(encoded[4].to_int(), content="0")
+}
+
+///|
 test "reference encoding helpers roundtrip JIT values" {
   inspect(is_null_ref(encode_null_ref()), content="true")
   debug_inspect(decode_funcref_idx(encode_funcref_idx(7)), content="Some(7)")

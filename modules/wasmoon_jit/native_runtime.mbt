@@ -163,6 +163,155 @@ pub fn take_wasi_exit_code(ctx_ptr : Int64) -> Int {
 }
 
 ///|
+pub fn make_cstring(s : String) -> FixedArray[Byte] {
+  let len = s.length()
+  let mut size = 0
+  let mut i = 0
+  while i < len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      size += 1
+      i += 1
+    } else if c < 0x800 {
+      size += 2
+      i += 1
+    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
+      let c2 = s.code_unit_at(i + 1).to_int()
+      if c2 >= 0xDC00 && c2 <= 0xDFFF {
+        size += 4
+        i += 2
+      } else {
+        size += 3
+        i += 1
+      }
+    } else {
+      size += 3
+      i += 1
+    }
+  }
+  let result = FixedArray::make(size + 1, b'\x00')
+  let mut pos = 0
+  i = 0
+  while i < len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      result[pos] = c.to_byte()
+      pos += 1
+      i += 1
+    } else if c < 0x800 {
+      result[pos] = (0xC0 | (c >> 6)).to_byte()
+      result[pos + 1] = (0x80 | (c & 0x3F)).to_byte()
+      pos += 2
+      i += 1
+    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
+      let c2 = s.code_unit_at(i + 1).to_int()
+      if c2 >= 0xDC00 && c2 <= 0xDFFF {
+        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
+        result[pos] = (0xF0 | (codepoint >> 18)).to_byte()
+        result[pos + 1] = (0x80 | ((codepoint >> 12) & 0x3F)).to_byte()
+        result[pos + 2] = (0x80 | ((codepoint >> 6) & 0x3F)).to_byte()
+        result[pos + 3] = (0x80 | (codepoint & 0x3F)).to_byte()
+        pos += 4
+        i += 2
+      } else {
+        result[pos] = b'\xEF'
+        result[pos + 1] = b'\xBF'
+        result[pos + 2] = b'\xBD'
+        pos += 3
+        i += 1
+      }
+    } else {
+      result[pos] = (0xE0 | (c >> 12)).to_byte()
+      result[pos + 1] = (0x80 | ((c >> 6) & 0x3F)).to_byte()
+      result[pos + 2] = (0x80 | (c & 0x3F)).to_byte()
+      pos += 3
+      i += 1
+    }
+  }
+  result[size] = b'\x00'
+  result
+}
+
+///|
+pub fn set_wasi_stdout_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
+  @jit_ffi.c_jit_set_wasi_stdout_capture(ctx_ptr, if enabled { 1 } else { 0 })
+}
+
+///|
+pub fn set_wasi_stderr_capture(ctx_ptr : Int64, enabled : Bool) -> Unit {
+  @jit_ffi.c_jit_set_wasi_stderr_capture(ctx_ptr, if enabled { 1 } else { 0 })
+}
+
+///|
+pub fn set_wasi_stdin_buffer(ctx_ptr : Int64, data : Bytes) -> Unit {
+  @jit_ffi.c_jit_set_wasi_stdin_buffer(ctx_ptr, data, data.length())
+}
+
+///|
+pub fn set_wasi_stdin_callback(ctx_ptr : Int64, callback : () -> Bytes) -> Unit {
+  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
+    f()
+  }
+  @jit_ffi.c_jit_set_wasi_stdin_callback(ctx_ptr, call_closure, callback)
+}
+
+///|
+pub fn clear_wasi_stdin_callback(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_clear_wasi_stdin_callback(ctx_ptr)
+}
+
+///|
+pub fn clear_wasi_stdin_buffer(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_clear_wasi_stdin_buffer(ctx_ptr)
+}
+
+///|
+pub fn take_wasi_stdout(ctx_ptr : Int64) -> Bytes {
+  @jit_ffi.c_jit_take_wasi_stdout(ctx_ptr)
+}
+
+///|
+pub fn take_wasi_stderr(ctx_ptr : Int64) -> Bytes {
+  @jit_ffi.c_jit_take_wasi_stderr(ctx_ptr)
+}
+
+///|
+pub fn init_wasi_context(
+  ctx_ptr : Int64,
+  args : Array[String],
+  env : Array[String],
+  preopens : Array[(String, String)],
+  quiet? : Bool = false,
+) -> Unit {
+  if quiet {
+    @jit_ffi.c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
+  } else {
+    @jit_ffi.c_jit_init_wasi_fds(ctx_ptr, preopens.length())
+  }
+  set_wasi_stdout_capture(ctx_ptr, false)
+  set_wasi_stderr_capture(ctx_ptr, false)
+  clear_wasi_stdin_callback(ctx_ptr)
+  clear_wasi_stdin_buffer(ctx_ptr)
+  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
+  for i, arg in args {
+    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, make_cstring(arg))
+  }
+  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
+  for i, e in env {
+    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, make_cstring(e))
+  }
+  for i, entry in preopens {
+    let (host, guest) = entry
+    @jit_ffi.c_jit_add_preopen(
+      ctx_ptr,
+      i,
+      make_cstring(host),
+      make_cstring(guest),
+    )
+  }
+}
+
+///|
 /// Get the runtime store function address for the current JIT -> hostcall.
 ///
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the

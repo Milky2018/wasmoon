@@ -205,81 +205,6 @@ fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
 // ============ WASI Initialization ============
 
 ///|
-/// Convert String to null-terminated FixedArray[Byte] for C FFI (UTF-8 encoding)
-fn string_to_cstring(s : String) -> FixedArray[Byte] {
-  let len = s.length()
-  // First pass: calculate required size
-  let mut size = 0
-  let mut i = 0
-  while i < len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      size += 1
-      i += 1
-    } else if c < 0x800 {
-      size += 2
-      i += 1
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        size += 4
-        i += 2
-      } else {
-        size += 3
-        i += 1
-      }
-    } else {
-      size += 3
-      i += 1
-    }
-  }
-  // Allocate with null terminator
-  let result = FixedArray::make(size + 1, b'\x00')
-  // Second pass: encode UTF-8
-  let mut pos = 0
-  i = 0
-  while i < len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      result[pos] = c.to_byte()
-      pos += 1
-      i += 1
-    } else if c < 0x800 {
-      result[pos] = (0xC0 | (c >> 6)).to_byte()
-      result[pos + 1] = (0x80 | (c & 0x3F)).to_byte()
-      pos += 2
-      i += 1
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
-        result[pos] = (0xF0 | (codepoint >> 18)).to_byte()
-        result[pos + 1] = (0x80 | ((codepoint >> 12) & 0x3F)).to_byte()
-        result[pos + 2] = (0x80 | ((codepoint >> 6) & 0x3F)).to_byte()
-        result[pos + 3] = (0x80 | (codepoint & 0x3F)).to_byte()
-        pos += 4
-        i += 2
-      } else {
-        // Invalid surrogate, encode as replacement character.
-        result[pos] = b'\xEF'
-        result[pos + 1] = b'\xBF'
-        result[pos + 2] = b'\xBD'
-        pos += 3
-        i += 1
-      }
-    } else {
-      result[pos] = (0xE0 | (c >> 12)).to_byte()
-      result[pos + 1] = (0x80 | ((c >> 6) & 0x3F)).to_byte()
-      result[pos + 2] = (0x80 | (c & 0x3F)).to_byte()
-      pos += 3
-      i += 1
-    }
-  }
-  result[size] = b'\x00'
-  result
-}
-
-///|
 /// Initialize WASI context with args, env, and preopens
 fn JITContext::init_wasi(
   self : JITContext,
@@ -287,33 +212,7 @@ fn JITContext::init_wasi(
   env : Array[String],
   preopens : Array[(String, String)],
 ) -> Unit {
-  let ctx_ptr = self.ptr()
-  // Initialize fd table
-  @jit_ffi.c_jit_init_wasi_fds(ctx_ptr, preopens.length())
-  // Reset stdio capture/buffers
-  self.set_wasi_stdout_capture(false)
-  self.set_wasi_stderr_capture(false)
-  self.clear_wasi_stdin_callback()
-  self.clear_wasi_stdin_buffer()
-  // Set args
-  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
-  for i, arg in args {
-    let cstr = string_to_cstring(arg)
-    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, cstr)
-  }
-  // Set env
-  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
-  for i, e in env {
-    let cstr = string_to_cstring(e)
-    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, cstr)
-  }
-  // Set preopens
-  for i, entry in preopens {
-    let (host, guest) = entry
-    let host_cstr = string_to_cstring(host)
-    let guest_cstr = string_to_cstring(guest)
-    @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
-  }
+  @wasmoon_jit.init_wasi_context(self.ptr(), args, env, preopens)
 }
 
 ///|
@@ -324,33 +223,7 @@ fn JITContext::init_wasi_quiet(
   env : Array[String],
   preopens : Array[(String, String)],
 ) -> Unit {
-  let ctx_ptr = self.ptr()
-  // Initialize fd table with quiet mode (stdout/stderr to /dev/null)
-  @jit_ffi.c_jit_init_wasi_fds_quiet(ctx_ptr, preopens.length())
-  // Reset stdio capture/buffers
-  self.set_wasi_stdout_capture(false)
-  self.set_wasi_stderr_capture(false)
-  self.clear_wasi_stdin_callback()
-  self.clear_wasi_stdin_buffer()
-  // Set args
-  @jit_ffi.c_jit_set_wasi_args(ctx_ptr, args.length())
-  for i, arg in args {
-    let cstr = string_to_cstring(arg)
-    @jit_ffi.c_jit_set_wasi_arg(ctx_ptr, i, cstr)
-  }
-  // Set env
-  @jit_ffi.c_jit_set_wasi_envs(ctx_ptr, env.length())
-  for i, e in env {
-    let cstr = string_to_cstring(e)
-    @jit_ffi.c_jit_set_wasi_env(ctx_ptr, i, cstr)
-  }
-  // Set preopens
-  for i, entry in preopens {
-    let (host, guest) = entry
-    let host_cstr = string_to_cstring(host)
-    let guest_cstr = string_to_cstring(guest)
-    @jit_ffi.c_jit_add_preopen(ctx_ptr, i, host_cstr, guest_cstr)
-  }
+  @wasmoon_jit.init_wasi_context(self.ptr(), args, env, preopens, quiet=true)
 }
 
 ///|
@@ -359,8 +232,7 @@ fn JITContext::set_wasi_stdout_capture(
   self : JITContext,
   enabled : Bool,
 ) -> Unit {
-  let value = if enabled { 1 } else { 0 }
-  @jit_ffi.c_jit_set_wasi_stdout_capture(self.ptr(), value)
+  @wasmoon_jit.set_wasi_stdout_capture(self.ptr(), enabled)
 }
 
 ///|
@@ -369,14 +241,13 @@ fn JITContext::set_wasi_stderr_capture(
   self : JITContext,
   enabled : Bool,
 ) -> Unit {
-  let value = if enabled { 1 } else { 0 }
-  @jit_ffi.c_jit_set_wasi_stderr_capture(self.ptr(), value)
+  @wasmoon_jit.set_wasi_stderr_capture(self.ptr(), enabled)
 }
 
 ///|
 /// Set WASI stdin buffer (custom stdin)
 fn JITContext::set_wasi_stdin_buffer(self : JITContext, data : Bytes) -> Unit {
-  @jit_ffi.c_jit_set_wasi_stdin_buffer(self.ptr(), data, data.length())
+  @wasmoon_jit.set_wasi_stdin_buffer(self.ptr(), data)
 }
 
 ///|
@@ -385,10 +256,7 @@ fn JITContext::set_wasi_stdin_callback(
   self : JITContext,
   callback : () -> Bytes,
 ) -> Unit {
-  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
-    f()
-  }
-  @jit_ffi.c_jit_set_wasi_stdin_callback(self.ptr(), call_closure, callback)
+  @wasmoon_jit.set_wasi_stdin_callback(self.ptr(), callback)
 }
 
 ///|
@@ -411,25 +279,25 @@ fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
 ///|
 /// Clear WASI stdin callback
 fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_clear_wasi_stdin_callback(self.ptr())
+  @wasmoon_jit.clear_wasi_stdin_callback(self.ptr())
 }
 
 ///|
 /// Clear WASI stdin buffer
 fn JITContext::clear_wasi_stdin_buffer(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_clear_wasi_stdin_buffer(self.ptr())
+  @wasmoon_jit.clear_wasi_stdin_buffer(self.ptr())
 }
 
 ///|
 /// Take captured stdout bytes (and clear buffer)
 fn JITContext::take_wasi_stdout(self : JITContext) -> Bytes {
-  @jit_ffi.c_jit_take_wasi_stdout(self.ptr())
+  @wasmoon_jit.take_wasi_stdout(self.ptr())
 }
 
 ///|
 /// Take captured stderr bytes (and clear buffer)
 fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
-  @jit_ffi.c_jit_take_wasi_stderr(self.ptr())
+  @wasmoon_jit.take_wasi_stderr(self.ptr())
 }
 
 // ============ Multi-value Return Support ============
