@@ -9,6 +9,8 @@ import {
 // Values
 pub fn emit_function(@machv.Function) -> CodeObject raise EmitError
 
+pub fn emit_function_for_target(@machv.Function, EmitTarget) -> CodeObject raise EmitError
+
 // Errors
 pub suberror EmitError {
   UnsupportedOpcode(opcode~ : String)
@@ -32,6 +34,11 @@ pub(all) struct DebugEntry {
   block_id : Int
   inst_id : Int
   opcode : String
+} derive(Eq, @debug.Debug)
+
+pub(all) enum EmitTarget {
+  AArch64
+  X64
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Fixup {
