@@ -69,10 +69,34 @@ test "plan MilkIR through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
   debug_inspect(plan.object.code, content="[72, 137, 240, 72, 1, 248, 195]")
+  inspect(plan.object.debug_entries.length(), content="2")
+}
+
+///|
+test "plan MilkIR CallPtr through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([Ptr, Ptr, I64], [I64])
+  let milk = @milkir.Function::new("callptr64", signature)
+  let callee = milk.new_value(Ptr)
+  let vmctx = milk.new_value(Ptr)
+  let arg = milk.new_value(I64)
+  let result = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(
+    milk.new_inst(CallPtr(1, 1), [callee, vmctx, arg], [result]),
+  )
+  entry.set_terminator(Return([result]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  debug_inspect(plan.target, content="X64")
+  inspect(plan.entry_symbol, content="callptr64")
+  debug_inspect(plan.object.code, content="[73, 255, 211, 195]")
   inspect(plan.object.debug_entries.length(), content="2")
 }
 

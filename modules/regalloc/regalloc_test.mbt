@@ -186,6 +186,22 @@ test "linear scan honors fixed register constraints by evicting active range" {
 }
 
 ///|
+test "linear scan can use fixed registers outside the allocatable pool" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let scratch : PhysicalReg = { id: 11, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0])
+  let block = Block::new(0)
+  let inst = Instruction::new(0)
+  inst.add_operand(Operand::use_reg(v0).with_constraint(FixedReg(scratch)))
+  block.append(inst)
+  program.add_block(block)
+  let allocation = allocate(program)
+  inspect(allocation.location_of(v0) == Some(Reg(scratch)), content="true")
+  inspect(verify_allocation(program, allocation), content="()")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

@@ -56,6 +56,12 @@ fn available_regs_for_range(
       out.push(preg)
     }
   }
+  if range.get_fixed_reg() is Some(fixed) &&
+    fixed.class == range.vreg.class &&
+    !contains_reg(out, fixed) &&
+    !is_clobbered_while_live(program, range, fixed, block_order) {
+    out.push(fixed)
+  }
   out
 }
 

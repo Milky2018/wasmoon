@@ -140,8 +140,8 @@ test "projected MachV ties co-locate use-def operands" {
 }
 
 ///|
-test "allocate_function rejects unsatisfied projected fixed constraint" {
-  let func = @machv.Function::new("fixed_reject")
+test "allocate_function accepts fixed registers outside the allocatable pool" {
+  let func = @machv.Function::new("fixed_outside_pool")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let inst = func.new_inst(Target("fixed_def"))
@@ -152,12 +152,12 @@ test "allocate_function rejects unsatisfied projected fixed constraint" {
   })
   entry.append(inst)
   let p0 : @machv.PReg = { index: 0, class: Int }
-  try allocate_function(func, [p0]) catch {
-    FixedConstraintViolation(_) => inspect("fixed", content="fixed")
-    _ => fail("unexpected verifier error")
-  } noraise {
-    _ => fail("expected fixed constraint violation")
-  }
+  let allocation = allocate_function(func, [p0])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) ==
+    Some(Reg({ id: 1, class: Int })),
+    content="true",
+  )
 }
 
 ///|
