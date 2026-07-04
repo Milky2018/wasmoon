@@ -500,6 +500,41 @@ test "lower table bulk helpers as native custom ops" {
 }
 
 ///|
+test "lower reference null and is_null natively" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [RefNull(FuncRef), RefIsNull],
+    "ref_null_test",
+  )
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("iconst"), content="true")
+  inspect(text.contains("icmp.eq"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower reference func non-null and eq natively" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [RefFunc(0), RefAsNonNull, RefFunc(0), RefEqInstr],
+    "ref_func_eq",
+  )
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.GetFuncRef"), content="true")
+  inspect(text.contains("trap \"null reference\""), content="true")
+  inspect(text.contains("icmp.eq"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
   let env = EmbeddingEnvironment::new()

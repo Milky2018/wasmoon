@@ -686,6 +686,81 @@ fn push_elem_drop(builder : @milkir.IRBuilder, elem_idx : Int) -> Bool {
 }
 
 ///|
+fn push_ref_null(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  ref_type : @types.ValueType,
+) -> Bool {
+  let ty = wasm_value_type_to_milkir(ref_type)
+  guard emit_op(builder, ty, Iconst(@types.NULL_REF), []) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_ref_is_null(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard pop_value(stack) is Some(ref_value) else { return false }
+  guard emit_op(builder, ref_value.ty, Iconst(@types.NULL_REF), [])
+    is Some(null_sentinel) else {
+    return false
+  }
+  stack.push(builder.icmp_eq(ref_value, null_sentinel))
+  true
+}
+
+///|
+fn push_ref_func(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  func_idx : Int,
+) -> Bool {
+  // TODO(ISS-023): lower this custom helper to a reusable runtime call or
+  // relocation instead of preserving the legacy GetFuncRef opcode shape.
+  guard emit_op(builder, Ref, Custom("wasmoon.GetFuncRef(\{func_idx})"), [])
+    is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_ref_as_non_null(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard stack.last() is Some(ref_value) else { return false }
+  guard emit_op(builder, ref_value.ty, Iconst(@types.NULL_REF), [])
+    is Some(null_sentinel) else {
+    return false
+  }
+  let is_null = builder.icmp_eq(ref_value, null_sentinel)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(is_null, trap_block, continue_block)
+  builder.switch_to_block(trap_block)
+  builder.trap("null reference")
+  builder.switch_to_block(continue_block)
+  true
+}
+
+///|
+fn push_ref_eq(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  if !push_int_cmp(builder, stack, Eq) {
+    return false
+  }
+  true
+}
+
+///|
 fn push_memory_base(
   builder : @milkir.IRBuilder,
   vmctx : @milkir.Value,
@@ -1222,6 +1297,17 @@ fn try_lower_linear_function(
         if !push_elem_drop(builder, elem_idx) {
           return None
         }
+      RefNull(ref_type) =>
+        if !push_ref_null(builder, stack, ref_type) {
+          return None
+        }
+      RefIsNull => if !push_ref_is_null(builder, stack) { return None }
+      RefFunc(func_idx) =>
+        if !push_ref_func(builder, stack, func_idx) {
+          return None
+        }
+      RefAsNonNull => if !push_ref_as_non_null(builder, stack) { return None }
+      RefEqInstr => if !push_ref_eq(builder, stack) { return None }
       Select | SelectTyped(_) => if !push_select(builder, stack) { return None }
       Drop => {
         guard pop_value(stack) is Some(_) else { return None }
