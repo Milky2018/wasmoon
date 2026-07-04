@@ -603,7 +603,7 @@ fn append_location_move(
   from : @regalloc.Location,
   to : @regalloc.Location,
   out : Array[@machv.Instruction],
-) -> Unit {
+) -> Unit raise @regalloc.VerifyError {
   match (from, to) {
     (Reg(src), Reg(dst)) => {
       let src_reg = preg_from_regalloc_for_class(src, class)
@@ -633,9 +633,9 @@ fn append_location_move(
       out.push(store)
     }
     (Spill(_), Spill(_)) =>
-      // TODO(machv_regalloc): route stack-to-stack edge copies through a
-      // reserved scratch register that is proven dead on the edge.
-      ()
+      @regalloc.raise_edge_copy_scratch_unavailable(
+        message="unresolved spill-to-spill MachV edge copy; missing scratch register",
+      )
   }
 }
 
@@ -647,12 +647,19 @@ fn resolve_edge_moves(
   class : @machv.RegClass,
   moves : Array[@regalloc.ParallelMove],
   out : Array[@machv.Instruction],
-) -> Unit {
+) -> Unit raise @regalloc.VerifyError {
   if moves.length() == 0 {
     return
   }
   let scratch_int = scratch_regs_for_class(physical_regs, Int)
-  let scratch_float = scratch_regs_for_class(physical_regs, Float)
+  let scratch_float = scratch_regs_for_class(
+    physical_regs,
+    if class == Vector {
+      Vector
+    } else {
+      Float
+    },
+  )
   let resolved = @regalloc.resolve_parallel_moves(
     moves, scratch_int, scratch_float,
   )
@@ -669,7 +676,7 @@ fn edge_transfer_insts(
   physical_regs : Array[@machv.PReg],
   target_id : Int,
   args : Array[@machv.Reg],
-) -> Array[@machv.Instruction] {
+) -> Array[@machv.Instruction] raise @regalloc.VerifyError {
   let out : Array[@machv.Instruction] = []
   if args.length() == 0 {
     return out
@@ -721,7 +728,7 @@ fn append_edge_transfers(
   block : @machv.Block,
   target_id : Int,
   args : Array[@machv.Reg],
-) -> Unit {
+) -> Unit raise @regalloc.VerifyError {
   for
     inst in edge_transfer_insts(
       func, allocation, spill_slots, physical_regs, target_id, args,
@@ -738,7 +745,7 @@ fn make_edge_transfer_block(
   physical_regs : Array[@machv.PReg],
   target_id : Int,
   args : Array[@machv.Reg],
-) -> Int {
+) -> Int raise @regalloc.VerifyError {
   let edge = func.new_block()
   for
     inst in edge_transfer_insts(
@@ -756,7 +763,7 @@ fn materialize_edge_transfers(
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
-) -> Unit {
+) -> Unit raise @regalloc.VerifyError {
   let original_blocks = func.blocks.length()
   for block_index in 0..<original_blocks {
     let block = func.blocks[block_index]

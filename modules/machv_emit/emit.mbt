@@ -438,6 +438,15 @@ fn emit_x64_vector_store_base_disp32(
 }
 
 ///|
+fn emit_x64_vector_move(object : CodeObject, dst : Int, src : Int) -> Unit {
+  object.code.push(0xf3)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x6f)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
 fn emit_x64_int_stack_load(
   object : CodeObject,
   dst : Int,
@@ -776,6 +785,14 @@ fn emit_aarch64_mov_w(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_aarch64_vector_move(object : CodeObject, dst : Int, src : Int) -> Unit {
+  emit_u32_le(
+    object,
+    0x4ea01c00 | ((src & 0x1f) << 16) | ((src & 0x1f) << 5) | (dst & 0x1f),
+  )
+}
+
+///|
 fn emit_aarch64_fmov_reg(
   object : CodeObject,
   dst : Int,
@@ -954,10 +971,7 @@ fn emit_aarch64_move(
       // TODO(machv_emit): choose 32-bit encodings from MachV value width.
       emit_u32_le(object, 0xaa0003e0 | (src << 16) | dst)
     Float32 | Float64 => emit_aarch64_fmov_reg(object, dst, src, dst_class)
-    Vector =>
-      // TODO(machv_emit): encode vector register copies once MachV carries
-      // lane-width metadata for SIMD moves.
-      raise UnsupportedOperand(message="mov does not support vector registers")
+    Vector => emit_aarch64_vector_move(object, dst, src)
   }
 }
 
@@ -1813,10 +1827,7 @@ fn emit_x64_move(
       // TODO(machv_emit): choose 32-bit encodings from MachV value width.
       emit_x64_mov_rr(object, dst, src)
     Float32 | Float64 => emit_x64_float_move(object, dst, src, dst_class)
-    Vector =>
-      // TODO(machv_emit): encode vector register copies once MachV carries
-      // lane-width metadata for SIMD moves.
-      raise UnsupportedOperand(message="mov does not support vector registers")
+    Vector => emit_x64_vector_move(object, dst, src)
   }
 }
 

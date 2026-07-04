@@ -618,6 +618,36 @@ test "emit AArch64 float register move" {
 }
 
 ///|
+test "emit X64 vector register move" {
+  let func = @machv.Function::new("vector_move")
+  let entry = func.new_block()
+  let move_ = func.new_inst(Move)
+  move_.add_operand(@machv.Operand::def(Physical({ index: 1, class: Vector })))
+  move_.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Vector })),
+  )
+  entry.append(move_)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(object.code, content="[243, 15, 111, 200, 195]")
+}
+
+///|
+test "emit AArch64 vector register move" {
+  let func = @machv.Function::new("vector_move")
+  let entry = func.new_block()
+  let move_ = func.new_inst(Move)
+  move_.add_operand(@machv.Operand::def(Physical({ index: 1, class: Vector })))
+  move_.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Vector })),
+  )
+  entry.append(move_)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(object.code, content="[1, 28, 160, 78, 192, 3, 95, 214]")
+}
+
+///|
 test "emit MachV terminators as target bytes" {
   let func = @machv.Function::new("term")
   let entry = func.new_block()

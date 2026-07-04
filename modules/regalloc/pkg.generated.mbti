@@ -14,6 +14,8 @@ pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
+pub fn raise_edge_copy_scratch_unavailable(message~ : String) -> Unit raise VerifyError
+
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
@@ -28,6 +30,7 @@ pub suberror VerifyError {
   RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
   ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
   TiedConstraintViolation(left~ : VirtualReg, right~ : VirtualReg, left_location~ : Location, right_location~ : Location)
+  EdgeCopyScratchUnavailable(message~ : String)
 }
 
 // Types and methods

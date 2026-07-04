@@ -323,6 +323,38 @@ test "apply preserves float32 class in edge transfers" {
 }
 
 ///|
+test "apply preserves vector class in edge transfers" {
+  let func = @machv.Function::new("edge_jump_vector")
+  let entry = func.new_block()
+  let target = func.new_block()
+  let source = func.new_vreg(Vector)
+  let param = func.new_vreg(Vector)
+  let v0 : @machv.PReg = { index: 0, class: Vector }
+  let v1 : @machv.PReg = { index: 1, class: Vector }
+  target.add_param(param)
+  let def_source = func.new_inst(Target("def_source"))
+  def_source.add_operand(@machv.Operand::def(Virtual(source)))
+  def_source.add_constraint({ operand_index: 0, allowed_regs: [v0] })
+  entry.append(def_source)
+  entry.set_terminator(TermJump(target.id, [Virtual(source)]))
+  let use_param = func.new_inst(Target("use_param"))
+  use_param.add_operand(@machv.Operand::use_reg(Virtual(param)))
+  use_param.add_constraint({ operand_index: 0, allowed_regs: [v1] })
+  target.append(use_param)
+  target.set_terminator(TermReturn([]))
+  allocate_and_apply(func, [v0, v1]) |> ignore
+  debug_inspect(
+    entry.instructions[entry.instructions.length() - 1].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 1, class: Vector }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 0, class: Vector }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+}
+
+///|
 test "apply splits conditional branch edge args through copy blocks" {
   let func = @machv.Function::new("edge_branch")
   let entry = func.new_block()
