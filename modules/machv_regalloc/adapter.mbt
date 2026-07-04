@@ -18,6 +18,20 @@ fn preg_to_regalloc(preg : @machv.PReg) -> @regalloc.PhysicalReg {
 }
 
 ///|
+fn class_from_regalloc(class : @regalloc.RegClass) -> @machv.RegClass {
+  match class {
+    Int => Int
+    Float => Float64
+    Vector => Vector
+  }
+}
+
+///|
+fn preg_from_regalloc(preg : @regalloc.PhysicalReg) -> @machv.PReg {
+  { index: preg.id, class: class_from_regalloc(preg.class) }
+}
+
+///|
 fn role_to_regalloc(role : @machv.OperandRole) -> @regalloc.OperandRole {
   match role {
     Use => Use
@@ -84,14 +98,45 @@ pub(all) struct ApplyResult {
 } derive(Debug)
 
 ///|
+fn rewrite_allocated_operand(
+  allocation : @regalloc.Allocation,
+  operand : @machv.Operand,
+) -> @machv.Operand {
+  match operand.reg {
+    Virtual(vreg) =>
+      match allocation.location_of(vreg_to_regalloc(vreg)) {
+        Some(Reg(preg)) =>
+          { reg: Physical(preg_from_regalloc(preg)), role: operand.role }
+        Some(Spill(_)) | None => operand
+      }
+    Physical(_) => operand
+  }
+}
+
+///|
+fn rewrite_allocated_operands(
+  func : @machv.Function,
+  allocation : @regalloc.Allocation,
+) -> Unit {
+  for block in func.blocks {
+    for inst in block.instructions {
+      for i, operand in inst.operands {
+        inst.operands[i] = rewrite_allocated_operand(allocation, operand)
+      }
+    }
+  }
+}
+
+///|
 pub fn allocate_and_apply(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> ApplyResult {
   let allocation = allocate_function(func, physical_regs)
   let spill_slots : Array[@machv.StackSlot] = []
-  // TODO(machv_regalloc): rewrite MachV operands to assigned physical
-  // registers and insert reload/spill moves around instruction boundaries.
+  rewrite_allocated_operands(func, allocation)
+  // TODO(machv_regalloc): insert reload/spill moves around instruction
+  // boundaries once MachV load/store pseudos are fully owned by machv_emit.
   for assignment in allocation.assignments {
     if assignment.location is Spill(_) {
       spill_slots.push(func.new_stack_slot(8, 8))
