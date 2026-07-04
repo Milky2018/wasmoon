@@ -13,6 +13,32 @@ test "resolve runtime helper relocations into linked code" {
 }
 
 ///|
+test "resolve wasm function symbols into cwasm call fixups" {
+  debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
+  debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
+  debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
+  let func = @machv.Function::new("caller")
+  let entry = func.new_block()
+  entry.append(func.new_inst(Call("wasm.func.3")))
+  entry.append(func.new_inst(Return))
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
+  inspect(linked.runtime_relocations.length(), content="1")
+  debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    9,
+    X86_64,
+    "caller",
+  )
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].call_fixups.length(), content="1")
+  inspect(restored.functions[0].call_fixups[0].offset, content="0")
+  inspect(restored.functions[0].call_fixups[0].func_idx, content="3")
+  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="-1")
+}
+
+///|
 test "resolve legacy runtime fixup ids in wasmoon_jit" {
   inspect(gc_runtime_fixup_idx(0), content="-20000")
   inspect(jit_runtime_fixup_idx(13), content="-21013")

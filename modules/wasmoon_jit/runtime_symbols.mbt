@@ -87,6 +87,30 @@ pub fn RuntimeSymbolResolver::resolve(
 }
 
 ///|
+fn parse_decimal_int(text : StringView) -> Int? {
+  if text.length() == 0 {
+    return None
+  }
+  let mut value = 0
+  for i in 0..<text.length() {
+    let ch = text.code_unit_at(i)
+    if ch < '0' || ch > '9' {
+      return None
+    }
+    value = value * 10 + (ch.to_int() - '0')
+  }
+  Some(value)
+}
+
+///|
+pub fn resolve_wasm_func_symbol(name : String) -> Int? {
+  match name {
+    [.. "wasm.func.", .. rest] => parse_decimal_int(rest)
+    _ => None
+  }
+}
+
+///|
 /// Resolve the legacy negative runtime-helper fixup id used by the old VCode
 /// emitter. New MachV emission should prefer named external-symbol relocations.
 /// TODO(ISS-021): delete this compatibility entry once the production JIT
@@ -176,6 +200,13 @@ pub fn link_code_object(
             symbol,
             address: runtime_symbol.address,
             fixup_idx: runtime_symbol.fixup_idx,
+          })
+        } else if resolve_wasm_func_symbol(symbol) is Some(func_idx) {
+          runtime_relocations.push({
+            offset: relocation.offset,
+            symbol,
+            address: 0L,
+            fixup_idx: Some(func_idx),
           })
         } else {
           raise UnknownRuntimeSymbol(symbol)

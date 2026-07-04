@@ -346,6 +346,8 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
 
+pub fn resolve_wasm_func_symbol(String) -> Int?
+
 pub fn sanitize_debug_filename(String) -> String
 
 pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
