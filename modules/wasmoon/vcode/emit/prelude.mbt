@@ -2,27 +2,6 @@
 // Translates VCode to machine code
 
 ///|
-/// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
-fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
-  let b0 = bytes[offset].to_int64() & 0xFFL
-  let b1 = bytes[offset + 1].to_int64() & 0xFFL
-  let b2 = bytes[offset + 2].to_int64() & 0xFFL
-  let b3 = bytes[offset + 3].to_int64() & 0xFFL
-  let b4 = bytes[offset + 4].to_int64() & 0xFFL
-  let b5 = bytes[offset + 5].to_int64() & 0xFFL
-  let b6 = bytes[offset + 6].to_int64() & 0xFFL
-  let b7 = bytes[offset + 7].to_int64() & 0xFFL
-  b0 |
-  (b1 << 8) |
-  (b2 << 16) |
-  (b3 << 24) |
-  (b4 << 32) |
-  (b5 << 40) |
-  (b6 << 48) |
-  (b7 << 56)
-}
-
-///|
 fn collect_used_callee_saved(
   func : @regalloc.VCodeFunction,
   _needs_sret : Bool,

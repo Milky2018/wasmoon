@@ -1236,8 +1236,8 @@ fn encode_value(
       match value {
         V128(bytes) =>
           if bytes.length() >= 16 {
-            let lo = bytes_to_int64_le(bytes, 0)
-            let hi = bytes_to_int64_le(bytes, 8)
+            let lo = @types.bytes_to_int64_le(bytes, 0)
+            let hi = @types.bytes_to_int64_le(bytes, 8)
             Some([lo, hi])
           } else {
             None

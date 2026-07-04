@@ -12,27 +12,6 @@ pub const EXTERNREF_TAG : Int64 = @types.EXTERNREF_TAG
 pub const FUNCREF_TAG : Int64 = @types.FUNCREF_TAG
 
 ///|
-/// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
-fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
-  let b0 = bytes[offset].to_int64() & 0xFFL
-  let b1 = bytes[offset + 1].to_int64() & 0xFFL
-  let b2 = bytes[offset + 2].to_int64() & 0xFFL
-  let b3 = bytes[offset + 3].to_int64() & 0xFFL
-  let b4 = bytes[offset + 4].to_int64() & 0xFFL
-  let b5 = bytes[offset + 5].to_int64() & 0xFFL
-  let b6 = bytes[offset + 6].to_int64() & 0xFFL
-  let b7 = bytes[offset + 7].to_int64() & 0xFFL
-  b0 |
-  (b1 << 8) |
-  (b2 << 16) |
-  (b3 << 24) |
-  (b4 << 32) |
-  (b5 << 40) |
-  (b6 << 48) |
-  (b7 << 56)
-}
-
-///|
 /// Convert two Int64 (low and high) to V128 Bytes (16 bytes, little-endian)
 fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
   let buf : @buffer.Buffer = Buffer(size_hint=16)
@@ -783,9 +762,9 @@ pub fn invoke_action(
                     i64_args.push(NULL_REF)
                   // V128: push 16 bytes as two Int64 (low then high) in little-endian
                   V128(bytes) => {
-                    let low = bytes_to_int64_le(bytes, 0)
+                    let low = @types.bytes_to_int64_le(bytes, 0)
                     i64_args.push(low)
-                    let high = bytes_to_int64_le(bytes, 8)
+                    let high = @types.bytes_to_int64_le(bytes, 8)
                     i64_args.push(high)
                   }
                   V128Pattern(_) =>

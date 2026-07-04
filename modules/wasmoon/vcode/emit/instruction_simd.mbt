@@ -19,8 +19,8 @@ fn MachineCode::emit_instruction_simd(
       let rd = wreg_num(inst.defs[0])
 
       // Extract low and high 64-bit values (little-endian)
-      let low = bytes_to_int64_le(bytes, 0)
-      let high = bytes_to_int64_le(bytes, 8)
+      let low = @types.bytes_to_int64_le(bytes, 0)
+      let high = @types.bytes_to_int64_le(bytes, 8)
 
       // Optimization: all zeros -> MOVI Vd.2D, #0
       if low == 0L && high == 0L {

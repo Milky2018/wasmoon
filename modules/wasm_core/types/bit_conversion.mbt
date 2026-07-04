@@ -51,6 +51,17 @@ pub impl FromInt64 for Float with fn from_int64_bits(v) {
   Float::reinterpret_from_int(v.to_int())
 }
 
+///|
+/// Decode 8 bytes at the given offset as a little-endian Int64 bit pattern.
+pub fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+  let mut result = 0L
+  for i in 0..<8 {
+    let b = bytes[offset + i].to_int64() & 0xFFL
+    result = result | (b << (i * 8))
+  }
+  result
+}
+
 // ============ Hex Conversion Utilities ============
 
 ///|

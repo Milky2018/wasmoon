@@ -51,16 +51,6 @@ fn decode_i31_ref(raw : Int64) -> @types.Value {
 }
 
 ///|
-fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
-  let mut result = 0L
-  for i in 0..<8 {
-    let b = bytes[offset + i].to_int64() & 0xFFL
-    result = result | (b << (i * 8))
-  }
-  result
-}
-
-///|
 /// Compare JIT and interpreter execution results
 /// Returns (jit_result, interp_result, match)
 
@@ -490,8 +480,8 @@ pub fn run_jit(
             guard bytes.length() == 16 else {
               return Err("Invalid V128 argument length: \{bytes.length()}")
             }
-            let low = bytes_to_int64_le(bytes, 0)
-            let high = bytes_to_int64_le(bytes, 8)
+            let low = @types.bytes_to_int64_le(bytes, 0)
+            let high = @types.bytes_to_int64_le(bytes, 8)
             jit_args.push(low)
             jit_args.push(high)
           }

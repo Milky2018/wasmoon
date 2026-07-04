@@ -3,15 +3,6 @@
 /// These are used to reproduce hang regressions reported in CLI runs.
 
 ///|
-fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
-  let mut result : Int64 = 0L
-  for i in 0..<8 {
-    result = result | (bytes[offset + i].to_int64() << (i * 8))
-  }
-  result
-}
-
-///|
 fn store_addr_to_module_func_idx(
   store_addr : Int,
   instance : @runtime.ModuleInstance,
@@ -68,8 +59,8 @@ fn init_jit_globals(
       Null => @types.NULL_REF
       V128(bytes) => {
         let offset = globals_ptr + (i * 16).to_int64()
-        let low = bytes_to_int64_le(bytes, 0)
-        let high = bytes_to_int64_le(bytes, 8)
+        let low = @types.bytes_to_int64_le(bytes, 0)
+        let high = @types.bytes_to_int64_le(bytes, 8)
         @wasmoon_jit.c_jit_write_i64(offset, low)
         @wasmoon_jit.c_jit_write_i64(offset + 8L, high)
         continue
