@@ -619,21 +619,30 @@ fn BacktrackingAllocator::get_available_regs(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> Array[@abi.PReg] {
-  if bundle.crosses_call(self.ranges) {
-    match bundle.reg_class {
-      Int => self.callee_saved_int
-      Float32 | Float64 => self.callee_saved_float
-      // V8-V15 preservation is only guaranteed for the low 64 bits by AAPCS64.
-      // Vector values that cross calls are handled by forced spilling earlier.
-      Vector => []
-    }
-  } else {
-    match bundle.reg_class {
-      Int => self.int_regs
-      Float32 | Float64 => self.float_regs
-      Vector => self.vector_regs
-    }
+  let (available_regs, callee_saved_regs) = match bundle.reg_class {
+    Int => (self.int_regs, self.callee_saved_int)
+    Float32 | Float64 => (self.float_regs, self.callee_saved_float)
+    Vector => (self.vector_regs, [])
   }
+  let selected = @core_regalloc.select_available_regs_for_bundle(
+    backtrack_core_reg_class(bundle.reg_class),
+    bundle.crosses_call(self.ranges),
+    backtrack_core_pregs(available_regs),
+    backtrack_core_pregs(callee_saved_regs),
+  )
+  let out : Array[@abi.PReg] = []
+  for preg in selected {
+    out.push(
+      backtrack_preg_from_probe(
+        preg,
+        bundle.reg_class,
+        available_regs,
+        [],
+        callee_saved_regs,
+      ),
+    )
+  }
+  out
 }
 
 ///|

@@ -478,6 +478,31 @@ test "plan register probe order uses phased rotation and skip" {
 }
 
 ///|
+test "select available registers for call-crossing bundles" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let f0 : PhysicalReg = { id: 0, class: Float }
+  let f1 : PhysicalReg = { id: 1, class: Float }
+  let v0 : PhysicalReg = { id: 0, class: Vector }
+  debug_inspect(
+    select_available_regs_for_bundle(Int, false, [r0, r1], [r1]),
+    content="[{ id: 0, class: Int }, { id: 1, class: Int }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Int, true, [r0, r1], [r1]),
+    content="[{ id: 1, class: Int }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Float, true, [f0, f1], [f1]),
+    content="[{ id: 1, class: Float }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Vector, true, [v0], [v0]),
+    content="[]",
+  )
+}
+
+///|
 test "eviction policy chooses cutoff, best conflict, and later split" {
   debug_inspect(eviction_cutoff(Some(3), Some(5)), content="Some(5)")
   debug_inspect(eviction_cutoff(Some(3), None), content="Some(3)")

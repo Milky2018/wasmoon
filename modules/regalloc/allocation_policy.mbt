@@ -20,3 +20,20 @@ pub fn should_force_spill_for_class_and_call(
 ) -> Bool {
   class == Vector && crosses_call
 }
+
+///|
+pub fn select_available_regs_for_bundle(
+  class : RegClass,
+  crosses_call : Bool,
+  available_regs : Array[PhysicalReg],
+  callee_saved_regs : Array[PhysicalReg],
+) -> Array[PhysicalReg] {
+  if crosses_call {
+    match class {
+      Int | Float => callee_saved_regs
+      Vector => []
+    }
+  } else {
+    available_regs
+  }
+}
