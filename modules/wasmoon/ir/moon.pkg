@@ -1,4 +1,5 @@
 import {
+  "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/perf",
   "Milky2018/wasmoon/ir/egraph",

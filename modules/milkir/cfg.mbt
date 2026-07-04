@@ -84,6 +84,24 @@ pub fn CFG::get_predecessors(self : CFG, block_id : Int) -> Array[Int] {
 }
 
 ///|
+pub fn CFG::is_entry_or_unreachable(self : CFG, block_id : Int) -> Bool {
+  if self.is_valid(block_id) {
+    self.predecessors[block_id].length() == 0
+  } else {
+    true
+  }
+}
+
+///|
+pub fn CFG::is_exit_block(self : CFG, block_id : Int) -> Bool {
+  if self.is_valid(block_id) {
+    self.successors[block_id].length() == 0
+  } else {
+    true
+  }
+}
+
+///|
 pub fn CFG::postorder(self : CFG) -> Array[Int] {
   let visited = Array::make(self.size, false)
   let result : Array[Int] = []
@@ -194,6 +212,120 @@ fn dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
     }
   }
   a == 0 && current == 0
+}
+
+///|
+pub fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
+  let children : Array[Array[Int]] = []
+  for _ in 0..<idom.length() {
+    children.push([])
+  }
+  for i, parent in idom {
+    if parent >= 0 && parent != i {
+      children[parent].push(i)
+    }
+  }
+  children
+}
+
+///|
+pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
+  let idom = self.compute_dominators()
+  let back_edges : Array[(Int, Int)] = []
+  for block_id in 0..<self.size {
+    if !self.valid[block_id] {
+      continue
+    }
+    for succ in self.successors[block_id] {
+      if dominates_with_idom(idom, succ, block_id) {
+        back_edges.push((block_id, succ))
+      }
+    }
+  }
+  back_edges
+}
+
+///|
+pub(all) struct Loop {
+  header : Int
+  blocks : Array[Int]
+  back_edges : Array[(Int, Int)]
+} derive(Debug)
+
+///|
+pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
+  let loops : Array[Loop] = []
+  let back_edges = self.find_back_edges()
+  let grouped : @hashmap.HashMap[Int, Array[(Int, Int)]] = HashMap([])
+  for edge in back_edges {
+    let (_, header) = edge
+    match grouped.get(header) {
+      Some(edges) => edges.push(edge)
+      None => grouped.set(header, [edge])
+    }
+  }
+  grouped.each(fn(header, edges) {
+    loops.push({
+      header,
+      blocks: self.find_loop_body(header, edges),
+      back_edges: edges,
+    })
+  })
+  loops
+}
+
+///|
+fn CFG::find_loop_body(
+  self : CFG,
+  header : Int,
+  back_edges : Array[(Int, Int)],
+) -> Array[Int] {
+  let body : @hashmap.HashMap[Int, Bool] = HashMap([])
+  body.set(header, true)
+  let worklist : Array[Int] = []
+  for edge in back_edges {
+    let (source, _) = edge
+    if source != header {
+      worklist.push(source)
+      body.set(source, true)
+    }
+  }
+  while worklist.length() > 0 {
+    let block = worklist.pop().unwrap()
+    for pred in self.predecessors[block] {
+      if !body.get(pred).unwrap_or(false) {
+        body.set(pred, true)
+        worklist.push(pred)
+      }
+    }
+  }
+  let result : Array[Int] = []
+  body.each(fn(block_id, _) { result.push(block_id) })
+  result
+}
+
+///|
+pub fn Loop::contains(self : Loop, block_id : Int) -> Bool {
+  for block in self.blocks {
+    if block == block_id {
+      return true
+    }
+  }
+  false
+}
+
+///|
+pub fn CFG::get_loop_preheader(self : CFG, loop_ : Loop) -> Int? {
+  let mut preheader : Int? = None
+  for pred in self.predecessors[loop_.header] {
+    if !loop_.contains(pred) {
+      match preheader {
+        Some(_) => return None
+        None => preheader = Some(pred)
+      }
+    }
+  }
+  preheader
 }
 
 ///|

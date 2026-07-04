@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/ir"
 
 import {
+  "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/ir/egraph",
   "moonbitlang/core/debug",
@@ -130,18 +131,14 @@ pub fn Block::add_param(Self, Value, Type) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 
 pub struct CFG {
-  size : Int
-  num_blocks : Int
-  successors : Array[Array[Int]]
-  predecessors : Array[Array[Int]]
-  valid : Array[Bool]
+  core : @milkir.CFG
 }
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominators(Self) -> Array[Int]
 pub fn CFG::dominates(Self, Int, Int) -> Bool
 pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
-pub fn CFG::find_loops(Self) -> Array[Loop]
-pub fn CFG::get_loop_preheader(Self, Loop) -> Int?
+pub fn CFG::find_loops(Self) -> Array[@milkir.Loop]
+pub fn CFG::get_loop_preheader(Self, @milkir.Loop) -> Int?
 pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
 pub fn CFG::get_successors(Self, Int) -> Array[Int]
 pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
@@ -423,13 +420,6 @@ pub(all) enum IntCC {
   Ugt
   Uge
 } derive(Eq, Hash, @debug.Debug)
-
-pub struct Loop {
-  header : Int
-  blocks : Array[Int]
-  back_edges : Array[(Int, Int)]
-}
-pub fn Loop::contains(Self, Int) -> Bool
 
 pub enum Opcode {
   Iconst(Int64)
@@ -860,6 +850,7 @@ pub struct Value {
 } derive(@debug.Debug)
 
 // Type aliases
+pub using @milkir {type Loop}
 
 // Traits
 

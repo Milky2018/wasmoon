@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 
 // Errors
 pub suberror VerifyError {
@@ -39,8 +40,13 @@ pub(all) struct CFG {
 pub fn CFG::build(Function) -> Self
 pub fn CFG::compute_dominators(Self) -> Array[Int]
 pub fn CFG::dominates(Self, Int, Int) -> Bool
+pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+pub fn CFG::find_loops(Self) -> Array[Loop]
+pub fn CFG::get_loop_preheader(Self, Loop) -> Int?
 pub fn CFG::get_predecessors(Self, Int) -> Array[Int]
 pub fn CFG::get_successors(Self, Int) -> Array[Int]
+pub fn CFG::is_entry_or_unreachable(Self, Int) -> Bool
+pub fn CFG::is_exit_block(Self, Int) -> Bool
 pub fn CFG::is_valid(Self, Int) -> Bool
 pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
@@ -150,6 +156,13 @@ pub(all) enum IntCC {
   Ugt
   Uge
 } derive(Eq, Hash, @debug.Debug)
+
+pub(all) struct Loop {
+  header : Int
+  blocks : Array[Int]
+  back_edges : Array[(Int, Int)]
+} derive(@debug.Debug)
+pub fn Loop::contains(Self, Int) -> Bool
 
 pub(all) enum Metadata {
   SourceLoc(String)
