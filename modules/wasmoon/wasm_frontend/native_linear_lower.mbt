@@ -23,6 +23,9 @@ const VMCTX_TABLES_OFFSET : Int = 56
 const VMCTX_TABLE_SIZES_OFFSET : Int = 72
 
 ///|
+const VMCTX_MEMORIES_OFFSET : Int = 88
+
+///|
 const GLOBAL_STRIDE : Int = 16
 
 ///|
@@ -30,6 +33,9 @@ const TABLE_ENTRY_STRIDE : Int = 16
 
 ///|
 const FUNC_TABLE_ENTRY_STRIDE : Int = 8
+
+///|
+const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
 
 ///|
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
@@ -652,18 +658,31 @@ fn push_memory_size(
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
     return false
   }
-  if memidx != 0 {
-    // TODO(ISS-023): move the full multi-memory descriptor layout into the
-    // reusable embedding ABI before lowering non-zero memory sizes natively.
-    return false
+  // TODO(ISS-023): source VMContext memory layout from the reusable embedding
+  // ABI instead of copy-first constants from legacy VCode lowering.
+  let size_bytes = if memidx == 0 {
+    builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_MEMORY0_SIZE_OFFSET.to_int64()),
+    )
+  } else {
+    let memories_ptr = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_MEMORIES_OFFSET.to_int64()),
+    )
+    let memory_ptr = builder.load_ptr(
+      I64,
+      memories_ptr,
+      builder.iconst_i64((memidx * 8).to_int64()),
+    )
+    builder.load_ptr(
+      I64,
+      memory_ptr,
+      builder.iconst_i64(MEMORY_CURRENT_LENGTH_OFFSET.to_int64()),
+    )
   }
-  // TODO(ISS-023): source VMContext memory0 layout from the reusable
-  // embedding ABI instead of copy-first constants from legacy VCode lowering.
-  let size_bytes = builder.load_ptr(
-    I64,
-    context,
-    builder.iconst_i64(VMCTX_MEMORY0_SIZE_OFFSET.to_int64()),
-  )
   let page_shift = builder.iconst_i64(
     memory_types[memidx].page_size_log2.to_int64(),
   )

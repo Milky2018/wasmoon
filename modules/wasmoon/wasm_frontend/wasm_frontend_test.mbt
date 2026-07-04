@@ -809,6 +809,25 @@ test "lower memory grow size and bulk helpers as native custom ops" {
 }
 
 ///|
+test "lower non-zero memory.size through native descriptor loads" {
+  let mod_ = {
+    ..@types.Module::simple([], [I32], [MemorySize(1)], "memory1_size"),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      { limits: { min: 2, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.MemorySize"), content="false")
+  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("ushr"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower table bulk helpers as native custom ops" {
   let table : @types.Table = {
     type_: {

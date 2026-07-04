@@ -161,6 +161,35 @@ test "compile api: reusable pipeline lowers memory.size without legacy custom" {
 }
 
 ///|
+test "compile api: reusable pipeline lowers memory.size for non-zero memory" {
+  let mod_ = {
+    ..@types.Module::simple([], [I32], [MemorySize(1)], "memory1_size"),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      { limits: { min: 2, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail(
+      "memory.size for non-zero memory did not compile through reusable pipeline",
+    )
+  }
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.MemorySize"), content="false")
+  inspect(reusable.milk_dump.contains("ushr"), content="true")
+}
+
+///|
 test "compile api: parse failure emits failed stage" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(Bytes::from_array([0x00, 0x01, 0x02]), on_progress=fn(
