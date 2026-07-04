@@ -186,6 +186,92 @@ fn push_float_copysign(
 }
 
 ///|
+fn push_i31_new(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  let masked = builder.iconst_i32(@types.I32_MAX)
+  guard emit_op(builder, I32, Band, [value, masked]) is Some(payload) else {
+    return false
+  }
+  guard emit_op(builder, I64, Uextend, [payload]) is Some(payload64) else {
+    return false
+  }
+  let shift = builder.iconst_i64(1L)
+  guard emit_op(builder, I64, Ishl, [payload64, shift]) is Some(shifted) else {
+    return false
+  }
+  let tag = builder.iconst_i64(1L)
+  guard emit_op(builder, Ref, Bor, [shifted, tag]) is Some(encoded) else {
+    return false
+  }
+  stack.push(encoded)
+  true
+}
+
+///|
+fn emit_i31_null_check(
+  builder : @milkir.IRBuilder,
+  value : @milkir.Value,
+) -> Bool {
+  guard builder.current_block() is Some(_) else { return false }
+  guard emit_op(builder, value.ty, Iconst(@types.NULL_REF), [])
+    is Some(null_ref) else {
+    return false
+  }
+  guard emit_op(builder, I32, Icmp(Eq), [value, null_ref]) is Some(is_null) else {
+    return false
+  }
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(is_null, trap_block, continue_block)
+  builder.switch_to_block(trap_block)
+  builder.trap("null i31 reference")
+  builder.switch_to_block(continue_block)
+  true
+}
+
+///|
+fn push_i31_get(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  signed : Bool,
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  if !emit_i31_null_check(builder, value) {
+    return false
+  }
+  guard emit_op(builder, I64, Bitcast, [value]) is Some(bits) else {
+    return false
+  }
+  let shift = builder.iconst_i64(1L)
+  guard emit_op(builder, I64, Ushr, [bits, shift]) is Some(decoded64) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [decoded64]) is Some(decoded32) else {
+    return false
+  }
+  if signed {
+    let sign_shift = builder.iconst_i32(1)
+    guard emit_op(builder, I32, Ishl, [decoded32, sign_shift]) is Some(left) else {
+      return false
+    }
+    guard emit_op(builder, I32, Sshr, [left, sign_shift]) is Some(result) else {
+      return false
+    }
+    stack.push(result)
+  } else {
+    let mask = builder.iconst_i32(@types.I32_MAX)
+    guard emit_op(builder, I32, Band, [decoded32, mask]) is Some(result) else {
+      return false
+    }
+    stack.push(result)
+  }
+  true
+}
+
+///|
 fn push_select(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -971,6 +1057,9 @@ fn push_simple_expr_instr(
     I64ReinterpretF64 => push_unary_opcode_as(builder, expr_stack, I64, Bitcast)
     F32ReinterpretI32 => push_unary_opcode_as(builder, expr_stack, F32, Bitcast)
     F64ReinterpretI64 => push_unary_opcode_as(builder, expr_stack, F64, Bitcast)
+    RefI31 => push_i31_new(builder, expr_stack)
+    I31GetS => push_i31_get(builder, expr_stack, true)
+    I31GetU => push_i31_get(builder, expr_stack, false)
     Select | SelectTyped(_) => push_select(builder, expr_stack)
     Drop => {
       guard pop_value(expr_stack) is Some(_) else { return false }
@@ -1673,6 +1762,9 @@ fn try_lower_linear_function(
         if !push_unary_opcode_as(builder, stack, F64, Bitcast) {
           return None
         }
+      RefI31 => if !push_i31_new(builder, stack) { return None }
+      I31GetS => if !push_i31_get(builder, stack, true) { return None }
+      I31GetU => if !push_i31_get(builder, stack, false) { return None }
       Call(func_idx) =>
         if !push_direct_call(builder, stack, mod_, func_idx) {
           return None

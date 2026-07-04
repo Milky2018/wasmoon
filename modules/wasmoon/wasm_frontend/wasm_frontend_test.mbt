@@ -873,6 +873,24 @@ test "lower reference func non-null and eq natively" {
 }
 
 ///|
+test "lower i31 refs through native linear fast path" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [LocalGet(0), RefI31, I31GetS],
+    "i31_roundtrip",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("band"), content="true")
+  inspect(text.contains("uextend"), content="true")
+  inspect(text.contains("trap \"null i31 reference\""), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
   let env = EmbeddingEnvironment::new()
