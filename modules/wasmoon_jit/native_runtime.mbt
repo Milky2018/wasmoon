@@ -808,6 +808,22 @@ pub fn patch_aarch64_func_addr_fixup_parts(
 }
 
 ///|
+pub fn patch_aarch64_func_addr_fixups(
+  exec_ptr : Int64,
+  fixups : Array[@cwasm.FuncAddrFixup],
+  func_table_ptr : Int64,
+) -> Unit {
+  for fixup in fixups {
+    let target_ptr = match
+      resolve_func_addr_fixup_target(fixup.func_idx, func_table_ptr) {
+      Some(ptr) => ptr
+      None => abort("unknown func addr fixup idx \{fixup.func_idx}")
+    }
+    patch_aarch64_func_addr_fixup(exec_ptr, fixup, target_ptr)
+  }
+}
+
+///|
 pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
   let diff = target_ptr - pc
   if diff % 4L != 0L {
@@ -855,6 +871,27 @@ pub fn patch_aarch64_direct_call(
   abort(
     "direct call target out of range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
   )
+}
+
+///|
+pub fn patch_aarch64_call_fixups(
+  exec_ptr : Int64,
+  fixups : Array[@cwasm.CallFixup],
+  func_table_ptr : Int64,
+  direct_call_targets : Map[Int, Int64],
+) -> Unit {
+  for fixup in fixups {
+    let target_ptr = match
+      resolve_call_fixup_target(
+        fixup.func_idx,
+        func_table_ptr,
+        direct_call_targets,
+      ) {
+      Some(ptr) => ptr
+      None => abort("missing direct-call target for idx \{fixup.func_idx}")
+    }
+    patch_aarch64_direct_call(exec_ptr, fixup, target_ptr)
+  }
 }
 
 ///|

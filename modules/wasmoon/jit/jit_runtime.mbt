@@ -156,17 +156,11 @@ fn apply_func_addr_fixups(
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
-      for fixup in entry.func_addr_fixups {
-        let target_ptr = match
-          @wasmoon_jit.resolve_func_addr_fixup_target(
-            fixup.func_idx,
-            func_table_ptr,
-          ) {
-          Some(ptr) => ptr
-          None => abort("unknown func addr fixup idx \{fixup.func_idx}")
-        }
-        @wasmoon_jit.patch_aarch64_func_addr_fixup(exec_ptr, fixup, target_ptr)
-      }
+      @wasmoon_jit.patch_aarch64_func_addr_fixups(
+        exec_ptr,
+        entry.func_addr_fixups,
+        func_table_ptr,
+      )
     }
   }
 }
@@ -187,18 +181,12 @@ fn apply_call_fixups(
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
-      for fixup in entry.call_fixups {
-        let target_ptr = match
-          @wasmoon_jit.resolve_call_fixup_target(
-            fixup.func_idx,
-            func_table_ptr,
-            jit_module.direct_call_targets,
-          ) {
-          Some(ptr) => ptr
-          None => abort("missing direct-call target for idx \{fixup.func_idx}")
-        }
-        @wasmoon_jit.patch_aarch64_direct_call(exec_ptr, fixup, target_ptr)
-      }
+      @wasmoon_jit.patch_aarch64_call_fixups(
+        exec_ptr,
+        entry.call_fixups,
+        func_table_ptr,
+        jit_module.direct_call_targets,
+      )
     }
   }
 }
