@@ -70,6 +70,39 @@ test "x64 preserves MilkIR stack slots for StackAddr lowering" {
 }
 
 ///|
+test "x64 lowers popcnt through generic MachV arithmetic sequence" {
+  let func = @milkir.Function::new_empty("popcnt64")
+  let value = func.new_value(I64)
+  let count = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Popcnt, [value], [count]))
+  entry.set_terminator(Return([count]))
+  let lowered = lower_function(func)
+  let mut has_popcnt = false
+  let mut has_mul = false
+  let mut has_rcx_shift = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == IntPopcnt {
+      has_popcnt = true
+    }
+    if inst.opcode == IntMul {
+      has_mul = true
+    }
+    if inst.opcode == IntShr(false) {
+      for constraint in inst.constraints {
+        if constraint.allowed_regs.length() == 1 &&
+          constraint.allowed_regs[0] == { index: 1, class: Int } {
+          has_rcx_shift = true
+        }
+      }
+    }
+  }
+  inspect(has_popcnt, content="false")
+  inspect(has_mul, content="true")
+  inspect(has_rcx_shift, content="true")
+}
+
+///|
 test "x64 legalizes integer division fixed-register operands" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("sdiv64", signature)

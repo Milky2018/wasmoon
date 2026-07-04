@@ -109,6 +109,34 @@ test "AArch64 lowers integer bitcount ops into structured MachV opcodes" {
 }
 
 ///|
+test "AArch64 lowers popcnt through generic MachV arithmetic sequence" {
+  let func = @milkir.Function::new_empty("popcnt64")
+  let value = func.new_value(I64)
+  let count = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Popcnt, [value], [count]))
+  entry.set_terminator(Return([count]))
+  let lowered = lower_function(func)
+  let mut has_popcnt = false
+  let mut has_mul = false
+  let mut has_shift = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == IntPopcnt {
+      has_popcnt = true
+    }
+    if inst.opcode == IntMul {
+      has_mul = true
+    }
+    if inst.opcode == IntShr(false) {
+      has_shift = true
+    }
+  }
+  inspect(has_popcnt, content="false")
+  inspect(has_mul, content="true")
+  inspect(has_shift, content="true")
+}
+
+///|
 test "AArch64 lowers multiply-high ops into structured MachV opcodes" {
   let func = @milkir.Function::new_empty("mulhigh")
   let lhs = func.new_value(I64)

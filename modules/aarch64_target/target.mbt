@@ -437,6 +437,166 @@ fn lower_int_rem(
 }
 
 ///|
+fn append_int_const(
+  out : @machv.Function,
+  block : @machv.Block,
+  value : Int64,
+) -> @machv.VReg {
+  let dst = out.new_vreg(Int)
+  let load = out.new_inst(IntConst(value))
+  load.add_operand(@machv.Operand::def(Virtual(dst)))
+  block.append(load)
+  dst
+}
+
+///|
+fn append_int_binop(
+  out : @machv.Function,
+  block : @machv.Block,
+  opcode : @machv.Opcode,
+  lhs : @machv.Reg,
+  rhs : @machv.Reg,
+) -> @machv.VReg {
+  let dst = out.new_vreg(Int)
+  let op = out.new_inst(opcode)
+  op.add_operand(@machv.Operand::use_reg(lhs))
+  op.add_operand(@machv.Operand::use_reg(rhs))
+  op.add_operand(@machv.Operand::def(Virtual(dst)))
+  block.append(op)
+  dst
+}
+
+///|
+fn append_int_binop_result(
+  block : @machv.Block,
+  out : @machv.Function,
+  opcode : @machv.Opcode,
+  lhs : @machv.Reg,
+  rhs : @machv.Reg,
+  results : Array[@milkir.Value],
+) -> Unit {
+  let op = out.new_inst(opcode)
+  op.add_operand(@machv.Operand::use_reg(lhs))
+  op.add_operand(@machv.Operand::use_reg(rhs))
+  add_defs(op, results)
+  block.append(op)
+}
+
+///|
+fn lower_int_popcnt(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+) -> Unit {
+  guard inst.args.length() == 1 && inst.results.length() == 1 else { return }
+  let input : @machv.Reg = if inst.args[0].ty == I32 {
+    let mask32 = append_int_const(out, block, 0xffffffffL)
+    let masked = append_int_binop(
+      out,
+      block,
+      IntAnd,
+      reg_for_value(inst.args[0]),
+      Virtual(mask32),
+    )
+    Virtual(masked)
+  } else {
+    reg_for_value(inst.args[0])
+  }
+  let one = append_int_const(out, block, 1L)
+  let mask1 = append_int_const(out, block, 0x5555555555555555L)
+  let half = append_int_binop(out, block, IntShr(false), input, Virtual(one))
+  let half_masked = append_int_binop(
+    out,
+    block,
+    IntAnd,
+    Virtual(half),
+    Virtual(mask1),
+  )
+  let step1 = append_int_binop(out, block, IntSub, input, Virtual(half_masked))
+
+  let two = append_int_const(out, block, 2L)
+  let mask2 = append_int_const(out, block, 0x3333333333333333L)
+  let low2 = append_int_binop(
+    out,
+    block,
+    IntAnd,
+    Virtual(step1),
+    Virtual(mask2),
+  )
+  let shifted2 = append_int_binop(
+    out,
+    block,
+    IntShr(false),
+    Virtual(step1),
+    Virtual(two),
+  )
+  let high2 = append_int_binop(
+    out,
+    block,
+    IntAnd,
+    Virtual(shifted2),
+    Virtual(mask2),
+  )
+  let step2 = append_int_binop(
+    out,
+    block,
+    IntAdd,
+    Virtual(low2),
+    Virtual(high2),
+  )
+
+  let four = append_int_const(out, block, 4L)
+  let mask4 = append_int_const(out, block, 0x0f0f0f0f0f0f0f0fL)
+  let shifted4 = append_int_binop(
+    out,
+    block,
+    IntShr(false),
+    Virtual(step2),
+    Virtual(four),
+  )
+  let sum4 = append_int_binop(
+    out,
+    block,
+    IntAdd,
+    Virtual(step2),
+    Virtual(shifted4),
+  )
+  let step3 = append_int_binop(
+    out,
+    block,
+    IntAnd,
+    Virtual(sum4),
+    Virtual(mask4),
+  )
+
+  let byte_sum = append_int_const(out, block, 0x0101010101010101L)
+  let product = append_int_binop(
+    out,
+    block,
+    IntMul,
+    Virtual(step3),
+    Virtual(byte_sum),
+  )
+  let final_shift = append_int_const(
+    out,
+    block,
+    if inst.args[0].ty == I32 {
+      24L
+    } else {
+      56L
+    },
+  )
+  append_int_binop_result(
+    block,
+    out,
+    IntShr(false),
+    Virtual(product),
+    Virtual(final_shift),
+    inst.results,
+  )
+}
+
+///|
 fn lower_int_rotl(
   out : @machv.Function,
   block : @machv.Block,
@@ -511,6 +671,10 @@ fn lower_inst(
     }
     Urem => {
       lower_int_rem(out, block, inst, false)
+      return
+    }
+    Popcnt => {
+      lower_int_popcnt(out, block, inst)
       return
     }
     Rotl => {

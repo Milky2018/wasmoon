@@ -572,6 +572,33 @@ test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR popcnt through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64], [I64])
+  let milk = @milkir.Function::new("popcnt_x64", signature)
+  let value = milk.new_value(I64)
+  let count = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Popcnt, [value], [count]))
+  entry.set_terminator(Return([count]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_imul = false
+  let mut has_shift = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xaf {
+      has_imul = true
+    }
+    if plan.object.code[i] == 0xd3 {
+      has_shift = true
+    }
+  }
+  inspect(has_imul, content="true")
+  inspect(has_shift, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([I64], [F64])
   let milk = @milkir.Function::new("bitcast_i64_f64", signature)
