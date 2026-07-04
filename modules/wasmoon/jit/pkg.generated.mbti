@@ -268,42 +268,6 @@ pub suberror PolycallError {
 // Types and methods
 type AddressRange derive(@debug.Debug)
 
-pub enum CompilationStatus {
-  NotCompiled
-  Compiled
-  Failed(String)
-}
-pub impl Show for CompilationStatus
-
-pub(all) struct FunctionEntry {
-  func_idx : Int
-  mut status : CompilationStatus
-  mut compiled_code : @vcode.CompiledFunction?
-  mut call_count : Int
-}
-pub fn FunctionEntry::is_compiled(Self) -> Bool
-pub fn FunctionEntry::new(Int) -> Self
-
-pub(all) struct JITEngine {
-  strategy : @wasmoon_jit.CompilationStrategy
-  runtime : @vcode.JITRuntime
-  functions : Map[Int, FunctionEntry]
-  mut total_calls : Int
-  mut jit_calls : Int
-  mut interpreter_calls : Int
-  mut compilation_failures : Int
-}
-pub fn JITEngine::default() -> Self
-pub fn JITEngine::get_compiled(Self, Int) -> @vcode.CompiledFunction?
-pub fn JITEngine::invalidate(Self, Int) -> Unit
-pub fn JITEngine::is_compiled(Self, Int) -> Bool
-pub fn JITEngine::mark_compiled(Self, Int, @vcode.CompiledFunction) -> Unit
-pub fn JITEngine::mark_failed(Self, Int, String) -> Unit
-pub fn JITEngine::new(@wasmoon_jit.TieredConfig) -> Self
-pub fn JITEngine::on_call(Self, Int) -> Bool
-pub fn JITEngine::stats(Self) -> (Int, Int, Int, Int, Int)
-pub impl Show for JITEngine
-
 pub struct JITFunction {
   func_idx : Int
   name : String
