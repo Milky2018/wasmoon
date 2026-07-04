@@ -13,6 +13,8 @@ pub fn fits_signed_i32(Int) -> Bool
 
 pub fn fits_signed_i8(Int) -> Bool
 
+pub fn format_disassembly(Array[Int], Array[(Int, Int)], Array[(Int, String)]) -> String
+
 pub fn patch_aarch64_branch_bytes(Array[Int], Int, Int) -> Unit raise EmitError
 
 pub fn patch_x64_branch_bytes(Array[Int], Int, Int) -> Unit raise EmitError

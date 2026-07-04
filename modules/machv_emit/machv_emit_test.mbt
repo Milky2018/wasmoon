@@ -44,6 +44,19 @@ test "check signed immediate ranges" {
 }
 
 ///|
+test "format generic disassembly annotations" {
+  inspect(
+    format_disassembly([0x90, 0xC3], [(1, 0)], [(1, "ret"), (0, "nop")]),
+    content=(
+      #|block1:
+      #|  0000: 90c30000  nop
+      #|  0001: c3000000  ret
+      #|
+    ),
+  )
+}
+
+///|
 test "emit AArch64 move, add, and return bytes" {
   let func = @machv.Function::new("entry")
   let entry = func.new_block()

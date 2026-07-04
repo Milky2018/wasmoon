@@ -246,71 +246,12 @@ pub fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
 ///|
 /// Dump disassembly with hex bytes
 pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
-  let mut result = ""
-  let max_offset = if self.pos > 0 { self.pos - 1 } else { 0 }
-  let width = if max_offset <= 0xFFFF {
-    4
-  } else if max_offset <= 0xFFFFFF {
-    6
-  } else {
-    8
-  }
-  // Build a map of offset -> labels (multiple blocks can share same offset)
-  let label_map : Map[Int, Array[Int]] = {}
+  let label_offsets : Array[(Int, Int)] = []
   for entry in self.labels {
     let (block_id, offset) = entry
-    match label_map.get(offset) {
-      Some(ids) => ids.push(block_id)
-      None => label_map.set(offset, [block_id])
-    }
+    label_offsets.push((block_id, offset))
   }
-  // Sort disasm by offset
-  let sorted = self.disasm.copy()
-  sorted.sort_by(fn(a, b) { a.0.compare(b.0) })
-  for entry in sorted {
-    let (offset, text) = entry
-    // Check if there are labels at this offset
-    if label_map.get(offset) is Some(block_ids) {
-      for block_id in block_ids {
-        result = result + "block\{block_id}:\n"
-      }
-    }
-    // Get the 4 bytes at this offset
-    let b0 = if offset < self.bytes.length() { self.bytes[offset] } else { 0 }
-    let b1 = if offset + 1 < self.bytes.length() {
-      self.bytes[offset + 1]
-    } else {
-      0
-    }
-    let b2 = if offset + 2 < self.bytes.length() {
-      self.bytes[offset + 2]
-    } else {
-      0
-    }
-    let b3 = if offset + 3 < self.bytes.length() {
-      self.bytes[offset + 3]
-    } else {
-      0
-    }
-    let hex = hex2(b0) + hex2(b1) + hex2(b2) + hex2(b3)
-    result = result + "  \{to_hex_offset(offset, width)}: \{hex}  \{text}\n"
-  }
-  result
-}
-
-///|
-fn hex2(n : Int) -> String {
-  @types.to_hex_byte(n)
-}
-
-///|
-fn to_hex_offset(n : Int, width : Int) -> String {
-  let hex = @types.int_to_hex(n)
-  if hex.length() >= width {
-    hex
-  } else {
-    "0".repeat(width - hex.length()) + hex
-  }
+  @machv_emit.format_disassembly(self.bytes, label_offsets, self.disasm)
 }
 
 ///|
