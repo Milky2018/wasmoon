@@ -1587,78 +1587,56 @@ pub fn BacktrackingAllocator::generate_result(
 }
 
 ///|
-priv struct SpillSetInfo {
-  old_slot : Int
-  reg_class : @abi.RegClass
-  spans : Array[ProgPointRange]
-  start : ProgPoint
-}
-
-///|
-priv struct AssignedSlot {
-  start : Int
-  spans : Array[ProgPointRange]
-  old_slots : Array[Int]
-}
-
-///|
 /// Compact spill slots by reusing them across non-overlapping spill bundles.
 fn BacktrackingAllocator::compact_spill_slots(
   self : BacktrackingAllocator,
   result : RegAllocResult,
 ) -> Int {
-  fn slots_used(cls : @abi.RegClass) -> Int {
+  fn core_class(cls : @abi.RegClass) -> @core_regalloc.RegClass {
     match cls {
-      Vector => 2
-      _ => 1
+      Int => Int
+      Float32 | Float64 => Float
+      Vector => Vector
     }
   }
 
-  fn spans_overlap(
-    a : Array[ProgPointRange],
-    b : Array[ProgPointRange],
-    block_order : FixedArray[Int],
-  ) -> Bool {
-    for ra in a {
-      for rb in b {
-        if ra.overlaps(rb, block_order) {
-          return true
-        }
+  fn core_point(point : ProgPoint) -> @core_regalloc.ProgramPoint {
+    let pos = match point.pos {
+      Before => 0
+      After => 1
+    }
+    @core_regalloc.ProgramPoint::new(point.block, point.inst * 2 + pos)
+  }
+
+  fn core_range(span : ProgPointRange) -> @core_regalloc.ProgramRange {
+    @core_regalloc.ProgramRange::new(
+      core_point(span.start),
+      core_point(span.end),
+    )
+  }
+
+  fn core_block_order(block_order : FixedArray[Int]) -> Array[Int] {
+    let out : Array[Int] = []
+    for i in 0..<block_order.length() {
+      out.push(block_order[i])
+    }
+    out
+  }
+
+  fn remap_lookup(
+    remaps : Array[@core_regalloc.SpillSlotRemap],
+    old_slot : Int,
+  ) -> Int? {
+    for remap in remaps {
+      if remap.old_slot == old_slot {
+        return Some(remap.new_slot)
       }
     }
-    false
-  }
-
-  fn compute_start(
-    spans : Array[ProgPointRange],
-    block_order : FixedArray[Int],
-  ) -> ProgPoint {
-    let mut s = spans[0].start
-    for i in 1..<spans.length() {
-      let p = spans[i].start
-      if p.compare_with_order(s, block_order) < 0 {
-        s = p
-      }
-    }
-    s
-  }
-
-  fn add_no_share_edge(
-    no_share : Map[Int, Set[Int]],
-    a : Int,
-    b : Int,
-  ) -> Unit {
-    if a == b {
-      return
-    }
-    if no_share.get(a) is None {
-      no_share.set(a, Set([]))
-    }
-    no_share.get(a).unwrap().add(b) |> ignore
+    None
   }
 
   // 1) Build spillsets keyed by the old spill-slot id.
-  let spillsets_by_slot : Map[Int, SpillSetInfo] = {}
+  let spillsets_by_slot : Map[Int, @core_regalloc.CompactSpillSet] = {}
   for vreg_id, old_slot in result.spill_slots {
     let range = match self.ranges.get_by_vreg(vreg_id) {
       Some(r) => r
@@ -1667,58 +1645,41 @@ fn BacktrackingAllocator::compact_spill_slots(
     let info = match spillsets_by_slot.get(old_slot) {
       Some(existing) => existing
       None => {
-        // Initialize with a dummy start; we fill it after collecting spans.
-        let dummy = range.ranges[0].start
-        let created : SpillSetInfo = {
+        let created : @core_regalloc.CompactSpillSet = {
           old_slot,
-          reg_class: range.vreg.class,
-          spans: [],
-          start: dummy,
+          class: core_class(range.vreg.class),
+          ranges: [],
         }
         spillsets_by_slot.set(old_slot, created)
         created
       }
     }
     // Sanity: a spill slot should not mix register classes.
-    if info.reg_class != range.vreg.class {
+    if info.class != core_class(range.vreg.class) {
       abort(
-        "spill slot \{old_slot} mixes classes: \{info.reg_class} vs \{range.vreg.class}",
+        "spill slot \{old_slot} mixes classes while compacting \{range.vreg.class}",
       )
     }
     for span in range.ranges {
-      info.spans.push(span)
+      info.ranges.push(core_range(span))
     }
   }
   if spillsets_by_slot.is_empty() {
     return 0
   }
 
-  // 2) Materialize spillsets and sort by start (linear-scan-friendly).
-  let spillsets : Array[SpillSetInfo] = []
+  let spillsets : Array[@core_regalloc.CompactSpillSet] = []
   for _, info in spillsets_by_slot {
-    // Skip empty (should not happen).
-    if info.spans.is_empty() {
-      continue
-    }
-    let start = compute_start(info.spans, self.ranges.block_order)
-    spillsets.push({
-      old_slot: info.old_slot,
-      reg_class: info.reg_class,
-      spans: info.spans,
-      start,
-    })
+    spillsets.push(info)
   }
-  spillsets.sort_by(fn(a, b) {
-    a.start.compare_with_order(b.start, self.ranges.block_order)
-  })
 
-  // 2.5) Build anti-coalesce constraints for block-arg edge copies.
+  // 2) Build anti-coalesce constraints for block-arg edge copies.
   //
   // Any spilled values participating in the same edge-parallel-copy must keep
   // distinct spill slots after compaction. Otherwise, compaction can collapse
   // logically distinct values onto one stack location at the jump boundary and
   // break SSA block-arg semantics.
-  let no_share : Map[Int, Set[Int]] = {}
+  let no_share_edges : Array[@core_regalloc.SpillSlotNoShareEdge] = []
   let block_id_to_index : Map[Int, Int] = {}
   for i, block in self.func.blocks {
     block_id_to_index.set(block.id, i)
@@ -1749,65 +1710,21 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
       for i in 0..<slots.length() {
         for j in (i + 1)..<slots.length() {
-          add_no_share_edge(no_share, slots[i], slots[j])
-          add_no_share_edge(no_share, slots[j], slots[i])
+          no_share_edges.push({ lhs: slots[i], rhs: slots[j] })
         }
       }
     }
   }
 
-  // 3) Assign spillsets to a compact set of physical spill slots.
-  let scalar_slots : Array[AssignedSlot] = []
-  let vector_slots : Array[AssignedSlot] = []
-  let slot_remap : Map[Int, Int] = {}
-  let mut next_slot = 0
-  for ss in spillsets {
-    let used = slots_used(ss.reg_class)
-    let pool = if used == 2 { vector_slots } else { scalar_slots }
-    let mut placed = false
-    for slot in pool {
-      let mut edge_conflict = false
-      if no_share.get(ss.old_slot) is Some(disallowed) {
-        for existing_old_slot in slot.old_slots {
-          if disallowed.contains(existing_old_slot) {
-            edge_conflict = true
-            break
-          }
-        }
-      }
-      if !edge_conflict &&
-        !spans_overlap(ss.spans, slot.spans, self.ranges.block_order) {
-        slot_remap.set(ss.old_slot, slot.start)
-        // Extend occupancy for future overlap checks.
-        for span in ss.spans {
-          slot.spans.push(span)
-        }
-        slot.old_slots.push(ss.old_slot)
-        placed = true
-        break
-      }
-    }
-    if placed {
-      continue
-    }
+  let compaction = @core_regalloc.compact_spill_slots(
+    spillsets,
+    no_share_edges,
+    core_block_order(self.ranges.block_order),
+  )
 
-    // Allocate a fresh slot (respect vector alignment).
-    if used == 2 && next_slot % 2 != 0 {
-      next_slot += 1
-    }
-    let new_slot = next_slot
-    next_slot += used
-    let new_spans : Array[ProgPointRange] = []
-    for span in ss.spans {
-      new_spans.push(span)
-    }
-    pool.push({ start: new_slot, spans: new_spans, old_slots: [ss.old_slot] })
-    slot_remap.set(ss.old_slot, new_slot)
-  }
-
-  // 4) Rewrite all spill-slot references (spill map + constraint edits).
+  // 3) Rewrite all spill-slot references (spill map + constraint edits).
   for vreg_id, old_slot in result.spill_slots {
-    if slot_remap.get(old_slot) is Some(new_slot) {
+    if remap_lookup(compaction.remaps, old_slot) is Some(new_slot) {
       result.spill_slots.set(vreg_id, new_slot)
     }
   }
@@ -1817,7 +1734,7 @@ fn BacktrackingAllocator::compact_spill_slots(
       let mv = edits.before[i]
       let from = match mv.from {
         Spill(s) =>
-          match slot_remap.get(s) {
+          match remap_lookup(compaction.remaps, s) {
             Some(ns) => Loc::Spill(ns)
             None => mv.from
           }
@@ -1825,7 +1742,7 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
       let to = match mv.to {
         Spill(s) =>
-          match slot_remap.get(s) {
+          match remap_lookup(compaction.remaps, s) {
             Some(ns) => Loc::Spill(ns)
             None => mv.to
           }
@@ -1837,7 +1754,7 @@ fn BacktrackingAllocator::compact_spill_slots(
       let mv = edits.after[i]
       let from = match mv.from {
         Spill(s) =>
-          match slot_remap.get(s) {
+          match remap_lookup(compaction.remaps, s) {
             Some(ns) => Loc::Spill(ns)
             None => mv.from
           }
@@ -1845,7 +1762,7 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
       let to = match mv.to {
         Spill(s) =>
-          match slot_remap.get(s) {
+          match remap_lookup(compaction.remaps, s) {
             Some(ns) => Loc::Spill(ns)
             None => mv.to
           }
@@ -1855,8 +1772,8 @@ fn BacktrackingAllocator::compact_spill_slots(
     }
   }
 
-  // 5) Return total spill-slot count.
-  next_slot
+  // 4) Return total spill-slot count.
+  compaction.total_slots
 }
 
 ///|

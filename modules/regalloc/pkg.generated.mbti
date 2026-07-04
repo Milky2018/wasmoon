@@ -10,6 +10,8 @@ pub fn allocate(Program) -> Allocation
 
 pub fn build_live_ranges(Program) -> LiveRangeSet
 
+pub fn compact_spill_slots(Array[CompactSpillSet], Array[SpillSlotNoShareEdge], Array[Int]) -> SpillSlotCompaction
+
 pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
@@ -61,6 +63,12 @@ pub(all) struct Block {
 pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
 pub fn Block::new(Int) -> Self
+
+pub(all) struct CompactSpillSet {
+  old_slot : Int
+  class : RegClass
+  ranges : Array[ProgramRange]
+} derive(@debug.Debug)
 
 pub(all) struct Instruction {
   id : Int
@@ -206,6 +214,21 @@ pub(all) struct RematUseInfo {
   vreg : VirtualReg
   block_id : Int
   inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotCompaction {
+  remaps : Array[SpillSlotRemap]
+  total_slots : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotNoShareEdge {
+  lhs : Int
+  rhs : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotRemap {
+  old_slot : Int
+  new_slot : Int
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SpillSlotReservation {

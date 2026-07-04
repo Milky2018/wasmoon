@@ -246,6 +246,66 @@ test "plan cross-block rematerialization clones once per use block" {
 }
 
 ///|
+test "compact spill slots reuses non-overlapping scalar slots" {
+  let a = ProgramRange::new(ProgramPoint::new(0, 0), ProgramPoint::new(0, 2))
+  let b = ProgramRange::new(ProgramPoint::new(0, 2), ProgramPoint::new(0, 4))
+  let c = ProgramRange::new(ProgramPoint::new(0, 1), ProgramPoint::new(0, 3))
+  let result = compact_spill_slots(
+    [
+      { old_slot: 0, class: Int, ranges: [a] },
+      { old_slot: 1, class: Int, ranges: [b] },
+      { old_slot: 2, class: Float, ranges: [c] },
+    ],
+    [],
+    [0],
+  )
+  debug_inspect(
+    result,
+    content=(
+      #|{
+      #|  remaps: [
+      #|    { old_slot: 0, new_slot: 0 },
+      #|    { old_slot: 1, new_slot: 0 },
+      #|    { old_slot: 2, new_slot: 1 },
+      #|  ],
+      #|  total_slots: 2,
+      #|}
+    ),
+  )
+}
+
+///|
+test "compact spill slots honors vector alignment and no-share edges" {
+  let full = ProgramRange::new(ProgramPoint::new(0, 0), ProgramPoint::new(0, 5))
+  let later = ProgramRange::new(
+    ProgramPoint::new(0, 5),
+    ProgramPoint::new(0, 7),
+  )
+  let result = compact_spill_slots(
+    [
+      { old_slot: 0, class: Int, ranges: [full] },
+      { old_slot: 1, class: Vector, ranges: [later] },
+      { old_slot: 3, class: Vector, ranges: [later] },
+    ],
+    [{ lhs: 1, rhs: 3 }],
+    [0],
+  )
+  debug_inspect(
+    result,
+    content=(
+      #|{
+      #|  remaps: [
+      #|    { old_slot: 0, new_slot: 0 },
+      #|    { old_slot: 1, new_slot: 2 },
+      #|    { old_slot: 3, new_slot: 4 },
+      #|  ],
+      #|  total_slots: 6,
+      #|}
+    ),
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
