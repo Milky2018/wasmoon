@@ -202,6 +202,28 @@ test "linear scan can use fixed registers outside the allocatable pool" {
 }
 
 ///|
+test "plan long-distance rematerialization clones by pure use positions" {
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let defs : Array[RematDefInfo] = [{ vreg: v0, block_id: 0, inst_index: 0 }]
+  let uses : Array[RematUseInfo] = [
+    { vreg: v0, block_id: 0, inst_index: 2 },
+    { vreg: v0, block_id: 0, inst_index: 4 },
+    { vreg: v0, block_id: 1, inst_index: 8 },
+    { vreg: v0, block_id: 0, inst_index: 9 },
+  ]
+  let plan = plan_long_distance_rematerializations(
+    defs,
+    uses,
+    min_distance=4,
+    per_vreg_clone_cap=1,
+  )
+  debug_inspect(
+    plan,
+    content="[{ vreg: { id: 0, class: Int }, block_id: 0, inst_index: 4 }]",
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

@@ -16,6 +16,8 @@ pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> A
 
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
+pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
+
 pub fn raise_scratch_register_unavailable(message~ : String) -> Unit raise VerifyError
 
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
@@ -178,6 +180,24 @@ pub(all) struct ReloadUseInfo {
   inst_index : Int
   spill_slot : Int
   vreg : VirtualReg
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematCloneInfo {
+  vreg : VirtualReg
+  block_id : Int
+  inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematDefInfo {
+  vreg : VirtualReg
+  block_id : Int
+  inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematUseInfo {
+  vreg : VirtualReg
+  block_id : Int
+  inst_index : Int
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SpillSlotReservation {
