@@ -25,3 +25,48 @@ pub fn compute_block_point_bases(
   }
   block_point_base
 }
+
+///|
+pub fn lower_bound_sorted_int(values : Array[Int], target : Int) -> Int {
+  let mut lo = 0
+  let mut hi = values.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    if values[mid] < target {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+///|
+pub fn upper_bound_sorted_int(values : Array[Int], target : Int) -> Int {
+  let mut lo = 0
+  let mut hi = values.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    if values[mid] <= target {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+///|
+pub fn count_sorted_ints_in_open_range(
+  values : Array[Int],
+  start : Int,
+  end : Int,
+) -> Int {
+  let first_after_start = upper_bound_sorted_int(values, start)
+  let first_at_or_after_end = lower_bound_sorted_int(values, end)
+  if first_after_start < first_at_or_after_end {
+    first_at_or_after_end - first_after_start
+  } else {
+    0
+  }
+}

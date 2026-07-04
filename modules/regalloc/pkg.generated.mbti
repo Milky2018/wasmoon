@@ -34,6 +34,8 @@ pub fn compute_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int
 
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
+pub fn count_sorted_ints_in_open_range(Array[Int], Int, Int) -> Int
+
 pub fn eviction_cutoff(Int?, Int?) -> Int?
 
 pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
@@ -41,6 +43,8 @@ pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgram
 pub fn insert_allocated_spans(Array[AllocatedProgramSpan], Int, Array[OrderedProgramSpan]) -> Array[AllocatedProgramSpan]
 
 pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
+
+pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
 
 pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
 
@@ -81,6 +85,8 @@ pub fn should_force_spill_for_class_and_call(RegClass, Bool) -> Bool
 pub fn should_take_eviction_candidate(Int?, PhysicalReg?, Int, PhysicalReg, PhysicalReg?) -> Bool
 
 pub fn should_take_split_candidate(Int?, ProgramPoint?, Int, ProgramPoint, Array[Int]) -> Bool
+
+pub fn upper_bound_sorted_int(Array[Int], Int) -> Int
 
 pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
 

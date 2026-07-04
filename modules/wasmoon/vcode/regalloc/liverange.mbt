@@ -494,51 +494,14 @@ pub fn build_live_ranges(
       c_calls_per_block_order[ord],
     )
   }
-  fn upper_bound_call_points(
-    point_orders : Array[Int],
-    point_ord : Int,
-  ) -> Int {
-    let mut lo = 0
-    let mut hi = point_orders.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if point_orders[mid] <= point_ord {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    lo
-  }
-
-  fn lower_bound_call_points(
-    point_orders : Array[Int],
-    point_ord : Int,
-  ) -> Int {
-    let mut lo = 0
-    let mut hi = point_orders.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if point_orders[mid] < point_ord {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    lo
-  }
   fn count_call_points_in_range(
     point_orders : Array[Int],
     start_ord : Int,
     end_ord : Int,
   ) -> Int {
-    let first_after_start = upper_bound_call_points(point_orders, start_ord)
-    let first_at_or_after_end = lower_bound_call_points(point_orders, end_ord)
-    if first_after_start < first_at_or_after_end {
-      first_at_or_after_end - first_after_start
-    } else {
-      0
-    }
+    @core_regalloc.count_sorted_ints_in_open_range(
+      point_orders, start_ord, end_ord,
+    )
   }
   fn point_after(point : ProgPoint, block_len : Int) -> ProgPoint {
     match point.pos {
@@ -945,10 +908,10 @@ pub fn build_live_ranges(
             }
           }
           if !used_block_fast_path {
-            let first_after_start = upper_bound_call_points(
+            let first_after_start = @core_regalloc.upper_bound_sorted_int(
               call_prog_point_orders, span_start_ord,
             )
-            let first_at_or_after_end = lower_bound_call_points(
+            let first_at_or_after_end = @core_regalloc.lower_bound_sorted_int(
               call_prog_point_orders, span_end_ord,
             )
             if first_after_start < first_at_or_after_end {

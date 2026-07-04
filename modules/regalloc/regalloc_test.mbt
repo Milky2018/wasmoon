@@ -165,6 +165,16 @@ test "build dense CFG edges from sparse block ids" {
 }
 
 ///|
+test "count sorted integer points in open range" {
+  let points = [2, 4, 4, 8, 10]
+  inspect(lower_bound_sorted_int(points, 4), content="1")
+  inspect(upper_bound_sorted_int(points, 4), content="3")
+  inspect(count_sorted_ints_in_open_range(points, 4, 10), content="1")
+  inspect(count_sorted_ints_in_open_range(points, 1, 11), content="5")
+  inspect(count_sorted_ints_in_open_range(points, 10, 12), content="0")
+}
+
+///|
 test "compute dense live sets over reusable CFG model" {
   let cfg : DenseCfgEdges = { preds: [[], [0], [1]], succs: [[1], [2], []] }
   let live_sets = compute_dense_live_sets(3, 2, cfg, [
