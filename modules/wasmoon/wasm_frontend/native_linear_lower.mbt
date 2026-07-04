@@ -1221,12 +1221,15 @@ fn append_linear_block_body(
         if !append_linear_block_body(out, nested) {
           return false
         }
+      Loop(_, nested) =>
+        if !append_linear_block_body(out, nested) {
+          return false
+        }
       Br(_)
       | BrIf(_)
       | BrTable(_, _)
       | BrOnNull(_)
       | BrOnNonNull(_)
-      | Loop(_, _)
       | TryTable(_, _, _) =>
         // TODO(ISS-023): lower structured labels and branch stack effects
         // directly instead of using the legacy translator bridge.

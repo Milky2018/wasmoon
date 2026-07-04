@@ -86,6 +86,23 @@ test "lower branchless blocks through native linear fast path" {
 }
 
 ///|
+test "lower branchless loop through native linear fast path" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [Loop(Value(I32), [LocalGet(0), I32Const(1), I32Add])],
+    "branchless_loop",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("iadd"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "try lower native function does not use legacy fallback" {
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
   let linear = @types.Module::simple(
@@ -100,8 +117,18 @@ test "try lower native function does not use legacy fallback" {
     [Block(Empty, [Br(0)])],
     "structured_branch",
   )
+  let loop_branch = @types.Module::simple(
+    [],
+    [],
+    [Loop(Empty, [Br(0)])],
+    "loop_branch",
+  )
   inspect(try_lower_native_function(env, linear, 0) is Some(_), content="true")
   inspect(try_lower_native_function(env, structured, 0) is None, content="true")
+  inspect(
+    try_lower_native_function(env, loop_branch, 0) is None,
+    content="true",
+  )
 }
 
 ///|
