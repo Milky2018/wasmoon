@@ -30,6 +30,8 @@ pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
+pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
+
 pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
 
 // Errors
@@ -71,6 +73,13 @@ pub(all) struct CompactSpillSet {
   class : RegClass
   ranges : Array[ProgramRange]
 } derive(@debug.Debug)
+
+pub(all) struct ConflictScanResult {
+  conflict_ids : Array[Int]
+  max_conflict_weight : Int
+  first_conflict_point : ProgramPoint?
+  rejected : Bool
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Instruction {
   id : Int
@@ -118,6 +127,13 @@ pub(all) enum Location {
   Spill(Int)
 } derive(Eq, @debug.Debug)
 
+pub(all) struct OccupiedProgramSpan {
+  owner_id : Int
+  span : OrderedProgramSpan
+  owner_weight : Int
+  owner_pinned : Bool
+} derive(Eq, @debug.Debug)
+
 pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
@@ -138,6 +154,12 @@ pub(all) enum OperandRole {
   Use
   Def
   UseDef
+} derive(Eq, @debug.Debug)
+
+pub(all) struct OrderedProgramSpan {
+  start : ProgramPoint
+  start_ord : Int
+  end_ord : Int
 } derive(Eq, @debug.Debug)
 
 pub(all) struct ParallelMove {

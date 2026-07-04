@@ -106,9 +106,6 @@ struct BacktrackingAllocator {
 
   // Reference to function for constraint lookups
   func : VCodeFunction
-  // Per-allocation-query seen markers for conflict dedup (bundle-id indexed).
-  conflict_seen_epoch : Array[Int]
-  mut conflict_epoch : Int
   bundle_attempts : Array[Int]
   scratch_conflicts : Array[Int]
   scratch_best_conflicts : Array[Int]
@@ -290,8 +287,6 @@ pub fn BacktrackingAllocator::new(
     loop_depths,
     block_point_base,
     func,
-    conflict_seen_epoch: Array::make(bundles.length(), 0),
-    conflict_epoch: 0,
     bundle_attempts: Array::make(bundles.length(), 0),
     scratch_conflicts: [],
     scratch_best_conflicts: [],
@@ -779,64 +774,71 @@ fn BacktrackingAllocator::scan_conflicts_with_cutoff(
   conflicts : Array[Int],
 ) -> (Int, ProgPoint?, Bool) {
   conflicts.clear()
-  self.conflict_epoch = self.conflict_epoch + 1
-  let seen_epoch = self.conflict_epoch
-  let mut max_conflict_weight = 0
-  let mut first_conflict_point : ProgPoint? = None
   let allocs = self.get_reg_allocs(preg.class)
   if preg.index < 0 || preg.index >= allocs.length() {
-    return (max_conflict_weight, first_conflict_point, false)
+    return (0, None, false)
   }
   let occupied = allocs[preg.index]
   if occupied.is_empty() || spans.is_empty() {
-    return (max_conflict_weight, first_conflict_point, false)
+    return (0, None, false)
   }
-  let mut i = 0
-  let mut j = self.occupied_lower_bound_by_end(occupied, spans[0].start_ord)
-  while i < spans.length() && j < occupied.length() {
-    let span = spans[i]
-    let occ = occupied[j].1
-    if span.end_ord <= occ.start_ord {
-      i = i + 1
-      continue
+
+  fn core_point(point : ProgPoint) -> @core_regalloc.ProgramPoint {
+    let pos = match point.pos {
+      Before => 0
+      After => 1
     }
-    if occ.end_ord <= span.start_ord {
-      j = j + 1
-      continue
+    @core_regalloc.ProgramPoint::new(point.block, point.inst * 2 + pos)
+  }
+
+  fn core_span(span : OrderedSpan) -> @core_regalloc.OrderedProgramSpan {
+    {
+      start: core_point(span.start),
+      start_ord: span.start_ord,
+      end_ord: span.end_ord,
     }
-    if first_conflict_point is None {
-      first_conflict_point = Some(
-        if span.start_ord >= occ.start_ord {
-          span.start
-        } else {
-          occ.start
-        },
-      )
-    }
-    let other_id = occupied[j].0
-    if self.conflict_seen_epoch[other_id] != seen_epoch {
-      self.conflict_seen_epoch[other_id] = seen_epoch
-      let other = self.bundles.get(other_id)
-      if other.is_pinned || other.spill_weight >= bundle.spill_weight {
-        conflicts.clear()
-        return (0, first_conflict_point, true)
-      }
-      conflicts.push(other_id)
-      if other.spill_weight > max_conflict_weight {
-        max_conflict_weight = other.spill_weight
-        if max_allowable_cost is Some(limit) && max_conflict_weight > limit {
-          conflicts.clear()
-          return (0, first_conflict_point, true)
-        }
-      }
-    }
-    if span.end_ord <= occ.end_ord {
-      i = i + 1
+  }
+
+  fn old_point(point : @core_regalloc.ProgramPoint) -> ProgPoint {
+    let pos = if point.inst % 2 == 0 { Before } else { After }
+    { block: point.block, inst: point.inst / 2, pos }
+  }
+
+  let core_spans : Array[@core_regalloc.OrderedProgramSpan] = []
+  for span in spans {
+    core_spans.push(core_span(span))
+  }
+  let core_occupied : Array[@core_regalloc.OccupiedProgramSpan] = []
+  for entry in occupied {
+    let (owner_id, span) = entry
+    if owner_id >= 0 && owner_id < self.bundles.length() {
+      let other = self.bundles.get(owner_id)
+      core_occupied.push({
+        owner_id,
+        span: core_span(span),
+        owner_weight: other.spill_weight,
+        owner_pinned: other.is_pinned,
+      })
     } else {
-      j = j + 1
+      core_occupied.push({
+        owner_id,
+        span: core_span(span),
+        owner_weight: bundle.spill_weight,
+        owner_pinned: true,
+      })
     }
   }
-  (max_conflict_weight, first_conflict_point, false)
+  let result = @core_regalloc.scan_conflicts_with_cutoff(
+    core_spans,
+    core_occupied,
+    bundle.spill_weight,
+    max_allowable_cost,
+  )
+  for id in result.conflict_ids {
+    conflicts.push(id)
+  }
+  let first_conflict_point = result.first_conflict_point.map(old_point)
+  (result.max_conflict_weight, first_conflict_point, result.rejected)
 }
 
 ///|
@@ -1076,7 +1078,6 @@ fn BacktrackingAllocator::split_bundle(
         before_bundle,
       )
       self.bundles.add_bundle(before_bundle)
-      self.conflict_seen_epoch.push(0)
       self.queue_hints.push(None)
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
@@ -1106,7 +1107,6 @@ fn BacktrackingAllocator::split_bundle(
         after_bundle,
       )
       self.bundles.add_bundle(after_bundle)
-      self.conflict_seen_epoch.push(0)
       self.queue_hints.push(None)
       self.queue_in_heap.push(false)
       self.bundle_attempts.push(0)
@@ -1155,7 +1155,6 @@ fn BacktrackingAllocator::enqueue_single_range_bundle(
   new_bundle.prio = new_bundle.total_length(self.ranges)
   new_bundle.spill_weight = self.recompute_bundle_spill_weight(new_bundle)
   self.bundles.add_bundle(new_bundle)
-  self.conflict_seen_epoch.push(0)
   self.queue_hints.push(None)
   self.queue_in_heap.push(false)
   self.bundle_attempts.push(0)

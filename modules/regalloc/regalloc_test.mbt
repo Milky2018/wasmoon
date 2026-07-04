@@ -352,6 +352,78 @@ test "choose fixed register hint by frequency and low-id tie break" {
 }
 
 ///|
+test "scan conflicts reports evictable owners and first conflict point" {
+  let span : OrderedProgramSpan = {
+    start: ProgramPoint::new(0, 1),
+    start_ord: 10,
+    end_ord: 30,
+  }
+  let occupied : Array[OccupiedProgramSpan] = [
+    {
+      owner_id: 7,
+      span: { start: ProgramPoint::new(0, 0), start_ord: 0, end_ord: 12 },
+      owner_weight: 2,
+      owner_pinned: false,
+    },
+    {
+      owner_id: 8,
+      span: { start: ProgramPoint::new(0, 2), start_ord: 20, end_ord: 40 },
+      owner_weight: 5,
+      owner_pinned: false,
+    },
+  ]
+  let result = scan_conflicts_with_cutoff([span], occupied, 9, None)
+  debug_inspect(
+    result,
+    content=(
+      #|{
+      #|  conflict_ids: [7, 8],
+      #|  max_conflict_weight: 5,
+      #|  first_conflict_point: Some({ block: 0, inst: 1 }),
+      #|  rejected: false,
+      #|}
+    ),
+  )
+}
+
+///|
+test "scan conflicts rejects pinned and cutoff conflicts" {
+  let span : OrderedProgramSpan = {
+    start: ProgramPoint::new(0, 0),
+    start_ord: 0,
+    end_ord: 20,
+  }
+  let pinned = scan_conflicts_with_cutoff(
+    [span],
+    [
+      {
+        owner_id: 1,
+        span: { start: ProgramPoint::new(0, 1), start_ord: 5, end_ord: 10 },
+        owner_weight: 1,
+        owner_pinned: true,
+      },
+    ],
+    9,
+    None,
+  )
+  inspect(pinned.rejected, content="true")
+  let cutoff = scan_conflicts_with_cutoff(
+    [span],
+    [
+      {
+        owner_id: 2,
+        span: { start: ProgramPoint::new(0, 1), start_ord: 5, end_ord: 10 },
+        owner_weight: 6,
+        owner_pinned: false,
+      },
+    ],
+    9,
+    Some(4),
+  )
+  inspect(cutoff.rejected, content="true")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
