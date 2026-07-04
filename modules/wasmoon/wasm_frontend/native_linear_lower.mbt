@@ -796,6 +796,155 @@ fn push_simple_expr_value(
 }
 
 ///|
+fn push_simple_expr_instr(
+  builder : @milkir.IRBuilder,
+  locals : Array[@milkir.Value],
+  expr_stack : Array[@milkir.Value],
+  instr : @types.Instruction,
+) -> Bool {
+  match instr {
+    LocalGet(idx) =>
+      if idx >= 0 && idx < locals.length() {
+        expr_stack.push(locals[idx])
+        true
+      } else {
+        false
+      }
+    I32Const(value) => {
+      expr_stack.push(builder.iconst_i32(value))
+      true
+    }
+    I64Const(value) => {
+      expr_stack.push(builder.iconst_i64(value))
+      true
+    }
+    F32Const(value) => {
+      expr_stack.push(builder.fconst_f32(value))
+      true
+    }
+    F64Const(value) => {
+      expr_stack.push(builder.fconst_f64(value))
+      true
+    }
+    RefNull(ref_type) => {
+      guard push_simple_expr_value(builder, locals, RefNull(ref_type))
+        is Some(value) else {
+        return false
+      }
+      expr_stack.push(value)
+      true
+    }
+    I32Add | I64Add =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) })
+    I32Sub | I64Sub =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.isub(lhs, rhs) })
+    I32Mul | I64Mul =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
+    I32And | I64And => push_binary_opcode(builder, expr_stack, Band)
+    I32Or | I64Or => push_binary_opcode(builder, expr_stack, Bor)
+    I32Xor | I64Xor => push_binary_opcode(builder, expr_stack, Bxor)
+    I32Shl | I64Shl => push_binary_opcode(builder, expr_stack, Ishl)
+    I32ShrS | I64ShrS => push_binary_opcode(builder, expr_stack, Sshr)
+    I32ShrU | I64ShrU => push_binary_opcode(builder, expr_stack, Ushr)
+    I32Rotl | I64Rotl => push_binary_opcode(builder, expr_stack, Rotl)
+    I32Rotr | I64Rotr => push_binary_opcode(builder, expr_stack, Rotr)
+    I32Clz | I64Clz => push_unary_opcode(builder, expr_stack, Clz)
+    I32Ctz | I64Ctz => push_unary_opcode(builder, expr_stack, Ctz)
+    I32Popcnt | I64Popcnt => push_unary_opcode(builder, expr_stack, Popcnt)
+    I32Eqz => {
+      guard pop_value(expr_stack) is Some(value) else { return false }
+      expr_stack.push(builder.icmp_eq(value, builder.iconst_i32(0)))
+      true
+    }
+    I64Eqz => {
+      guard pop_value(expr_stack) is Some(value) else { return false }
+      expr_stack.push(builder.icmp_eq(value, builder.iconst_i64(0L)))
+      true
+    }
+    I32Eq | I64Eq => push_int_cmp(builder, expr_stack, Eq)
+    I32Ne | I64Ne => push_int_cmp(builder, expr_stack, Ne)
+    I32LtS | I64LtS => push_int_cmp(builder, expr_stack, Slt)
+    I32LtU | I64LtU => push_int_cmp(builder, expr_stack, Ult)
+    I32GtS | I64GtS => push_int_cmp(builder, expr_stack, Sgt)
+    I32GtU | I64GtU => push_int_cmp(builder, expr_stack, Ugt)
+    I32LeS | I64LeS => push_int_cmp(builder, expr_stack, Sle)
+    I32LeU | I64LeU => push_int_cmp(builder, expr_stack, Ule)
+    I32GeS | I64GeS => push_int_cmp(builder, expr_stack, Sge)
+    I32GeU | I64GeU => push_int_cmp(builder, expr_stack, Uge)
+    F32Add | F64Add =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.fadd(lhs, rhs) })
+    F32Sub | F64Sub =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.fsub(lhs, rhs) })
+    F32Mul | F64Mul =>
+      push_binary(expr_stack, fn(lhs, rhs) { builder.fmul(lhs, rhs) })
+    F32Div | F64Div => push_binary_opcode(builder, expr_stack, Fdiv)
+    F32Min | F64Min => push_binary_opcode(builder, expr_stack, Fmin)
+    F32Max | F64Max => push_binary_opcode(builder, expr_stack, Fmax)
+    F32Neg | F64Neg => push_unary_opcode(builder, expr_stack, Fneg)
+    F32Abs | F64Abs => push_unary_opcode(builder, expr_stack, Fabs)
+    F32Sqrt | F64Sqrt => push_unary_opcode(builder, expr_stack, Fsqrt)
+    F32Ceil | F64Ceil => push_unary_opcode(builder, expr_stack, Fceil)
+    F32Floor | F64Floor => push_unary_opcode(builder, expr_stack, Ffloor)
+    F32Trunc | F64Trunc => push_unary_opcode(builder, expr_stack, Ftrunc)
+    F32Nearest | F64Nearest => push_unary_opcode(builder, expr_stack, Fnearest)
+    F32Eq | F64Eq => push_float_cmp(builder, expr_stack, Eq)
+    F32Ne | F64Ne => push_float_cmp(builder, expr_stack, Ne)
+    F32Lt | F64Lt => push_float_cmp(builder, expr_stack, Lt)
+    F32Gt | F64Gt => push_float_cmp(builder, expr_stack, Gt)
+    F32Le | F64Le => push_float_cmp(builder, expr_stack, Le)
+    F32Ge | F64Ge => push_float_cmp(builder, expr_stack, Ge)
+    I32WrapI64 => push_unary_opcode_as(builder, expr_stack, I32, Ireduce)
+    I64ExtendI32S => push_unary_opcode_as(builder, expr_stack, I64, Sextend)
+    I64ExtendI32U => push_unary_opcode_as(builder, expr_stack, I64, Uextend)
+    I32Extend8S => push_unary_opcode_as(builder, expr_stack, I32, Sextend8)
+    I32Extend16S => push_unary_opcode_as(builder, expr_stack, I32, Sextend16)
+    I64Extend8S => push_unary_opcode_as(builder, expr_stack, I64, Sextend8)
+    I64Extend16S => push_unary_opcode_as(builder, expr_stack, I64, Sextend16)
+    I64Extend32S => push_unary_opcode_as(builder, expr_stack, I64, Sextend32)
+    F32DemoteF64 => push_unary_opcode_as(builder, expr_stack, F32, Fdemote)
+    F64PromoteF32 => push_unary_opcode_as(builder, expr_stack, F64, Fpromote)
+    I32TruncSatF32S | I32TruncSatF64S =>
+      push_unary_opcode_as(builder, expr_stack, I32, FcvtToSintSat)
+    I32TruncSatF32U | I32TruncSatF64U =>
+      push_unary_opcode_as(builder, expr_stack, I32, FcvtToUintSat)
+    I64TruncSatF32S | I64TruncSatF64S =>
+      push_unary_opcode_as(builder, expr_stack, I64, FcvtToSintSat)
+    I64TruncSatF32U | I64TruncSatF64U =>
+      push_unary_opcode_as(builder, expr_stack, I64, FcvtToUintSat)
+    I32ReinterpretF32 => push_unary_opcode_as(builder, expr_stack, I32, Bitcast)
+    I64ReinterpretF64 => push_unary_opcode_as(builder, expr_stack, I64, Bitcast)
+    F32ReinterpretI32 => push_unary_opcode_as(builder, expr_stack, F32, Bitcast)
+    F64ReinterpretI64 => push_unary_opcode_as(builder, expr_stack, F64, Bitcast)
+    Select | SelectTyped(_) => push_select(builder, expr_stack)
+    Drop => {
+      guard pop_value(expr_stack) is Some(_) else { return false }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn push_simple_expr_body_value(
+  builder : @milkir.IRBuilder,
+  locals : Array[@milkir.Value],
+  body : Array[@types.Instruction],
+  expected_ty : @milkir.Type,
+) -> @milkir.Value? {
+  let expr_stack : Array[@milkir.Value] = []
+  for instr in body {
+    if !push_simple_expr_instr(builder, locals, expr_stack, instr) {
+      return None
+    }
+  }
+  if expr_stack.length() != 1 || expr_stack[0].ty != expected_ty {
+    None
+  } else {
+    Some(expr_stack[0])
+  }
+}
+
+///|
 fn push_simple_if_select(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -807,20 +956,14 @@ fn push_simple_if_select(
   guard single_block_result_type(block_type) is Some(result_ty) else {
     return false
   }
-  if then_body.length() != 1 || else_body.length() != 1 {
-    return false
-  }
   guard pop_value(stack) is Some(cond) else { return false }
-  guard push_simple_expr_value(builder, locals, then_body[0])
+  let expected_ty = wasm_value_type_to_milkir(result_ty)
+  guard push_simple_expr_body_value(builder, locals, then_body, expected_ty)
     is Some(true_value) else {
     return false
   }
-  guard push_simple_expr_value(builder, locals, else_body[0])
+  guard push_simple_expr_body_value(builder, locals, else_body, expected_ty)
     is Some(false_value) else {
-    return false
-  }
-  let expected_ty = wasm_value_type_to_milkir(result_ty)
-  if true_value.ty != expected_ty || false_value.ty != expected_ty {
     return false
   }
   // TODO(ISS-023): lower general structured `if` control flow with block

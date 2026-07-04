@@ -379,6 +379,32 @@ test "lower pure if into native MilkIR select" {
 }
 
 ///|
+test "lower pure if expression bodies into native MilkIR select" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [
+      LocalGet(0),
+      If(Value(I32), [LocalGet(0), I32Const(10), I32Add], [
+        LocalGet(0),
+        I32Const(1),
+        I32Shl,
+      ]),
+    ],
+    "select_expr_body",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("iadd"), content="true")
+  inspect(text.contains("ishl"), content="true")
+  inspect(text.contains("select"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower trap without wasm_frontend skeleton fallback" {
   let mod_ = @types.Module::simple([], [], [Unreachable], "trap")
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
