@@ -5,6 +5,9 @@ const VMCTX_FUNC_TABLE_OFFSET : Int = 24
 const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
 
 ///|
+const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
+
+///|
 const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
@@ -641,17 +644,40 @@ fn memory_index_type(
 fn push_memory_size(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
     return false
   }
-  guard emit_op(builder, result_ty, Custom("wasmoon.MemorySize(\{memidx})"), [])
-    is Some(result) else {
+  if memidx != 0 {
+    // TODO(ISS-023): move the full multi-memory descriptor layout into the
+    // reusable embedding ABI before lowering non-zero memory sizes natively.
     return false
   }
-  stack.push(result)
+  // TODO(ISS-023): source VMContext memory0 layout from the reusable
+  // embedding ABI instead of copy-first constants from legacy VCode lowering.
+  let size_bytes = builder.load_ptr(
+    I64,
+    context,
+    builder.iconst_i64(VMCTX_MEMORY0_SIZE_OFFSET.to_int64()),
+  )
+  let page_shift = builder.iconst_i64(
+    memory_types[memidx].page_size_log2.to_int64(),
+  )
+  guard emit_op(builder, I64, Ushr, [size_bytes, page_shift]) is Some(pages_i64) else {
+    return false
+  }
+  if result_ty == I64 {
+    stack.push(pages_i64)
+  } else {
+    guard emit_op(builder, I32, Ireduce, [pages_i64]) is Some(pages_i32) else {
+      return false
+    }
+    stack.push(pages_i32)
+  }
   true
 }
 
@@ -2018,7 +2044,7 @@ fn try_lower_linear_function(
           return None
         }
       MemorySize(memidx) =>
-        if !push_memory_size(builder, stack, memory_types, memidx) {
+        if !push_memory_size(builder, stack, vmctx, memory_types, memidx) {
           return None
         }
       MemoryGrow(memidx) =>
