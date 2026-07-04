@@ -1396,36 +1396,6 @@ test "liverange: basic operations" {
 }
 
 ///|
-/// Test UnionFind operations
-test "union_find: basic operations" {
-  let uf = @unionfind.UnionFind::new(5)
-
-  // Initially all separate
-  inspect(uf.num_sets(), content="5")
-
-  // Union 0 and 1
-  inspect(uf.union(0, 1), content="true")
-  inspect(uf.num_sets(), content="4")
-
-  // Union 2 and 3
-  inspect(uf.union(2, 3), content="true")
-  inspect(uf.num_sets(), content="3")
-
-  // Union 1 and 3 (connects {0,1} with {2,3})
-  inspect(uf.union(1, 3), content="true")
-  inspect(uf.num_sets(), content="2")
-
-  // Check same_set
-  inspect(uf.same_set(0, 2), content="true")
-  inspect(uf.same_set(0, 4), content="false")
-
-  // Get set members
-  let set_0 = uf.get_set(0)
-  set_0.sort_by(fn(a, b) { a - b })
-  debug_inspect(set_0, content="[0, 1, 2, 3]")
-}
-
-///|
 /// Test constraint reload coalescing - when same spill slot is needed in
 /// multiple registers, should load once and use moves
 test "constraint_reload_coalescing" {

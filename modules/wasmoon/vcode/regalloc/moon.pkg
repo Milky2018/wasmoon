@@ -16,6 +16,5 @@ import {
 }
 
 import {
-  "Milky2018/regalloc/unionfind",
   "moonbitlang/core/strconv",
 } for "wbtest"
