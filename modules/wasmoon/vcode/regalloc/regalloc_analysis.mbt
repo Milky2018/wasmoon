@@ -600,54 +600,35 @@ fn compute_live_sets(
 fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
+  let block_order_array : Array[Int] = []
+  let block_lengths : Array[Int] = []
+  for block_idx in 0..<func.blocks.length() {
+    block_order_array.push(block_order[block_idx])
+    block_lengths.push(func.blocks[block_idx].insts.length())
+  }
+  let block_point_base = @core_regalloc.compute_block_point_bases(
+    block_order_array, block_lengths,
+  )
+  fn point_order(point : ProgPoint) -> Int {
+    let block_ord = block_order[point.block]
+    let pos_ord = match point.pos {
+      Before => 0
+      After => 1
+    }
+    block_point_base[block_ord] + (point.inst + 1) * 2 + pos_ord
+  }
   let sorted_call_points = result.call_points.copy()
   sorted_call_points.sort_by(fn(a, b) {
-    a.0.compare_with_order(b.0, block_order)
+    point_order(a.0).compare(point_order(b.0))
   })
-  let call_prog_points : Array[ProgPoint] = []
+  let call_point_orders : Array[Int] = []
   let c_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
     let (call_point, call_conv) = entry
-    call_prog_points.push(call_point)
+    call_point_orders.push(point_order(call_point))
     let prev = c_call_prefix[c_call_prefix.length() - 1]
     let add = if call_conv is C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
-  }
-
-  fn upper_bound_call_points(
-    points : Array[ProgPoint],
-    point : ProgPoint,
-    block_order : FixedArray[Int],
-  ) -> Int {
-    let mut lo = 0
-    let mut hi = points.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if points[mid].compare_with_order(point, block_order) <= 0 {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    lo
-  }
-
-  fn lower_bound_call_points(
-    points : Array[ProgPoint],
-    point : ProgPoint,
-    block_order : FixedArray[Int],
-  ) -> Int {
-    let mut lo = 0
-    let mut hi = points.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if points[mid].compare_with_order(point, block_order) < 0 {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    lo
   }
 
   // Summarize liveness boundaries once:
@@ -728,16 +709,14 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
 
     // Check if this interval crosses any call point.
     // start < call_point < end (strict bounds).
-    if !call_prog_points.is_empty() {
-      let first_after_start = upper_bound_call_points(
-        call_prog_points,
-        interval.start,
-        block_order,
+    if !call_point_orders.is_empty() {
+      let first_after_start = @core_regalloc.upper_bound_sorted_int(
+        call_point_orders,
+        point_order(interval.start),
       )
-      let first_at_or_after_end = lower_bound_call_points(
-        call_prog_points,
-        interval.end,
-        block_order,
+      let first_at_or_after_end = @core_regalloc.lower_bound_sorted_int(
+        call_point_orders,
+        point_order(interval.end),
       )
       if first_after_start < first_at_or_after_end {
         interval.crosses_call = true
