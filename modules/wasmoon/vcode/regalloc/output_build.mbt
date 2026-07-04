@@ -128,47 +128,6 @@ fn add_used_reg_marks(
 }
 
 ///|
-fn active_reload_get(
-  active_reload_epoch : Array[Int],
-  active_reload_preg_idx : Array[Int],
-  slot : Int,
-  cls : @abi.RegClass,
-  epoch : Int,
-) -> @abi.PReg? {
-  if slot < 0 || slot >= active_reload_epoch.length() {
-    return None
-  }
-  if active_reload_epoch[slot] == epoch {
-    Some({ index: active_reload_preg_idx[slot], class: cls })
-  } else {
-    None
-  }
-}
-
-///|
-fn active_reload_set(
-  active_reload_epoch : Array[Int],
-  active_reload_preg_idx : Array[Int],
-  slot : Int,
-  preg : @abi.PReg,
-  epoch : Int,
-) -> Unit {
-  if slot < 0 || slot >= active_reload_epoch.length() {
-    return
-  }
-  active_reload_epoch[slot] = epoch
-  active_reload_preg_idx[slot] = preg.index
-}
-
-///|
-fn active_reload_clear(active_reload_epoch : Array[Int], slot : Int) -> Unit {
-  if slot < 0 || slot >= active_reload_epoch.length() {
-    return
-  }
-  active_reload_epoch[slot] = 0
-}
-
-///|
 fn pick_temp_preg(
   out : Output,
   isa : @isa.ISA,
@@ -423,10 +382,8 @@ fn build_output(
   let spill_def_tmp_epoch = Array::make(max_vreg_id, 0)
   let mut spill_tmp_epoch = 1
   let mut inst_edits_cursor = 0
-  let active_reload_epoch : Array[Int] = Array::make(alloc.num_spill_slots, 0)
-  let active_reload_preg_idx : Array[Int] = Array::make(
+  let active_reloads = @core_regalloc.ActiveReloadCache::new(
     alloc.num_spill_slots,
-    -1,
   )
   let mut block_reload_epoch = 0
   for block_id, block in func.blocks {
@@ -594,14 +551,8 @@ fn build_output(
             continue
           }
           // If the slot is currently active in a coalesced reload reg, reuse it.
-          if active_reload_get(
-              active_reload_epoch,
-              active_reload_preg_idx,
-              slot,
-              vreg.class,
-              reload_epoch,
-            )
-            is Some(rp) {
+          if active_reloads.get(slot, reload_epoch) is Some(preg_id) {
+            let rp : @abi.PReg = { index: preg_id, class: vreg.class }
             spill_use_tmp_epoch[vreg.id] = spill_epoch
             spill_use_tmp_idx[vreg.id] = rp.index
             continue
@@ -615,9 +566,7 @@ fn build_output(
               Before,
               Move(Spill(slot), Reg(rp), vreg.class),
             )
-            active_reload_set(
-              active_reload_epoch, active_reload_preg_idx, slot, rp, reload_epoch,
-            )
+            active_reloads.set(slot, rp.index, reload_epoch)
             spill_use_tmp_epoch[vreg.id] = spill_epoch
             spill_use_tmp_idx[vreg.id] = rp.index
             add_used_reg_marks(used_int_marks, used_fp_marks, epoch, rp)
@@ -722,7 +671,7 @@ fn build_output(
             )
           }
           // If this slot had an active reload register, it is now stale.
-          active_reload_clear(active_reload_epoch, slot)
+          active_reloads.clear(slot)
         }
       }
 
@@ -877,14 +826,8 @@ fn build_output(
               if spill_use_tmp_epoch[vreg.id] == spill_epoch {
                 continue
               }
-              if active_reload_get(
-                  active_reload_epoch,
-                  active_reload_preg_idx,
-                  slot,
-                  vreg.class,
-                  reload_epoch,
-                )
-                is Some(rp) {
+              if active_reloads.get(slot, reload_epoch) is Some(preg_id) {
+                let rp : @abi.PReg = { index: preg_id, class: vreg.class }
                 spill_use_tmp_epoch[vreg.id] = spill_epoch
                 spill_use_tmp_idx[vreg.id] = rp.index
                 continue

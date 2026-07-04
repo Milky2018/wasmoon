@@ -70,6 +70,15 @@ pub suberror VerifyError {
 }
 
 // Types and methods
+pub(all) struct ActiveReloadCache {
+  epoch : Array[Int]
+  preg_ids : Array[Int]
+} derive(@debug.Debug)
+pub fn ActiveReloadCache::clear(Self, Int) -> Unit
+pub fn ActiveReloadCache::get(Self, Int, Int) -> Int?
+pub fn ActiveReloadCache::new(Int) -> Self
+pub fn ActiveReloadCache::set(Self, Int, Int, Int) -> Unit
+
 pub(all) struct Allocation {
   assignments : Array[Assignment]
   mut spill_count : Int

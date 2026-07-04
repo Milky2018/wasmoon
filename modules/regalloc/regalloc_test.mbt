@@ -678,6 +678,19 @@ test "temp register choice rotates pool and steals with preserve slot" {
 }
 
 ///|
+test "active reload cache tracks block-local slot reloads" {
+  let cache = ActiveReloadCache::new(3)
+  debug_inspect(cache.get(1, 1), content="None")
+  cache.set(1, 7, 1)
+  debug_inspect(cache.get(1, 1), content="Some(7)")
+  debug_inspect(cache.get(1, 2), content="None")
+  cache.clear(1)
+  debug_inspect(cache.get(1, 1), content="None")
+  cache.set(4, 9, 1)
+  debug_inspect(cache.get(4, 1), content="None")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
