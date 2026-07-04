@@ -104,7 +104,12 @@ fn format_opcode(
     Load => "load \{ops}"
     Store => "store \{ops}"
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
+    LoadPtrNarrow(result_ty, bits, signed) => {
+      let suffix = if signed { "s" } else { "u" }
+      "load_ptr\{bits}\{suffix}.\{result_ty} \{ops}"
+    }
     StorePtr(ty) => "store_ptr.\{ty} \{ops}"
+    StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
     StackAddr(slot) => "stack_addr slot=\{slot.id}"
     Call(symbol) => "call \{symbol.name}(\{ops})"
     CallIndirect(_) => "call_indirect(\{ops})"

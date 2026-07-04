@@ -484,6 +484,35 @@ test "lower memory operations through Wasmoon-owned adapter opcodes" {
 }
 
 ///|
+test "lower narrow memory operations through native MilkIR pointer ops" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [
+        I32Const(0),
+        I32Const(0x1234),
+        I32Store16(0, 1, 2),
+        I32Const(1),
+        I32Load8S(0, 0, 2),
+      ],
+      "narrow_memory",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.LoadMemBase"), content="true")
+  inspect(text.contains("store_ptr16"), content="true")
+  inspect(text.contains("load_ptr8s.i32"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower memory grow size and bulk helpers as native custom ops" {
   let mod_ = {
     ..@types.Module::simple(

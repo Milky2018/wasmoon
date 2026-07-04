@@ -150,9 +150,21 @@ fn verify_inst(
       if inst.args.length() < 1 {
         raise ArityMismatch(message="load_ptr expects at least 1 operand")
       }
+    LoadPtrNarrow(_, _, _) =>
+      if inst.args.length() < 1 {
+        raise ArityMismatch(
+          message="load_ptr_narrow expects at least 1 operand",
+        )
+      }
     StorePtr(_) =>
       if inst.args.length() < 2 {
         raise ArityMismatch(message="store_ptr expects at least 2 operands")
+      }
+    StorePtrNarrow(_) =>
+      if inst.args.length() < 2 {
+        raise ArityMismatch(
+          message="store_ptr_narrow expects at least 2 operands",
+        )
       }
     Call(_) | CallIndirect(_) | CallPtr(_, _) | Custom(_) => ()
   }

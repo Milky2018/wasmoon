@@ -86,7 +86,9 @@ pub(all) enum Opcode {
   Load
   Store
   LoadPtr(Type)
+  LoadPtrNarrow(Type, Int, Bool)
   StorePtr(Type)
+  StorePtrNarrow(Int)
   StackAddr(StackSlot)
   Call(ExternalSymbol)
   CallIndirect(Signature)

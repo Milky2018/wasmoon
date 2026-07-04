@@ -1040,6 +1040,43 @@ fn push_memory_load(
 }
 
 ///|
+fn push_memory_load_narrow(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  mod_ : @types.Module,
+  memidx : Int,
+  result_ty : @milkir.Type,
+  bits : Int,
+  signed : Bool,
+  offset : Int64,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if memidx != 0 ||
+    memidx >= mod_.memories.length() ||
+    mod_.memories[memidx].is_memory64 {
+    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
+    // for memory64 and non-zero narrow memory loads into the native frontend.
+    return false
+  }
+  guard pop_value(stack) is Some(wasm_addr) else { return false }
+  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+    is Some(effective_addr) else {
+    return false
+  }
+  stack.push(
+    builder.load_ptr_narrow(
+      result_ty,
+      bits,
+      signed,
+      effective_addr,
+      builder.iconst_i64(0L),
+    ),
+  )
+  true
+}
+
+///|
 fn push_memory_store(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -1064,6 +1101,34 @@ fn push_memory_store(
     return false
   }
   builder.store_ptr(ty, effective_addr, value, builder.iconst_i64(0L))
+  true
+}
+
+///|
+fn push_memory_store_narrow(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  mod_ : @types.Module,
+  memidx : Int,
+  bits : Int,
+  offset : Int64,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if memidx != 0 ||
+    memidx >= mod_.memories.length() ||
+    mod_.memories[memidx].is_memory64 {
+    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
+    // for memory64 and non-zero narrow memory stores into the native frontend.
+    return false
+  }
+  guard pop_value(stack) is Some(value) else { return false }
+  guard pop_value(stack) is Some(wasm_addr) else { return false }
+  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+    is Some(effective_addr) else {
+    return false
+  }
+  builder.store_ptr_narrow(bits, effective_addr, value, builder.iconst_i64(0L))
   true
 }
 
@@ -1490,6 +1555,146 @@ fn try_lower_linear_function(
         if !push_memory_load(builder, stack, vmctx, mod_, memidx, F64, offset) {
           return None
         }
+      I32Load8S(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            8,
+            true,
+            offset,
+          ) {
+          return None
+        }
+      I32Load8U(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            8,
+            false,
+            offset,
+          ) {
+          return None
+        }
+      I32Load16S(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            16,
+            true,
+            offset,
+          ) {
+          return None
+        }
+      I32Load16U(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            16,
+            false,
+            offset,
+          ) {
+          return None
+        }
+      I64Load8S(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            8,
+            true,
+            offset,
+          ) {
+          return None
+        }
+      I64Load8U(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            8,
+            false,
+            offset,
+          ) {
+          return None
+        }
+      I64Load16S(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            16,
+            true,
+            offset,
+          ) {
+          return None
+        }
+      I64Load16U(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            16,
+            false,
+            offset,
+          ) {
+          return None
+        }
+      I64Load32S(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            32,
+            true,
+            offset,
+          ) {
+          return None
+        }
+      I64Load32U(memidx, _, offset) =>
+        if !push_memory_load_narrow(
+            builder,
+            stack,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            32,
+            false,
+            offset,
+          ) {
+          return None
+        }
       I32Store(memidx, _, offset) =>
         if !push_memory_store(builder, stack, vmctx, mod_, memidx, I32, offset) {
           return None
@@ -1504,6 +1709,36 @@ fn try_lower_linear_function(
         }
       F64Store(memidx, _, offset) =>
         if !push_memory_store(builder, stack, vmctx, mod_, memidx, F64, offset) {
+          return None
+        }
+      I32Store8(memidx, _, offset) =>
+        if !push_memory_store_narrow(
+            builder, stack, vmctx, mod_, memidx, 8, offset,
+          ) {
+          return None
+        }
+      I32Store16(memidx, _, offset) =>
+        if !push_memory_store_narrow(
+            builder, stack, vmctx, mod_, memidx, 16, offset,
+          ) {
+          return None
+        }
+      I64Store8(memidx, _, offset) =>
+        if !push_memory_store_narrow(
+            builder, stack, vmctx, mod_, memidx, 8, offset,
+          ) {
+          return None
+        }
+      I64Store16(memidx, _, offset) =>
+        if !push_memory_store_narrow(
+            builder, stack, vmctx, mod_, memidx, 16, offset,
+          ) {
+          return None
+        }
+      I64Store32(memidx, _, offset) =>
+        if !push_memory_store_narrow(
+            builder, stack, vmctx, mod_, memidx, 32, offset,
+          ) {
           return None
         }
       MemorySize(memidx) =>

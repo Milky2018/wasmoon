@@ -1105,7 +1105,9 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     Load => LoadMemory(MemI64, 0)
     Store => StoreMemory(MemI64, 0)
     LoadPtr(ty) => LoadPtr(mem_type_for_type(ty), 0)
+    LoadPtrNarrow(_, bits, signed) => LoadPtrNarrow(bits, signed, 0)
     StorePtr(ty) => StorePtr(mem_type_for_type(ty), 0)
+    StorePtrNarrow(bits) => StorePtrNarrow(bits, 0)
     StackAddr(slot) => StackAddr(slot.id)
     Iconst(value) => IntConst(value)
     Fconst(value) => FloatConst(value)
@@ -1205,16 +1207,24 @@ fn lower_inst(
       let offset = const_offset_arg(func, inst.args, 1)
       out.new_inst(LoadPtr(mem_type_for_type(ty), offset))
     }
+    LoadPtrNarrow(_, bits, signed) => {
+      let offset = const_offset_arg(func, inst.args, 1)
+      out.new_inst(LoadPtrNarrow(bits, signed, offset))
+    }
     StorePtr(ty) => {
       let offset = const_offset_arg(func, inst.args, 2)
       out.new_inst(StorePtr(mem_type_for_type(ty), offset))
+    }
+    StorePtrNarrow(bits) => {
+      let offset = const_offset_arg(func, inst.args, 2)
+      out.new_inst(StorePtrNarrow(bits, offset))
     }
     Load => out.new_inst(LoadMemory(load_mem_type(inst), 0))
     Store => out.new_inst(StoreMemory(store_mem_type(inst), 0))
     _ => out.new_inst(opcode_for(inst.opcode))
   }
   match inst.opcode {
-    LoadPtr(_) => {
+    LoadPtr(_) | LoadPtrNarrow(_, _, _) => {
       if inst.args.length() > 0 {
         lowered.add_operand(
           @machv.Operand::use_reg(reg_for_value(inst.args[0])),
@@ -1229,7 +1239,7 @@ fn lower_inst(
       }
       add_defs(lowered, inst.results)
     }
-    StorePtr(_) => {
+    StorePtr(_) | StorePtrNarrow(_) => {
       if inst.args.length() > 0 {
         lowered.add_operand(
           @machv.Operand::use_reg(reg_for_value(inst.args[0])),

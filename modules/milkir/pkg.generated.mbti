@@ -156,11 +156,13 @@ pub fn IRBuilder::imul(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
+pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::print(Self) -> String
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
 pub fn IRBuilder::select(Self, Value, Value, Value) -> Value
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
+pub fn IRBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
 pub fn IRBuilder::trap(Self, String) -> Unit
 
@@ -259,7 +261,9 @@ pub(all) enum Opcode {
   Load
   Store
   LoadPtr(Type)
+  LoadPtrNarrow(Type, Int, Bool)
   StorePtr(Type)
+  StorePtrNarrow(Int)
   StackAddr(StackSlot)
   Call(ExternalSymbol)
   CallIndirect(Signature)

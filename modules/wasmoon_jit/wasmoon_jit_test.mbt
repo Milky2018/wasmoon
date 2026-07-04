@@ -830,6 +830,41 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
+  let builder = @milkir.IRBuilder::new("narrow_mem_x64")
+  let ptr = builder.add_param(Ptr)
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
+  let loaded = builder.load_ptr_narrow(
+    I32,
+    8,
+    false,
+    ptr,
+    builder.iconst_i64(4L),
+  )
+  builder.return_([loaded])
+  let plan = plan_milkir_integration_for_target(builder.get_function(), X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_store16 = false
+  let mut has_load8u = false
+  for i in 0..<(plan.object.code.length() - 2) {
+    if plan.object.code[i] == 0x66 && plan.object.code[i + 1] == 0x89 {
+      has_store16 = true
+    }
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xb6 {
+      has_load8u = true
+    }
+  }
+  inspect(has_store16, content="true")
+  inspect(has_load8u, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   let signature = @milkir.Signature::new([Ptr, I32], [I32])
   let milk = @milkir.Function::new("generic_mem_aarch64", signature)
@@ -856,6 +891,42 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   }
   inspect(has_str_w, content="true")
   inspect(has_ldr_w, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
+test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
+  let builder = @milkir.IRBuilder::new("narrow_mem_aarch64")
+  let ptr = builder.add_param(Ptr)
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
+  let loaded = builder.load_ptr_narrow(
+    I32,
+    8,
+    true,
+    ptr,
+    builder.iconst_i64(4L),
+  )
+  builder.return_([loaded])
+  let plan = plan_milkir_integration_for_target(builder.get_function(), AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_store16 = false
+  let mut has_load8s = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if plan.object.code[i + 3] == 0x79 {
+      has_store16 = true
+    }
+    if plan.object.code[i + 2] == 0x80 && plan.object.code[i + 3] == 0x39 {
+      has_load8s = true
+    }
+  }
+  inspect(has_store16, content="true")
+  inspect(has_load8s, content="true")
   inspect(plan.object.code[plan.object.code.length() - 4], content="192")
   inspect(plan.object.code[plan.object.code.length() - 1], content="214")
 }

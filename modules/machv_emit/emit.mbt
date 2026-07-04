@@ -376,6 +376,88 @@ fn emit_x64_store_base_disp32(
 }
 
 ///|
+fn emit_x64_load_narrow_base_disp32(
+  object : CodeObject,
+  dst : Int,
+  base : Int,
+  bits : Int,
+  signed : Bool,
+  offset : Int,
+) -> Unit raise EmitError {
+  let r = (dst >> 3) & 1
+  let b = (base >> 3) & 1
+  match (bits, signed) {
+    (8, true) => {
+      emit_x64_rex_w(object, r, b)
+      object.code.push(0x0f)
+      object.code.push(0xbe)
+    }
+    (8, false) => {
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x0f)
+      object.code.push(0xb6)
+    }
+    (16, true) => {
+      emit_x64_rex_w(object, r, b)
+      object.code.push(0x0f)
+      object.code.push(0xbf)
+    }
+    (16, false) => {
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x0f)
+      object.code.push(0xb7)
+    }
+    (32, true) => {
+      emit_x64_rex_w(object, r, b)
+      object.code.push(0x63)
+    }
+    (32, false) => {
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x8b)
+    }
+    _ =>
+      raise UnsupportedOperand(
+        message="X64 narrow load requires 8, 16, or 32-bit access",
+      )
+  }
+  emit_x64_modrm(object, 2, dst, base)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_store_narrow_base_disp32(
+  object : CodeObject,
+  base : Int,
+  src : Int,
+  bits : Int,
+  offset : Int,
+) -> Unit raise EmitError {
+  let r = (src >> 3) & 1
+  let b = (base >> 3) & 1
+  match bits {
+    8 => {
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x88)
+    }
+    16 => {
+      object.code.push(0x66)
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x89)
+    }
+    32 => {
+      emit_x64_rex_if_needed(object, r, b)
+      object.code.push(0x89)
+    }
+    _ =>
+      raise UnsupportedOperand(
+        message="X64 narrow store requires 8, 16, or 32-bit access",
+      )
+  }
+  emit_x64_modrm(object, 2, src, base)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn emit_x64_float_load_base_disp32(
   object : CodeObject,
   dst : Int,
@@ -1575,6 +1657,100 @@ fn emit_aarch64_store_ptr(
 }
 
 ///|
+fn emit_aarch64_load_ptr_narrow(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  bits : Int,
+  signed : Bool,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base_reg = require_int_preg(
+    find_operand(inst, Use, 0, "load_ptr_narrow"),
+    "load_ptr_narrow base",
+  )
+  let scale = match bits {
+    8 => 1
+    16 => 2
+    32 => 4
+    _ =>
+      raise UnsupportedOperand(
+        message="AArch64 narrow load requires 8, 16, or 32-bit access",
+      )
+  }
+  guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 narrow load requires a non-negative scaled unsigned 12-bit offset",
+    )
+  }
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "load_ptr_narrow"),
+    "load_ptr_narrow destination",
+  )
+  let imm12 = offset / scale
+  let base = match (bits, signed) {
+    (8, true) => 0x39800000
+    (8, false) => 0x39400000
+    (16, true) => 0x79800000
+    (16, false) => 0x79400000
+    (32, true) => 0xb9800000
+    (32, false) => 0xb9400000
+    _ =>
+      raise UnsupportedOperand(
+        message="AArch64 narrow load requires 8, 16, or 32-bit access",
+      )
+  }
+  emit_u32_le(
+    object,
+    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (dst & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_store_ptr_narrow(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  bits : Int,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base_reg = require_int_preg(
+    find_operand(inst, Use, 0, "store_ptr_narrow"),
+    "store_ptr_narrow base",
+  )
+  let scale = match bits {
+    8 => 1
+    16 => 2
+    32 => 4
+    _ =>
+      raise UnsupportedOperand(
+        message="AArch64 narrow store requires 8, 16, or 32-bit access",
+      )
+  }
+  guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 narrow store requires a non-negative scaled unsigned 12-bit offset",
+    )
+  }
+  let src = require_int_preg(
+    find_operand(inst, Use, 1, "store_ptr_narrow"),
+    "store_ptr_narrow source",
+  )
+  let imm12 = offset / scale
+  let base = match bits {
+    8 => 0x39000000
+    16 => 0x79000000
+    32 => 0xb9000000
+    _ =>
+      raise UnsupportedOperand(
+        message="AArch64 narrow store requires 8, 16, or 32-bit access",
+      )
+  }
+  emit_u32_le(
+    object,
+    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (src & 0x1f),
+  )
+}
+
+///|
 fn require_scaled_stack_offset(
   offset : Int,
   scale : Int,
@@ -2080,6 +2256,43 @@ fn emit_x64_store_ptr(
       )
     }
   }
+}
+
+///|
+fn emit_x64_load_ptr_narrow(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  bits : Int,
+  signed : Bool,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base = require_int_preg(
+    find_operand(inst, Use, 0, "load_ptr_narrow"),
+    "load_ptr_narrow base",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "load_ptr_narrow"),
+    "load_ptr_narrow destination",
+  )
+  emit_x64_load_narrow_base_disp32(object, dst, base, bits, signed, offset)
+}
+
+///|
+fn emit_x64_store_ptr_narrow(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  bits : Int,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base = require_int_preg(
+    find_operand(inst, Use, 0, "store_ptr_narrow"),
+    "store_ptr_narrow base",
+  )
+  let src = require_int_preg(
+    find_operand(inst, Use, 1, "store_ptr_narrow"),
+    "store_ptr_narrow source",
+  )
+  emit_x64_store_narrow_base_disp32(object, base, src, bits, offset)
 }
 
 ///|
@@ -2840,8 +3053,12 @@ fn write_aarch64_inst_bytes(
       emit_aarch64_store_ptr(object, inst, mem_type, offset)
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
+    LoadPtrNarrow(bits, signed, offset) =>
+      emit_aarch64_load_ptr_narrow(object, inst, bits, signed, offset)
     StorePtr(mem_type, offset) =>
       emit_aarch64_store_ptr(object, inst, mem_type, offset)
+    StorePtrNarrow(bits, offset) =>
+      emit_aarch64_store_ptr_narrow(object, inst, bits, offset)
     StackAddr(slot_id) => emit_aarch64_stack_addr(object, inst, slot_id, frame)
     Load(slot) => emit_aarch64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_aarch64_stack_store(object, inst, slot, frame)
@@ -2926,8 +3143,12 @@ fn write_x64_inst_bytes(
       emit_x64_store_ptr(object, inst, mem_type, offset)
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
+    LoadPtrNarrow(bits, signed, offset) =>
+      emit_x64_load_ptr_narrow(object, inst, bits, signed, offset)
     StorePtr(mem_type, offset) =>
       emit_x64_store_ptr(object, inst, mem_type, offset)
+    StorePtrNarrow(bits, offset) =>
+      emit_x64_store_ptr_narrow(object, inst, bits, offset)
     StackAddr(slot_id) => emit_x64_stack_addr(object, inst, slot_id, frame)
     Load(slot) => emit_x64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_x64_stack_store(object, inst, slot, frame)

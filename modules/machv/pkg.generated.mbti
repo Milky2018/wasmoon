@@ -178,7 +178,9 @@ pub(all) enum Opcode {
   LoadMemory(MemType, Int)
   StoreMemory(MemType, Int)
   LoadPtr(MemType, Int)
+  LoadPtrNarrow(Int, Bool, Int)
   StorePtr(MemType, Int)
+  StorePtrNarrow(Int, Int)
   StackAddr(Int)
   CallIndirect
   CallPtr(Int, Int)

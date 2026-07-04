@@ -72,6 +72,35 @@ test "builder prints pointer operations" {
 }
 
 ///|
+test "builder prints narrow pointer operations" {
+  let builder = IRBuilder::new("narrow_mem")
+  let addr = builder.add_param(Ptr)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let load_offset = builder.iconst_i64(2L)
+  let loaded = builder.load_ptr_narrow(I32, 8, true, addr, load_offset)
+  let store_offset = builder.iconst_i64(6L)
+  builder.store_ptr_narrow(16, addr, loaded, store_offset)
+  builder.return_([loaded])
+  inspect(
+    builder.print(),
+    content=(
+      #|function narrow_mem(v0:ptr) -> i32 {
+      #|block0:
+      #|    v1:i64 = iconst 2
+      #|    v2:i32 = load_ptr8s.i32 v0, v1
+      #|    v3:i64 = iconst 6
+      #|    store_ptr16 v0, v2, v3
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  inspect(builder.get_function().verify(), content="()")
+}
+
+///|
 test "builder and CFG support branches and block params" {
   let builder = IRBuilder::new("loop_sum")
   let n = builder.add_param(I32)

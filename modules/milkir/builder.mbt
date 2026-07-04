@@ -209,6 +209,20 @@ pub fn IRBuilder::load_ptr(
 }
 
 ///|
+pub fn IRBuilder::load_ptr_narrow(
+  self : IRBuilder,
+  result_ty : Type,
+  bits : Int,
+  signed : Bool,
+  base : Value,
+  offset : Value,
+) -> Value {
+  self.emit_inst(result_ty, LoadPtrNarrow(result_ty, bits, signed), [
+    base, offset,
+  ])
+}
+
+///|
 pub fn IRBuilder::store_ptr(
   self : IRBuilder,
   ty : Type,
@@ -217,6 +231,17 @@ pub fn IRBuilder::store_ptr(
   offset : Value,
 ) -> Unit {
   self.emit_void_inst(StorePtr(ty), [base, value, offset])
+}
+
+///|
+pub fn IRBuilder::store_ptr_narrow(
+  self : IRBuilder,
+  bits : Int,
+  base : Value,
+  value : Value,
+  offset : Value,
+) -> Unit {
+  self.emit_void_inst(StorePtrNarrow(bits), [base, value, offset])
 }
 
 ///|

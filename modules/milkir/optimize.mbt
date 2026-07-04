@@ -281,13 +281,15 @@ fn inst_has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
     Store
     | StorePtr(_)
+    | StorePtrNarrow(_)
     | Call(_)
     | CallIndirect(_)
     | CallPtr(_, _)
     | Trap(_)
     | Custom(_)
     | Load
-    | LoadPtr(_) => true
+    | LoadPtr(_)
+    | LoadPtrNarrow(_, _, _) => true
     // TODO(milkir): allow deleting loads once alias, trap, and volatility
     // metadata can prove that a load is speculatable and unused.
     _ => inst.results.length() == 0
@@ -326,6 +328,7 @@ fn is_pure_cse_candidate(inst : Inst) -> Bool {
   match inst.opcode {
     Store
     | StorePtr(_)
+    | StorePtrNarrow(_)
     | Call(_)
     | CallIndirect(_)
     | CallPtr(_, _)
@@ -333,6 +336,7 @@ fn is_pure_cse_candidate(inst : Inst) -> Bool {
     | Custom(_)
     | Load
     | LoadPtr(_)
+    | LoadPtrNarrow(_, _, _)
     | Sdiv
     | Udiv
     | Srem

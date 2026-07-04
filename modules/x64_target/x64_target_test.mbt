@@ -407,6 +407,31 @@ test "x64 folds constant pointer offsets into MachV memory opcodes" {
 }
 
 ///|
+test "x64 folds constant narrow pointer offsets into MachV memory opcodes" {
+  let builder = @milkir.IRBuilder::new("narrow_mem")
+  let ptr = builder.add_param(Ptr)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let load_offset = builder.iconst_i64(4L)
+  let loaded = builder.load_ptr_narrow(I32, 8, false, ptr, load_offset)
+  let store_offset = builder.iconst_i64(8L)
+  builder.store_ptr_narrow(16, ptr, loaded, store_offset)
+  builder.return_([loaded])
+  let lowered = lower_function(builder.get_function())
+  inspect(
+    lowered.blocks[0].instructions[1].opcode == LoadPtrNarrow(8, false, 4),
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[1].operands.length(), content="2")
+  inspect(
+    lowered.blocks[0].instructions[3].opcode == StorePtrNarrow(16, 8),
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[3].operands.length(), content="2")
+}
+
+///|
 test "x64 lowers generic load and store with value widths" {
   let func = @milkir.Function::new_empty("generic_mem")
   let ptr = func.new_value(Ptr)
