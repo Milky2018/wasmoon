@@ -36,6 +36,19 @@ pub impl Show for WasmCompilerPipelineError with fn output(self, logger) {
 }
 
 ///|
+fn wasm_body_embedding_env(
+  env : @wasm_frontend.EmbeddingEnvironment,
+) -> @wasm_frontend.EmbeddingEnvironment {
+  if env.hidden_context_param() is Some(_) {
+    env
+  } else {
+    @wasm_frontend.EmbeddingEnvironment::new(
+      runtime_symbol_prefix=env.runtime_symbol_prefix,
+    )
+  }
+}
+
+///|
 pub fn runtime_assembly() -> RuntimeAssembly {
   {
     product_module: "Milky2018/wasmoon",
@@ -81,7 +94,8 @@ pub fn plan_wasm_function_with_compiler_infra(
   opt_level? : Int = 2,
 ) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
   try {
-    let milk = @wasm_frontend.lower_function(env, mod_, func_local_idx)
+    let body_env = wasm_body_embedding_env(env)
+    let milk = @wasm_frontend.lower_function(body_env, mod_, func_local_idx)
     @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
     |> ignore
     @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, target)

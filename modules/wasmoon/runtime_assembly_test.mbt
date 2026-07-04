@@ -39,3 +39,17 @@ test "wasmoon plans wasm function through reusable compiler infrastructure" {
   inspect(plan.object.code.length() > 0, content="true")
   inspect(plan.object.debug_entries.length() > 0, content="true")
 }
+
+///|
+test "wasmoon planning restores hidden vmctx for wasm body ABI" {
+  let mod_ = @types.Module::simple(
+    [I64, I64],
+    [I64],
+    [LocalGet(0), LocalGet(1), I64Add],
+    "add64",
+  )
+  let env = @wasm_frontend.EmbeddingEnvironment::new(hidden_context_type=None)
+  let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
+  inspect(plan.entry_symbol, content="wasm_func_0")
+  inspect(plan.object.code.length() > 0, content="true")
+}
