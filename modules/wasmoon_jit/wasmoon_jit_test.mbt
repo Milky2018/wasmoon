@@ -177,6 +177,41 @@ test "cwasm artifact preserves runtime call fixup metadata" {
 }
 
 ///|
+test "aarch64 cwasm artifact materializes runtime call veneers" {
+  let func = @machv.Function::new("caller")
+  let entry = func.new_block()
+  entry.append(func.new_inst(Call("wasmoon.runtime.hostcall")))
+  entry.append(func.new_inst(Return))
+  let object = try! @machv_emit.emit_function_for_target(func, AArch64)
+  let resolver = RuntimeSymbolResolver::new()
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.hostcall",
+    4096L,
+    jit_runtime_fixup_idx(13),
+  )
+  let linked = try! link_code_object(object, resolver)
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    9,
+    AArch64,
+    "caller",
+  )
+  inspect(artifact.call_veneers.length(), content="1")
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].call_fixups.length(), content="1")
+  inspect(restored.functions[0].call_fixups[0].offset, content="0")
+  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21013")
+  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="8")
+  inspect(restored.functions[0].code.length(), content="24")
+  inspect(restored.functions[0].code[8], content="80")
+  inspect(restored.functions[0].code[11], content="88")
+  inspect(restored.functions[0].code[12], content="0")
+  inspect(restored.functions[0].code[13], content="2")
+  inspect(restored.functions[0].code[14], content="31")
+  inspect(restored.functions[0].code[15], content="214")
+}
+
+///|
 test "build moved cwasm entry from emitted code parts" {
   let entry = build_cwasm_entry_from_code(
     9,

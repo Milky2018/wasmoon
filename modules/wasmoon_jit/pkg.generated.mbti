@@ -488,6 +488,7 @@ pub(all) struct CwasmArtifact {
   entry_symbol : String
   code : Array[Int]
   functions : Array[CwasmFunctionRecord]
+  call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   block_fixups : Array[@machv_emit.Fixup]
   stack_maps : Array[@machv_emit.StackMap]
@@ -500,6 +501,12 @@ pub fn CwasmArtifact::from_linked_code_for_target_with_signature(LinkedCode, Int
 pub fn CwasmArtifact::manifest(Self) -> Array[String]
 pub fn CwasmArtifact::serialize(Self) -> Array[Int]
 pub fn CwasmArtifact::to_precompiled_module(Self) -> @cwasm.PrecompiledModule
+
+pub(all) struct CwasmCallVeneer {
+  function_index : Int
+  func_idx : Int
+  offset : Int
+} derive(Eq, @debug.Debug)
 
 pub(all) struct CwasmFunctionRecord {
   function_index : Int

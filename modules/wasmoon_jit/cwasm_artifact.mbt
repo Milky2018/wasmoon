@@ -9,12 +9,20 @@ pub(all) struct CwasmFunctionRecord {
 } derive(Eq, Debug)
 
 ///|
+pub(all) struct CwasmCallVeneer {
+  function_index : Int
+  func_idx : Int
+  offset : Int
+} derive(Eq, Debug)
+
+///|
 pub(all) struct CwasmArtifact {
   version : Int
   target : @cwasm.TargetArch
   entry_symbol : String
   code : Array[Int]
   functions : Array[CwasmFunctionRecord]
+  call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   block_fixups : Array[@machv_emit.Fixup]
   stack_maps : Array[@machv_emit.StackMap]
@@ -61,21 +69,32 @@ pub fn CwasmArtifact::from_linked_code_for_target_with_signature(
   num_params : Int,
   num_results : Int,
 ) -> CwasmArtifact {
+  let code = linked.code.copy()
+  let call_veneers = if target is AArch64 {
+    materialize_aarch64_call_veneers(
+      code,
+      function_index,
+      linked.runtime_relocations,
+    )
+  } else {
+    []
+  }
   {
     version: 1,
     target,
     entry_symbol,
-    code: linked.code,
+    code,
     functions: [
       {
         function_index,
         code_offset: 0,
-        code_size: linked.code.length(),
+        code_size: code.length(),
         frame_size: linked.frame_size,
         num_params,
         num_results,
       },
     ],
+    call_veneers,
     runtime_relocations: linked.runtime_relocations,
     block_fixups: linked.block_fixups,
     stack_maps: linked.stack_maps,
@@ -126,6 +145,61 @@ fn CwasmArtifact::function_code(
 }
 
 ///|
+fn append_aarch64_call_veneer(code : Array[Int]) -> Int {
+  let offset = code.length()
+  // Veneer layout:
+  //   ldr x16, #8
+  //   br x16
+  //   .quad target_ptr
+  code.push(0x50)
+  code.push(0x00)
+  code.push(0x00)
+  code.push(0x58)
+  code.push(0x00)
+  code.push(0x02)
+  code.push(0x1f)
+  code.push(0xd6)
+  for _ in 0..<8 {
+    code.push(0)
+  }
+  offset
+}
+
+///|
+fn materialize_aarch64_call_veneers(
+  code : Array[Int],
+  function_index : Int,
+  runtime_relocations : Array[ResolvedRuntimeRelocation],
+) -> Array[CwasmCallVeneer] {
+  let out : Array[CwasmCallVeneer] = []
+  let veneers_by_func : Map[Int, Int] = {}
+  for relocation in runtime_relocations {
+    if relocation.fixup_idx is Some(func_idx) {
+      if veneers_by_func.get(func_idx) is None {
+        let offset = append_aarch64_call_veneer(code)
+        veneers_by_func.set(func_idx, offset)
+        out.push({ function_index, func_idx, offset })
+      }
+    }
+  }
+  out
+}
+
+///|
+fn CwasmArtifact::find_call_veneer(
+  self : CwasmArtifact,
+  function_index : Int,
+  func_idx : Int,
+) -> Int? {
+  for veneer in self.call_veneers {
+    if veneer.function_index == function_index && veneer.func_idx == func_idx {
+      return Some(veneer.offset)
+    }
+  }
+  None
+}
+
+///|
 fn CwasmArtifact::function_gc_safepoints(
   self : CwasmArtifact,
   record : CwasmFunctionRecord,
@@ -152,11 +226,12 @@ fn CwasmArtifact::function_call_fixups(
   for relocation in self.runtime_relocations {
     if relocation.offset >= start && relocation.offset < end {
       if relocation.fixup_idx is Some(func_idx) {
-        out.push({
-          offset: relocation.offset - start,
-          func_idx,
-          veneer_offset: -1,
-        })
+        let veneer_offset = match
+          self.find_call_veneer(record.function_index, func_idx) {
+          Some(offset) => offset - start
+          None => -1
+        }
+        out.push({ offset: relocation.offset - start, func_idx, veneer_offset })
       }
     }
   }
