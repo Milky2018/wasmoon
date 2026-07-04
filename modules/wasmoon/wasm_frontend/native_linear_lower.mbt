@@ -1253,6 +1253,15 @@ fn append_linear_exit_block_body(
         // block label; any outer label, conditional branch, or loop continue
         // still falls back to the legacy translator bridge.
         return depth == 0
+      BrIf(depth) =>
+        if depth == 0 {
+          // At the end of a block, both taken and not-taken paths leave the
+          // same label values on the stack. The condition is still consumed.
+          out.push(Drop)
+          return true
+        } else {
+          return false
+        }
       _ => if !append_linear_block_body(out, [instr]) { return false }
     }
   }
