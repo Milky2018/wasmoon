@@ -917,6 +917,7 @@ test "lower table bulk helpers as native custom ops" {
     tables: [table],
   }
   let env = EmbeddingEnvironment::new()
+  inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.TableGrow"), content="true")
