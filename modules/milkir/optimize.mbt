@@ -825,6 +825,81 @@ pub fn thread_jumps(func : Function) -> OptResult {
 }
 
 ///|
+/// Merge straight-line blocks when a predecessor jumps directly to its only
+/// successor, and that successor has only that predecessor.
+pub fn merge_blocks(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("merge_blocks")
+  if func.blocks.length() <= 1 {
+    return result
+  }
+  let pred_count : @hashmap.HashMap[Int, Int] = HashMap([])
+  let succ_count : @hashmap.HashMap[Int, Int] = HashMap([])
+  let single_pred : @hashmap.HashMap[Int, Int] = HashMap([])
+  for block in func.blocks {
+    pred_count.set(block.id, 0)
+    succ_count.set(block.id, 0)
+  }
+  for block in func.blocks {
+    if block.terminator is Some(term) {
+      let targets = terminator_targets(term)
+      succ_count.set(block.id, targets.length())
+      for target in targets {
+        let count = pred_count.get(target).unwrap_or(0)
+        pred_count.set(target, count + 1)
+        if count == 0 {
+          single_pred.set(target, block.id)
+        } else {
+          single_pred.remove(target)
+        }
+      }
+    }
+  }
+  let to_merge : Array[(Int, Int)] = []
+  for block in func.blocks {
+    if block.id == func.blocks[0].id || block.params.length() != 0 {
+      continue
+    }
+    if pred_count.get(block.id).unwrap_or(0) == 1 &&
+      single_pred.get(block.id) is Some(pred_id) &&
+      succ_count.get(pred_id).unwrap_or(0) == 1 {
+      for pred_block in func.blocks {
+        if pred_block.id == pred_id {
+          if pred_block.terminator is Some(Jump(_, args)) && args.length() == 0 {
+            to_merge.push((pred_id, block.id))
+          }
+          break
+        }
+      }
+    }
+  }
+  for pair in to_merge {
+    let (pred_id, succ_id) = pair
+    let mut pred_block : Block? = None
+    let mut succ_block : Block? = None
+    let mut succ_index = -1
+    for i, block in func.blocks {
+      if block.id == pred_id {
+        pred_block = Some(block)
+      }
+      if block.id == succ_id {
+        succ_block = Some(block)
+        succ_index = i
+      }
+    }
+    if (pred_block, succ_block) is (Some(pred), Some(succ)) && succ_index >= 0 {
+      for inst in succ.instructions {
+        pred.instructions.push(inst)
+      }
+      pred.terminator = succ.terminator
+      func.blocks.remove(succ_index) |> ignore
+      result.mark_changed()
+    }
+  }
+  result
+}
+
+///|
 /// Remove blocks that cannot be reached from the entry block.
 pub fn eliminate_unreachable_blocks(func : Function) -> OptResult {
   let result = OptResult::new()
@@ -886,6 +961,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, eliminate_dead_code(func))
       merge_opt_result(result, simplify_branches(func))
       merge_opt_result(result, eliminate_dead_block_params(func))
+      merge_opt_result(result, merge_blocks(func))
       merge_opt_result(result, thread_jumps(func))
       merge_opt_result(result, eliminate_unreachable_blocks(func))
       result

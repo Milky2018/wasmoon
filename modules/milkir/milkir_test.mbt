@@ -573,6 +573,52 @@ test "optimizer threads jump args through block params" {
 }
 
 ///|
+test "optimizer merges straight line blocks" {
+  let builder = IRBuilder::new("merge_blocks")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  let value = builder.iconst_i32(7)
+  builder.return_([value])
+  let func = builder.get_function()
+  let result = merge_blocks(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function merge_blocks() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 7
+      #|    return v0
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer does not merge block with params" {
+  let builder = IRBuilder::new("merge_skip_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  let arg = builder.iconst_i32(7)
+  builder.jump(exit, [arg])
+  let param = builder.add_block_param(exit, I32)
+  builder.switch_to_block(exit)
+  builder.return_([param])
+  let func = builder.get_function()
+  let result = merge_blocks(func)
+  inspect(result.changed, content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "CSE keeps duplicate loads without alias metadata" {
   let builder = IRBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)
