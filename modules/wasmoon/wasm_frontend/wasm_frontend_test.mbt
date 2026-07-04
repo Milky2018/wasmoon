@@ -53,6 +53,29 @@ test "lower locals through native linear fast path" {
 }
 
 ///|
+test "lower globals through native VMContext loads and stores" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [I32],
+      [I32],
+      [LocalGet(0), GlobalSet(0), GlobalGet(0)],
+      "global_roundtrip",
+    ),
+    globals: [
+      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("store_ptr.i32"), content="true")
+  inspect(text.contains("load_ptr.i32"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower linear explicit return without legacy bridge" {
   let mod_ = @types.Module::simple(
     [I64, I64],

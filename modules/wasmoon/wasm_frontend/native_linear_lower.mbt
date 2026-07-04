@@ -1,4 +1,10 @@
 ///|
+const VMCTX_GLOBALS_OFFSET : Int = 48
+
+///|
+const GLOBAL_STRIDE : Int = 16
+
+///|
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
   match ty {
     I32 => Some(builder.iconst_i32(0))
@@ -178,6 +184,20 @@ fn get_global_func_type(
 }
 
 ///|
+fn collect_global_types(mod_ : @types.Module) -> Array[@types.GlobalType] {
+  let globals : Array[@types.GlobalType] = []
+  for import_ in mod_.imports {
+    if import_.desc is Global(global_type) {
+      globals.push(global_type)
+    }
+  }
+  for global in mod_.globals {
+    globals.push(global.type_)
+  }
+  globals
+}
+
+///|
 fn push_direct_call(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -204,6 +224,51 @@ fn push_direct_call(
     }
     true
   }
+}
+
+///|
+fn push_global_get(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  global_types : Array[@types.GlobalType],
+  global_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if global_idx < 0 || global_idx >= global_types.length() {
+    return false
+  }
+  // TODO(ISS-023): source VMContext layout from the reusable embedding ABI
+  // instead of copy-first constants from the legacy FuncEnvironment.
+  let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
+  let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_ptr = builder.load_ptr(I64, context, globals_offset)
+  let field_offset = builder.iconst_i64((global_idx * GLOBAL_STRIDE).to_int64())
+  stack.push(builder.load_ptr(ty, globals_ptr, field_offset))
+  true
+}
+
+///|
+fn push_global_set(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  global_types : Array[@types.GlobalType],
+  global_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  if global_idx < 0 || global_idx >= global_types.length() {
+    return false
+  }
+  guard pop_value(stack) is Some(value) else { return false }
+  // TODO(ISS-023): source VMContext layout from the reusable embedding ABI
+  // instead of copy-first constants from the legacy FuncEnvironment.
+  let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
+  let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_ptr = builder.load_ptr(I64, context, globals_offset)
+  let field_offset = builder.iconst_i64((global_idx * GLOBAL_STRIDE).to_int64())
+  builder.store_ptr(ty, globals_ptr, value, field_offset)
+  true
 }
 
 ///|
@@ -332,6 +397,7 @@ fn try_lower_linear_function(
   let func_type = get_func_type(mod_, func_local_idx)
   get_code(mod_, func_local_idx)
   let code = mod_.codes[func_local_idx]
+  let global_types = collect_global_types(mod_)
   let builder = @milkir.IRBuilder::new(function_name(mod_, func_local_idx))
   let locals : Array[@milkir.Value] = []
   let mut vmctx : @milkir.Value? = None
@@ -380,6 +446,14 @@ fn try_lower_linear_function(
         guard stack.last() is Some(value) else { return None }
         locals[idx] = value
       }
+      GlobalGet(idx) =>
+        if !push_global_get(builder, stack, vmctx, global_types, idx) {
+          return None
+        }
+      GlobalSet(idx) =>
+        if !push_global_set(builder, stack, vmctx, global_types, idx) {
+          return None
+        }
       I32Const(value) => stack.push(builder.iconst_i32(value))
       I64Const(value) => stack.push(builder.iconst_i64(value))
       F32Const(value) => stack.push(builder.fconst_f32(value))
