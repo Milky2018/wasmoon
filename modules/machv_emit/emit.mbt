@@ -336,6 +336,24 @@ fn emit_aarch64_cmp_rr(
 }
 
 ///|
+fn emit_aarch64_clz(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: CLZ Xd, Xn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0xdac01000,
+  )
+}
+
+///|
+fn emit_aarch64_rbit(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: RBIT Xd, Xn.
+  emit_u32_le(
+    object,
+    (dst & 31) | ((src & 7) << 5) | (((src >> 3) & 3) << 8) | 0xdac00000,
+  )
+}
+
+///|
 fn emit_aarch64_cmp_imm(
   object : CodeObject,
   lhs : Int,
@@ -544,6 +562,35 @@ fn emit_aarch64_int_cmp(
   // TODO(machv_emit): encode 32-bit comparisons once MachV carries lane width.
   emit_aarch64_cmp_rr(object, lhs, rhs, true)
   emit_aarch64_cset(object, dst, cond)
+}
+
+///|
+fn emit_aarch64_int_clz(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let src = require_int_preg(find_operand(inst, Use, 0, "clz"), "clz source")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "clz"),
+    "clz destination",
+  )
+  // TODO(machv_emit): encode 32-bit CLZ once MachV carries lane width.
+  emit_aarch64_clz(object, dst, src)
+}
+
+///|
+fn emit_aarch64_int_ctz(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let src = require_int_preg(find_operand(inst, Use, 0, "ctz"), "ctz source")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "ctz"),
+    "ctz destination",
+  )
+  // TODO(machv_emit): encode 32-bit CTZ once MachV carries lane width.
+  emit_aarch64_rbit(object, dst, src)
+  emit_aarch64_clz(object, dst, dst)
 }
 
 ///|
@@ -1286,6 +1333,8 @@ fn write_aarch64_inst_bytes(
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
     IntCmp(cond) => emit_aarch64_int_cmp(object, inst, cond)
+    IntClz => emit_aarch64_int_clz(object, inst)
+    IntCtz => emit_aarch64_int_ctz(object, inst)
     IntShl => emit_aarch64_int_shift(object, inst, 8, "shl")
     IntShr(signed) =>
       emit_aarch64_int_shift(

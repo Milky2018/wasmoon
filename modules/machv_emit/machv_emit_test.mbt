@@ -524,6 +524,26 @@ test "emit AArch64 integer compare bytes" {
 }
 
 ///|
+test "emit AArch64 integer bitcount bytes" {
+  let func = @machv.Function::new("int_bitcount")
+  let entry = func.new_block()
+  let clz = func.new_inst(IntClz)
+  clz.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  clz.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(clz)
+  let ctz = func.new_inst(IntCtz)
+  ctz.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  ctz.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  entry.append(ctz)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[32, 16, 192, 218, 67, 0, 192, 218, 99, 16, 192, 218, 192, 3, 95, 214]",
+  )
+}
+
+///|
 test "emit AArch64 integer shift bytes" {
   let func = @machv.Function::new("int_shift")
   let entry = func.new_block()

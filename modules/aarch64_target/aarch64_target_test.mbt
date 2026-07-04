@@ -75,6 +75,21 @@ test "AArch64 lowers integer remainder to generic arithmetic sequence" {
 }
 
 ///|
+test "AArch64 lowers integer bitcount ops into structured MachV opcodes" {
+  let func = @milkir.Function::new_empty("bitcount")
+  let value = func.new_value(I64)
+  let leading = func.new_value(I64)
+  let trailing = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Clz, [value], [leading]))
+  entry.append_inst(func.new_inst(Ctz, [value], [trailing]))
+  entry.set_terminator(Return([leading, trailing]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions[0].opcode == IntClz, content="true")
+  inspect(lowered.blocks[0].instructions[1].opcode == IntCtz, content="true")
+}
+
+///|
 test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
   let builder = @milkir.IRBuilder::new("mem")
   let ptr = builder.add_param(Ptr)

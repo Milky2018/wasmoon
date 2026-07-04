@@ -245,6 +245,35 @@ test "plan MilkIR integer shift through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64], [I64])
+  let milk = @milkir.Function::new("ctz64", signature)
+  let value = milk.new_value(I64)
+  let trailing = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Ctz, [value], [trailing]))
+  entry.set_terminator(Return([trailing]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_rbit = false
+  let mut has_clz = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if plan.object.code[i + 2] == 0xc0 && plan.object.code[i + 3] == 0xda {
+      if (plan.object.code[i + 1] & 0x10) == 0 {
+        has_rbit = true
+      } else {
+        has_clz = true
+      }
+    }
+  }
+  inspect(has_rbit, content="true")
+  inspect(has_clz, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)
