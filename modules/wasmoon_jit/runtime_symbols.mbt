@@ -2,6 +2,7 @@
 pub(all) struct RuntimeSymbol {
   name : String
   address : Int64
+  fixup_idx : Int?
 } derive(Eq, Debug)
 
 ///|
@@ -48,7 +49,30 @@ pub fn RuntimeSymbolResolver::add_symbol(
   name : String,
   address : Int64,
 ) -> Unit {
-  self.symbols.push({ name, address })
+  self.symbols.push({ name, address, fixup_idx: None })
+}
+
+///|
+pub fn RuntimeSymbolResolver::add_symbol_fixup(
+  self : RuntimeSymbolResolver,
+  name : String,
+  address : Int64,
+  fixup_idx : Int,
+) -> Unit {
+  self.symbols.push({ name, address, fixup_idx: Some(fixup_idx) })
+}
+
+///|
+pub fn RuntimeSymbolResolver::resolve_symbol(
+  self : RuntimeSymbolResolver,
+  name : String,
+) -> RuntimeSymbol? {
+  for symbol in self.symbols {
+    if symbol.name == name {
+      return Some(symbol)
+    }
+  }
+  None
 }
 
 ///|
@@ -56,12 +80,10 @@ pub fn RuntimeSymbolResolver::resolve(
   self : RuntimeSymbolResolver,
   name : String,
 ) -> Int64? {
-  for symbol in self.symbols {
-    if symbol.name == name {
-      return Some(symbol.address)
-    }
+  match self.resolve_symbol(name) {
+    Some(symbol) => Some(symbol.address)
+    None => None
   }
-  None
 }
 
 ///|
@@ -126,6 +148,7 @@ pub(all) struct ResolvedRuntimeRelocation {
   offset : Int
   symbol : String
   address : Int64
+  fixup_idx : Int?
 } derive(Eq, Debug)
 
 ///|
@@ -147,11 +170,12 @@ pub fn link_code_object(
   for relocation in object.relocations {
     match relocation.kind {
       ExternalSymbol(symbol) =>
-        if resolver.resolve(symbol) is Some(address) {
+        if resolver.resolve_symbol(symbol) is Some(runtime_symbol) {
           runtime_relocations.push({
             offset: relocation.offset,
             symbol,
-            address,
+            address: runtime_symbol.address,
+            fixup_idx: runtime_symbol.fixup_idx,
           })
         } else {
           raise UnknownRuntimeSymbol(symbol)

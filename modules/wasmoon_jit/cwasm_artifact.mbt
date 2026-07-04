@@ -142,6 +142,28 @@ fn CwasmArtifact::function_gc_safepoints(
 }
 
 ///|
+fn CwasmArtifact::function_call_fixups(
+  self : CwasmArtifact,
+  record : CwasmFunctionRecord,
+) -> Array[@cwasm.CallFixup] {
+  let out : Array[@cwasm.CallFixup] = []
+  let start = record.code_offset
+  let end = record.code_offset + record.code_size
+  for relocation in self.runtime_relocations {
+    if relocation.offset >= start && relocation.offset < end {
+      if relocation.fixup_idx is Some(func_idx) {
+        out.push({
+          offset: relocation.offset - start,
+          func_idx,
+          veneer_offset: -1,
+        })
+      }
+    }
+  }
+  out
+}
+
+///|
 fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
   buf.push((value & 0xFF).to_byte())
   buf.push(((value >> 8) & 0xFF).to_byte())
@@ -344,7 +366,7 @@ pub fn CwasmArtifact::to_precompiled_module(
     let gc_safepoints = self.function_gc_safepoints(record)
     let gc_root_counts = Array::make(gc_safepoints.length(), 0)
     // TODO(ISS-022): carry real live-root indices/root counts and per-function
-    // fixups from the production JIT pipeline.
+    // function-address fixups from the production JIT pipeline.
     module_.add_function(
       build_cwasm_entry_from_code(
         record.function_index,
@@ -356,6 +378,7 @@ pub fn CwasmArtifact::to_precompiled_module(
         record.num_results,
         gc_safepoints~,
         gc_safepoint_root_counts=gc_root_counts,
+        call_fixups=self.function_call_fixups(record),
       ),
     )
   }

@@ -150,6 +150,33 @@ test "cwasm artifact preserves reusable stack map offsets" {
 }
 
 ///|
+test "cwasm artifact preserves runtime call fixup metadata" {
+  let func = @machv.Function::new("caller")
+  let entry = func.new_block()
+  entry.append(func.new_inst(Call("wasmoon.runtime.hostcall")))
+  entry.append(func.new_inst(Return))
+  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let resolver = RuntimeSymbolResolver::new()
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.hostcall",
+    4096L,
+    jit_runtime_fixup_idx(13),
+  )
+  let linked = try! link_code_object(object, resolver)
+  let artifact = CwasmArtifact::from_linked_code_for_target(
+    linked,
+    9,
+    X86_64,
+    "caller",
+  )
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].call_fixups.length(), content="1")
+  inspect(restored.functions[0].call_fixups[0].offset, content="0")
+  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21013")
+  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="-1")
+}
+
+///|
 test "build moved cwasm entry from emitted code parts" {
   let entry = build_cwasm_entry_from_code(
     9,
