@@ -308,6 +308,8 @@ pub fn patch_aarch64_func_addr_fixup(Int64, @cwasm.FuncAddrFixup, Int64) -> Unit
 
 pub fn patch_aarch64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
 
+pub fn patch_aarch64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
+
 pub fn patch_aarch64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
 
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit

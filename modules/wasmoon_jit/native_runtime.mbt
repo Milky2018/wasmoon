@@ -808,6 +808,22 @@ pub fn patch_aarch64_func_addr_fixup_parts(
 }
 
 ///|
+pub fn patch_aarch64_func_addr_fixup_raw(
+  exec_ptr : Int64,
+  offset : Int,
+  reg : Int,
+  func_idx : Int,
+  func_table_ptr : Int64,
+) -> Unit {
+  let target_ptr = match
+    resolve_func_addr_fixup_target(func_idx, func_table_ptr) {
+    Some(ptr) => ptr
+    None => abort("unknown func addr fixup idx \{func_idx}")
+  }
+  patch_aarch64_func_addr_fixup_parts(exec_ptr, offset, reg, target_ptr)
+}
+
+///|
 pub fn patch_aarch64_func_addr_fixups(
   exec_ptr : Int64,
   fixups : Array[@cwasm.FuncAddrFixup],

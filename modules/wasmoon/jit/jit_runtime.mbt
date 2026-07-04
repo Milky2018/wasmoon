@@ -257,20 +257,12 @@ pub fn JITModule::load_with_imports(
                 // fixups (LoadJITFuncPtr). Patch them before first execution.
                 let func_table_ptr = ctx.get_func_table_ptr()
                 for fixup in mc.get_func_addr_fixups() {
-                  let target_ptr = match
-                    @wasmoon_jit.resolve_func_addr_fixup_target(
-                      fixup.func_idx,
-                      func_table_ptr,
-                    ) {
-                    Some(ptr) => ptr
-                    None =>
-                      abort("unknown func addr fixup idx \{fixup.func_idx}")
-                  }
-                  @wasmoon_jit.patch_aarch64_func_addr_fixup_parts(
+                  @wasmoon_jit.patch_aarch64_func_addr_fixup_raw(
                     ec.ptr(),
                     fixup.offset,
                     fixup.reg,
-                    target_ptr,
+                    fixup.func_idx,
+                    func_table_ptr,
                   )
                 }
                 jit_module.import_exec_codes.push(ec)
