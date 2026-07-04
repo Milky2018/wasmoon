@@ -353,6 +353,32 @@ test "emit X64 sign-extension bytes" {
 }
 
 ///|
+test "emit X64 generic integer width conversion bytes" {
+  let func = @machv.Function::new("x64_width")
+  let entry = func.new_block()
+  let sext = func.new_inst(Sextend)
+  sext.add_operand(@machv.Operand::use_reg(Physical({ index: 10, class: Int })))
+  sext.add_operand(@machv.Operand::def(Physical({ index: 11, class: Int })))
+  entry.append(sext)
+  let uext = func.new_inst(Uextend)
+  uext.add_operand(@machv.Operand::use_reg(Physical({ index: 10, class: Int })))
+  uext.add_operand(@machv.Operand::def(Physical({ index: 11, class: Int })))
+  entry.append(uext)
+  let reduce = func.new_inst(Ireduce)
+  reduce.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 8, class: Int })),
+  )
+  reduce.add_operand(@machv.Operand::def(Physical({ index: 9, class: Int })))
+  entry.append(reduce)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[77, 99, 218, 69, 137, 211, 69, 137, 193, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -785,6 +811,32 @@ test "emit AArch64 sign-extension bytes" {
   debug_inspect(
     object.code,
     content="[32, 28, 64, 147, 98, 60, 64, 147, 164, 124, 64, 147, 192, 3, 95, 214]",
+  )
+}
+
+///|
+test "emit AArch64 generic integer width conversion bytes" {
+  let func = @machv.Function::new("width")
+  let entry = func.new_block()
+  let sext = func.new_inst(Sextend)
+  sext.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  sext.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(sext)
+  let uext = func.new_inst(Uextend)
+  uext.add_operand(@machv.Operand::use_reg(Physical({ index: 3, class: Int })))
+  uext.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(uext)
+  let reduce = func.new_inst(Ireduce)
+  reduce.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 5, class: Int })),
+  )
+  reduce.add_operand(@machv.Operand::def(Physical({ index: 4, class: Int })))
+  entry.append(reduce)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[32, 124, 64, 147, 226, 3, 3, 42, 228, 3, 5, 42, 192, 3, 95, 214]",
   )
 }
 

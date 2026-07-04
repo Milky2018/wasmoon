@@ -59,6 +59,14 @@ fn emit_x64_mov_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_mov_rr32(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: mov r/m32, r32.
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x89)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
 fn emit_x64_add_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: add r/m64, r64.
   emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
@@ -561,6 +569,19 @@ fn emit_aarch64_sxtw(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_aarch64_mov_w(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: MOV Wd, Wn.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((31 & 7) << 5) |
+    (((31 >> 3) & 3) << 8) |
+    ((src & 31) << 16) |
+    (0x2a << 24),
+  )
+}
+
+///|
 fn emit_aarch64_clz(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: CLZ Xd, Xn.
   emit_u32_le(
@@ -946,6 +967,25 @@ fn emit_aarch64_sign_extend(
     32 => emit_aarch64_sxtw(object, dst, src)
     _ => abort("unreachable sign-extension width")
   }
+}
+
+///|
+fn emit_aarch64_zero_extend32(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  context : String,
+) -> Unit raise EmitError {
+  let src = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): generalize integer width conversions once MachV carries
+  // source and destination lane widths instead of only a generic Int class.
+  emit_aarch64_mov_w(object, dst, src)
 }
 
 ///|
@@ -1890,6 +1930,25 @@ fn emit_x64_sign_extend(
 }
 
 ///|
+fn emit_x64_zero_extend32(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  context : String,
+) -> Unit raise EmitError {
+  let src = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): generalize integer width conversions once MachV carries
+  // source and destination lane widths instead of only a generic Int class.
+  emit_x64_mov_rr32(object, dst, src)
+}
+
+///|
 fn emit_x64_float_width_convert(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2034,6 +2093,9 @@ fn write_aarch64_inst_bytes(
     Fpromote => emit_aarch64_float_width_convert(object, inst, true)
     Fdemote => emit_aarch64_float_width_convert(object, inst, false)
     Bitcast => emit_aarch64_bitcast(object, inst)
+    Sextend => emit_aarch64_sign_extend(object, inst, 32)
+    Uextend => emit_aarch64_zero_extend32(object, inst, "uextend")
+    Ireduce => emit_aarch64_zero_extend32(object, inst, "ireduce")
     Sextend8 => emit_aarch64_sign_extend(object, inst, 8)
     Sextend16 => emit_aarch64_sign_extend(object, inst, 16)
     Sextend32 => emit_aarch64_sign_extend(object, inst, 32)
@@ -2109,6 +2171,9 @@ fn write_x64_inst_bytes(
     Fpromote => emit_x64_float_width_convert(object, inst, true)
     Fdemote => emit_x64_float_width_convert(object, inst, false)
     Bitcast => emit_x64_bitcast(object, inst)
+    Sextend => emit_x64_sign_extend(object, inst, 32)
+    Uextend => emit_x64_zero_extend32(object, inst, "uextend")
+    Ireduce => emit_x64_zero_extend32(object, inst, "ireduce")
     Sextend8 => emit_x64_sign_extend(object, inst, 8)
     Sextend16 => emit_x64_sign_extend(object, inst, 16)
     Sextend32 => emit_x64_sign_extend(object, inst, 32)
