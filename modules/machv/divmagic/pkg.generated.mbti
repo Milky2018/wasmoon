@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/vcode/lower/divmagic"
+package "Milky2018/machv/divmagic"
 
 // Values
 pub fn magic_s32(Int) -> MagicS32
