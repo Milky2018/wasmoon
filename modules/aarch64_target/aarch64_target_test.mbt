@@ -112,6 +112,26 @@ test "AArch64 lowers multiply-high ops into structured MachV opcodes" {
 }
 
 ///|
+test "AArch64 lowers rotate-left through explicit rotate-right count transform" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let func = @milkir.Function::new("rotl64", signature)
+  let value = func.new_value(I64)
+  let count = func.new_value(I64)
+  let rotated = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Rotl, [value, count], [rotated]))
+  entry.set_terminator(Return([rotated]))
+  let lowered = lower_function(func)
+  inspect(lowered.blocks[0].instructions.length(), content="3")
+  inspect(
+    lowered.blocks[0].instructions[0].opcode == IntConst(0L),
+    content="true",
+  )
+  inspect(lowered.blocks[0].instructions[1].opcode == IntSub, content="true")
+  inspect(lowered.blocks[0].instructions[2].opcode == IntRotr, content="true")
+}
+
+///|
 test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
   let builder = @milkir.IRBuilder::new("mem")
   let ptr = builder.add_param(Ptr)

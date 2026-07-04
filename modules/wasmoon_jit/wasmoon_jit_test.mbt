@@ -372,6 +372,32 @@ test "plan MilkIR rotate-right through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("rotl64_aarch64", signature)
+  let value = milk.new_value(I64)
+  let count = milk.new_value(I64)
+  let rotated = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Rotl, [value, count], [rotated]))
+  entry.set_terminator(Return([rotated]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_rorv = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if (plan.object.code[i + 1] & 0x2c) == 0x2c &&
+      (plan.object.code[i + 2] & 0xc0) == 0xc0 &&
+      plan.object.code[i + 3] == 0x9a {
+      has_rorv = true
+    }
+  }
+  inspect(has_rorv, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)

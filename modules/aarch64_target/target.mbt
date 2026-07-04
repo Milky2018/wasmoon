@@ -430,6 +430,32 @@ fn lower_int_rem(
 }
 
 ///|
+fn lower_int_rotl(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+) -> Unit {
+  // TODO(aarch64_target): make rotate-left a target combine once MachV has
+  // explicit value-width metadata. AArch64 variable rotate masks the count, so
+  // rotl(x, n) is encoded as rorv(x, 0 - n) for the current 64-bit path.
+  let zero = out.new_vreg(Int)
+  let neg_count = out.new_vreg(Int)
+  let zero_const = out.new_inst(IntConst(0L))
+  zero_const.add_operand(@machv.Operand::def(Virtual(zero)))
+  block.append(zero_const)
+  let negate = out.new_inst(IntSub)
+  negate.add_operand(@machv.Operand::use_reg(Virtual(zero)))
+  negate.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  negate.add_operand(@machv.Operand::def(Virtual(neg_count)))
+  block.append(negate)
+  let rotr = out.new_inst(IntRotr)
+  rotr.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  rotr.add_operand(@machv.Operand::use_reg(Virtual(neg_count)))
+  add_defs(rotr, inst.results)
+  block.append(rotr)
+}
+
+///|
 fn lower_inst(
   func : @milkir.Function,
   out : @machv.Function,
@@ -443,6 +469,10 @@ fn lower_inst(
     }
     Urem => {
       lower_int_rem(out, block, inst, false)
+      return
+    }
+    Rotl => {
+      lower_int_rotl(out, block, inst)
       return
     }
     _ => ()
