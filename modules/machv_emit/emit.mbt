@@ -315,6 +315,40 @@ fn require_int_preg(
 }
 
 ///|
+fn require_float_preg(
+  operand : @machv.Operand,
+  context : String,
+) -> (Int, @machv.RegClass) raise EmitError {
+  match operand.reg {
+    Physical(preg) =>
+      if (preg.class == Float32 || preg.class == Float64) && !preg.is_spilled() {
+        (preg.index, preg.class)
+      } else {
+        raise UnsupportedOperand(
+          message="\{context} requires a floating-point physical register",
+        )
+      }
+    Virtual(_) =>
+      raise UnsupportedOperand(
+        message="\{context} requires register allocation before emission",
+      )
+  }
+}
+
+///|
+fn require_same_float_class(
+  lhs : @machv.RegClass,
+  rhs : @machv.RegClass,
+  context : String,
+) -> Unit raise EmitError {
+  guard lhs == rhs else {
+    raise UnsupportedOperand(
+      message="\{context} requires matching floating-point register classes",
+    )
+  }
+}
+
+///|
 fn find_operand(
   inst : @machv.Instruction,
   role : @machv.OperandRole,
@@ -586,6 +620,76 @@ fn emit_aarch64_store_ptr(
 }
 
 ///|
+fn emit_aarch64_float_binop3(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  f32_mid : Int,
+  f64_mid : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (lhs, lhs_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let (rhs, rhs_class) = require_float_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, lhs_class, context)
+  require_same_float_class(dst_class, rhs_class, context)
+  let mid = match dst_class {
+    Float32 => f32_mid
+    Float64 => f64_mid
+    _ => abort("unreachable float class")
+  }
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((lhs & 7) << 5) |
+    (((lhs >> 3) & 3) << 8) |
+    (mid << 8) |
+    ((rhs & 31) << 16) |
+    (0x1e << 24),
+  )
+}
+
+///|
+fn emit_aarch64_float_unop(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  f32_mid : Int,
+  f64_mid : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, src_class, context)
+  let mid = match dst_class {
+    Float32 => f32_mid
+    Float64 => f64_mid
+    _ => abort("unreachable float class")
+  }
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((src & 7) << 5) |
+    (((src >> 3) & 3) << 8) |
+    (mid << 8) |
+    (0x1e << 24),
+  )
+}
+
+///|
 fn emit_x64_move(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -705,6 +809,92 @@ fn emit_x64_store_ptr(
 }
 
 ///|
+fn emit_x64_sse_rr(
+  object : CodeObject,
+  prefix : Int,
+  opcode : Int,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  object.code.push(prefix)
+  emit_x64_rex_if_needed(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(opcode)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_float_move(
+  object : CodeObject,
+  dst : Int,
+  src : Int,
+  class : @machv.RegClass,
+) -> Unit {
+  let prefix = match class {
+    Float32 => 0xf3
+    Float64 => 0xf2
+    _ => abort("unreachable float class")
+  }
+  emit_x64_sse_rr(object, prefix, 0x10, dst, src)
+}
+
+///|
+fn emit_x64_float_binop3(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  opcode : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (lhs, lhs_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let (rhs, rhs_class) = require_float_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, lhs_class, context)
+  require_same_float_class(dst_class, rhs_class, context)
+  if dst != lhs {
+    emit_x64_float_move(object, dst, lhs, dst_class)
+  }
+  let prefix = match dst_class {
+    Float32 => 0xf3
+    Float64 => 0xf2
+    _ => abort("unreachable float class")
+  }
+  emit_x64_sse_rr(object, prefix, opcode, dst, rhs)
+}
+
+///|
+fn emit_x64_float_unop(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  opcode : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let (src, src_class) = require_float_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} source",
+  )
+  let (dst, dst_class) = require_float_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  require_same_float_class(dst_class, src_class, context)
+  let prefix = match dst_class {
+    Float32 => 0xf3
+    Float64 => 0xf2
+    _ => abort("unreachable float class")
+  }
+  emit_x64_sse_rr(object, prefix, opcode, dst, src)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -718,6 +908,13 @@ fn write_aarch64_inst_bytes(
     IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
+    FloatAdd => emit_aarch64_float_binop3(object, inst, 0x2028, 0x6028, "fadd")
+    FloatSub => emit_aarch64_float_binop3(object, inst, 0x2038, 0x6038, "fsub")
+    FloatMul => emit_aarch64_float_binop3(object, inst, 0x2008, 0x6008, "fmul")
+    FloatDiv => emit_aarch64_float_binop3(object, inst, 0x2018, 0x6018, "fdiv")
+    FloatMin => emit_aarch64_float_binop3(object, inst, 0x2058, 0x6058, "fmin")
+    FloatMax => emit_aarch64_float_binop3(object, inst, 0x2048, 0x6048, "fmax")
+    FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -748,6 +945,13 @@ fn write_x64_inst_bytes(
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
+    FloatAdd => emit_x64_float_binop3(object, inst, 0x58, "fadd")
+    FloatSub => emit_x64_float_binop3(object, inst, 0x5c, "fsub")
+    FloatMul => emit_x64_float_binop3(object, inst, 0x59, "fmul")
+    FloatDiv => emit_x64_float_binop3(object, inst, 0x5e, "fdiv")
+    FloatMin => emit_x64_float_binop3(object, inst, 0x5d, "fmin")
+    FloatMax => emit_x64_float_binop3(object, inst, 0x5f, "fmax")
+    FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>

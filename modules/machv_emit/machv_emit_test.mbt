@@ -307,6 +307,60 @@ test "emit AArch64 pointer memory bytes" {
 }
 
 ///|
+test "emit AArch64 scalar floating point bytes" {
+  let func = @machv.Function::new("float_ops")
+  let entry = func.new_block()
+  let add = func.new_inst(FloatAdd)
+  add.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float64 })),
+  )
+  add.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float64 })),
+  )
+  add.add_operand(@machv.Operand::def(Physical({ index: 0, class: Float64 })))
+  entry.append(add)
+  let sqrt = func.new_inst(FloatSqrt)
+  sqrt.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float32 })),
+  )
+  sqrt.add_operand(@machv.Operand::def(Physical({ index: 3, class: Float32 })))
+  entry.append(sqrt)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[32, 40, 98, 30, 131, 192, 33, 30, 192, 3, 95, 214]",
+  )
+}
+
+///|
+test "emit X64 scalar floating point bytes" {
+  let func = @machv.Function::new("x64_float_ops")
+  let entry = func.new_block()
+  let add = func.new_inst(FloatAdd)
+  add.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float64 })),
+  )
+  add.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float64 })),
+  )
+  add.add_operand(@machv.Operand::def(Physical({ index: 0, class: Float64 })))
+  entry.append(add)
+  let sqrt = func.new_inst(FloatSqrt)
+  sqrt.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 4, class: Float32 })),
+  )
+  sqrt.add_operand(@machv.Operand::def(Physical({ index: 3, class: Float32 })))
+  entry.append(sqrt)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[242, 15, 16, 193, 242, 15, 88, 194, 243, 15, 81, 220, 195]",
+  )
+}
+
+///|
 test "emit generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
