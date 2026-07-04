@@ -889,6 +889,39 @@ test "lower memory64 load with overflow-safe bounds check" {
 }
 
 ///|
+test "lower memory64 narrow load store with overflow-safe bounds check" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [
+        I64Const(0L),
+        I32Const(7),
+        I32Store8(0, 0, 0),
+        I64Const(0L),
+        I32Load8U(0, 0, 0),
+      ],
+      "memory64_narrow_roundtrip",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let lowered = try_lower_native_function(env, mod_, 0)
+  guard lowered is Some(func) else {
+    fail("memory64 narrow load/store did not lower natively")
+  }
+  let text = func.print()
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("trap \"memory out of bounds\""), content="true")
+  inspect(text.contains("load_ptr8u.i32"), content="true")
+  inspect(text.contains("store_ptr8"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower table bulk helpers as native custom ops" {
   let table : @types.Table = {
     type_: {

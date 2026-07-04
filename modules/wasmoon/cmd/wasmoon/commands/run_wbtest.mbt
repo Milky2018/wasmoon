@@ -244,36 +244,64 @@ test "compile api: reusable pipeline lowers memory64 load" {
     ],
   }
   let isa = @isa.ISA::current()
-  let env = @wasm_frontend.EmbeddingEnvironment::new()
-  let milk = @wasm_frontend.try_lower_native_function(env, mod_, 0) catch {
-    e => fail(e.to_string())
-  }
-  guard milk is Some(milk_func) else {
-    fail("memory64 load did not lower natively")
-  }
-  @milkir.optimize_with_level(milk_func, @milkir.OptLevel::from_int(2))
-  |> ignore
-  let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
-    milk_func,
-    current_emit_target(isa),
-  ) catch {
-    e => fail(e.to_string())
-  }
-  let artifact = @wasmoon_jit.CwasmArtifact::from_jit_plan_with_signature(
-    plan,
-    @wasmoon_jit.RuntimeSymbolResolver::new(),
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
     0,
-    mod_.get_func_type(0).params.length(),
-    mod_.get_func_type(0).results.length(),
-  ) catch {
-    e => fail(e.to_string())
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("memory64 load did not compile through reusable pipeline")
   }
-  let compiled = artifact.to_precompiled_module()
-  inspect(compiled.functions.length(), content="1")
-  inspect(compiled.functions[0].code.length() > 0, content="true")
-  inspect(milk_func.print().contains("wasmoon.LoadMemBase"), content="false")
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.LoadMemBase"), content="false")
   inspect(
-    milk_func.print().contains("trap \"memory out of bounds\""),
+    reusable.milk_dump.contains("trap \"memory out of bounds\""),
+    content="true",
+  )
+}
+
+///|
+test "compile api: reusable pipeline lowers memory64 narrow load store" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [
+        I64Const(0L),
+        I32Const(7),
+        I32Store8(0, 0, 0),
+        I64Const(0L),
+        I32Load8U(0, 0, 0),
+      ],
+      "memory64_narrow_roundtrip",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("memory64 narrow load/store did not compile through reusable pipeline")
+  }
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(reusable.milk_dump.contains("load_ptr8u.i32"), content="true")
+  inspect(reusable.milk_dump.contains("store_ptr8"), content="true")
+  inspect(
+    reusable.milk_dump.contains("trap \"memory out of bounds\""),
     content="true",
   )
 }
