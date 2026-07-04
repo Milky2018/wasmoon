@@ -86,6 +86,67 @@ test "lower linear float arithmetic and drop without legacy bridge" {
 }
 
 ///|
+test "lower linear integer bitops comparisons and select natively" {
+  let mod_ = @types.Module::simple(
+    [I32, I32],
+    [I32],
+    [
+      LocalGet(0),
+      I32Const(3),
+      I32And,
+      LocalTee(2),
+      LocalGet(1),
+      I32Const(1),
+      I32Shl,
+      LocalGet(2),
+      I32Const(0),
+      I32Eq,
+      Select,
+    ],
+    "bit_select",
+  )
+  let body : Array[@types.Instruction] = [
+    LocalGet(0),
+    I32Const(3),
+    I32And,
+    LocalTee(2),
+    LocalGet(1),
+    I32Const(1),
+    I32Shl,
+    LocalGet(2),
+    I32Const(0),
+    I32Eq,
+    Select,
+  ]
+  let mod_ = { ..mod_, codes: [{ locals: [I32], body }] }
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("band"), content="true")
+  inspect(text.contains("ishl"), content="true")
+  inspect(text.contains("icmp.eq"), content="true")
+  inspect(text.contains("select"), content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear float compare and unary ops natively" {
+  let mod_ = @types.Module::simple(
+    [F64],
+    [I32],
+    [LocalGet(0), F64Neg, F64Abs, F64Const(1.0), F64Ge],
+    "float_cmp",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("fneg"), content="true")
+  inspect(text.contains("fabs"), content="true")
+  inspect(text.contains("fcmp.ge"), content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower control flow into MilkIR blocks and terminators" {
   let mod_ = @types.Module::simple(
     [I32],
