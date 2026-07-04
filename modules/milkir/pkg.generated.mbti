@@ -8,6 +8,8 @@ import {
 // Values
 pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
 
+pub fn eliminate_dead_code(Function) -> OptResult
+
 pub fn fold_constants(Function) -> OptResult
 
 pub fn instruction_count(Function) -> Int

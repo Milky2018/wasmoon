@@ -218,3 +218,47 @@ test "optimizer O0 does not rewrite constants" {
     ),
   )
 }
+
+///|
+test "optimizer O2 removes dead pure instructions after folding" {
+  let builder = IRBuilder::new("o2_dce")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let lhs = builder.iconst_i32(1)
+  let rhs = builder.iconst_i32(2)
+  let sum = builder.iadd(lhs, rhs)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = optimize_with_level(func, O2)
+  inspect(result.changed, content="true")
+  inspect(instruction_count(func), content="1")
+  inspect(
+    func.print(),
+    content=(
+      #|function o2_dce() -> i32 {
+      #|block0:
+      #|    v2:i32 = iconst 3
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "dead code pass keeps unused loads without alias metadata" {
+  let builder = IRBuilder::new("keep_load")
+  let ptr = builder.add_param(Ptr)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let offset = builder.iconst_i64(0L)
+  let _loaded = builder.load_ptr(I32, ptr, offset)
+  let result = builder.iconst_i32(7)
+  builder.return_([result])
+  let func = builder.get_function()
+  let opt = eliminate_dead_code(func)
+  inspect(opt.changed, content="false")
+  inspect(instruction_count(func), content="3")
+}

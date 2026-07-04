@@ -250,9 +250,114 @@ pub fn fold_constants(func : Function) -> OptResult {
 }
 
 ///|
+fn record_terminator_uses(
+  used : @hashmap.HashMap[Int, Bool],
+  term : Terminator,
+) -> Unit {
+  fn record_values(
+    used : @hashmap.HashMap[Int, Bool],
+    values : Array[Value],
+  ) -> Unit {
+    for value in values {
+      used.set(value.id, true)
+    }
+  }
+  match term {
+    Return(values) => record_values(used, values)
+    Jump(_, args) => record_values(used, args)
+    Branch(cond, _, true_args, _, false_args) => {
+      used.set(cond.id, true)
+      record_values(used, true_args)
+      record_values(used, false_args)
+    }
+    Brz(cond, _, _) | Brnz(cond, _, _) => used.set(cond.id, true)
+    BrTable(index, _, _) => used.set(index.id, true)
+    TrapExit(_) => ()
+  }
+}
+
+///|
+fn inst_has_side_effects(inst : Inst) -> Bool {
+  match inst.opcode {
+    Store
+    | StorePtr(_)
+    | Call(_)
+    | CallIndirect(_)
+    | CallPtr(_, _)
+    | Trap(_)
+    | Custom(_)
+    | Load
+    | LoadPtr(_) => true
+    // TODO(milkir): allow deleting loads once alias, trap, and volatility
+    // metadata can prove that a load is speculatable and unused.
+    _ => inst.results.length() == 0
+  }
+}
+
+///|
+fn inst_result_is_used(inst : Inst, used : @hashmap.HashMap[Int, Bool]) -> Bool {
+  for result in inst.results {
+    if used.get(result.id).unwrap_or(false) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+pub fn eliminate_dead_code(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("dce")
+  let used : @hashmap.HashMap[Int, Bool] = HashMap([])
+  for block in func.blocks {
+    for inst in block.instructions {
+      for arg in inst.args {
+        used.set(arg.id, true)
+      }
+    }
+    if block.terminator is Some(term) {
+      record_terminator_uses(used, term)
+    }
+  }
+  for block in func.blocks {
+    let kept : Array[Inst] = []
+    for inst in block.instructions {
+      if inst_has_side_effects(inst) || inst_result_is_used(inst, used) {
+        kept.push(inst)
+      } else {
+        result.mark_changed()
+      }
+    }
+    if result.changed && kept.length() != block.instructions.length() {
+      block.instructions.clear()
+      for inst in kept {
+        block.instructions.push(inst)
+      }
+    }
+  }
+  result
+}
+
+///|
+fn merge_opt_result(result : OptResult, pass_result : OptResult) -> Unit {
+  if pass_result.changed {
+    result.mark_changed()
+  }
+  for pass in pass_result.passes_run {
+    result.add_pass(pass)
+  }
+}
+
+///|
 pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   match level {
     O0 => OptResult::new()
-    O1 | O2 | O3 => fold_constants(func)
+    O1 => fold_constants(func)
+    O2 | O3 => {
+      let result = OptResult::new()
+      merge_opt_result(result, fold_constants(func))
+      merge_opt_result(result, eliminate_dead_code(func))
+      result
+    }
   }
 }
