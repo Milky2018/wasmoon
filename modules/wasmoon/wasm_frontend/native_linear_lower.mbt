@@ -1379,6 +1379,11 @@ fn append_linear_exit_block_body(
 }
 
 ///|
+fn body_is_nop_only(body : Array[@types.Instruction]) -> Bool {
+  body.all(instr => instr is Nop)
+}
+
+///|
 fn flatten_linear_blocks(
   body : Array[@types.Instruction],
 ) -> Array[@types.Instruction]? {
@@ -1431,7 +1436,9 @@ fn try_lower_linear_function(
     match instr {
       Nop => ()
       If(block_type, then_body, else_body) =>
-        if block_type is Empty && then_body.is_empty() && else_body.is_empty() {
+        if block_type is Empty &&
+          body_is_nop_only(then_body) &&
+          body_is_nop_only(else_body) {
           guard pop_value(stack) is Some(_) else { return None }
         } else if !push_simple_if_select(
             builder, stack, locals, block_type, then_body, else_body,
