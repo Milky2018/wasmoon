@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise @machv_emit.EmitError
 
 pub fn runtime_assembly() -> RuntimeAssembly
 

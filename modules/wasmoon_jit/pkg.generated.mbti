@@ -13,7 +13,7 @@ pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan
+pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan raise @machv_emit.EmitError
 
 // Errors
 pub suberror LinkError {

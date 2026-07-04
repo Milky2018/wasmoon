@@ -39,7 +39,7 @@ pub fn default_native_glue() -> Array[NativeGlueBinding] {
 pub fn plan_integration(
   func : @milkir.Function,
   machv_func : @machv.Function,
-) -> JitIntegrationPlan {
+) -> JitIntegrationPlan raise @machv_emit.EmitError {
   {
     entry_symbol: func.name,
     native_glue: default_native_glue(),

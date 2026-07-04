@@ -15,7 +15,7 @@ test "wasmoon remains the product runtime module" {
 
 ///|
 test "wasmoon consumes reusable compiler infrastructure" {
-  let assembly = compiler_infrastructure_assembly()
+  let assembly = try! compiler_infrastructure_assembly()
   inspect(assembly.signature.params.length(), content="0")
   inspect(assembly.regalloc_program.blocks.length(), content="1")
   inspect(assembly.code_object.debug_entries.length(), content="1")

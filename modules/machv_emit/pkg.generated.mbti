@@ -7,9 +7,14 @@ import {
 }
 
 // Values
-pub fn emit_function(@machv.Function) -> CodeObject
+pub fn emit_function(@machv.Function) -> CodeObject raise EmitError
 
 // Errors
+pub suberror EmitError {
+  UnsupportedOpcode(opcode~ : String)
+  UnsupportedOperand(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for EmitError
 
 // Types and methods
 pub(all) struct CodeObject {

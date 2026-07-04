@@ -45,7 +45,7 @@ pub fn runtime_assembly() -> RuntimeAssembly {
 }
 
 ///|
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise @machv_emit.EmitError {
   let signature = @milkir.Signature::new([], [])
   let machv_function = @machv.Function::new("wasmoon_runtime_probe")
   let entry = machv_function.new_block()
