@@ -18,7 +18,7 @@ test "emit AArch64 move, add, and return bytes" {
   add_inst.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
   entry.append(add_inst)
   entry.append(func.new_inst(Return))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[224, 3, 1, 170, 32, 0, 2, 139, 192, 3, 95, 214]",
@@ -613,7 +613,7 @@ test "emit AArch64 float register move" {
   )
   entry.append(move_)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(object.code, content="[1, 64, 96, 30, 192, 3, 95, 214]")
 }
 
@@ -643,7 +643,7 @@ test "emit AArch64 vector register move" {
   )
   entry.append(move_)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(object.code, content="[1, 28, 160, 78, 192, 3, 95, 214]")
 }
 
@@ -707,7 +707,7 @@ test "emit AArch64 compare branch terminator" {
   )
   then_block.set_terminator(TermReturn([]))
   else_block.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -802,7 +802,7 @@ test "emit AArch64 integer constants and arithmetic bytes" {
   and_.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
   entry.append(and_)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[64, 5, 128, 210, 2, 0, 1, 203, 67, 0, 1, 138, 192, 3, 95, 214]",
@@ -820,7 +820,7 @@ test "emit AArch64 wide integer constants" {
   shifted.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
   entry.append(shifted)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[1, 0, 128, 146, 34, 0, 160, 210, 192, 3, 95, 214]",
@@ -854,7 +854,7 @@ test "emit AArch64 integer division bytes" {
   )
   entry.append(unsigned_div)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[2, 12, 193, 154, 67, 8, 193, 154, 192, 3, 95, 214]",
@@ -884,7 +884,7 @@ test "emit AArch64 integer multiply-high bytes" {
   signed.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
   entry.append(signed)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 124, 194, 155, 131, 124, 69, 155, 192, 3, 95, 214]",
@@ -900,7 +900,7 @@ test "emit AArch64 integer not bytes" {
   not.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
   entry.append(not)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(object.code, content="[227, 3, 36, 170, 192, 3, 95, 214]")
 }
 
@@ -927,7 +927,7 @@ test "emit AArch64 integer compare bytes" {
   cmp_ult.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
   entry.append(cmp_ult)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -980,7 +980,7 @@ test "emit AArch64 scalar float compare bytes" {
   cmp_ne.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
   entry.append(cmp_ne)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -1023,7 +1023,7 @@ test "emit AArch64 integer bitcount bytes" {
   ctz.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
   entry.append(ctz)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 16, 192, 218, 67, 0, 192, 218, 99, 16, 192, 218, 192, 3, 95, 214]",
@@ -1050,7 +1050,7 @@ test "emit AArch64 integer shift bytes" {
   sshr.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
   entry.append(sshr)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -1086,7 +1086,7 @@ test "emit AArch64 integer rotate-right bytes" {
   rotr.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
   entry.append(rotr)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(object.code, content="[32, 44, 194, 154, 192, 3, 95, 214]")
 }
 
@@ -1111,7 +1111,7 @@ test "emit AArch64 bitcast bytes" {
   )
   entry.append(float_to_int)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[65, 0, 103, 158, 131, 0, 102, 158, 192, 3, 95, 214]",
@@ -1135,7 +1135,7 @@ test "emit AArch64 sign-extension bytes" {
   s32.add_operand(@machv.Operand::def(Physical({ index: 4, class: Int })))
   entry.append(s32)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 28, 64, 147, 98, 60, 64, 147, 164, 124, 64, 147, 192, 3, 95, 214]",
@@ -1161,7 +1161,7 @@ test "emit AArch64 generic integer width conversion bytes" {
   reduce.add_operand(@machv.Operand::def(Physical({ index: 4, class: Int })))
   entry.append(reduce)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 124, 64, 147, 226, 3, 3, 42, 228, 3, 5, 42, 192, 3, 95, 214]",
@@ -1185,7 +1185,7 @@ test "emit AArch64 integer select bytes" {
   select.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
   entry.append(select)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[63, 0, 0, 113, 64, 16, 131, 154, 192, 3, 95, 214]",
@@ -1205,7 +1205,7 @@ test "emit AArch64 pointer memory bytes" {
   store.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
   entry.append(store)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[1, 4, 64, 249, 1, 8, 0, 249, 192, 3, 95, 214]",
@@ -1225,7 +1225,7 @@ test "emit AArch64 generic memory bytes" {
   store.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
   entry.append(store)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 4, 64, 249, 98, 4, 0, 185, 192, 3, 95, 214]",
@@ -1247,7 +1247,7 @@ test "emit AArch64 scalar float memory bytes" {
   )
   entry.append(store)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[1, 4, 64, 189, 2, 4, 0, 253, 192, 3, 95, 214]",
@@ -1269,7 +1269,7 @@ test "emit AArch64 vector memory bytes" {
   )
   entry.append(store)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[1, 4, 192, 61, 2, 8, 128, 61, 192, 3, 95, 214]",
@@ -1308,7 +1308,7 @@ test "emit AArch64 scalar floating point bytes" {
   neg.add_operand(@machv.Operand::def(Physical({ index: 8, class: Float32 })))
   entry.append(neg)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -1359,7 +1359,7 @@ test "emit AArch64 float width conversion bytes" {
   )
   entry.append(demote)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[32, 192, 34, 30, 98, 64, 98, 30, 192, 3, 95, 214]",
@@ -1397,7 +1397,7 @@ test "emit AArch64 scalar float rounding bytes" {
   )
   entry.append(nearest)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -1643,7 +1643,7 @@ test "emit AArch64 stack spill load store bytes" {
   )
   entry.append(store_float)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content=(
@@ -1759,7 +1759,7 @@ test "emit AArch64 vector stack spill load store bytes" {
   )
   entry.append(store)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[225, 3, 192, 61, 226, 7, 128, 61, 192, 3, 95, 214]",
@@ -1820,7 +1820,7 @@ test "emit AArch64 stack address bytes" {
   addr.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
   entry.append(addr)
   entry.set_terminator(TermReturn([]))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(object.code, content="[225, 67, 0, 145, 192, 3, 95, 214]")
 }
 
@@ -1849,7 +1849,7 @@ test "emit generic relocations and stack maps" {
   entry.append(func.new_inst(Jump(1)))
   let exit = func.new_block()
   exit.append(func.new_inst(Return))
-  let object = try! emit_function(func)
+  let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
     content="[0, 0, 0, 148, 1, 0, 0, 20, 192, 3, 95, 214]",
@@ -1877,7 +1877,7 @@ test "reject unsupported MachV opcode instead of pseudo emitting" {
   let func = @machv.Function::new("unsupported")
   let entry = func.new_block()
   entry.append(func.new_inst(Target("x64.iadd")))
-  try emit_function(func) catch {
+  try emit_function_for_target(func, AArch64) catch {
     UnsupportedOpcode(_) => inspect("unsupported", content="unsupported")
     _ => fail("unexpected emit error")
   } noraise {

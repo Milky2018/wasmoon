@@ -3314,9 +3314,3 @@ pub fn emit_function_for_target(
   patch_block_fixups(object, target, block_offsets)
   object
 }
-
-///|
-pub fn emit_function(func : @machv.Function) -> CodeObject raise EmitError {
-  // TODO(machv_emit): require callers to pass target metadata instead of relying on this temporary AArch64 default.
-  emit_function_for_target(func, AArch64)
-}
