@@ -168,6 +168,85 @@ fn add_defs(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
 }
 
 ///|
+fn preg_with_class(preg : @machv.PReg, class : @machv.RegClass) -> @machv.PReg {
+  { index: preg.index, class }
+}
+
+///|
+fn add_fixed_constraint(
+  inst : @machv.Instruction,
+  operand_index : Int,
+  preg : @machv.PReg,
+) -> Unit {
+  inst.add_constraint({ operand_index, allowed_regs: [preg] })
+}
+
+///|
+fn add_call_abi_constraints(
+  inst : @machv.Instruction,
+  args : Array[@milkir.Value],
+  results : Array[@milkir.Value],
+) -> Unit {
+  let abi = abi_policy()
+  let mut int_arg_idx = 0
+  let mut float_arg_idx = 0
+  for operand_index, arg in args {
+    match class_for_type(arg.ty) {
+      Int =>
+        if int_arg_idx < abi.int_argument_regs.length() {
+          add_fixed_constraint(
+            inst,
+            operand_index,
+            abi.int_argument_regs[int_arg_idx],
+          )
+          int_arg_idx = int_arg_idx + 1
+        }
+      Float32 | Float64 | Vector =>
+        if float_arg_idx < abi.float_argument_regs.length() {
+          let class = class_for_type(arg.ty)
+          add_fixed_constraint(
+            inst,
+            operand_index,
+            preg_with_class(abi.float_argument_regs[float_arg_idx], class),
+          )
+          float_arg_idx = float_arg_idx + 1
+        }
+    }
+  }
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  for result_index, result in results {
+    let operand_index = args.length() + result_index
+    match class_for_type(result.ty) {
+      Int =>
+        if int_result_idx < abi.int_return_regs.length() {
+          add_fixed_constraint(
+            inst,
+            operand_index,
+            abi.int_return_regs[int_result_idx],
+          )
+          int_result_idx = int_result_idx + 1
+        }
+      Float32 | Float64 | Vector =>
+        if float_result_idx < abi.float_return_regs.length() {
+          let class = class_for_type(result.ty)
+          add_fixed_constraint(
+            inst,
+            operand_index,
+            preg_with_class(abi.float_return_regs[float_result_idx], class),
+          )
+          float_result_idx = float_result_idx + 1
+        }
+    }
+  }
+  // TODO(aarch64_target): materialize overflow stack arguments once MachV
+  // carries outgoing stack-argument effects in a target-independent form.
+  for preg in abi.caller_saved_regs {
+    inst.add_clobber(preg)
+  }
+}
+
+///|
 fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
   match cc {
     Eq => Eq
@@ -367,6 +446,12 @@ fn lower_inst(
     _ => {
       add_uses(lowered, inst.args)
       add_defs(lowered, inst.results)
+      if inst.opcode is Call(_) {
+        add_call_abi_constraints(lowered, inst.args, inst.results)
+      } else if inst.opcode is CallPtr(_, _) || inst.opcode is CallIndirect(_) {
+        // TODO(aarch64_target): split generic indirect-call ABI from Wasmoon-specific
+        // callee VMContext and function-pointer placement.
+      }
     }
   }
   // TODO(aarch64_target): replace textual target opcodes with selected AArch64

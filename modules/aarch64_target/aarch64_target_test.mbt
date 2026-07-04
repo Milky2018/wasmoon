@@ -71,3 +71,47 @@ test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
   )
   inspect(lowered.blocks[0].instructions[4].operands.length(), content="2")
 }
+
+///|
+test "AArch64 lowers direct calls with AAPCS64 ABI constraints" {
+  let func = @milkir.Function::new_empty("call")
+  let int0 = func.new_value(I64)
+  let float0 = func.new_value(F64)
+  let int1 = func.new_value(I64)
+  let result0 = func.new_value(I64)
+  let result1 = func.new_value(F64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(
+      Call(@milkir.ExternalSymbol::new("callee")),
+      [int0, float0, int1],
+      [result0, result1],
+    ),
+  )
+  entry.set_terminator(Return([result0, result1]))
+  let lowered = lower_function(func)
+  let call = lowered.blocks[0].instructions[0]
+  inspect(call.opcode == Call("callee"), content="true")
+  inspect(call.constraints.length(), content="5")
+  inspect(
+    call.constraints[0].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[1].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(
+    call.constraints[2].allowed_regs[0] == { index: 1, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[3].allowed_regs[0] == { index: 0, class: Int },
+    content="true",
+  )
+  inspect(
+    call.constraints[4].allowed_regs[0] == { index: 0, class: Float64 },
+    content="true",
+  )
+  inspect(call.clobbers.length() > 0, content="true")
+}
