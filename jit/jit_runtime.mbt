@@ -70,7 +70,7 @@ pub struct JITDebugDB {
 
 ///|
 pub fn JITDebugDB::new() -> JITDebugDB {
-  { entries: Map::new() }
+  { entries: Map([]) }
 }
 
 ///|
@@ -112,7 +112,7 @@ pub suberror JITModuleLoadError {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for JITModuleLoadError with output(self, logger) {
+pub impl Show for JITModuleLoadError with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -157,8 +157,8 @@ struct JITModule {
 ///|
 pub fn JITModule::new() -> JITModule {
   {
-    functions: Map::new(),
-    by_name: Map::new(),
+    functions: Map([]),
+    by_name: Map([]),
     address_ranges: [],
     context: None,
     context_ptr: 0L,

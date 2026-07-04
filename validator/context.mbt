@@ -181,7 +181,7 @@ fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
   }
 
   // Collect declared functions from elem segments and global inits
-  let declared_funcs : @hashset.HashSet[Int] = @hashset.new()
+  let declared_funcs : @hashset.HashSet[Int] = @hashset.HashSet([])
   // Functions referenced in element segments
   for elem in mod.elems {
     for init in elem.init {

@@ -2,6 +2,18 @@
 // These tests cover throw, try_table, catch, catch_ref, catch_all, catch_all_ref, and throw_ref
 
 ///|
+fn[T] exception_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 /// Create a module with a simple throw instruction
 fn create_throw_module() -> @types.Module {
   // tag $e0 (no params)
@@ -38,8 +50,13 @@ test "exception: basic throw raises exception" {
   let mod = create_throw_module()
   let (store, instance) = @executor.instantiate_module(mod)
   // Calling throw_it should raise an exception
-  let result = try? @executor.call_exported_func(store, instance, "throw_it", [])
-  inspect(result is Err(_), content="true")
+  inspect(
+    exception_runtime_has_error(
+      () => @executor.call_exported_func(store, instance, "throw_it", []),
+      _ => true,
+    ),
+    content="true",
+  )
 }
 
 ///|
@@ -908,9 +925,14 @@ fn create_uncaught_module() -> @types.Module {
 test "exception: uncaught exception propagates out" {
   let mod = create_uncaught_module()
   let (store, instance) = @executor.instantiate_module(mod)
-  let result = try? @executor.call_exported_func(store, instance, "uncaught", [])
   // Should raise an error because exception is uncaught
-  inspect(result is Err(_), content="true")
+  inspect(
+    exception_runtime_has_error(
+      () => @executor.call_exported_func(store, instance, "uncaught", []),
+      _ => true,
+    ),
+    content="true",
+  )
 }
 
 ///|

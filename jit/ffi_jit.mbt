@@ -17,7 +17,7 @@ pub suberror JITTrap {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for JITTrap with output(self, logger) {
+pub impl Show for JITTrap with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -211,7 +211,7 @@ fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(ctx)
   // Check if allocation succeeded by verifying the pointer is valid
   if ctx_ptr != 0L {
-    Some(JITContext::{ ctx, trampoline_cache: Map::new() })
+    Some(JITContext::{ ctx, trampoline_cache: Map([]) })
   } else {
     None
   }

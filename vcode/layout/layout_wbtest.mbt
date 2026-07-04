@@ -23,7 +23,7 @@ test "layout: no loops - preserves order" {
   let order = layout_blocks(func)
 
   // Should preserve original order (no loops)
-  inspect(order, content="[0, 1, 2]")
+  debug_inspect(order, content="[0, 1, 2]")
 }
 
 ///|
@@ -62,7 +62,7 @@ test "layout: simple loop - cfg rpo order" {
 
   // Cranelift-style blockorder starts from CFG RPO.
   // With successor order [exit, body], we get [entry, header, body, exit].
-  inspect(order, content="[0, 1, 2, 3]")
+  debug_inspect(order, content="[0, 1, 2, 3]")
 }
 
 ///|
@@ -83,7 +83,7 @@ test "cfg: find back edges" {
 
   // Should find one back edge: block1 -> block0
   inspect(back_edges.length(), content="1")
-  inspect(back_edges[0], content="(1, 0)")
+  debug_inspect(back_edges[0], content="(1, 0)")
 }
 
 ///|
@@ -104,7 +104,7 @@ test "cfg: sparse block ids keep edges" {
   let cfg = VCodeCFG::build(func)
   let back_edges = cfg.find_back_edges()
   inspect(back_edges.length(), content="1")
-  inspect(back_edges[0], content="(1, 0)")
+  debug_inspect(back_edges[0], content="(1, 0)")
 }
 
 ///|
@@ -206,7 +206,7 @@ test "layout: loop with exit chain" {
   let order = layout_blocks(func)
 
   // CFG RPO order for this graph is [0, 2, 3, 4, 1].
-  inspect(order, content="[0, 2, 3, 4, 1]")
+  debug_inspect(order, content="[0, 2, 3, 4, 1]")
 }
 
 ///|

@@ -24,7 +24,7 @@ test "table.init: basic initialization from element segment" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(0)])")
+  debug_inspect(result, content="Ok([I32(0)])")
 }
 
 ///|
@@ -47,7 +47,7 @@ test "table.init: verify second function" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(1)])")
+  debug_inspect(result, content="Ok([I32(1)])")
 }
 
 ///|
@@ -71,7 +71,7 @@ test "table.copy: non-overlapping copy" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(0)])")
+  debug_inspect(result, content="Ok([I32(0)])")
 }
 
 ///|
@@ -94,7 +94,7 @@ test "table.copy: verify copied function" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(2)])")
+  debug_inspect(result, content="Ok([I32(2)])")
 }
 
 ///|
@@ -116,7 +116,7 @@ test "table.fill: fill with null" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(42)])")
+  debug_inspect(result, content="Ok([I32(42)])")
 }
 
 ///|
@@ -139,7 +139,7 @@ test "elem.drop: dropped segment init with zero length succeeds" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(1)])")
+  debug_inspect(result, content="Ok([I32(1)])")
 }
 
 ///|
@@ -158,5 +158,5 @@ test "elem.drop: can drop multiple times" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(42)])")
+  debug_inspect(result, content="Ok([I32(42)])")
 }

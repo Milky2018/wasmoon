@@ -246,7 +246,7 @@ test "basic add" {
     I32(5),
     I32(3),
   ])
-  inspect(result, content="[I32(8)]")
+  debug_inspect(result, content="[I32(8)]")
 }
 ```
 
@@ -267,7 +267,7 @@ test "memory" {
   @executor.call_exported_func(store, instance, "store", [I32(0), I32(42)])
   |> ignore
   let result = @executor.call_exported_func(store, instance, "load", [I32(0)])
-  inspect(result, content="[I32(42)]")
+  debug_inspect(result, content="[I32(42)]")
 }
 ```
 
@@ -296,7 +296,7 @@ test "cross-module" {
     "use_add",
     [I32(3), I32(5)],
   )
-  inspect(result, content="[I32(8)]")
+  debug_inspect(result, content="[I32(8)]")
 }
 ```
 
@@ -329,7 +329,7 @@ test "host function" {
     "quadruple",
     [I32(5)],
   )
-  inspect(result, content="[I32(20)]")
+  debug_inspect(result, content="[I32(20)]")
 }
 ```
 

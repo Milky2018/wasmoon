@@ -10,7 +10,7 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
   for block in func.blocks {
     // Reset expressions map for each block to avoid cross-block CSE issues
     // (e.g., using values defined in sibling branches of if-else)
-    let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.new()
+    let expressions : @hashmap.HashMap[Inst, Value] = @hashmap.HashMap([])
     let mut i = 0
     while i < block.instructions.length() {
       let inst = block.instructions[i]
@@ -60,9 +60,9 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
   let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
   for block in func.blocks {
     // Key: (memidx, vmctx_value_id) packed into an Int64.
-    let seen : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    let seen : @hashmap.HashMap[Int64, Value] = @hashmap.HashMap([])
     // Key: opcode/base/offset for vmctx field loads.
-    let seen_vmctx_loads : @hashmap.HashMap[String, Value] = @hashmap.new()
+    let seen_vmctx_loads : @hashmap.HashMap[String, Value] = @hashmap.HashMap([])
     for inst in block.instructions {
       match inst.opcode {
         LoadMemBase(memidx) =>
@@ -157,7 +157,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
   if !cfg.is_valid(0) {
     return result
   }
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
@@ -167,7 +167,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
   fn copy_state(
     src : @hashmap.HashMap[Int64, Value],
   ) -> @hashmap.HashMap[Int64, Value] {
-    let dst : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    let dst : @hashmap.HashMap[Int64, Value] = @hashmap.HashMap([])
     for entry in src.iter() {
       let (k, v) = entry
       dst.set(k, v)
@@ -228,7 +228,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
     dst : @hashmap.HashMap[Int64, Value],
     incoming : @hashmap.HashMap[Int64, Value],
   ) -> Bool {
-    let next : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    let next : @hashmap.HashMap[Int64, Value] = @hashmap.HashMap([])
     for entry in dst.iter() {
       let (k, old_v) = entry
       if incoming.get(k) is Some(in_v) && in_v.id == old_v.id {
@@ -261,10 +261,11 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
   }
 
   // Block input state: block_id -> available (memidx, vmctx) -> dominating value.
-  let block_input : @hashmap.HashMap[Int, @hashmap.HashMap[Int64, Value]] = @hashmap.new()
-  block_input.set(0, @hashmap.new())
+  let block_input : @hashmap.HashMap[Int, @hashmap.HashMap[Int64, Value]] = @hashmap.HashMap([],
+  )
+  block_input.set(0, @hashmap.HashMap([]))
   let worklist : Array[Int] = [0]
-  let in_worklist : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let in_worklist : @hashset.HashSet[Int] = @hashset.HashSet([])
   in_worklist.add(0) |> ignore
 
   while worklist.length() > 0 {
@@ -309,7 +310,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
   for block in func.blocks {
     let state = match block_input.get(block.id) {
       Some(s) => copy_state(s)
-      None => @hashmap.new()
+      None => @hashmap.HashMap([])
     }
     for inst in block.instructions {
       if invalidates_mem_base(inst, ptr_base_infos) {
@@ -437,7 +438,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
   }
 
   let iconst_values = collect_iconst_values(func)
-  let def_inst : @hashmap.HashMap[Int, Inst] = @hashmap.new()
+  let def_inst : @hashmap.HashMap[Int, Inst] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(r) {
@@ -446,7 +447,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
     }
   }
 
-  let has_mem_base_cache : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let has_mem_base_cache : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
 
   fn has_wasm_mem_base(
     value : Value,
@@ -457,7 +458,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
       return cached
     }
     let stack : Array[Value] = [value]
-    let visited : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    let visited : @hashset.HashSet[Int] = @hashset.HashSet([])
     while stack.length() > 0 {
       let current = stack.pop().unwrap()
       if visited.contains(current.id) {
@@ -493,7 +494,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
   }
 
   for block in func.blocks {
-    let pair_use_count : @hashmap.HashMap[String, Int] = @hashmap.new()
+    let pair_use_count : @hashmap.HashMap[String, Int] = @hashmap.HashMap([])
     // Pass 1: count candidate `(base, reg)` pairs in this block.
     for inst in block.instructions {
       guard mem_addr_operand_indices(inst) is Some((base_idx, off_idx)) else {
@@ -525,8 +526,8 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
     }
 
     // Pass 2: rewrite memory ops to shared pair-base + immediate offset.
-    let shared_pairs : @hashmap.HashMap[String, Value] = @hashmap.new()
-    let local_consts : @hashmap.HashMap[Int64, Value] = @hashmap.new()
+    let shared_pairs : @hashmap.HashMap[String, Value] = @hashmap.HashMap([])
+    let local_consts : @hashmap.HashMap[Int64, Value] = @hashmap.HashMap([])
     let new_insts : Array[Inst] = []
     let orig_len = block.instructions.length()
 
@@ -708,12 +709,12 @@ fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
 
 ///|
 fn LastStoreState::new() -> LastStoreState {
-  { heap: @hashmap.new(), heap_default: None, vmctx: None, other: None }
+  { heap: @hashmap.HashMap([]), heap_default: None, vmctx: None, other: None }
 }
 
 ///|
 fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
-  let heap : @hashmap.HashMap[Int, StoreVersion] = @hashmap.new()
+  let heap : @hashmap.HashMap[Int, StoreVersion] = @hashmap.HashMap([])
   for entry in self.heap.iter() {
     let (memidx, token) = entry
     heap.set(memidx, token)
@@ -778,7 +779,7 @@ fn LastStoreState::meet_from(
     other.heap_default,
     join_token,
   )
-  let heap_keys : @hashset.HashSet[Int] = @hashset.new()
+  let heap_keys : @hashset.HashSet[Int] = @hashset.HashSet([])
   for entry in self.heap.iter() {
     let (memidx, _) = entry
     heap_keys.add(memidx)
@@ -787,7 +788,7 @@ fn LastStoreState::meet_from(
     let (memidx, _) = entry
     heap_keys.add(memidx)
   }
-  let merged_heap : @hashmap.HashMap[Int, StoreVersion] = @hashmap.new()
+  let merged_heap : @hashmap.HashMap[Int, StoreVersion] = @hashmap.HashMap([])
   for memidx in heap_keys {
     let left = match self.heap.get(memidx) {
       Some(token) => Some(token)
@@ -868,12 +869,12 @@ fn compute_block_input_last_store_states(
   block_idx : @hashmap.HashMap[Int, Int],
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> @hashmap.HashMap[Int, LastStoreState] {
-  let block_input : @hashmap.HashMap[Int, LastStoreState] = @hashmap.new()
+  let block_input : @hashmap.HashMap[Int, LastStoreState] = @hashmap.HashMap([])
   if !cfg.is_valid(0) {
     return block_input
   }
   let queue : Array[Int] = [0]
-  let queue_set : @hashset.HashSet[Int] = @hashset.new()
+  let queue_set : @hashset.HashSet[Int] = @hashset.HashSet([])
   queue_set.add(0)
   while queue.length() > 0 {
     let block_id = queue.pop().unwrap()
@@ -927,7 +928,7 @@ fn compute_block_input_last_store_states(
 
 ///|
 fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
-  let result : @hashmap.HashMap[Int, Int64] = @hashmap.new()
+  let result : @hashmap.HashMap[Int, Int64] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
@@ -959,7 +960,7 @@ fn collect_ptr_base_infos(
   func : Function,
   iconst_values : @hashmap.HashMap[Int, Int64],
 ) -> @hashmap.HashMap[Int, PtrBaseInfo] {
-  let result : @hashmap.HashMap[Int, PtrBaseInfo] = @hashmap.new()
+  let result : @hashmap.HashMap[Int, PtrBaseInfo] = @hashmap.HashMap([])
   if func.params.length() > 0 {
     // Wasm ABI: function param 0 is vmctx.
     let vmctx = func.params[0].0
@@ -1180,32 +1181,33 @@ fn run_global_value_numbering(
   let iconst_values : @hashmap.HashMap[Int, Int64] = if enable_memory {
     collect_iconst_values(func)
   } else {
-    @hashmap.new()
+    @hashmap.HashMap([])
   }
   let ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo] = if enable_memory {
     collect_ptr_base_infos(func, iconst_values)
   } else {
-    @hashmap.new()
+    @hashmap.HashMap([])
   }
   // Build CFG and compute dominators
   let cfg = CFG::build(func)
   let idom = cfg.compute_dominators()
   let domtree = build_dominator_tree(idom)
   // Build block_id -> array_index mapping
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
   // Expression environment: key -> (value, reads_memory flag)
-  let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+  let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.HashMap([])
   // Track memory-reading keys separately for O(1) invalidation lookup
-  let memory_keys : @hashset.HashSet[Inst] = @hashset.new()
+  let memory_keys : @hashset.HashSet[Inst] = @hashset.HashSet([])
   let block_input_state : @hashmap.HashMap[Int, LastStoreState] = if enable_memory {
     compute_block_input_last_store_states(func, cfg, block_idx, ptr_base_infos)
   } else {
-    @hashmap.new()
+    @hashmap.HashMap([])
   }
-  let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = @hashmap.new()
+  let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = @hashmap.HashMap([],
+  )
   // DFS the dominator tree
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
@@ -1352,7 +1354,7 @@ pub fn gvn(func : Function) -> OptResult {
   let result = OptResult::new()
   for block in func.blocks {
     // Value table: expression key -> (result value, reads_memory flag)
-    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.new()
+    let value_table : @hashmap.HashMap[Inst, (Value, Bool)] = @hashmap.HashMap([])
     for inst in block.instructions {
       // Check if this instruction may invalidate memory-based expressions
       if may_write_memory(inst.opcode) {

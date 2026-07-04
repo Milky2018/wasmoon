@@ -171,7 +171,7 @@ test "component runtime: host import export" {
   let results = instance.call_exported_func("", [
     @runtime_impl.ComponentValue::S32(41),
   ])
-  inspect(results, content="[S32(42)]")
+  debug_inspect(results, content="[S32(42)]")
 }
 
 ///|
@@ -203,7 +203,7 @@ test "component runtime: canon lift core func" {
   let results = instance.call_exported_func("inc", [
     @runtime_impl.ComponentValue::S32(41),
   ])
-  inspect(results, content="[S32(42)]")
+  debug_inspect(results, content="[S32(42)]")
 }
 
 ///|
@@ -259,5 +259,5 @@ test "component runtime: canon lower to core func" {
   ) catch {
     e => return fail("call core func failed: \{e}")
   }
-  inspect(results, content="[I32(42)]")
+  debug_inspect(results, content="[I32(42)]")
 }

@@ -1,6 +1,18 @@
 // Executor Tests
 
 ///|
+fn[T] runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "execute simple add function" {
   let mod = @types.Module::simple(
     [@types.ValueType::I32, @types.ValueType::I32],
@@ -1047,8 +1059,11 @@ test "import validation: missing import raises error" {
 
   // Should raise UnknownImport
   inspect(
-    try? instantiate_module_with_imports(store, mod, imports),
-    content="Err(unknown import: env.missing_func)",
+    runtime_has_error(
+      () => instantiate_module_with_imports(store, mod, imports),
+      err => err is @runtime.UnknownImport("env", "missing_func"),
+    ),
+    content="true",
   )
 }
 

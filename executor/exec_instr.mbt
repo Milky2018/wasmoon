@@ -569,11 +569,15 @@ fn ExecContext::exec_instr(
       let arity = self.block_arity(bt)
       let stack_height = self.stack.size()
       self.push_label(false, arity)
-      let result = try? self.exec_block(body)
+      let result = try self.exec_block(body) catch {
+        e => ExecBlockRaised(e)
+      } noraise {
+        _ => ExecBlockCompleted
+      }
       self.pop_label()
       match result {
-        Ok(_) => ()
-        Err(ThrowException(tag_addr, values)) => {
+        ExecBlockCompleted => ()
+        ExecBlockRaised(ThrowException(tag_addr, values)) => {
           // Find a matching handler
           for handler in handlers {
             match handler {
@@ -620,15 +624,16 @@ fn ExecContext::exec_instr(
           // No handler matched, re-raise the exception
           raise ThrowException(tag_addr, values)
         }
-        Err(BranchWith(0, values)) => {
+        ExecBlockRaised(BranchWith(0, values)) => {
           // Normal branch to end of try_table
           self.restore_stack_to(stack_height)
           for v in values {
             self.stack.push(v)
           }
         }
-        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-        Err(e) => raise e
+        ExecBlockRaised(BranchWith(n, values)) =>
+          raise BranchWith(n - 1, values)
+        ExecBlockRaised(e) => raise e
       }
     }
 

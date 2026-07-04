@@ -61,7 +61,7 @@ fn ProgPoint::to_string(self : ProgPoint) -> String {
 }
 
 ///|
-pub impl Show for ProgPoint with output(self, logger) {
+pub impl Show for ProgPoint with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -128,7 +128,7 @@ fn LiveInterval::to_string(self : LiveInterval) -> String {
 }
 
 ///|
-pub impl Show for LiveInterval with output(self, logger) {
+pub impl Show for LiveInterval with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -325,7 +325,8 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
     for v in liveness.live_out[i] {
       out_list.push(v)
     }
-    result = result + "  block\{i}: in=\{in_list}, out=\{out_list}\n"
+    result = result +
+      "  block\{i}: in=\{to_repr(in_list)}, out=\{to_repr(out_list)}\n"
   }
 
   // Print intervals
@@ -465,8 +466,8 @@ fn compute_liveness_with_options(
   let live_out : Array[Set[Int]] = []
   if build_live_intervals {
     for _ in 0..<num_blocks {
-      live_in.push(Set::new())
-      live_out.push(Set::new())
+      live_in.push(Set([]))
+      live_out.push(Set([]))
     }
   }
   // Compute block order directly as FixedArray

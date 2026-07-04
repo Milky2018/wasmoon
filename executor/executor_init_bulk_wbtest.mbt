@@ -1,4 +1,16 @@
 ///|
+fn[T] init_bulk_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "module initialization: start function execution" {
   // Module with a start function that sets a global
   // func 0: init() - sets global to 42
@@ -397,8 +409,11 @@ test "bulk memory: data.drop" {
 
   // After drop: init_nonzero should fail
   inspect(
-    try? call_exported_func(store, instance, "init_nonzero", []),
-    content="Err(out of bounds memory access)",
+    init_bulk_runtime_has_error(
+      () => call_exported_func(store, instance, "init_nonzero", []),
+      err => err is @runtime.OutOfBoundsMemoryAccess,
+    ),
+    content="true",
   )
 }
 

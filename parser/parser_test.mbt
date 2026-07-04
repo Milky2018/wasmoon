@@ -27,10 +27,10 @@ fn make_wasm_module(sections : Array[FixedArray[Int]]) -> Bytes {
 ///|
 fn parse_wasm(sections : Array[FixedArray[Int]]) -> @types.Module? {
   let data = make_wasm_module(sections)
-  let result = try? @parser.parse_module(data)
-  match result {
-    Ok(m) => Some(m)
-    Err(_) => None
+  try @parser.parse_module(data) catch {
+    _ => None
+  } noraise {
+    m => Some(m)
   }
 }
 

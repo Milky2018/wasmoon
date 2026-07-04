@@ -457,9 +457,13 @@ fn try_compile_jit(
         lowered_mod, instance, store,
       )
       // Load JIT module
-      let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
-        pc, func_signatures, external_imports,
-      )
+      let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
+        @jit.JITModule::load_with_imports(pc, func_signatures, external_imports)
+      catch {
+        e => Err(e)
+      } noraise {
+        jm => Ok(jm)
+      }
       match jit_module_result {
         Err(err) =>
           return Err(

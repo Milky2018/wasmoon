@@ -1587,24 +1587,26 @@ pub fn BacktrackingAllocator::generate_result(
 }
 
 ///|
+priv struct SpillSetInfo {
+  old_slot : Int
+  reg_class : @abi.RegClass
+  spans : Array[ProgPointRange]
+  start : ProgPoint
+}
+
+///|
+priv struct AssignedSlot {
+  start : Int
+  spans : Array[ProgPointRange]
+  old_slots : Array[Int]
+}
+
+///|
 /// Compact spill slots by reusing them across non-overlapping spill bundles.
 fn BacktrackingAllocator::compact_spill_slots(
   self : BacktrackingAllocator,
   result : RegAllocResult,
 ) -> Int {
-  // Per spill-slot (spill-bundle slot) we record the union of live ranges
-  // (as ProgPointRange spans) for all vregs assigned to that spill slot.
-  struct SpillSetInfo {
-    old_slot : Int
-    reg_class : @abi.RegClass
-    spans : Array[ProgPointRange]
-    start : ProgPoint
-  }
-  struct AssignedSlot {
-    start : Int
-    spans : Array[ProgPointRange]
-    old_slots : Array[Int]
-  }
   fn slots_used(cls : @abi.RegClass) -> Int {
     match cls {
       @abi.Vector => 2
@@ -1650,7 +1652,7 @@ fn BacktrackingAllocator::compact_spill_slots(
       return
     }
     if no_share.get(a) is None {
-      no_share.set(a, Set::new())
+      no_share.set(a, Set([]))
     }
     no_share.get(a).unwrap().add(b) |> ignore
   }
@@ -1725,7 +1727,7 @@ fn BacktrackingAllocator::compact_spill_slots(
     if pred_block.terminator is Some(Jump(target, args)) {
       guard block_id_to_index.get(target) is Some(target_idx) else { continue }
       let target_block = self.func.blocks[target_idx]
-      let edge_slots : Set[Int] = Set::new()
+      let edge_slots : Set[Int] = Set([])
       for i, param in target_block.params {
         if i >= args.length() {
           break

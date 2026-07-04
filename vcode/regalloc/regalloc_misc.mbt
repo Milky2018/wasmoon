@@ -89,7 +89,7 @@ fn selected_regalloc_algorithm() -> RegallocAlgorithm {
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
   // Step 1: Collect all used vregs
-  let used_vregs : Set[Int] = Set::new()
+  let used_vregs : Set[Int] = Set([])
 
   // Add function parameters (they're implicitly used)
   for param in func.params {
@@ -464,7 +464,7 @@ fn AllocStats::to_string(self : AllocStats) -> String {
 }
 
 ///|
-pub impl Show for AllocStats with output(self, logger) {
+pub impl Show for AllocStats with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

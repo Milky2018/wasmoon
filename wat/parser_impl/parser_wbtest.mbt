@@ -1,6 +1,24 @@
 // Whitebox tests for WAT parser float parsing
 
 ///|
+fn[T] parse_int_fails(body : () -> T raise WatError) -> Bool {
+  try body() catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+fn parse_wat_error(wat : String) -> WatError? {
+  try parse(wat) catch {
+    err => Some(err)
+  } noraise {
+    _ => None
+  }
+}
+
+///|
 test "parse_float32: positive infinity" {
   let result = parse_float32("inf") catch { _ => fail("unexpected error") }
   inspect(result.is_pos_inf(), content="true")
@@ -212,14 +230,18 @@ test "parse_hex_int64: simple hex" {
 ///|
 test "parse_u32: overflow raises error" {
   // Values exceeding u32 max should raise error
-  let result = try? parse_u32("0xFFFF_FFFF_FFFF_FFFF")
-  inspect(result is Err(_), content="true")
+  inspect(
+    parse_int_fails(() => parse_u32("0xFFFF_FFFF_FFFF_FFFF")),
+    content="true",
+  )
 }
 
 ///|
 test "parse_hex_u32: overflow raises error" {
-  let result = try? parse_hex_u32("FFFF_FFFF_FFFF_FFFF")
-  inspect(result is Err(_), content="true")
+  inspect(
+    parse_int_fails(() => parse_hex_u32("FFFF_FFFF_FFFF_FFFF")),
+    content="true",
+  )
 }
 
 ///|
@@ -231,15 +253,13 @@ test "parse_u32: max valid value" {
 ///|
 test "parse_u32: decimal overflow raises error" {
   // 4294967296 is u32::MAX + 1
-  let result = try? parse_u32("4294967296")
-  inspect(result is Err(_), content="true")
+  inspect(parse_int_fails(() => parse_u32("4294967296")), content="true")
 }
 
 ///|
 test "parse_u32: hex overflow 0x1_0000_0000 raises error" {
   // 0x1_0000_0000 = 4294967296, exceeds u32 max
-  let result = try? parse_u32("0x1_0000_0000")
-  inspect(result is Err(_), content="true")
+  inspect(parse_int_fails(() => parse_u32("0x1_0000_0000")), content="true")
 }
 
 ///|
@@ -677,18 +697,17 @@ test "parse WAT: func multiple exports before import" {
 test "error location: unexpected token reports correct position" {
   // Test that error locations point to the correct token
   let wat = "(module (func invalid))"
-  let result = try? parse(wat)
-  match result {
-    Err(InvalidInstruction(s, loc)) => {
+  match parse_wat_error(wat) {
+    Some(InvalidInstruction(s, loc)) => {
       inspect(s, content="invalid")
       inspect(loc.line, content="1")
       // Position depends on lexer implementation
       inspect(loc.column > 0, content="true")
     }
-    Err(_) =>
+    Some(_) =>
       // Accept other error types - the important thing is parsing failed
       ()
-    Ok(_) => fail("expected error but parsing succeeded")
+    None => fail("expected error but parsing succeeded")
   }
 }
 
@@ -700,17 +719,16 @@ test "error location: multiline error position" {
     #|    invalid
     #|  )
     #|)
-  let result = try? parse(wat)
-  match result {
-    Err(InvalidInstruction(s, loc)) => {
+  match parse_wat_error(wat) {
+    Some(InvalidInstruction(s, loc)) => {
       inspect(s, content="invalid")
       // Should be on line 3 or 4 depending on how multiline strings work
       inspect(loc.line >= 3, content="true")
     }
-    Err(_) =>
+    Some(_) =>
       // Accept other error types
       ()
-    Ok(_) => fail("expected error but parsing succeeded")
+    None => fail("expected error but parsing succeeded")
   }
 }
 

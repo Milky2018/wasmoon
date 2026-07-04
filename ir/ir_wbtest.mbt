@@ -449,11 +449,11 @@ test "cfg linear" {
   let func = builder.get_function()
   let cfg = CFG::build(func)
   // Check successors
-  inspect(cfg.get_successors(0), content="[1]")
-  inspect(cfg.get_successors(1), content="[]")
+  debug_inspect(cfg.get_successors(0), content="[1]")
+  debug_inspect(cfg.get_successors(1), content="[]")
   // Check predecessors
-  inspect(cfg.get_predecessors(0), content="[]")
-  inspect(cfg.get_predecessors(1), content="[0]")
+  debug_inspect(cfg.get_predecessors(0), content="[]")
+  debug_inspect(cfg.get_predecessors(1), content="[0]")
 }
 
 ///|
@@ -480,15 +480,15 @@ test "cfg branching" {
   let func = builder.get_function()
   let cfg = CFG::build(func)
   // Check successors
-  inspect(cfg.get_successors(0), content="[1, 2]")
-  inspect(cfg.get_successors(1), content="[3]")
-  inspect(cfg.get_successors(2), content="[3]")
-  inspect(cfg.get_successors(3), content="[]")
+  debug_inspect(cfg.get_successors(0), content="[1, 2]")
+  debug_inspect(cfg.get_successors(1), content="[3]")
+  debug_inspect(cfg.get_successors(2), content="[3]")
+  debug_inspect(cfg.get_successors(3), content="[]")
   // Check predecessors
-  inspect(cfg.get_predecessors(0), content="[]")
-  inspect(cfg.get_predecessors(1), content="[0]")
-  inspect(cfg.get_predecessors(2), content="[0]")
-  inspect(cfg.get_predecessors(3), content="[1, 2]")
+  debug_inspect(cfg.get_predecessors(0), content="[]")
+  debug_inspect(cfg.get_predecessors(1), content="[0]")
+  debug_inspect(cfg.get_predecessors(2), content="[0]")
+  debug_inspect(cfg.get_predecessors(3), content="[1, 2]")
   // Suppress unused variable warnings
   ignore(c1)
   ignore(c2)
@@ -516,10 +516,10 @@ test "cfg loop" {
   let cfg = CFG::build(func)
   // Check back edge exists (loop_header -> loop_header)
   let back_edges = cfg.find_back_edges()
-  inspect(back_edges, content="[(1, 1)]")
+  debug_inspect(back_edges, content="[(1, 1)]")
   // Check postorder traversal
   let po = cfg.postorder()
-  inspect(po, content="[2, 1, 0]")
+  debug_inspect(po, content="[2, 1, 0]")
   // Suppress unused variable warnings
   ignore(init)
 }

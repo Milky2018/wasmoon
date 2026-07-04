@@ -16,12 +16,12 @@ pub fn rematerialize_across_blocks(func : Function) -> OptResult {
   let result = OptResult::new()
 
   // value_id -> defining block id (for inst results and blockparams).
-  let def_block : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let def_block : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   // value_id -> defining instruction (only for single-result instructions).
-  let def_inst : @hashmap.HashMap[Int, Inst] = @hashmap.new()
+  let def_inst : @hashmap.HashMap[Int, Inst] = @hashmap.HashMap([])
 
   // Track which SSA values are integer constants; used to detect ALU-with-imm.
-  let iconst_values : @hashmap.HashMap[Int, Unit] = @hashmap.new()
+  let iconst_values : @hashmap.HashMap[Int, Unit] = @hashmap.HashMap([])
   for block in func.blocks {
     // Blockparams are defs at block entry.
     for pair in block.params {
@@ -41,7 +41,7 @@ pub fn rematerialize_across_blocks(func : Function) -> OptResult {
   }
 
   // Identify remat candidates by SSA value id.
-  let remat_values : @hashmap.HashMap[Int, Unit] = @hashmap.new()
+  let remat_values : @hashmap.HashMap[Int, Unit] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.results.length() == 1 && is_remat_candidate(inst, iconst_values) {
@@ -53,7 +53,7 @@ pub fn rematerialize_across_blocks(func : Function) -> OptResult {
     // Cranelift-style behavior: insert the cloned def immediately before the
     // first use in this block (not at block entry), then reuse it for
     // subsequent uses in this block.
-    let cache : @hashmap.HashMap[Int, Value] = @hashmap.new()
+    let cache : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
     let new_insts : Array[Inst] = []
     let orig_len = block.instructions.length()
     fn get_or_insert_copy(

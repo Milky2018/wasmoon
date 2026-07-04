@@ -33,7 +33,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
     for h in succs {
       if h >= 0 && h < n && dom[b.id].contains(h) {
         // Natural loop nodes.
-        let loop_nodes : @hashset.HashSet[Int] = @hashset.new()
+        let loop_nodes : @hashset.HashSet[Int] = @hashset.HashSet([])
         loop_nodes.add(h)
         loop_nodes.add(b.id)
         let work : Array[Int] = [b.id]
@@ -62,7 +62,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
         let preheader_id = outside_preds[0]
 
         // Compute all vreg ids used outside loop.
-        let used_outside : @hashset.HashSet[Int] = @hashset.new()
+        let used_outside : @hashset.HashSet[Int] = @hashset.HashSet([])
         for i in 0..<n {
           if loop_nodes.contains(i) {
             continue
@@ -98,7 +98,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
             }
           }
           if blk.terminator is Some(term) {
-            let used : @hashset.HashSet[Int] = @hashset.new()
+            let used : @hashset.HashSet[Int] = @hashset.HashSet([])
             collect_terminator_uses_simple(term, used)
             for uid in used {
               let c = use_count_in_loop.get(uid).unwrap_or(0)
@@ -108,7 +108,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
         }
 
         // Build set of vregs defined inside the loop.
-        let defs_in_loop : @hashset.HashSet[Int] = @hashset.new()
+        let defs_in_loop : @hashset.HashSet[Int] = @hashset.HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
@@ -171,7 +171,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
 
         // Hoist invariants from loop blocks to preheader.
         let hoisted : Array[@instr.VCodeInst] = []
-        let hoisted_defs : @hashset.HashSet[Int] = @hashset.new()
+        let hoisted_defs : @hashset.HashSet[Int] = @hashset.HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
@@ -244,13 +244,13 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
   let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
   // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
   // vmctx-derived base loads can be CSE'd even before prelude rewrites.
-  let vmctx_aliases : @hashset.HashSet[Int] = @hashset.new()
+  let vmctx_aliases : @hashset.HashSet[Int] = @hashset.HashSet([])
   let params = func.get_params()
   if params.length() > 0 {
     vmctx_aliases.add(params[0].id)
   }
   // Collect all vregs that are func_table pointers.
-  let func_table_ptrs : @hashset.HashSet[Int] = @hashset.new()
+  let func_table_ptrs : @hashset.HashSet[Int] = @hashset.HashSet([])
   fn is_vmctx_alias(
     reg : @abi.Reg,
     copies : Map[Int, Int],
@@ -578,7 +578,7 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
   let mut changed = true
   while changed {
     changed = false
-    let used : @hashset.HashSet[Int] = @hashset.new()
+    let used : @hashset.HashSet[Int] = @hashset.HashSet([])
     for block in func.blocks {
       for inst in block.insts {
         collect_uses(inst, used)
@@ -679,7 +679,7 @@ fn propagate_single_use_moves(
   }
 
   let copies : Map[Int, @abi.VReg] = {}
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = @hashset.HashSet([])
   for i, inst in block.insts {
     if inst.opcode is Move &&
       inst.defs.length() == 1 &&
@@ -832,7 +832,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     use_inst_idx : Int,
   ) -> @abi.VReg {
     let mut cur = reg
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = @hashset.HashSet([])
     while copies.get(cur.id) is Some(next) {
       if next.id == cur.id || visited.contains(cur.id) {
         break
@@ -1322,7 +1322,7 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
     let mut cur_target = target
     let mut cur_args = args
     let mut changed = false
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = @hashset.HashSet([])
     while true {
       if visited.contains(cur_target) {
         break
@@ -1360,7 +1360,7 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
     forwarding : Map[Int, JumpForwardInfo],
   ) -> Int {
     let mut cur_target = target
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = @hashset.HashSet([])
     while true {
       if visited.contains(cur_target) {
         break

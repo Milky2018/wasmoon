@@ -29,11 +29,11 @@ fn collect_used_callee_saved(
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : @hashset.HashSet[Int] = @hashset.HashSet([])
   let mut has_calls = false
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_int : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_int : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in env.callee_saved_int {
     callee_saved_int.add(r.index)
   }
@@ -84,10 +84,10 @@ fn collect_used_callee_saved_fprs(
   func : @regalloc.VCodeFunction,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : @hashset.HashSet[Int] = @hashset.HashSet([])
   let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
-  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.new()
+  let callee_saved_fprs : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in env.callee_saved_float {
     callee_saved_fprs.add(r.index)
   }

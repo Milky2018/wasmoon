@@ -133,17 +133,17 @@ test "compiled function: machinecode root indices build v2 stackmap" {
   mc.record_gc_safepoint(4, root_count=2, root_indices=[2, 0]) |> ignore
   let func = CompiledFunction::new("gc_func_v2", mc, 0)
   inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
-  inspect(
+  debug_inspect(
     decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
     content="[2]",
   )
-  inspect(
+  debug_inspect(
     decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
     content="[2, 0]",
   )
   let safepoints = func.get_gc_safepoints()
   inspect(safepoints.length(), content="1")
-  inspect(safepoints[0].live_refs, content="[2, 0]")
+  debug_inspect(safepoints[0].live_refs, content="[2, 0]")
 }
 
 ///|
@@ -183,7 +183,7 @@ test "compiled function: explicit safepoints build stackmap when blob missing" {
     gc_safepoints=explicit_points,
   )
   inspect(func.get_gc_stackmap_blob().length(), content="16")
-  inspect(
+  debug_inspect(
     decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
     content="[3, 1]",
   )
@@ -204,15 +204,15 @@ test "compiled function: explicit safepoint indices build v2 stackmap" {
     gc_safepoints=explicit_points,
   )
   inspect(decode_stackmap_version(func.get_gc_stackmap_blob()), content="2")
-  inspect(
+  debug_inspect(
     decode_stackmap_root_counts(func.get_gc_stackmap_blob()),
     content="[2, 1]",
   )
-  inspect(
+  debug_inspect(
     decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 0),
     content="[5, 1]",
   )
-  inspect(
+  debug_inspect(
     decode_stackmap_root_indices(func.get_gc_stackmap_blob(), 1),
     content="[3]",
   )

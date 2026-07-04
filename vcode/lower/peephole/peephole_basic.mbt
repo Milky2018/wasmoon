@@ -188,7 +188,7 @@ fn optimize_block(
   state : PeepholeState,
 ) -> Int {
   // Phase 1: Collect all used vregs (for dead code elimination)
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : @hashset.HashSet[Int] = @hashset.HashSet([])
 
   // Collect uses from all instructions
   for inst in block.insts {
@@ -575,7 +575,7 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
 
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
-  let to_eliminate : @hashset.HashSet[Int] = @hashset.new()
+  let to_eliminate : @hashset.HashSet[Int] = @hashset.HashSet([])
   let replace_def : Map[Int, Int] = {} // inst_idx -> new_def_vreg_id
   for i, inst in block.insts {
     if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
@@ -762,7 +762,7 @@ fn optimize_store_merging(
   }
 
   // Track which instructions to remove and what to insert
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = @hashset.HashSet([])
   let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
   let mut merged = 0
 
@@ -837,7 +837,7 @@ fn optimize_load_merging(
   if block.insts.length() < 2 {
     return 0
   }
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = @hashset.HashSet([])
   let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
   let mut merged = 0
 
@@ -1082,7 +1082,7 @@ fn collect_terminator_uses_simple(
 /// insert/remove). Mutating the "copy" would corrupt the source set and can
 /// lead to non-termination.
 fn clone_hashset_int(set : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
-  let out : @hashset.HashSet[Int] = @hashset.new()
+  let out : @hashset.HashSet[Int] = @hashset.HashSet([])
   for x in set {
     out.add(x)
   }
@@ -1109,7 +1109,7 @@ fn compute_dominators(
       }
     }
   }
-  let all : @hashset.HashSet[Int] = @hashset.new()
+  let all : @hashset.HashSet[Int] = @hashset.HashSet([])
   for i in 0..<n {
     all.add(i)
   }
@@ -1118,7 +1118,7 @@ fn compute_dominators(
   let dom : Array[@hashset.HashSet[Int]] = []
   for i in 0..<n {
     if i == 0 {
-      let s : @hashset.HashSet[Int] = @hashset.new()
+      let s : @hashset.HashSet[Int] = @hashset.HashSet([])
       s.add(0)
       dom.push(s)
     } else {
@@ -1129,7 +1129,7 @@ fn compute_dominators(
   while changed {
     changed = false
     for b in 1..<n {
-      let mut new_dom : @hashset.HashSet[Int] = @hashset.new()
+      let mut new_dom : @hashset.HashSet[Int] = @hashset.HashSet([])
       // If block has no preds (unreachable), keep only itself.
       if preds[b].length() == 0 {
         new_dom.add(b)

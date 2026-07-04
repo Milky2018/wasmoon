@@ -21,7 +21,7 @@ test "memory.init: basic copy from data segment" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(187)])") // 0xbb = 187
+  debug_inspect(result, content="Ok([I32(187)])") // 0xbb = 187
 }
 
 ///|
@@ -40,7 +40,7 @@ test "memory.init: verify second byte" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(204)])") // 0xcc = 204
+  debug_inspect(result, content="Ok([I32(204)])") // 0xcc = 204
 }
 
 ///|
@@ -63,7 +63,7 @@ test "memory.init: zero length is valid" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(42)])")
+  debug_inspect(result, content="Ok([I32(42)])")
 }
 
 ///|
@@ -85,7 +85,7 @@ test "data.drop: dropped segment init with zero length succeeds" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(1)])")
+  debug_inspect(result, content="Ok([I32(1)])")
 }
 
 ///|
@@ -103,7 +103,7 @@ test "data.drop: can drop multiple times" {
     #|  )
     #|)
   let result = run_interp_only(source, "test", [])
-  inspect(result, content="Ok([I32(42)])")
+  debug_inspect(result, content="Ok([I32(42)])")
 }
 
 // ============ JIT Comparison Tests ============
@@ -124,7 +124,7 @@ test "JIT: memory.init basic copy" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result, content="matched")
+  inspect(compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -143,7 +143,7 @@ test "JIT: memory.init second byte" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result, content="matched")
+  inspect(compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -163,5 +163,5 @@ test "JIT: data.drop and init with zero length" {
     #|  )
     #|)
   let result = compare_jit_interp(source, "test", [])
-  inspect(result, content="matched")
+  inspect(compare_result_is_match(result), content="true")
 }

@@ -114,7 +114,7 @@ pub fn FuncEnvironment::new(
     memory_page_size_log2,
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
-    bounds_check_cache: @hashmap.new(),
+    bounds_check_cache: @hashmap.HashMap([]),
   }
 }
 

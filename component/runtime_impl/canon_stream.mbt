@@ -50,7 +50,7 @@ fn instantiate_canon_stream_new(
       }
     }
     if per_task.get(cur) is Some(v) {
-      set_canon_debug_message("stream.new(replay cur=\{cur})-> \{v}")
+      set_canon_debug_message("stream.new(replay cur=\{cur})-> \{to_repr(v)}")
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
         1
       return v

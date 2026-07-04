@@ -136,10 +136,10 @@ test "collect_module_text reconstruction" {
       inspect(mod_.funcs.length(), content="3")
       inspect(mod_.elems.length(), content="1")
       // Check elem init is correct (should be 1, func index of $func)
-      inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
+      debug_inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
       // Check call_indirect type index (should be 0, index of $check - explicit type first)
       let test_func = mod_.codes[mod_.codes.length() - 1]
-      inspect(
+      debug_inspect(
         test_func.body,
         content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
       )

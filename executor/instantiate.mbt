@@ -952,7 +952,7 @@ pub fn validate_imports_with_diagnostics(
                     ImportTypeMismatch,
                     expected_type.to_string(),
                     Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{expected_rec_info}",
+                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{to_repr(expected_rec_info)}",
                   )
                   continue
                 }
@@ -1424,7 +1424,7 @@ pub fn instantiate_module_with_imports(
                 // Host functions must be imported by singleton rec group types
                 if expected_rec_info != (0, 1) {
                   raise @runtime.LinkErrorDetail(
-                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{expected_rec_info}",
+                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{to_repr(expected_rec_info)}",
                   )
                 }
                 // Compare types structurally

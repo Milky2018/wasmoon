@@ -14,7 +14,7 @@ fn RegMove::to_string(self : RegMove) -> String {
 }
 
 ///|
-pub impl Show for RegMove with output(self, logger) {
+pub impl Show for RegMove with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -85,7 +85,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   }
   let result : Array[RegMove] = []
   let pending : Array[RegMove] = []
-  let seen : Set[Int] = Set::new()
+  let seen : Set[Int] = Set([])
   fn same_loc(a : Loc, b : Loc) -> Bool {
     match (a, b) {
       (Reg(ra), Reg(rb)) => ra.index == rb.index && ra.class == rb.class
@@ -208,7 +208,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
   // Build a set of source registers for quick lookup
   fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
-    let srcs : Set[Int] = Set::new()
+    let srcs : Set[Int] = Set([])
     for mv in pending {
       srcs.add(loc_key(mv.from, mv.class))
     }

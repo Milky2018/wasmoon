@@ -117,7 +117,7 @@ fn instantiate_canon_lower(
       }
       fn cache_and_advance(out : Array[@types.Value]) -> Array[@types.Value] {
         set_canon_debug_message(
-          "lower.async(func=\{func_idx} cur=\{cur})-> \{out}",
+          "lower.async(func=\{func_idx} cur=\{cur})-> \{to_repr(out)}",
         )
         per_task.set(cur, out)
         async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
@@ -127,7 +127,7 @@ fn instantiate_canon_lower(
 
       if per_task.get(cur) is Some(v) {
         set_canon_debug_message(
-          "lower.async(replay func=\{func_idx} cur=\{cur})-> \{v}",
+          "lower.async(replay func=\{func_idx} cur=\{cur})-> \{to_repr(v)}",
         )
         async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
           1

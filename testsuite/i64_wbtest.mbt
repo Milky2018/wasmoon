@@ -2,6 +2,18 @@
 // These tests are extracted from the official WebAssembly testsuite
 
 ///|
+fn[T] i64_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 /// Create i64 arithmetic test module
 fn create_i64_arithmetic_module() -> @types.Module {
   let add_func : @types.FunctionCode = {
@@ -148,11 +160,16 @@ test "wasm-testsuite: i64.div_s trap on zero" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i64.const 1) (i64.const 0)) "integer divide by zero")
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I64(1L),
-      I64(0L),
-    ]),
-    content="Err(integer divide by zero)",
+    i64_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I64(1L),
+          I64(0L),
+        ])
+      },
+      err => err is @runtime.DivisionByZero,
+    ),
+    content="true",
   )
 }
 
@@ -163,11 +180,16 @@ test "wasm-testsuite: i64.div_s trap on overflow" {
   // (assert_trap (invoke "div_s" (i64.const 0x8000000000000000) (i64.const -1)) "integer overflow")
   // INT64_MIN / -1 overflows
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I64(-9223372036854775808L),
-      I64(-1L),
-    ]),
-    content="Err(integer overflow)",
+    i64_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I64(-9223372036854775808L),
+          I64(-1L),
+        ])
+      },
+      err => err is @runtime.IntegerOverflow,
+    ),
+    content="true",
   )
 }
 

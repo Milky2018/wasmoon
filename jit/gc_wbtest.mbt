@@ -338,12 +338,15 @@ test "gc: fault injection fails configured allocation attempt" {
 test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
   gc_debug_set_fail_alloc(1)
   let heap = CHeap::new(capacity=1024)
-  let result : Result[Int, CHeapError] = try? heap.alloc_struct(0, [
-    @types.Value::I32(123),
-  ])
+  let failed = try heap.alloc_struct(0, [@types.Value::I32(123)]) catch {
+    OutOfMemory => true
+    _ => false
+  } noraise {
+    _ => false
+  }
   gc_debug_set_fail_alloc(0)
 
-  guard result is Err(OutOfMemory) else { fail("expected OutOfMemory") }
+  guard failed else { fail("expected OutOfMemory") }
 }
 
 ///|
@@ -351,41 +354,60 @@ test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::new()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
-  let missing_types : Result[Unit, GCSetupError] = try? gc_setup(
-    heap,
-    [],
-    [],
-    ctx_ptr~,
-    func_type_indices=[],
-    func_table_ptr=0L,
-    num_funcs=1,
-  )
-  guard missing_types
-    is Err(FuncTypeIndicesLengthMismatch(func_type_indices_len=0, num_funcs=1)) else {
+  let missing_types = try
+    gc_setup(
+      heap,
+      [],
+      [],
+      ctx_ptr~,
+      func_type_indices=[],
+      func_table_ptr=0L,
+      num_funcs=1,
+    )
+  catch {
+    FuncTypeIndicesLengthMismatch(func_type_indices_len=0, num_funcs=1) => true
+    _ => false
+  } noraise {
+    _ => false
+  }
+  guard missing_types else {
     fail("expected func_type_indices length mismatch")
   }
-  let missing_table_ptr : Result[Unit, GCSetupError] = try? gc_setup(
-    heap,
-    [],
-    [],
-    ctx_ptr~,
-    func_type_indices=[0],
-    func_table_ptr=0L,
-    num_funcs=1,
-  )
-  guard missing_table_ptr is Err(MissingFunctionTableContext(num_funcs=1)) else {
+  let missing_table_ptr = try
+    gc_setup(
+      heap,
+      [],
+      [],
+      ctx_ptr~,
+      func_type_indices=[0],
+      func_table_ptr=0L,
+      num_funcs=1,
+    )
+  catch {
+    MissingFunctionTableContext(num_funcs=1) => true
+    _ => false
+  } noraise {
+    _ => false
+  }
+  guard missing_table_ptr else {
     fail("expected missing function table context")
   }
-  let zero_funcs_ok : Result[Unit, GCSetupError] = try? gc_setup(
-    heap,
-    [],
-    [],
-    ctx_ptr~,
-    func_type_indices=[],
-    func_table_ptr=0L,
-    num_funcs=0,
-  )
-  guard zero_funcs_ok is Ok(_) else {
+  let zero_funcs_ok = try
+    gc_setup(
+      heap,
+      [],
+      [],
+      ctx_ptr~,
+      func_type_indices=[],
+      func_table_ptr=0L,
+      num_funcs=0,
+    )
+  catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+  guard zero_funcs_ok else {
     fail("expected gc_setup success for zero-func module")
   }
   gc_teardown(ctx_ptr)

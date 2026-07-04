@@ -216,7 +216,7 @@ pub fn VCodeCFG::find_loops(self : VCodeCFG) -> Array[VCodeLoop] {
   let back_edges = self.find_back_edges()
 
   // Group back edges by header
-  let header_to_latches : @hashmap.HashMap[Int, Array[Int]] = @hashmap.new()
+  let header_to_latches : @hashmap.HashMap[Int, Array[Int]] = @hashmap.HashMap([])
   for edge in back_edges {
     let (latch, header) = edge
     match header_to_latches.get(header) {
@@ -242,7 +242,7 @@ fn VCodeCFG::find_loop_body(
   header : Int,
   latches : Array[Int],
 ) -> Array[Int] {
-  let body : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let body : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
   body.set(header, true)
 
   // Worklist for reverse DFS from latch blocks

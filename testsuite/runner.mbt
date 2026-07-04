@@ -507,11 +507,10 @@ fn run_test_command_internal(
           return
         }
       }
-      if (try? ({
+      if !succeeds(() => {
           let mod = @parser.parse_module(bytes)
           @validator.validate_module(mod)
-        }))
-        is Err(_) {
+        }) {
         result.passed += 1
       } else {
         result.failed += 1
@@ -537,7 +536,7 @@ fn run_test_command_internal(
         }
         // Convert bytes to string for WAT parsing
         let content = bytes_to_string(bytes)
-        if (try? @wat.parse(content)) is Err(_) {
+        if !succeeds(() => @wat.parse(content)) {
           result.passed += 1
         } else {
           result.failed += 1
@@ -553,7 +552,7 @@ fn run_test_command_internal(
             return
           }
         }
-        if (try? @parser.parse_module(bytes)) is Err(_) {
+        if !succeeds(() => @parser.parse_module(bytes)) {
           result.passed += 1
         } else {
           result.failed += 1
@@ -574,7 +573,7 @@ fn run_test_command_internal(
           return
         }
       }
-      if (try? ctx.load_module(bytes, None)) is Ok(_) {
+      if succeeds(() => ctx.load_module(bytes, None)) {
         result.failed += 1
         result.failures.push(
           "\{line_prefix}assert_uninstantiable should have failed: \{filename}",

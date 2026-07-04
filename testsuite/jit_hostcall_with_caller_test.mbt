@@ -80,9 +80,15 @@ test "jit hostcall: imported host func receives Caller and can access exported m
   let external_imports = @wast.build_external_imports_for_jit(
     mod_, instance, store,
   )
-  let load_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
-    precompiled, func_signatures, external_imports,
-  )
+  let load_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
+    @jit.JITModule::load_with_imports(
+      precompiled, func_signatures, external_imports,
+    )
+  catch {
+    e => Err(e)
+  } noraise {
+    jm => Ok(jm)
+  }
   let jm = match load_result {
     Ok(m) => m
     Err(err) => abort("jit load failed: \{err}")

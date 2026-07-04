@@ -189,7 +189,7 @@ fn convert_jit_results(
         let low = results[slot_idx]
         let high = results[slot_idx + 1]
         slot_idx += 2
-        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
         for i in 0..<8 {
           buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
         }
@@ -257,7 +257,7 @@ fn CompileStage::to_string(self : CompileStage) -> String {
 }
 
 ///|
-pub impl Show for CompileStage with output(self, logger) {
+pub impl Show for CompileStage with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1223,12 +1223,18 @@ fn run_with_jit(
         mod_, instance, store,
       )
       // Load JIT module
-      let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
-        pc,
-        func_signatures,
-        external_imports,
-        debug_db~,
-      )
+      let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
+        @jit.JITModule::load_with_imports(
+          pc,
+          func_signatures,
+          external_imports,
+          debug_db~,
+        )
+      catch {
+        e => Err(e)
+      } noraise {
+        jm => Ok(jm)
+      }
       match jit_module_result {
         Err(err) => {
           @logger.error("Failed to load JIT module: \{err}")

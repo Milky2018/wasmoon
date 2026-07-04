@@ -913,11 +913,10 @@ fn value_matches_type(
         true
       } else {
         // Check if runtime type matches expected type
-        let result = try? store.get_gc_type_idx(idx)
-        match result {
-          Ok(runtime_type_idx) =>
-            is_subtype(runtime_type_idx, type_idx, instance)
-          Err(_) => false
+        try store.get_gc_type_idx(idx) catch {
+          _ => false
+        } noraise {
+          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
         }
       }
     (StructRef(idx), RefNullStruct(type_idx)) =>
@@ -925,11 +924,10 @@ fn value_matches_type(
       if type_idx == -1 {
         true
       } else {
-        let result = try? store.get_gc_type_idx(idx)
-        match result {
-          Ok(runtime_type_idx) =>
-            is_subtype(runtime_type_idx, type_idx, instance)
-          Err(_) => false
+        try store.get_gc_type_idx(idx) catch {
+          _ => false
+        } noraise {
+          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
         }
       }
     (StructRef(_), RefEq) => true
@@ -943,11 +941,10 @@ fn value_matches_type(
       if type_idx == -1 {
         true
       } else {
-        let result = try? store.get_gc_type_idx(idx)
-        match result {
-          Ok(runtime_type_idx) =>
-            is_subtype(runtime_type_idx, type_idx, instance)
-          Err(_) => false
+        try store.get_gc_type_idx(idx) catch {
+          _ => false
+        } noraise {
+          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
         }
       }
     (ArrayRef(idx), RefNullArray(type_idx)) =>
@@ -955,11 +952,10 @@ fn value_matches_type(
       if type_idx == -1 {
         true
       } else {
-        let result = try? store.get_gc_type_idx(idx)
-        match result {
-          Ok(runtime_type_idx) =>
-            is_subtype(runtime_type_idx, type_idx, instance)
-          Err(_) => false
+        try store.get_gc_type_idx(idx) catch {
+          _ => false
+        } noraise {
+          runtime_type_idx => is_subtype(runtime_type_idx, type_idx, instance)
         }
       }
     (ArrayRef(_), RefEq) => true

@@ -1,4 +1,16 @@
 ///|
+fn[T] heap_has_error(
+  body : () -> T raise RuntimeError,
+  matches : (RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "MarkSweepHeap: alloc and get struct" {
   let heap = MarkSweepHeap::new()
   let idx = heap.alloc_struct(0, [
@@ -103,12 +115,16 @@ test "MarkSweepHeap: array out of bounds" {
   let heap = MarkSweepHeap::new()
   let idx = heap.alloc_array(0, [@types.Value::I32(1), @types.Value::I32(2)])
   inspect(
-    try? heap.array_get(idx, 5),
-    content="Err(out of bounds array access)",
+    heap_has_error(() => heap.array_get(idx, 5), err => {
+      err is OutOfBoundsArrayAccess
+    }),
+    content="true",
   )
   inspect(
-    try? heap.array_set(idx, -1, @types.Value::I32(0)),
-    content="Err(out of bounds array access)",
+    heap_has_error(() => heap.array_set(idx, -1, @types.Value::I32(0)), err => {
+      err is OutOfBoundsArrayAccess
+    }),
+    content="true",
   )
 }
 
@@ -119,9 +135,15 @@ test "MarkSweepHeap: type mismatch" {
   let array_idx = heap.alloc_array(1, [])
 
   // Try to get struct as array
-  inspect(try? heap.get_array(struct_idx), content="Err(type mismatch)")
+  inspect(
+    heap_has_error(() => heap.get_array(struct_idx), err => err is TypeMismatch),
+    content="true",
+  )
   // Try to get array as struct
-  inspect(try? heap.get_struct(array_idx), content="Err(type mismatch)")
+  inspect(
+    heap_has_error(() => heap.get_struct(array_idx), err => err is TypeMismatch),
+    content="true",
+  )
 }
 
 ///|
@@ -300,5 +322,8 @@ test "GC: collected object becomes inaccessible" {
   inspect(heap.is_alive(idx), content="false")
 
   // Trying to access collected object should fail
-  inspect(try? heap.get(idx), content="Err(undefined element)")
+  inspect(
+    heap_has_error(() => heap.get(idx), err => err is UndefinedElement),
+    content="true",
+  )
 }

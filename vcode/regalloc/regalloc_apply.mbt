@@ -404,7 +404,7 @@ pub fn apply_allocation(
 
       // First, collect registers that are in use by non-spilled uses
       // to avoid clobbering them with scratch register reloads
-      let used_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+      let used_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) &&
           alloc.assignments.get(vreg.id) is Some(preg) {

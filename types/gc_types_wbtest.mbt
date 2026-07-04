@@ -21,8 +21,8 @@ test "SubType::from_func wraps FuncType correctly" {
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
   guard subtype.composite is Func(ft) else { return }
-  inspect(ft.params, content="[F32, F64]")
-  inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params, content="[F32, F64]")
+  debug_inspect(ft.results, content="[I32]")
 }
 
 ///|
@@ -30,8 +30,8 @@ test "SubType::func convenience function" {
   let subtype = SubType::func([I32, I32], [I32])
   inspect(subtype.final_, content="true")
   guard subtype.composite is Func(ft) else { return }
-  inspect(ft.params, content="[I32, I32]")
-  inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params, content="[I32, I32]")
+  debug_inspect(ft.results, content="[I32]")
 }
 
 ///|
@@ -140,7 +140,7 @@ test "CompositeType::Func variant" {
   let ft : FuncType = { params: [I32], results: [I32] }
   let composite = CompositeType::Func(ft)
   guard composite is Func(f) else { return }
-  inspect(f.params, content="[I32]")
+  debug_inspect(f.params, content="[I32]")
 }
 
 ///|
@@ -177,8 +177,8 @@ test "func_types_to_subtypes with single type" {
   inspect(subtypes.length(), content="1")
   inspect(subtypes[0].final_, content="true")
   guard subtypes[0].composite is Func(ft) else { return }
-  inspect(ft.params, content="[I32]")
-  inspect(ft.results, content="[I64]")
+  debug_inspect(ft.params, content="[I32]")
+  debug_inspect(ft.results, content="[I64]")
 }
 
 ///|
@@ -221,10 +221,10 @@ test "extract_func_types with func subtypes" {
   ]
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="2")
-  inspect(func_types[0].params, content="[I32]")
-  inspect(func_types[0].results, content="[I32]")
-  inspect(func_types[1].params, content="[F64, F64]")
-  inspect(func_types[1].results, content="[F64]")
+  debug_inspect(func_types[0].params, content="[I32]")
+  debug_inspect(func_types[0].results, content="[I32]")
+  debug_inspect(func_types[1].params, content="[F64, F64]")
+  debug_inspect(func_types[1].results, content="[F64]")
 }
 
 ///|
@@ -272,11 +272,11 @@ test "extract_func_types with mixed types" {
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="4")
   // Index 0: actual func type
-  inspect(func_types[0].params, content="[I32]")
+  debug_inspect(func_types[0].params, content="[I32]")
   // Index 1: struct placeholder
   inspect(func_types[1].params.length(), content="0")
   // Index 2: actual func type
-  inspect(func_types[2].params, content="[F64]")
+  debug_inspect(func_types[2].params, content="[F64]")
   // Index 3: array placeholder
   inspect(func_types[3].params.length(), content="0")
 }
@@ -482,10 +482,10 @@ test "Module::get_func_type returns correct FuncType" {
   mod_.types.push(SubType::func([], [F64]))
   let ft0 = mod_.get_func_type(0)
   let ft1 = mod_.get_func_type(1)
-  inspect(ft0.params, content="[I32, I32]")
-  inspect(ft0.results, content="[I32]")
-  inspect(ft1.params, content="[]")
-  inspect(ft1.results, content="[F64]")
+  debug_inspect(ft0.params, content="[I32, I32]")
+  debug_inspect(ft0.results, content="[I32]")
+  debug_inspect(ft1.params, content="[]")
+  debug_inspect(ft1.results, content="[F64]")
 }
 
 ///|
@@ -591,7 +591,7 @@ test "Module with mixed type definitions" {
   inspect(mod_.is_func_type(4), content="true")
   // Get specific types
   let add_type = mod_.get_func_type(1)
-  inspect(add_type.params, content="[I32, I32]")
+  debug_inspect(add_type.params, content="[I32, I32]")
   let point_type = mod_.get_struct_type(2)
   inspect(point_type.fields.length(), content="1")
   let arr_type = mod_.get_array_type(3)

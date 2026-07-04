@@ -594,9 +594,12 @@ test "end-to-end: f32_br_2locals.wast from source" {
   // Show all test results: (input, expected, actual)
   // Expected: all 4 tests pass with correct values
   // Case 3 (default) returns 0.0 because local2 is never set when jumping directly to end
-  inspect(results, content="[(0, 10, 10), (1, 10, 10), (2, 10, 10), (3, 0, 0)]")
-  assert_eq(results[0], (0, 10, 10))
-  assert_eq(results[1], (1, 10, 10))
-  assert_eq(results[2], (2, 10, 10))
-  assert_eq(results[3], (3, 0, 0))
+  debug_inspect(
+    results,
+    content="[(0, 10, 10), (1, 10, 10), (2, 10, 10), (3, 0, 0)]",
+  )
+  inspect(results[0] == (0, 10, 10), content="true")
+  inspect(results[1] == (1, 10, 10), content="true")
+  inspect(results[2] == (2, 10, 10), content="true")
+  inspect(results[3] == (3, 0, 0), content="true")
 }

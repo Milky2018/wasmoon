@@ -9,7 +9,7 @@ pub fn hoist_loop_invariants(func : Function) -> OptResult {
   let loops = cfg.find_loops()
 
   // Build a map from value id to the block where it's defined
-  let value_to_block : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let value_to_block : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for block in func.blocks {
     // Function parameters are defined in entry block
     for param in func.params {
@@ -103,7 +103,7 @@ fn hoist_from_loop(
   value_to_block : @hashmap.HashMap[Int, Int],
 ) -> Bool {
   let mut any_hoisted = false
-  let invariant_values : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let invariant_values : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
 
   // Iterate until no more invariants found
   let mut changed = true
@@ -252,7 +252,7 @@ pub fn reduce_strength(func : Function) -> OptResult {
   let result = OptResult::new()
 
   // Build constant map
-  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
+  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {

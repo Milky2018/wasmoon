@@ -42,10 +42,10 @@ test "Table set and get with funcref" {
   let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, None)
   table.set(0, @types.Value::FuncRef(42))
   table.set(5, @types.Value::FuncRef(100))
-  inspect(try? table.get(0), content="Ok(FuncRef(42))")
-  inspect(try? table.get(5), content="Ok(FuncRef(100))")
+  inspect(table.get(0), content="FuncRef(42)")
+  inspect(table.get(5), content="FuncRef(100)")
   // Uninitialized element returns Null (call_indirect would trap on this)
-  inspect(try? table.get(1), content="Ok(Null)")
+  inspect(table.get(1), content="Null")
 }
 
 ///|

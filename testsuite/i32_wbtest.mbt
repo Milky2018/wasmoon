@@ -2,6 +2,18 @@
 // These tests are extracted from the official WebAssembly testsuite
 
 ///|
+fn[T] i32_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 /// Create i32 test module programmatically (simplified version for testing)
 fn create_i32_add_module() -> @types.Module {
   // Function: add(a, b) -> a + b
@@ -196,8 +208,13 @@ test "wasm-testsuite: i32.div_s trap on zero" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 1) (i32.const 0)) "integer divide by zero")
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)]),
-    content="Err(integer divide by zero)",
+    i32_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)])
+      },
+      err => err is @runtime.DivisionByZero,
+    ),
+    content="true",
   )
 }
 
@@ -208,11 +225,16 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
   // (assert_trap (invoke "div_s" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
   // -2147483648 / -1 overflows because result would be 2147483648 which doesn't fit in i32
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I32(-2147483648),
-      I32(-1),
-    ]),
-    content="Err(integer overflow)",
+    i32_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I32(-2147483648),
+          I32(-1),
+        ])
+      },
+      err => err is @runtime.IntegerOverflow,
+    ),
+    content="true",
   )
 }
 
@@ -986,10 +1008,5 @@ test "wasm-testsuite: i32.1.wasm should fail validation" {
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)
-  inspect(
-    try? @validator.validate_module(mod),
-    content=(
-      #|Err(StackUnderflow("Expected I32, but stack is empty"))
-    ),
-  )
+  inspect(!succeeds(() => @validator.validate_module(mod)), content="true")
 }

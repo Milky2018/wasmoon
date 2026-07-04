@@ -1407,7 +1407,7 @@ test "union_find: basic operations" {
   // Get set members
   let set_0 = uf.get_set(0)
   set_0.sort_by(fn(a, b) { a - b })
-  inspect(set_0, content="[0, 1, 2, 3]")
+  debug_inspect(set_0, content="[0, 1, 2, 3]")
 }
 
 ///|
@@ -1501,7 +1501,7 @@ test "constraint_reload_coalescing_logic" {
   }
 
   // Should see: StackLoad + Move (not StackLoad + StackLoad)
-  inspect(
+  debug_inspect(
     operations,
     content=(
       #|["StackLoad slot 0 to X16", "Move from X16 to X3"]

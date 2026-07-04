@@ -43,7 +43,7 @@ fn make_v128(
 ///|
 /// Helper to create v128 from i32x4 lanes
 fn make_i32x4(lane0 : Int, lane1 : Int, lane2 : Int, lane3 : Int) -> Bytes {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
   for lane in [lane0, lane1, lane2, lane3] {
     buf.write_byte(lane.to_byte())
     buf.write_byte((lane >> 8).to_byte())

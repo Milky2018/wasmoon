@@ -34,7 +34,7 @@ fn compute_reload_intervals(
     // changes. Therefore, we disable coalescing for any spill slot that is
     // used by multiple vregs within the block.
     let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = {}
-    let conflicting_slots : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    let conflicting_slots : @hashset.HashSet[Int] = @hashset.HashSet([])
     for inst_idx, inst in block.insts {
       for use_reg in inst.uses {
         if use_reg is @abi.Virtual(vreg) &&
@@ -95,8 +95,8 @@ fn allocate_reload_registers(
   // Reserve special registers that are not part of the allocator pool but are
   // used by the ABI / codegen. These must never be chosen for reload
   // coalescing.
-  let reserved_int_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  let reserved_float_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let reserved_int_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let reserved_float_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
   let isa = @isa.ISA::current()
   // - The pinned VMContext register (AArch64: x21).
   reserved_int_regs.add(isa.vmctx_reg_index()) |> ignore
@@ -177,9 +177,9 @@ fn allocate_reload_registers(
   let block_float_used_map : Map[Int, @hashset.HashSet[Int]] = {}
   let block_has_call_map : Map[Int, Bool] = {}
   for block_idx, block in func.blocks {
-    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
-    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
-    let block_referenced_vregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let block_referenced_vregs : @hashset.HashSet[Int] = @hashset.HashSet([])
     let mut block_has_call = false
 
     for param in block.params {
@@ -274,11 +274,11 @@ fn allocate_reload_registers(
   for block_idx, _block in func.blocks {
     let block_int_live = match block_int_used_map.get(block_idx) {
       Some(s) => s
-      None => @hashset.HashSet::new()
+      None => @hashset.HashSet([])
     }
     let block_float_live = match block_float_used_map.get(block_idx) {
       Some(s) => s
-      None => @hashset.HashSet::new()
+      None => @hashset.HashSet([])
     }
     let block_has_call = match block_has_call_map.get(block_idx) {
       Some(v) => v
@@ -289,8 +289,8 @@ fn allocate_reload_registers(
     // callee-saved candidate set in call-containing blocks (no caller-saved
     // fallback pool), but still allow interval coalescing within those blocks.
     // Track which reload registers are in use within this block.
-    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
-    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet::new()
+    let block_int_used : @hashset.HashSet[Int] = @hashset.HashSet([])
+    let block_float_used : @hashset.HashSet[Int] = @hashset.HashSet([])
     // Allocate reload registers for intervals in this block.
     for key, interval in intervals {
       let (b_idx, _) = key

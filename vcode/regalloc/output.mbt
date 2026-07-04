@@ -26,7 +26,7 @@ fn Loc::to_string(self : Loc) -> String {
 }
 
 ///|
-pub impl Show for Loc with output(self, logger) {
+pub impl Show for Loc with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -65,7 +65,7 @@ fn Edit::to_string(self : Edit) -> String {
 }
 
 ///|
-pub impl Show for Edit with output(self, logger) {
+pub impl Show for Edit with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -155,7 +155,7 @@ pub fn Output::summary(self : Output) -> String {
   }
 
   // Count distinct spill slots referenced (may be less than reserved slots due to reuse).
-  let used_slots : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_slots : @hashset.HashSet[Int] = @hashset.HashSet([])
   fn record_slot(used : @hashset.HashSet[Int], loc : Loc) -> Unit {
     if loc is Spill(slot) {
       used.add(slot) |> ignore
@@ -181,9 +181,9 @@ pub fn Output::summary(self : Output) -> String {
   // Operand allocation breakdown and unique preg usage.
   let mut alloc_reg = 0
   let mut alloc_spill = 0
-  let used_int_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  let used_fp_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
-  let used_vec_pregs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let used_int_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used_fp_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
+  let used_vec_pregs : @hashset.HashSet[Int] = @hashset.HashSet([])
   fn record_preg(
     used_int : @hashset.HashSet[Int],
     used_fp : @hashset.HashSet[Int],
@@ -277,7 +277,7 @@ pub fn Output::summary(self : Output) -> String {
       regs.push(r)
     }
     regs.sort()
-    s = s + "  regs_used_int_indices: \{regs}\n"
+    s = s + "  regs_used_int_indices: \{to_repr(regs)}\n"
   }
   s = s + "  operand_ranges: \{self.operand_ranges.length()}\n"
   if !hot_slots.is_empty() {

@@ -122,7 +122,7 @@ pub fn UnionFind::length(self : UnionFind) -> Int {
 ///|
 /// Count the number of distinct sets
 pub fn UnionFind::num_sets(self : UnionFind) -> Int {
-  let roots : Set[Int] = Set::new()
+  let roots : Set[Int] = Set([])
   for i in 0..<self.parent.length() {
     roots.add(self.find(i))
   }

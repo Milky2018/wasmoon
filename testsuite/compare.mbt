@@ -78,7 +78,7 @@ pub fn compare_result_is_match(result : CompareResult) -> Bool {
 }
 
 ///|
-pub impl Show for CompareResult with output(self, logger) {
+pub impl Show for CompareResult with fn output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
   } else {
@@ -183,7 +183,7 @@ pub fn jit_results_to_values(
         let high = results[slot_idx + 1]
         slot_idx += 2
         // Reconstruct 16 bytes from two Int64 values using Buffer
-        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
         // Low 8 bytes (little-endian)
         for i in 0..<8 {
           buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
@@ -845,5 +845,5 @@ test "compare_jit_interp: i32 add" {
   let jit_result = run_jit(
     mod_, "add", func_idx, args, param_types, result_types,
   )
-  inspect(jit_result, content="Ok([I32(8)])")
+  debug_inspect(jit_result, content="Ok([I32(8)])")
 }

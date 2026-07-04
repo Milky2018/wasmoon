@@ -279,10 +279,10 @@ test "table operations: table.grow" {
   let (store, instance) = instantiate_module(mod)
   // Grow table by 3, should return old size (2)
   let grow_result = call_exported_func(store, instance, "grow", [])
-  inspect(grow_result, content="[I32(2)]")
+  debug_inspect(grow_result, content="[I32(2)]")
   // New size should be 5
   let size_result = call_exported_func(store, instance, "size", [])
-  inspect(size_result, content="[I32(5)]")
+  debug_inspect(size_result, content="[I32(5)]")
 }
 
 ///|

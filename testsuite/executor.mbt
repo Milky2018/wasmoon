@@ -17,6 +17,15 @@ pub fn TestContext::new() -> TestContext {
 }
 
 ///|
+fn[T] succeeds(body : () -> T raise) -> Bool {
+  try body() catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+}
+
+///|
 /// Set current module
 pub fn TestContext::set_current_module(
   self : TestContext,
@@ -130,7 +139,7 @@ pub fn run_assert_trap(
 ) -> Bool {
   let runtime_args = args.map(parse_test_value)
   // Should trap
-  (try? ctx.invoke(module_name, func_name, runtime_args)) is Err(_)
+  !succeeds(() => ctx.invoke(module_name, func_name, runtime_args))
 }
 
 ///|

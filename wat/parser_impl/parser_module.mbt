@@ -379,7 +379,7 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
 ///          (v128.const f32x4 v0 v1 v2 v3)
 ///          (v128.const f64x2 v0 v1)
 fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
   // Parse the lane type keyword
   match self.current.token {
     Keyword(lane_type) => {

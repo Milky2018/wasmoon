@@ -24,7 +24,7 @@ fn alias_key(preg : @abi.PReg) -> Int {
 
 ///|
 fn build_index_set(regs : Array[@abi.PReg]) -> @hashset.HashSet[Int] {
-  let set : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let set : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in regs {
     set.add(r.index) |> ignore
   }
@@ -33,7 +33,7 @@ fn build_index_set(regs : Array[@abi.PReg]) -> @hashset.HashSet[Int] {
 
 ///|
 fn build_index_set_int(xs : Array[Int]) -> @hashset.HashSet[Int] {
-  let set : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let set : @hashset.HashSet[Int] = @hashset.HashSet([])
   for x in xs {
     set.add(x) |> ignore
   }
@@ -93,7 +93,7 @@ pub fn verify_allocation(
   // Function parameters and block parameters may legitimately reside in ABI
   // argument registers (x0-x7/v0-v7). Block params are SSA phis and often
   // coalesce with incoming args.
-  let param_ids : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let param_ids : @hashset.HashSet[Int] = @hashset.HashSet([])
   for p in func.params {
     param_ids.add(p.id) |> ignore
   }
@@ -102,7 +102,7 @@ pub fn verify_allocation(
       param_ids.add(p.id) |> ignore
     }
   }
-  let wasm_int_arg_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let wasm_int_arg_regs : @hashset.HashSet[Int] = @hashset.HashSet([])
   wasm_int_arg_regs.add(isa.wasm_vmctx_arg_preg().index) |> ignore
   for preg in isa.wasm_user_arg_gprs() {
     wasm_int_arg_regs.add(preg.index) |> ignore
@@ -110,7 +110,7 @@ pub fn verify_allocation(
   let wasm_float_arg_regs = build_index_set(isa.wasm_arg_fprs())
 
   // Call-clobbered sets.
-  let call_clobbered_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_int : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in isa.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
@@ -118,12 +118,12 @@ pub fn verify_allocation(
   // V8-V15 (AAPCS64) the same way as same-ABI calls.
   //
   // Vector values are handled separately below and must never cross calls.
-  let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_c.add(r.index) |> ignore
   }
   // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
-  let call_clobbered_float_wasm : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_float_wasm : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_wasm.add(r.index) |> ignore
   }

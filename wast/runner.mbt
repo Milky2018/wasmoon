@@ -35,7 +35,7 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 /// Convert two Int64 (low and high) to V128 Bytes (16 bytes, little-endian)
 fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = @buffer.Buffer(size_hint=16)
   // Write low 8 bytes
   buf.write_byte((low & 0xFFL).to_byte())
   buf.write_byte(((low >> 8) & 0xFFL).to_byte())
@@ -182,17 +182,17 @@ pub fn WastContext::new(
     Some(instance) => instance
     None => @runtime.ModuleInstance::new() // Fallback: shouldn't happen
   }
-  let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
+  let registered_modules : Map[String, @runtime.ModuleInstance] = Map([])
   registered_modules.set("spectest", spectest_instance)
   registered_modules.set("wasi_snapshot_preview1", wasi_instance)
   WastContext::{
     store,
     current_module: None,
-    named_modules: Map::new(),
-    module_definitions: Map::new(),
+    named_modules: Map([]),
+    module_definitions: Map([]),
     registered_modules,
-    overridden_builtin_modules: @hashset.new(),
-    jit_modules: Map::new(),
+    overridden_builtin_modules: @hashset.HashSet([]),
+    jit_modules: Map([]),
     current_jit: None,
     use_jit,
     jit_compiler,
@@ -524,7 +524,7 @@ pub fn run_wast_command(
         values => {
           result.failed = result.failed + 1
           result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{values})",
+            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{to_repr(values)})",
           )
         }
       }
@@ -695,7 +695,16 @@ fn run_assert_trap(
   _expected_msg : String,
 ) -> Bool {
   // Should trap
-  (try? invoke_action(ctx, action)) is Err(_)
+  !succeeds(() => invoke_action(ctx, action))
+}
+
+///|
+fn[T] succeeds(body : () -> T raise) -> Bool {
+  try body() catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
 }
 
 ///|
@@ -707,7 +716,7 @@ pub(all) suberror WastRunnerError {
 }
 
 ///|
-pub impl Show for WastRunnerError with output(self, logger) {
+pub impl Show for WastRunnerError with fn output(self, logger) {
   match self {
     ModuleNotFound(name) => logger.write_string("module not found: \{name}")
     NoCurrentModule => logger.write_string("no current module")
@@ -1253,23 +1262,21 @@ fn v128_pattern_match(
 fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
   match source {
     Binary(bytes) =>
-      (try? ({
+      succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
-      }))
-      is Ok(_)
+      })
     Quote(parts) => {
       // Join quoted parts and parse as WAT
       let wat_source = "(module " +
         parts.iter().fold(init="", fn(acc, s) { acc + s }) +
         ")"
-      (try? ({
+      succeeds(() => {
         let mod_ = @wat.parse(wat_source)
         @validator.validate_module(mod_)
-      }))
-      is Ok(_)
+      })
     }
-    Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
+    Inline(mod_) => succeeds(() => @validator.validate_module(mod_))
     FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
@@ -1277,7 +1284,7 @@ fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
 ///|
 fn parse_module_source(source : @wat.WastModuleSource) -> Bool {
   match source {
-    Binary(bytes) => (try? @parser.parse_module(bytes)) is Ok(_)
+    Binary(bytes) => succeeds(() => @parser.parse_module(bytes))
     Quote(_) => false // Quoted source is assumed to fail parsing
     Inline(_) => true // Already parsed successfully
     FailedToParse(_) => false // Module failed to parse
@@ -1292,7 +1299,7 @@ fn try_instantiate_source(
   let imports = ctx.build_imports()
   match source {
     Binary(bytes) =>
-      (try? ({
+      succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
@@ -1301,10 +1308,9 @@ fn try_instantiate_source(
           imports,
         )
         ctx.current_module = Some(instance)
-      }))
-      is Ok(_)
+      })
     Inline(mod_) =>
-      (try? ({
+      succeeds(() => {
         @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
@@ -1312,8 +1318,7 @@ fn try_instantiate_source(
           imports,
         )
         ctx.current_module = Some(instance)
-      }))
-      is Ok(_)
+      })
     Quote(_) => false
     FailedToParse(_) => false // Module failed to parse, can't instantiate
   }
@@ -1464,13 +1469,10 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = (try? (@executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        |> ignore))
-        is Err(_)
+      let trapped = !succeeds(() => {
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
+      })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
@@ -1506,13 +1508,10 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = (try? (@executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        |> ignore))
-        is Err(_)
+      let trapped = !succeeds(() => {
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
+      })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -

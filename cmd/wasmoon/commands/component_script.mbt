@@ -16,12 +16,12 @@ pub(all) enum ComponentTestErrorCode {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for ComponentTestError with output(self, logger) {
+pub impl Show for ComponentTestError with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
 
 ///|
-pub impl Show for ComponentTestErrorCode with output(self, logger) {
+pub impl Show for ComponentTestErrorCode with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
 
@@ -471,7 +471,11 @@ fn instantiate_component(
   @runtime_impl.ComponentInstance,
   @runtime_impl.ComponentRuntimeError,
 ] {
-  try? linker.instantiate(name, component)
+  try linker.instantiate(name, component) catch {
+    e => Err(e)
+  } noraise {
+    instance => Ok(instance)
+  }
 }
 
 ///|
@@ -483,7 +487,11 @@ fn run_invoke(
   Array[@runtime_impl.ComponentValue],
   @runtime_impl.ComponentRuntimeError,
 ] {
-  try? instance.call_exported_func(field, args)
+  try instance.call_exported_func(field, args) catch {
+    e => Err(e)
+  } noraise {
+    values => Ok(values)
+  }
 }
 
 ///|
@@ -1247,7 +1255,7 @@ fn run_component_script_impl(
                   result.add_passed()
                 } else {
                   result.add_failed(
-                    "assert_return mismatch expected=\{expected} got=\{vals}",
+                    "assert_return mismatch expected=\{to_repr(expected)} got=\{to_repr(vals)}",
                   )
                 }
               Err(e) => result.add_failed("assert_return trapped: \{e}")

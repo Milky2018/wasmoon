@@ -24,7 +24,7 @@ fn ValidationResult::add_error(self : ValidationResult, error : String) -> Unit 
 pub fn validate_function(func : Function) -> ValidationResult {
   let result = ValidationResult::new()
   // Track all defined values
-  let defined_values : @hashmap.HashMap[Int, Type] = @hashmap.new()
+  let defined_values : @hashmap.HashMap[Int, Type] = @hashmap.HashMap([])
   // Add function parameters as defined
   for param in func.params {
     let (v, ty) = param

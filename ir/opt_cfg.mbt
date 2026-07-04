@@ -596,7 +596,7 @@ fn compute_used_block_params(
 pub fn simplify_branches(func : Function) -> OptResult {
   let result = OptResult::new()
   // Build constant map from constant folding
-  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
+  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
@@ -659,7 +659,7 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
     return result
   }
   // Mark reachable blocks using DFS from entry
-  let reachable : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let reachable : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
   let worklist : Array[Int] = [0] // Start from entry block (block 0)
   while worklist.length() > 0 {
     let block_id = worklist.pop().unwrap()
@@ -705,9 +705,9 @@ pub fn merge_blocks(func : Function) -> OptResult {
     return result
   }
   // Build predecessor and successor counts
-  let pred_count : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  let succ_count : @hashmap.HashMap[Int, Int] = @hashmap.new()
-  let single_pred : @hashmap.HashMap[Int, Int] = @hashmap.new() // block -> its single predecessor
+  let pred_count : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
+  let succ_count : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
+  let single_pred : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([]) // block -> its single predecessor
   for block in func.blocks {
     pred_count.set(block.id, 0)
     succ_count.set(block.id, 0)
@@ -808,7 +808,7 @@ fn rewrite_jump_args_through_block(
   if block_params.length() != incoming_args.length() {
     return None
   }
-  let param_to_arg : @hashmap.HashMap[Int, Value] = @hashmap.new()
+  let param_to_arg : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
   for i in 0..<block_params.length() {
     let (param, _) = block_params[i]
     param_to_arg.set(param.id, incoming_args[i])
@@ -827,7 +827,7 @@ fn resolve_jump_target_with_args(
   func : Function,
   block_idx : @hashmap.HashMap[Int, Int],
 ) -> (Int, Array[Value]) {
-  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
   let mut current_target = target
   let mut current_args = args
   let mut done = false
@@ -864,7 +864,7 @@ fn resolve_jump_target_with_args(
 /// Bypasses blocks that only contain an unconditional jump
 pub fn thread_jumps(func : Function) -> OptResult {
   let result = OptResult::new()
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }

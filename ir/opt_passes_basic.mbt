@@ -62,7 +62,7 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
 ///|
 /// Compute use counts for all values in a function
 fn compute_use_counts(func : Function) -> @hashmap.HashMap[Int, Int] {
-  let counts : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let counts : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for block in func.blocks {
     // Count uses in instructions
     for inst in block.instructions {
@@ -160,7 +160,7 @@ fn has_side_effects(inst : Inst) -> Bool {
 pub fn fold_constants(func : Function) -> OptResult {
   let result = OptResult::new()
   // Map from value id to constant value (if known)
-  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.new()
+  let constants : @hashmap.HashMap[Int, ConstValue] = @hashmap.HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
       // First, record any constant instruction
@@ -587,7 +587,7 @@ pub fn propagate_copies(func : Function) -> OptResult {
   // Process each block independently to avoid cross-block copy propagation issues
   for block in func.blocks {
     // Map from copy destination to copy source (local to this block)
-    let copies : @hashmap.HashMap[Int, Value] = @hashmap.new()
+    let copies : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
     // First pass: collect copy instructions in this block
     for inst in block.instructions {
       if inst.opcode is Copy &&
@@ -628,12 +628,12 @@ pub fn canonicalize_aliases(func : Function) -> OptResult {
   let idom = cfg.compute_dominators()
   let domtree = build_dominator_tree(idom)
   // Build block_id -> array_index mapping.
-  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.new()
+  let block_idx : @hashmap.HashMap[Int, Int] = @hashmap.HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)
   }
   // Active alias environment for the current dominator-tree path.
-  let aliases : @hashmap.HashMap[Int, Value] = @hashmap.new()
+  let aliases : @hashmap.HashMap[Int, Value] = @hashmap.HashMap([])
   fn dfs(block_id : Int) {
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
@@ -691,7 +691,7 @@ pub fn propagate_copies_global(func : Function) -> OptResult {
 fn resolve_copy(v : Value, copies : @hashmap.HashMap[Int, Value]) -> Value? {
   // Follow copy chain (with cycle detection)
   let mut current = v
-  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let visited : @hashmap.HashMap[Int, Bool] = @hashmap.HashMap([])
   while true {
     if visited.get(current.id).unwrap_or(false) {
       break // Cycle detected

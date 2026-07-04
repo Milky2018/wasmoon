@@ -1,4 +1,25 @@
 ///|
+fn validate_module_has_error(
+  mod : @types.Module,
+  matches : (ValidationError) -> Bool,
+) -> Bool {
+  try validate_module(mod) catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+fn validate_module_with_context_error(mod : @types.Module) -> ValidationError? {
+  try validate_module_with_context(mod) catch {
+    err => Some(err)
+  } noraise {
+    _ => None
+  }
+}
+
+///|
 test "validator: valid simple function" {
   let func : @types.FunctionCode = {
     locals: [],
@@ -83,11 +104,10 @@ test "validator: type mismatch - wrong operand type" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("Expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I32, got I64")
+    }),
   )
 }
 
@@ -114,11 +134,10 @@ test "validator: stack underflow" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(StackUnderflow("Expected I32, but stack is empty"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is StackUnderflow("Expected I32, but stack is empty")
+    }),
   )
 }
 
@@ -142,7 +161,9 @@ test "validator: invalid local index" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidLocalIndex(5))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidLocalIndex(5)),
+  )
 }
 
 ///|
@@ -234,11 +255,11 @@ test "validator: stack height - function returns too many values" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(StackHeightMismatch("function return: expected stack height 1, got 2"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err
+      is StackHeightMismatch("function return: expected stack height 1, got 2")
+    }),
   )
 }
 
@@ -267,7 +288,7 @@ test "validator: stack height - function returns too few values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -348,7 +369,7 @@ test "validator: stack height - block leaves wrong number of values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -411,7 +432,7 @@ test "validator: stack height - void function with leftover values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -473,7 +494,7 @@ test "validator: control flow - invalid label index" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(InvalidLabelIndex(1)),
+    validate_module_has_error(mod, err => err is InvalidLabelIndex(1)),
     content="true",
   )
 }
@@ -715,10 +736,10 @@ test "validator: validate_module_with_context provides location on error" {
     tags: [],
     func_names: {},
   }
-  let result = try? validate_module_with_context(mod)
+  let result = validate_module_with_context_error(mod)
   // Should fail with context
   match result {
-    Err(WithContext(ctx)) => {
+    Some(WithContext(ctx)) => {
       assert_true(ctx.func_idx is Some(0))
       assert_true(ctx.instr_offset is Some(2))
       assert_true(ctx.instruction is Some(_))
@@ -752,9 +773,9 @@ test "validator: validate_module_with_context reports correct function index" {
     tags: [],
     func_names: {},
   }
-  let result = try? validate_module_with_context(mod)
+  let result = validate_module_with_context_error(mod)
   match result {
-    Err(WithContext(ctx)) => {
+    Some(WithContext(ctx)) => {
       // Should report error in function 1 (not 0)
       assert_true(ctx.func_idx is Some(1))
       assert_true(ctx.instr_offset is Some(0))
@@ -814,11 +835,10 @@ test "validator: data segment with i64 offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got I64")
+    }),
   )
 }
 
@@ -845,11 +865,10 @@ test "validator: data segment with ref.null offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got FuncRef"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got FuncRef")
+    }),
   )
 }
 
@@ -874,11 +893,10 @@ test "validator: data segment with empty offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("empty constant expression"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("empty constant expression")
+    }),
   )
 }
 
@@ -903,7 +921,9 @@ test "validator: data segment with non-constant instruction should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -927,7 +947,9 @@ test "validator: data segment with nop offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -951,7 +973,9 @@ test "validator: data segment with unknown global should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
+  )
 }
 
 ///|
@@ -980,7 +1004,9 @@ test "validator: data segment with mutable global offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+  assert_true(
+    validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
+  )
 }
 
 ///|
@@ -1004,7 +1030,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1033,7 +1059,7 @@ test "validator: data segment with immutable global offset should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1074,11 +1100,10 @@ test "validator: elem segment with i64 offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got I64")
+    }),
   )
 }
 
@@ -1112,7 +1137,9 @@ test "validator: elem segment with non-constant instruction should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -1149,7 +1176,9 @@ test "validator: elem segment with unknown global should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
+  )
 }
 
 ///|
@@ -1191,7 +1220,9 @@ test "validator: elem segment with mutable global offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+  assert_true(
+    validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
+  )
 }
 
 ///|
@@ -1219,7 +1250,9 @@ test "validator: elem segment with invalid table index should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidTableIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTableIndex(0)),
+  )
 }
 
 ///|
@@ -1256,7 +1289,10 @@ test "validator: elem segment type mismatch with table should fail" {
     tags: [],
     func_names: {},
   }
-  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+  inspect(
+    validate_module_has_error(mod, err => err is TypeMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -1292,7 +1328,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1329,7 +1365,10 @@ test "validator: elem init with wrong type should fail" {
     tags: [],
     func_names: {},
   }
-  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+  inspect(
+    validate_module_has_error(mod, err => err is TypeMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -1368,7 +1407,7 @@ test "validator: elem with unknown function should fail" {
     func_names: {},
   }
   // Should fail with "unknown function" error
-  inspect((try? validate_module(mod)) is Err(_), content="true")
+  inspect(validate_module_has_error(mod, _ => true), content="true")
 }
 
 // ============================================================
@@ -1395,7 +1434,7 @@ test "regression: invalid type index should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(2))")
+  assert_true(validate_module_has_error(mod, err => err is InvalidTypeIndex(2)))
 }
 
 ///|
@@ -1423,7 +1462,9 @@ test "regression: uninitialized non-nullable local should fail" {
     tags: [],
     func_names: {},
   } // reading uninitialized local
-  inspect(try? validate_module(mod), content="Err(UninitializedLocal(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is UninitializedLocal(0)),
+  )
 }
 
 ///|
@@ -1463,7 +1504,7 @@ test "regression: initialized non-nullable local should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1491,7 +1532,7 @@ test "regression: nullable ref local reading without initialization should pass"
     tags: [],
     func_names: {},
   } // reading uninitialized nullable local is OK
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1513,7 +1554,7 @@ test "regression: param with non-nullable ref type should be initialized" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1584,7 +1625,7 @@ test "validator: module with struct type should pass" {
     ],
     [0],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1593,7 +1634,7 @@ test "validator: module with array type should pass" {
     [array_subtype(field(@types.StorageType::Val(I32), mutable=true))],
     [0],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1607,7 +1648,7 @@ test "validator: struct with packed field types should pass" {
     ],
     [0],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1619,7 +1660,7 @@ test "validator: struct with ref field referencing valid type should pass" {
     ],
     [0, 1],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1628,7 +1669,9 @@ test "validator: struct with ref field referencing invalid type should fail" {
     [struct_subtype([field(@types.StorageType::Val(RefNullFuncTyped(99)))])],
     [0],
   )
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(99))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTypeIndex(99)),
+  )
 }
 
 ///|
@@ -1641,7 +1684,7 @@ test "validator: forward ref within rec group should pass" {
     ],
     [0, 0], // Same rec group
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1654,7 +1697,7 @@ test "validator: forward ref outside rec group should fail" {
     ],
     [0, 1], // Different rec groups
   )
-  inspect(try? validate_module(mod), content="Err(UnknownType(1))")
+  assert_true(validate_module_has_error(mod, err => err is UnknownType(1)))
 }
 
 ///|
@@ -1668,7 +1711,7 @@ test "validator: array with ref element referencing valid type should pass" {
     ],
     [0, 1],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1681,7 +1724,9 @@ test "validator: array with ref element referencing invalid type should fail" {
     ],
     [0],
   )
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(50))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTypeIndex(50)),
+  )
 }
 
 ///|
@@ -1706,7 +1751,7 @@ test "validator: mixed func, struct, array types should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1794,9 +1839,10 @@ test "validator: memory64 rejects i32 address" {
     [I32],
     is_memory64=true,
   )
-  inspect(
-    try? validate_module(mod),
-    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I64, got I32")
+    }),
   )
 }
 
@@ -1853,9 +1899,10 @@ test "validator: table64 rejects i32 index" {
     [FuncRef],
     is_table64=true,
   )
-  inspect(
-    try? validate_module(mod),
-    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I64, got I32")
+    }),
   )
 }
 

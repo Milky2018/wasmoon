@@ -237,7 +237,7 @@ fn build_gpr_save_list_v3(
   let fp = isa.fp_reg_index()
   let lr = isa.lr_reg_index()
   let env = isa.machine_env(settings=abi_settings)
-  let callee : @hashset.HashSet[Int] = @hashset.new()
+  let callee : @hashset.HashSet[Int] = @hashset.HashSet([])
   for r in env.callee_saved_int {
     callee.add(r.index)
   }

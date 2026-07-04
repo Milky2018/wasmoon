@@ -124,12 +124,12 @@ pub(all) enum EOpcode {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for EClassId with output(self, logger) {
+pub impl Show for EClassId with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for EOpcode with output(self, logger) {
+pub impl Show for EOpcode with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -423,7 +423,7 @@ pub fn EGraph::new() -> EGraph {
     opcode_index: {},
     uses: {},
     type_map: {},
-    remat_set: @hashset.new(),
+    remat_set: @hashset.HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
     last_eclass_size_limit_hits: 0,
@@ -436,7 +436,7 @@ fn EGraph::index_add(self : EGraph, tag : EOpcodeTag, class_id : Int) -> Unit {
   match self.opcode_index.get(tag) {
     Some(set) => set.add(class_id)
     None => {
-      let set : @hashset.HashSet[Int] = @hashset.new()
+      let set : @hashset.HashSet[Int] = @hashset.HashSet([])
       set.add(class_id)
       self.opcode_index.set(tag, set)
     }
@@ -535,7 +535,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     match self.uses.get(child_root) {
       Some(parents) => parents.add(id)
       None => {
-        let parents : @hashset.HashSet[Int] = @hashset.new()
+        let parents : @hashset.HashSet[Int] = @hashset.HashSet([])
         parents.add(id)
         self.uses.set(child_root, parents)
       }
@@ -864,7 +864,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       match idx.get(tag) {
         Some(set) => set.add(root)
         None => {
-          let set : @hashset.HashSet[Int] = @hashset.new()
+          let set : @hashset.HashSet[Int] = @hashset.HashSet([])
           set.add(root)
           idx.set(tag, set)
         }
@@ -954,7 +954,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             match self.uses.get(child_root) {
               Some(parents) => parents.add(class_id)
               None => {
-                let parents : @hashset.HashSet[Int] = @hashset.new()
+                let parents : @hashset.HashSet[Int] = @hashset.HashSet([])
                 parents.add(class_id)
                 self.uses.set(child_root, parents)
               }
@@ -1702,7 +1702,8 @@ fn extract_cost_equal(lhs : ExtractCost, rhs : ExtractCost) -> Bool {
 
 ///|
 fn extract_node_tiebreak_less(lhs : ENode, rhs : ENode) -> Bool {
-  "\{lhs.op}:\{lhs.children}" < "\{rhs.op}:\{rhs.children}"
+  "\{to_repr(lhs.op)}:\{to_repr(lhs.children)}" <
+  "\{to_repr(rhs.op)}:\{to_repr(rhs.children)}"
 }
 
 ///|
@@ -1736,7 +1737,7 @@ pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
   let memo : Map[Int, (ExtractCost, ENode)] = {}
   // Track classes currently being processed to detect cycles
-  let in_progress : @hashset.HashSet[Int] = @hashset.new()
+  let in_progress : @hashset.HashSet[Int] = @hashset.HashSet([])
   let (cost, node) = self.extract_impl(id, memo, in_progress)
   if cost.infinite {
     (@int.MAX_VALUE, node)

@@ -38,8 +38,8 @@ test "Wasm ABI arg/ret reg counts (shape)" {
 ///|
 test "AArch64 MachineEnv reserves scratch regs" {
   let env = ISA::AArch64.machine_env()
-  inspect(env.scratch_int, content="[16, 17]")
-  inspect(env.scratch_float, content="[16, 17]")
+  debug_inspect(env.scratch_int, content="[16, 17]")
+  debug_inspect(env.scratch_float, content="[16, 17]")
 }
 
 ///|
@@ -54,6 +54,6 @@ test "amd64 call-clobbered sets basic shape" {
 ///|
 test "amd64 MachineEnv reserves scratch regs" {
   let env = ISA::AMD64.machine_env()
-  inspect(env.scratch_int, content="[10, 11]")
-  inspect(env.scratch_float, content="[14, 15]")
+  debug_inspect(env.scratch_int, content="[10, 11]")
+  debug_inspect(env.scratch_float, content="[14, 15]")
 }
