@@ -437,6 +437,60 @@ test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer select through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I32, I64, I64], [I64])
+  let milk = @milkir.Function::new("select_x64", signature)
+  let cond = milk.new_value(I32)
+  let true_value = milk.new_value(I64)
+  let false_value = milk.new_value(I64)
+  let output = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(
+    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+  )
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_cmovne = false
+  for i in 0..<(plan.object.code.length() - 2) {
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x45 {
+      has_cmovne = true
+    }
+  }
+  inspect(has_cmovne, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR integer select through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([I32, I64, I64], [I64])
+  let milk = @milkir.Function::new("select_aarch64", signature)
+  let cond = milk.new_value(I32)
+  let true_value = milk.new_value(I64)
+  let false_value = milk.new_value(I64)
+  let output = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(
+    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+  )
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_csel = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if plan.object.code[i + 3] == 0x9a &&
+      (plan.object.code[i + 2] & 0x80) == 0x80 {
+      has_csel = true
+    }
+  }
+  inspect(has_csel, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "plan MilkIR signed integer division through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("sdiv64", signature)

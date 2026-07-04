@@ -379,6 +379,30 @@ test "emit X64 generic integer width conversion bytes" {
 }
 
 ///|
+test "emit X64 integer select bytes" {
+  let func = @machv.Function::new("x64_select")
+  let entry = func.new_block()
+  let select = func.new_inst(Select)
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Int })),
+  )
+  select.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(select)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[133, 201, 72, 137, 216, 72, 15, 69, 194, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -837,6 +861,30 @@ test "emit AArch64 generic integer width conversion bytes" {
   debug_inspect(
     object.code,
     content="[32, 124, 64, 147, 226, 3, 3, 42, 228, 3, 5, 42, 192, 3, 95, 214]",
+  )
+}
+
+///|
+test "emit AArch64 integer select bytes" {
+  let func = @machv.Function::new("select")
+  let entry = func.new_block()
+  let select = func.new_inst(Select)
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  select.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Int })),
+  )
+  select.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(select)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[63, 0, 0, 113, 64, 16, 131, 154, 192, 3, 95, 214]",
   )
 }
 

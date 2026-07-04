@@ -227,6 +227,14 @@ fn emit_x64_test_rr(object : CodeObject, reg : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_test_rr32(object : CodeObject, reg : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: test r/m32, r32.
+  emit_x64_rex_if_needed(object, (reg >> 3) & 1, (reg >> 3) & 1)
+  object.code.push(0x85)
+  emit_x64_modrm(object, 3, reg, reg)
+}
+
+///|
 fn emit_x64_cmp_rr(object : CodeObject, lhs : Int, rhs : Int) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: cmp r/m64, r64.
   emit_x64_rex_w(object, (rhs >> 3) & 1, (lhs >> 3) & 1)
@@ -270,6 +278,20 @@ fn emit_x64_cmp_imm32(object : CodeObject, lhs : Int, imm : Int) -> Unit {
   object.code.push(0x81)
   emit_x64_modrm(object, 3, 7, lhs)
   emit_u32_le(object, imm)
+}
+
+///|
+fn emit_x64_cmovcc_rr(
+  object : CodeObject,
+  cond : @machv.Cond,
+  dst : Int,
+  src : Int,
+) -> Unit {
+  let cc = x64_jcc_opcode(cond) & 15
+  emit_x64_rex_w(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x40 + cc)
+  emit_x64_modrm(object, 3, dst, src)
 }
 
 ///|
@@ -441,6 +463,24 @@ fn emit_aarch64_cset(
   let b0 = (dst & 31) | 0xe0
   let b1 = 0x07 | ((inv_cond & 15) << 4) | 0x04
   emit_u32_le(object, b0 | (b1 << 8) | (159 << 16) | (154 << 24))
+}
+
+///|
+fn emit_aarch64_csel(
+  object : CodeObject,
+  dst : Int,
+  true_reg : Int,
+  false_reg : Int,
+  cond : @machv.Cond,
+) -> Unit {
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((true_reg & 7) << 5) |
+    ((((true_reg >> 3) & 3) | ((aarch64_cond_bits(cond) & 15) << 4)) << 8) |
+    (((false_reg & 31) | 128) << 16) |
+    (154 << 24),
+  )
 }
 
 ///|
@@ -986,6 +1026,33 @@ fn emit_aarch64_zero_extend32(
   // TODO(machv_emit): generalize integer width conversions once MachV carries
   // source and destination lane widths instead of only a generic Int class.
   emit_aarch64_mov_w(object, dst, src)
+}
+
+///|
+fn emit_aarch64_select(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let cond = require_int_preg(
+    find_operand(inst, Use, 0, "select"),
+    "select condition",
+  )
+  let true_reg = require_int_preg(
+    find_operand(inst, Use, 1, "select"),
+    "select true value",
+  )
+  let false_reg = require_int_preg(
+    find_operand(inst, Use, 2, "select"),
+    "select false value",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "select"),
+    "select destination",
+  )
+  // TODO(machv_emit): add Float32/Float64 FCSEL and vector select emission once
+  // MachV select carries result class-specific lowering metadata.
+  emit_aarch64_cmp_imm(object, cond, 0, false)
+  emit_aarch64_csel(object, dst, true_reg, false_reg, Ne)
 }
 
 ///|
@@ -1949,6 +2016,40 @@ fn emit_x64_zero_extend32(
 }
 
 ///|
+fn emit_x64_select(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let cond = require_int_preg(
+    find_operand(inst, Use, 0, "select"),
+    "select condition",
+  )
+  let true_reg = require_int_preg(
+    find_operand(inst, Use, 1, "select"),
+    "select true value",
+  )
+  let false_reg = require_int_preg(
+    find_operand(inst, Use, 2, "select"),
+    "select false value",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "select"),
+    "select destination",
+  )
+  // TODO(machv_emit): add branch-based Float32/Float64 and vector select
+  // lowering once MachV select carries result class-specific lowering metadata.
+  emit_x64_test_rr32(object, cond)
+  if dst == true_reg {
+    emit_x64_cmovcc_rr(object, Eq, dst, false_reg)
+  } else {
+    if dst != false_reg {
+      emit_x64_mov_rr(object, dst, false_reg)
+    }
+    emit_x64_cmovcc_rr(object, Ne, dst, true_reg)
+  }
+}
+
+///|
 fn emit_x64_float_width_convert(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2099,6 +2200,7 @@ fn write_aarch64_inst_bytes(
     Sextend8 => emit_aarch64_sign_extend(object, inst, 8)
     Sextend16 => emit_aarch64_sign_extend(object, inst, 16)
     Sextend32 => emit_aarch64_sign_extend(object, inst, 32)
+    Select => emit_aarch64_select(object, inst)
     LoadPtr(mem_type, offset) =>
       emit_aarch64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
@@ -2177,6 +2279,7 @@ fn write_x64_inst_bytes(
     Sextend8 => emit_x64_sign_extend(object, inst, 8)
     Sextend16 => emit_x64_sign_extend(object, inst, 16)
     Sextend32 => emit_x64_sign_extend(object, inst, 32)
+    Select => emit_x64_select(object, inst)
     LoadPtr(mem_type, offset) =>
       emit_x64_load_ptr(object, inst, mem_type, offset)
     StorePtr(mem_type, offset) =>
