@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wasm_frontend"
+
+import {
+  "Milky2018/milkir",
+  "Milky2018/wasm_core/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn lower_function(EmbeddingEnvironment, @types.Module, Int) -> @milkir.Function raise LowerError
+
+// Errors
+pub suberror LowerError {
+  FunctionIndexOutOfRange(index~ : Int)
+  TypeIndexOutOfRange(index~ : Int)
+  NonFunctionType(index~ : Int)
+  MissingCode(index~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for LowerError
+
+// Types and methods
+pub(all) struct EmbeddingEnvironment {
+  runtime_symbol_prefix : String
+  hidden_context_type : @milkir.Type?
+} derive(@debug.Debug)
+pub fn EmbeddingEnvironment::hidden_context_param(Self) -> @milkir.Type?
+pub fn EmbeddingEnvironment::new(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?) -> Self
+pub fn EmbeddingEnvironment::runtime_symbol(Self, String) -> @milkir.ExternalSymbol
+
+// Type aliases
+
+// Traits
+
