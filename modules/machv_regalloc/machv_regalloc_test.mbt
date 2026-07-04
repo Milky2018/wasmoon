@@ -69,6 +69,27 @@ test "projected MachV constraints guide fixed register allocation" {
 }
 
 ///|
+test "allocate_function rejects unsatisfied projected fixed constraint" {
+  let func = @machv.Function::new("fixed_reject")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let inst = func.new_inst(Target("fixed_def"))
+  inst.add_operand(@machv.Operand::def(Virtual(v0)))
+  inst.add_constraint({
+    operand_index: 0,
+    allowed_regs: [{ index: 1, class: Int }],
+  })
+  entry.append(inst)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  try allocate_function(func, [p0]) catch {
+    FixedConstraintViolation(_) => inspect("fixed", content="fixed")
+    _ => fail("unexpected verifier error")
+  } noraise {
+    _ => fail("expected fixed constraint violation")
+  }
+}
+
+///|
 test "apply inserts reloads and spills for stack allocated operands" {
   let func = @machv.Function::new("reload_spill")
   let entry = func.new_block()

@@ -8,9 +8,9 @@ import {
 }
 
 // Values
-pub fn allocate_and_apply(@machv.Function, Array[@machv.PReg]) -> ApplyResult
+pub fn allocate_and_apply(@machv.Function, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
 
-pub fn allocate_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation
+pub fn allocate_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
 
 pub fn project_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Program
 

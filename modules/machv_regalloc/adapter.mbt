@@ -101,8 +101,11 @@ pub fn project_function(
 pub fn allocate_function(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
-) -> @regalloc.Allocation {
-  @regalloc.allocate(project_function(func, physical_regs))
+) -> @regalloc.Allocation raise @regalloc.VerifyError {
+  let program = project_function(func, physical_regs)
+  let allocation = @regalloc.allocate(program)
+  @regalloc.verify_allocation(program, allocation)
+  allocation
 }
 
 ///|
@@ -171,7 +174,7 @@ fn allocatable_regs_for_spills(
 fn allocate_with_optional_scratch(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
-) -> @regalloc.Allocation {
+) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let first = allocate_function(func, physical_regs)
   if has_spills(first) {
     let allocatable = allocatable_regs_for_spills(physical_regs)
@@ -307,7 +310,7 @@ fn rewrite_operands_and_spills(
 pub fn allocate_and_apply(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
-) -> ApplyResult {
+) -> ApplyResult raise @regalloc.VerifyError {
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
