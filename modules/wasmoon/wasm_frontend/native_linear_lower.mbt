@@ -1262,6 +1262,16 @@ fn append_linear_exit_block_body(
         } else {
           return false
         }
+      BrTable(labels, default_label) =>
+        if default_label == 0 && labels.all(label => label == 0) {
+          // Terminal table branches to the current block all have the same
+          // observable effect: consume the selector and leave current label
+          // values for the block result.
+          out.push(Drop)
+          return true
+        } else {
+          return false
+        }
       _ => if !append_linear_block_body(out, [instr]) { return false }
     }
   }
