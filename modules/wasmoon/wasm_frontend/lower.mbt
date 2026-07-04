@@ -48,11 +48,10 @@ fn get_func_type(
 fn get_code(
   mod_ : @types.Module,
   func_local_idx : Int,
-) -> @types.FunctionCode raise LowerError {
+) -> Unit raise LowerError {
   if func_local_idx < 0 || func_local_idx >= mod_.codes.length() {
     raise MissingCode(index=func_local_idx)
   }
-  mod_.codes[func_local_idx]
 }
 
 ///|
@@ -64,51 +63,18 @@ fn function_name(mod_ : @types.Module, func_local_idx : Int) -> String {
 }
 
 ///|
-fn lower_body_skeleton(
-  func : @milkir.Function,
-  entry : @milkir.Block,
-  code : @types.FunctionCode,
-) -> Unit {
-  // TODO(wasm_frontend): lower WebAssembly instructions into ordinary MilkIR
-  // operations through EmbeddingEnvironment callbacks.
-  match code.body {
-    [] => entry.set_terminator(Return([]))
-    [Return] => entry.set_terminator(Return([]))
-    _ => {
-      let inst = func.new_inst(
-        Trap("TODO(wasm_frontend): unsupported Wasm instruction body"),
-        [],
-        [],
-      )
-      inst.add_metadata(
-        Comment("TODO(wasm_frontend): replace skeleton trap with real lowering"),
-      )
-      entry.append_inst(inst)
-      entry.set_terminator(
-        TrapExit("TODO(wasm_frontend): unsupported Wasm instruction body"),
-      )
-    }
-  }
-}
-
-///|
 pub fn lower_function(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
   func_local_idx : Int,
 ) -> @milkir.Function raise LowerError {
   let func_type = get_func_type(mod_, func_local_idx)
-  let code = get_code(mod_, func_local_idx)
+  get_code(mod_, func_local_idx)
   let signature = wasm_func_type_to_signature(env, func_type)
-  let func = @milkir.Function::new(
-    function_name(mod_, func_local_idx),
-    signature,
+  let legacy_func = @ir.translate_function(
+    mod_,
+    func_local_idx,
+    name=function_name(mod_, func_local_idx),
   )
-  let params : Array[@milkir.Value] = []
-  for param in signature.params {
-    params.push(func.new_value(param))
-  }
-  let entry = func.new_block(params)
-  lower_body_skeleton(func, entry, code)
-  func
+  legacy_func.to_milkir_with_signature(signature)
 }

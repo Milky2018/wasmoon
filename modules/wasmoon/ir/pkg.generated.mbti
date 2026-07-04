@@ -208,6 +208,8 @@ pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> Block
 pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::print(Self) -> String
+pub fn Function::to_milkir(Self) -> @milkir.Function
+pub fn Function::to_milkir_with_signature(Self, @milkir.Signature) -> @milkir.Function
 
 type IRBuilder
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
