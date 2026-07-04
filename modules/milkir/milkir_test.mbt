@@ -283,8 +283,7 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
       #|function cse_local(v0:i32, v1:i32) -> i32 {
       #|block0:
       #|    v2:i32 = iadd v0, v1
-      #|    v3:i32 = copy v2
-      #|    return v3
+      #|    return v2
       #|}
       #|
     ),
@@ -320,14 +319,129 @@ test "optimizer CSE reuses expressions from dominating blocks" {
       #|    v3:i32 = iadd v0, v1
       #|    brnz v2, block1, block2
       #|block1:
-      #|    v4:i32 = copy v3
-      #|    return v4
+      #|    return v3
       #|block2:
       #|    return v3
       #|}
       #|
     ),
   )
+}
+
+///|
+test "optimizer propagates local copies" {
+  let builder = IRBuilder::new("copy_prop")
+  let param = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let copy = builder.copy(param)
+  let one = builder.iconst_i32(1)
+  let sum = builder.iadd(copy, one)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = propagate_copies(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function copy_prop(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = copy v0
+      #|    v2:i32 = iconst 1
+      #|    v3:i32 = iadd v0, v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer canonicalizes aliases through dominating blocks" {
+  let builder = IRBuilder::new("alias_canon_copy_chain")
+  let param = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let body = builder.create_block()
+  builder.switch_to_block(entry)
+  let copy0 = builder.copy(param)
+  builder.jump(body, [])
+  builder.switch_to_block(body)
+  let copy1 = builder.copy(copy0)
+  let copy2 = builder.copy(copy1)
+  let one = builder.iconst_i32(1)
+  let sum = builder.iadd(copy2, one)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = canonicalize_aliases(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function alias_canon_copy_chain(v0:i32) -> i32 {
+      #|block0:
+      #|    v1:i32 = copy v0
+      #|    jump block1
+      #|block1:
+      #|    v2:i32 = copy v0
+      #|    v3:i32 = copy v0
+      #|    v4:i32 = iconst 1
+      #|    v5:i32 = iadd v0, v4
+      #|    return v5
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer canonicalizes branch args without crossing sibling dominance" {
+  let builder = IRBuilder::new("alias_canon_branch_args")
+  let value = builder.add_param(I32)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  let join = builder.create_block()
+  let join_param = builder.add_block_param(join, I32)
+  builder.switch_to_block(entry)
+  builder.brnz(cond, then_block, else_block)
+  builder.switch_to_block(then_block)
+  let copy = builder.copy(value)
+  builder.jump(join, [copy])
+  builder.switch_to_block(else_block)
+  builder.jump(join, [value])
+  builder.switch_to_block(join)
+  let one = builder.iconst_i32(1)
+  let sum = builder.iadd(join_param, one)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = canonicalize_aliases(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function alias_canon_branch_args(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    brnz v1, block1, block2
+      #|block1:
+      #|    v3:i32 = copy v0
+      #|    jump block3(v0)
+      #|block2:
+      #|    jump block3(v0)
+      #|block3(v2:i32):
+      #|    v4:i32 = iconst 1
+      #|    v5:i32 = iadd v2, v4
+      #|    return v5
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
 }
 
 ///|

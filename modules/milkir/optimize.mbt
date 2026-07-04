@@ -414,6 +414,207 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
 }
 
 ///|
+fn resolve_copy(value : Value, copies : @hashmap.HashMap[Int, Value]) -> Value {
+  let mut current = value
+  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
+  while true {
+    if visited.get(current.id).unwrap_or(false) {
+      break
+    }
+    visited.set(current.id, true)
+    match copies.get(current.id) {
+      Some(source) =>
+        if source.id != current.id {
+          current = source
+        } else {
+          break
+        }
+      None => break
+    }
+  }
+  current
+}
+
+///|
+fn rewrite_values_with_copies(
+  values : Array[Value],
+  copies : @hashmap.HashMap[Int, Value],
+) -> Array[Value]? {
+  let mut updated : Array[Value]? = None
+  for i, value in values {
+    let resolved = resolve_copy(value, copies)
+    if resolved.id != value.id {
+      if updated is None {
+        updated = Some(values.copy())
+      }
+      if updated is Some(items) {
+        items[i] = resolved
+      }
+    }
+  }
+  updated
+}
+
+///|
+fn rewrite_terminator_with_copies(
+  term : Terminator,
+  copies : @hashmap.HashMap[Int, Value],
+) -> Terminator? {
+  match term {
+    Return(values) =>
+      match rewrite_values_with_copies(values, copies) {
+        Some(updated) => Some(Return(updated))
+        None => None
+      }
+    Jump(target, args) =>
+      match rewrite_values_with_copies(args, copies) {
+        Some(updated) => Some(Jump(target, updated))
+        None => None
+      }
+    Branch(cond, true_target, true_args, false_target, false_args) => {
+      let new_cond = resolve_copy(cond, copies)
+      let new_true_args = rewrite_values_with_copies(true_args, copies).unwrap_or(
+        true_args,
+      )
+      let new_false_args = rewrite_values_with_copies(false_args, copies).unwrap_or(
+        false_args,
+      )
+      if new_cond.id != cond.id ||
+        !value_arrays_equal(new_true_args, true_args) ||
+        !value_arrays_equal(new_false_args, false_args) {
+        Some(
+          Branch(
+            new_cond, true_target, new_true_args, false_target, new_false_args,
+          ),
+        )
+      } else {
+        None
+      }
+    }
+    Brz(cond, true_target, false_target) => {
+      let resolved = resolve_copy(cond, copies)
+      if resolved.id != cond.id {
+        Some(Brz(resolved, true_target, false_target))
+      } else {
+        None
+      }
+    }
+    Brnz(cond, true_target, false_target) => {
+      let resolved = resolve_copy(cond, copies)
+      if resolved.id != cond.id {
+        Some(Brnz(resolved, true_target, false_target))
+      } else {
+        None
+      }
+    }
+    BrTable(index, targets, default_target) => {
+      let resolved = resolve_copy(index, copies)
+      if resolved.id != index.id {
+        Some(BrTable(resolved, targets, default_target))
+      } else {
+        None
+      }
+    }
+    TrapExit(_) => None
+  }
+}
+
+///|
+/// Replace local uses of `copy` results with their source values.
+///
+/// This pass is intentionally block-local; use `canonicalize_aliases` when
+/// dominance information is required to propagate copies across blocks.
+pub fn propagate_copies(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("copy_prop")
+  for block in func.blocks {
+    let copies : @hashmap.HashMap[Int, Value] = HashMap([])
+    for inst in block.instructions {
+      if inst.opcode is Copy &&
+        inst.results.length() == 1 &&
+        inst.args.length() > 0 {
+        copies.set(inst.results[0].id, inst.args[0])
+      }
+    }
+    for inst in block.instructions {
+      if rewrite_values_with_copies(inst.args, copies) is Some(updated_args) {
+        inst.args.clear()
+        for arg in updated_args {
+          inst.args.push(arg)
+        }
+        result.mark_changed()
+      }
+    }
+    if block.terminator is Some(term) {
+      if rewrite_terminator_with_copies(term, copies) is Some(updated) {
+        block.terminator = Some(updated)
+        result.mark_changed()
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Resolve visible copy chains along the dominator tree.
+pub fn canonicalize_aliases(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("alias_canon")
+  if func.blocks.length() == 0 {
+    return result
+  }
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  let block_index = build_block_index(func)
+  let aliases : @hashmap.HashMap[Int, Value] = HashMap([])
+  fn visit(block_id : Int) {
+    guard block_index.get(block_id) is Some(index) else { return }
+    let block = func.blocks[index]
+    let local_aliases : Array[Int] = []
+    for inst in block.instructions {
+      if rewrite_values_with_copies(inst.args, aliases) is Some(updated_args) {
+        inst.args.clear()
+        for arg in updated_args {
+          inst.args.push(arg)
+        }
+        result.mark_changed()
+      }
+      if inst.opcode is Copy &&
+        inst.results.length() == 1 &&
+        inst.args.length() > 0 {
+        aliases.set(inst.results[0].id, inst.args[0])
+        local_aliases.push(inst.results[0].id)
+      }
+    }
+    if block.terminator is Some(term) {
+      if rewrite_terminator_with_copies(term, aliases) is Some(updated) {
+        block.terminator = Some(updated)
+        result.mark_changed()
+      }
+    }
+    if block_id >= 0 && block_id < domtree.length() {
+      for child in domtree[block_id] {
+        visit(child)
+      }
+    }
+    for value_id in local_aliases {
+      aliases.remove(value_id)
+    }
+  }
+  let entry_id = func.blocks[0].id
+  if cfg.is_valid(entry_id) {
+    visit(entry_id)
+  }
+  result
+}
+
+///|
+pub fn propagate_copies_global(func : Function) -> OptResult {
+  canonicalize_aliases(func)
+}
+
+///|
 pub fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::new()
   result.add_pass("dce")
@@ -1430,6 +1631,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       let result = OptResult::new()
       merge_opt_result(result, fold_constants(func))
       merge_opt_result(result, eliminate_common_subexpressions(func))
+      merge_opt_result(result, canonicalize_aliases(func))
       merge_opt_result(result, eliminate_dead_code(func))
       merge_opt_result(result, simplify_branches(func))
       merge_opt_result(result, eliminate_constant_block_params(func))
