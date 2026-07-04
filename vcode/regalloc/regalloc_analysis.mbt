@@ -61,7 +61,7 @@ fn ProgPoint::to_string(self : ProgPoint) -> String {
 }
 
 ///|
-pub impl Show for ProgPoint with output(self, logger) {
+pub impl Show for ProgPoint with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -128,7 +128,7 @@ fn LiveInterval::to_string(self : LiveInterval) -> String {
 }
 
 ///|
-pub impl Show for LiveInterval with output(self, logger) {
+pub impl Show for LiveInterval with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -325,7 +325,8 @@ pub fn debug_liveness(liveness : LivenessResult) -> String {
     for v in liveness.live_out[i] {
       out_list.push(v)
     }
-    result = result + "  block\{i}: in=\{in_list}, out=\{out_list}\n"
+    result = result +
+      "  block\{i}: in=\{to_repr(in_list)}, out=\{to_repr(out_list)}\n"
   }
 
   // Print intervals
@@ -465,8 +466,8 @@ fn compute_liveness_with_options(
   let live_out : Array[Set[Int]] = []
   if build_live_intervals {
     for _ in 0..<num_blocks {
-      live_in.push(Set::new())
-      live_out.push(Set::new())
+      live_in.push(Set([]))
+      live_out.push(Set([]))
     }
   }
   // Compute block order directly as FixedArray
@@ -571,17 +572,17 @@ fn collect_defs_uses(
       // Record call points for caller-saved register handling
       // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
-      if inst.opcode.call_type() is @instr.Regular {
+      if inst.opcode.call_type() is Regular {
         let conv = match inst.opcode {
-          @instr.CallPtr(_, _, call_conv) => call_conv
-          @instr.CallDirect(_, _, _, call_conv) => call_conv
+          CallPtr(_, _, call_conv) => call_conv
+          CallDirect(_, _, _, call_conv) => call_conv
           // This pseudo-op may call a C helper on a slow path.
-          @instr.TypeCheckSubtypeIndirect(_) => @instr.C
-          @instr.GCAllocStructInline(_, _) => @instr.C
-          @instr.GCAllocStructSlowPrecise(_, _) => @instr.C
-          @instr.GCAllocArrayFixedInline(_, _) => @instr.C
-          @instr.GCAllocArraySlowPrecise(_) => @instr.C
-          _ => @instr.Wasm
+          TypeCheckSubtypeIndirect(_) => C
+          GCAllocStructInline(_, _) => C
+          GCAllocStructSlowPrecise(_, _) => C
+          GCAllocArrayFixedInline(_, _) => C
+          GCAllocArraySlowPrecise(_) => C
+          _ => Wasm
         }
         result.call_points.push(
           ({ block: block_idx, inst: inst_idx, pos: After }, conv),
@@ -590,12 +591,12 @@ fn collect_defs_uses(
 
       // Record uses (before the instruction)
       for i, use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
+        if use_reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
           let fixed = if i < inst.use_constraints.length() &&
-            inst.use_constraints[i] is @abi.FixedReg(preg) {
+            inst.use_constraints[i] is FixedReg(preg) {
             Some(preg)
           } else {
             None
@@ -608,7 +609,7 @@ fn collect_defs_uses(
 
       // Record definitions (after the instruction)
       for i, def in inst.defs {
-        if def.reg is @abi.Virtual(vreg) {
+        if def.reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
@@ -621,7 +622,7 @@ fn collect_defs_uses(
             abort("vreg defined multiple times (SSA violation)")
           }
           let fixed = if i < inst.def_constraints.length() &&
-            inst.def_constraints[i] is @abi.FixedReg(preg) {
+            inst.def_constraints[i] is FixedReg(preg) {
             Some(preg)
           } else {
             None
@@ -640,7 +641,7 @@ fn collect_defs_uses(
         block_idx : Int,
         inst_idx : Int,
       ) -> Unit {
-        if reg is @abi.Virtual(vreg) {
+        if reg is Virtual(vreg) {
           let info = ensure_use_def_info(
             result, vreg, record_sparse_use_def_map,
           )
@@ -854,7 +855,7 @@ fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
     let (call_point, call_conv) = entry
     call_prog_points.push(call_point)
     let prev = c_call_prefix[c_call_prefix.length() - 1]
-    let add = if call_conv is @instr.C { 1 } else { 0 }
+    let add = if call_conv is C { 1 } else { 0 }
     c_call_prefix.push(prev + add)
   }
 

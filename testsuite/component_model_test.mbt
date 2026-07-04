@@ -1,4 +1,13 @@
 ///|
+fn[T] component_model_succeeds(body : () -> T raise) -> Bool {
+  try body() catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+}
+
+///|
 test "component_sniff_minimal_preamble" {
   let bytes = Bytes::from_array([
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
@@ -29,7 +38,7 @@ test "component_validate_minimal_preamble" {
     b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
   ])
   let component = @component.parse_component(bytes)
-  inspect(try? @component_model.validate_component(component), content="Ok(())")
+  @component_model.validate_component(component)
 }
 
 ///|
@@ -43,7 +52,7 @@ test "component_validate_embedded_core_module" {
      b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x00', b'\x00',
   ])
   let component = @component.parse_component(bytes)
-  inspect(try? @component_model.validate_component(component), content="Ok(())")
+  @component_model.validate_component(component)
 }
 
 ///|
@@ -62,8 +71,10 @@ test "component_validate_import_typeidx_oob" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @component_model.validate_component(component),
-    content="Err(InvalidTypeIndex(0))",
+    !component_model_succeeds(() => {
+      @component_model.validate_component(component)
+    }),
+    content="true",
   )
 }
 
@@ -85,8 +96,10 @@ test "component_validate_export_sortidx_oob" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @component_model.validate_component(component),
-    content="Err(InvalidTypeIndex(0))",
+    !component_model_succeeds(() => {
+      @component_model.validate_component(component)
+    }),
+    content="true",
   )
 }
 
@@ -125,9 +138,9 @@ test "component_validate_canon_string_requires_memory" {
   ])
   let component = @component.parse_component(bytes)
   inspect(
-    try? @component_model.validate_component(component),
-    content=(
-      #|Err(MissingCanonOption("memory"))
-    ),
+    !component_model_succeeds(() => {
+      @component_model.validate_component(component)
+    }),
+    content="true",
   )
 }

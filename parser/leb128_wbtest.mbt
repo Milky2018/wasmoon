@@ -3,6 +3,18 @@
 // ============================================================
 
 ///|
+fn[T] expect_parser_error(
+  body : () -> T raise ParserError,
+  message : String,
+) -> Unit raise {
+  try body() catch {
+    err => inspect(err.to_string(), content=message)
+  } noraise {
+    _ => fail("expected parser error")
+  }
+}
+
+///|
 test "LEB128 u32 decoding - single byte" {
   let parser = Parser::new(b"\x7F") // 127
   inspect(parser.read_leb128_u32(), content="127")
@@ -30,9 +42,9 @@ test "LEB128 i64 decoding" {
 test "LEB128 u32 - too long (6 bytes)" {
   // 6 bytes encoding value 3: \x83\x80\x80\x80\x80\x00
   let parser = Parser::new(b"\x83\x80\x80\x80\x80\x00")
-  inspect(
-    try? parser.read_leb128_u32(),
-    content="Err(LEB128 encoded integer is too large)",
+  expect_parser_error(
+    () => parser.read_leb128_u32(),
+    "LEB128 encoded integer is too large",
   )
 }
 
@@ -40,9 +52,9 @@ test "LEB128 u32 - too long (6 bytes)" {
 test "LEB128 u32 - 5th byte with unused bits set" {
   // Value 3 with 5th byte having bit 4 set: \x83\x80\x80\x80\x10
   let parser = Parser::new(b"\x83\x80\x80\x80\x10")
-  inspect(
-    try? parser.read_leb128_u32(),
-    content="Err(LEB128 encoded integer is too large)",
+  expect_parser_error(
+    () => parser.read_leb128_u32(),
+    "LEB128 encoded integer is too large",
   )
 }
 
@@ -57,9 +69,9 @@ test "LEB128 u32 - valid 5 byte encoding" {
 test "LEB128 i32 - unused bits not sign-extended (positive)" {
   // i32.const 0 with 5th byte = 0x70 (bits 4-6 should be 0 for positive)
   let parser = Parser::new(b"\x80\x80\x80\x80\x70")
-  inspect(
-    try? parser.read_leb128_i32(),
-    content="Err(LEB128 encoded integer is too large)",
+  expect_parser_error(
+    () => parser.read_leb128_i32(),
+    "LEB128 encoded integer is too large",
   )
 }
 
@@ -67,9 +79,9 @@ test "LEB128 i32 - unused bits not sign-extended (positive)" {
 test "LEB128 i32 - unused bits not sign-extended (negative)" {
   // i32.const -1 with 5th byte = 0x0F (bits 4-6 should be 1 for negative)
   let parser = Parser::new(b"\xFF\xFF\xFF\xFF\x0F")
-  inspect(
-    try? parser.read_leb128_i32(),
-    content="Err(LEB128 encoded integer is too large)",
+  expect_parser_error(
+    () => parser.read_leb128_i32(),
+    "LEB128 encoded integer is too large",
   )
 }
 
@@ -91,9 +103,9 @@ test "LEB128 i32 - valid negative 5 byte" {
 test "LEB128 i64 - unused bits not sign-extended" {
   // i64.const 0 with 10th byte = 0x7E (bits 1-6 should be 0 for positive)
   let parser = Parser::new(b"\x80\x80\x80\x80\x80\x80\x80\x80\x80\x7E")
-  inspect(
-    try? parser.read_leb128_i64(),
-    content="Err(LEB128 encoded integer is too large)",
+  expect_parser_error(
+    () => parser.read_leb128_i64(),
+    "LEB128 encoded integer is too large",
   )
 }
 
@@ -119,7 +131,7 @@ test "peek_byte does not consume" {
   let first = parser.peek_byte()
   let second = parser.peek_byte()
   let consumed = parser.read_byte()
-  inspect((first, second, consumed), content="(66, 66, 66)")
+  debug_inspect((first, second, consumed), content="(66, 66, 66)")
 }
 
 ///|
@@ -145,7 +157,7 @@ test "custom section - empty section should fail" {
   // custom.wast line 76: \00asm \01\00\00\00 \00\00
   // section_id=0, section_size=0, but custom section must have a name
   let bytes = b"\x00asm\x01\x00\x00\x00\x00\x00"
-  inspect(try? parse_module(bytes), content="Err(unexpected end)")
+  expect_parser_error(() => parse_module(bytes), "unexpected end")
 }
 
 ///|
@@ -153,7 +165,7 @@ test "custom section - length out of bounds" {
   // custom.wast line 84: section claims 0x26=38 bytes but only 36 available
   // \00asm \01\00\00\00 \00\26\10 "a custom section" "this is the payload"
   let bytes = b"\x00asm\x01\x00\x00\x00\x00\x26\x10a custom sectionthis is the payload"
-  inspect(try? parse_module(bytes), content="Err(length out of bounds)")
+  expect_parser_error(() => parse_module(bytes), "length out of bounds")
 }
 
 ///|
@@ -161,5 +173,5 @@ test "custom section - concatenated modules" {
   // custom.wast line 114: two wasm modules concatenated
   // \00asm\01\00\00\00 \00asm\01\00\00\00
   let bytes = b"\x00asm\x01\x00\x00\x00\x00asm\x01\x00\x00\x00"
-  inspect(try? parse_module(bytes), content="Err(length out of bounds)")
+  expect_parser_error(() => parse_module(bytes), "length out of bounds")
 }

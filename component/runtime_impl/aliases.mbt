@@ -44,9 +44,6 @@ type Sort = @component.Sort
 type SortIdx = @component.SortIdx
 
 ///|
-type TypeBound = @component.TypeBound
-
-///|
 type Import = @component.Import
 
 ///|
@@ -56,16 +53,7 @@ type Export = @component.Export
 type Instance = @component.Instance
 
 ///|
-type InstanceDecl = @component.InstanceDecl
-
-///|
-type InstanceExpr = @component.InstanceExpr
-
-///|
 type Alias = @component.Alias
-
-///|
-type AliasTarget = @component.AliasTarget
 
 ///|
 type CoreInstanceDecl = @component.CoreInstanceDecl
@@ -75,9 +63,6 @@ type CoreInstantiateArg = @component.CoreInstantiateArg
 
 ///|
 type CoreInlineExport = @component.CoreInlineExport
-
-///|
-type CoreInstanceExpr = @component.CoreInstanceExpr
 
 ///|
 type ComponentParseError = @component.ComponentParseError

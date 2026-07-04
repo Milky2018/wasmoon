@@ -2,7 +2,7 @@
 fn make_host_fail_module() -> @types.Module {
   {
     ..@types.Module::empty(),
-    types: [@types.SubType::func([], [@types.ValueType::I32])],
+    types: [@types.SubType::func([], [I32])],
     type_rec_groups: [0],
     imports: [{ mod_name: "env", name: "fail", desc: Func(0) }],
     funcs: [0],
@@ -14,8 +14,8 @@ fn make_host_fail_module() -> @types.Module {
 ///|
 test "call_exported_func_with_options: classify wasm trap" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::I32],
+    [I32],
+    [I32],
     [LocalGet(0), I32Const(0), I32DivS],
     "div_by_zero",
   )
@@ -42,8 +42,8 @@ test "call_exported_func_with_options: classify wasm trap" {
 test "call_exported_func_with_options: classify host invocation error" {
   let store = @runtime.Store::new()
   let host_addr = store.alloc_host_func_with_caller(
-    (_caller, _args) => raise @runtime.LinkErrorDetail("host failed"),
-    func_type={ params: [], results: [@types.ValueType::I32] },
+    (_caller, _args) => raise LinkErrorDetail("host failed"),
+    func_type={ params: [], results: [I32] },
     type_idx=0,
   )
   let imports = @runtime.Imports::new()
@@ -75,8 +75,8 @@ test "call_exported_func_with_options: classify host invocation error" {
 test "call_exported_func_with_options: preserve legacy host error behavior" {
   let store = @runtime.Store::new()
   let host_addr = store.alloc_host_func_with_caller(
-    (_caller, _args) => raise @runtime.LinkErrorDetail("legacy host error"),
-    func_type={ params: [], results: [@types.ValueType::I32] },
+    (_caller, _args) => raise LinkErrorDetail("legacy host error"),
+    func_type={ params: [], results: [I32] },
     type_idx=0,
   )
   let imports = @runtime.Imports::new()
@@ -97,12 +97,7 @@ test "call_exported_func_with_options: preserve legacy host error behavior" {
 
 ///|
 test "call_exported_func_with_options: cancel before invocation" {
-  let mod = @types.Module::simple(
-    [],
-    [@types.ValueType::I32],
-    [I32Const(42)],
-    "main",
-  )
+  let mod = @types.Module::simple([], [I32], [I32Const(42)], "main")
   let (store, instance) = instantiate_module(mod)
   let options = CallExportOptions::new(cancel=Some(fn() { true }))
   let result = call_exported_func_with_options(
@@ -126,12 +121,7 @@ test "call_exported_func_with_options: cancel before invocation" {
 
 ///|
 test "call_exported_func_with_options: unsupported budget options are structured" {
-  let mod = @types.Module::simple(
-    [],
-    [@types.ValueType::I32],
-    [I32Const(1)],
-    "main",
-  )
+  let mod = @types.Module::simple([], [I32], [I32Const(1)], "main")
   let (store, instance) = instantiate_module(mod)
   let options = CallExportOptions::new(fuel=Some(100))
   let result = call_exported_func_with_options(

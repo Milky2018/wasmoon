@@ -46,10 +46,14 @@ fn ExecContext::exec_control(
         self.stack.push(v)
       }
       self.push_label(false, arity) // Block branches use result arity
-      let result = try? self.exec_block(body)
+      let result = try self.exec_block(body) catch {
+        e => ExecBlockRaised(e)
+      } noraise {
+        _ => ExecBlockCompleted
+      }
       self.pop_label()
       match result {
-        Ok(_) => {
+        ExecBlockCompleted => {
           // Normal completion: keep only block results on the outer stack.
           let results = self.stack.pop_n(arity)
           self.restore_stack_to(stack_height)
@@ -57,15 +61,16 @@ fn ExecContext::exec_control(
             self.stack.push(v)
           }
         }
-        Err(BranchWith(0, values)) => {
+        ExecBlockRaised(BranchWith(0, values)) => {
           // br 0: jump to end, keep carried values only.
           self.restore_stack_to(stack_height)
           for v in values {
             self.stack.push(v)
           }
         }
-        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-        Err(e) => raise e
+        ExecBlockRaised(BranchWith(n, values)) =>
+          raise BranchWith(n - 1, values)
+        ExecBlockRaised(e) => raise e
       }
     }
     // Loop: execute body, br 0 jumps to start
@@ -79,9 +84,13 @@ fn ExecContext::exec_control(
       }
       self.push_label(true, param_arity) // Loop branches use param arity
       while true {
-        let result = try? self.exec_block(body)
+        let result = try self.exec_block(body) catch {
+          e => ExecBlockRaised(e)
+        } noraise {
+          _ => ExecBlockCompleted
+        }
         match result {
-          Ok(_) => {
+          ExecBlockCompleted => {
             self.pop_label()
             // Normal loop exit: keep only loop results on the outer stack.
             let results = self.stack.pop_n(result_arity)
@@ -91,7 +100,7 @@ fn ExecContext::exec_control(
             }
             break // Normal exit
           }
-          Err(BranchWith(0, values)) => {
+          ExecBlockRaised(BranchWith(0, values)) => {
             // For loop, branch to start: restore stack and push params back
             self.restore_stack_to(stack_height)
             for v in values {
@@ -99,11 +108,11 @@ fn ExecContext::exec_control(
             }
             continue
           }
-          Err(BranchWith(n, values)) => {
+          ExecBlockRaised(BranchWith(n, values)) => {
             self.pop_label()
             raise BranchWith(n - 1, values)
           }
-          Err(e) => {
+          ExecBlockRaised(e) => {
             self.pop_label()
             raise e
           }
@@ -122,10 +131,14 @@ fn ExecContext::exec_control(
         self.stack.push(v)
       }
       self.push_label(false, arity) // If branches use result arity
-      let result = try? self.exec_block(body)
+      let result = try self.exec_block(body) catch {
+        e => ExecBlockRaised(e)
+      } noraise {
+        _ => ExecBlockCompleted
+      }
       self.pop_label()
       match result {
-        Ok(_) => {
+        ExecBlockCompleted => {
           // Normal completion: keep only if results on the outer stack.
           let results = self.stack.pop_n(arity)
           self.restore_stack_to(stack_height)
@@ -133,14 +146,15 @@ fn ExecContext::exec_control(
             self.stack.push(v)
           }
         }
-        Err(BranchWith(0, values)) => {
+        ExecBlockRaised(BranchWith(0, values)) => {
           self.restore_stack_to(stack_height)
           for v in values {
             self.stack.push(v)
           }
         }
-        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-        Err(e) => raise e
+        ExecBlockRaised(BranchWith(n, values)) =>
+          raise BranchWith(n - 1, values)
+        ExecBlockRaised(e) => raise e
       }
     }
     // Unconditional branch - collect values based on target block arity

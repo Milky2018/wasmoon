@@ -341,7 +341,8 @@ pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
   let back_edges = self.find_back_edges()
 
   // Group back edges by header
-  let header_to_back_edges : @hashmap.HashMap[Int, Array[(Int, Int)]] = @hashmap.new()
+  let header_to_back_edges : @hashmap.HashMap[Int, Array[(Int, Int)]] = HashMap([],
+  )
   for edge in back_edges {
     let (_, header) = edge
     match header_to_back_edges.get(header) {
@@ -365,7 +366,7 @@ fn CFG::find_loop_body(
   header : Int,
   back_edges : Array[(Int, Int)],
 ) -> Array[Int] {
-  let body : @hashmap.HashMap[Int, Bool] = @hashmap.new()
+  let body : @hashmap.HashMap[Int, Bool] = HashMap([])
   body.set(header, true)
 
   // Worklist for reverse DFS from back edge sources

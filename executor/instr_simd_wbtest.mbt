@@ -43,7 +43,7 @@ fn make_v128(
 ///|
 /// Helper to create v128 from i32x4 lanes
 fn make_i32x4(lane0 : Int, lane1 : Int, lane2 : Int, lane3 : Int) -> Bytes {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(size_hint=16)
   for lane in [lane0, lane1, lane2, lane3] {
     buf.write_byte(lane.to_byte())
     buf.write_byte((lane >> 8).to_byte())
@@ -193,12 +193,7 @@ test "trunc_sat_f32_to_u32" {
 /// Test SIMD v128.const execution
 test "exec_v128_const" {
   let bytes = make_v128(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
-  let mod = @types.Module::simple(
-    [],
-    [@types.ValueType::V128],
-    [V128Const(bytes)],
-    "get_v128",
-  )
+  let mod = @types.Module::simple([], [V128], [V128Const(bytes)], "get_v128")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "get_v128", [])
   match results[0] {
@@ -214,15 +209,13 @@ test "exec_v128_const" {
 /// Test i32x4.splat
 test "exec_i32x4_splat" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::V128],
+    [I32],
+    [V128],
     [LocalGet(0), I32x4Splat],
     "splat",
   )
   let (store, instance) = instantiate_module(mod)
-  let results = call_exported_func(store, instance, "splat", [
-    @types.Value::I32(0x12345678),
-  ])
+  let results = call_exported_func(store, instance, "splat", [I32(0x12345678)])
   match results[0] {
     V128(result) => {
       // Check first lane (little-endian: 0x78, 0x56, 0x34, 0x12)
@@ -248,7 +241,7 @@ test "exec_i32x4_add" {
   let b = make_i32x4(10, 20, 30, 40)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), I32x4Add],
     "add",
   )
@@ -273,7 +266,7 @@ test "exec_i8x16_extract_lane_s" {
   let bytes = make_v128(0x7F, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(bytes), I8x16ExtractLaneS(1)], // Extract lane 1 (value 0x80 = -128)
     "extract",
   )
@@ -291,7 +284,7 @@ test "exec_i8x16_extract_lane_u" {
   let bytes = make_v128(0, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(bytes), I8x16ExtractLaneU(1)],
     "extract",
   )
@@ -308,15 +301,13 @@ test "exec_i8x16_extract_lane_u" {
 test "exec_i8x16_replace_lane" {
   let bytes = make_v128(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::V128],
+    [I32],
+    [V128],
     [V128Const(bytes), LocalGet(0), I8x16ReplaceLane(5)], // Replace lane 5
     "replace",
   )
   let (store, instance) = instantiate_module(mod)
-  let results = call_exported_func(store, instance, "replace", [
-    @types.Value::I32(0xAB),
-  ])
+  let results = call_exported_func(store, instance, "replace", [I32(0xAB)])
   match results[0] {
     V128(result) => {
       inspect(result[0].to_int(), content="0")
@@ -340,7 +331,7 @@ test "exec_v128_and" {
   )
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), V128And],
     "and",
   )
@@ -369,7 +360,7 @@ test "exec_v128_or" {
   )
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), V128Or],
     "or",
   )
@@ -390,7 +381,7 @@ test "exec_i8x16_eq" {
   let b = make_v128(5, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), I8x16Eq],
     "eq",
   )
@@ -420,7 +411,7 @@ test "exec_i8x16_shuffle" {
   ]
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), I8x16Shuffle(lanes)],
     "shuffle",
   )
@@ -444,7 +435,7 @@ test "exec_i32x4_sub" {
   let b = make_i32x4(10, 20, 30, 40)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), I32x4Sub],
     "sub",
   )
@@ -468,7 +459,7 @@ test "exec_i32x4_mul" {
   let b = make_i32x4(10, 10, 10, 10)
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::V128],
+    [V128],
     [V128Const(a), V128Const(b), I32x4Mul],
     "mul",
   )
@@ -494,7 +485,7 @@ test "exec_v128_any_true" {
   // Test with all zeros
   let mod1 = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(zero), V128AnyTrue],
     "any_true",
   )
@@ -508,7 +499,7 @@ test "exec_v128_any_true" {
   // Test with one non-zero byte
   let mod2 = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(nonzero), V128AnyTrue],
     "any_true",
   )
@@ -529,7 +520,7 @@ test "exec_i32x4_all_true" {
   // Test with all non-zero lanes
   let mod1 = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(all_nonzero), I32x4AllTrue],
     "all_true",
   )
@@ -543,7 +534,7 @@ test "exec_i32x4_all_true" {
   // Test with one zero lane
   let mod2 = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
+    [I32],
     [V128Const(has_zero), I32x4AllTrue],
     "all_true",
   )

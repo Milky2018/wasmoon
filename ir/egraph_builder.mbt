@@ -182,24 +182,24 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
     return None
   }
   match inst.opcode {
-    Iconst(c) => Some(@egraph.EOpcode::Const(c))
-    Iadd => Some(@egraph.EOpcode::Add)
-    Isub => Some(@egraph.EOpcode::Sub)
-    Imul => Some(@egraph.EOpcode::Mul)
-    Band => Some(@egraph.EOpcode::And)
-    Bor => Some(@egraph.EOpcode::Or)
-    Bxor => Some(@egraph.EOpcode::Xor)
-    Bnot => Some(@egraph.EOpcode::Bnot)
-    Ishl => Some(@egraph.EOpcode::Shl)
-    Sshr => Some(@egraph.EOpcode::Sshr)
-    Ushr => Some(@egraph.EOpcode::Ushr)
-    Rotl => Some(@egraph.EOpcode::Rotl)
-    Rotr => Some(@egraph.EOpcode::Rotr)
-    Clz => Some(@egraph.EOpcode::Clz)
-    Ctz => Some(@egraph.EOpcode::Ctz)
-    Popcnt => Some(@egraph.EOpcode::Popcnt)
-    Icmp(cc) => Some(@egraph.EOpcode::Icmp(intcc_to_ordinal(cc)))
-    Select => Some(@egraph.EOpcode::Select)
+    Iconst(c) => Some(Const(c))
+    Iadd => Some(Add)
+    Isub => Some(Sub)
+    Imul => Some(Mul)
+    Band => Some(And)
+    Bor => Some(Or)
+    Bxor => Some(Xor)
+    Bnot => Some(Bnot)
+    Ishl => Some(Shl)
+    Sshr => Some(Sshr)
+    Ushr => Some(Ushr)
+    Rotl => Some(Rotl)
+    Rotr => Some(Rotr)
+    Clz => Some(Clz)
+    Ctz => Some(Ctz)
+    Popcnt => Some(Popcnt)
+    Icmp(cc) => Some(Icmp(intcc_to_ordinal(cc)))
+    Select => Some(Select)
     Ireduce => {
       // ireduce: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
@@ -211,7 +211,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
         Some(v) => type_bits(v.ty)
         None => 32 // default
       }
-      Some(@egraph.EOpcode::Ireduce(from_bits, to_bits))
+      Some(Ireduce(from_bits, to_bits))
     }
     Uextend => {
       // uextend: from_bits = operand type, to_bits = result type
@@ -224,7 +224,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
         Some(v) => type_bits(v.ty)
         None => 64 // default
       }
-      Some(@egraph.EOpcode::Uextend(from_bits, to_bits))
+      Some(Uextend(from_bits, to_bits))
     }
     Sextend => {
       // sextend: from_bits = operand type, to_bits = result type
@@ -237,7 +237,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
         Some(v) => type_bits(v.ty)
         None => 64 // default
       }
-      Some(@egraph.EOpcode::Sextend(from_bits, to_bits))
+      Some(Sextend(from_bits, to_bits))
     }
     _ => None // Not optimizable via e-graph
   }

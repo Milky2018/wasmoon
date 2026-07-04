@@ -5,21 +5,21 @@
 /// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
 fn decode_gc_value(raw : Int64, store : @runtime.Store) -> @types.Value {
   if raw == 0L {
-    @types.Value::Null
+    Null
   } else if (raw & 1L) == 1L {
     // i31: (value << 1) | 1, decode by shifting right
-    @types.Value::I31((raw >> 1).to_int())
+    I31((raw >> 1).to_int())
   } else {
     // Heap reference: encoded as (gc_ref << 1), where gc_ref is 1-based.
     let heap_idx = @jit.decode_heap_ref(raw)
     match store.c_heap {
       Some(heap) =>
         if heap.is_array(heap_idx) {
-          @types.Value::ArrayRef(heap_idx)
+          ArrayRef(heap_idx)
         } else {
-          @types.Value::StructRef(heap_idx)
+          StructRef(heap_idx)
         }
-      None => @types.Value::StructRef(heap_idx)
+      None => StructRef(heap_idx)
     }
   }
 }
@@ -225,24 +225,24 @@ pub fn sync_jit_globals_to_store(
       // Note: For FuncRef, JIT stores module function index, we need to convert
       // it back to store address for the interpreter
       let new_value : @types.Value = match global_inst.get_type().value_type {
-        I32 => @types.Value::I32(@types.FromInt64::from_int64_bits(raw_value))
-        I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(raw_value))
-        F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(raw_value))
-        F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(raw_value))
+        I32 => I32(@types.FromInt64::from_int64_bits(raw_value))
+        I64 => I64(@types.FromInt64::from_int64_bits(raw_value))
+        F32 => F32(@types.FromInt64::from_int64_bits(raw_value))
+        F64 => F64(@types.FromInt64::from_int64_bits(raw_value))
         FuncRef
         | RefFunc
         | RefFuncTyped(_)
         | RefNullFuncTyped(_)
         | NullFuncRef =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else if raw_value < 0L {
             // IR-encoded funcref: value = -(func_idx + 1)
             let mod_func_idx = (-(raw_value + 1L)).to_int()
             if mod_func_idx >= 0 && mod_func_idx < jit_ctx.func_addrs.length() {
-              @types.Value::FuncRef(jit_ctx.func_addrs[mod_func_idx])
+              FuncRef(jit_ctx.func_addrs[mod_func_idx])
             } else {
-              @types.Value::Null
+              Null
             }
           } else if @jit.is_funcref_ptr(raw_value) {
             let ptr = @jit.untag_funcref_ptr(raw_value)
@@ -262,24 +262,24 @@ pub fn sync_jit_globals_to_store(
             match store_addr {
               Some(addr) => {
                 register_funcref_mapping(addr, ptr)
-                @types.Value::FuncRef(addr)
+                FuncRef(addr)
               }
-              None => @types.Value::Null
+              None => Null
             }
           } else {
-            @types.Value::FuncRef(raw_value.to_int())
+            FuncRef(raw_value.to_int())
           }
         ExternRef | RefExtern | NullExternRef =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else if (raw_value & EXTERNREF_TAG) != 0L {
             match @jit.decode_externref(raw_value) {
-              Some(idx) => @types.Value::ExternRef(idx)
-              None => @types.Value::ExternRef(raw_value.to_int())
+              Some(idx) => ExternRef(idx)
+              None => ExternRef(raw_value.to_int())
             }
           } else {
             // Fallback: treat as raw host index
-            @types.Value::ExternRef(raw_value.to_int())
+            ExternRef(raw_value.to_int())
           }
         // GC reference types - decode using JIT encoding:
         // null = 0, i31 = (value << 1) | 1, struct/array = gc_ref << 1
@@ -287,35 +287,35 @@ pub fn sync_jit_globals_to_store(
           decode_gc_value(raw_value, store)
         ExnRef | NullExnRef =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else {
-            @types.Value::ExnRef(raw_value.to_int())
+            ExnRef(raw_value.to_int())
           }
         RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else {
-            @types.Value::StructRef((raw_value >> 1).to_int())
+            StructRef((raw_value >> 1).to_int())
           }
         RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else {
-            @types.Value::ArrayRef((raw_value >> 1).to_int())
+            ArrayRef((raw_value >> 1).to_int())
           }
         RefI31 | RefNullI31 =>
           if raw_value == 0L {
-            @types.Value::Null
+            Null
           } else if (raw_value & 1L) == 1L {
-            @types.Value::I31((raw_value >> 1).to_int())
+            I31((raw_value >> 1).to_int())
           } else {
-            @types.Value::Null
+            Null
           }
-        RefNone => @types.Value::Null
+        RefNone => Null
         V128 => {
           // Read both 64-bit halves and construct V128
           let high_value = @jit.c_jit_read_i64(offset + 8L)
-          @types.Value::V128(int64_pair_to_v128_le(raw_value, high_value))
+          V128(int64_pair_to_v128_le(raw_value, high_value))
         }
       }
       // We already checked mutability, so set should succeed
@@ -332,14 +332,14 @@ fn decode_funcref_from_jit_ctx(
   jit_ctx : JITModuleContext,
 ) -> @types.Value {
   if raw_value == NULL_REF {
-    return @types.Value::Null
+    return Null
   }
   match @jit.decode_funcref_idx(raw_value) {
     Some(func_idx) =>
       if func_idx >= 0 && func_idx < jit_ctx.func_addrs.length() {
-        @types.Value::FuncRef(jit_ctx.func_addrs[func_idx])
+        FuncRef(jit_ctx.func_addrs[func_idx])
       } else {
-        @types.Value::Null
+        Null
       }
     None =>
       if @jit.is_funcref_ptr(raw_value) {
@@ -360,12 +360,12 @@ fn decode_funcref_from_jit_ctx(
         match store_addr {
           Some(addr) => {
             register_funcref_mapping(addr, ptr)
-            @types.Value::FuncRef(addr)
+            FuncRef(addr)
           }
-          None => @types.Value::Null
+          None => Null
         }
       } else {
-        @types.Value::FuncRef(raw_value.to_int())
+        FuncRef(raw_value.to_int())
       }
   }
 }
@@ -382,20 +382,20 @@ fn decode_table_entry_value(
       decode_funcref_from_jit_ctx(raw_value, jit_ctx)
     ExternRef | RefExtern | NullExternRef =>
       if raw_value == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         match @jit.decode_externref(raw_value) {
-          Some(idx) => @types.Value::ExternRef(idx)
-          None => @types.Value::ExternRef(raw_value.to_int())
+          Some(idx) => ExternRef(idx)
+          None => ExternRef(raw_value.to_int())
         }
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       if raw_value == NULL_REF {
-        @types.Value::Null
+        Null
       } else if (raw_value & EXTERNREF_TAG) != 0L {
         match @jit.decode_externref(raw_value) {
-          Some(idx) => @types.Value::ExternRef(idx)
-          None => @types.Value::ExternRef(raw_value.to_int())
+          Some(idx) => ExternRef(idx)
+          None => ExternRef(raw_value.to_int())
         }
       } else if @jit.is_funcref_ptr(raw_value) || raw_value < 0L {
         decode_funcref_from_jit_ctx(raw_value, jit_ctx)
@@ -404,25 +404,25 @@ fn decode_table_entry_value(
       }
     RefI31 | RefNullI31 =>
       if raw_value == NULL_REF {
-        @types.Value::Null
+        Null
       } else if (raw_value & 1L) == 1L {
-        @types.Value::I31((raw_value >> 1).to_int())
+        I31((raw_value >> 1).to_int())
       } else {
-        @types.Value::Null
+        Null
       }
     RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
       if raw_value == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::StructRef(@jit.decode_heap_ref(raw_value))
+        StructRef(@jit.decode_heap_ref(raw_value))
       }
     RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
       if raw_value == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::ArrayRef(@jit.decode_heap_ref(raw_value))
+        ArrayRef(@jit.decode_heap_ref(raw_value))
       }
-    _ => @types.Value::Null
+    _ => Null
   }
 }
 
@@ -450,7 +450,7 @@ pub fn sync_jit_tables_to_store(
     if jit_size > runtime_size {
       let delta = jit_size - runtime_size
       if delta > 0 {
-        if table.grow(delta, @types.Value::Null) < 0 {
+        if table.grow(delta, Null) < 0 {
           continue
         }
         runtime_size = table.size()
@@ -747,7 +747,7 @@ pub fn init_bulk_segments(
       i < instance.dropped_elems.length() &&
       instance.dropped_elems[i]
     // Declarative segments behave as dropped for table.init/array.new_elem.
-    let declarative = elem.mode is @types.ElemMode::Declarative
+    let declarative = elem.mode is Declarative
     elem_dropped.push(dropped || declarative)
   }
 
@@ -771,15 +771,14 @@ pub fn init_bulk_segments(
       let mut raw = @types.NULL_REF
       let mut ty = -1L
       match value {
-        @types.Value::Null => ()
-        @types.Value::I31(n) => raw = @jit.encode_i31(n)
-        @types.Value::ExternRef(host_idx) =>
-          raw = @jit.encode_externref(host_idx)
-        @types.Value::StructRef(idx) =>
+        Null => ()
+        I31(n) => raw = @jit.encode_i31(n)
+        ExternRef(host_idx) => raw = @jit.encode_externref(host_idx)
+        StructRef(idx) =>
           // JIT GC refs are encoded as (gc_ref << 1), where gc_ref = idx + 1.
           raw = (idx + 1).to_int64() << 1
-        @types.Value::ArrayRef(idx) => raw = (idx + 1).to_int64() << 1
-        @types.Value::FuncRef(store_addr) =>
+        ArrayRef(idx) => raw = (idx + 1).to_int64() << 1
+        FuncRef(store_addr) =>
           match func_addr_to_idx.get(store_addr) {
             Some(func_idx) => {
               let ptr = jm.get_func_ptr(func_idx)
@@ -1028,25 +1027,25 @@ fn decode_funcref_to_store_addr(
   instance : @runtime.ModuleInstance,
 ) -> @types.Value {
   if raw == NULL_REF {
-    return @types.Value::Null
+    return Null
   }
   match @jit.decode_funcref_idx(raw) {
     Some(mod_func_idx) =>
       if mod_func_idx >= 0 && mod_func_idx < instance.func_addrs.length() {
-        @types.Value::FuncRef(instance.func_addrs[mod_func_idx])
+        FuncRef(instance.func_addrs[mod_func_idx])
       } else {
-        @types.Value::Null
+        Null
       }
     None =>
       if @jit.is_funcref_ptr(raw) {
         let ptr = @jit.untag_funcref_ptr(raw)
         match lookup_store_addr_for_funcref_ptr(ptr, jit_module, instance) {
-          Some(addr) => @types.Value::FuncRef(addr)
-          None => @types.Value::Null
+          Some(addr) => FuncRef(addr)
+          None => Null
         }
       } else {
         // Fallback: treat as a store address (best-effort).
-        @types.Value::FuncRef(raw.to_int())
+        FuncRef(raw.to_int())
       }
   }
 }
@@ -1109,60 +1108,60 @@ fn decode_ref_value(
       decode_funcref_to_store_addr(raw, jit_module, instance)
     ExternRef | RefExtern | NullExternRef =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         match @jit.decode_externref(raw) {
-          Some(idx) => @types.Value::ExternRef(idx)
-          None => @types.Value::ExternRef(raw.to_int())
+          Some(idx) => ExternRef(idx)
+          None => ExternRef(raw.to_int())
         }
       }
     ExnRef | NullExnRef =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::ExnRef(raw.to_int())
+        ExnRef(raw.to_int())
       }
     StructRef | RefStruct(_) | RefNullStruct(_) | RefStructAbs =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::StructRef(@jit.decode_heap_ref(raw))
+        StructRef(@jit.decode_heap_ref(raw))
       }
     ArrayRef | RefArray(_) | RefNullArray(_) | RefArrayAbs =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::ArrayRef(@jit.decode_heap_ref(raw))
+        ArrayRef(@jit.decode_heap_ref(raw))
       }
     AnyRef | NullRef | RefAny | RefEq | RefNullEq =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else if (raw & 1L) == 1L {
-        @types.Value::I31((raw >> 1).to_int())
+        I31((raw >> 1).to_int())
       } else {
         let heap_idx = @jit.decode_heap_ref(raw)
         match store.c_heap {
           Some(heap) =>
             if heap.is_array(heap_idx) {
-              @types.Value::ArrayRef(heap_idx)
+              ArrayRef(heap_idx)
             } else {
-              @types.Value::StructRef(heap_idx)
+              StructRef(heap_idx)
             }
-          None => @types.Value::StructRef(heap_idx)
+          None => StructRef(heap_idx)
         }
       }
     RefI31 | RefNullI31 =>
       if raw == NULL_REF {
-        @types.Value::Null
+        Null
       } else if (raw & 1L) == 1L {
-        @types.Value::I31((raw >> 1).to_int())
+        I31((raw >> 1).to_int())
       } else {
-        @types.Value::Null
+        Null
       }
-    RefNone => @types.Value::Null
+    RefNone => Null
 
     // Non-ref types should not reach here.
-    _ => @types.Value::Null
+    _ => Null
   }
 }
 
@@ -1176,21 +1175,20 @@ fn decode_value(
   instance : @runtime.ModuleInstance,
 ) -> (@types.Value, Int) {
   match ty {
-    I32 =>
-      (@types.Value::I32(low_u32_bits(read_slot_i64(values_ptr, slot_idx))), 1)
-    I64 => (@types.Value::I64(read_slot_i64(values_ptr, slot_idx)), 1)
+    I32 => (I32(low_u32_bits(read_slot_i64(values_ptr, slot_idx))), 1)
+    I64 => (I64(read_slot_i64(values_ptr, slot_idx)), 1)
     F32 => {
       let bits = low_u32_bits(read_slot_i64(values_ptr, slot_idx))
-      (@types.Value::F32(Float::reinterpret_from_int(bits)), 1)
+      (F32(Float::reinterpret_from_int(bits)), 1)
     }
     F64 => {
       let raw = read_slot_i64(values_ptr, slot_idx)
-      (@types.Value::F64(raw.reinterpret_as_double()), 1)
+      (F64(raw.reinterpret_as_double()), 1)
     }
     V128 => {
       let lo = read_slot_i64(values_ptr, slot_idx)
       let hi = read_slot_i64(values_ptr, slot_idx + 1)
-      (@types.Value::V128(int64_pair_to_v128_le(lo, hi)), 2)
+      (V128(int64_pair_to_v128_le(lo, hi)), 2)
     }
     _ =>
       (
@@ -1296,14 +1294,14 @@ fn encode_value(
 ///|
 fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
   match err {
-    @runtime.RuntimeError::OutOfBoundsMemoryAccess => 1
-    @runtime.RuntimeError::CallStackExhausted => 2
-    @runtime.RuntimeError::Unreachable => 3
-    @runtime.RuntimeError::IndirectCallTypeMismatch => 4
-    @runtime.RuntimeError::InvalidConversion => 5
-    @runtime.RuntimeError::DivisionByZero => 6
-    @runtime.RuntimeError::IntegerOverflow => 7
-    @runtime.RuntimeError::OutOfMemory => 9
+    OutOfBoundsMemoryAccess => 1
+    CallStackExhausted => 2
+    Unreachable => 3
+    IndirectCallTypeMismatch => 4
+    InvalidConversion => 5
+    DivisionByZero => 6
+    IntegerOverflow => 7
+    OutOfMemory => 9
     _ => 99
   }
 }
@@ -1381,14 +1379,14 @@ pub fn install_jit_hostcall_dispatcher(
   ) -> @executor.InvokeWithExceptionResult raise @runtime.RuntimeError {
     let inst = store.get_func_inst(func_addr)
     match inst {
-      @runtime.FuncInst::HostFunc(f) => {
+      HostFunc(f) => {
         let caller = @runtime.Caller::new(store, caller_instance)
-        @executor.InvokeWithExceptionResult::Returned(f(caller, args))
+        Returned(f(caller, args))
       }
-      @runtime.FuncInst::WasmFunc(_) => {
+      WasmFunc(_) => {
         let owner = match store.get_func_owner(func_addr) {
           Some(owner_instance) => owner_instance
-          None => raise @runtime.UndefinedElement
+          None => raise UndefinedElement
         }
         let mut func_idx = -1
         for i, addr in owner.func_addrs {
@@ -1398,7 +1396,7 @@ pub fn install_jit_hostcall_dispatcher(
           }
         }
         if func_idx < 0 {
-          raise @runtime.UndefinedElement
+          raise UndefinedElement
         }
         @executor.call_func_by_index_with_exception(
           store, owner, func_idx, args,
@@ -1437,8 +1435,8 @@ pub fn install_jit_hostcall_dispatcher(
       e => return runtime_error_to_trap_code(e)
     }
     let results : Array[@types.Value] = match invoke_result {
-      @executor.InvokeWithExceptionResult::Returned(values) => values
-      @executor.InvokeWithExceptionResult::Thrown(tag_addr, values) => {
+      Returned(values) => values
+      Thrown(tag_addr, values) => {
         let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
         // Imported wasm callees can throw; route the exception into the active
         // JIT try_table chain instead of flattening it to a generic trap.

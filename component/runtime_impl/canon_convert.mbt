@@ -33,71 +33,68 @@ fn lift_component_value_from_flat(
             }
             let (ptr, len) = if mem_is_64 {
               match (take(vals), take(vals)) {
-                (@types.Value::I64(p), @types.Value::I64(l)) =>
-                  (p.to_int(), l.to_int())
+                (I64(p), I64(l)) => (p.to_int(), l.to_int())
                 _ => raise HostCallError("type mismatch")
               }
             } else {
               match (take(vals), take(vals)) {
-                (@types.Value::I32(p), @types.Value::I32(l)) => (p, l)
+                (I32(p), I32(l)) => (p, l)
                 _ => raise HostCallError("type mismatch")
               }
             }
             let s = read_string_from_memory_with_encoding(m, ptr, len, encoding)
             if p == String {
-              ComponentValue::String(s)
+              String(s)
             } else {
-              ComponentValue::ErrorContext(s)
+              ErrorContext(s)
             }
           }
           _ =>
             match (p, take(vals)) {
-              (Bool, @types.Value::I32(n)) => ComponentValue::Bool(n != 0)
-              (S8, @types.Value::I32(n)) => ComponentValue::S8(trunc_s8(n))
-              (U8, @types.Value::I32(n)) => ComponentValue::U8(trunc_u8(n))
-              (S16, @types.Value::I32(n)) => ComponentValue::S16(trunc_s16(n))
-              (U16, @types.Value::I32(n)) => ComponentValue::U16(trunc_u16(n))
-              (S32, @types.Value::I32(n)) => ComponentValue::S32(n)
-              (U32, @types.Value::I32(n)) => ComponentValue::U32(trunc_u32(n))
-              (Char, @types.Value::I32(n)) =>
-                ComponentValue::Char(char_from_canon_i32(n))
-              (S64, @types.Value::I64(n)) => ComponentValue::S64(n)
-              (U64, @types.Value::I64(n)) => ComponentValue::U64(n)
-              (F32, @types.Value::F32(f)) => ComponentValue::F32(f)
-              (F64, @types.Value::F64(f)) => ComponentValue::F64(f)
+              (Bool, I32(n)) => Bool(n != 0)
+              (S8, I32(n)) => S8(trunc_s8(n))
+              (U8, I32(n)) => U8(trunc_u8(n))
+              (S16, I32(n)) => S16(trunc_s16(n))
+              (U16, I32(n)) => U16(trunc_u16(n))
+              (S32, I32(n)) => S32(n)
+              (U32, I32(n)) => U32(trunc_u32(n))
+              (Char, I32(n)) => Char(char_from_canon_i32(n))
+              (S64, I64(n)) => S64(n)
+              (U64, I64(n)) => U64(n)
+              (F32, F32(f)) => F32(f)
+              (F64, F64(f)) => F64(f)
               _ => raise HostCallError("type mismatch")
             }
         }
       TypeIdx(ti) =>
         match types.get(ti) {
-          Some(Some(TypeDef::Tuple(tys))) => {
+          Some(Some(Tuple(tys))) => {
             let items : Array[ComponentValue] = []
             for t in tys {
               items.push(lift_inner(t, vals))
             }
-            ComponentValue::Tuple(items)
+            Tuple(items)
           }
-          Some(Some(TypeDef::Record(fields))) => {
+          Some(Some(Record(fields))) => {
             let items : Array[ComponentValue] = []
             for f in fields {
               items.push(lift_inner(f.ty, vals))
             }
-            ComponentValue::Tuple(items)
+            Tuple(items)
           }
-          Some(Some(TypeDef::List(elem_ty))) => {
+          Some(Some(List(elem_ty))) => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory
             }
             let (ptr, len) = if mem_is_64 {
               match (take(vals), take(vals)) {
-                (@types.Value::I64(p), @types.Value::I64(l)) =>
-                  (p.to_int(), l.to_int())
+                (I64(p), I64(l)) => (p.to_int(), l.to_int())
                 _ => raise HostCallError("type mismatch")
               }
             } else {
               match (take(vals), take(vals)) {
-                (@types.Value::I32(p), @types.Value::I32(l)) => (p, l)
+                (I32(p), I32(l)) => (p, l)
                 _ => raise HostCallError("type mismatch")
               }
             }
@@ -123,16 +120,16 @@ fn lift_component_value_from_flat(
                 ),
               )
             }
-            ComponentValue::List(items)
+            List(items)
           }
-          Some(Some(TypeDef::Stream(_))) | Some(Some(TypeDef::Future(_))) =>
+          Some(Some(Stream(_))) | Some(Some(Future(_))) =>
             match take(vals) {
-              @types.Value::I32(n) => ComponentValue::U32(n)
+              I32(n) => U32(n)
               _ => raise HostCallError("type mismatch")
             }
-          Some(Some(TypeDef::Variant(cases))) => {
+          Some(Some(Variant(cases))) => {
             let tag = match take(vals) {
-              @types.Value::I32(n) => n
+              I32(n) => n
               _ => raise HostCallError("type mismatch")
             }
             if tag < 0 || tag >= cases.length() {
@@ -149,7 +146,7 @@ fn lift_component_value_from_flat(
               joined_vals.push(coerce_flat_value(v, vt, vt))
             }
             match cases[tag].ty {
-              None => ComponentValue::Variant(tag, None)
+              None => Variant(tag, None)
               Some(payload_ty) => {
                 let payload_flat_types = core_types_for_valtype(
                   payload_ty, types, mem_is_64,
@@ -167,13 +164,13 @@ fn lift_component_value_from_flat(
                 let payload = lift_component_value_from_flat(
                   payload_ty, payload_vals, types, mem, mem_is_64, encoding,
                 )
-                ComponentValue::Variant(tag, Some(payload))
+                Variant(tag, Some(payload))
               }
             }
           }
-          Some(Some(TypeDef::Option(payload_ty))) => {
+          Some(Some(Option(payload_ty))) => {
             let tag = match take(vals) {
-              @types.Value::I32(n) => n
+              I32(n) => n
               _ => raise HostCallError("type mismatch")
             }
             if tag != 0 && tag != 1 {
@@ -190,7 +187,7 @@ fn lift_component_value_from_flat(
               joined_vals.push(coerce_flat_value(v, vt, vt))
             }
             if tag == 0 {
-              ComponentValue::Variant(0, None)
+              Variant(0, None)
             } else {
               let payload_flat_types = core_types_for_valtype(
                 payload_ty, types, mem_is_64,
@@ -208,12 +205,12 @@ fn lift_component_value_from_flat(
               let payload = lift_component_value_from_flat(
                 payload_ty, payload_vals, types, mem, mem_is_64, encoding,
               )
-              ComponentValue::Variant(1, Some(payload))
+              Variant(1, Some(payload))
             }
           }
-          Some(Some(TypeDef::Result(ok_ty, err_ty))) => {
+          Some(Some(Result(ok_ty, err_ty))) => {
             let tag = match take(vals) {
-              @types.Value::I32(n) => n
+              I32(n) => n
               _ => raise HostCallError("type mismatch")
             }
             if tag != 0 && tag != 1 {
@@ -231,7 +228,7 @@ fn lift_component_value_from_flat(
             }
             let payload_ty = if tag == 0 { ok_ty } else { err_ty }
             match payload_ty {
-              None => ComponentValue::Variant(tag, None)
+              None => Variant(tag, None)
               Some(pt) => {
                 let payload_flat_types = core_types_for_valtype(
                   pt, types, mem_is_64,
@@ -249,15 +246,15 @@ fn lift_component_value_from_flat(
                 let payload = lift_component_value_from_flat(
                   pt, payload_vals, types, mem, mem_is_64, encoding,
                 )
-                ComponentValue::Variant(tag, Some(payload))
+                Variant(tag, Some(payload))
               }
             }
           }
-          Some(Some(TypeDef::Flags(labels))) => {
+          Some(Some(Flags(labels))) => {
             let nbits = labels.length()
             if nbits <= 32 {
               let raw = match take(vals) {
-                @types.Value::I32(n) => n.reinterpret_as_uint()
+                I32(n) => n.reinterpret_as_uint()
                 _ => raise HostCallError("type mismatch")
               }
               let masked = if nbits == 32 {
@@ -265,10 +262,10 @@ fn lift_component_value_from_flat(
               } else {
                 raw & ((1U << nbits) - 1U)
               }
-              ComponentValue::U32(masked.reinterpret_as_int())
+              U32(masked.reinterpret_as_int())
             } else {
               let raw = match take(vals) {
-                @types.Value::I64(n) => n.reinterpret_as_uint64()
+                I64(n) => n.reinterpret_as_uint64()
                 _ => raise HostCallError("type mismatch")
               }
               let masked = if nbits == 64 {
@@ -276,24 +273,24 @@ fn lift_component_value_from_flat(
               } else {
                 raw & ((1UL << nbits) - 1UL)
               }
-              ComponentValue::U64(masked.reinterpret_as_int64())
+              U64(masked.reinterpret_as_int64())
             }
           }
-          Some(Some(TypeDef::Enum(labels))) => {
+          Some(Some(Enum(labels))) => {
             let n = match take(vals) {
-              @types.Value::I32(n) => n
+              I32(n) => n
               _ => raise HostCallError("type mismatch")
             }
             if n < 0 || n >= labels.length() {
               raise CanonCallError("invalid enum discriminant")
             }
-            ComponentValue::U32(n)
+            U32(n)
           }
-          Some(Some(TypeDef::Own(_)))
-          | Some(Some(TypeDef::Borrow(_)))
-          | Some(Some(TypeDef::ResourceType(_, _, _, _))) =>
+          Some(Some(Own(_)))
+          | Some(Some(Borrow(_)))
+          | Some(Some(ResourceType(_, _, _, _))) =>
             match take(vals) {
-              @types.Value::I32(handle) => ComponentValue::U32(handle)
+              I32(handle) => U32(handle)
               _ => raise HostCallError("type mismatch")
             }
           _ => raise HostCallError("type mismatch")
@@ -335,21 +332,18 @@ fn component_args_to_core(
     match resolve_valtype(ty, types) {
       Prim(p) =>
         match (p, val) {
-          (Bool, ComponentValue::Bool(b)) =>
-            [@types.Value::I32(if b { 1 } else { 0 })]
-          (S8, ComponentValue::S8(n))
-          | (U8, ComponentValue::U8(n))
-          | (S16, ComponentValue::S16(n))
-          | (U16, ComponentValue::U16(n))
-          | (S32, ComponentValue::S32(n))
-          | (U32, ComponentValue::U32(n)) => [@types.Value::I32(n)]
-          (S64, ComponentValue::S64(n)) | (U64, ComponentValue::U64(n)) =>
-            [@types.Value::I64(n)]
-          (F32, ComponentValue::F32(f)) => [@types.Value::F32(f)]
-          (F64, ComponentValue::F64(f)) => [@types.Value::F64(f)]
-          (Char, ComponentValue::Char(c)) => [@types.Value::I32(c.to_int())]
-          (String, ComponentValue::String(s))
-          | (ErrorContext, ComponentValue::ErrorContext(s)) => {
+          (Bool, Bool(b)) => [I32(if b { 1 } else { 0 })]
+          (S8, S8(n))
+          | (U8, U8(n))
+          | (S16, S16(n))
+          | (U16, U16(n))
+          | (S32, S32(n))
+          | (U32, U32(n)) => [I32(n)]
+          (S64, S64(n)) | (U64, U64(n)) => [I64(n)]
+          (F32, F32(f)) => [F32(f)]
+          (F64, F64(f)) => [F64(f)]
+          (Char, Char(c)) => [I32(c.to_int())]
+          (String, String(s)) | (ErrorContext, ErrorContext(s)) => {
             let m = match mem {
               Some(m) => m
               None => raise MissingCanonMemory
@@ -366,21 +360,18 @@ fn component_args_to_core(
               store, m, realloc, mem_is_64, bytes, align,
             )
             if mem_is_64 {
-              [
-                @types.Value::I64(ptr.to_int64()),
-                @types.Value::I64(canon_len.to_int64()),
-              ]
+              [I64(ptr.to_int64()), I64(canon_len.to_int64())]
             } else {
-              [@types.Value::I32(ptr), @types.Value::I32(canon_len)]
+              [I32(ptr), I32(canon_len)]
             }
           }
           _ => raise HostCallError("argument type mismatch")
         }
       TypeIdx(ti) =>
         match types.get(ti) {
-          Some(Some(TypeDef::Tuple(tys))) =>
+          Some(Some(Tuple(tys))) =>
             match val {
-              ComponentValue::Tuple(items) =>
+              Tuple(items) =>
                 if items.length() != tys.length() {
                   raise HostCallError("argument type mismatch")
                 } else {
@@ -394,9 +385,9 @@ fn component_args_to_core(
                 }
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::Record(fields))) =>
+          Some(Some(Record(fields))) =>
             match val {
-              ComponentValue::Tuple(items) =>
+              Tuple(items) =>
                 if items.length() != fields.length() {
                   raise HostCallError("argument type mismatch")
                 } else {
@@ -410,9 +401,9 @@ fn component_args_to_core(
                 }
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::List(elem_ty))) =>
+          Some(Some(List(elem_ty))) =>
             match val {
-              ComponentValue::List(items) => {
+              List(items) => {
                 let m = match mem {
                   Some(m) => m
                   None => raise MissingCanonMemory
@@ -449,24 +440,21 @@ fn component_args_to_core(
                 }
                 let len = items.length()
                 if mem_is_64 {
-                  [
-                    @types.Value::I64(ptr.to_int64()),
-                    @types.Value::I64(len.to_int64()),
-                  ]
+                  [I64(ptr.to_int64()), I64(len.to_int64())]
                 } else {
-                  [@types.Value::I32(ptr), @types.Value::I32(len)]
+                  [I32(ptr), I32(len)]
                 }
               }
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::Variant(cases))) => {
+          Some(Some(Variant(cases))) => {
             let all_flat = core_types_for_valtype(TypeIdx(ti), types, mem_is_64)
             let joined_types : Array[@types.ValueType] = []
             for i in 1..<all_flat.length() {
               joined_types.push(all_flat[i])
             }
             match val {
-              ComponentValue::Variant(tag, payload_opt) => {
+              Variant(tag, payload_opt) => {
                 if tag < 0 || tag >= cases.length() {
                   raise HostCallError("invalid variant discriminant")
                 }
@@ -482,16 +470,16 @@ fn component_args_to_core(
                       Some(pv) => lower_value(pv, payload_ty)
                     }
                 }
-                let out : Array[@types.Value] = [@types.Value::I32(tag)]
+                let out : Array[@types.Value] = [I32(tag)]
                 for i in 0..<joined_types.length() {
                   if i < payload_vals.length() {
                     let actual = payload_vals[i]
                     let actual_vt = match actual {
-                      @types.Value::I32(_) => @types.ValueType::I32
-                      @types.Value::I64(_) => @types.ValueType::I64
-                      @types.Value::F32(_) => @types.ValueType::F32
-                      @types.Value::F64(_) => @types.ValueType::F64
-                      _ => @types.ValueType::I32
+                      I32(_) => @types.ValueType::I32
+                      I64(_) => I64
+                      F32(_) => F32
+                      F64(_) => F64
+                      _ => I32
                     }
                     out.push(
                       coerce_flat_value(actual, actual_vt, joined_types[i]),
@@ -505,16 +493,16 @@ fn component_args_to_core(
               _ => raise HostCallError("argument type mismatch")
             }
           }
-          Some(Some(TypeDef::Option(payload_ty))) =>
+          Some(Some(Option(payload_ty))) =>
             match val {
-              ComponentValue::Variant(tag, payload_opt) =>
+              Variant(tag, payload_opt) =>
                 if tag == 0 {
                   // none
                   if payload_opt is Some(_) {
                     raise HostCallError("argument type mismatch")
                   }
                   // tag + payload slots (same as payload flat types)
-                  let out : Array[@types.Value] = [@types.Value::I32(0)]
+                  let out : Array[@types.Value] = [I32(0)]
                   let payload_flat = core_types_for_valtype(
                     payload_ty, types, mem_is_64,
                   )
@@ -528,15 +516,15 @@ fn component_args_to_core(
                     None => raise HostCallError("argument type mismatch")
                   }
                   let payload_vals = lower_value(payload, payload_ty)
-                  [@types.Value::I32(1)] + payload_vals
+                  [I32(1)] + payload_vals
                 } else {
                   raise HostCallError("invalid variant discriminant")
                 }
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::Result(ok_ty, err_ty))) =>
+          Some(Some(Result(ok_ty, err_ty))) =>
             match val {
-              ComponentValue::Variant(tag, payload_opt) => {
+              Variant(tag, payload_opt) => {
                 let payload_ty = if tag == 0 {
                   ok_ty
                 } else if tag == 1 {
@@ -566,16 +554,16 @@ fn component_args_to_core(
                 for i in 1..<all_flat.length() {
                   joined_types.push(all_flat[i])
                 }
-                let out : Array[@types.Value] = [@types.Value::I32(tag)]
+                let out : Array[@types.Value] = [I32(tag)]
                 for i in 0..<joined_types.length() {
                   if i < payload_vals.length() {
                     let actual = payload_vals[i]
                     let actual_vt = match actual {
-                      @types.Value::I32(_) => @types.ValueType::I32
-                      @types.Value::I64(_) => @types.ValueType::I64
-                      @types.Value::F32(_) => @types.ValueType::F32
-                      @types.Value::F64(_) => @types.ValueType::F64
-                      _ => @types.ValueType::I32
+                      I32(_) => @types.ValueType::I32
+                      I64(_) => I64
+                      F32(_) => F32
+                      F64(_) => F64
+                      _ => I32
                     }
                     out.push(
                       coerce_flat_value(actual, actual_vt, joined_types[i]),
@@ -588,12 +576,12 @@ fn component_args_to_core(
               }
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::Flags(labels))) => {
+          Some(Some(Flags(labels))) => {
             let nbits = labels.length()
             if nbits <= 32 {
               let raw = match val {
-                ComponentValue::U32(n) => n.reinterpret_as_uint()
-                ComponentValue::S32(n) => n.reinterpret_as_uint()
+                U32(n) => n.reinterpret_as_uint()
+                S32(n) => n.reinterpret_as_uint()
                 _ => raise HostCallError("argument type mismatch")
               }
               let masked = if nbits == 32 {
@@ -601,11 +589,11 @@ fn component_args_to_core(
               } else {
                 raw & ((1U << nbits) - 1U)
               }
-              [@types.Value::I32(masked.reinterpret_as_int())]
+              [I32(masked.reinterpret_as_int())]
             } else {
               let raw = match val {
-                ComponentValue::U64(n) => n.reinterpret_as_uint64()
-                ComponentValue::S64(n) => n.reinterpret_as_uint64()
+                U64(n) => n.reinterpret_as_uint64()
+                S64(n) => n.reinterpret_as_uint64()
                 _ => raise HostCallError("argument type mismatch")
               }
               let masked = if nbits == 64 {
@@ -613,28 +601,28 @@ fn component_args_to_core(
               } else {
                 raw & ((1UL << nbits) - 1UL)
               }
-              [@types.Value::I64(masked.reinterpret_as_int64())]
+              [I64(masked.reinterpret_as_int64())]
             }
           }
-          Some(Some(TypeDef::Enum(labels))) => {
+          Some(Some(Enum(labels))) => {
             let n = match val {
-              ComponentValue::U32(n) => n
-              ComponentValue::S32(n) => n
+              U32(n) => n
+              S32(n) => n
               _ => raise HostCallError("argument type mismatch")
             }
             if n < 0 || n >= labels.length() {
               raise HostCallError("invalid enum discriminant")
             }
-            [@types.Value::I32(n)]
+            [I32(n)]
           }
-          Some(Some(TypeDef::Borrow(resource_tyidx))) => {
+          Some(Some(Borrow(resource_tyidx))) => {
             let expected_type_id = match types.get(resource_tyidx) {
-              Some(Some(TypeDef::ResourceType(id, _, _, _))) => id
+              Some(Some(ResourceType(id, _, _, _))) => id
               _ => raise HostCallError("unsupported param type")
             }
             let handle = match val {
-              ComponentValue::U32(h) => h
-              ComponentValue::S32(h) => h
+              U32(h) => h
+              S32(h) => h
               _ => raise HostCallError("argument type mismatch")
             }
             match caller_table.get(handle) {
@@ -644,23 +632,23 @@ fn component_args_to_core(
                     "handle index \{handle} used with the wrong type",
                   )
                 } else {
-                  [@types.Value::I32(entry.rep)]
+                  [I32(entry.rep)]
                 }
               None => raise CanonCallError("unknown handle index \{handle}")
             }
           }
-          Some(Some(TypeDef::Own(resource_tyidx))) => {
+          Some(Some(Own(resource_tyidx))) => {
             let expected_type_id = match types.get(resource_tyidx) {
-              Some(Some(TypeDef::ResourceType(id, _, _, _))) => id
+              Some(Some(ResourceType(id, _, _, _))) => id
               _ => raise HostCallError("unsupported param type")
             }
             let handle = match val {
-              ComponentValue::U32(h) => h
-              ComponentValue::S32(h) => h
+              U32(h) => h
+              S32(h) => h
               _ => raise HostCallError("argument type mismatch")
             }
             if caller_table.id == callee_table.id {
-              [@types.Value::I32(handle)]
+              [I32(handle)]
             } else {
               let entry = match caller_table.free(handle) {
                 Some(e) => e
@@ -672,19 +660,19 @@ fn component_args_to_core(
                 )
               }
               let new_handle = callee_table.alloc(entry)
-              [@types.Value::I32(new_handle)]
+              [I32(new_handle)]
             }
           }
-          Some(Some(TypeDef::ResourceType(_, _, _, _))) =>
+          Some(Some(ResourceType(_, _, _, _))) =>
             match val {
-              ComponentValue::U32(handle) => [@types.Value::I32(handle)]
-              ComponentValue::S32(handle) => [@types.Value::I32(handle)]
+              U32(handle) => [I32(handle)]
+              S32(handle) => [I32(handle)]
               _ => raise HostCallError("argument type mismatch")
             }
-          Some(Some(TypeDef::Stream(_))) | Some(Some(TypeDef::Future(_))) =>
+          Some(Some(Stream(_))) | Some(Some(Future(_))) =>
             match val {
-              ComponentValue::U32(handle) => [@types.Value::I32(handle)]
-              ComponentValue::S32(handle) => [@types.Value::I32(handle)]
+              U32(handle) => [I32(handle)]
+              S32(handle) => [I32(handle)]
               _ => raise HostCallError("argument type mismatch")
             }
           _ => raise HostCallError("unsupported param type")
@@ -742,9 +730,9 @@ fn component_args_to_core(
     )
   }
   if mem_is_64 {
-    [@types.Value::I64(ptr.to_int64())]
+    [I64(ptr.to_int64())]
   } else {
-    [@types.Value::I32(ptr)]
+    [I32(ptr)]
   }
 }
 
@@ -762,7 +750,7 @@ fn core_results_to_component(
     types : Array[TypeDef?],
   ) -> (Int, ResourceKind) raise ComponentRuntimeError {
     match types.get(tyidx) {
-      Some(Some(TypeDef::ResourceType(id, _, _, kind))) => (id, kind)
+      Some(Some(ResourceType(id, _, _, kind))) => (id, kind)
       _ => raise HostCallError("invalid resource type")
     }
   }
@@ -784,12 +772,12 @@ fn core_results_to_component(
             "unknown handle index \{handle}; index \{handle} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
-          let expected_desc = if expected_kind == ResourceKind::GuestDefined {
+          let expected_desc = if expected_kind == GuestDefined {
             "guest-defined resource"
           } else {
             "host-defined resource"
           }
-          let found_desc = if entry.kind == ResourceKind::GuestDefined {
+          let found_desc = if entry.kind == GuestDefined {
             "guest-defined resource"
           } else {
             "host-defined resource"
@@ -814,42 +802,37 @@ fn core_results_to_component(
           match p {
             Bool =>
               match results {
-                [@types.Value::I32(n)] => [ComponentValue::Bool(n != 0)]
+                [I32(n)] => [Bool(n != 0)]
                 _ => raise HostCallError("result type mismatch")
               }
             S8 | U8 | S16 | U16 | S32 | U32 | Char =>
               match results {
-                [@types.Value::I32(n)] =>
+                [I32(n)] =>
                   match p {
-                    Char => [ComponentValue::Char(char_from_canon_i32(n))]
-                    S8 => [ComponentValue::S8(trunc_s8(n))]
-                    U8 => [ComponentValue::U8(trunc_u8(n))]
-                    S16 => [ComponentValue::S16(trunc_s16(n))]
-                    U16 => [ComponentValue::U16(trunc_u16(n))]
-                    S32 => [ComponentValue::S32(n)]
-                    U32 => [ComponentValue::U32(trunc_u32(n))]
+                    Char => [Char(char_from_canon_i32(n))]
+                    S8 => [S8(trunc_s8(n))]
+                    U8 => [U8(trunc_u8(n))]
+                    S16 => [S16(trunc_s16(n))]
+                    U16 => [U16(trunc_u16(n))]
+                    S32 => [S32(n)]
+                    U32 => [U32(trunc_u32(n))]
                     _ => raise HostCallError("result type mismatch")
                   }
                 _ => raise HostCallError("result type mismatch")
               }
             S64 | U64 =>
               match results {
-                [@types.Value::I64(n)] =>
-                  if p == S64 {
-                    [ComponentValue::S64(n)]
-                  } else {
-                    [ComponentValue::U64(n)]
-                  }
+                [I64(n)] => if p == S64 { [S64(n)] } else { [U64(n)] }
                 _ => raise HostCallError("result type mismatch")
               }
             F32 =>
               match results {
-                [@types.Value::F32(n)] => [ComponentValue::F32(n)]
+                [F32(n)] => [F32(n)]
                 _ => raise HostCallError("result type mismatch")
               }
             F64 =>
               match results {
-                [@types.Value::F64(n)] => [ComponentValue::F64(n)]
+                [F64(n)] => [F64(n)]
                 _ => raise HostCallError("result type mismatch")
               }
             String | ErrorContext => {
@@ -863,9 +846,8 @@ fn core_results_to_component(
               let mem_is_64 = mem.is_memory64()
               let (ptr, len) = if mem_is_64 {
                 match results {
-                  [@types.Value::I64(p), @types.Value::I64(l)] =>
-                    (p.to_int(), l.to_int())
-                  [@types.Value::I64(p)] => {
+                  [I64(p), I64(l)] => (p.to_int(), l.to_int())
+                  [I64(p)] => {
                     let base = p.to_int()
                     let ptr64 = mem.load_i64(base) catch {
                       e => raise CanonCallError(e.to_string())
@@ -879,8 +861,8 @@ fn core_results_to_component(
                 }
               } else {
                 match results {
-                  [@types.Value::I32(p), @types.Value::I32(l)] => (p, l)
-                  [@types.Value::I32(p)] => {
+                  [I32(p), I32(l)] => (p, l)
+                  [I32(p)] => {
                     let ptr32 = mem.load_i32(p) catch {
                       e => raise CanonCallError(e.to_string())
                     }
@@ -899,9 +881,9 @@ fn core_results_to_component(
                 resources.encoding,
               )
               if p == String {
-                [ComponentValue::String(s)]
+                [String(s)]
               } else {
-                [ComponentValue::ErrorContext(s)]
+                [ErrorContext(s)]
               }
             }
           }
@@ -930,8 +912,8 @@ fn core_results_to_component(
               None => raise MissingCanonMemory
             }
             let ptr = match results[0] {
-              @types.Value::I32(n) => n
-              @types.Value::I64(n) => n.to_int()
+              I32(n) => n
+              I64(n) => n.to_int()
               _ => raise HostCallError("result type mismatch")
             }
             let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
@@ -963,15 +945,15 @@ fn core_results_to_component(
           match resolve_valtype(r, types) {
             TypeIdx(ti) =>
               match types.get(ti) {
-                Some(Some(TypeDef::Own(resource_tyidx)))
-                | Some(Some(TypeDef::Borrow(resource_tyidx))) => {
+                Some(Some(Own(resource_tyidx)))
+                | Some(Some(Borrow(resource_tyidx))) => {
                   let (type_id, kind) = resource_type_info(
                     resource_tyidx, types,
                   )
                   match v {
-                    ComponentValue::U32(h) =>
+                    U32(h) =>
                       validate_resource_handle(h, type_id, kind, resource_table)
-                    ComponentValue::S32(h) =>
+                    S32(h) =>
                       validate_resource_handle(h, type_id, kind, resource_table)
                     _ => ()
                   }
@@ -1000,7 +982,7 @@ fn core_args_to_component(
     types : Array[TypeDef?],
   ) -> (Int, ResourceKind) raise ComponentRuntimeError {
     match types.get(tyidx) {
-      Some(Some(TypeDef::ResourceType(id, _, _, kind))) => (id, kind)
+      Some(Some(ResourceType(id, _, _, kind))) => (id, kind)
       _ => raise HostCallError("invalid resource type")
     }
   }
@@ -1022,12 +1004,12 @@ fn core_args_to_component(
             "unknown handle index \{handle}; index \{handle} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
-          let expected_desc = if expected_kind == ResourceKind::GuestDefined {
+          let expected_desc = if expected_kind == GuestDefined {
             "guest-defined resource"
           } else {
             "host-defined resource"
           }
-          let found_desc = if entry.kind == ResourceKind::GuestDefined {
+          let found_desc = if entry.kind == GuestDefined {
             "guest-defined resource"
           } else {
             "host-defined resource"
@@ -1079,8 +1061,8 @@ fn core_args_to_component(
       raise HostCallError("argument type mismatch")
     }
     let ptr = match args[0] {
-      @types.Value::I32(n) => n
-      @types.Value::I64(n) => n.to_int()
+      I32(n) => n
+      I64(n) => n.to_int()
       _ => raise HostCallError("argument type mismatch")
     }
     let m = match mem {
@@ -1130,22 +1112,18 @@ fn core_args_to_component(
     // host/component functions.
     if resolve_valtype(p.ty, types) is TypeIdx(ti) {
       let type_def = types.get(ti)
-      if type_def is Some(Some(TypeDef::Own(resource_tyidx))) {
+      if type_def is Some(Some(Own(resource_tyidx))) {
         let (type_id, kind) = resource_type_info(resource_tyidx, types)
         match v {
-          ComponentValue::U32(h) =>
-            validate_resource_handle(h, type_id, kind, resource_table)
-          ComponentValue::S32(h) =>
-            validate_resource_handle(h, type_id, kind, resource_table)
+          U32(h) => validate_resource_handle(h, type_id, kind, resource_table)
+          S32(h) => validate_resource_handle(h, type_id, kind, resource_table)
           _ => ()
         }
-      } else if type_def is Some(Some(TypeDef::Borrow(resource_tyidx))) {
+      } else if type_def is Some(Some(Borrow(resource_tyidx))) {
         let (type_id, kind) = resource_type_info(resource_tyidx, types)
         match v {
-          ComponentValue::U32(h) =>
-            validate_resource_handle(h, type_id, kind, resource_table)
-          ComponentValue::S32(h) =>
-            validate_resource_handle(h, type_id, kind, resource_table)
+          U32(h) => validate_resource_handle(h, type_id, kind, resource_table)
+          S32(h) => validate_resource_handle(h, type_id, kind, resource_table)
           _ => ()
         }
       }
@@ -1208,22 +1186,18 @@ fn component_results_to_core(
           match resolve_valtype(ty, types) {
             Prim(p) =>
               match (p, v) {
-                (Bool, ComponentValue::Bool(b)) =>
-                  [@types.Value::I32(if b { 1 } else { 0 })]
-                (S8, ComponentValue::S8(n))
-                | (U8, ComponentValue::U8(n))
-                | (S16, ComponentValue::S16(n))
-                | (U16, ComponentValue::U16(n))
-                | (S32, ComponentValue::S32(n))
-                | (U32, ComponentValue::U32(n)) => [@types.Value::I32(n)]
-                (S64, ComponentValue::S64(n)) | (U64, ComponentValue::U64(n)) =>
-                  [@types.Value::I64(n)]
-                (F32, ComponentValue::F32(f)) => [@types.Value::F32(f)]
-                (F64, ComponentValue::F64(f)) => [@types.Value::F64(f)]
-                (Char, ComponentValue::Char(c)) =>
-                  [@types.Value::I32(c.to_int())]
-                (String, ComponentValue::String(s))
-                | (ErrorContext, ComponentValue::ErrorContext(s)) => {
+                (Bool, Bool(b)) => [I32(if b { 1 } else { 0 })]
+                (S8, S8(n))
+                | (U8, U8(n))
+                | (S16, S16(n))
+                | (U16, U16(n))
+                | (S32, S32(n))
+                | (U32, U32(n)) => [I32(n)]
+                (S64, S64(n)) | (U64, U64(n)) => [I64(n)]
+                (F32, F32(f)) => [F32(f)]
+                (F64, F64(f)) => [F64(f)]
+                (Char, Char(c)) => [I32(c.to_int())]
+                (String, String(s)) | (ErrorContext, ErrorContext(s)) => {
                   if resources.mem_addr is None {
                     raise MissingCanonMemory
                   }
@@ -1239,21 +1213,18 @@ fn component_results_to_core(
                     store, mem, realloc, mem_is_64, bytes, align,
                   )
                   if mem_is_64 {
-                    [
-                      @types.Value::I64(ptr.to_int64()),
-                      @types.Value::I64(canon_len.to_int64()),
-                    ]
+                    [I64(ptr.to_int64()), I64(canon_len.to_int64())]
                   } else {
-                    [@types.Value::I32(ptr), @types.Value::I32(canon_len)]
+                    [I32(ptr), I32(canon_len)]
                   }
                 }
                 _ => raise HostCallError("result type mismatch")
               }
             TypeIdx(ti) =>
               match types.get(ti) {
-                Some(Some(TypeDef::Tuple(tys))) =>
+                Some(Some(Tuple(tys))) =>
                   match v {
-                    ComponentValue::Tuple(items) =>
+                    Tuple(items) =>
                       if items.length() != tys.length() {
                         raise HostCallError("result type mismatch")
                       } else {
@@ -1267,9 +1238,9 @@ fn component_results_to_core(
                       }
                     _ => raise HostCallError("result type mismatch")
                   }
-                Some(Some(TypeDef::Record(fields))) =>
+                Some(Some(Record(fields))) =>
                   match v {
-                    ComponentValue::Tuple(items) =>
+                    Tuple(items) =>
                       if items.length() != fields.length() {
                         raise HostCallError("result type mismatch")
                       } else {
@@ -1283,14 +1254,14 @@ fn component_results_to_core(
                       }
                     _ => raise HostCallError("result type mismatch")
                   }
-                Some(Some(TypeDef::Own(_)))
-                | Some(Some(TypeDef::Borrow(_)))
-                | Some(Some(TypeDef::ResourceType(_, _, _, _)))
-                | Some(Some(TypeDef::Stream(_)))
-                | Some(Some(TypeDef::Future(_))) =>
+                Some(Some(Own(_)))
+                | Some(Some(Borrow(_)))
+                | Some(Some(ResourceType(_, _, _, _)))
+                | Some(Some(Stream(_)))
+                | Some(Some(Future(_))) =>
                   match v {
-                    ComponentValue::U32(handle) => [@types.Value::I32(handle)]
-                    ComponentValue::S32(handle) => [@types.Value::I32(handle)]
+                    U32(handle) => [I32(handle)]
+                    S32(handle) => [I32(handle)]
                     _ => raise HostCallError("result type mismatch")
                   }
                 _ => raise HostCallError("unsupported result type")
@@ -1315,21 +1286,18 @@ fn component_results_to_core(
       match resolve_valtype(r, types) {
         Prim(p) =>
           match (p, val) {
-            (Bool, ComponentValue::Bool(b)) =>
-              [@types.Value::I32(if b { 1 } else { 0 })]
-            (S8, ComponentValue::S8(n))
-            | (U8, ComponentValue::U8(n))
-            | (S16, ComponentValue::S16(n))
-            | (U16, ComponentValue::U16(n))
-            | (S32, ComponentValue::S32(n))
-            | (U32, ComponentValue::U32(n)) => [@types.Value::I32(n)]
-            (S64, ComponentValue::S64(n)) | (U64, ComponentValue::U64(n)) =>
-              [@types.Value::I64(n)]
-            (F32, ComponentValue::F32(n)) => [@types.Value::F32(n)]
-            (F64, ComponentValue::F64(n)) => [@types.Value::F64(n)]
-            (Char, ComponentValue::Char(c)) => [@types.Value::I32(c.to_int())]
-            (String, ComponentValue::String(s))
-            | (ErrorContext, ComponentValue::ErrorContext(s)) => {
+            (Bool, Bool(b)) => [I32(if b { 1 } else { 0 })]
+            (S8, S8(n))
+            | (U8, U8(n))
+            | (S16, S16(n))
+            | (U16, U16(n))
+            | (S32, S32(n))
+            | (U32, U32(n)) => [I32(n)]
+            (S64, S64(n)) | (U64, U64(n)) => [I64(n)]
+            (F32, F32(n)) => [F32(n)]
+            (F64, F64(n)) => [F64(n)]
+            (Char, Char(c)) => [I32(c.to_int())]
+            (String, String(s)) | (ErrorContext, ErrorContext(s)) => {
               let mem = require_memory(resources, store)
               let mem_is_64 = mem.is_memory64()
               let realloc = match resources.realloc {
@@ -1345,31 +1313,28 @@ fn component_results_to_core(
               )
               let len = canon_len
               if mem_is_64 {
-                [
-                  @types.Value::I64(ptr.to_int64()),
-                  @types.Value::I64(len.to_int64()),
-                ]
+                [I64(ptr.to_int64()), I64(len.to_int64())]
               } else {
-                [@types.Value::I32(ptr), @types.Value::I32(len)]
+                [I32(ptr), I32(len)]
               }
             }
             _ => raise HostCallError("result type mismatch")
           }
         TypeIdx(ti) =>
           match types.get(ti) {
-            Some(Some(TypeDef::Own(_)))
-            | Some(Some(TypeDef::Borrow(_)))
-            | Some(Some(TypeDef::ResourceType(_, _, _, _)))
-            | Some(Some(TypeDef::Stream(_)))
-            | Some(Some(TypeDef::Future(_))) =>
+            Some(Some(Own(_)))
+            | Some(Some(Borrow(_)))
+            | Some(Some(ResourceType(_, _, _, _)))
+            | Some(Some(Stream(_)))
+            | Some(Some(Future(_))) =>
               match val {
-                ComponentValue::U32(handle) => [@types.Value::I32(handle)]
-                ComponentValue::S32(handle) => [@types.Value::I32(handle)]
+                U32(handle) => [I32(handle)]
+                S32(handle) => [I32(handle)]
                 _ => raise HostCallError("result type mismatch")
               }
-            Some(Some(TypeDef::Variant(cases))) =>
+            Some(Some(Variant(cases))) =>
               match val {
-                ComponentValue::Variant(tag, payload_opt) => {
+                Variant(tag, payload_opt) => {
                   if tag < 0 || tag >= cases.length() {
                     raise HostCallError("invalid variant discriminant")
                   }
@@ -1377,7 +1342,7 @@ fn component_results_to_core(
                   match cases[tag].ty {
                     None =>
                       match payload_opt {
-                        None => [@types.Value::I32(tag)]
+                        None => [I32(tag)]
                         Some(_) => raise HostCallError("result type mismatch")
                       }
                     Some(_) => raise HostCallError("unsupported result type")
@@ -1385,14 +1350,14 @@ fn component_results_to_core(
                 }
                 _ => raise HostCallError("result type mismatch")
               }
-            Some(Some(TypeDef::Option(_payload_ty))) =>
+            Some(Some(Option(_payload_ty))) =>
               match val {
-                ComponentValue::Variant(tag, payload_opt) =>
+                Variant(tag, payload_opt) =>
                   if tag == 0 {
                     if payload_opt is Some(_) {
                       raise HostCallError("result type mismatch")
                     }
-                    [@types.Value::I32(0)]
+                    [I32(0)]
                   } else if tag == 1 {
                     // Options with payload would have been handled by the indirect-result path.
                     if payload_opt is None {
@@ -1404,26 +1369,26 @@ fn component_results_to_core(
                   }
                 _ => raise HostCallError("result type mismatch")
               }
-            Some(Some(TypeDef::Result(_ok_ty, _err_ty))) =>
+            Some(Some(Result(_ok_ty, _err_ty))) =>
               match val {
-                ComponentValue::Variant(tag, payload_opt) =>
+                Variant(tag, payload_opt) =>
                   if tag == 0 || tag == 1 {
                     if payload_opt is Some(_) {
                       // Payload results are indirect today.
                       raise HostCallError("unsupported result type")
                     }
-                    [@types.Value::I32(tag)]
+                    [I32(tag)]
                   } else {
                     raise HostCallError("invalid variant discriminant")
                   }
                 _ => raise HostCallError("result type mismatch")
               }
-            Some(Some(TypeDef::Flags(labels))) => {
+            Some(Some(Flags(labels))) => {
               let nbits = labels.length()
               if nbits <= 32 {
                 let raw = match val {
-                  ComponentValue::U32(n) => n.reinterpret_as_uint()
-                  ComponentValue::S32(n) => n.reinterpret_as_uint()
+                  U32(n) => n.reinterpret_as_uint()
+                  S32(n) => n.reinterpret_as_uint()
                   _ => raise HostCallError("result type mismatch")
                 }
                 let masked = if nbits == 32 {
@@ -1431,11 +1396,11 @@ fn component_results_to_core(
                 } else {
                   raw & ((1U << nbits) - 1U)
                 }
-                [@types.Value::I32(masked.reinterpret_as_int())]
+                [I32(masked.reinterpret_as_int())]
               } else {
                 let raw = match val {
-                  ComponentValue::U64(n) => n.reinterpret_as_uint64()
-                  ComponentValue::S64(n) => n.reinterpret_as_uint64()
+                  U64(n) => n.reinterpret_as_uint64()
+                  S64(n) => n.reinterpret_as_uint64()
                   _ => raise HostCallError("result type mismatch")
                 }
                 let masked = if nbits == 64 {
@@ -1443,19 +1408,19 @@ fn component_results_to_core(
                 } else {
                   raw & ((1UL << nbits) - 1UL)
                 }
-                [@types.Value::I64(masked.reinterpret_as_int64())]
+                [I64(masked.reinterpret_as_int64())]
               }
             }
-            Some(Some(TypeDef::Enum(labels))) => {
+            Some(Some(Enum(labels))) => {
               let n = match val {
-                ComponentValue::U32(n) => n
-                ComponentValue::S32(n) => n
+                U32(n) => n
+                S32(n) => n
                 _ => raise HostCallError("result type mismatch")
               }
               if n < 0 || n >= labels.length() {
                 raise HostCallError("invalid enum discriminant")
               }
-              [@types.Value::I32(n)]
+              [I32(n)]
             }
             _ => raise HostCallError("unsupported result type")
           }

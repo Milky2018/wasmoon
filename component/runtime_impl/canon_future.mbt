@@ -8,14 +8,11 @@ fn instantiate_canon_future_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I64],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I64] }
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
   let payload_ty : ValType? = match state.types.get(_tyidx) {
-    Some(Some(TypeDef::Future(v))) => v
+    Some(Some(Future(v))) => v
     _ => None
   }
   let host = fn(
@@ -118,10 +115,7 @@ fn instantiate_canon_future_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
@@ -159,7 +153,7 @@ fn instantiate_canon_future_read(
       out
     }
     match args {
-      [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
+      [I32(handle), I32(ptr)] =>
         match
           async_state.future_endpoints.get(
             handle_key(caller_component_id, handle),
@@ -218,7 +212,7 @@ fn instantiate_canon_future_read(
                         trap_canon(
                           "cannot read from and write to intra-component future",
                         )
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                     _ => ()
                   }
@@ -232,49 +226,49 @@ fn instantiate_canon_future_read(
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       mem.store_byte(ptr, trunc_u8(pw.val).to_byte()) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                     }
                     Some(Prim(Char)) => {
                       if ptr % 4 != 0 {
                         trap_canon("unaligned pointer")
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                       let mem = match resources.mem_addr {
                         Some(addr) =>
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       mem.store_i32(ptr, pw.val) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                     }
                     _ => {
                       trap_canon("unsupported future type")
-                      return [@types.Value::I32(0)]
+                      return [I32(0)]
                     }
                   }
 
@@ -344,8 +338,8 @@ fn instantiate_canon_future_read(
                     if is_async {
                       cache_i32(-1)
                     } else {
-                      canon_suspend[0] = Some(CanonSuspend::Yield)
-                      raise @runtime.RuntimeError::Unreachable
+                      canon_suspend[0] = Some(Yield)
+                      raise Unreachable
                     }
                   }
               }
@@ -367,10 +361,7 @@ fn instantiate_canon_future_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let resources = resolve_canon_resources(_opts, state) catch { e => raise e }
   let async_state = state.async_state
   let caller_component_id = state.resource_table.id
@@ -408,7 +399,7 @@ fn instantiate_canon_future_write(
       out
     }
     match args {
-      [@types.Value::I32(handle), @types.Value::I32(ptr)] =>
+      [I32(handle), I32(ptr)] =>
         match
           async_state.future_endpoints.get(
             handle_key(caller_component_id, handle),
@@ -474,7 +465,7 @@ fn instantiate_canon_future_write(
                         trap_canon(
                           "cannot read from and write to intra-component future",
                         )
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                     _ => ()
                   }
@@ -489,12 +480,12 @@ fn instantiate_canon_future_write(
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let dst_mem = match pr.mem_addr {
@@ -502,43 +493,43 @@ fn instantiate_canon_future_write(
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let b = src_mem.load_byte(ptr) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       dst_mem.store_byte(pr.ptr, b) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                     }
                     Some(Prim(Char)) => {
                       if ptr % 4 != 0 || pr.ptr % 4 != 0 {
                         trap_canon("unaligned pointer")
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                       let src_mem = match resources.mem_addr {
                         Some(addr) =>
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let dst_mem = match pr.mem_addr {
@@ -546,38 +537,38 @@ fn instantiate_canon_future_write(
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let n = src_mem.load_i32(ptr) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       // Validate scalar value.
                       (char_from_canon_i32(n) catch {
                         e => {
                           trap_canon(canon_err_message(e))
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       })
                       |> ignore
                       dst_mem.store_i32(pr.ptr, n) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                     }
                     _ => {
                       trap_canon("unsupported future type")
-                      return [@types.Value::I32(0)]
+                      return [I32(0)]
                     }
                   }
 
@@ -620,18 +611,18 @@ fn instantiate_canon_future_write(
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let b = mem.load_byte(ptr) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       b.to_int()
@@ -639,31 +630,31 @@ fn instantiate_canon_future_write(
                     Some(Prim(Char)) => {
                       if ptr % 4 != 0 {
                         trap_canon("unaligned pointer")
-                        return [@types.Value::I32(0)]
+                        return [I32(0)]
                       }
                       let mem = match resources.mem_addr {
                         Some(addr) =>
                           store.get_mem(addr) catch {
                             e => {
                               trap_canon(e.to_string())
-                              return [@types.Value::I32(0)]
+                              return [I32(0)]
                             }
                           }
                         None => {
                           trap_canon("missing canon memory")
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       let n = mem.load_i32(ptr) catch {
                         e => {
                           trap_canon(e.to_string())
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       }
                       (char_from_canon_i32(n) catch {
                         e => {
                           trap_canon(canon_err_message(e))
-                          return [@types.Value::I32(0)]
+                          return [I32(0)]
                         }
                       })
                       |> ignore
@@ -671,7 +662,7 @@ fn instantiate_canon_future_write(
                     }
                     _ => {
                       trap_canon("unsupported future type")
-                      return [@types.Value::I32(0)]
+                      return [I32(0)]
                     }
                   }
                   async_state.futures.set(ep.future_id, {
@@ -692,8 +683,8 @@ fn instantiate_canon_future_write(
                   if is_async {
                     cache_i32(-1)
                   } else {
-                    canon_suspend[0] = Some(CanonSuspend::Yield)
-                    raise @runtime.RuntimeError::Unreachable
+                    canon_suspend[0] = Some(Yield)
+                    raise Unreachable
                   }
                 }
               }
@@ -715,10 +706,7 @@ fn instantiate_canon_future_cancel_read(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -728,7 +716,7 @@ fn instantiate_canon_future_cancel_read(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match
           async_state.future_endpoints.get(
             handle_key(owner_component_id, handle),
@@ -739,7 +727,7 @@ fn instantiate_canon_future_cancel_read(
             } else {
               trap_canon("unknown future handle index \{handle}")
             }
-            [@types.Value::I32(0)]
+            [I32(0)]
           }
           Some(ep) =>
             if !ep.is_readable {
@@ -748,13 +736,13 @@ fn instantiate_canon_future_cancel_read(
               } else {
                 trap_canon("type mismatch")
               }
-              [@types.Value::I32(0)]
+              [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown future handle index \{handle}")
-                  return [@types.Value::I32(0)]
+                  return [I32(0)]
                 }
               }
               // If the read already completed, cancellation observes the terminal
@@ -770,7 +758,7 @@ fn instantiate_canon_future_cancel_read(
                 } else {
                   2
                 }
-                [@types.Value::I32(code)]
+                [I32(code)]
               } else if st0.pending_read is Some(_) {
                 async_state.futures.set(ep.future_id, {
                   payload_ty: st0.payload_ty,
@@ -784,15 +772,15 @@ fn instantiate_canon_future_cancel_read(
                   wrote_value: st0.wrote_value,
                 })
                 // CANCELLED=2
-                [@types.Value::I32(2)]
+                [I32(2)]
               } else {
-                [@types.Value::I32(2)]
+                [I32(2)]
               }
             }
         }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -806,10 +794,7 @@ fn instantiate_canon_future_cancel_write(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -819,7 +804,7 @@ fn instantiate_canon_future_cancel_write(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match
           async_state.future_endpoints.get(
             handle_key(owner_component_id, handle),
@@ -830,7 +815,7 @@ fn instantiate_canon_future_cancel_write(
             } else {
               trap_canon("unknown future handle index \{handle}")
             }
-            [@types.Value::I32(0)]
+            [I32(0)]
           }
           Some(ep) =>
             if ep.is_readable {
@@ -839,13 +824,13 @@ fn instantiate_canon_future_cancel_write(
               } else {
                 trap_canon("type mismatch")
               }
-              [@types.Value::I32(0)]
+              [I32(0)]
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown future handle index \{handle}")
-                  return [@types.Value::I32(0)]
+                  return [I32(0)]
                 }
               }
               // If the write already completed (or the readable end already
@@ -854,12 +839,12 @@ fn instantiate_canon_future_cancel_write(
                 remove_waitable_events_for(
                   async_state, owner_component_id, handle, 5,
                 )
-                [@types.Value::I32(0)]
+                [I32(0)]
               } else if st0.readable_dropped || st0.write_observed_readable_drop {
                 remove_waitable_events_for(
                   async_state, owner_component_id, handle, 5,
                 )
-                [@types.Value::I32(1)]
+                [I32(1)]
               } else {
                 let had_pending = match st0.pending_write {
                   Some(_) => true
@@ -879,13 +864,13 @@ fn instantiate_canon_future_cancel_write(
                     wrote_value: false,
                   })
                 }
-                [@types.Value::I32(2)]
+                [I32(2)]
               }
             }
         }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -898,10 +883,7 @@ fn instantiate_canon_future_drop_readable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   async_state.thread_handle_required.set(owner_component_id, true)
@@ -912,7 +894,7 @@ fn instantiate_canon_future_drop_readable(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match
           async_state.future_endpoints.get(
             handle_key(owner_component_id, handle),
@@ -982,10 +964,7 @@ fn instantiate_canon_future_drop_writable(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -995,7 +974,7 @@ fn instantiate_canon_future_drop_writable(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(handle)] =>
+      [I32(handle)] =>
         match
           async_state.future_endpoints.get(
             handle_key(owner_component_id, handle),

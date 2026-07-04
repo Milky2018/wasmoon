@@ -96,17 +96,17 @@ fn Parser::read_instruction(
             // catch_ref: tag_idx, label_idx
             let tag_idx = self.read_u32()
             let label_idx = self.read_u32()
-            @types.CatchHandler::CatchRef(tag_idx, label_idx)
+            CatchRef(tag_idx, label_idx)
           }
           0x02 => {
             // catch_all: label_idx
             let label_idx = self.read_u32()
-            @types.CatchHandler::CatchAll(label_idx)
+            CatchAll(label_idx)
           }
           0x03 => {
             // catch_all_ref: label_idx
             let label_idx = self.read_u32()
-            @types.CatchHandler::CatchAllRef(label_idx)
+            CatchAllRef(label_idx)
           }
           _ => raise ParseError("invalid catch handler kind: \{catch_kind}")
         }
@@ -403,17 +403,17 @@ fn Parser::read_instruction(
       if heap_type < 0 {
         let nullable_ref_ty = match heap_type {
           -16 => @types.ValueType::FuncRef
-          -17 => @types.ValueType::ExternRef
-          -18 => @types.ValueType::AnyRef
-          -19 => @types.ValueType::RefNullEq
-          -20 => @types.ValueType::RefNullI31
-          -21 => @types.ValueType::StructRef
-          -22 => @types.ValueType::ArrayRef
-          -23 => @types.ValueType::ExnRef
-          -15 => @types.ValueType::NullRef
-          -14 => @types.ValueType::NullExternRef
-          -13 => @types.ValueType::NullFuncRef
-          -12 => @types.ValueType::NullExnRef
+          -17 => ExternRef
+          -18 => AnyRef
+          -19 => RefNullEq
+          -20 => RefNullI31
+          -21 => StructRef
+          -22 => ArrayRef
+          -23 => ExnRef
+          -15 => NullRef
+          -14 => NullExternRef
+          -13 => NullFuncRef
+          -12 => NullExnRef
           _ => raise ParseError("invalid heap type")
         }
         RefNull(nullable_ref_ty)
@@ -423,8 +423,8 @@ fn Parser::read_instruction(
         }
         let nullable_ref_ty = match self.types[heap_type].composite {
           Func(_) => @types.ValueType::RefNullFuncTyped(heap_type)
-          Struct(_) => @types.ValueType::RefNullStruct(heap_type)
-          Array(_) => @types.ValueType::RefNullArray(heap_type)
+          Struct(_) => RefNullStruct(heap_type)
+          Array(_) => RefNullArray(heap_type)
         }
         RefNull(nullable_ref_ty)
       }

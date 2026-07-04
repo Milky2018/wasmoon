@@ -1,4 +1,16 @@
 ///|
+fn[T] init_bulk_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "module initialization: start function execution" {
   // Module with a start function that sets a global
   // func 0: init() - sets global to 42
@@ -9,12 +21,9 @@ test "module initialization: start function execution" {
   }
   let get_func : @types.FunctionCode = { locals: [], body: [GlobalGet(0)] }
   let init_type : @types.FuncType = { params: [], results: [] }
-  let get_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let get_type : @types.FuncType = { params: [], results: [I32] }
   let global : @types.Global = {
-    type_: { value_type: @types.ValueType::I32, mutable: true },
+    type_: { value_type: I32, mutable: true },
     init: [I32Const(0)],
   }
   let mod : @types.Module = {
@@ -28,7 +37,7 @@ test "module initialization: start function execution" {
     tables: [],
     memories: [],
     globals: [global],
-    exports: [{ name: "get", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "get", desc: Func(1) }],
     start: Some(0), // start function is func 0
     elems: [],
     codes: [init_func, get_func],
@@ -51,12 +60,7 @@ test "module initialization: start function execution" {
 test "module initialization: data segment" {
   let data_bytes = Bytes::from_array([b'\x2A', b'\x00', b'\x00', b'\x00'])
   let mod = {
-    ..@types.Module::simple(
-      [],
-      [@types.ValueType::I32],
-      [I32Const(0), I32Load(0, 2, 0)],
-      "read",
-    ),
+    ..@types.Module::simple([], [I32], [I32Const(0), I32Load(0, 2, 0)], "read"),
     memories: [
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
@@ -78,7 +82,7 @@ test "module initialization: data segment with offset" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [I32Const(100), I32Load(0, 2, 0)],
       "read",
     ),
@@ -107,14 +111,8 @@ test "module initialization: element segment" {
     locals: [],
     body: [LocalGet(0), CallIndirect(0, 0)],
   }
-  let ret_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let call_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let ret_type : @types.FuncType = { params: [], results: [I32] }
+  let call_type : @types.FuncType = { params: [I32], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(ret_type),
@@ -126,7 +124,7 @@ test "module initialization: element segment" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 2, max: None },
           is_table64: false,
         },
@@ -135,12 +133,12 @@ test "module initialization: element segment" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "call", desc: @types.ExportDesc::Func(2) }],
+    exports: [{ name: "call", desc: Func(2) }],
     start: None,
     elems: [
       {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
+        mode: Active(0, [I32Const(0)]),
+        type_: FuncRef,
         init: [[RefFunc(0)], [RefFunc(1)]],
       },
     ],
@@ -171,7 +169,7 @@ test "bulk memory: memory.fill" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(0x42),
@@ -199,7 +197,7 @@ test "bulk memory: memory.copy non-overlapping" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(0x12345678),
@@ -230,7 +228,7 @@ test "bulk memory: memory.copy overlapping backward" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(0x04030201),
@@ -270,7 +268,7 @@ test "bulk memory: memory.init from data segment" {
   // Data: 0xDEADBEEF in little-endian
   let data_bytes = Bytes::from_array([b'\xEF', b'\xBE', b'\xAD', b'\xDE'])
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
+    ..@types.Module::simple([], [I32], body, "test"),
     memories: [
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
@@ -300,7 +298,7 @@ test "bulk memory: memory.init with offset" {
   // Data: [0x11, 0x22, 0x33, 0x44]
   let data_bytes = Bytes::from_array([b'\x11', b'\x22', b'\x33', b'\x44'])
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
+    ..@types.Module::simple([], [I32], body, "test"),
     memories: [
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
@@ -345,10 +343,7 @@ test "bulk memory: data.drop" {
     ],
   }
   let void_type : @types.FuncType = { params: [], results: [] }
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let data_bytes = Bytes::from_array([b'\x42'])
   let mod : @types.Module = {
     types: [
@@ -364,9 +359,9 @@ test "bulk memory: data.drop" {
     ],
     globals: [],
     exports: [
-      { name: "drop", desc: @types.ExportDesc::Func(0) },
-      { name: "init_zero", desc: @types.ExportDesc::Func(1) },
-      { name: "init_nonzero", desc: @types.ExportDesc::Func(2) },
+      { name: "drop", desc: Func(0) },
+      { name: "init_zero", desc: Func(1) },
+      { name: "init_nonzero", desc: Func(2) },
     ],
     start: None,
     elems: [],
@@ -397,8 +392,11 @@ test "bulk memory: data.drop" {
 
   // After drop: init_nonzero should fail
   inspect(
-    try? call_exported_func(store, instance, "init_nonzero", []),
-    content="Err(out of bounds memory access)",
+    init_bulk_runtime_has_error(
+      () => call_exported_func(store, instance, "init_nonzero", []),
+      err => err is OutOfBoundsMemoryAccess,
+    ),
+    content="true",
   )
 }
 
@@ -409,10 +407,7 @@ test "bulk memory: elem.drop" {
   let drop_func : @types.FunctionCode = { locals: [], body: [ElemDrop(0)] } // drop elem segment 0
   let void_type : @types.FuncType = { params: [], results: [] }
   let dummy_func : @types.FunctionCode = { locals: [], body: [I32Const(0)] }
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(void_type),
@@ -424,7 +419,7 @@ test "bulk memory: elem.drop" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 2, max: None },
           is_table64: false,
         },
@@ -433,14 +428,10 @@ test "bulk memory: elem.drop" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "drop", desc: Func(0) }],
     start: None,
     elems: [
-      {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(1)]],
-      },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(1)]] },
     ], // elem segment with func 1
     codes: [drop_func, dummy_func],
     datas: [],
@@ -480,7 +471,7 @@ test "bulk memory: data.drop is idempotent" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
     globals: [],
-    exports: [{ name: "drop", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "drop", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [drop_func],

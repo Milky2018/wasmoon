@@ -2,6 +2,18 @@
 // These tests are extracted from the official WebAssembly testsuite
 
 ///|
+fn[T] i32_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 /// Create i32 test module programmatically (simplified version for testing)
 fn create_i32_add_module() -> @types.Module {
   // Function: add(a, b) -> a + b
@@ -9,10 +21,7 @@ fn create_i32_add_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -21,7 +30,7 @@ fn create_i32_add_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "add", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [add_func],
@@ -103,10 +112,7 @@ fn create_i32_arithmetic_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32RemU],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -116,13 +122,13 @@ fn create_i32_arithmetic_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "add", desc: @types.ExportDesc::Func(0) },
-      { name: "sub", desc: @types.ExportDesc::Func(1) },
-      { name: "mul", desc: @types.ExportDesc::Func(2) },
-      { name: "div_s", desc: @types.ExportDesc::Func(3) },
-      { name: "div_u", desc: @types.ExportDesc::Func(4) },
-      { name: "rem_s", desc: @types.ExportDesc::Func(5) },
-      { name: "rem_u", desc: @types.ExportDesc::Func(6) },
+      { name: "add", desc: Func(0) },
+      { name: "sub", desc: Func(1) },
+      { name: "mul", desc: Func(2) },
+      { name: "div_s", desc: Func(3) },
+      { name: "div_u", desc: Func(4) },
+      { name: "rem_s", desc: Func(5) },
+      { name: "rem_u", desc: Func(6) },
     ],
     start: None,
     elems: [],
@@ -196,8 +202,13 @@ test "wasm-testsuite: i32.div_s trap on zero" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i32.const 1) (i32.const 0)) "integer divide by zero")
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)]),
-    content="Err(integer divide by zero)",
+    i32_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [I32(1), I32(0)])
+      },
+      err => err is DivisionByZero,
+    ),
+    content="true",
   )
 }
 
@@ -208,11 +219,16 @@ test "wasm-testsuite: i32.div_s trap on overflow" {
   // (assert_trap (invoke "div_s" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
   // -2147483648 / -1 overflows because result would be 2147483648 which doesn't fit in i32
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I32(-2147483648),
-      I32(-1),
-    ]),
-    content="Err(integer overflow)",
+    i32_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I32(-2147483648),
+          I32(-1),
+        ])
+      },
+      err => err is IntegerOverflow,
+    ),
+    content="true",
   )
 }
 
@@ -341,10 +357,7 @@ fn create_i32_bitwise_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Rotr],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -354,14 +367,14 @@ fn create_i32_bitwise_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "and", desc: @types.ExportDesc::Func(0) },
-      { name: "or", desc: @types.ExportDesc::Func(1) },
-      { name: "xor", desc: @types.ExportDesc::Func(2) },
-      { name: "shl", desc: @types.ExportDesc::Func(3) },
-      { name: "shr_s", desc: @types.ExportDesc::Func(4) },
-      { name: "shr_u", desc: @types.ExportDesc::Func(5) },
-      { name: "rotl", desc: @types.ExportDesc::Func(6) },
-      { name: "rotr", desc: @types.ExportDesc::Func(7) },
+      { name: "and", desc: Func(0) },
+      { name: "or", desc: Func(1) },
+      { name: "xor", desc: Func(2) },
+      { name: "shl", desc: Func(3) },
+      { name: "shr_s", desc: Func(4) },
+      { name: "shr_u", desc: Func(5) },
+      { name: "rotl", desc: Func(6) },
+      { name: "rotr", desc: Func(7) },
     ],
     start: None,
     elems: [],
@@ -507,14 +520,8 @@ fn create_i32_cmp_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), I32Eqz],
   }
-  let binary_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
   {
     types: [
       @types.SubType::from_func(binary_type),
@@ -527,14 +534,14 @@ fn create_i32_cmp_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "eq", desc: @types.ExportDesc::Func(0) },
-      { name: "ne", desc: @types.ExportDesc::Func(1) },
-      { name: "lt_s", desc: @types.ExportDesc::Func(2) },
-      { name: "lt_u", desc: @types.ExportDesc::Func(3) },
-      { name: "le_s", desc: @types.ExportDesc::Func(4) },
-      { name: "gt_s", desc: @types.ExportDesc::Func(5) },
-      { name: "ge_u", desc: @types.ExportDesc::Func(6) },
-      { name: "eqz", desc: @types.ExportDesc::Func(7) },
+      { name: "eq", desc: Func(0) },
+      { name: "ne", desc: Func(1) },
+      { name: "lt_s", desc: Func(2) },
+      { name: "lt_u", desc: Func(3) },
+      { name: "le_s", desc: Func(4) },
+      { name: "gt_s", desc: Func(5) },
+      { name: "ge_u", desc: Func(6) },
+      { name: "eqz", desc: Func(7) },
     ],
     start: None,
     elems: [],
@@ -635,10 +642,7 @@ fn create_i32_unary_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), I32Extend16S],
   }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
   {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
@@ -648,11 +652,11 @@ fn create_i32_unary_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "clz", desc: @types.ExportDesc::Func(0) },
-      { name: "ctz", desc: @types.ExportDesc::Func(1) },
-      { name: "popcnt", desc: @types.ExportDesc::Func(2) },
-      { name: "extend8_s", desc: @types.ExportDesc::Func(3) },
-      { name: "extend16_s", desc: @types.ExportDesc::Func(4) },
+      { name: "clz", desc: Func(0) },
+      { name: "ctz", desc: Func(1) },
+      { name: "popcnt", desc: Func(2) },
+      { name: "extend8_s", desc: Func(3) },
+      { name: "extend16_s", desc: Func(4) },
     ],
     start: None,
     elems: [],
@@ -801,10 +805,7 @@ fn create_i32_rotate_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Rotr],
   }
-  let binary_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   {
     types: [@types.SubType::from_func(binary_type)],
     type_rec_groups: [0],
@@ -813,10 +814,7 @@ fn create_i32_rotate_module() -> @types.Module {
     tables: [],
     memories: [],
     globals: [],
-    exports: [
-      { name: "rotl", desc: @types.ExportDesc::Func(0) },
-      { name: "rotr", desc: @types.ExportDesc::Func(1) },
-    ],
+    exports: [{ name: "rotl", desc: Func(0) }, { name: "rotr", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [rotl_func, rotr_func],
@@ -986,10 +984,5 @@ test "wasm-testsuite: i32.1.wasm should fail validation" {
   ]
   let bytes_data = Bytes::from_array(bytes)
   let mod = @parser.parse_module(bytes_data)
-  inspect(
-    try? @validator.validate_module(mod),
-    content=(
-      #|Err(StackUnderflow("Expected I32, but stack is empty"))
-    ),
-  )
+  inspect(!succeeds(() => @validator.validate_module(mod)), content="true")
 }

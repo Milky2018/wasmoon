@@ -235,7 +235,7 @@ test "gc jit: null struct arg is_null" {
     #|    (ref.is_null (local.get 0))
     #|  )
     #|)
-  let result = compare_jit_interp(source, "test", [@types.Value::Null])
+  let result = compare_jit_interp(source, "test", [Null])
   inspect(result, content="matched")
 }
 

@@ -1372,7 +1372,7 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
   for elem in mod.elems {
     match elem.mode {
       Active(table_idx, offset_expr) =>
-        if table_idx == 0 && elem.type_ is @types.FuncRef {
+        if table_idx == 0 && elem.type_ is FuncRef {
           // Simplified encoding for table 0 with funcref
           w.write_byte(0x00)
           encode_instructions(w, offset_expr)
@@ -1382,7 +1382,7 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
           for init_expr in elem.init {
             // Extract function index from ref.func instruction
             match init_expr {
-              [@types.RefFunc(idx)] => w.write_u32(idx)
+              [RefFunc(idx)] => w.write_u32(idx)
               _ => w.write_u32(0) // fallback
             }
           }

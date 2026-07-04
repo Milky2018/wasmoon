@@ -70,7 +70,7 @@ pub struct JITDebugDB {
 
 ///|
 pub fn JITDebugDB::new() -> JITDebugDB {
-  { entries: Map::new() }
+  { entries: Map([]) }
 }
 
 ///|
@@ -112,7 +112,7 @@ pub suberror JITModuleLoadError {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for JITModuleLoadError with output(self, logger) {
+pub impl Show for JITModuleLoadError with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -157,8 +157,8 @@ struct JITModule {
 ///|
 pub fn JITModule::new() -> JITModule {
   {
-    functions: Map::new(),
-    by_name: Map::new(),
+    functions: Map([]),
+    by_name: Map([]),
     address_ranges: [],
     context: None,
     context_ptr: 0L,
@@ -893,22 +893,22 @@ pub fn JITModule::get_last_trap_report(self : JITModule) -> TrapReport? {
 ///|
 fn value_type_may_hold_gc_ref(ty : @types.ValueType) -> Bool {
   match ty {
-    @types.AnyRef
-    | @types.ExnRef
-    | @types.StructRef
-    | @types.ArrayRef
-    | @types.RefStruct(_)
-    | @types.RefNullStruct(_)
-    | @types.RefArray(_)
-    | @types.RefNullArray(_)
-    | @types.RefAny
-    | @types.RefEq
-    | @types.RefNullEq
-    | @types.RefI31
-    | @types.RefNullI31
-    | @types.RefStructAbs
-    | @types.RefArrayAbs
-    | @types.NullRef => true
+    AnyRef
+    | ExnRef
+    | StructRef
+    | ArrayRef
+    | RefStruct(_)
+    | RefNullStruct(_)
+    | RefArray(_)
+    | RefNullArray(_)
+    | RefAny
+    | RefEq
+    | RefNullEq
+    | RefI31
+    | RefNullI31
+    | RefStructAbs
+    | RefArrayAbs
+    | NullRef => true
     _ => false
   }
 }
@@ -954,7 +954,7 @@ pub fn JITModule::call_with_context(
       // Calculate number of result slots (V128 needs 2 slots, others need 1)
       let mut num_result_slots = 0
       for result_type in func.result_types {
-        if result_type is @types.ValueType::V128 {
+        if result_type is V128 {
           num_result_slots = num_result_slots + 2
         } else {
           num_result_slots = num_result_slots + 1

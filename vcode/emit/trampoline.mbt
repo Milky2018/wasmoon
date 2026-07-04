@@ -55,12 +55,12 @@ fn generate_trampoline_ir(
   let builder = @ir.IRBuilder::new("trampoline")
 
   // Trampoline parameters: vmctx, values_vec, func_ptr
-  let vmctx = builder.add_param(@ir.Type::I64)
-  let values_vec = builder.add_param(@ir.Type::I64)
-  let func_ptr = builder.add_param(@ir.Type::I64)
+  let vmctx = builder.add_param(I64)
+  let values_vec = builder.add_param(I64)
+  let func_ptr = builder.add_param(I64)
 
   // Result: trap code (i64 for simplicity)
-  builder.add_result(@ir.Type::I64)
+  builder.add_result(I64)
 
   // Create entry block and switch to it
   let entry = builder.create_block()
@@ -76,13 +76,13 @@ fn generate_trampoline_ir(
     let ir_type = type_code_to_ir_type(param_type)
     wasm_arg_types.push(ir_type)
     match ir_type {
-      @ir.Type::V128 => {
+      V128 => {
         // Load low 64 bits
         let offset_low = builder.iconst_i64(current_offset.to_int64())
-        let low = builder.load_ptr(@ir.Type::I64, values_vec, offset_low)
+        let low = builder.load_ptr(I64, values_vec, offset_low)
         // Load high 64 bits
         let offset_high = builder.iconst_i64((current_offset + 8).to_int64())
-        let high = builder.load_ptr(@ir.Type::I64, values_vec, offset_high)
+        let high = builder.load_ptr(I64, values_vec, offset_high)
         // Construct V128 from two I64 values
         let vec = builder.v128_splat64(low)
         let arg = builder.v128_replace64(vec, high, 1)
@@ -116,15 +116,15 @@ fn generate_trampoline_ir(
   for i, result_val in results {
     let ir_type = wasm_result_types[i]
     match ir_type {
-      @ir.Type::V128 => {
+      V128 => {
         // Extract and store low 64 bits
         let low = builder.v128_extract64(result_val, 0)
         let offset_low = builder.iconst_i64(result_offset.to_int64())
-        builder.store_ptr(@ir.Type::I64, values_vec, low, offset_low)
+        builder.store_ptr(I64, values_vec, low, offset_low)
         // Extract and store high 64 bits
         let high = builder.v128_extract64(result_val, 1)
         let offset_high = builder.iconst_i64((result_offset + 8).to_int64())
-        builder.store_ptr(@ir.Type::I64, values_vec, high, offset_high)
+        builder.store_ptr(I64, values_vec, high, offset_high)
         result_offset = result_offset + 16
       }
       _ => {
@@ -145,12 +145,12 @@ fn generate_trampoline_ir(
 /// Convert type code to IR type
 fn type_code_to_ir_type(code : Int) -> @ir.Type {
   match code {
-    0 => @ir.Type::I32
-    1 => @ir.Type::I64
-    2 => @ir.Type::F32
-    3 => @ir.Type::F64
-    4 => @ir.Type::V128
-    _ => @ir.Type::I64 // Default
+    0 => I32
+    1 => I64
+    2 => F32
+    3 => F64
+    4 => V128
+    _ => I64 // Default
   }
 }
 

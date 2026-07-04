@@ -13,12 +13,12 @@ pub(all) enum ComponentErrorCode {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for ComponentErrorFormat with output(self, logger) {
+pub impl Show for ComponentErrorFormat with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
 
 ///|
-pub impl Show for ComponentErrorCode with output(self, logger) {
+pub impl Show for ComponentErrorCode with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
 
@@ -59,10 +59,10 @@ fn component_validation_error_code(
   e : @component_model.ComponentValidationError,
 ) -> ComponentErrorCode {
   match e {
-    @component_model.UnsupportedCoreSort(_)
-    | @component_model.UnsupportedComponentImport
-    | @component_model.UnsupportedComponentExport => CompUnsupported
-    @component_model.SectionParseError(_, msg) =>
+    UnsupportedCoreSort(_)
+    | UnsupportedComponentImport
+    | UnsupportedComponentExport => CompUnsupported
+    SectionParseError(_, msg) =>
       if msg.contains("unsupported") {
         CompUnsupported
       } else {

@@ -7,10 +7,7 @@ fn instantiate_canon_waitable_set_new(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   // Component-model async ABI: even if the current task is synchronous (e.g. core start),
@@ -44,7 +41,7 @@ fn instantiate_canon_waitable_set_new(
         // previous run (before a suspension forced replay), recreate it so the
         // cached id remains usable.
         match v {
-          [@types.Value::I32(id)] =>
+          [I32(id)] =>
             if async_state.waitable_sets.get(handle_key(owner_component_id, id))
               is None {
               async_state.waitable_sets.set(
@@ -84,10 +81,7 @@ fn instantiate_canon_waitable_set_wait(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   if memidx < 0 || memidx >= state.core_mems.length() {
@@ -103,7 +97,7 @@ fn instantiate_canon_waitable_set_wait(
     let mem = store.get_mem(mem_addr) catch {
       e => {
         trap_canon(e.to_string())
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     fn ensure_subtask_return_ready(ev : WaitEvent) -> Unit {
@@ -126,11 +120,10 @@ fn instantiate_canon_waitable_set_wait(
           None => []
         }
         let (ft, ftypes) = match st.driver {
-          SubtaskDriver::CallbackLifted(t) =>
+          CallbackLifted(t) =>
             match t.func {
-              ComponentFunc::Host(func_type, types, _) => (func_type, types)
-              ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
-                (func_type, types)
+              Host(func_type, types, _) => (func_type, types)
+              Lifted(_, func_type, _, types, _, _, _, _) => (func_type, types)
             }
         }
         let mem2 = store.get_mem(mem_addr2) catch { _ => return }
@@ -145,14 +138,8 @@ fn instantiate_canon_waitable_set_wait(
           _e => return
         }
         match core_vals {
-          [@types.Value::I32(n)] =>
-            mem2.store_i32(st.retptr, n) catch {
-              _ => ()
-            }
-          [@types.Value::I64(n)] =>
-            mem2.store_i64(st.retptr, n) catch {
-              _ => ()
-            }
+          [I32(n)] => mem2.store_i32(st.retptr, n) catch { _ => () }
+          [I64(n)] => mem2.store_i64(st.retptr, n) catch { _ => () }
           _ => ()
         }
       }
@@ -190,7 +177,7 @@ fn instantiate_canon_waitable_set_wait(
     }
 
     match args {
-      [@types.Value::I32(ws), @types.Value::I32(ptr)] => {
+      [I32(ws), I32(ptr)] => {
         let ws_key = handle_key(owner_component_id, ws)
         if !async_state.task_can_block[0] {
           // Synchronous tasks generally cannot block. One exception is waiting on
@@ -205,7 +192,7 @@ fn instantiate_canon_waitable_set_wait(
               // Even if the argument is invalid (e.g. unaligned), component-spec
               // expects synchronous tasks to trap before attempting to block.
               trap_canon("cannot block a synchronous task before returning")
-              return [@types.Value::I32(0)]
+              return [I32(0)]
             }
             while !waitable_set_has_event(async_state, ws_key) {
               let progressed = progress_one_subtask_intrinsic(
@@ -213,21 +200,21 @@ fn instantiate_canon_waitable_set_wait(
               ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
-                  return [@types.Value::I32(0)]
+                  return [I32(0)]
                 }
               }
               if !progressed {
                 trap_canon(
                   "wasm trap: deadlock detected: event loop cannot make further progress",
                 )
-                return [@types.Value::I32(0)]
+                return [I32(0)]
               }
             }
           }
         }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
         let task_id = current_task_id(async_state)
         let cur = if async_state.wait_cursor_stack.length() == 0 {
@@ -285,7 +272,7 @@ fn instantiate_canon_waitable_set_wait(
             set_canon_debug_message(
               "waitable-set.wait(replay cur=\{cur} ws=\{ws})-> code=\{ev.code} index=\{ev.index} payload=\{ev.payload}\{subtask_result_dbg(ev)}",
             )
-            [@types.Value::I32(ev.code)]
+            [I32(ev.code)]
           }
           None => {
             // Cooperative wait: suspend the current task until an event exists.
@@ -299,14 +286,14 @@ fn instantiate_canon_waitable_set_wait(
                 }
                 async_state.waiting_ws.set(task_id, ws_key)
               }
-              canon_suspend[0] = Some(CanonSuspend::Wait(ws_key))
-              raise @runtime.RuntimeError::Unreachable
+              canon_suspend[0] = Some(Wait(ws_key))
+              raise Unreachable
             }
             let ev = match pop_waitable_event(async_state, ws_key) {
               Some(ev) => ev
               None => {
-                canon_suspend[0] = Some(CanonSuspend::Wait(ws_key))
-                raise @runtime.RuntimeError::Unreachable
+                canon_suspend[0] = Some(Wait(ws_key))
+                raise Unreachable
               }
             }
             ensure_subtask_return_ready(ev)
@@ -365,13 +352,13 @@ fn instantiate_canon_waitable_set_wait(
             set_canon_debug_message(
               "waitable-set.wait(cur=\{cur} ws=\{ws})-> code=\{ev.code} index=\{ev.index} payload=\{ev.payload}\{subtask_result_dbg(ev)}",
             )
-            [@types.Value::I32(ev.code)]
+            [I32(ev.code)]
           }
         }
       }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -385,10 +372,7 @@ fn instantiate_canon_waitable_set_poll(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   if memidx < 0 || memidx >= state.core_mems.length() {
@@ -404,14 +388,14 @@ fn instantiate_canon_waitable_set_poll(
     let mem = store.get_mem(mem_addr) catch {
       e => {
         trap_canon(e.to_string())
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     match args {
-      [@types.Value::I32(ws), @types.Value::I32(ptr)] => {
+      [I32(ws), I32(ptr)] => {
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
         let ws_key = handle_key(owner_component_id, ws)
         match pop_waitable_event(async_state, ws_key) {
@@ -423,14 +407,14 @@ fn instantiate_canon_waitable_set_poll(
             mem.store_i32(ptr + 4, ev.payload) catch {
               _ => ()
             }
-            [@types.Value::I32(ev.code)]
+            [I32(ev.code)]
           }
-          None => [@types.Value::I32(0)]
+          None => [I32(0)]
         }
       }
       _ => {
         trap_canon("type mismatch")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -442,10 +426,7 @@ fn instantiate_canon_waitable_set_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -455,7 +436,7 @@ fn instantiate_canon_waitable_set_drop(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(ws)] => {
+      [I32(ws)] => {
         let ws_key = handle_key(owner_component_id, ws)
         match async_state.waitable_sets.get(ws_key) {
           Some(set) =>
@@ -499,10 +480,7 @@ fn instantiate_canon_waitable_join(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -512,7 +490,7 @@ fn instantiate_canon_waitable_join(
       trap_canon("cannot leave component instance")
     }
     match args {
-      [@types.Value::I32(waitable), @types.Value::I32(ws)] => {
+      [I32(waitable), I32(ws)] => {
         let ws_key = handle_key(owner_component_id, ws)
         let waitable_key = handle_key(owner_component_id, waitable)
         match async_state.waitable_sets.get(ws_key) {

@@ -46,7 +46,7 @@ fn StackSlotKind::to_string(self : StackSlotKind) -> String {
 }
 
 ///|
-pub impl Show for StackSlotKind with output(self, logger) {
+pub impl Show for StackSlotKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -57,7 +57,7 @@ fn StackSlot::to_string(self : StackSlot) -> String {
 }
 
 ///|
-pub impl Show for StackSlot with output(self, logger) {
+pub impl Show for StackSlot with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -218,7 +218,7 @@ pub fn StackFrame::print(self : StackFrame) -> String {
 }
 
 ///|
-pub impl Show for StackFrame with output(self, logger) {
+pub impl Show for StackFrame with fn output(self, logger) {
   logger.write_string(self.print())
 }
 
@@ -397,7 +397,7 @@ fn AArch64StackFrame::print(self : AArch64StackFrame) -> String {
 }
 
 ///|
-pub impl Show for AArch64StackFrame with output(self, logger) {
+pub impl Show for AArch64StackFrame with fn output(self, logger) {
   logger.write_string(self.print())
 }
 

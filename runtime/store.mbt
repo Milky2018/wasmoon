@@ -181,7 +181,7 @@ pub fn Store::wrap_as_extern(
 ) -> @types.Value {
   let idx = self.wrapped_externs.length()
   self.wrapped_externs.push(value)
-  @types.Value::ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
+  ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
 }
 
 ///|
@@ -205,7 +205,7 @@ pub fn Store::unwrap_extern(
         // Host externref - return as-is (it's already an internal representation)
         value
       }
-    Null => @types.Value::Null
+    Null => Null
     _ => value
   }
 }
@@ -219,10 +219,10 @@ pub fn Store::alloc_func(
   type_idx? : Int = -1,
 ) -> Int {
   let idx = self.funcs.length()
-  self.funcs.push(FuncInst::WasmFunc(func))
+  self.funcs.push(WasmFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(FuncOwner::Unowned)
+  self.func_owners.push(Unowned)
   idx
 }
 
@@ -240,10 +240,10 @@ pub fn Store::alloc_host_func(
     _caller,
     args,
   ) => func(args)
-  self.funcs.push(FuncInst::HostFunc(wrapped))
+  self.funcs.push(HostFunc(wrapped))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(FuncOwner::HostFunc)
+  self.func_owners.push(HostFunc)
   idx
 }
 
@@ -256,10 +256,10 @@ pub fn Store::alloc_host_func_with_caller(
   type_idx? : Int = -1,
 ) -> Int {
   let idx = self.funcs.length()
-  self.funcs.push(FuncInst::HostFunc(func))
+  self.funcs.push(HostFunc(func))
   self.func_types.push(func_type)
   self.func_type_indices.push(type_idx)
-  self.func_owners.push(FuncOwner::HostFunc)
+  self.func_owners.push(HostFunc)
   idx
 }
 
@@ -309,7 +309,7 @@ pub fn Store::alloc_tag(
   let idx = self.tags.length()
   self.tags.push(tag_type)
   self.tag_type_indices.push(type_idx)
-  self.tag_owners.push(FuncOwner::Unowned)
+  self.tag_owners.push(Unowned)
   idx
 }
 
@@ -340,7 +340,7 @@ pub fn Store::get_tag_owner(self : Store, tag_addr : Int) -> ModuleInstance? {
     return None
   }
   match self.tag_owners[tag_addr] {
-    FuncOwner::Module(idx) =>
+    Module(idx) =>
       if idx >= 0 && idx < self.instances.length() {
         Some(self.instances[idx])
       } else {
@@ -382,19 +382,19 @@ fn Store::get_struct_field_type(
   field_idx : Int,
 ) -> @types.ValueType {
   if type_idx < 0 || type_idx >= self.module_types.length() {
-    return @types.ValueType::I64 // Fallback
+    return I64 // Fallback
   }
   match self.module_types[type_idx].composite {
     Struct(st) =>
       if field_idx >= 0 && field_idx < st.fields.length() {
         match st.fields[field_idx].storage_type {
           Val(vt) => vt
-          Packed(I8) | Packed(I16) => @types.ValueType::I32
+          Packed(I8) | Packed(I16) => I32
         }
       } else {
-        @types.ValueType::I64
+        I64
       }
-    _ => @types.ValueType::I64
+    _ => I64
   }
 }
 
@@ -402,15 +402,15 @@ fn Store::get_struct_field_type(
 /// Get the element type of an array from module_types
 fn Store::get_array_elem_type(self : Store, type_idx : Int) -> @types.ValueType {
   if type_idx < 0 || type_idx >= self.module_types.length() {
-    return @types.ValueType::I64
+    return I64
   }
   match self.module_types[type_idx].composite {
     Array(at) =>
       match at.element.storage_type {
         Val(vt) => vt
-        Packed(I8) | Packed(I16) => @types.ValueType::I32
+        Packed(I8) | Packed(I16) => I32
       }
-    _ => @types.ValueType::I64
+    _ => I64
   }
 }
 
@@ -424,9 +424,9 @@ pub fn Store::alloc_struct(
   match self.c_heap {
     Some(heap) =>
       heap.alloc_struct(type_idx, fields) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     None => self.heap.alloc_struct(type_idx, fields)
   }
@@ -442,9 +442,9 @@ pub fn Store::alloc_array(
   match self.c_heap {
     Some(heap) =>
       heap.alloc_array_from_values(type_idx, elements) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     None => self.heap.alloc_array(type_idx, elements)
   }
@@ -505,9 +505,9 @@ pub fn Store::array_get(
       let type_idx = heap.get_type_idx(array_idx)
       let elem_type = self.get_array_elem_type(type_idx)
       heap.array_get(array_idx, elem_idx, elem_type) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     }
     None => self.heap.array_get(array_idx, elem_idx)
@@ -525,9 +525,9 @@ pub fn Store::array_set(
   match self.c_heap {
     Some(heap) =>
       heap.array_set(array_idx, elem_idx, value) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     None => self.heap.array_set(array_idx, elem_idx, value)
   }
@@ -545,9 +545,9 @@ pub fn Store::array_fill(
   match self.c_heap {
     Some(heap) =>
       heap.array_fill(array_idx, offset, value, count) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     None => self.heap.array_fill(array_idx, offset, value, count)
   }
@@ -566,9 +566,9 @@ pub fn Store::array_copy(
   match self.c_heap {
     Some(heap) =>
       heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
-        @jit.CHeapError::OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
-        @jit.CHeapError::NullReference => raise NullReference
-        @jit.CHeapError::OutOfMemory => raise OutOfMemory
+        OutOfBoundsArrayAccess => raise OutOfBoundsArrayAccess
+        NullReference => raise NullReference
+        OutOfMemory => raise OutOfMemory
       }
     None =>
       self.heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count)
@@ -778,16 +778,16 @@ pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int 
   for func_addr in instance.func_addrs {
     if func_addr >= 0 &&
       func_addr < self.func_owners.length() &&
-      self.func_owners[func_addr] == FuncOwner::Unowned {
-      self.func_owners[func_addr] = FuncOwner::Module(instance_idx)
+      self.func_owners[func_addr] == Unowned {
+      self.func_owners[func_addr] = Module(instance_idx)
     }
   }
   // Set ownership for unowned tags
   for tag_addr in instance.tag_addrs {
     if tag_addr >= 0 &&
       tag_addr < self.tag_owners.length() &&
-      self.tag_owners[tag_addr] == FuncOwner::Unowned {
-      self.tag_owners[tag_addr] = FuncOwner::Module(instance_idx)
+      self.tag_owners[tag_addr] == Unowned {
+      self.tag_owners[tag_addr] = Module(instance_idx)
     }
   }
   instance_idx

@@ -70,8 +70,8 @@ fn await_component_func(
   }
   let caller_task_id = current_task_id(async_state)
   let callee_instance_id = match func {
-    ComponentFunc::Host(_, _, _) => -1
-    ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+    Host(_, _, _) => -1
+    Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
   }
   if callee_instance_id >= 0 &&
     caller_task_id != 0L &&
@@ -86,19 +86,18 @@ fn await_component_func(
   // Ensure this async task has a current thread handle in the callee instance's
   // handle space (affects stream/future numbering per component-spec/async).
   match func {
-    ComponentFunc::Host(_, _, _) =>
-      ensure_task_thread(async_state, caller_table.id, task_id)
-    ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
+    Host(_, _, _) => ensure_task_thread(async_state, caller_table.id, task_id)
+    Lifted(_, _, _, _, callee_table, _, _, _) =>
       ensure_task_thread(async_state, callee_table.id, task_id)
   }
   take_task_result(async_state, task_id) |> ignore
   let out = try {
     match func {
-      ComponentFunc::Host(_ft, _types, host) =>
+      Host(_ft, _types, host) =>
         host(args, caller_table) catch {
           e => raise HostCallError(e.to_string())
         }
-      ComponentFunc::Lifted(
+      Lifted(
         core_func,
         func_type,
         resources,
@@ -257,7 +256,7 @@ fn await_component_func(
               store, may_enter, core_func, core_args,
             )
             let mut code = match core_results {
-              [@types.Value::I32(n)] => n
+              [I32(n)] => n
               _ => raise CanonCallError("type mismatch")
             }
             while true {
@@ -275,9 +274,9 @@ fn await_component_func(
                 async_state.in_async_callback[0] = true
                 preset_canon_debug_message("async.callback.yield(ev=NONE)")
                 let r = call_core_func_guarded(store, may_enter, cb, [
-                  @types.Value::I32(0),
-                  @types.Value::I32(0),
-                  @types.Value::I32(0),
+                  I32(0),
+                  I32(0),
+                  I32(0),
                 ]) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -286,7 +285,7 @@ fn await_component_func(
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
-                  [@types.Value::I32(n)] => n
+                  [I32(n)] => n
                   _ => raise CanonCallError("type mismatch")
                 }
               } else if tag == 2 {
@@ -327,9 +326,9 @@ fn await_component_func(
                   "async.callback.wait(ev code=\{ev.code} index=\{ev.index} payload=\{ev.payload})\{subtask_mem_dbg(ev)}",
                 )
                 let r = call_core_func_guarded(store, may_enter, cb, [
-                  @types.Value::I32(ev.code),
-                  @types.Value::I32(ev.index),
-                  @types.Value::I32(ev.payload),
+                  I32(ev.code),
+                  I32(ev.index),
+                  I32(ev.payload),
                 ]) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -338,7 +337,7 @@ fn await_component_func(
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
-                  [@types.Value::I32(n)] => n
+                  [I32(n)] => n
                   _ => raise CanonCallError("type mismatch")
                 }
               } else {
@@ -434,9 +433,8 @@ fn step_task_once(
 ) -> TaskStep raise ComponentRuntimeError {
   fn task_owner_component_id() -> Int {
     match task.func {
-      ComponentFunc::Host(_, _, _) => caller_table.id
-      ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-        callee_table.id
+      Host(_, _, _) => caller_table.id
+      Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
     }
   }
 
@@ -461,14 +459,14 @@ fn step_task_once(
   }
 
   match task.func {
-    ComponentFunc::Host(_ft, _types, host) => {
+    Host(_ft, _types, host) => {
       (host(task.args, caller_table) catch {
         e => raise HostCallError(e.to_string())
       })
       |> ignore
-      TaskStep::Done
+      Done
     }
-    ComponentFunc::Lifted(
+    Lifted(
       core_func,
       func_type,
       resources,
@@ -514,7 +512,7 @@ fn step_task_once(
         match task.waiting_set[0] {
           Some(ws) =>
             if !waitable_set_has_event(async_state, ws) && !task.cancelled[0] {
-              return TaskStep::Blocked
+              return Blocked
             }
           None => ()
         }
@@ -544,7 +542,7 @@ fn step_task_once(
                 async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
                 1] = 0
               }
-              return TaskStep::Progressed
+              return Progressed
             }
             AsyncSuspendWait(ws) => {
               task.started[0] = false
@@ -565,12 +563,12 @@ fn step_task_once(
                 async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
                 1] = 0
               }
-              return TaskStep::Blocked
+              return Blocked
             }
             e => raise e
           }
           let code = match core_results {
-            [@types.Value::I32(n)] => n
+            [I32(n)] => n
             _ => raise CanonCallError("type mismatch")
           }
           task.code[0] = code
@@ -582,27 +580,27 @@ fn step_task_once(
               None
             },
           )
-          return if d.tag == 0 { TaskStep::Done } else { TaskStep::Progressed }
+          return if d.tag == 0 { Done } else { Progressed }
         }
         let d0 = decode_callback_code(task.code[0])
         if d0.tag == 0 {
-          return TaskStep::Done
+          return Done
         }
         if d0.tag == 1 {
           // YIELD
           let args = if task.cancelled[0] {
             task.cancelled[0] = false
             // TASK_CANCELLED=6, index=0, payload=0 (component-spec convention).
-            [@types.Value::I32(6), @types.Value::I32(0), @types.Value::I32(0)]
+            [@types.Value::I32(6), I32(0), I32(0)]
           } else {
-            [@types.Value::I32(0), @types.Value::I32(0), @types.Value::I32(0)]
+            [I32(0), I32(0), I32(0)]
           }
           async_state.stream_results_cb.remove(current_task_id(async_state))
           async_state.in_async_callback[0] = true
           let r = call_core_func_guarded(store, may_enter, cb, args)
           async_state.in_async_callback[0] = false
           let code = match r {
-            [@types.Value::I32(n)] => n
+            [I32(n)] => n
             _ => raise CanonCallError("type mismatch")
           }
           task.code[0] = code
@@ -614,7 +612,7 @@ fn step_task_once(
               None
             },
           )
-          return if d.tag == 0 { TaskStep::Done } else { TaskStep::Progressed }
+          return if d.tag == 0 { Done } else { Progressed }
         }
         if d0.tag == 2 {
           let ws_key = ws_key_from_local(d0.payload)
@@ -626,13 +624,13 @@ fn step_task_once(
             async_state.stream_results_cb.remove(current_task_id(async_state))
             async_state.in_async_callback[0] = true
             let r = call_core_func_guarded(store, may_enter, cb, [
-              @types.Value::I32(6),
-              @types.Value::I32(0),
-              @types.Value::I32(0),
+              I32(6),
+              I32(0),
+              I32(0),
             ])
             async_state.in_async_callback[0] = false
             let code = match r {
-              [@types.Value::I32(n)] => n
+              [I32(n)] => n
               _ => raise CanonCallError("type mismatch")
             }
             task.code[0] = code
@@ -644,18 +642,14 @@ fn step_task_once(
                 None
               },
             )
-            return if d.tag == 0 {
-              TaskStep::Done
-            } else {
-              TaskStep::Progressed
-            }
+            return if d.tag == 0 { Done } else { Progressed }
           }
           if !waitable_set_has_event(async_state, ws_key) {
-            return TaskStep::Blocked
+            return Blocked
           }
           let ev = match pop_waitable_event(async_state, ws_key) {
             Some(ev) => ev
-            None => return TaskStep::Blocked
+            None => return Blocked
           }
           acknowledge_waitable_event(async_state, ev)
           // Leaving the waiting state to process one event.
@@ -663,13 +657,13 @@ fn step_task_once(
           async_state.stream_results_cb.remove(current_task_id(async_state))
           async_state.in_async_callback[0] = true
           let r = call_core_func_guarded(store, may_enter, cb, [
-            @types.Value::I32(ev.code),
-            @types.Value::I32(ev.index),
-            @types.Value::I32(ev.payload),
+            I32(ev.code),
+            I32(ev.index),
+            I32(ev.payload),
           ])
           async_state.in_async_callback[0] = false
           let code = match r {
-            [@types.Value::I32(n)] => n
+            [I32(n)] => n
             _ => raise CanonCallError("type mismatch")
           }
           task.code[0] = code
@@ -681,7 +675,7 @@ fn step_task_once(
               None
             },
           )
-          return if d.tag == 0 { TaskStep::Done } else { TaskStep::Progressed }
+          return if d.tag == 0 { Done } else { Progressed }
         }
         raise CanonCallError("unsupported callback code: \{d0.tag}")
       }
@@ -692,7 +686,7 @@ fn step_task_once(
         match task.waiting_set[0] {
           Some(ws) =>
             if !waitable_set_has_event(async_state, ws) {
-              return TaskStep::Blocked
+              return Blocked
             }
           None => ()
         }
@@ -730,17 +724,17 @@ fn step_task_once(
               set_task_result(async_state, task_id, callee_table.id, vals)
             }
           }
-          TaskStep::Done
+          Done
         } catch {
           AsyncSuspendYield => {
             task.started[0] = true
             task.waiting_set[0] = None
-            TaskStep::Progressed
+            Progressed
           }
           AsyncSuspendWait(ws) => {
             task.started[0] = true
             task.waiting_set[0] = Some(ws)
-            TaskStep::Progressed
+            Progressed
           }
           e => raise e
         }
@@ -770,7 +764,7 @@ fn step_task_once(
         let task_id = current_task_id(async_state)
         async_state.task_returned.set(task_id, true)
         set_task_result(async_state, task_id, callee_table.id, vals)
-        TaskStep::Done
+        Done
       }
     }
   }
@@ -920,7 +914,7 @@ fn progress_one_subtask(
       }
     }
     if async_state.subtasks.get(next_id) is Some(st) && !task_on_stack(next_id) {
-      st.phase[0] = SubtaskPhase::Started
+      st.phase[0] = Started
       async_state.inflight_by_instance.set(key, 1)
       // Transitioned from STARTING to STARTED: notify via event.
       let owner_component_id = st.caller_table.id
@@ -937,7 +931,7 @@ fn progress_one_subtask(
   let started_ids : Array[Int64] = []
   for kv in async_state.subtasks.iter() {
     let (task_id, st0) = kv
-    if st0.phase[0] == SubtaskPhase::Started && !task_on_stack(task_id) {
+    if st0.phase[0] == Started && !task_on_stack(task_id) {
       started_ids.push(task_id)
     }
   }
@@ -947,7 +941,7 @@ fn progress_one_subtask(
       Some(s) => s
       None => continue
     }
-    if st.phase[0] != SubtaskPhase::Started {
+    if st.phase[0] != Started {
       continue
     }
     if task_on_stack(task_id) {
@@ -956,14 +950,14 @@ fn progress_one_subtask(
     ensure_task_thread(async_state, st.callee_instance_id, task_id)
     push_task(async_state, task_id, true)
     let step = match st.driver {
-      SubtaskDriver::CallbackLifted(t) =>
+      CallbackLifted(t) =>
         step_task_once(t, store, st.caller_table, async_state)
     }
     pop_task(async_state)
     match step {
-      TaskStep::Blocked => ()
-      TaskStep::Progressed => return true
-      TaskStep::Done => {
+      Blocked => ()
+      Progressed => return true
+      Done => {
         drop_task_thread(async_state, task_id)
         if st.detached {
           // Detached background tasks are not observable by core code; avoid emitting events
@@ -1017,11 +1011,10 @@ fn progress_one_subtask(
               // by `component_results_to_core` via `retptr`.
               if !cancelled {
                 let (ft, ftypes) = match st.driver {
-                  SubtaskDriver::CallbackLifted(t) =>
+                  CallbackLifted(t) =>
                     match t.func {
-                      ComponentFunc::Host(func_type, types, _) =>
-                        (func_type, types)
-                      ComponentFunc::Lifted(_, func_type, _, types, _, _, _, _) =>
+                      Host(func_type, types, _) => (func_type, types)
+                      Lifted(_, func_type, _, types, _, _, _, _) =>
                         (func_type, types)
                     }
                 }
@@ -1045,14 +1038,8 @@ fn progress_one_subtask(
                   Some(st.retptr),
                 )
                 match core_vals {
-                  [@types.Value::I32(n)] =>
-                    mem.store_i32(st.retptr, n) catch {
-                      _ => ()
-                    }
-                  [@types.Value::I64(n)] =>
-                    mem.store_i64(st.retptr, n) catch {
-                      _ => ()
-                    }
+                  [I32(n)] => mem.store_i32(st.retptr, n) catch { _ => () }
+                  [I64(n)] => mem.store_i64(st.retptr, n) catch { _ => () }
                   _ => ()
                 }
               }
@@ -1063,7 +1050,7 @@ fn progress_one_subtask(
           None => ()
         }
         // Mark returned and emit RETURNED event. The return value itself is written by the lower wrapper.
-        st.phase[0] = SubtaskPhase::Returned
+        st.phase[0] = Returned
         async_state.inflight_by_instance.set(st.bp_key, 0)
         let owner_component_id = st.caller_table.id
         let payload = if cancelled {
@@ -1120,9 +1107,8 @@ fn call_component_func(
       ensure_task_thread(async_state, resource_table.id, task_id)
     } else {
       let inst_id = match func {
-        ComponentFunc::Host(_, _, _) => resource_table.id
-        ComponentFunc::Lifted(_, _, _, _, callee_table, _, _, _) =>
-          callee_table.id
+        Host(_, _, _) => resource_table.id
+        Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
       // Some synchronous component instances still need the implicit thread
       // handle slot reserved for component-spec/async handle numbering.
@@ -1157,7 +1143,7 @@ fn call_component_func_in_task(
   async_state : AsyncState,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   match func {
-    ComponentFunc::Host(func_type, _types, host) =>
+    Host(func_type, _types, host) =>
       if func_type.is_async {
         await_component_func(func, args, store, resource_table, async_state)
       } else {
@@ -1165,7 +1151,7 @@ fn call_component_func_in_task(
           e => raise HostCallError(e.to_string())
         }
       }
-    ComponentFunc::Lifted(
+    Lifted(
       core_func,
       func_type,
       resources,
@@ -1248,7 +1234,7 @@ fn call_component_func_in_task(
                 e => raise e
               }
               code = match core_results {
-                [@types.Value::I32(n)] => n
+                [I32(n)] => n
                 _ => raise CanonCallError("type mismatch")
               }
               break
@@ -1266,9 +1252,9 @@ fn call_component_func_in_task(
                 )
                 async_state.in_async_callback[0] = true
                 let r = call_core_func_guarded(store, may_enter, cb, [
-                  @types.Value::I32(0),
-                  @types.Value::I32(0),
-                  @types.Value::I32(0),
+                  I32(0),
+                  I32(0),
+                  I32(0),
                 ]) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -1277,7 +1263,7 @@ fn call_component_func_in_task(
                 }
                 async_state.in_async_callback[0] = false
                 code = match r {
-                  [@types.Value::I32(n)] => n
+                  [I32(n)] => n
                   _ => raise CanonCallError("type mismatch")
                 }
               } else if tag == 2 {
@@ -1428,9 +1414,9 @@ fn call_component_func_in_task(
         match func_type.result {
           Some(TypeIdx(ti)) =>
             match types.get(ti) {
-              Some(Some(TypeDef::Own(_resource_tyidx))) =>
+              Some(Some(Own(_resource_tyidx))) =>
                 match component_results {
-                  [ComponentValue::U32(h)] => {
+                  [U32(h)] => {
                     let entry = match callee_table.free(h) {
                       Some(e) => e
                       None => raise CanonCallError("unknown handle index \{h}")

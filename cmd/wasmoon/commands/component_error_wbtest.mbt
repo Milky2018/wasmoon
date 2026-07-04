@@ -14,9 +14,7 @@ test "component error code mapping: enum string is stable" {
 test "component error code mapping: validate unsupported -> COMP_UNSUPPORTED" {
   inspect(
     component_error_code_string(
-      component_validation_error_code(
-        @component_model.UnsupportedComponentImport,
-      ),
+      component_validation_error_code(UnsupportedComponentImport),
     ),
     content="COMP_UNSUPPORTED",
   )

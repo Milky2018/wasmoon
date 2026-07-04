@@ -24,7 +24,7 @@ pub fn GlobalInstance::set(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   if !self.type_.mutable {
-    raise RuntimeError::TypeMismatch // attempting to mutate immutable global
+    raise TypeMismatch // attempting to mutate immutable global
   }
   self.value = value
 }

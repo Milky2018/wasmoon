@@ -14,10 +14,7 @@ fn module_with_imported_func(expected_type : @types.FuncType) -> @types.Module {
 ///|
 test "validate_imports_with_diagnostics: missing import" {
   let store = @runtime.Store::new()
-  let mod = module_with_imported_func({
-    params: [],
-    results: [@types.ValueType::I32],
-  })
+  let mod = module_with_imported_func({ params: [], results: [I32] })
   let result = validate_imports_with_diagnostics(
     store,
     mod,
@@ -36,10 +33,7 @@ test "validate_imports_with_diagnostics: missing import" {
 ///|
 test "validate_imports_with_diagnostics: import kind mismatch" {
   let store = @runtime.Store::new()
-  let mod = module_with_imported_func({
-    params: [],
-    results: [@types.ValueType::I32],
-  })
+  let mod = module_with_imported_func({ params: [], results: [I32] })
   let mem_addr = store.alloc_mem(@runtime.Memory::new(1, None))
   let imports = @runtime.Imports::new()
   imports.add_memory("env", "f", mem_addr)
@@ -60,13 +54,10 @@ test "validate_imports_with_diagnostics: import kind mismatch" {
 ///|
 test "validate_imports_with_diagnostics: function signature mismatch" {
   let store = @runtime.Store::new()
-  let mod = module_with_imported_func({
-    params: [],
-    results: [@types.ValueType::I32],
-  })
+  let mod = module_with_imported_func({ params: [], results: [I32] })
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => [I64(1L)],
-    func_type={ params: [], results: [@types.ValueType::I64] },
+    func_type={ params: [], results: [I64] },
     type_idx=0,
   )
   let imports = @runtime.Imports::new()
@@ -83,10 +74,7 @@ test "validate_imports_with_diagnostics: function signature mismatch" {
 ///|
 test "instantiate_module_with_import_diagnostics: returns import error" {
   let store = @runtime.Store::new()
-  let mod = module_with_imported_func({
-    params: [],
-    results: [@types.ValueType::I32],
-  })
+  let mod = module_with_imported_func({ params: [], results: [I32] })
   let result = instantiate_module_with_import_diagnostics(
     store,
     mod,
@@ -101,13 +89,10 @@ test "instantiate_module_with_import_diagnostics: returns import error" {
 ///|
 test "instantiate_module_with_import_diagnostics: returns ok on valid imports" {
   let store = @runtime.Store::new()
-  let mod = module_with_imported_func({
-    params: [],
-    results: [@types.ValueType::I32],
-  })
+  let mod = module_with_imported_func({ params: [], results: [I32] })
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => [I32(9)],
-    func_type={ params: [], results: [@types.ValueType::I32] },
+    func_type={ params: [], results: [I32] },
     type_idx=0,
   )
   let imports = @runtime.Imports::new()

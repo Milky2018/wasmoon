@@ -16,23 +16,23 @@ fn MachineCode::emit_instruction_x86_64(
   let isa = @isa.ISA::current()
   fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
     match kind {
-      @instr.CmpKind::Eq => @instr.Cond::Eq
-      @instr.CmpKind::Ne => @instr.Cond::Ne
-      @instr.CmpKind::Slt => @instr.Cond::Lt
-      @instr.CmpKind::Sle => @instr.Cond::Le
-      @instr.CmpKind::Sgt => @instr.Cond::Gt
-      @instr.CmpKind::Sge => @instr.Cond::Ge
-      @instr.CmpKind::Ult => @instr.Cond::Lo
-      @instr.CmpKind::Ule => @instr.Cond::Ls
-      @instr.CmpKind::Ugt => @instr.Cond::Hi
-      @instr.CmpKind::Uge => @instr.Cond::Hs
+      Eq => Eq
+      Ne => Ne
+      Slt => Lt
+      Sle => Le
+      Sgt => Gt
+      Sge => Ge
+      Ult => Lo
+      Ule => Ls
+      Ugt => Hi
+      Uge => Hs
     }
   }
 
   fn reg_class_of(reg : @abi.Reg) -> @abi.RegClass {
     match reg {
-      @abi.Physical(preg) => preg.class
-      @abi.Virtual(vreg) => vreg.class
+      Physical(preg) => preg.class
+      Virtual(vreg) => vreg.class
     }
   }
 
@@ -50,9 +50,8 @@ fn MachineCode::emit_instruction_x86_64(
       return
     }
     match class {
-      @abi.Int => self.x86_emit_mov_rr(dst, src)
-      @abi.Float32 | @abi.Float64 | @abi.Vector =>
-        self.x86_emit_movaps_xmm_xmm(dst, src)
+      Int => self.x86_emit_mov_rr(dst, src)
+      Float32 | Float64 | Vector => self.x86_emit_movaps_xmm_xmm(dst, src)
     }
   }
 
@@ -174,19 +173,16 @@ fn MachineCode::emit_instruction_x86_64(
       return false
     }
     match ty {
-      @instr.MemType::I32 | @instr.MemType::I64 => {
+      I32 | I64 => {
         match ext {
-          @instr.IndexExtend::None =>
-            if rt != index {
-              self.x86_emit_mov_rr(rt, index)
-            }
-          @instr.IndexExtend::Uxtw =>
+          None => if rt != index { self.x86_emit_mov_rr(rt, index) }
+          Uxtw =>
             if rt != index {
               self.x86_emit_mov_rr32(rt, index)
             } else {
               self.x86_emit_mov_rr32(rt, rt)
             }
-          @instr.IndexExtend::Sxtw =>
+          Sxtw =>
             if rt != index {
               self.x86_emit_movsxd_r64_r32(rt, index)
             } else {
@@ -195,11 +191,11 @@ fn MachineCode::emit_instruction_x86_64(
         }
         if can_use_scaled_amode && (rt & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
                 rt, base, rt, shift, offset,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
                 rt, base, rt, shift, offset,
               )
@@ -212,11 +208,11 @@ fn MachineCode::emit_instruction_x86_64(
         }
         if (rt & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
                 rt, base, rt, 0, offset,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
                 rt, base, rt, 0, offset,
               )
@@ -226,8 +222,8 @@ fn MachineCode::emit_instruction_x86_64(
         }
         self.x86_emit_add_rr(rt, base)
         match ty {
-          @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rt, offset)
-          @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rt, offset)
+          I32 => self.x86_emit_mov_r32_m32(rt, rt, offset)
+          I64 => self.x86_emit_mov_r64_m64(rt, rt, offset)
           _ => ()
         }
         true
@@ -278,9 +274,9 @@ fn MachineCode::emit_instruction_x86_64(
     }
 
     // If not equal, use native min/max.
-    self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_min_max) // JNZ
+    self.x86_emit_jcc_rel32(Ne, do_min_max) // JNZ
     // If unordered (NaN), propagate NaN via add.
-    self.x86_emit_jcc_rel32(@instr.Cond::Ps, propagate_nan) // JP
+    self.x86_emit_jcc_rel32(Ps, propagate_nan) // JP
 
     // Ordered and equal: merge sign bits to handle -0 vs +0.
     if is_f32 {
@@ -302,7 +298,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_addsd_xmm_xmm(rd, lhs_reg)
     }
     // PF is still set from the UCOMIS* above, so JP is always taken here.
-    self.x86_emit_jcc_rel32(@instr.Cond::Ps, done)
+    self.x86_emit_jcc_rel32(Ps, done)
     self.define_label(do_min_max)
     if is_f32 {
       if is_min {
@@ -320,7 +316,7 @@ fn MachineCode::emit_instruction_x86_64(
 
   self.annotate(inst.to_string())
   match inst.opcode {
-    @instr.Umulh => {
+    Umulh => {
       // Unsigned multiply high: rd = (lhs * rhs) >> 64.
       //
       // amd64 encoding uses implicit RAX/RDX: MUL r/m64 computes RDX:RAX.
@@ -336,7 +332,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, 2)
       }
     }
-    @instr.Smulh => {
+    Smulh => {
       // Signed multiply high: rd = (lhs * rhs) >> 64.
       //
       // amd64 encoding uses implicit RAX/RDX: IMUL r/m64 computes RDX:RAX.
@@ -352,7 +348,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, 2)
       }
     }
-    @instr.Smull => {
+    Smull => {
       // Signed widening multiply: sign-extend i32 operands, keep low 64 bits.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -367,7 +363,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_movsxd_r64_r32(rhs, rhs)
       self.x86_emit_imul_rr(rd, rhs)
     }
-    @instr.Umull => {
+    Umull => {
       // Unsigned widening multiply: zero-extend i32 operands, keep low 64 bits.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -377,7 +373,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr32(rhs, rm)
       self.x86_emit_imul_rr(rd, rhs)
     }
-    @instr.Add(is_64) => {
+    Add(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -425,7 +421,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_add_rr32(rd, rm)
       }
     }
-    @instr.Sub(is_64) => {
+    Sub(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -455,7 +451,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sub_rr32(rd, rm)
       }
     }
-    @instr.AddImm(imm, is_64) => {
+    AddImm(imm, is_64) => {
       // Cranelift-style: prefer direct reg-imm ALU forms (imm8/imm32) and
       // only fall back to scratch materialization for out-of-range immediates.
       let rd = wreg_num(inst.defs[0])
@@ -489,7 +485,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.SubImm(imm, is_64) => {
+    SubImm(imm, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -521,7 +517,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.FAdd(is_f32) => {
+    FAdd(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -532,7 +528,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_addsd_xmm_xmm(rd, src)
       }
     }
-    @instr.FSub(is_f32) => {
+    FSub(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -543,7 +539,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_subsd_xmm_xmm(rd, src)
       }
     }
-    @instr.FMul(is_f32) => {
+    FMul(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -554,7 +550,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mulsd_xmm_xmm(rd, src)
       }
     }
-    @instr.FDiv(is_f32) => {
+    FDiv(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -565,7 +561,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_divsd_xmm_xmm(rd, src)
       }
     }
-    @instr.FSqrt(is_f32) => {
+    FSqrt(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if rd != src {
@@ -577,7 +573,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sqrtsd_xmm_xmm(rd, rd)
       }
     }
-    @instr.FAbs(is_f32) => {
+    FAbs(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if rd != src {
@@ -598,7 +594,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_andpd_xmm_xmm(rd, mask)
       }
     }
-    @instr.FNeg(is_f32) => {
+    FNeg(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if rd != src {
@@ -619,19 +615,19 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xorpd_xmm_xmm(rd, mask)
       }
     }
-    @instr.FMin(is_f32) => {
+    FMin(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       emit_scalar_min_max_seq(self, is_f32, true, rd, lhs, rhs)
     }
-    @instr.FMax(is_f32) => {
+    FMax(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       emit_scalar_min_max_seq(self, is_f32, false, rd, lhs, rhs)
     }
-    @instr.FCeil(is_f32) => {
+    FCeil(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -640,7 +636,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 2)
       }
     }
-    @instr.FFloor(is_f32) => {
+    FFloor(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -649,7 +645,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 1)
       }
     }
-    @instr.FTrunc(is_f32) => {
+    FTrunc(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -658,7 +654,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 3)
       }
     }
-    @instr.FNearest(is_f32) => {
+    FNearest(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -667,7 +663,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundsd_xmm_xmm_imm8(rd, src, 0)
       }
     }
-    @instr.Mul(is_64) => {
+    Mul(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -689,7 +685,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_imul_rr32(rd, src)
       }
     }
-    @instr.Madd => {
+    Madd => {
       // rd = acc + (src1 * src2)  (i64 only; generated by lowering patterns)
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -703,7 +699,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, tmp)
       }
     }
-    @instr.Msub => {
+    Msub => {
       // rd = acc - (src1 * src2)  (i64 only; generated by lowering patterns)
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -717,7 +713,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_sub_rr(rd, tmp)
     }
-    @instr.Mneg => {
+    Mneg => {
       // rd = -(src1 * src2)  (i64 only; generated by lowering patterns)
       let rd = wreg_num(inst.defs[0])
       let src1 = reg_num(inst.uses[0])
@@ -730,7 +726,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, tmp)
       }
     }
-    @instr.Madd32 => {
+    Madd32 => {
       // rd = acc + (src1 * src2)  (i32 form)
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -744,7 +740,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr32(rd, tmp)
     }
-    @instr.Msub32 => {
+    Msub32 => {
       // rd = acc - (src1 * src2)  (i32 form)
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -758,7 +754,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_sub_rr32(rd, tmp)
     }
-    @instr.Mneg32 => {
+    Mneg32 => {
       // rd = -(src1 * src2)  (i32 form)
       let rd = wreg_num(inst.defs[0])
       let src1 = reg_num(inst.uses[0])
@@ -769,7 +765,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_xor_rr32(rd, rd)
       self.x86_emit_sub_rr32(rd, prod)
     }
-    @instr.And(is_64) => {
+    And(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -791,7 +787,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_and_rr32(rd, src)
       }
     }
-    @instr.AndImm(imm, is_64) => {
+    AndImm(imm, is_64) => {
       // Fallback: materialize imm into scratch and use and.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -810,7 +806,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_and_rr32(rd, scratch)
       }
     }
-    @instr.AndNot(is_64) => {
+    AndNot(is_64) => {
       // rd = rn & ~rm
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -839,7 +835,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_and_rr32(rd, tmp)
       }
     }
-    @instr.Or(is_64) => {
+    Or(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -861,7 +857,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, src)
       }
     }
-    @instr.OrImm(imm, is_64) => {
+    OrImm(imm, is_64) => {
       // Fallback: materialize imm into scratch and use or.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -880,7 +876,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, scratch)
       }
     }
-    @instr.OrNot(is_64) => {
+    OrNot(is_64) => {
       // rd = rn | ~rm
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -909,7 +905,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, tmp)
       }
     }
-    @instr.Xor(is_64) => {
+    Xor(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -931,7 +927,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr32(rd, src)
       }
     }
-    @instr.XorImm(imm, is_64) => {
+    XorImm(imm, is_64) => {
       // Fallback: materialize imm into scratch and use xor.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -950,7 +946,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr32(rd, scratch)
       }
     }
-    @instr.XorNot(is_64) => {
+    XorNot(is_64) => {
       // rd = rn ^ ~rm
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -979,7 +975,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_xor_rr32(rd, tmp)
       }
     }
-    @instr.AddExtend(ext, amount) => {
+    AddExtend(ext, amount) => {
       // AArch64-specific ADD with extended W operand:
       //   rd = rn + extend_32_to_64(rm) << amount
       // amd64 fallback materializes the extension explicitly.
@@ -988,10 +984,9 @@ fn MachineCode::emit_instruction_x86_64(
       let rm = reg_num(inst.uses[1])
       let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
-        @instr.IndexExtend::None =>
-          abort("x86_64 add_extend expects Uxtw or Sxtw, got None")
+        Uxtw => self.x86_emit_mov_rr32(tmp, rm)
+        Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
+        None => abort("x86_64 add_extend expects Uxtw or Sxtw, got None")
       }
       let sh = amount & 63
       if sh != 0 {
@@ -1002,7 +997,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(rd, tmp)
     }
-    @instr.SubExtend(ext, amount) => {
+    SubExtend(ext, amount) => {
       // AArch64-specific SUB with extended W operand:
       //   rd = rn - extend_32_to_64(rm) << amount
       let rd = wreg_num(inst.defs[0])
@@ -1010,10 +1005,9 @@ fn MachineCode::emit_instruction_x86_64(
       let rm = reg_num(inst.uses[1])
       let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(tmp, rm)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
-        @instr.IndexExtend::None =>
-          abort("x86_64 sub_extend expects Uxtw or Sxtw, got None")
+        Uxtw => self.x86_emit_mov_rr32(tmp, rm)
+        Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
+        None => abort("x86_64 sub_extend expects Uxtw or Sxtw, got None")
       }
       let sh = amount & 63
       if sh != 0 {
@@ -1024,7 +1018,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_sub_rr(rd, tmp)
     }
-    @instr.AddShifted(shift, amount) => {
+    AddShifted(shift, amount) => {
       // AArch64 fused "op + shifted operand" form.
       //
       // amd64 lowering may still emit these today; emulate with a scratch register:
@@ -1033,7 +1027,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+      if shift is Lsl && amount >= 0 && amount <= 3 {
         // Cranelift emit_lea does add-conversion for scale=1, disp=0 when dst aliases base/index.
         if amount == 0 {
           if rd == rn {
@@ -1061,9 +1055,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1071,11 +1065,11 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(rd, tmp)
     }
-    @instr.AddShifted32(shift, amount) => {
+    AddShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      if shift is @instr.ShiftType::Lsl && amount >= 0 && amount <= 3 {
+      if shift is Lsl && amount >= 0 && amount <= 3 {
         if amount == 0 {
           if rd == rn {
             self.x86_emit_add_rr32(rd, rm)
@@ -1100,9 +1094,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 31
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1110,7 +1104,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr32(rd, tmp)
     }
-    @instr.SubShifted(shift, amount) => {
+    SubShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1119,9 +1113,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1129,7 +1123,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_sub_rr(rd, tmp)
     }
-    @instr.SubShifted32(shift, amount) => {
+    SubShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1138,9 +1132,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 31
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1148,7 +1142,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_sub_rr32(rd, tmp)
     }
-    @instr.AndShifted(shift, amount) => {
+    AndShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1157,9 +1151,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1167,7 +1161,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_and_rr(rd, tmp)
     }
-    @instr.AndShifted32(shift, amount) => {
+    AndShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1176,9 +1170,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 31
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1186,7 +1180,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_and_rr32(rd, tmp)
     }
-    @instr.OrShifted(shift, amount) => {
+    OrShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1195,9 +1189,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1205,7 +1199,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_or_rr(rd, tmp)
     }
-    @instr.OrShifted32(shift, amount) => {
+    OrShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1214,9 +1208,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 31
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1224,7 +1218,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_or_rr32(rd, tmp)
     }
-    @instr.XorShifted(shift, amount) => {
+    XorShifted(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1233,9 +1227,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 63
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1243,7 +1237,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_xor_rr(rd, tmp)
     }
-    @instr.XorShifted32(shift, amount) => {
+    XorShifted32(shift, amount) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1252,9 +1246,9 @@ fn MachineCode::emit_instruction_x86_64(
       let sh = amount & 31
       if sh != 0 {
         match shift {
-          @instr.ShiftType::Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
-          @instr.ShiftType::Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
-          @instr.ShiftType::Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
+          Lsl => self.x86_emit_shl_r32_imm8(tmp, sh)
+          Lsr => self.x86_emit_shr_r32_imm8(tmp, sh)
+          Asr => self.x86_emit_sar_r32_imm8(tmp, sh)
         }
       }
       if rd != rn {
@@ -1262,7 +1256,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_xor_rr32(rd, tmp)
     }
-    @instr.Not(is_64) => {
+    Not(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -1278,7 +1272,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_not_r32(rd)
       }
     }
-    @instr.Clz(is_64) => {
+    Clz(is_64) => {
       // Count leading zeros.
       //
       // Use a baseline x86_64 sequence:
@@ -1293,7 +1287,7 @@ fn MachineCode::emit_instruction_x86_64(
       if is_64 {
         self.x86_emit_mov_rr(tmp, rn)
         self.x86_emit_test_rr(tmp, tmp)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
+        self.x86_emit_jcc_rel32(Ne, nonzero)
         self.x86_emit_mov_imm64(rd, 64L)
         self.x86_emit_jmp_rel32(done)
         self.define_label(nonzero)
@@ -1304,7 +1298,7 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         self.x86_emit_mov_rr32(tmp, rn)
         self.x86_emit_test_rr32(tmp, tmp)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, nonzero)
+        self.x86_emit_jcc_rel32(Ne, nonzero)
         self.x86_emit_mov_imm64(rd, 32L)
         self.x86_emit_jmp_rel32(done)
         self.define_label(nonzero)
@@ -1314,7 +1308,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.define_label(done)
       }
     }
-    @instr.Popcnt(is_64) => {
+    Popcnt(is_64) => {
       // Population count.
       //
       // Software popcount to avoid CPU feature gating.
@@ -1419,7 +1413,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.Rbit(is_64) => {
+    Rbit(is_64) => {
       // Reverse bits.
       //
       // Software bit-reversal using shift/mask swaps.
@@ -1528,127 +1522,105 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.Move => {
+    Move => {
       let rd = wreg_num(inst.defs[0])
       let rm = reg_num(inst.uses[0])
       if rd == rm {
         return
       }
       let reg_class = match inst.defs[0].reg {
-        @abi.Physical(preg) => preg.class
-        @abi.Virtual(_) => @abi.Int
+        Physical(preg) => preg.class
+        Virtual(_) => Int
       }
       match reg_class {
-        @abi.Int => self.x86_emit_mov_rr(rd, rm)
-        @abi.Float32 | @abi.Float64 | @abi.Vector =>
-          self.x86_emit_movaps_xmm_xmm(rd, rm)
+        Int => self.x86_emit_mov_rr(rd, rm)
+        Float32 | Float64 | Vector => self.x86_emit_movaps_xmm_xmm(rd, rm)
       }
     }
-    @instr.LoadConst(v) => {
+    LoadConst(v) => {
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_imm64(rd, v)
     }
-    @instr.LoadConstF32(bits) => {
+    LoadConstF32(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
       let label = self.intern_amd64_const_f32(bits)
       self.x86_emit_lea_r64_riprel32(scratch, label)
       self.x86_emit_movss_xmm_m32(rd, scratch, 0)
     }
-    @instr.LoadConstF64(bits) => {
+    LoadConstF64(bits) => {
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
       let label = self.intern_amd64_const_f64(bits)
       self.x86_emit_lea_r64_riprel32(scratch, label)
       self.x86_emit_movsd_xmm_m64(rd, scratch, 0)
     }
-    @instr.LoadGCFuncPtr(libcall) => {
+    LoadGCFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
       let func_ptr = match libcall {
-        @instr.GCLibcall::RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
-        @instr.GCLibcall::RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
-        @instr.GCLibcall::StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
-        @instr.GCLibcall::StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
-        @instr.GCLibcall::StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
-        @instr.GCLibcall::ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
-        @instr.GCLibcall::ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
-        @instr.GCLibcall::ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
-        @instr.GCLibcall::ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
-        @instr.GCLibcall::ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
-        @instr.GCLibcall::ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
-        @instr.GCLibcall::ArrayNewData =>
-          @jit_ffi.c_jit_get_gc_array_new_data_ptr()
-        @instr.GCLibcall::ArrayNewElem =>
-          @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
-        @instr.GCLibcall::ArrayInitData =>
-          @jit_ffi.c_jit_get_gc_array_init_data_ptr()
-        @instr.GCLibcall::ArrayInitElem =>
-          @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
-        @instr.GCLibcall::TypeCheckSubtype =>
-          @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
-        @instr.GCLibcall::RegisterStructInline =>
+        RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
+        RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
+        StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
+        StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
+        StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
+        ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
+        ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
+        ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
+        ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
+        ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
+        ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
+        ArrayNewData => @jit_ffi.c_jit_get_gc_array_new_data_ptr()
+        ArrayNewElem => @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
+        ArrayInitData => @jit_ffi.c_jit_get_gc_array_init_data_ptr()
+        ArrayInitElem => @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
+        TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
+        RegisterStructInline =>
           @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
-        @instr.GCLibcall::RegisterArrayInline =>
-          @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
-        @instr.GCLibcall::AllocStructSlow =>
-          @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
-        @instr.GCLibcall::AllocArraySlow =>
-          @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
+        RegisterArrayInline => @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
+        AllocStructSlow => @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
+        AllocArraySlow => @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
       }
       self.x86_emit_mov_imm64(rd, func_ptr)
     }
-    @instr.LoadJITFuncPtr(libcall) => {
+    LoadJITFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
       let func_ptr = match libcall {
-        @instr.JITLibcall::MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
-        @instr.JITLibcall::MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
-        @instr.JITLibcall::MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
-        @instr.JITLibcall::MemoryFillMem0 =>
-          @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
-        @instr.JITLibcall::MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
-        @instr.JITLibcall::MemoryCopyMem0 =>
-          @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
-        @instr.JITLibcall::MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
-        @instr.JITLibcall::DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
-        @instr.JITLibcall::TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
-        @instr.JITLibcall::TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
-        @instr.JITLibcall::TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
-        @instr.JITLibcall::TableInit => @jit_ffi.c_jit_get_table_init_ptr()
-        @instr.JITLibcall::ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
-        @instr.JITLibcall::HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
+        MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
+        MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
+        MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
+        MemoryFillMem0 => @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
+        MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
+        MemoryCopyMem0 => @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
+        MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
+        DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
+        TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
+        TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
+        TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
+        TableInit => @jit_ffi.c_jit_get_table_init_ptr()
+        ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
+        HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
       }
       self.x86_emit_mov_imm64(rd, func_ptr)
     }
-    @instr.LoadExceptionFuncPtr(libcall) => {
+    LoadExceptionFuncPtr(libcall) => {
       let rd = wreg_num(inst.defs[0])
       let func_ptr = match libcall {
-        @instr.ExceptionLibcall::TryBegin =>
-          @jit_ffi.c_jit_get_exception_try_begin_ptr()
-        @instr.ExceptionLibcall::TryEnd =>
-          @jit_ffi.c_jit_get_exception_try_end_ptr()
-        @instr.ExceptionLibcall::Throw =>
-          @jit_ffi.c_jit_get_exception_throw_ptr()
-        @instr.ExceptionLibcall::ThrowTag =>
-          @jit_ffi.c_jit_get_exception_throw_tag_ptr()
-        @instr.ExceptionLibcall::ThrowRef =>
-          @jit_ffi.c_jit_get_exception_throw_ref_ptr()
-        @instr.ExceptionLibcall::Delegate =>
-          @jit_ffi.c_jit_get_exception_delegate_ptr()
-        @instr.ExceptionLibcall::GetTag =>
-          @jit_ffi.c_jit_get_exception_get_tag_ptr()
-        @instr.ExceptionLibcall::GetValue =>
-          @jit_ffi.c_jit_get_exception_get_value_ptr()
-        @instr.ExceptionLibcall::GetValueCount =>
-          @jit_ffi.c_jit_get_exception_get_value_count_ptr()
-        @instr.ExceptionLibcall::Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
-        @instr.ExceptionLibcall::SpillLocals =>
-          @jit_ffi.c_jit_get_exception_spill_locals_ptr()
-        @instr.ExceptionLibcall::GetSpilledLocal =>
-          @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
+        TryBegin => @jit_ffi.c_jit_get_exception_try_begin_ptr()
+        TryEnd => @jit_ffi.c_jit_get_exception_try_end_ptr()
+        Throw => @jit_ffi.c_jit_get_exception_throw_ptr()
+        ThrowTag => @jit_ffi.c_jit_get_exception_throw_tag_ptr()
+        ThrowRef => @jit_ffi.c_jit_get_exception_throw_ref_ptr()
+        Delegate => @jit_ffi.c_jit_get_exception_delegate_ptr()
+        GetTag => @jit_ffi.c_jit_get_exception_get_tag_ptr()
+        GetValue => @jit_ffi.c_jit_get_exception_get_value_ptr()
+        GetValueCount => @jit_ffi.c_jit_get_exception_get_value_count_ptr()
+        Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
+        SpillLocals => @jit_ffi.c_jit_get_exception_spill_locals_ptr()
+        GetSpilledLocal => @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
       }
       self.x86_emit_mov_imm64(rd, func_ptr)
     }
-    @instr.Cmp(kind, is_64) => {
+    Cmp(kind, is_64) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_64 {
@@ -1661,7 +1633,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_setcc_r8(cond, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
-    @instr.FCmp(kind) => {
+    FCmp(kind) => {
       // Match Cranelift x64 scalar fcmp lowering (see wasmtime cranelift x64 inst.isle `emit_fcmp`):
       // - UCOMIS* sets ZF/CF/PF; unordered => PF=1.
       // - Eq: NP && Z
@@ -1671,8 +1643,8 @@ fn MachineCode::emit_instruction_x86_64(
       let rhs = reg_num(inst.uses[1])
       let rd = wreg_num(inst.defs[0])
       let class = reg_class_of(inst.uses[0])
-      let is_f32 = class == @abi.Float32
-      if class != @abi.Float32 && class != @abi.Float64 {
+      let is_f32 = class == Float32
+      if class != Float32 && class != Float64 {
         abort("x86_64 FCmp: expected scalar float register class")
       }
       fn emit_ucomis(
@@ -1694,45 +1666,45 @@ fn MachineCode::emit_instruction_x86_64(
         scratch = isa.scratch_reg_2_index()
       }
       match kind {
-        @instr.FCmpKind::Eq => {
+        Eq => {
           emit_ucomis(self, is_f32, lhs, rhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd) // Z
-          self.x86_emit_setcc_r8(@instr.Cond::Pc, scratch) // NP (parity clear)
+          self.x86_emit_setcc_r8(Eq, rd) // Z
+          self.x86_emit_setcc_r8(Pc, scratch) // NP (parity clear)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_and_rr32(rd, scratch)
         }
-        @instr.FCmpKind::Ne => {
+        Ne => {
           emit_ucomis(self, is_f32, lhs, rhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Ne, rd) // NZ
-          self.x86_emit_setcc_r8(@instr.Cond::Ps, scratch) // P (parity set)
+          self.x86_emit_setcc_r8(Ne, rd) // NZ
+          self.x86_emit_setcc_r8(Ps, scratch) // P (parity set)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_or_rr32(rd, scratch)
         }
-        @instr.FCmpKind::Gt => {
+        Gt => {
           emit_ucomis(self, is_f32, lhs, rhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Hi, rd) // NBE (ordered >)
+          self.x86_emit_setcc_r8(Hi, rd) // NBE (ordered >)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
-        @instr.FCmpKind::Ge => {
+        Ge => {
           emit_ucomis(self, is_f32, lhs, rhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Hs, rd) // NB (ordered >=)
+          self.x86_emit_setcc_r8(Hs, rd) // NB (ordered >=)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
-        @instr.FCmpKind::Lt => {
+        Lt => {
           emit_ucomis(self, is_f32, rhs, lhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Hi, rd) // NBE (ordered <)
+          self.x86_emit_setcc_r8(Hi, rd) // NBE (ordered <)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
-        @instr.FCmpKind::Le => {
+        Le => {
           emit_ucomis(self, is_f32, rhs, lhs)
-          self.x86_emit_setcc_r8(@instr.Cond::Hs, rd) // NB (ordered <=)
+          self.x86_emit_setcc_r8(Hs, rd) // NB (ordered <=)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
       }
     }
-    @instr.FpuCmp(is_f32) => {
+    FpuCmp(is_f32) => {
       // Floating-point compare that only sets flags (no result).
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1742,7 +1714,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_ucomisd_xmm_xmm(rn, rm)
       }
     }
-    @instr.FpuSel(_is_f32, cond) => {
+    FpuSel(_is_f32, cond) => {
       // Select between two XMM values based on flags from the preceding compare.
       let rd = wreg_num(inst.defs[0])
       let true_reg = reg_num(inst.uses[0])
@@ -1757,21 +1729,21 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.define_label(done)
     }
-    @instr.FpuMaxnm(is_f32) => {
+    FpuMaxnm(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       emit_scalar_min_max_seq(self, is_f32, false, rd, lhs, rhs)
     }
-    @instr.FpuMinnm(is_f32) => {
+    FpuMinnm(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       emit_scalar_min_max_seq(self, is_f32, true, rd, lhs, rhs)
     }
-    @instr.TrapIf(cond, trap_code) => {
+    TrapIf(cond, trap_code) => {
       // Trap if condition is true (based on the most recent flags).
-      if cond is @instr.Cond::Al {
+      if cond is Al {
         self.x86_emit_trap_imm16(trap_code)
         return
       }
@@ -1780,40 +1752,40 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
     }
-    @instr.TrapIfUgt(trap_code) => {
+    TrapIfUgt(trap_code) => {
       // Trap if lhs > rhs (unsigned).
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       self.x86_emit_cmp_rr(lhs, rhs)
       let done = self.new_internal_label()
-      self.x86_emit_jcc_rel32(@instr.Cond::Ls, done)
+      self.x86_emit_jcc_rel32(Ls, done)
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
     }
-    @instr.TrapIfUge(trap_code) => {
+    TrapIfUge(trap_code) => {
       // Trap if lhs >= rhs (unsigned).
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
       self.x86_emit_cmp_rr(lhs, rhs)
       let done = self.new_internal_label()
-      self.x86_emit_jcc_rel32(@instr.Cond::Lo, done)
+      self.x86_emit_jcc_rel32(Lo, done)
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
     }
-    @instr.TypeCheckIndirect(expected_type) => {
+    TypeCheckIndirect(expected_type) => {
       // Check if actual_type == expected_type, trap if not.
       //
       // Uses: [actual_type_vreg]
       let actual_type_reg = reg_num(inst.uses[0])
       self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
       let ok = self.new_internal_label()
-      self.x86_emit_jcc_rel32(@instr.Cond::Eq, ok)
+      self.x86_emit_jcc_rel32(Eq, ok)
       // Trap code matches the AArch64 brk immediate used for indirect-call type
       // mismatch.
       self.x86_emit_trap_imm16(2)
       self.define_label(ok)
     }
-    @instr.TypeCheckSubtypeIndirect(expected_type) => {
+    TypeCheckSubtypeIndirect(expected_type) => {
       // Fast path for call_indirect type checks:
       // - If actual_type == expected_type: do nothing.
       // - Otherwise: call the runtime subtype checker (traps on failure).
@@ -1822,7 +1794,7 @@ fn MachineCode::emit_instruction_x86_64(
       let actual_type_reg = reg_num(inst.uses[0])
       self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
       let done = self.new_internal_label()
-      self.x86_emit_jcc_rel32(@instr.Cond::Eq, done)
+      self.x86_emit_jcc_rel32(Eq, done)
 
       // Slow path: call gc_type_check_subtype_impl(actual, expected).
       // SysV AMD64 args: rdi, rsi.
@@ -1836,23 +1808,21 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_call_r64(scratch)
       self.define_label(done)
     }
-    @instr.Extend(kind) => {
+    Extend(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       match kind {
-        @instr.ExtendKind::Signed8To32 => self.x86_emit_movsx_r32_r8(rd, rn)
-        @instr.ExtendKind::Signed8To64 => self.x86_emit_movsx_r64_r8(rd, rn)
-        @instr.ExtendKind::Signed16To32 => self.x86_emit_movsx_r32_r16(rd, rn)
-        @instr.ExtendKind::Signed16To64 => self.x86_emit_movsx_r64_r16(rd, rn)
-        @instr.ExtendKind::Signed32To64 => self.x86_emit_movsxd_r64_r32(rd, rn)
-        @instr.ExtendKind::Unsigned8To32 | @instr.ExtendKind::Unsigned8To64 =>
-          self.x86_emit_movzx_r32_r8(rd, rn)
-        @instr.ExtendKind::Unsigned16To32 | @instr.ExtendKind::Unsigned16To64 =>
-          self.x86_emit_movzx_r32_r16(rd, rn)
-        @instr.ExtendKind::Unsigned32To64 => self.x86_emit_mov_rr32(rd, rn)
+        Signed8To32 => self.x86_emit_movsx_r32_r8(rd, rn)
+        Signed8To64 => self.x86_emit_movsx_r64_r8(rd, rn)
+        Signed16To32 => self.x86_emit_movsx_r32_r16(rd, rn)
+        Signed16To64 => self.x86_emit_movsx_r64_r16(rd, rn)
+        Signed32To64 => self.x86_emit_movsxd_r64_r32(rd, rn)
+        Unsigned8To32 | Unsigned8To64 => self.x86_emit_movzx_r32_r8(rd, rn)
+        Unsigned16To32 | Unsigned16To64 => self.x86_emit_movzx_r32_r16(rd, rn)
+        Unsigned32To64 => self.x86_emit_mov_rr32(rd, rn)
       }
     }
-    @instr.Truncate => {
+    Truncate => {
       // i64 -> i32 truncation: write through a 32-bit move to clear upper bits.
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -1860,37 +1830,31 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr32(rd, rn)
       }
     }
-    @instr.Nop => ()
-    @instr.FPromote => {
+    Nop => ()
+    FPromote => {
       // f32 -> f64
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_cvtss2sd_xmm_xmm(rd, rn)
     }
-    @instr.FDemote => {
+    FDemote => {
       // f64 -> f32
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_cvtsd2ss_xmm_xmm(rd, rn)
     }
-    @instr.IntToFloat(kind) => {
+    IntToFloat(kind) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       match kind {
-        @instr.IntToFloatKind::I32SToF32 =>
-          self.x86_emit_cvtsi2ss_xmm_r32(rd, rn)
-        @instr.IntToFloatKind::I32SToF64 =>
-          self.x86_emit_cvtsi2sd_xmm_r32(rd, rn)
-        @instr.IntToFloatKind::I64SToF32 =>
-          self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
-        @instr.IntToFloatKind::I64SToF64 =>
-          self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
+        I32SToF32 => self.x86_emit_cvtsi2ss_xmm_r32(rd, rn)
+        I32SToF64 => self.x86_emit_cvtsi2sd_xmm_r32(rd, rn)
+        I64SToF32 => self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
+        I64SToF64 => self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
         // u32 fits in signed i64 when zero-extended; use the r64 form.
-        @instr.IntToFloatKind::I32UToF32 =>
-          self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
-        @instr.IntToFloatKind::I32UToF64 =>
-          self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
-        @instr.IntToFloatKind::I64UToF32 | @instr.IntToFloatKind::I64UToF64 => {
+        I32UToF32 => self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
+        I32UToF64 => self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
+        I64UToF32 | I64UToF64 => {
           let scratch1 = isa.scratch_reg_1_index()
           let scratch2 = isa.scratch_reg_2_index()
           // Match Cranelift x64 `CvtUint64ToFloatSeq`:
@@ -1899,7 +1863,7 @@ fn MachineCode::emit_instruction_x86_64(
           let nonneg = self.new_internal_label()
           let done = self.new_internal_label()
           self.x86_emit_test_rr(rn, rn)
-          self.x86_emit_jcc_rel32(@instr.Cond::Pl, nonneg) // JNS
+          self.x86_emit_jcc_rel32(Pl, nonneg) // JNS
 
           // scratch1 = src >> 1
           self.x86_emit_mov_rr(scratch1, rn)
@@ -1913,7 +1877,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_or_rr(scratch2, scratch1)
 
           // dst = cvt(scratch2); dst += dst
-          if kind is @instr.IntToFloatKind::I64UToF32 {
+          if kind is I64UToF32 {
             self.x86_emit_cvtsi2ss_xmm_r64(rd, scratch2)
             self.x86_emit_addss_xmm_xmm(rd, rd)
           } else {
@@ -1922,7 +1886,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           self.x86_emit_jmp_rel32(done)
           self.define_label(nonneg)
-          if kind is @instr.IntToFloatKind::I64UToF32 {
+          if kind is I64UToF32 {
             self.x86_emit_cvtsi2ss_xmm_r64(rd, rn)
           } else {
             self.x86_emit_cvtsi2sd_xmm_r64(rd, rn)
@@ -1931,20 +1895,20 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.Bitcast => {
+    Bitcast => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let dst_class = reg_class_of_w(inst.defs[0])
       let src_class = reg_class_of(inst.uses[0])
       match (dst_class, src_class) {
-        (@abi.Int, @abi.Float32) => self.x86_emit_movd_r32_xmm(rd, rn)
-        (@abi.Int, @abi.Float64) => self.x86_emit_movq_r64_xmm(rd, rn)
-        (@abi.Float32, @abi.Int) => self.x86_emit_movd_xmm_r32(rd, rn)
-        (@abi.Float64, @abi.Int) => self.x86_emit_movq_xmm_r64(rd, rn)
+        (Int, Float32) => self.x86_emit_movd_r32_xmm(rd, rn)
+        (Int, Float64) => self.x86_emit_movq_r64_xmm(rd, rn)
+        (Float32, Int) => self.x86_emit_movd_xmm_r32(rd, rn)
+        (Float64, Int) => self.x86_emit_movq_xmm_r64(rd, rn)
         _ => abort("x86_64 Bitcast: unsupported reg class combination")
       }
     }
-    @instr.FcvtToInt(is_f32, is_i64, is_signed) => {
+    FcvtToInt(is_f32, is_i64, is_signed) => {
       // Match Cranelift x64 conversion sequences:
       // - signed: `CvtFloatToSintSeq` saturating behavior
       // - unsigned: `CvtFloatToUintSeq` saturating behavior
@@ -2008,11 +1972,11 @@ fn MachineCode::emit_instruction_x86_64(
         emit_cvtt(self, is_f32, is_i64, dst, src_xmm)
         // Detect INT_MIN overflow/invalid sentinel via `cmp dst, 1; jno done`.
         emit_cmp_imm(self, is_i64, dst, 1)
-        self.x86_emit_jcc_rel32(@instr.Cond::Vc, done) // JNO
+        self.x86_emit_jcc_rel32(Vc, done) // JNO
 
         // NaN => 0
         emit_ucomis(self, is_f32, src_xmm, src_xmm)
-        self.x86_emit_jcc_rel32(@instr.Cond::Pc, not_nan) // JNP
+        self.x86_emit_jcc_rel32(Pc, not_nan) // JNP
         emit_xor_self(self, is_i64, dst)
         self.x86_emit_jmp_rel32(done)
         self.define_label(not_nan)
@@ -2020,7 +1984,7 @@ fn MachineCode::emit_instruction_x86_64(
         // If src <= 0, keep INT_MIN (already in dst); else saturate to INT_MAX.
         self.x86_emit_xorpd_xmm_xmm(tmp_xmm, tmp_xmm)
         emit_ucomis(self, is_f32, tmp_xmm, src_xmm)
-        self.x86_emit_jcc_rel32(@instr.Cond::Hs, done) // JAE
+        self.x86_emit_jcc_rel32(Hs, done) // JAE
         let int_max = if is_i64 { 0x7fffffffffffffffL } else { 0x7fffffffL }
         self.x86_emit_mov_imm64(dst, int_max)
         self.define_label(done)
@@ -2047,10 +2011,10 @@ fn MachineCode::emit_instruction_x86_64(
 
         // Compare src with threshold; if src >= threshold, go to large path.
         emit_ucomis(self, is_f32, src_xmm, tmp_xmm)
-        self.x86_emit_jcc_rel32(@instr.Cond::Hs, handle_large) // JAE/JNB
+        self.x86_emit_jcc_rel32(Hs, handle_large) // JAE/JNB
 
         // NaN => 0
-        self.x86_emit_jcc_rel32(@instr.Cond::Pc, not_nan) // JNP
+        self.x86_emit_jcc_rel32(Pc, not_nan) // JNP
         emit_xor_self(self, is_i64, dst)
         self.x86_emit_jmp_rel32(done)
         self.define_label(not_nan)
@@ -2058,7 +2022,7 @@ fn MachineCode::emit_instruction_x86_64(
         // Small path: cvtt + if result >= 0 then done else 0.
         emit_cvtt(self, is_f32, is_i64, dst, src_xmm)
         emit_cmp_imm(self, is_i64, dst, 0)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ge, done) // JGE
+        self.x86_emit_jcc_rel32(Ge, done) // JGE
         emit_xor_self(self, is_i64, dst)
         self.x86_emit_jmp_rel32(done)
 
@@ -2072,7 +2036,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
         emit_cvtt(self, is_f32, is_i64, dst, tmp_xmm2)
         emit_cmp_imm(self, is_i64, dst, 0)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ge, next_is_large)
+        self.x86_emit_jcc_rel32(Ge, next_is_large)
         // Too large => UINT_MAX.
         let uint_max = if is_i64 { -1L } else { 0xFFFFFFFFL }
         self.x86_emit_mov_imm64(dst, uint_max)
@@ -2088,11 +2052,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.define_label(done)
       }
     }
-    @instr.Shl(is_64) => {
+    Shl(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = match inst.use_constraints[1] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[1])
       }
       if rm != 1 {
@@ -2107,7 +2071,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shl_r32_cl(rd)
       }
     }
-    @instr.ShlImm(amt, is_64) => {
+    ShlImm(amt, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -2119,11 +2083,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shl_r32_imm8(rd, amt)
       }
     }
-    @instr.LShr(is_64) => {
+    LShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = match inst.use_constraints[1] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[1])
       }
       if rm != 1 {
@@ -2138,7 +2102,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shr_r32_cl(rd)
       }
     }
-    @instr.LShrImm(amt, is_64) => {
+    LShrImm(amt, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -2150,11 +2114,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shr_r32_imm8(rd, amt)
       }
     }
-    @instr.AShr(is_64) => {
+    AShr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = match inst.use_constraints[1] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[1])
       }
       if rm != 1 {
@@ -2169,7 +2133,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sar_r32_cl(rd)
       }
     }
-    @instr.AShrImm(amt, is_64) => {
+    AShrImm(amt, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -2181,11 +2145,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sar_r32_imm8(rd, amt)
       }
     }
-    @instr.Rotr(is_64) => {
+    Rotr(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = match inst.use_constraints[1] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[1])
       }
       if rm != 1 {
@@ -2200,7 +2164,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_ror_r32_cl(rd)
       }
     }
-    @instr.RotrImm(amt, is_64) => {
+    RotrImm(amt, is_64) => {
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if rd != rn {
@@ -2212,7 +2176,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_ror_r32_imm8(rd, amt)
       }
     }
-    @instr.ExtrImm(amt, is_64) => {
+    ExtrImm(amt, is_64) => {
       // AArch64 EXTR fallback on amd64:
       //   (rn << (bits - amt)) | (rm >> amt)
       // with shift domain masked per lane width.
@@ -2256,7 +2220,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_or_rr32(rd, tmp)
       }
     }
-    @instr.Select => {
+    Select => {
       let rd = wreg_num(inst.defs[0])
       let cond_reg = reg_num(inst.uses[0])
       let true_reg = reg_num(inst.uses[1])
@@ -2264,41 +2228,41 @@ fn MachineCode::emit_instruction_x86_64(
       let class = reg_class_of_w(inst.defs[0])
       match class {
         // Match Cranelift x64: integer select uses cmov.
-        @abi.Int => {
+        Int => {
           // Set flags based on cond != 0.
           self.x86_emit_test_rr32(cond_reg, cond_reg)
           // Avoid clobbering `true_reg` when `rd` aliases it.
           if rd == true_reg {
             // Keep `true` in place and overwrite with `false` only on cond == 0.
-            self.x86_emit_cmovcc_rr(@instr.Cond::Eq, rd, false_reg)
+            self.x86_emit_cmovcc_rr(Eq, rd, false_reg)
           } else {
             // dst = false
             emit_reg_move(self, rd, false_reg, class)
             // dst = cond ? true : dst
-            self.x86_emit_cmovcc_rr(@instr.Cond::Ne, rd, true_reg)
+            self.x86_emit_cmovcc_rr(Ne, rd, true_reg)
           }
         }
         // Match Cranelift x64: XMM select uses a branch (no cmov for XMM).
-        @abi.Float32 | @abi.Float64 | @abi.Vector => {
+        Float32 | Float64 | Vector => {
           self.x86_emit_test_rr32(cond_reg, cond_reg)
           if rd == true_reg {
             // Keep `true` in place and overwrite with `false` only on cond == 0.
             let next = self.new_internal_label()
-            self.x86_emit_jcc_rel32(@instr.Cond::Ne, next)
+            self.x86_emit_jcc_rel32(Ne, next)
             emit_reg_move(self, rd, false_reg, class)
             self.define_label(next)
           } else {
             // dst = false
             emit_reg_move(self, rd, false_reg, class)
             let next = self.new_internal_label()
-            self.x86_emit_jcc_rel32(@instr.Cond::Eq, next)
+            self.x86_emit_jcc_rel32(Eq, next)
             emit_reg_move(self, rd, true_reg, class)
             self.define_label(next)
           }
         }
       }
     }
-    @instr.SelectCmp(kind, is_64) => {
+    SelectCmp(kind, is_64) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       if is_64 {
@@ -2313,7 +2277,7 @@ fn MachineCode::emit_instruction_x86_64(
       let cond = cmp_kind_to_cond(kind)
       match class {
         // Match Cranelift x64: integer selectcmp uses cmov.
-        @abi.Int =>
+        Int =>
           if rd == true_reg {
             // Keep `true` in place and overwrite with `false` only when cond is false.
             if is_64 {
@@ -2330,7 +2294,7 @@ fn MachineCode::emit_instruction_x86_64(
             }
           }
         // XMM: branch-based move (no cmov).
-        @abi.Float32 | @abi.Float64 | @abi.Vector =>
+        Float32 | Float64 | Vector =>
           if rd == true_reg {
             let next = self.new_internal_label()
             self.x86_emit_jcc_rel32(cond, next)
@@ -2345,7 +2309,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
       }
     }
-    @instr.TrapIfZero(is_64, trap_code) => {
+    TrapIfZero(is_64, trap_code) => {
       let rn = reg_num(inst.uses[0])
       if is_64 {
         self.x86_emit_test_rr(rn, rn)
@@ -2353,11 +2317,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_test_rr32(rn, rn)
       }
       let done_l = self.new_internal_label()
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+      self.x86_emit_jcc_rel32(Ne, done_l)
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done_l)
     }
-    @instr.TrapIfDivOverflow(is_64, trap_code) => {
+    TrapIfDivOverflow(is_64, trap_code) => {
       // Trap if lhs == INT_MIN && rhs == -1.
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
@@ -2366,21 +2330,21 @@ fn MachineCode::emit_instruction_x86_64(
         // Cranelift-aligned guard shape for checked sdiv:
         // only overflow candidate is divisor == -1 and dividend == INT_MIN.
         self.x86_emit_cmp_r_imm32(rhs, -1)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_jcc_rel32(Ne, done_l)
         let scratch = pick_scratch_gpr(isa, lhs, rhs, -1, -1)
         self.x86_emit_mov_imm64(scratch, 0x8000000000000000L)
         self.x86_emit_cmp_rr(lhs, scratch)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_jcc_rel32(Ne, done_l)
       } else {
         self.x86_emit_cmp_r32_imm32(rhs, -1)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_jcc_rel32(Ne, done_l)
         self.x86_emit_cmp_r32_imm32(lhs, -2147483648)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, done_l)
+        self.x86_emit_jcc_rel32(Ne, done_l)
       }
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done_l)
     }
-    @instr.SDiv(is_64) => {
+    SDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
@@ -2420,7 +2384,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.UDiv(is_64) => {
+    UDiv(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
@@ -2453,7 +2417,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, 0)
       }
     }
-    @instr.SRem(is_64) => {
+    SRem(is_64) => {
       // Match Cranelift x64 CheckedSRemSeq behavior: guard `divisor == -1` and
       // return 0 without executing IDIV (avoids INT_MIN/-1 overflow trap).
       let rd = wreg_num(inst.defs[0])
@@ -2473,7 +2437,7 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         self.x86_emit_cmp_r32_imm32(rhs, -1)
       }
-      self.x86_emit_jcc_rel32(@instr.Cond::Ne, do_idiv)
+      self.x86_emit_jcc_rel32(Ne, do_idiv)
       if is_64 {
         self.x86_emit_xor_rr(2, 2)
       } else {
@@ -2510,7 +2474,7 @@ fn MachineCode::emit_instruction_x86_64(
       // Remainder is in rdx already.
       self.define_label(done)
     }
-    @instr.URem(is_64) => {
+    URem(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
@@ -2545,7 +2509,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       // Remainder is in rdx already.
     }
-    @instr.LoadMemBase(memidx) => {
+    LoadMemBase(memidx) => {
       // Load linear memory base pointer from VMContext.
       // Uses: [vmctx], Defs: [result]
       let dst = wreg_num(inst.defs[0])
@@ -2565,11 +2529,11 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_r64_m64(dst, dst, 0)
       }
     }
-    @instr.Load(ty, offset) => {
+    Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       if stack_frame.cache_func_table &&
-        ty is @instr.MemType::I64 &&
+        ty is I64 &&
         rn == @isaregs.vmctx_index() &&
         offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
         let ft = @isaregs.func_table_index()
@@ -2579,44 +2543,44 @@ fn MachineCode::emit_instruction_x86_64(
         return
       }
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
-        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
-        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
-        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
-        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
+        I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
+        I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
+        F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
+        F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
+        V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
-    @instr.Store(ty, offset) => {
+    Store(ty, offset) => {
       let rn = reg_num(inst.uses[0])
       let rt = reg_num(inst.uses[1])
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
-        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
-        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
-        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
-        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+        I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
+        I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
+        F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
+        F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
+        V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
       }
     }
-    @instr.LoadPtr(ty, offset) => {
+    LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking).
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
-        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
-        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
-        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
-        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
+        I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
+        I64 => self.x86_emit_mov_r64_m64(rt, rn, offset)
+        F32 => self.x86_emit_movss_xmm_m32(rt, rn, offset)
+        F64 => self.x86_emit_movsd_xmm_m64(rt, rn, offset)
+        V128 => self.x86_emit_movdqu_xmm_m128(rt, rn, offset)
       }
     }
-    @instr.LoadPtrRegOffset(ty, ext, shift, offset) => {
+    LoadPtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer load with scaled index addressing (Cranelift-style sinkable load).
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let can_use_scaled_amode = shift >= 0 && shift <= 3
       let rt_gpr_avoid = match ty {
-        @instr.MemType::I32 | @instr.MemType::I64 => rt
+        I32 | I64 => rt
         _ => -1
       }
       let s1 = isa.scratch_reg_1_index()
@@ -2630,55 +2594,52 @@ fn MachineCode::emit_instruction_x86_64(
         return
       }
       if can_use_scaled_amode {
-        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+        if ext is None && (index & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
                 rt, base, index, shift, offset,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
                 rt, base, index, shift, offset,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_xmm_m32_base_index_scale_disp(
                 rt, base, index, shift, offset,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
                 rt, base, index, shift, offset,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
                 rt, base, index, shift, offset,
               )
           }
           return
         }
-        if ext is @instr.IndexExtend::None &&
-          shift == 0 &&
-          (index & 7) == 4 &&
-          (base & 7) != 4 {
+        if ext is None && shift == 0 && (index & 7) == 4 && (base & 7) != 4 {
           // Cranelift to_amode_add style commutative swap for iadd with scale=1:
           // avoid scratch when only index-register legality blocks encoding.
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
                 rt, index, base, 0, offset,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
                 rt, index, base, 0, offset,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_xmm_m32_base_index_scale_disp(
                 rt, index, base, 0, offset,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
                 rt, index, base, 0, offset,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
                 rt, index, base, 0, offset,
               )
@@ -2687,29 +2648,29 @@ fn MachineCode::emit_instruction_x86_64(
         }
         let idx = pick_scratch_gpr(isa, base, index, rt_gpr_avoid, -1)
         match ext {
-          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
-          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
-          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+          None => self.x86_emit_mov_rr(idx, index)
+          Uxtw => self.x86_emit_mov_rr32(idx, index)
+          Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
         }
         if (idx & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_r32_m32_base_index_scale_disp(
                 rt, base, idx, shift, offset,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_r64_m64_base_index_scale_disp(
                 rt, base, idx, shift, offset,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_xmm_m32_base_index_scale_disp(
                 rt, base, idx, shift, offset,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
                 rt, base, idx, shift, offset,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
                 rt, base, idx, shift, offset,
               )
@@ -2720,32 +2681,32 @@ fn MachineCode::emit_instruction_x86_64(
       let idx = pick_scratch_gpr(isa, base, index, rt_gpr_avoid, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
-        @instr.IndexExtend::None => ()
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+        None => ()
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
       if (idx & 7) != 4 {
         match ty {
-          @instr.MemType::I32 =>
+          I32 =>
             self.x86_emit_mov_r32_m32_base_index_scale_disp(
               rt, base, idx, 0, offset,
             )
-          @instr.MemType::I64 =>
+          I64 =>
             self.x86_emit_mov_r64_m64_base_index_scale_disp(
               rt, base, idx, 0, offset,
             )
-          @instr.MemType::F32 =>
+          F32 =>
             self.x86_emit_movss_xmm_m32_base_index_scale_disp(
               rt, base, idx, 0, offset,
             )
-          @instr.MemType::F64 =>
+          F64 =>
             self.x86_emit_movsd_xmm_m64_base_index_scale_disp(
               rt, base, idx, 0, offset,
             )
-          @instr.MemType::V128 =>
+          V128 =>
             self.x86_emit_movdqu_xmm_m128_base_index_scale_disp(
               rt, base, idx, 0, offset,
             )
@@ -2754,22 +2715,20 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_r32_m32(rt, idx, offset)
-        @instr.MemType::I64 => self.x86_emit_mov_r64_m64(rt, idx, offset)
-        @instr.MemType::F32 => self.x86_emit_movss_xmm_m32(rt, idx, offset)
-        @instr.MemType::F64 => self.x86_emit_movsd_xmm_m64(rt, idx, offset)
-        @instr.MemType::V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, offset)
+        I32 => self.x86_emit_mov_r32_m32(rt, idx, offset)
+        I64 => self.x86_emit_mov_r64_m64(rt, idx, offset)
+        F32 => self.x86_emit_movss_xmm_m32(rt, idx, offset)
+        F64 => self.x86_emit_movsd_xmm_m64(rt, idx, offset)
+        V128 => self.x86_emit_movdqu_xmm_m128(rt, idx, offset)
       }
     }
-    @instr.LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
+    LoadPtrNarrowRegOffset(bits, signed, ext, shift, offset) => {
       // Raw pointer narrow load with register-offset addressing.
       let rt = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let can_use_scaled_amode = shift >= 0 && shift <= 3
-      if can_use_scaled_amode &&
-        ext is @instr.IndexExtend::None &&
-        (index & 7) != 4 {
+      if can_use_scaled_amode && ext is None && (index & 7) != 4 {
         match (bits, signed) {
           (8, true) =>
             self.x86_emit_movsx_r64_m8_base_index_scale_disp(
@@ -2802,7 +2761,7 @@ fn MachineCode::emit_instruction_x86_64(
         return
       }
       if can_use_scaled_amode &&
-        ext is @instr.IndexExtend::None &&
+        ext is None &&
         shift == 0 &&
         (index & 7) == 4 &&
         (base & 7) != 4 {
@@ -2840,9 +2799,9 @@ fn MachineCode::emit_instruction_x86_64(
       let idx = pick_scratch_gpr(isa, base, index, rt, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
-        @instr.IndexExtend::None => ()
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+        None => ()
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if can_use_scaled_amode && (idx & 7) != 4 {
         match (bits, signed) {
@@ -2932,76 +2891,73 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 LoadPtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
-    @instr.StorePtr(ty, offset) => {
+    StorePtr(ty, offset) => {
       // Raw pointer store (no bounds checking).
       let rn = reg_num(inst.uses[0])
       let rt = reg_num(inst.uses[1])
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
-        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
-        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
-        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
-        @instr.MemType::V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
+        I32 => self.x86_emit_mov_m32_r32(rn, offset, rt)
+        I64 => self.x86_emit_mov_m64_r64(rn, offset, rt)
+        F32 => self.x86_emit_movss_m32_xmm(rn, offset, rt)
+        F64 => self.x86_emit_movsd_m64_xmm(rn, offset, rt)
+        V128 => self.x86_emit_movdqu_m128_xmm(rn, offset, rt)
       }
     }
-    @instr.StorePtrRegOffset(ty, ext, shift, offset) => {
+    StorePtrRegOffset(ty, ext, shift, offset) => {
       // Raw pointer store with scaled index addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
       let value_gpr_avoid = match ty {
-        @instr.MemType::I32 | @instr.MemType::I64 => value
+        I32 | I64 => value
         _ => -1
       }
       let can_use_scaled_amode = shift >= 0 && shift <= 3
       if can_use_scaled_amode {
-        if ext is @instr.IndexExtend::None && (index & 7) != 4 {
+        if ext is None && (index & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_m32_r32_base_index_scale_disp(
                 base, index, shift, offset, value,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_m64_r64_base_index_scale_disp(
                 base, index, shift, offset, value,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_m32_xmm_base_index_scale_disp(
                 base, index, shift, offset, value,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
                 base, index, shift, offset, value,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
                 base, index, shift, offset, value,
               )
           }
           return
         }
-        if ext is @instr.IndexExtend::None &&
-          shift == 0 &&
-          (index & 7) == 4 &&
-          (base & 7) != 4 {
+        if ext is None && shift == 0 && (index & 7) == 4 && (base & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_m32_r32_base_index_scale_disp(
                 index, base, 0, offset, value,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_m64_r64_base_index_scale_disp(
                 index, base, 0, offset, value,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_m32_xmm_base_index_scale_disp(
                 index, base, 0, offset, value,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
                 index, base, 0, offset, value,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
                 index, base, 0, offset, value,
               )
@@ -3010,29 +2966,29 @@ fn MachineCode::emit_instruction_x86_64(
         }
         let idx = pick_scratch_gpr(isa, base, index, value_gpr_avoid, -1)
         match ext {
-          @instr.IndexExtend::None => self.x86_emit_mov_rr(idx, index)
-          @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, index)
-          @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
+          None => self.x86_emit_mov_rr(idx, index)
+          Uxtw => self.x86_emit_mov_rr32(idx, index)
+          Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
         }
         if (idx & 7) != 4 {
           match ty {
-            @instr.MemType::I32 =>
+            I32 =>
               self.x86_emit_mov_m32_r32_base_index_scale_disp(
                 base, idx, shift, offset, value,
               )
-            @instr.MemType::I64 =>
+            I64 =>
               self.x86_emit_mov_m64_r64_base_index_scale_disp(
                 base, idx, shift, offset, value,
               )
-            @instr.MemType::F32 =>
+            F32 =>
               self.x86_emit_movss_m32_xmm_base_index_scale_disp(
                 base, idx, shift, offset, value,
               )
-            @instr.MemType::F64 =>
+            F64 =>
               self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
                 base, idx, shift, offset, value,
               )
-            @instr.MemType::V128 =>
+            V128 =>
               self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
                 base, idx, shift, offset, value,
               )
@@ -3043,32 +2999,32 @@ fn MachineCode::emit_instruction_x86_64(
       let idx = pick_scratch_gpr(isa, base, index, value_gpr_avoid, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
-        @instr.IndexExtend::None => ()
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+        None => ()
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
       }
       if (idx & 7) != 4 {
         match ty {
-          @instr.MemType::I32 =>
+          I32 =>
             self.x86_emit_mov_m32_r32_base_index_scale_disp(
               base, idx, 0, offset, value,
             )
-          @instr.MemType::I64 =>
+          I64 =>
             self.x86_emit_mov_m64_r64_base_index_scale_disp(
               base, idx, 0, offset, value,
             )
-          @instr.MemType::F32 =>
+          F32 =>
             self.x86_emit_movss_m32_xmm_base_index_scale_disp(
               base, idx, 0, offset, value,
             )
-          @instr.MemType::F64 =>
+          F64 =>
             self.x86_emit_movsd_m64_xmm_base_index_scale_disp(
               base, idx, 0, offset, value,
             )
-          @instr.MemType::V128 =>
+          V128 =>
             self.x86_emit_movdqu_m128_xmm_base_index_scale_disp(
               base, idx, 0, offset, value,
             )
@@ -3077,23 +3033,20 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_add_rr(idx, base)
       match ty {
-        @instr.MemType::I32 => self.x86_emit_mov_m32_r32(idx, offset, value)
-        @instr.MemType::I64 => self.x86_emit_mov_m64_r64(idx, offset, value)
-        @instr.MemType::F32 => self.x86_emit_movss_m32_xmm(idx, offset, value)
-        @instr.MemType::F64 => self.x86_emit_movsd_m64_xmm(idx, offset, value)
-        @instr.MemType::V128 =>
-          self.x86_emit_movdqu_m128_xmm(idx, offset, value)
+        I32 => self.x86_emit_mov_m32_r32(idx, offset, value)
+        I64 => self.x86_emit_mov_m64_r64(idx, offset, value)
+        F32 => self.x86_emit_movss_m32_xmm(idx, offset, value)
+        F64 => self.x86_emit_movsd_m64_xmm(idx, offset, value)
+        V128 => self.x86_emit_movdqu_m128_xmm(idx, offset, value)
       }
     }
-    @instr.StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
+    StorePtrNarrowRegOffset(bits, ext, shift, offset) => {
       // Raw pointer narrow store with register-offset addressing.
       let base = reg_num(inst.uses[0])
       let index = reg_num(inst.uses[1])
       let value = reg_num(inst.uses[2])
       let can_use_scaled_amode = shift >= 0 && shift <= 3
-      if can_use_scaled_amode &&
-        ext is @instr.IndexExtend::None &&
-        (index & 7) != 4 {
+      if can_use_scaled_amode && ext is None && (index & 7) != 4 {
         match bits {
           8 =>
             self.x86_emit_mov_m8_r8_base_index_scale_disp(
@@ -3112,7 +3065,7 @@ fn MachineCode::emit_instruction_x86_64(
         return
       }
       if can_use_scaled_amode &&
-        ext is @instr.IndexExtend::None &&
+        ext is None &&
         shift == 0 &&
         (index & 7) == 4 &&
         (base & 7) != 4 {
@@ -3136,9 +3089,9 @@ fn MachineCode::emit_instruction_x86_64(
       let idx = pick_scratch_gpr(isa, base, index, value, -1)
       self.x86_emit_mov_rr(idx, index)
       match ext {
-        @instr.IndexExtend::None => ()
-        @instr.IndexExtend::Uxtw => self.x86_emit_mov_rr32(idx, idx)
-        @instr.IndexExtend::Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
+        None => ()
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if can_use_scaled_amode && (idx & 7) != 4 {
         match bits {
@@ -3187,7 +3140,7 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 StorePtrNarrowRegOffset: unsupported bits \{bits}")
       }
     }
-    @instr.LoadPtrNarrow(bits, signed, offset) => {
+    LoadPtrNarrow(bits, signed, offset) => {
       // Raw pointer narrow load (no bounds checking).
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
@@ -3201,7 +3154,7 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 LoadPtrNarrow: unsupported bits \{bits}")
       }
     }
-    @instr.StorePtrNarrow(bits, offset) => {
+    StorePtrNarrow(bits, offset) => {
       // Raw pointer narrow store (no bounds checking).
       let rn = reg_num(inst.uses[0])
       let rt = reg_num(inst.uses[1])
@@ -3212,37 +3165,37 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 StorePtrNarrow: unsupported bits \{bits}")
       }
     }
-    @instr.Load8S(offset) => {
+    Load8S(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_movsx_r64_m8(rt, rn, offset)
     }
-    @instr.Load8U(offset) => {
+    Load8U(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_movzx_r32_m8(rt, rn, offset)
     }
-    @instr.Load16S(offset) => {
+    Load16S(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_movsx_r64_m16(rt, rn, offset)
     }
-    @instr.Load16U(offset) => {
+    Load16U(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_movzx_r32_m16(rt, rn, offset)
     }
-    @instr.Load32S(offset) => {
+    Load32S(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_movsxd_r64_m32(rt, rn, offset)
     }
-    @instr.Load32U(offset) => {
+    Load32U(offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       self.x86_emit_mov_r32_m32(rt, rn, offset)
     }
-    @instr.LoadFuncAddr(func_idx) => {
+    LoadFuncAddr(func_idx) => {
       // Load function pointer from vmctx->func_table[func_idx].
       let rd = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
@@ -3250,7 +3203,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
       self.x86_emit_mov_r64_m64(rd, table, func_idx * 8)
     }
-    @instr.CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
+    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       // Call via vmctx->func_table[func_idx] to avoid rel32 patching.
       let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
@@ -3259,20 +3212,20 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r64_m64(callee, table, func_idx * 8)
       self.x86_emit_call_r64(callee)
     }
-    @instr.CallPtr(_, _, _call_conv) => {
+    CallPtr(_, _, _call_conv) => {
       // Standard call: arguments already placed by lowering.
       let target = match inst.use_constraints[0] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
       self.x86_emit_call_r64(target)
     }
-    @instr.ReturnCallIndirect(stack_arg_bytes, _) => {
+    ReturnCallIndirect(stack_arg_bytes, _) => {
       // Tail-call:
       // - fast path (no stack overflow args): epilogue + jmp
       // - overflow args: call + return for correctness with current ABI
       let target = match inst.use_constraints[0] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
       if stack_arg_bytes > 0 {
@@ -3294,35 +3247,34 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_jmp_r64(jump_target)
       }
     }
-    @instr.AdjustSP(delta) =>
+    AdjustSP(delta) =>
       if delta > 0 {
         self.x86_emit_add_rsp_imm32(delta)
       } else if delta < 0 {
         self.x86_emit_sub_rsp_imm32(-delta)
       }
-    @instr.StoreToStack(offset) => {
+    StoreToStack(offset) => {
       // Store to pre-allocated outgoing args area at [rsp + outgoing_args_offset + offset].
       let actual_offset = stack_frame.outgoing_args_offset + offset
       let src = reg_num(inst.uses[0])
       let src_class = match inst.uses[0] {
-        @abi.Physical(preg) => preg.class
-        @abi.Virtual(vreg) => vreg.class
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
       }
       match src_class {
-        @abi.Int => self.x86_emit_mov_m64_r64(4, actual_offset, src)
-        @abi.Float32 | @abi.Float64 =>
-          self.x86_emit_movsd_m64_xmm(4, actual_offset, src)
-        @abi.Vector => self.x86_emit_movdqu_m128_xmm(4, actual_offset, src)
+        Int => self.x86_emit_mov_m64_r64(4, actual_offset, src)
+        Float32 | Float64 => self.x86_emit_movsd_m64_xmm(4, actual_offset, src)
+        Vector => self.x86_emit_movdqu_m128_xmm(4, actual_offset, src)
       }
     }
-    @instr.LoadSP => {
+    LoadSP => {
       // Load outgoing-args base into result register so it matches
       // StoreToStack's [rsp + outgoing_args_offset + off] addressing.
       let rd = wreg_num(inst.defs[0])
       self.x86_emit_mov_rr(rd, 4)
       emit_add_imm_to_reg_in_chunks(self, rd, stack_frame.outgoing_args_offset)
     }
-    @instr.GCAllocStructSlowPrecise(type_idx, num_fields) => {
+    GCAllocStructSlowPrecise(type_idx, num_fields) => {
       let dst = wreg_num(inst.defs[0])
       let vmctx = reg_num(inst.uses[0])
       let stack_base_off = stack_frame.outgoing_args_offset
@@ -3359,7 +3311,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(dst, 0)
       }
     }
-    @instr.GCAllocStructInline(type_idx, num_fields) => {
+    GCAllocStructInline(type_idx, num_fields) => {
       // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
@@ -3390,7 +3342,7 @@ fn MachineCode::emit_instruction_x86_64(
       // if end > vmctx->gc_heap_limit: slow path.
       self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
       self.x86_emit_cmp_rr(end, tmp)
-      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+      self.x86_emit_jcc_rel32(Hi, slow)
 
       // Fast path: header + fields copy from outgoing-args stack area.
       self.x86_emit_mov_imm64(tmp, header_low)
@@ -3451,7 +3403,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.define_label(done)
     }
-    @instr.GCAllocArrayFixedInline(type_idx, len) => {
+    GCAllocArrayFixedInline(type_idx, len) => {
       // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
@@ -3486,7 +3438,7 @@ fn MachineCode::emit_instruction_x86_64(
       // if end > vmctx->gc_heap_limit: slow path.
       self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
       self.x86_emit_cmp_rr(end, tmp)
-      self.x86_emit_jcc_rel32(@instr.Cond::Hi, slow)
+      self.x86_emit_jcc_rel32(Hi, slow)
 
       // Fast path: header + len + elements copy.
       self.x86_emit_mov_imm64(tmp, header_low)
@@ -3553,7 +3505,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.define_label(done)
     }
-    @instr.GCAllocArraySlowPrecise(type_idx) => {
+    GCAllocArraySlowPrecise(type_idx) => {
       let dst = wreg_num(inst.defs[0])
       let vmctx = reg_num(inst.uses[0])
       let mut len_reg = reg_num(inst.uses[1])
@@ -3603,7 +3555,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(dst, 0)
       }
     }
-    @instr.LoadConstV128(bytes) => {
+    LoadConstV128(bytes) => {
       // Materialize a 128-bit constant via constant pool (Cranelift-style).
       let rd = wreg_num(inst.defs[0])
       let scratch = isa.scratch_reg_1_index()
@@ -3611,7 +3563,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_lea_r64_riprel32(scratch, label)
       self.x86_emit_movdqu_xmm_m128(rd, scratch, 0)
     }
-    @instr.SIMDSplat(lane_size) => {
+    SIMDSplat(lane_size) => {
       // Splat scalar integer to all lanes.
       //
       // Mirrors Cranelift x64 lowering rules in `lower.isle` (SSE2 baseline):
@@ -3622,28 +3574,28 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match lane_size {
-        @instr.LaneSize::B8 => {
+        B8 => {
           self.x86_emit_movd_xmm_r32(rd, src)
           self.x86_emit_punpcklbw_xmm_xmm(rd, rd)
           self.x86_emit_pshuflw_xmm_xmm_imm8(rd, rd, 0)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
         }
-        @instr.LaneSize::H16 => {
+        H16 => {
           self.x86_emit_movd_xmm_r32(rd, src)
           self.x86_emit_pshuflw_xmm_xmm_imm8(rd, rd, 0)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
         }
-        @instr.LaneSize::S32 => {
+        S32 => {
           self.x86_emit_movd_xmm_r32(rd, src)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0)
         }
-        @instr.LaneSize::D64 => {
+        D64 => {
           self.x86_emit_movq_xmm_r64(rd, src)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x44)
         }
       }
     }
-    @instr.SIMDSplatF(is_f32) => {
+    SIMDSplatF(is_f32) => {
       // Splat scalar float to all lanes.
       //
       // - f32x4.splat: SHUFPS xmm, xmm, 0x00 (SSE1)
@@ -3659,7 +3611,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_shufpd_xmm_xmm_imm8(rd, rd, 0x00)
       }
     }
-    @instr.SIMDInsert(lane_size, lane) => {
+    SIMDInsert(lane_size, lane) => {
       // Insert scalar integer into a vector lane.
       //
       // Use `pinsr*` (SSE2/SSE4.1) to update one lane while preserving others.
@@ -3670,46 +3622,46 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movaps_xmm_xmm(rd, vec)
       }
       match lane_size {
-        @instr.LaneSize::B8 => self.x86_emit_pinsrb_xmm_r32_imm8(rd, src, lane)
-        @instr.LaneSize::H16 => self.x86_emit_pinsrw_xmm_r32_imm8(rd, src, lane)
-        @instr.LaneSize::S32 => self.x86_emit_pinsrd_xmm_r32_imm8(rd, src, lane)
-        @instr.LaneSize::D64 => self.x86_emit_pinsrq_xmm_r64_imm8(rd, src, lane)
+        B8 => self.x86_emit_pinsrb_xmm_r32_imm8(rd, src, lane)
+        H16 => self.x86_emit_pinsrw_xmm_r32_imm8(rd, src, lane)
+        S32 => self.x86_emit_pinsrd_xmm_r32_imm8(rd, src, lane)
+        D64 => self.x86_emit_pinsrq_xmm_r64_imm8(rd, src, lane)
       }
     }
-    @instr.SIMDExtractU(lane_size, lane) => {
+    SIMDExtractU(lane_size, lane) => {
       // Extract scalar integer lane, zero-extending to the destination GPR.
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match lane_size {
-        @instr.LaneSize::B8 => self.x86_emit_pextrb_r32_xmm_imm8(rd, src, lane)
-        @instr.LaneSize::H16 => self.x86_emit_pextrw_r32_xmm_imm8(rd, src, lane)
-        @instr.LaneSize::S32 => self.x86_emit_pextrd_r32_xmm_imm8(rd, src, lane)
-        @instr.LaneSize::D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
+        B8 => self.x86_emit_pextrb_r32_xmm_imm8(rd, src, lane)
+        H16 => self.x86_emit_pextrw_r32_xmm_imm8(rd, src, lane)
+        S32 => self.x86_emit_pextrd_r32_xmm_imm8(rd, src, lane)
+        D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
       }
     }
-    @instr.SIMDExtractS(lane_size, lane) => {
+    SIMDExtractS(lane_size, lane) => {
       // Extract scalar integer lane, sign-extending to the destination GPR.
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match lane_size {
-        @instr.LaneSize::B8 => {
+        B8 => {
           self.x86_emit_pextrb_r32_xmm_imm8(rd, src, lane)
           self.x86_emit_shl_r_imm8(rd, 56)
           self.x86_emit_sar_r_imm8(rd, 56)
         }
-        @instr.LaneSize::H16 => {
+        H16 => {
           self.x86_emit_pextrw_r32_xmm_imm8(rd, src, lane)
           self.x86_emit_shl_r_imm8(rd, 48)
           self.x86_emit_sar_r_imm8(rd, 48)
         }
-        @instr.LaneSize::S32 => {
+        S32 => {
           self.x86_emit_pextrd_r32_xmm_imm8(rd, src, lane)
           self.x86_emit_movsxd_r64_r32(rd, rd)
         }
-        @instr.LaneSize::D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
+        D64 => self.x86_emit_pextrq_r64_xmm_imm8(rd, src, lane)
       }
     }
-    @instr.SIMDExtractF(is_f32, lane) => {
+    SIMDExtractF(is_f32, lane) => {
       // Extract scalar float lane into an XMM register.
       //
       // Mirrors Cranelift x64 lowering rules in `lower.isle`.
@@ -3730,7 +3682,7 @@ fn MachineCode::emit_instruction_x86_64(
         abort("SIMDExtractF f64 lane out of range: \{lane}")
       }
     }
-    @instr.SIMDInsertF(is_f32, lane) => {
+    SIMDInsertF(is_f32, lane) => {
       // Insert scalar float into a vector lane.
       //
       // Mirrors Cranelift x64 lowering rules in `lower.isle`.
@@ -3751,28 +3703,28 @@ fn MachineCode::emit_instruction_x86_64(
         abort("SIMDInsertF f64 lane out of range: \{lane}")
       }
     }
-    @instr.SIMDAnd => {
+    SIMDAnd => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       self.x86_emit_pand_xmm_xmm(rd, src)
     }
-    @instr.SIMDOr => {
+    SIMDOr => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       self.x86_emit_por_xmm_xmm(rd, src)
     }
-    @instr.SIMDXor => {
+    SIMDXor => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       self.x86_emit_pxor_xmm_xmm(rd, src)
     }
-    @instr.SIMDBic => {
+    SIMDBic => {
       // a & ~b == (~b) & a, matching the x86 `PANDN` operand order.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
@@ -3790,7 +3742,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_pandn_xmm_xmm(rd, a)
       }
     }
-    @instr.SIMDNot => {
+    SIMDNot => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       let tmp = 15 // reserved via MachineEnvData.scratch_float
@@ -3800,144 +3752,140 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pcmpeqd_xmm_xmm(tmp, tmp) // tmp = all ones
       self.x86_emit_pxor_xmm_xmm(rd, tmp)
     }
-    @instr.SIMDAdd(lane_size) => {
+    SIMDAdd(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       self.x86_emit_padd_xmm_xmm(lane_size, rd, src)
     }
-    @instr.SIMDSub(lane_size) => {
+    SIMDSub(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       self.x86_emit_psub_xmm_xmm(lane_size, rd, src)
     }
-    @instr.SIMDSqadd(lane_size) => {
+    SIMDSqadd(lane_size) => {
       // Signed saturating add (wasm: i8x16.add_sat_s, i16x8.add_sat_s).
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_paddsb_xmm_xmm(rd, src)
-        @instr.H16 => self.x86_emit_paddsw_xmm_xmm(rd, src)
+        B8 => self.x86_emit_paddsb_xmm_xmm(rd, src)
+        H16 => self.x86_emit_paddsw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDSqadd: unsupported lane size \{lane_size}")
       }
     }
-    @instr.SIMDUqadd(lane_size) => {
+    SIMDUqadd(lane_size) => {
       // Unsigned saturating add (wasm: i8x16.add_sat_u, i16x8.add_sat_u).
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_paddusb_xmm_xmm(rd, src)
-        @instr.H16 => self.x86_emit_paddusw_xmm_xmm(rd, src)
+        B8 => self.x86_emit_paddusb_xmm_xmm(rd, src)
+        H16 => self.x86_emit_paddusw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDUqadd: unsupported lane size \{lane_size}")
       }
     }
-    @instr.SIMDSqsub(lane_size) => {
+    SIMDSqsub(lane_size) => {
       // Signed saturating subtract (wasm: i8x16.sub_sat_s, i16x8.sub_sat_s).
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_psubsb_xmm_xmm(rd, src)
-        @instr.H16 => self.x86_emit_psubsw_xmm_xmm(rd, src)
+        B8 => self.x86_emit_psubsb_xmm_xmm(rd, src)
+        H16 => self.x86_emit_psubsw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDSqsub: unsupported lane size \{lane_size}")
       }
     }
-    @instr.SIMDUqsub(lane_size) => {
+    SIMDUqsub(lane_size) => {
       // Unsigned saturating subtract (wasm: i8x16.sub_sat_u, i16x8.sub_sat_u).
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_psubusb_xmm_xmm(rd, src)
-        @instr.H16 => self.x86_emit_psubusw_xmm_xmm(rd, src)
+        B8 => self.x86_emit_psubusb_xmm_xmm(rd, src)
+        H16 => self.x86_emit_psubusw_xmm_xmm(rd, src)
         _ => abort("x86_64 SIMDUqsub: unsupported lane size \{lane_size}")
       }
     }
-    @instr.SIMDSmin(lane_size) => {
+    SIMDSmin(lane_size) => {
       // Signed integer minimum.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_pminsb_xmm_xmm(rd, src) // SSE4.1
-        @instr.H16 => self.x86_emit_pminsw_xmm_xmm(rd, src) // SSE2
-        @instr.S32 => self.x86_emit_pminsd_xmm_xmm(rd, src) // SSE4.1
-        @instr.D64 =>
-          abort("x86_64 SIMDSmin: i64x2 min not supported by wasm SIMD")
+        B8 => self.x86_emit_pminsb_xmm_xmm(rd, src) // SSE4.1
+        H16 => self.x86_emit_pminsw_xmm_xmm(rd, src) // SSE2
+        S32 => self.x86_emit_pminsd_xmm_xmm(rd, src) // SSE4.1
+        D64 => abort("x86_64 SIMDSmin: i64x2 min not supported by wasm SIMD")
       }
     }
-    @instr.SIMDUmin(lane_size) => {
+    SIMDUmin(lane_size) => {
       // Unsigned integer minimum.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_pminub_xmm_xmm(rd, src) // SSE2
-        @instr.H16 => self.x86_emit_pminuw_xmm_xmm(rd, src) // SSE4.1
-        @instr.S32 => self.x86_emit_pminud_xmm_xmm(rd, src) // SSE4.1
-        @instr.D64 =>
-          abort("x86_64 SIMDUmin: i64x2 min not supported by wasm SIMD")
+        B8 => self.x86_emit_pminub_xmm_xmm(rd, src) // SSE2
+        H16 => self.x86_emit_pminuw_xmm_xmm(rd, src) // SSE4.1
+        S32 => self.x86_emit_pminud_xmm_xmm(rd, src) // SSE4.1
+        D64 => abort("x86_64 SIMDUmin: i64x2 min not supported by wasm SIMD")
       }
     }
-    @instr.SIMDSmax(lane_size) => {
+    SIMDSmax(lane_size) => {
       // Signed integer maximum.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_pmaxsb_xmm_xmm(rd, src) // SSE4.1
-        @instr.H16 => self.x86_emit_pmaxsw_xmm_xmm(rd, src) // SSE2
-        @instr.S32 => self.x86_emit_pmaxsd_xmm_xmm(rd, src) // SSE4.1
-        @instr.D64 =>
-          abort("x86_64 SIMDSmax: i64x2 max not supported by wasm SIMD")
+        B8 => self.x86_emit_pmaxsb_xmm_xmm(rd, src) // SSE4.1
+        H16 => self.x86_emit_pmaxsw_xmm_xmm(rd, src) // SSE2
+        S32 => self.x86_emit_pmaxsd_xmm_xmm(rd, src) // SSE4.1
+        D64 => abort("x86_64 SIMDSmax: i64x2 max not supported by wasm SIMD")
       }
     }
-    @instr.SIMDUmax(lane_size) => {
+    SIMDUmax(lane_size) => {
       // Unsigned integer maximum.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_pmaxub_xmm_xmm(rd, src) // SSE2
-        @instr.H16 => self.x86_emit_pmaxuw_xmm_xmm(rd, src) // SSE4.1
-        @instr.S32 => self.x86_emit_pmaxud_xmm_xmm(rd, src) // SSE4.1
-        @instr.D64 =>
-          abort("x86_64 SIMDUmax: i64x2 max not supported by wasm SIMD")
+        B8 => self.x86_emit_pmaxub_xmm_xmm(rd, src) // SSE2
+        H16 => self.x86_emit_pmaxuw_xmm_xmm(rd, src) // SSE4.1
+        S32 => self.x86_emit_pmaxud_xmm_xmm(rd, src) // SSE4.1
+        D64 => abort("x86_64 SIMDUmax: i64x2 max not supported by wasm SIMD")
       }
     }
-    @instr.SIMDUrhadd(lane_size) => {
+    SIMDUrhadd(lane_size) => {
       // Unsigned rounding halving add: (a + b + 1) >> 1.
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       let src = prepare_xmm_two_operand(self, rd, a, b, 14)
       match lane_size {
-        @instr.B8 => self.x86_emit_pavgb_xmm_xmm(rd, src) // SSE2
-        @instr.H16 => self.x86_emit_pavgw_xmm_xmm(rd, src) // SSE2
+        B8 => self.x86_emit_pavgb_xmm_xmm(rd, src) // SSE2
+        H16 => self.x86_emit_pavgw_xmm_xmm(rd, src) // SSE2
         _ => abort("x86_64 SIMDUrhadd: unsupported lane size \{lane_size}")
       }
     }
-    @instr.SIMDAbs(lane_size) => {
+    SIMDAbs(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match lane_size {
-        @instr.B8 => self.x86_emit_pabsb_xmm_xmm(rd, src) // SSSE3
-        @instr.H16 => self.x86_emit_pabsw_xmm_xmm(rd, src) // SSSE3
-        @instr.S32 => self.x86_emit_pabsd_xmm_xmm(rd, src) // SSSE3
-        @instr.D64 => {
+        B8 => self.x86_emit_pabsb_xmm_xmm(rd, src) // SSSE3
+        H16 => self.x86_emit_pabsw_xmm_xmm(rd, src) // SSSE3
+        S32 => self.x86_emit_pabsd_xmm_xmm(rd, src) // SSSE3
+        D64 => {
           // Align with Cranelift x64 lowering for i64x2.abs without AVX512:
           // generate a per-lane sign mask via psrad+pshufd, then xor/sub.
           let sign = 14 // reserved via MachineEnvData.scratch_float
@@ -3948,11 +3896,11 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_psrad_xmm_imm8(sign, 31)
           self.x86_emit_pshufd_xmm_xmm_imm8(sign, sign, 0xF5)
           self.x86_emit_pxor_xmm_xmm(rd, sign)
-          self.x86_emit_psub_xmm_xmm(@instr.D64, rd, sign)
+          self.x86_emit_psub_xmm_xmm(D64, rd, sign)
         }
       }
     }
-    @instr.SIMDNeg(lane_size) => {
+    SIMDNeg(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       let mut tmp = 14 // reserved via MachineEnvData.scratch_float
@@ -3968,7 +3916,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pxor_xmm_xmm(rd, rd)
       self.x86_emit_psub_xmm_xmm(lane_size, rd, src_reg)
     }
-    @instr.SIMDCnt => {
+    SIMDCnt => {
       // Align with Cranelift x64 i8x16.popcnt when SSSE3 is available
       // (Mula's algorithm with a nibble lookup table).
       let rd = wreg_num(inst.defs[0])
@@ -4013,12 +3961,12 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pshufb_xmm_xmm(tmp0, rd)
 
       // result = bit_counts_low + bit_counts_high
-      self.x86_emit_padd_xmm_xmm(@instr.B8, tmp1, tmp0)
+      self.x86_emit_padd_xmm_xmm(B8, tmp1, tmp0)
       if rd != tmp1 {
         self.x86_emit_movaps_xmm_xmm(rd, tmp1)
       }
     }
-    @instr.SIMDBroadcastShift(lane_size, negate) => {
+    SIMDBroadcastShift(lane_size, negate) => {
       // x86 packed shifts take a scalar count from the low bits of an XMM
       // register, so we materialize the masked (and optionally negated) count
       // into `shift_vec`.
@@ -4026,10 +3974,10 @@ fn MachineCode::emit_instruction_x86_64(
       let shift_vec = wreg_num(inst.defs[1])
       let shift = reg_num(inst.uses[0])
       let mask = match lane_size {
-        @instr.B8 => 7
-        @instr.H16 => 15
-        @instr.S32 => 31
-        @instr.D64 => 63
+        B8 => 7
+        H16 => 15
+        S32 => 31
+        D64 => 63
       }
       if tmp_gpr != shift {
         self.x86_emit_mov_rr(tmp_gpr, shift)
@@ -4040,7 +3988,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_movq_xmm_r64(shift_vec, tmp_gpr)
     }
-    @instr.SIMDShiftByVec(lane_size, use_ushl) => {
+    SIMDShiftByVec(lane_size, use_ushl) => {
       // Interpret the shift amount as a signed scalar:
       // - non-negative => left shift
       // - negative => right shift by -amount
@@ -4059,22 +4007,22 @@ fn MachineCode::emit_instruction_x86_64(
       // tmp_gpr = shift amount (signed)
       self.x86_emit_movq_r64_xmm(tmp_gpr, shift_vec)
       self.x86_emit_test_rr(tmp_gpr, tmp_gpr)
-      self.x86_emit_jcc_rel32(@instr.Cond::Mi, do_right) // JS
+      self.x86_emit_jcc_rel32(Mi, do_right) // JS
 
       // Left shift (count >= 0).
       match lane_size {
-        @instr.B8 => {
+        B8 => {
           // i8x16 shl via 16x8 shift + dynamic mask (Cranelift-style idea).
           if rd != vec {
             self.x86_emit_movaps_xmm_xmm(rd, vec)
           }
           // rd = psllw(rd, shift_vec)
-          self.x86_emit_psll_xmm_xmm(@instr.H16, rd, shift_vec)
+          self.x86_emit_psll_xmm_xmm(H16, rd, shift_vec)
 
           // tmp_xmm = hi_mask = (0xFF00 << count)
           self.x86_emit_pcmpeqd_xmm_xmm(tmp_xmm, tmp_xmm)
           self.x86_emit_psllw_xmm_imm8(tmp_xmm, 8) // 0xFF00
-          self.x86_emit_psll_xmm_xmm(@instr.H16, tmp_xmm, shift_vec)
+          self.x86_emit_psll_xmm_xmm(H16, tmp_xmm, shift_vec)
 
           // cnt_xmm = lo_mask = 0x00FF
           self.x86_emit_pcmpeqd_xmm_xmm(cnt_xmm, cnt_xmm)
@@ -4098,18 +4046,18 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_neg_r64(tmp_gpr)
       self.x86_emit_movq_xmm_r64(cnt_xmm, tmp_gpr)
       match lane_size {
-        @instr.B8 =>
+        B8 =>
           if use_ushl {
             // i8x16 ushr via 16x8 shift + dynamic mask (Cranelift-style idea).
             if rd != vec {
               self.x86_emit_movaps_xmm_xmm(rd, vec)
             }
-            self.x86_emit_psrl_xmm_xmm(@instr.H16, rd, cnt_xmm)
+            self.x86_emit_psrl_xmm_xmm(H16, rd, cnt_xmm)
 
             // tmp_xmm = low_mask = (0x00FF >> count)
             self.x86_emit_pcmpeqd_xmm_xmm(tmp_xmm, tmp_xmm)
             self.x86_emit_psrlw_xmm_imm8(tmp_xmm, 8) // 0x00FF
-            self.x86_emit_psrl_xmm_xmm(@instr.H16, tmp_xmm, cnt_xmm)
+            self.x86_emit_psrl_xmm_xmm(H16, tmp_xmm, cnt_xmm)
 
             // cnt_xmm = high_mask = 0xFF00
             self.x86_emit_pcmpeqd_xmm_xmm(cnt_xmm, cnt_xmm)
@@ -4134,14 +4082,14 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_mov_imm64(tmp_gpr2, 8)
             self.x86_emit_add_rr(tmp_gpr, tmp_gpr2)
             self.x86_emit_movd_xmm_r32(rd, tmp_gpr)
-            self.x86_emit_psra_xmm_xmm(@instr.H16, tmp_xmm, rd)
-            self.x86_emit_psra_xmm_xmm(@instr.H16, cnt_xmm, rd)
+            self.x86_emit_psra_xmm_xmm(H16, tmp_xmm, rd)
+            self.x86_emit_psra_xmm_xmm(H16, cnt_xmm, rd)
             self.x86_emit_packsswb_xmm_xmm(tmp_xmm, cnt_xmm)
             if rd != tmp_xmm {
               self.x86_emit_movaps_xmm_xmm(rd, tmp_xmm)
             }
           }
-        @instr.H16 | @instr.S32 =>
+        H16 | S32 =>
           if use_ushl {
             if rd != vec {
               self.x86_emit_movaps_xmm_xmm(rd, vec)
@@ -4153,12 +4101,12 @@ fn MachineCode::emit_instruction_x86_64(
             }
             self.x86_emit_psra_xmm_xmm(lane_size, rd, cnt_xmm)
           }
-        @instr.D64 =>
+        D64 =>
           if use_ushl {
             if rd != vec {
               self.x86_emit_movaps_xmm_xmm(rd, vec)
             }
-            self.x86_emit_psrl_xmm_xmm(@instr.D64, rd, cnt_xmm)
+            self.x86_emit_psrl_xmm_xmm(D64, rd, cnt_xmm)
           } else {
             // i64x2 sshr via Cranelift `lower_i64x2_sshr_gpr` sequence.
             if rd != vec {
@@ -4168,17 +4116,17 @@ fn MachineCode::emit_instruction_x86_64(
               self, tmp_xmm, 0x8000000000000000L, 0x8000000000000000L, tmp_gpr2,
             )
             // sign_bit_loc = mask >> count
-            self.x86_emit_psrl_xmm_xmm(@instr.D64, tmp_xmm, cnt_xmm)
+            self.x86_emit_psrl_xmm_xmm(D64, tmp_xmm, cnt_xmm)
             // ushr = vec >> count
-            self.x86_emit_psrl_xmm_xmm(@instr.D64, rd, cnt_xmm)
+            self.x86_emit_psrl_xmm_xmm(D64, rd, cnt_xmm)
             // (ushr ^ sign_bit_loc) - sign_bit_loc
             self.x86_emit_pxor_xmm_xmm(rd, tmp_xmm)
-            self.x86_emit_psub_xmm_xmm(@instr.D64, rd, tmp_xmm)
+            self.x86_emit_psub_xmm_xmm(D64, rd, tmp_xmm)
           }
       }
       self.define_label(done)
     }
-    @instr.SIMDNarrow(dst_lane_size, is_signed) => {
+    SIMDNarrow(dst_lane_size, is_signed) => {
       // Narrow two vectors to one, with saturation.
       //
       // Match Cranelift x64 lowering using PACK* instructions.
@@ -4188,13 +4136,13 @@ fn MachineCode::emit_instruction_x86_64(
       let tmp = 15 // reserved via MachineEnvData.scratch_float
       let rhs = prepare_xmm_two_operand(self, rd, a, b, tmp)
       match dst_lane_size {
-        @instr.B8 =>
+        B8 =>
           if is_signed {
             self.x86_emit_packsswb_xmm_xmm(rd, rhs)
           } else {
             self.x86_emit_packuswb_xmm_xmm(rd, rhs)
           }
-        @instr.H16 =>
+        H16 =>
           if is_signed {
             self.x86_emit_packssdw_xmm_xmm(rd, rhs)
           } else {
@@ -4204,7 +4152,7 @@ fn MachineCode::emit_instruction_x86_64(
           abort("amd64 SIMDNarrow: unsupported dst lane size \{dst_lane_size}")
       }
     }
-    @instr.SIMDExtendLow(dst_lane_size, is_signed) => {
+    SIMDExtendLow(dst_lane_size, is_signed) => {
       // Widen the lower half lanes.
       //
       // Match Cranelift x64 `swiden_low`/`uwiden_low` rules using SSE4.1
@@ -4212,19 +4160,19 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match dst_lane_size {
-        @instr.H16 =>
+        H16 =>
           if is_signed {
             self.x86_emit_pmovsxbw_xmm_xmm(rd, src)
           } else {
             self.x86_emit_pmovzxbw_xmm_xmm(rd, src)
           }
-        @instr.S32 =>
+        S32 =>
           if is_signed {
             self.x86_emit_pmovsxwd_xmm_xmm(rd, src)
           } else {
             self.x86_emit_pmovzxwd_xmm_xmm(rd, src)
           }
-        @instr.D64 =>
+        D64 =>
           if is_signed {
             self.x86_emit_pmovsxdq_xmm_xmm(rd, src)
           } else {
@@ -4236,7 +4184,7 @@ fn MachineCode::emit_instruction_x86_64(
           )
       }
     }
-    @instr.SIMDExtendHigh(dst_lane_size, is_signed) => {
+    SIMDExtendHigh(dst_lane_size, is_signed) => {
       // Widen the upper half lanes.
       //
       // Match Cranelift x64 `swiden_high` rules: move the high lanes down then
@@ -4244,7 +4192,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match dst_lane_size {
-        @instr.H16 => {
+        H16 => {
           if rd != src {
             self.x86_emit_movaps_xmm_xmm(rd, src)
           }
@@ -4255,7 +4203,7 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_pmovzxbw_xmm_xmm(rd, rd)
           }
         }
-        @instr.S32 => {
+        S32 => {
           if rd != src {
             self.x86_emit_movaps_xmm_xmm(rd, src)
           }
@@ -4266,7 +4214,7 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_pmovzxwd_xmm_xmm(rd, rd)
           }
         }
-        @instr.D64 => {
+        D64 => {
           if rd != src {
             self.x86_emit_movaps_xmm_xmm(rd, src)
           }
@@ -4284,7 +4232,7 @@ fn MachineCode::emit_instruction_x86_64(
           )
       }
     }
-    @instr.SIMDExtMulLow(dst_lane_size, is_signed) => {
+    SIMDExtMulLow(dst_lane_size, is_signed) => {
       // Multiply lower half lanes and widen the result.
       //
       // Match Cranelift x64 special cases for extmul.
@@ -4294,7 +4242,7 @@ fn MachineCode::emit_instruction_x86_64(
       let t0 = 14 // reserved via MachineEnvData.scratch_float
       let t1 = 15 // reserved via MachineEnvData.scratch_float
       match dst_lane_size {
-        @instr.H16 => {
+        H16 => {
           if is_signed {
             self.x86_emit_pmovsxbw_xmm_xmm(rd, x)
             self.x86_emit_pmovsxbw_xmm_xmm(t0, y)
@@ -4304,7 +4252,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           self.x86_emit_pmullw_xmm_xmm(rd, t0)
         }
-        @instr.S32 => {
+        S32 => {
           // lo = pmullw(x, y); hi = pmulh*(x, y); punpcklwd(lo, hi)
           let mut y_keep = y
           if rd == y {
@@ -4323,7 +4271,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pmullw_xmm_xmm(rd, y_keep)
           self.x86_emit_punpcklwd_xmm_xmm(rd, t0)
         }
-        @instr.D64 => {
+        D64 => {
           let imm = 0x50
           self.x86_emit_pshufd_xmm_xmm_imm8(t0, x, imm)
           self.x86_emit_pshufd_xmm_xmm_imm8(t1, y, imm)
@@ -4340,7 +4288,7 @@ fn MachineCode::emit_instruction_x86_64(
           )
       }
     }
-    @instr.SIMDExtMulHigh(dst_lane_size, is_signed) => {
+    SIMDExtMulHigh(dst_lane_size, is_signed) => {
       // Multiply upper half lanes and widen the result.
       //
       // Match Cranelift x64 special cases for extmul.
@@ -4350,7 +4298,7 @@ fn MachineCode::emit_instruction_x86_64(
       let t0 = 14 // reserved via MachineEnvData.scratch_float
       let t1 = 15 // reserved via MachineEnvData.scratch_float
       match dst_lane_size {
-        @instr.H16 => {
+        H16 => {
           if rd != x {
             self.x86_emit_movaps_xmm_xmm(rd, x)
           }
@@ -4366,7 +4314,7 @@ fn MachineCode::emit_instruction_x86_64(
           }
           self.x86_emit_pmullw_xmm_xmm(rd, t0)
         }
-        @instr.S32 => {
+        S32 => {
           // lo = pmullw(x, y); hi = pmulh*(x, y); punpckhwd(lo, hi)
           let mut y_keep = y
           if rd == y {
@@ -4385,7 +4333,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pmullw_xmm_xmm(rd, y_keep)
           self.x86_emit_punpckhwd_xmm_xmm(rd, t0)
         }
-        @instr.D64 => {
+        D64 => {
           let imm = 0xFA
           self.x86_emit_pshufd_xmm_xmm_imm8(t0, x, imm)
           self.x86_emit_pshufd_xmm_xmm_imm8(t1, y, imm)
@@ -4402,7 +4350,7 @@ fn MachineCode::emit_instruction_x86_64(
           )
       }
     }
-    @instr.SIMDExtAddPairwise(dst_lane_size, is_signed) => {
+    SIMDExtAddPairwise(dst_lane_size, is_signed) => {
       // Pairwise add adjacent lanes and widen the result.
       //
       // Match Cranelift x64 special cases for extadd_pairwise.
@@ -4415,7 +4363,7 @@ fn MachineCode::emit_instruction_x86_64(
         scratch = isa.scratch_reg_2_index()
       }
       match dst_lane_size {
-        @instr.H16 => {
+        H16 => {
           // i16x8.extadd_pairwise_i8x16_{s,u}
           let ones = 0x0101010101010101L
           materialize_xmm_const(self, t0, ones, ones, scratch)
@@ -4437,7 +4385,7 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_pmaddubsw_xmm_xmm(rd, t0)
           }
         }
-        @instr.S32 => {
+        S32 => {
           // i32x4.extadd_pairwise_i16x8_{s,u}
           let madd_ones = 0x0001000100010001L
           if is_signed {
@@ -4458,7 +4406,7 @@ fn MachineCode::emit_instruction_x86_64(
             materialize_xmm_const(self, t1, madd_ones, madd_ones, scratch)
             self.x86_emit_pmaddwd_xmm_xmm(rd, t1)
             materialize_xmm_const(self, t0, addd_const, addd_const, scratch)
-            self.x86_emit_padd_xmm_xmm(@instr.S32, rd, t0)
+            self.x86_emit_padd_xmm_xmm(S32, rd, t0)
           }
         }
         _ =>
@@ -4467,7 +4415,7 @@ fn MachineCode::emit_instruction_x86_64(
           )
       }
     }
-    @instr.SIMDDot => {
+    SIMDDot => {
       // i32x4.dot_i16x8_s: use PMADDWD directly (Cranelift special case).
       let rd = wreg_num(inst.defs[0])
       let x = reg_num(inst.uses[0])
@@ -4476,7 +4424,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rhs = prepare_xmm_two_operand(self, rd, x, y, tmp)
       self.x86_emit_pmaddwd_xmm_xmm(rd, rhs)
     }
-    @instr.SIMDQ15MulrSat => {
+    SIMDQ15MulrSat => {
       // i16x8.q15mulr_sat_s / relaxed_q15mulr_s: rounding multiply high with
       // signed saturation.
       //
@@ -4498,10 +4446,10 @@ fn MachineCode::emit_instruction_x86_64(
       let mask = 0x8000800080008000L
       materialize_xmm_const(self, t0, mask, mask, scratch)
       self.x86_emit_movaps_xmm_xmm(t1, rd)
-      self.x86_emit_pcmpeq_xmm_xmm(@instr.H16, t1, t0)
+      self.x86_emit_pcmpeq_xmm_xmm(H16, t1, t0)
       self.x86_emit_pxor_xmm_xmm(rd, t1)
     }
-    @instr.SIMDFMla(is_f32) => {
+    SIMDFMla(is_f32) => {
       // relaxed_madd: a * b + c
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -4523,7 +4471,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_addpd_xmm_xmm(rd, t0)
       }
     }
-    @instr.SIMDFMls(is_f32) => {
+    SIMDFMls(is_f32) => {
       // relaxed_nmadd: c - a * b
       let rd = wreg_num(inst.defs[0])
       let acc = reg_num(inst.uses[0])
@@ -4545,7 +4493,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_subpd_xmm_xmm(rd, t0)
       }
     }
-    @instr.SIMDRelaxedDot8to16 => {
+    SIMDRelaxedDot8to16 => {
       // Cranelift-aligned x64 strategy: PMADDUBSW with swapped operands.
       // rd = pmaddubsw(b_unsigned, a_signed)
       let rd = wreg_num(inst.defs[0])
@@ -4555,7 +4503,7 @@ fn MachineCode::emit_instruction_x86_64(
       let rhs = prepare_xmm_two_operand(self, rd, b, a, tmp)
       self.x86_emit_pmaddubsw_xmm_xmm(rd, rhs)
     }
-    @instr.SIMDRelaxedDot8to32Add => {
+    SIMDRelaxedDot8to32Add => {
       // Cranelift-style sequence:
       // dot16 = pmaddubsw(b, a)
       // dot32 = pmaddwd(dot16, ones16)
@@ -4578,19 +4526,19 @@ fn MachineCode::emit_instruction_x86_64(
       if rd != acc {
         self.x86_emit_movaps_xmm_xmm(rd, acc)
       }
-      self.x86_emit_padd_xmm_xmm(@instr.S32, rd, dot)
+      self.x86_emit_padd_xmm_xmm(S32, rd, dot)
     }
-    @instr.SIMDLoad(offset) => {
+    SIMDLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
       self.x86_emit_movdqu_xmm_m128(rd, base, offset)
     }
-    @instr.SIMDStore(offset) => {
+    SIMDStore(offset) => {
       let vec = reg_num(inst.uses[0])
       let base = reg_num(inst.uses[1])
       self.x86_emit_movdqu_m128_xmm(base, offset, vec)
     }
-    @instr.SIMDLoadSplat(lane_size, offset) => {
+    SIMDLoadSplat(lane_size, offset) => {
       // Note: current lowering passes `offset=0` because the effective address
       // already includes the wasm memory offset.
       let rd = wreg_num(inst.defs[0])
@@ -4598,7 +4546,7 @@ fn MachineCode::emit_instruction_x86_64(
       let scratch1 = isa.scratch_reg_1_index()
       let scratch2 = isa.scratch_reg_2_index()
       match lane_size {
-        @instr.B8 => {
+        B8 => {
           // i8x16 splat: load u8 -> movd -> pshufb with a zero mask.
           self.x86_emit_movzx_r32_m8(scratch1, base, offset)
           self.x86_emit_movd_xmm_r32(rd, scratch1)
@@ -4609,7 +4557,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pxor_xmm_xmm(mask, mask)
           self.x86_emit_pshufb_xmm_xmm(rd, mask)
         }
-        @instr.H16 => {
+        H16 => {
           // i16x8 splat: duplicate into a dword, then pshufd broadcast.
           self.x86_emit_movzx_r32_m16(scratch1, base, offset)
           self.x86_emit_mov_rr32(scratch2, scratch1)
@@ -4618,19 +4566,19 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_movd_xmm_r32(rd, scratch2)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x00)
         }
-        @instr.S32 => {
+        S32 => {
           self.x86_emit_mov_r32_m32(scratch1, base, offset)
           self.x86_emit_movd_xmm_r32(rd, scratch1)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x00)
         }
-        @instr.D64 => {
+        D64 => {
           self.x86_emit_mov_r64_m64(scratch1, base, offset)
           self.x86_emit_movq_xmm_r64(rd, scratch1)
           self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0x44)
         }
       }
     }
-    @instr.SIMDLoadZero(is_64, offset) => {
+    SIMDLoadZero(is_64, offset) => {
       // Zero-extend 32-bit/64-bit scalar load into v128.
       let rd = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
@@ -4641,7 +4589,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movss_xmm_m32(rd, base, offset)
       }
     }
-    @instr.SIMDLoadExtend(bits, signed, offset) => {
+    SIMDLoadExtend(bits, signed, offset) => {
       // Extend lane values loaded from memory:
       // - 8x8 -> i16x8
       // - 16x4 -> i32x4
@@ -4679,7 +4627,7 @@ fn MachineCode::emit_instruction_x86_64(
         _ => abort("x86_64 SIMDLoadExtend: unsupported src bits \{bits}")
       }
     }
-    @instr.SIMDLoadLane(lane_size, lane, offset) => {
+    SIMDLoadLane(lane_size, lane, offset) => {
       // Insert a scalar loaded from memory into one lane of an existing vector.
       let rd = wreg_num(inst.defs[0])
       let base = reg_num(inst.uses[0])
@@ -4689,49 +4637,49 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movaps_xmm_xmm(rd, vec)
       }
       match lane_size {
-        @instr.B8 => {
+        B8 => {
           self.x86_emit_movzx_r32_m8(scratch, base, offset)
           self.x86_emit_pinsrb_xmm_r32_imm8(rd, scratch, lane)
         }
-        @instr.H16 => {
+        H16 => {
           self.x86_emit_movzx_r32_m16(scratch, base, offset)
           self.x86_emit_pinsrw_xmm_r32_imm8(rd, scratch, lane)
         }
-        @instr.S32 => {
+        S32 => {
           self.x86_emit_mov_r32_m32(scratch, base, offset)
           self.x86_emit_pinsrd_xmm_r32_imm8(rd, scratch, lane)
         }
-        @instr.D64 => {
+        D64 => {
           self.x86_emit_mov_r64_m64(scratch, base, offset)
           self.x86_emit_pinsrq_xmm_r64_imm8(rd, scratch, lane)
         }
       }
     }
-    @instr.SIMDStoreLane(lane_size, lane, offset) => {
+    SIMDStoreLane(lane_size, lane, offset) => {
       // Extract one lane from a vector and store it to memory.
       let base = reg_num(inst.uses[0])
       let vec = reg_num(inst.uses[1])
       let scratch = isa.scratch_reg_1_index()
       match lane_size {
-        @instr.B8 => {
+        B8 => {
           self.x86_emit_pextrb_r32_xmm_imm8(scratch, vec, lane)
           self.x86_emit_mov_m8_r8(base, offset, scratch)
         }
-        @instr.H16 => {
+        H16 => {
           self.x86_emit_pextrw_r32_xmm_imm8(scratch, vec, lane)
           self.x86_emit_mov_m16_r16(base, offset, scratch)
         }
-        @instr.S32 => {
+        S32 => {
           self.x86_emit_pextrd_r32_xmm_imm8(scratch, vec, lane)
           self.x86_emit_mov_m32_r32(base, offset, scratch)
         }
-        @instr.D64 => {
+        D64 => {
           self.x86_emit_pextrq_r64_xmm_imm8(scratch, vec, lane)
           self.x86_emit_mov_m64_r64(base, offset, scratch)
         }
       }
     }
-    @instr.SIMDFCmp(is_f32, kind) => {
+    SIMDFCmp(is_f32, kind) => {
       // Align with Cranelift x64 vector fcmp lowering: use CMPP* immediates,
       // and for `gt/ge` swap operands and use `lt/le` predicate indices.
       let rd = wreg_num(inst.defs[0])
@@ -4742,9 +4690,9 @@ fn MachineCode::emit_instruction_x86_64(
         tmp = 15
       }
       let (lhs, rhs, imm) = match kind {
-        @instr.SIMDFCmpKind::Eq => (x, y, 0)
-        @instr.SIMDFCmpKind::Gt => (y, x, 1) // a > b <=> b < a
-        @instr.SIMDFCmpKind::Ge => (y, x, 2) // a >= b <=> b <= a
+        Eq => (x, y, 0)
+        Gt => (y, x, 1) // a > b <=> b < a
+        Ge => (y, x, 2) // a >= b <=> b <= a
       }
       let rhs_reg = prepare_xmm_two_operand(self, rd, lhs, rhs, tmp)
       if is_f32 {
@@ -4753,7 +4701,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_cmppd_xmm_xmm_imm8(rd, rhs_reg, imm)
       }
     }
-    @instr.SIMDFCvtToIntS(is_f32) => {
+    SIMDFCvtToIntS(is_f32) => {
       // Match Cranelift x64 `fcvt_to_sint_sat` for f32x4:
       // handle NaN and overflow lanes in-vector.
       let rd = wreg_num(inst.defs[0])
@@ -4772,7 +4720,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_psrad_xmm_imm8(t0, 31)
       self.x86_emit_pxor_xmm_xmm(rd, t0)
     }
-    @instr.SIMDFCvtToIntU(is_f32) => {
+    SIMDFCvtToIntU(is_f32) => {
       // Match Cranelift x64 `fcvt_to_uint_sat` for f32x4.
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
@@ -4795,9 +4743,9 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pxor_xmm_xmm(t0, t1)
       self.x86_emit_pxor_xmm_xmm(t1, t1)
       self.x86_emit_pmaxsd_xmm_xmm(t0, t1)
-      self.x86_emit_padd_xmm_xmm(@instr.S32, rd, t0)
+      self.x86_emit_padd_xmm_xmm(S32, rd, t0)
     }
-    @instr.SIMDIntToFloatS(is_f32) => {
+    SIMDIntToFloatS(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -4806,7 +4754,7 @@ fn MachineCode::emit_instruction_x86_64(
         emit_amd64_abort("SIMDIntToFloatS f64x2 is not implemented")
       }
     }
-    @instr.SIMDIntToFloatU(is_f32) => {
+    SIMDIntToFloatU(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if !is_f32 {
@@ -4819,7 +4767,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pslld_xmm_imm8(a_lo, 16)
       self.x86_emit_psrld_xmm_imm8(a_lo, 16)
       self.x86_emit_movaps_xmm_xmm(a_hi, src)
-      self.x86_emit_psub_xmm_xmm(@instr.S32, a_hi, a_lo)
+      self.x86_emit_psub_xmm_xmm(S32, a_hi, a_lo)
       self.x86_emit_cvtdq2ps_xmm_xmm(a_lo, a_lo)
       self.x86_emit_psrld_xmm_imm8(a_hi, 1)
       self.x86_emit_cvtdq2ps_xmm_xmm(a_hi, a_hi)
@@ -4829,7 +4777,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_addps_xmm_xmm(rd, a_lo)
     }
-    @instr.SIMDTruncSatF64ToI32SZero => {
+    SIMDTruncSatF64ToI32SZero => {
       // Match Cranelift x64 special-case lowering for
       // i32x4.trunc_sat_f64x2_s_zero.
       let rd = wreg_num(inst.defs[0])
@@ -4847,7 +4795,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_minpd_xmm_xmm(rd, t0)
       self.x86_emit_cvttpd2dq_xmm_xmm(rd, rd)
     }
-    @instr.SIMDTruncSatF64ToI32UZero => {
+    SIMDTruncSatF64ToI32UZero => {
       // Match Cranelift x64 special-case lowering for
       // i32x4.trunc_sat_f64x2_u_zero.
       let rd = wreg_num(inst.defs[0])
@@ -4869,12 +4817,12 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_addpd_xmm_xmm(rd, t0)
       self.x86_emit_shufps_xmm_xmm_imm8(rd, zeros, 0x88)
     }
-    @instr.SIMDConvertLowI32ToF64S => {
+    SIMDConvertLowI32ToF64S => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       self.x86_emit_cvtdq2pd_xmm_xmm(rd, src)
     }
-    @instr.SIMDConvertLowI32ToF64U => {
+    SIMDConvertLowI32ToF64U => {
       // Match Cranelift x64 `fcvt_from_uint (uwiden_low i32x4)` sequence.
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
@@ -4890,18 +4838,18 @@ fn MachineCode::emit_instruction_x86_64(
       )
       self.x86_emit_subpd_xmm_xmm(rd, t0)
     }
-    @instr.SIMDDemoteF64ToF32Zero => {
+    SIMDDemoteF64ToF32Zero => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       self.x86_emit_xorps_xmm_xmm(rd, rd)
       self.x86_emit_cvtpd2ps_xmm_xmm(rd, src)
     }
-    @instr.SIMDPromoteLowF32ToF64 => {
+    SIMDPromoteLowF32ToF64 => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       self.x86_emit_cvtps2pd_xmm_xmm(rd, src)
     }
-    @instr.SIMDFAdd(is_f32) => {
+    SIMDFAdd(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -4912,7 +4860,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_addpd_xmm_xmm(rd, src)
       }
     }
-    @instr.SIMDFSub(is_f32) => {
+    SIMDFSub(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -4923,7 +4871,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_subpd_xmm_xmm(rd, src)
       }
     }
-    @instr.SIMDFMul(is_f32) => {
+    SIMDFMul(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -4934,7 +4882,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mulpd_xmm_xmm(rd, src)
       }
     }
-    @instr.SIMDFDiv(is_f32) => {
+    SIMDFDiv(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
@@ -4945,7 +4893,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_divpd_xmm_xmm(rd, src)
       }
     }
-    @instr.SIMDFAbs(is_f32) => {
+    SIMDFAbs(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if rd != src {
@@ -4964,7 +4912,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_pand_xmm_xmm(rd, mask)
     }
-    @instr.SIMDFNeg(is_f32) => {
+    SIMDFNeg(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if rd != src {
@@ -4983,7 +4931,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_pxor_xmm_xmm(rd, sign)
     }
-    @instr.SIMDFSqrt(is_f32) => {
+    SIMDFSqrt(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -4992,7 +4940,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_sqrtpd_xmm_xmm(rd, src)
       }
     }
-    @instr.SIMDFCeil(is_f32) => {
+    SIMDFCeil(is_f32) => {
       // Align with Cranelift x64 RoundImm encoding:
       //   ceil: 2 (RoundUp), floor: 1 (RoundDown), nearest: 0, trunc: 3 (RoundZero).
       let rd = wreg_num(inst.defs[0])
@@ -5003,7 +4951,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 2)
       }
     }
-    @instr.SIMDFFloor(is_f32) => {
+    SIMDFFloor(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -5012,7 +4960,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 1)
       }
     }
-    @instr.SIMDFNearest(is_f32) => {
+    SIMDFNearest(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -5021,7 +4969,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 0)
       }
     }
-    @instr.SIMDFTrunc(is_f32) => {
+    SIMDFTrunc(is_f32) => {
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       if is_f32 {
@@ -5030,7 +4978,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_roundpd_xmm_xmm_imm8(rd, src, 3)
       }
     }
-    @instr.SIMDFMin(is_f32) => {
+    SIMDFMin(is_f32) => {
       // Floating-point minimum with NaN propagation and signed-zero rules,
       // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
       // for `fmin`).
@@ -5074,7 +5022,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.SIMDFMax(is_f32) => {
+    SIMDFMax(is_f32) => {
       // Floating-point maximum with NaN propagation and signed-zero rules,
       // aligned with Cranelift x64 lowering (see cranelift x64 lower.isle rules
       // for `fmax`).
@@ -5123,7 +5071,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.SIMDFPMin(is_f32) => {
+    SIMDFPMin(is_f32) => {
       // Pseudo-min: match wasm pmin semantics (select-style, first operand
       // preferred on equality/unordered) by swapping operands for SSE MINP*,
       // which returns the second operand for equal/unordered cases.
@@ -5141,7 +5089,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movaps_xmm_xmm(rd, tmp)
       }
     }
-    @instr.SIMDFPMax(is_f32) => {
+    SIMDFPMax(is_f32) => {
       // Pseudo-max: match wasm pmax semantics (select-style, first operand
       // preferred on equality/unordered) by swapping operands for SSE MAXP*,
       // which returns the second operand for equal/unordered cases.
@@ -5159,21 +5107,21 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_movaps_xmm_xmm(rd, tmp)
       }
     }
-    @instr.SIMDMul(lane_size) => {
+    SIMDMul(lane_size) => {
       let rd = wreg_num(inst.defs[0])
       let a = reg_num(inst.uses[0])
       let b = reg_num(inst.uses[1])
       match lane_size {
-        @instr.B8 => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
-        @instr.H16 => {
+        B8 => abort("x86_64 SIMDMul: unsupported lane size \{lane_size}")
+        H16 => {
           let src = prepare_xmm_two_operand(self, rd, a, b, 14)
           self.x86_emit_pmullw_xmm_xmm(rd, src)
         }
-        @instr.S32 => {
+        S32 => {
           let src = prepare_xmm_two_operand(self, rd, a, b, 14)
           self.x86_emit_pmulld_xmm_xmm(rd, src) // SSE4.1
         }
-        @instr.D64 => {
+        D64 => {
           // Match Cranelift x64 lowering for i64x2.mul without AVX-512:
           //
           // a * b = (Al*Bl) + ((Ah*Bl + Al*Bh) << 32)
@@ -5192,7 +5140,7 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pmuludq_xmm_xmm(t1, a)
 
           // t0 = (Ah*Bl + Al*Bh) << 32
-          self.x86_emit_padd_xmm_xmm(@instr.D64, t0, t1)
+          self.x86_emit_padd_xmm_xmm(D64, t0, t1)
           self.x86_emit_psllq_xmm_imm8(t0, 32)
 
           // t1 = Al * Bl
@@ -5200,14 +5148,14 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pmuludq_xmm_xmm(t1, b)
 
           // t1 += cross terms
-          self.x86_emit_padd_xmm_xmm(@instr.D64, t1, t0)
+          self.x86_emit_padd_xmm_xmm(D64, t1, t0)
           if rd != t1 {
             self.x86_emit_movaps_xmm_xmm(rd, t1)
           }
         }
       }
     }
-    @instr.SIMDCmp(lane_size, kind) => {
+    SIMDCmp(lane_size, kind) => {
       // Integer SIMD comparisons return all-ones/all-zeros lanes.
       let rd = wreg_num(inst.defs[0])
       let x = reg_num(inst.uses[0])
@@ -5251,7 +5199,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_pxor_xmm_xmm(t1, rd) // t1 = rhs_masked
         self.x86_emit_movaps_xmm_xmm(rd, t0) // rd = lhs_masked
         self.x86_emit_pcmpeqd_xmm_xmm(rd, t1) // rd = cmp_eq
-        self.x86_emit_pcmpgt_xmm_xmm(@instr.S32, t0, t1) // t0 = cmp32
+        self.x86_emit_pcmpgt_xmm_xmm(S32, t0, t1) // t0 = cmp32
         self.x86_emit_pshufd_xmm_xmm_imm8(t1, t0, 0xA0) // t1 = low_halves_gt
         self.x86_emit_pshufd_xmm_xmm_imm8(t0, t0, 0xF5) // t0 = high_halves_gt
         self.x86_emit_pshufd_xmm_xmm_imm8(rd, rd, 0xF5) // rd = high_halves_eq
@@ -5261,8 +5209,8 @@ fn MachineCode::emit_instruction_x86_64(
       }
 
       match kind {
-        @instr.SIMDCmpKind::Eq =>
-          if lane_size is @instr.D64 {
+        Eq =>
+          if lane_size is D64 {
             // Match Cranelift x64: emulate pcmpeqq without SSE4.1.
             //
             // cmp32 = pcmpeqd(x, y)
@@ -5276,16 +5224,16 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_movaps_xmm_xmm(rd, x)
             self.x86_emit_pcmpeq_xmm_xmm(lane_size, rd, y)
           }
-        @instr.SIMDCmpKind::GtS =>
-          if lane_size is @instr.D64 {
+        GtS =>
+          if lane_size is D64 {
             emit_i64x2_pcmpgt(self, rd, x, y, t0, t1)
           } else {
             self.x86_emit_movaps_xmm_xmm(rd, x)
             self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, y)
           }
-        @instr.SIMDCmpKind::GeS =>
+        GeS =>
           // a >= b  <=>  !(b > a)
-          if lane_size is @instr.D64 {
+          if lane_size is D64 {
             emit_i64x2_pcmpgt(self, rd, y, x, t0, t1)
             self.x86_emit_pcmpeqd_xmm_xmm(t0, t0)
             self.x86_emit_pxor_xmm_xmm(rd, t0)
@@ -5295,18 +5243,18 @@ fn MachineCode::emit_instruction_x86_64(
             self.x86_emit_pcmpeqd_xmm_xmm(t0, t0)
             self.x86_emit_pxor_xmm_xmm(rd, t0)
           }
-        @instr.SIMDCmpKind::GtU => {
-          if lane_size is @instr.D64 {
+        GtU => {
+          if lane_size is D64 {
             abort(
               "x86_64 SIMDCmp.gt.u: i64x2 unsigned compare not supported by wasm SIMD",
             )
           }
           // Match Cranelift x64: flip sign bit and do signed compare.
           let pattern = match lane_size {
-            @instr.B8 => 0x80808080
-            @instr.H16 => 0x80008000
-            @instr.S32 => 0x80000000
-            @instr.D64 => 0
+            B8 => 0x80808080
+            H16 => 0x80008000
+            S32 => 0x80000000
+            D64 => 0
           }
           emit_broadcast_dword_pattern(self, rd, pattern)
           self.x86_emit_movaps_xmm_xmm(t0, x)
@@ -5316,18 +5264,18 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_movaps_xmm_xmm(rd, t0)
           self.x86_emit_pcmpgt_xmm_xmm(lane_size, rd, t1)
         }
-        @instr.SIMDCmpKind::GeU => {
-          if lane_size is @instr.D64 {
+        GeU => {
+          if lane_size is D64 {
             abort(
               "x86_64 SIMDCmp.ge.u: i64x2 unsigned compare not supported by wasm SIMD",
             )
           }
           // a >= b <=> !(b > a) after unsigned compare.
           let pattern = match lane_size {
-            @instr.B8 => 0x80808080
-            @instr.H16 => 0x80008000
-            @instr.S32 => 0x80000000
-            @instr.D64 => 0
+            B8 => 0x80808080
+            H16 => 0x80008000
+            S32 => 0x80000000
+            D64 => 0
           }
           emit_broadcast_dword_pattern(self, rd, pattern)
           self.x86_emit_movaps_xmm_xmm(t0, y)
@@ -5341,7 +5289,7 @@ fn MachineCode::emit_instruction_x86_64(
         }
       }
     }
-    @instr.SIMDShuffle(lanes) => {
+    SIMDShuffle(lanes) => {
       // i8x16.shuffle: select lanes from two source vectors using constant indices.
       //
       // Match Cranelift x64 lowering strategy: build two SSSE3 `pshufb` masks and
@@ -5395,7 +5343,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_por_xmm_xmm(rd, tmp_b)
     }
-    @instr.SIMDSwizzle => {
+    SIMDSwizzle => {
       // i8x16.swizzle: select lanes from one vector using runtime indices.
       //
       // Match Cranelift x64 lowering: use SSSE3 `pshufb` with a saturating-add
@@ -5418,7 +5366,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_paddusb_xmm_xmm(mask, c70)
       self.x86_emit_pshufb_xmm_xmm(rd, mask)
     }
-    @instr.SIMDBsl => {
+    SIMDBsl => {
       // v128.bitselect(a, b, c) = (a & c) | (b & ~c)
       //
       // Match Cranelift-style bitselect using boolean ops; handle common aliasing
@@ -5452,7 +5400,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_pand_xmm_xmm(rd, c_keep) // (a ^ b) & c
       self.x86_emit_pxor_xmm_xmm(rd, b_keep) // b ^ ...
     }
-    @instr.SIMDAnyTrue => {
+    SIMDAnyTrue => {
       // v128.any_true: return 1 if any bit is set, 0 otherwise.
       //
       // Match Cranelift x64 lowering: compare against zero per byte then
@@ -5471,13 +5419,13 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_movaps_xmm_xmm(tmp, src)
       self.x86_emit_pxor_xmm_xmm(zero, zero)
-      self.x86_emit_pcmpeq_xmm_xmm(@instr.B8, tmp, zero)
+      self.x86_emit_pcmpeq_xmm_xmm(B8, tmp, zero)
       self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
       self.x86_emit_cmp_r32_imm32(scratch, 0xFFFF)
-      self.x86_emit_setcc_r8(@instr.Cond::Ne, rd)
+      self.x86_emit_setcc_r8(Ne, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
-    @instr.SIMDAllTrue(lane_size) => {
+    SIMDAllTrue(lane_size) => {
       // i*x*.all_true: return 1 if all lanes are non-zero, 0 otherwise.
       //
       // Match Cranelift-style lowering: compare lanes against zero, then use
@@ -5490,7 +5438,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       let zero = 15 // reserved via MachineEnvData.scratch_float
       match lane_size {
-        @instr.B8 | @instr.H16 | @instr.S32 => {
+        B8 | H16 | S32 => {
           // tmp is provided by lowering for B8/H16/S32.
           let tmp = wreg_num(inst.defs[1])
           self.x86_emit_movaps_xmm_xmm(tmp, src)
@@ -5498,10 +5446,10 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pcmpeq_xmm_xmm(lane_size, tmp, zero) // lane == 0 => 0xFF..
           self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
           self.x86_emit_cmp_r32_imm32(scratch, 0)
-          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd)
+          self.x86_emit_setcc_r8(Eq, rd)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
-        @instr.D64 => {
+        D64 => {
           // No pcmpeqq without SSE4.1; emulate lane==0 with 32-bit compares.
           //
           // tmp = pcmpeqd(src, 0)
@@ -5517,18 +5465,18 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_pand_xmm_xmm(tmp, tmp2)
           self.x86_emit_pmovmskb_r32_xmm(scratch, tmp)
           self.x86_emit_cmp_r32_imm32(scratch, 0)
-          self.x86_emit_setcc_r8(@instr.Cond::Eq, rd)
+          self.x86_emit_setcc_r8(Eq, rd)
           self.x86_emit_movzx_r32_r8(rd, rd)
         }
       }
     }
-    @instr.SIMDBitmask(lane_size) => {
+    SIMDBitmask(lane_size) => {
       // Extract the MSB/sign bit of each lane into a scalar i32.
       let rd = wreg_num(inst.defs[0])
       let src = reg_num(inst.uses[0])
       match lane_size {
-        @instr.B8 => self.x86_emit_pmovmskb_r32_xmm(rd, src)
-        @instr.H16 => {
+        B8 => self.x86_emit_pmovmskb_r32_xmm(rd, src)
+        H16 => {
           let tmp = 15 // reserved via MachineEnvData.scratch_float
           self.x86_emit_movaps_xmm_xmm(tmp, src)
           self.x86_emit_packsswb_xmm_xmm(tmp, tmp)
@@ -5536,44 +5484,44 @@ fn MachineCode::emit_instruction_x86_64(
           // packsswb(x, x) duplicates the 8-lane mask into both halves.
           self.x86_emit_shr_r32_imm8(rd, 8)
         }
-        @instr.S32 => self.x86_emit_movmskps_r32_xmm(rd, src)
-        @instr.D64 => self.x86_emit_movmskpd_r32_xmm(rd, src)
+        S32 => self.x86_emit_movmskps_r32_xmm(rd, src)
+        D64 => self.x86_emit_movmskpd_r32_xmm(rd, src)
       }
     }
-    @instr.StackLoad(offset) => {
+    StackLoad(offset) => {
       let rd = wreg_num(inst.defs[0])
       let def_class = match inst.defs[0].reg {
-        @abi.Physical(preg) => preg.class
-        @abi.Virtual(vreg) => vreg.class
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
       }
       let disp = spill_base_offset + offset
       match def_class {
-        @abi.Int => self.x86_emit_mov_r64_m64(rd, 4, disp)
-        @abi.Float32 | @abi.Float64 => self.x86_emit_movsd_xmm_m64(rd, 4, disp)
-        @abi.Vector => self.x86_emit_movdqu_xmm_m128(rd, 4, disp)
+        Int => self.x86_emit_mov_r64_m64(rd, 4, disp)
+        Float32 | Float64 => self.x86_emit_movsd_xmm_m64(rd, 4, disp)
+        Vector => self.x86_emit_movdqu_xmm_m128(rd, 4, disp)
       }
     }
-    @instr.StackStore(offset) => {
+    StackStore(offset) => {
       let rt = reg_num(inst.uses[0])
       let use_class = match inst.uses[0] {
-        @abi.Physical(preg) => preg.class
-        @abi.Virtual(vreg) => vreg.class
+        Physical(preg) => preg.class
+        Virtual(vreg) => vreg.class
       }
       let disp = spill_base_offset + offset
       match use_class {
-        @abi.Int => self.x86_emit_mov_m64_r64(4, disp, rt)
-        @abi.Float32 | @abi.Float64 => self.x86_emit_movsd_m64_xmm(4, disp, rt)
-        @abi.Vector => self.x86_emit_movdqu_m128_xmm(4, disp, rt)
+        Int => self.x86_emit_mov_m64_r64(4, disp, rt)
+        Float32 | Float64 => self.x86_emit_movsd_m64_xmm(4, disp, rt)
+        Vector => self.x86_emit_movdqu_m128_xmm(4, disp, rt)
       }
     }
-    @instr.LoadStackParam(offset, class) => {
+    LoadStackParam(offset, class) => {
       // Load from [entry_sp + offset] where entry_sp = rsp + total_size.
       let rd = wreg_num(inst.defs[0])
       let disp = frame_size + offset
       match class {
-        @abi.Int => self.x86_emit_mov_r64_m64(rd, 4, disp)
-        @abi.Float32 | @abi.Float64 => self.x86_emit_movsd_xmm_m64(rd, 4, disp)
-        @abi.Vector => self.x86_emit_movdqu_xmm_m128(rd, 4, disp)
+        Int => self.x86_emit_mov_r64_m64(rd, 4, disp)
+        Float32 | Float64 => self.x86_emit_movsd_xmm_m64(rd, 4, disp)
+        Vector => self.x86_emit_movdqu_xmm_m128(rd, 4, disp)
       }
     }
   }

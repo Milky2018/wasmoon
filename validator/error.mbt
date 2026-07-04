@@ -37,7 +37,7 @@ pub(all) suberror ValidationError {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for ValidationError with output(self, logger) {
+pub impl Show for ValidationError with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -143,7 +143,7 @@ pub fn ValidationErrorContext::format(self : ValidationErrorContext) -> String {
 }
 
 ///|
-pub impl Show for ValidationErrorContext with output(self, logger) {
+pub impl Show for ValidationErrorContext with fn output(self, logger) {
   logger.write_string(self.format())
 }
 

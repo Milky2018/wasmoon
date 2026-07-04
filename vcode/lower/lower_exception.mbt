@@ -68,7 +68,7 @@ fn lower_throw(
   let throw_libcall = if num_operands == 0 {
     @instr.ExceptionLibcall::ThrowTag
   } else {
-    @instr.ExceptionLibcall::Throw
+    Throw
   }
 
   // Load function pointer

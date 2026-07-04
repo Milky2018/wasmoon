@@ -142,7 +142,7 @@ test "emit: comparison" {
 
 ///|
 test "emit: full function" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Create a simple add function: add(a, b) -> a + b
@@ -154,13 +154,13 @@ test "emit: full function" {
 
   // X0 = X0 + X1 (assuming params in X0, X1)
   let add_inst = @instr.VCodeInst::new(Add(true))
-  add_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  add_inst.add_use(@abi.Physical({ index: 0, class: Int }))
-  add_inst.add_use(@abi.Physical({ index: 1, class: Int }))
+  add_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+  add_inst.add_use(Physical({ index: 0, class: Int }))
+  add_inst.add_use(Physical({ index: 1, class: Int }))
   block.add_inst(add_inst)
 
   // Return X0
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // Emit machine code
   let mc = @emit.emit_function(func)
@@ -327,7 +327,7 @@ test "machine code: align with invalid alignment" {
 
 ///|
 test "emit: complete function with control flow" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Test a function with conditional branch:
@@ -348,25 +348,25 @@ test "emit: complete function with control flow" {
   // block0: compare X3 (a) > X4 (b) and branch
   // CMP X3, X4; CSET X8, GT; CBNZ X8, block1; B block2
   let cmp_inst = @instr.VCodeInst::new(Cmp(Sgt, true))
-  cmp_inst.add_def({ reg: @abi.Physical({ index: 8, class: Int }) })
-  cmp_inst.add_use(@abi.Physical({ index: 3, class: Int }))
-  cmp_inst.add_use(@abi.Physical({ index: 4, class: Int }))
+  cmp_inst.add_def({ reg: Physical({ index: 8, class: Int }) })
+  cmp_inst.add_use(Physical({ index: 3, class: Int }))
+  cmp_inst.add_use(Physical({ index: 4, class: Int }))
   block0.add_inst(cmp_inst)
-  block0.set_terminator(Branch(@abi.Physical({ index: 8, class: Int }), 1, 2))
+  block0.set_terminator(Branch(Physical({ index: 8, class: Int }), 1, 2))
 
   // block1: MOV X0, X3; RET
   let mov1 = @instr.VCodeInst::new(Move)
-  mov1.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  mov1.add_use(@abi.Physical({ index: 3, class: Int }))
+  mov1.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov1.add_use(Physical({ index: 3, class: Int }))
   block1.add_inst(mov1)
   block1.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // block2: MOV X0, X4; RET
   let mov2 = @instr.VCodeInst::new(Move)
-  mov2.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  mov2.add_use(@abi.Physical({ index: 4, class: Int }))
+  mov2.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov2.add_use(Physical({ index: 4, class: Int }))
   block2.add_inst(mov2)
-  block2.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block2.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(
@@ -569,7 +569,7 @@ test "emit: multiply-accumulate instructions" {
 
 ///|
 test "emit: complete VCode instruction emission" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Test emit_instruction for various VCodeOpcode values
@@ -582,29 +582,29 @@ test "emit: complete VCode instruction emission" {
   // Add various instructions using physical registers
   // LoadConst
   let ldi = @instr.VCodeInst::new(LoadConst(42L))
-  ldi.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  ldi.add_def({ reg: Physical({ index: 0, class: Int }) })
   block.add_inst(ldi)
 
   // Add
   let add = @instr.VCodeInst::new(Add(true))
-  add.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
-  add.add_use(@abi.Physical({ index: 0, class: Int }))
-  add.add_use(@abi.Physical({ index: 0, class: Int }))
+  add.add_def({ reg: Physical({ index: 1, class: Int }) })
+  add.add_use(Physical({ index: 0, class: Int }))
+  add.add_use(Physical({ index: 0, class: Int }))
   block.add_inst(add)
 
   // Mul
   let mul = @instr.VCodeInst::new(Mul(true))
-  mul.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
-  mul.add_use(@abi.Physical({ index: 1, class: Int }))
-  mul.add_use(@abi.Physical({ index: 0, class: Int }))
+  mul.add_def({ reg: Physical({ index: 2, class: Int }) })
+  mul.add_use(Physical({ index: 1, class: Int }))
+  mul.add_use(Physical({ index: 0, class: Int }))
   block.add_inst(mul)
 
   // Move
   let mov = @instr.VCodeInst::new(Move)
-  mov.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  mov.add_use(@abi.Physical({ index: 2, class: Int }))
+  mov.add_def({ reg: Physical({ index: 0, class: Int }) })
+  mov.add_use(Physical({ index: 2, class: Int }))
   block.add_inst(mov)
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
 
   // Show VCode
   inspect(
@@ -650,7 +650,7 @@ test "emit_mul encoding verification" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Test CallPtr instruction emission with disassembly dump
@@ -661,12 +661,12 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 
   // Put a dummy function pointer in X17 then call it.
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
-  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  load_ptr.add_def({ reg: Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(3, 1, C))
-  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
+  call_inst.add_use(Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
@@ -699,7 +699,7 @@ test "emit: call_ptr(C) instruction disasm (3 args, 1 result)" {
 
 ///|
 test "emit: call_direct(Wasm) emits BL fixup with local veneer fallback" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let func = @regalloc.VCodeFunction::new("test_call_direct_no_fixup")
@@ -707,7 +707,7 @@ test "emit: call_direct(Wasm) emits BL fixup with local veneer fallback" {
   let block = func.new_block()
   let call_inst = @instr.VCodeInst::new(CallDirect(6000, 0, 1, Wasm))
   block.add_inst(call_inst)
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let fixups = mc.get_call_fixups()
   inspect(fixups.length(), content="1")
@@ -721,19 +721,19 @@ test "emit: call_direct(Wasm) emits BL fixup with local veneer fallback" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_1_1")
   func.add_result(Int)
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
-  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  load_ptr.add_def({ reg: Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(1, 1, C))
-  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
+  call_inst.add_use(Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
 
@@ -764,28 +764,28 @@ test "emit: call_ptr(C) instruction disasm (1 arg, 1 result)" {
 
 ///|
 test "emit: select uses 32-bit condition compare" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let func = @regalloc.VCodeFunction::new("test_select_cmp32")
   func.add_result(Int)
   let block = func.new_block()
   let load_cond = @instr.VCodeInst::new(LoadConst(0L))
-  load_cond.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
+  load_cond.add_def({ reg: Physical({ index: 0, class: Int }) })
   block.add_inst(load_cond)
   let load_true = @instr.VCodeInst::new(LoadConst(1L))
-  load_true.add_def({ reg: @abi.Physical({ index: 1, class: Int }) })
+  load_true.add_def({ reg: Physical({ index: 1, class: Int }) })
   block.add_inst(load_true)
   let load_false = @instr.VCodeInst::new(LoadConst(2L))
-  load_false.add_def({ reg: @abi.Physical({ index: 2, class: Int }) })
+  load_false.add_def({ reg: Physical({ index: 2, class: Int }) })
   block.add_inst(load_false)
   let select_inst = @instr.VCodeInst::new(Select)
-  select_inst.add_def({ reg: @abi.Physical({ index: 0, class: Int }) })
-  select_inst.add_use(@abi.Physical({ index: 0, class: Int }))
-  select_inst.add_use(@abi.Physical({ index: 1, class: Int }))
-  select_inst.add_use(@abi.Physical({ index: 2, class: Int }))
+  select_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+  select_inst.add_use(Physical({ index: 0, class: Int }))
+  select_inst.add_use(Physical({ index: 1, class: Int }))
+  select_inst.add_use(Physical({ index: 2, class: Int }))
   block.add_inst(select_inst)
-  block.set_terminator(Return([@abi.Physical({ index: 0, class: Int })]))
+  block.set_terminator(Return([Physical({ index: 0, class: Int })]))
   let mc = @emit.emit_function(func)
   let disasm = mc.dump_disasm()
   inspect(disasm.contains("cmp w0, #0"), content="true")
@@ -794,16 +794,16 @@ test "emit: select uses 32-bit condition compare" {
 
 ///|
 test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let func = @regalloc.VCodeFunction::new("test_call_ptr_c_4_0")
   let block = func.new_block()
   let load_ptr = @instr.VCodeInst::new(LoadConst(0L))
-  load_ptr.add_def({ reg: @abi.Physical({ index: 17, class: Int }) })
+  load_ptr.add_def({ reg: Physical({ index: 17, class: Int }) })
   block.add_inst(load_ptr)
   let call_inst = @instr.VCodeInst::new(CallPtr(4, 0, C))
-  call_inst.add_use(@abi.Physical({ index: 17, class: Int }))
+  call_inst.add_use(Physical({ index: 17, class: Int }))
   block.add_inst(call_inst)
   block.set_terminator(Return([]))
   let mc = @emit.emit_function(func)
@@ -836,7 +836,7 @@ test "emit: call_ptr(C) instruction disasm (4 args, 0 result)" {
 
 ///|
 test "emit: Trap terminator encodes BRK immediate by trap message" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   fn find_first_brk_imm(bytes : Array[Int]) -> Int? {

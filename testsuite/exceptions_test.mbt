@@ -286,7 +286,7 @@ test "exception_conditional_throw_ref" {
     #|  )
     #|)
   // Test case where we don't re-throw (arg = 1)
-  let result1 = compare_jit_interp(source, "test", [@types.Value::I32(1)])
+  let result1 = compare_jit_interp(source, "test", [I32(1)])
   inspect(result1, content="matched")
 }
 

@@ -18,7 +18,7 @@ fn RegClass::to_string(self : RegClass) -> String {
 }
 
 ///|
-pub impl Show for RegClass with output(self, logger) {
+pub impl Show for RegClass with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -38,7 +38,7 @@ fn Reg::to_string(self : Reg) -> String {
 }
 
 ///|
-pub impl Show for Reg with output(self, logger) {
+pub impl Show for Reg with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -59,6 +59,6 @@ fn OperandConstraint::to_string(self : OperandConstraint) -> String {
 }
 
 ///|
-pub impl Show for OperandConstraint with output(self, logger) {
+pub impl Show for OperandConstraint with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

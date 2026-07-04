@@ -29,7 +29,7 @@ pub(all) suberror RuntimeError {
 
 ///|
 /// Custom Show implementation for WebAssembly-spec-compliant error messages
-pub impl Show for RuntimeError with output(self, logger) {
+pub impl Show for RuntimeError with fn output(self, logger) {
   let msg = match self {
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
@@ -153,7 +153,7 @@ pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
 }
 
 ///|
-pub impl Show for RuntimeErrorContext with output(self, logger) {
+pub impl Show for RuntimeErrorContext with fn output(self, logger) {
   logger.write_string(self.format())
 }
 

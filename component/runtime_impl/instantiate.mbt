@@ -26,7 +26,7 @@ fn instantiate_component(
       type_id: -1,
       rep: 0,
       dtor: None,
-      kind: ResourceKind::GuestDefined,
+      kind: GuestDefined,
     }),
   )
   let may_enter_self : Array[Bool] = [false]
@@ -45,7 +45,7 @@ fn instantiate_component(
         }
         for inst in core_instances {
           match inst.expr {
-            CoreInstanceExpr::Instantiate(module_idx, args) => {
+            Instantiate(module_idx, args) => {
               if module_idx < 0 || module_idx >= state.core_modules.length() {
                 raise InvalidCoreModuleIndex(module_idx)
               }
@@ -101,7 +101,7 @@ fn instantiate_component(
               linker.core_linker.register(module_name, instance)
               state.core_instances.push(core_instance_from_module(instance))
             }
-            CoreInstanceExpr::InlineExports(exports) =>
+            InlineExports(exports) =>
               state.core_instances.push(
                 build_inline_core_instance(exports, state),
               )
@@ -143,7 +143,7 @@ fn instantiate_component(
         }
         for inst in instances {
           match inst.expr {
-            InstanceExpr::Instantiate(component_idx, args) => {
+            Instantiate(component_idx, args) => {
               if component_idx < 0 || component_idx >= state.components.length() {
                 raise InvalidComponentIndex(component_idx)
               }
@@ -162,7 +162,7 @@ fn instantiate_component(
               )
               state.instances.push(nested)
             }
-            InstanceExpr::InlineExports(exports) => {
+            InlineExports(exports) => {
               let export_map : Map[String, ComponentExtern] = {}
               for ex in exports {
                 let ext = resolve_sortidx(ex.sortidx, state)
@@ -200,7 +200,7 @@ fn instantiate_component(
         }
         for alias_decl in aliases {
           let ext = match alias_decl.target {
-            AliasTarget::Export(instance_idx, name) => {
+            Export(instance_idx, name) => {
               if instance_idx < 0 || instance_idx >= state.instances.length() {
                 raise InvalidInstanceIndex(instance_idx)
               }
@@ -209,42 +209,42 @@ fn instantiate_component(
                 None => raise UnknownExport(name)
               }
             }
-            AliasTarget::CoreExport(core_inst_idx, name) => {
+            CoreExport(core_inst_idx, name) => {
               if core_inst_idx < 0 ||
                 core_inst_idx >= state.core_instances.length() {
                 raise InvalidCoreInstanceIndex(core_inst_idx)
               }
               let core_inst = state.core_instances[core_inst_idx]
               match alias_decl.sort {
-                Sort::Core(0x00) =>
+                Core(0x00) =>
                   match core_inst.funcs.get(name) {
-                    Some(v) => ComponentExtern::CoreFunc(v)
+                    Some(v) => CoreFunc(v)
                     None => raise UnknownExport(name)
                   }
-                Sort::Core(0x01) =>
+                Core(0x01) =>
                   match core_inst.tables.get(name) {
-                    Some(v) => ComponentExtern::CoreTable(v)
+                    Some(v) => CoreTable(v)
                     None => raise UnknownExport(name)
                   }
-                Sort::Core(0x02) =>
+                Core(0x02) =>
                   match core_inst.memories.get(name) {
-                    Some(v) => ComponentExtern::CoreMemory(v)
+                    Some(v) => CoreMemory(v)
                     None => raise UnknownExport(name)
                   }
-                Sort::Core(0x03) =>
+                Core(0x03) =>
                   match core_inst.globals.get(name) {
-                    Some(v) => ComponentExtern::CoreGlobal(v)
+                    Some(v) => CoreGlobal(v)
                     None => raise UnknownExport(name)
                   }
-                Sort::Core(0x04) =>
+                Core(0x04) =>
                   match core_inst.tags.get(name) {
-                    Some(v) => ComponentExtern::CoreTag(v)
+                    Some(v) => CoreTag(v)
                     None => raise UnknownExport(name)
                   }
                 _ => raise AliasTargetMismatch("core export sort")
               }
             }
-            AliasTarget::Outer(ct, idx) =>
+            Outer(ct, idx) =>
               resolve_outer_alias(
                 extend_outer_stack(
                   outer_stack,
@@ -264,7 +264,7 @@ fn instantiate_component(
         }
         for t in types {
           let t2 = match t {
-            TypeDef::ResourceType(id, rep, dtor, kind) =>
+            ResourceType(id, rep, dtor, kind) =>
               if id < 0 {
                 TypeDef::ResourceType(
                   linker.alloc_resource_id(),
@@ -329,34 +329,34 @@ fn instantiate_component(
             store,
           )
           match imp.desc {
-            ExternDesc::CoreModuleType(_) =>
+            CoreModuleType(_) =>
               match ext {
-                ComponentExtern::CoreModule(m) => state.core_modules.push(m)
+                CoreModule(m) => state.core_modules.push(m)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
-            ExternDesc::FuncType(_) =>
+            FuncType(_) =>
               match ext {
-                ComponentExtern::Func(f) => state.funcs.push(f)
+                Func(f) => state.funcs.push(f)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
-            ExternDesc::Value(_) =>
+            Value(_) =>
               match ext {
-                ComponentExtern::Value(v) => state.values.push(v)
+                Value(v) => state.values.push(v)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
-            ExternDesc::Type(_) =>
+            Type(_) =>
               match ext {
-                ComponentExtern::Type(t) => state.types.push(t)
+                Type(t) => state.types.push(t)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
-            ExternDesc::ComponentType(_) =>
+            ComponentType(_) =>
               match ext {
-                ComponentExtern::Component(c) => state.components.push(c)
+                Component(c) => state.components.push(c)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
-            ExternDesc::InstanceType(_) =>
+            InstanceType(_) =>
               match ext {
-                ComponentExtern::Instance(i) => state.instances.push(i)
+                Instance(i) => state.instances.push(i)
                 _ => raise UnknownImport(decode_import_name(imp.name))
               }
           }

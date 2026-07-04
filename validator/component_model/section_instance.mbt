@@ -139,14 +139,14 @@ fn validate_component_section_instance(
                   if sort != a.sortidx.sort {
                     raise ComponentImportTypeMismatch(a.name)
                   } else {
-                    if sort is @component.Sort::Func {
+                    if sort is Func {
                       pending_func_args.push((a.name, a.sortidx.idx))
                     }
-                    if sort is @component.Sort::Instance {
+                    if sort is Instance {
                       pending_instance_args.push((a.name, a.sortidx.idx))
                     }
                     match (sort, expected_import_instance_sigs) {
-                      (@component.Sort::Instance, Some(sig_map)) =>
+                      (Instance, Some(sig_map)) =>
                         match sig_map.get(a.name) {
                           Some(req) => {
                             let actual = if a.sortidx.idx >= 0 &&
@@ -162,7 +162,7 @@ fn validate_component_section_instance(
                       _ => ()
                     }
                     match (sort, expected_import_core_modules) {
-                      (@component.Sort::Core(0x11), Some(core_map)) =>
+                      (Core(0x11), Some(core_map)) =>
                         match core_map.get(a.name) {
                           Some(req) =>
                             if a.sortidx.idx >= 0 &&
@@ -179,7 +179,7 @@ fn validate_component_section_instance(
                       _ => ()
                     }
                     match (sort, expected_import_core_module_import_sigs) {
-                      (@component.Sort::Core(0x11), Some(sig_map)) =>
+                      (Core(0x11), Some(sig_map)) =>
                         match sig_map.get(a.name) {
                           Some(req) => {
                             let actual_sig = core_module_import_sig_of_idx(
@@ -193,7 +193,7 @@ fn validate_component_section_instance(
                         }
                       _ => ()
                     }
-                    if sort is @component.Sort::Type {
+                    if sort is Type {
                       pending_type_args.push((a.name, a.sortidx.idx))
                     }
                   }
@@ -232,14 +232,14 @@ fn validate_component_section_instance(
                     match tmap {
                       Some(map) =>
                         match map.get(tname) {
-                          Some(ExportedTypeInfo::Resource(actual_rid)) =>
+                          Some(Resource(actual_rid)) =>
                             rid_subst.set(expected_rid, actual_rid)
-                          Some(ExportedTypeInfo::Existing(tidx)) =>
+                          Some(Existing(tidx)) =>
                             match
                               type_sig_of_typeidx(
                                 tidx, type_table, resource_ids,
                               ) {
-                              TypeSig::Resource(actual_rid) =>
+                              Resource(actual_rid) =>
                                 rid_subst.set(expected_rid, actual_rid)
                               _ =>
                                 raise SectionParseError(
@@ -268,14 +268,14 @@ fn validate_component_section_instance(
             for kv in pending_type_args {
               let (name, idx) = kv
               match bounds.get(name) {
-                Some(@component.TypeBound::SubResource) =>
+                Some(SubResource) =>
                   match sigs.get(name) {
-                    Some(TypeSig::Resource(expected_rid)) => {
+                    Some(Resource(expected_rid)) => {
                       let actual_sig = type_sig_of_typeidx(
                         idx, type_table, resource_ids,
                       )
                       match actual_sig {
-                        TypeSig::Resource(actual_rid) =>
+                        Resource(actual_rid) =>
                           rid_subst.set(expected_rid, actual_rid)
                         _ =>
                           raise SectionParseError(
@@ -292,7 +292,7 @@ fn validate_component_section_instance(
             for kv in pending_type_args {
               let (name, idx) = kv
               match bounds.get(name) {
-                Some(@component.TypeBound::Eq(_)) =>
+                Some(Eq(_)) =>
                   match sigs.get(name) {
                     Some(req0) => {
                       let req = type_sig_subst_resources(req0, rid_subst)
@@ -301,15 +301,15 @@ fn validate_component_section_instance(
                       )
                       if actual != req {
                         match (req, actual) {
-                          (TypeSig::Resource(_), TypeSig::Resource(_)) =>
+                          (Resource(_), Resource(_)) =>
                             raise SectionParseError(
                               5, "resource types are not the same",
                             )
-                          (TypeSig::Resource(_), _) =>
+                          (Resource(_), _) =>
                             raise SectionParseError(
                               5, "expected resource, found defined type",
                             )
-                          (_, TypeSig::Resource(_)) =>
+                          (_, Resource(_)) =>
                             raise SectionParseError(
                               5, "expected defined type, found resource",
                             )
@@ -415,32 +415,27 @@ fn validate_component_section_instance(
                 let (name, sig0) = kv
                 sig_out.set(name, type_sig_subst_resources(sig0, rid_subst))
                 match sig0 {
-                  TypeSig::Resource(rid0) =>
+                  Resource(rid0) =>
                     match rid_subst.get(rid0) {
                       Some(actual_rid) => {
                         let mut found : Int? = None
                         for i in 0..<type_table.length() {
                           if type_sig_of_typeidx(i, type_table, resource_ids) ==
-                            TypeSig::Resource(actual_rid) {
+                            Resource(actual_rid) {
                             found = Some(i)
                             break
                           }
                         }
                         match found {
-                          Some(idx) =>
-                            out.set(name, ExportedTypeInfo::Existing(idx))
-                          None =>
-                            out.set(
-                              name,
-                              ExportedTypeInfo::Resource(actual_rid),
-                            )
+                          Some(idx) => out.set(name, Existing(idx))
+                          None => out.set(name, Resource(actual_rid))
                         }
                       }
                       None => {
                         let rid = next_resource_id
                         next_resource_id += 1
                         rid_subst.set(rid0, rid)
-                        out.set(name, ExportedTypeInfo::Resource(rid))
+                        out.set(name, Resource(rid))
                       }
                     }
                   _ => {
@@ -453,9 +448,8 @@ fn validate_component_section_instance(
                       }
                     }
                     match found {
-                      Some(idx) =>
-                        out.set(name, ExportedTypeInfo::Existing(idx))
-                      None => out.set(name, ExportedTypeInfo::Opaque)
+                      Some(idx) => out.set(name, Existing(idx))
+                      None => out.set(name, Opaque)
                     }
                   }
                 }
@@ -540,15 +534,15 @@ fn validate_component_section_instance(
           }
           map.set(ex.name, ex.sortidx.sort)
           match ex.sortidx.sort {
-            @component.Sort::Type => {
+            Type => {
               t_idxs.push(ex.sortidx.idx)
-              type_map.set(ex.name, ExportedTypeInfo::Existing(ex.sortidx.idx))
+              type_map.set(ex.name, Existing(ex.sortidx.idx))
               type_sig_map.set(
                 ex.name,
                 type_sig_of_typeidx(ex.sortidx.idx, type_table, resource_ids),
               )
             }
-            @component.Sort::Func => {
+            Func => {
               f_idxs.push(ex.sortidx.idx)
               let sig = if ex.sortidx.idx >= 0 &&
                 ex.sortidx.idx < func_sig_shapes.length() {
@@ -574,7 +568,7 @@ fn validate_component_section_instance(
             _ => ()
           }
           match ex.sortidx.sort {
-            @component.Sort::Instance => {
+            Instance => {
               let delta = if ex.sortidx.idx >= 0 &&
                 ex.sortidx.idx < instance_sizes.length() {
                 instance_sizes[ex.sortidx.idx]

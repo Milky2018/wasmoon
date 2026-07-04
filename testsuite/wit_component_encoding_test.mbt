@@ -29,7 +29,7 @@ test "wit component encode (minimal)" {
     }
   }
   match @component.sniff_binary_kind(bytes) {
-    Some(@component.BinaryKind::Component) => ()
+    Some(Component) => ()
     _ => fail("expected component binary kind")
   }
   let c = @component.parse_component(bytes) catch {

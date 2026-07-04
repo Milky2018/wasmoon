@@ -1,13 +1,31 @@
 ///|
+fn validate_module_has_error(
+  mod : @types.Module,
+  matches : (ValidationError) -> Bool,
+) -> Bool {
+  try validate_module(mod) catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+fn validate_module_with_context_error(mod : @types.Module) -> ValidationError? {
+  try validate_module_with_context(mod) catch {
+    err => Some(err)
+  } noraise {
+    _ => None
+  }
+}
+
+///|
 test "validator: valid simple function" {
   let func : @types.FunctionCode = {
     locals: [],
     body: [I32Const(1), I32Const(2), I32Add],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -34,10 +52,7 @@ test "validator: valid function with params" {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -63,10 +78,7 @@ test "validator: type mismatch - wrong operand type" {
     locals: [],
     body: [I64Const(1L), I32Const(2), I32Add], // i64 + i32 is invalid
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -83,21 +95,17 @@ test "validator: type mismatch - wrong operand type" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("Expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I32, got I64")
+    }),
   )
 }
 
 ///|
 test "validator: stack underflow" {
   let func : @types.FunctionCode = { locals: [], body: [I32Const(1), I32Add] } // needs 2 operands, only has 1
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -114,11 +122,10 @@ test "validator: stack underflow" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(StackUnderflow("Expected I32, but stack is empty"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is StackUnderflow("Expected I32, but stack is empty")
+    }),
   )
 }
 
@@ -142,7 +149,9 @@ test "validator: invalid local index" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidLocalIndex(5))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidLocalIndex(5)),
+  )
 }
 
 ///|
@@ -151,10 +160,7 @@ test "validator: valid function call" {
   // func 1: calls func 0 and returns result
   let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
   let func1 : @types.FunctionCode = { locals: [], body: [Call(0)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -180,14 +186,8 @@ test "validator: valid global operations" {
     locals: [],
     body: [GlobalGet(0), I32Const(1), I32Add, GlobalSet(0), GlobalGet(0)],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let global_type : @types.GlobalType = {
-    value_type: @types.ValueType::I32,
-    mutable: true,
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let global_type : @types.GlobalType = { value_type: I32, mutable: true }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -214,10 +214,7 @@ test "validator: stack height - function returns too many values" {
     locals: [],
     body: [I32Const(1), I32Const(2)], // 2 values, but only 1 expected
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -234,11 +231,11 @@ test "validator: stack height - function returns too many values" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(StackHeightMismatch("function return: expected stack height 1, got 2"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err
+      is StackHeightMismatch("function return: expected stack height 1, got 2")
+    }),
   )
 }
 
@@ -246,10 +243,7 @@ test "validator: stack height - function returns too many values" {
 test "validator: stack height - function returns too few values" {
   // Function type says returns 2 values, but body only leaves 1
   let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32, I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -267,7 +261,7 @@ test "validator: stack height - function returns too few values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -279,20 +273,14 @@ test "validator: stack height - block returns correct values" {
     locals: [],
     body: [
       Block(
-        @types.BlockType::TypeIndex(0),
+        TypeIndex(0),
         [I32Const(10), I32Const(20)], // returns 2 i32
       ),
       I32Add,
     ],
   }
-  let block_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let block_type : @types.FuncType = { params: [], results: [I32, I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(block_type),
@@ -320,17 +308,9 @@ test "validator: stack height - block leaves wrong number of values" {
   // Block type says 1 result, but body leaves 2
   let func : @types.FunctionCode = {
     locals: [],
-    body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        I32Const(1),
-        I32Const(2),
-      ]),
-    ],
+    body: [Block(Value(I32), [I32Const(1), I32Const(2)])],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -348,7 +328,7 @@ test "validator: stack height - block leaves wrong number of values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -361,15 +341,10 @@ test "validator: stack height - if branches must match" {
     locals: [],
     body: [
       I32Const(1), // condition
-      If(@types.BlockType::Value(@types.ValueType::I32), [I32Const(10)], [
-        I32Const(20),
-      ]),
+      If(Value(I32), [I32Const(10)], [I32Const(20)]),
     ],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -411,7 +386,7 @@ test "validator: stack height - void function with leftover values" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(StackHeightMismatch(_)),
+    validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
     content="true",
   )
 }
@@ -421,17 +396,9 @@ test "validator: control flow - valid br in block" {
   // Block with br that exits with correct value
   let func : @types.FunctionCode = {
     locals: [],
-    body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
-        I32Const(42),
-        Br(0),
-      ]),
-    ],
+    body: [Block(Value(I32), [I32Const(42), Br(0)])],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -473,7 +440,7 @@ test "validator: control flow - invalid label index" {
     func_names: {},
   }
   inspect(
-    (try? validate_module(mod)) is Err(InvalidLabelIndex(1)),
+    validate_module_has_error(mod, err => err is InvalidLabelIndex(1)),
     content="true",
   )
 }
@@ -484,19 +451,16 @@ test "validator: control flow - nested blocks with br" {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
+      Block(Value(I32), [
         Block(
-          @types.BlockType::Empty,
+          Empty,
           [I32Const(100), Br(1)], // br 1 jumps to outer block
         ),
         I32Const(0), // unreachable
       ]),
     ],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -521,7 +485,7 @@ test "validator: control flow - br_if with correct type" {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
+      Block(Value(I32), [
         I32Const(42),
         I32Const(1), // condition
         BrIf(0), // conditional branch
@@ -530,10 +494,7 @@ test "validator: control flow - br_if with correct type" {
       ]),
     ],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -562,7 +523,7 @@ test "validator: control flow - loop with br back to start" {
     locals: [],
     body: [
       Loop(
-        @types.BlockType::TypeIndex(0),
+        TypeIndex(0),
         [Br(0)], // br 0 in loop jumps to start, carries params (empty)
       ),
     ],
@@ -593,12 +554,9 @@ test "validator: control flow - loop with br back to start" {
 test "validator: control flow - return in nested block" {
   let func : @types.FunctionCode = {
     locals: [],
-    body: [Block(@types.BlockType::Empty, [I32Const(42), Return]), I32Const(0)],
+    body: [Block(Empty, [I32Const(42), Return]), I32Const(0)],
   } // unreachable after block with return
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -623,17 +581,14 @@ test "validator: control flow - br_table basic" {
   let func : @types.FunctionCode = {
     locals: [],
     body: [
-      Block(@types.BlockType::Value(@types.ValueType::I32), [
+      Block(Value(I32), [
         I32Const(42), // value to branch with
         I32Const(0), // index
         BrTable([0], 0), // all targets go to same block
       ]),
     ],
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -695,10 +650,7 @@ test "validator: validate_module_with_context provides location on error" {
     locals: [],
     body: [I64Const(1L), I32Const(2), I32Add], // Type mismatch at index 2
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -715,10 +667,10 @@ test "validator: validate_module_with_context provides location on error" {
     tags: [],
     func_names: {},
   }
-  let result = try? validate_module_with_context(mod)
+  let result = validate_module_with_context_error(mod)
   // Should fail with context
   match result {
-    Err(WithContext(ctx)) => {
+    Some(WithContext(ctx)) => {
       assert_true(ctx.func_idx is Some(0))
       assert_true(ctx.instr_offset is Some(2))
       assert_true(ctx.instruction is Some(_))
@@ -732,10 +684,7 @@ test "validator: validate_module_with_context reports correct function index" {
   // First function is valid, second has error
   let func0 : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
   let func1 : @types.FunctionCode = { locals: [], body: [LocalGet(99)] } // Invalid local index
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -752,9 +701,9 @@ test "validator: validate_module_with_context reports correct function index" {
     tags: [],
     func_names: {},
   }
-  let result = try? validate_module_with_context(mod)
+  let result = validate_module_with_context_error(mod)
   match result {
-    Err(WithContext(ctx)) => {
+    Some(WithContext(ctx)) => {
       // Should report error in function 1 (not 0)
       assert_true(ctx.func_idx is Some(1))
       assert_true(ctx.instr_offset is Some(0))
@@ -814,11 +763,10 @@ test "validator: data segment with i64 offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got I64")
+    }),
   )
 }
 
@@ -839,17 +787,14 @@ test "validator: data segment with ref.null offset should fail" {
     start: None,
     elems: [],
     codes: [],
-    datas: [
-      { memory_idx: 0, offset: [RefNull(@types.ValueType::FuncRef)], init: b"" },
-    ],
+    datas: [{ memory_idx: 0, offset: [RefNull(FuncRef)], init: b"" }],
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got FuncRef"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got FuncRef")
+    }),
   )
 }
 
@@ -874,11 +819,10 @@ test "validator: data segment with empty offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("empty constant expression"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("empty constant expression")
+    }),
   )
 }
 
@@ -903,7 +847,9 @@ test "validator: data segment with non-constant instruction should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -927,7 +873,9 @@ test "validator: data segment with nop offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -951,7 +899,9 @@ test "validator: data segment with unknown global should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
+  )
 }
 
 ///|
@@ -967,10 +917,7 @@ test "validator: data segment with mutable global offset should fail" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
     globals: [
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: true },
-        init: [I32Const(0)],
-      },
+      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
     ],
     exports: [],
     start: None,
@@ -980,7 +927,9 @@ test "validator: data segment with mutable global offset should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+  assert_true(
+    validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
+  )
 }
 
 ///|
@@ -1004,7 +953,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1020,10 +969,7 @@ test "validator: data segment with immutable global offset should pass" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
     globals: [
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: false },
-        init: [I32Const(0)],
-      },
+      { type_: { value_type: I32, mutable: false }, init: [I32Const(0)] },
     ],
     exports: [],
     start: None,
@@ -1033,7 +979,7 @@ test "validator: data segment with immutable global offset should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1051,7 +997,7 @@ test "validator: elem segment with i64 offset should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1062,23 +1008,16 @@ test "validator: elem segment with i64 offset should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [I64Const(0L)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [I64Const(0L)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(
-    try? validate_module(mod),
-    content=(
-      #|Err(TypeMismatch("constant expression: expected I32, got I64"))
-    ),
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("constant expression: expected I32, got I64")
+    }),
   )
 }
 
@@ -1093,7 +1032,7 @@ test "validator: elem segment with non-constant instruction should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1104,15 +1043,15 @@ test "validator: elem segment with non-constant instruction should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      { mode: Active(0, [I32Ctz]), type_: @types.ValueType::FuncRef, init: [] },
-    ],
+    elems: [{ mode: Active(0, [I32Ctz]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(ConstantExpressionRequired)")
+  assert_true(
+    validate_module_has_error(mod, err => err is ConstantExpressionRequired),
+  )
 }
 
 ///|
@@ -1126,7 +1065,7 @@ test "validator: elem segment with unknown global should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1137,19 +1076,15 @@ test "validator: elem segment with unknown global should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [GlobalGet(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidGlobalIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
+  )
 }
 
 ///|
@@ -1163,7 +1098,7 @@ test "validator: elem segment with mutable global offset should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1172,26 +1107,19 @@ test "validator: elem segment with mutable global offset should fail" {
     ],
     memories: [],
     globals: [
-      {
-        type_: { value_type: @types.ValueType::I32, mutable: true },
-        init: [I32Const(0)],
-      },
+      { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
     ],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [GlobalGet(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [GlobalGet(0)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(MutableGlobalInConstExpr)")
+  assert_true(
+    validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
+  )
 }
 
 ///|
@@ -1207,19 +1135,15 @@ test "validator: elem segment with invalid table index should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidTableIndex(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTableIndex(0)),
+  )
 }
 
 ///|
@@ -1233,7 +1157,7 @@ test "validator: elem segment type mismatch with table should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::ExternRef,
+          elem_type: ExternRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1244,19 +1168,16 @@ test "validator: elem segment type mismatch with table should fail" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+  inspect(
+    validate_module_has_error(mod, err => err is TypeMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -1269,7 +1190,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1280,19 +1201,13 @@ test "validator: elem segment with valid i32 const offset should pass" {
     globals: [],
     exports: [],
     start: None,
-    elems: [
-      {
-        mode: Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      },
-    ],
+    elems: [{ mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [] }],
     codes: [],
     datas: [],
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1306,7 +1221,7 @@ test "validator: elem init with wrong type should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -1320,8 +1235,8 @@ test "validator: elem init with wrong type should fail" {
     elems: [
       {
         mode: Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefNull(@types.ValueType::ExternRef)]],
+        type_: FuncRef,
+        init: [[RefNull(ExternRef)]],
       },
     ],
     codes: [],
@@ -1329,7 +1244,10 @@ test "validator: elem init with wrong type should fail" {
     tags: [],
     func_names: {},
   }
-  inspect((try? validate_module(mod)) is Err(TypeMismatch(_)), content="true")
+  inspect(
+    validate_module_has_error(mod, err => err is TypeMismatch(_)),
+    content="true",
+  )
 }
 
 ///|
@@ -1344,7 +1262,7 @@ test "validator: elem with unknown function should fail" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 2, max: None },
           is_table64: false,
         },
@@ -1358,7 +1276,7 @@ test "validator: elem with unknown function should fail" {
     elems: [
       {
         mode: Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
+        type_: FuncRef,
         init: [[RefFunc(0)], [RefFunc(0)]], // references func 0, which doesn't exist
       },
     ],
@@ -1368,7 +1286,7 @@ test "validator: elem with unknown function should fail" {
     func_names: {},
   }
   // Should fail with "unknown function" error
-  inspect((try? validate_module(mod)) is Err(_), content="true")
+  inspect(validate_module_has_error(mod, _ => true), content="true")
 }
 
 // ============================================================
@@ -1395,7 +1313,7 @@ test "regression: invalid type index should fail" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(2))")
+  assert_true(validate_module_has_error(mod, err => err is InvalidTypeIndex(2)))
 }
 
 ///|
@@ -1415,7 +1333,7 @@ test "regression: uninitialized non-nullable local should fail" {
     elems: [],
     codes: [
       {
-        locals: [@types.ValueType::RefFunc], // non-nullable ref local
+        locals: [RefFunc], // non-nullable ref local
         body: [LocalGet(0), Drop],
       },
     ],
@@ -1423,7 +1341,9 @@ test "regression: uninitialized non-nullable local should fail" {
     tags: [],
     func_names: {},
   } // reading uninitialized local
-  inspect(try? validate_module(mod), content="Err(UninitializedLocal(0))")
+  assert_true(
+    validate_module_has_error(mod, err => err is UninitializedLocal(0)),
+  )
 }
 
 ///|
@@ -1442,15 +1362,11 @@ test "regression: initialized non-nullable local should pass" {
     start: None,
     elems: [
       // Need to declare function 0 for ref.func usage
-      {
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(0)]],
-        mode: Declarative,
-      },
+      { type_: FuncRef, init: [[RefFunc(0)]], mode: Declarative },
     ],
     codes: [
       {
-        locals: [@types.ValueType::FuncRef], // nullable ref local
+        locals: [FuncRef], // nullable ref local
         body: [
           RefFunc(0), // push a FuncRef value
           LocalSet(0), // set the local
@@ -1463,7 +1379,7 @@ test "regression: initialized non-nullable local should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1483,7 +1399,7 @@ test "regression: nullable ref local reading without initialization should pass"
     elems: [],
     codes: [
       {
-        locals: [@types.ValueType::FuncRef], // nullable ref local
+        locals: [FuncRef], // nullable ref local
         body: [LocalGet(0), Drop],
       },
     ],
@@ -1491,14 +1407,14 @@ test "regression: nullable ref local reading without initialization should pass"
     tags: [],
     func_names: {},
   } // reading uninitialized nullable local is OK
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
 test "regression: param with non-nullable ref type should be initialized" {
   // Function parameters are always initialized by the caller
   let mod : @types.Module = {
-    types: [@types.SubType::func([@types.ValueType::RefFunc], [])],
+    types: [@types.SubType::func([RefFunc], [])],
     type_rec_groups: [0, 1],
     imports: [],
     funcs: [0],
@@ -1513,7 +1429,7 @@ test "regression: param with non-nullable ref type should be initialized" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1556,44 +1472,30 @@ fn field(
 ///|
 /// Helper: create a SubType wrapping a struct
 fn struct_subtype(fields : Array[@types.FieldType]) -> @types.SubType {
-  {
-    final_: true,
-    supertypes: [],
-    composite: @types.CompositeType::Struct({ fields, }),
-  }
+  { final_: true, supertypes: [], composite: Struct({ fields, }) }
 }
 
 ///|
 /// Helper: create a SubType wrapping an array
 fn array_subtype(element : @types.FieldType) -> @types.SubType {
-  {
-    final_: true,
-    supertypes: [],
-    composite: @types.CompositeType::Array({ element, }),
-  }
+  { final_: true, supertypes: [], composite: Array({ element, }) }
 }
 
 ///|
 test "validator: module with struct type should pass" {
   let mod = module_with_types(
-    [
-      struct_subtype([
-        field(@types.StorageType::Val(I32)),
-        field(@types.StorageType::Val(F64), mutable=true),
-      ]),
-    ],
+    [struct_subtype([field(Val(I32)), field(Val(F64), mutable=true)])],
     [0],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
 test "validator: module with array type should pass" {
-  let mod = module_with_types(
-    [array_subtype(field(@types.StorageType::Val(I32), mutable=true))],
-    [0],
-  )
-  inspect(try? validate_module(mod), content="Ok(())")
+  let mod = module_with_types([array_subtype(field(Val(I32), mutable=true))], [
+    0,
+  ])
+  validate_module(mod)
 }
 
 ///|
@@ -1601,13 +1503,13 @@ test "validator: struct with packed field types should pass" {
   let mod = module_with_types(
     [
       struct_subtype([
-        field(@types.StorageType::Packed(I8), mutable=true),
-        field(@types.StorageType::Packed(I16), mutable=true),
+        field(Packed(I8), mutable=true),
+        field(Packed(I16), mutable=true),
       ]),
     ],
     [0],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1615,20 +1517,22 @@ test "validator: struct with ref field referencing valid type should pass" {
   let mod = module_with_types(
     [
       @types.SubType::func([], [I32]),
-      struct_subtype([field(@types.StorageType::Val(RefNullFuncTyped(0)))]),
+      struct_subtype([field(Val(RefNullFuncTyped(0)))]),
     ],
     [0, 1],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
 test "validator: struct with ref field referencing invalid type should fail" {
   let mod = module_with_types(
-    [struct_subtype([field(@types.StorageType::Val(RefNullFuncTyped(99)))])],
+    [struct_subtype([field(Val(RefNullFuncTyped(99)))])],
     [0],
   )
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(99))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTypeIndex(99)),
+  )
 }
 
 ///|
@@ -1636,12 +1540,12 @@ test "validator: forward ref within rec group should pass" {
   // Type 0 references type 1 (forward reference within same rec group)
   let mod = module_with_types(
     [
-      struct_subtype([field(@types.StorageType::Val(RefNullStruct(1)))]),
-      struct_subtype([field(@types.StorageType::Val(RefNullStruct(0)))]),
+      struct_subtype([field(Val(RefNullStruct(1)))]),
+      struct_subtype([field(Val(RefNullStruct(0)))]),
     ],
     [0, 0], // Same rec group
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
@@ -1649,39 +1553,35 @@ test "validator: forward ref outside rec group should fail" {
   // Type 0 references type 1, but they're in different rec groups
   let mod = module_with_types(
     [
-      struct_subtype([field(@types.StorageType::Val(RefNullStruct(1)))]),
-      struct_subtype([field(@types.StorageType::Val(I32))]),
+      struct_subtype([field(Val(RefNullStruct(1)))]),
+      struct_subtype([field(Val(I32))]),
     ],
     [0, 1], // Different rec groups
   )
-  inspect(try? validate_module(mod), content="Err(UnknownType(1))")
+  assert_true(validate_module_has_error(mod, err => err is UnknownType(1)))
 }
 
 ///|
 test "validator: array with ref element referencing valid type should pass" {
   let mod = module_with_types(
     [
-      struct_subtype([field(@types.StorageType::Val(I32))]),
-      array_subtype(
-        field(@types.StorageType::Val(RefNullStruct(0)), mutable=true),
-      ),
+      struct_subtype([field(Val(I32))]),
+      array_subtype(field(Val(RefNullStruct(0)), mutable=true)),
     ],
     [0, 1],
   )
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 ///|
 test "validator: array with ref element referencing invalid type should fail" {
   let mod = module_with_types(
-    [
-      array_subtype(
-        field(@types.StorageType::Val(RefNullArray(50)), mutable=true),
-      ),
-    ],
+    [array_subtype(field(Val(RefNullArray(50)), mutable=true))],
     [0],
   )
-  inspect(try? validate_module(mod), content="Err(InvalidTypeIndex(50))")
+  assert_true(
+    validate_module_has_error(mod, err => err is InvalidTypeIndex(50)),
+  )
 }
 
 ///|
@@ -1689,8 +1589,8 @@ test "validator: mixed func, struct, array types should pass" {
   let mod : @types.Module = {
     types: [
       @types.SubType::func([I32], [I32]),
-      struct_subtype([field(@types.StorageType::Val(I64), mutable=true)]),
-      array_subtype(field(@types.StorageType::Val(F32))),
+      struct_subtype([field(Val(I64), mutable=true)]),
+      array_subtype(field(Val(F32))),
     ],
     type_rec_groups: [0, 1, 2],
     imports: [],
@@ -1706,7 +1606,7 @@ test "validator: mixed func, struct, array types should pass" {
     tags: [],
     func_names: {},
   }
-  inspect(try? validate_module(mod), content="Ok(())")
+  validate_module(mod)
 }
 
 // ============================================================
@@ -1752,7 +1652,7 @@ fn module_with_table(
   let func_type : @types.FuncType = { params: [], results }
   let table_type : @types.TableType = {
     limits: { min: 1L, max: None },
-    elem_type: @types.ValueType::FuncRef,
+    elem_type: FuncRef,
     is_table64,
   }
   {
@@ -1794,9 +1694,10 @@ test "validator: memory64 rejects i32 address" {
     [I32],
     is_memory64=true,
   )
-  inspect(
-    try? validate_module(mod),
-    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I64, got I32")
+    }),
   )
 }
 
@@ -1853,9 +1754,10 @@ test "validator: table64 rejects i32 index" {
     [FuncRef],
     is_table64=true,
   )
-  inspect(
-    try? validate_module(mod),
-    content="Err(TypeMismatch(\"Expected I64, got I32\"))",
+  assert_true(
+    validate_module_has_error(mod, err => {
+      err is TypeMismatch("Expected I64, got I32")
+    }),
   )
 }
 

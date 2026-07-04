@@ -450,47 +450,47 @@ pub fn Table::size(Self) -> Int
 
 // Traits
 pub(open) trait GcHeap {
-  alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  alloc_array(Self, Int, Array[@types.Value]) -> Int
-  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_len(Self, Int) -> Int raise RuntimeError
-  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-  get_type_idx(Self, Int) -> Int raise RuntimeError
-  is_valid(Self, Int) -> Bool
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_len(Self, Int) -> Int raise RuntimeError
+  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  fn get_type_idx(Self, Int) -> Int raise RuntimeError
+  fn is_valid(Self, Int) -> Bool
 }
 
 pub(open) trait GcManager {
-  alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  alloc_array(Self, Int, Array[@types.Value]) -> Int
-  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_len(Self, Int) -> Int raise RuntimeError
-  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-  get_type_idx(Self, Int) -> Int raise RuntimeError
-  is_valid(Self, Int) -> Bool
-  should_collect(Self) -> Bool
-  collect(Self, Array[@types.Value]) -> Unit
-  stats(Self) -> GcStats
-  write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_len(Self, Int) -> Int raise RuntimeError
+  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  fn get_type_idx(Self, Int) -> Int raise RuntimeError
+  fn is_valid(Self, Int) -> Bool
+  fn should_collect(Self) -> Bool
+  fn collect(Self, Array[@types.Value]) -> Unit
+  fn stats(Self) -> GcStats
+  fn write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
 }
 
 pub(open) trait GcRuntime {
-  should_collect(Self) -> Bool
-  collect(Self, Array[@types.Value]) -> Unit
-  force_collect(Self, Array[@types.Value]) -> Unit
-  write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
-  write_barrier_post(Self, Int, @types.Value) -> Unit
-  read_barrier(Self, Int) -> @types.Value
-  stats(Self) -> GcStats
-  collection_count(Self) -> Int
-  set_threshold(Self, Int) -> Unit
-  get_threshold(Self) -> Int
+  fn should_collect(Self) -> Bool
+  fn collect(Self, Array[@types.Value]) -> Unit
+  fn force_collect(Self, Array[@types.Value]) -> Unit
+  fn write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
+  fn write_barrier_post(Self, Int, @types.Value) -> Unit
+  fn read_barrier(Self, Int) -> @types.Value
+  fn stats(Self) -> GcStats
+  fn collection_count(Self) -> Int
+  fn set_threshold(Self, Int) -> Unit
+  fn get_threshold(Self) -> Int
 }
 

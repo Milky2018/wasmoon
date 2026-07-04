@@ -44,7 +44,7 @@ test "f32 store/load with align=1" {
     code_bytes,
     "test",
     [], // param_types
-    [@types.ValueType::F32], // result_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -95,7 +95,7 @@ test "f64 store/load with align=1" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::F64],
+    [F64],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -143,7 +143,7 @@ test "i32 store/load at unaligned address" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::I32],
+    [I32],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -191,7 +191,7 @@ test "i64 store/load at unaligned address" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::I64],
+    [I64],
     4096L,
   )
   guard jit_module is Some(jm) else { return }
@@ -239,7 +239,7 @@ test "f64 store/load at offset 5" {
     code_bytes,
     "test",
     [],
-    [@types.ValueType::F64],
+    [F64],
     4096L,
   )
   guard jit_module is Some(jm) else { return }

@@ -1,7 +1,7 @@
 ///|
 /// Lowering profile keeps machine-level memory merge rewrites disabled.
 test "lowering_profile_keeps_store8_pairs" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Test case: two adjacent store8 with constant addresses

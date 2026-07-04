@@ -118,7 +118,7 @@ fn FunctionTemperature::to_string(self : FunctionTemperature) -> String {
 }
 
 ///|
-pub impl Show for FunctionTemperature with output(self, logger) {
+pub impl Show for FunctionTemperature with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -159,9 +159,9 @@ pub fn Profiler::new(threshold : HotThreshold) -> Profiler {
   {
     counter: CallCounter::new(),
     threshold,
-    hot_functions: @hashset.new(),
-    pending_compilation: @hashset.new(),
-    compiled_functions: @hashset.new(),
+    hot_functions: HashSet([]),
+    pending_compilation: HashSet([]),
+    compiled_functions: HashSet([]),
   }
 }
 
@@ -250,6 +250,6 @@ fn Profiler::to_string(self : Profiler) -> String {
 }
 
 ///|
-pub impl Show for Profiler with output(self, logger) {
+pub impl Show for Profiler with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

@@ -1,6 +1,15 @@
 // Tests for .cwasm format
 
 ///|
+fn deserialize_has_error(bytes : Array[Int], message : String) -> Bool {
+  try deserialize(bytes) catch {
+    DeserializeError(msg) => msg == message
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "target arch: to_byte and from_byte" {
   inspect(TargetArch::Unknown.to_byte(), content="0")
   inspect(TargetArch::X86_64.to_byte(), content="1")
@@ -126,7 +135,7 @@ test "serialize and deserialize: multiple functions" {
 ///|
 test "deserialize: invalid magic" {
   let bytes : Array[Int] = [0x00, 0x00, 0x00, 0x00]
-  inspect(try? deserialize(bytes), content="Err(Invalid magic number)")
+  inspect(deserialize_has_error(bytes, "Invalid magic number"), content="true")
 }
 
 ///|
@@ -136,12 +145,18 @@ test "deserialize: unsupported version" {
     0x63, 0x77, 0x61, 0x73, // magic
      0x01, 0x00, 0x00, 0x00,
   ] // version 1
-  inspect(try? deserialize(v1_bytes), content="Err(Unsupported version: 1)")
+  inspect(
+    deserialize_has_error(v1_bytes, "Unsupported version: 1"),
+    content="true",
+  )
   let v3_bytes : Array[Int] = [
     0x63, 0x77, 0x61, 0x73, // magic
      0x03, 0x00, 0x00, 0x00,
   ] // version 3
-  inspect(try? deserialize(v3_bytes), content="Err(Unsupported version: 3)")
+  inspect(
+    deserialize_has_error(v3_bytes, "Unsupported version: 3"),
+    content="true",
+  )
 }
 
 ///|

@@ -139,7 +139,7 @@ fn Parser::resolve_label(self : Parser, name : String) -> Int? {
 fn Parser::resolve_memory(self : Parser, name : String) -> Int raise WatError {
   match self.memory_names.get(name) {
     Some(idx) => idx
-    None => raise WatError::UndefinedIdentifier("memory $\{name}", self.loc())
+    None => raise UndefinedIdentifier("memory $\{name}", self.loc())
   }
 }
 
@@ -160,22 +160,18 @@ fn Parser::parse_field_idx(self : Parser, type_idx : Int) -> Int raise WatError 
               idx
             }
             None =>
-              raise WatError::UndefinedIdentifier(
+              raise UndefinedIdentifier(
                 "field $\{name} in type \{type_idx}",
                 self.loc(),
               )
           }
         None =>
-          raise WatError::UndefinedIdentifier(
+          raise UndefinedIdentifier(
             "field $\{name} in type \{type_idx}",
             self.loc(),
           )
       }
-    _ =>
-      raise WatError::UnexpectedToken(
-        "expected field index or name",
-        self.loc(),
-      )
+    _ => raise UnexpectedToken("expected field index or name", self.loc())
   }
 }
 
@@ -231,11 +227,7 @@ fn Parser::skip_to_matching_rparen(self : Parser) -> Unit raise WatError {
 fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
   match self.current.token {
     LParen => self.advance()
-    _ =>
-      raise WatError::UnexpectedToken(
-        "expected '(', got \{self.current}",
-        self.loc(),
-      )
+    _ => raise UnexpectedToken("expected '(', got \{self.current}", self.loc())
   }
 }
 
@@ -243,11 +235,7 @@ fn Parser::expect_lparen(self : Parser) -> Unit raise WatError {
 fn Parser::expect_rparen(self : Parser) -> Unit raise WatError {
   match self.current.token {
     RParen => self.advance()
-    _ =>
-      raise WatError::UnexpectedToken(
-        "expected ')', got \{self.current}",
-        self.loc(),
-      )
+    _ => raise UnexpectedToken("expected ')', got \{self.current}", self.loc())
   }
 }
 
@@ -258,16 +246,10 @@ fn Parser::expect_keyword(self : Parser, kw : String) -> Unit raise WatError {
       if k == kw {
         self.advance()
       } else {
-        raise WatError::UnexpectedToken(
-          "expected '\{kw}', got '\{k}'",
-          self.loc(),
-        )
+        raise UnexpectedToken("expected '\{kw}', got '\{k}'", self.loc())
       }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected '\{kw}', got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected '\{kw}', got \{self.current}", self.loc())
   }
 }
 
@@ -287,10 +269,7 @@ fn Parser::parse_u32(self : Parser) -> Int raise WatError {
       parse_u32(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -303,10 +282,7 @@ fn Parser::parse_u64(self : Parser) -> Int64 raise WatError {
       parse_u64(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -318,10 +294,7 @@ fn Parser::parse_i32(self : Parser) -> Int raise WatError {
       parse_int(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -333,10 +306,7 @@ fn Parser::parse_i64(self : Parser) -> Int64 raise WatError {
       parse_int64(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -348,10 +318,7 @@ fn Parser::parse_f32(self : Parser) -> Float raise WatError {
       parse_float32(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -363,10 +330,7 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
       parse_float64(s)
     }
     _ =>
-      raise WatError::UnexpectedToken(
-        "expected number, got \{self.current}",
-        self.loc(),
-      )
+      raise UnexpectedToken("expected number, got \{self.current}", self.loc())
   }
 }
 
@@ -379,7 +343,7 @@ fn Parser::parse_f64(self : Parser) -> Double raise WatError {
 ///          (v128.const f32x4 v0 v1 v2 v3)
 ///          (v128.const f64x2 v0 v1)
 fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(size_hint=16)
   // Parse the lane type keyword
   match self.current.token {
     Keyword(lane_type) => {
@@ -439,14 +403,14 @@ fn Parser::parse_v128_const(self : Parser) -> Bytes raise WatError {
             buf.write_byte((v >> 56).to_byte())
           }
         _ =>
-          raise WatError::ParseError(
+          raise ParseError(
             "invalid v128.const lane type: \{lane_type}",
             self.loc(),
           )
       }
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected lane type (i8x16, i16x8, etc), got \{self.current}",
         self.loc(),
       )
@@ -472,100 +436,96 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::FuncRef
+            FuncRef
           } else {
-            @types.ValueType::RefFunc
+            RefFunc
           }
         }
         Keyword("extern") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::ExternRef
+            ExternRef
           } else {
-            @types.ValueType::RefExtern
+            RefExtern
           }
         }
         Keyword("any") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::AnyRef
+            AnyRef
           } else {
-            @types.ValueType::RefAny
+            RefAny
           }
         }
         Keyword("exn") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::ExnRef // exn only has nullable form in current spec
+          ExnRef // exn only has nullable form in current spec
         }
         Keyword("none") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::NullRef // bottom type for any
+          NullRef // bottom type for any
         }
         Keyword("nofunc") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::NullFuncRef // bottom type for func
+          NullFuncRef // bottom type for func
         }
         Keyword("noexn") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::NullExnRef // bottom type for exn
+          NullExnRef // bottom type for exn
         }
         Keyword("noextern") => {
           self.advance()
           self.expect_rparen()
-          @types.ValueType::NullExternRef // bottom type for extern
+          NullExternRef // bottom type for extern
         }
         // GC abstract heap types
         Keyword("struct") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::RefNullStruct(-1) // -1 means abstract struct type
+            RefNullStruct(-1) // -1 means abstract struct type
           } else {
-            @types.ValueType::RefStruct(-1)
+            RefStruct(-1)
           }
         }
         Keyword("array") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::RefNullArray(-1) // -1 means abstract array type
+            RefNullArray(-1) // -1 means abstract array type
           } else {
-            @types.ValueType::RefArray(-1)
+            RefArray(-1)
           }
         }
         Keyword("i31") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::RefNullI31
+            RefNullI31
           } else {
-            @types.ValueType::RefI31
+            RefI31
           }
         }
         Keyword("eq") => {
           self.advance()
           self.expect_rparen()
           if is_nullable {
-            @types.ValueType::RefNullEq
+            RefNullEq
           } else {
-            @types.ValueType::RefEq
+            RefEq
           }
         }
         Id(name) => {
           // Typed reference like (ref $t)
           let type_idx = match self.type_names.get(name) {
             Some(idx) => idx
-            None =>
-              raise WatError::UnexpectedToken(
-                "unknown type \{name}",
-                self.loc(),
-              )
+            None => raise UnexpectedToken("unknown type \{name}", self.loc())
           }
           self.advance()
           self.expect_rparen()
@@ -582,9 +542,9 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
           self.expect_rparen()
           // Default to FuncRef/RefFunc based on nullability
           if is_nullable {
-            @types.ValueType::FuncRef
+            FuncRef
           } else {
-            @types.ValueType::RefFunc
+            RefFunc
           }
         }
       }
@@ -611,14 +571,11 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
         "structref" => RefNullStruct(-1) // -1 means abstract struct type
         "arrayref" => RefNullArray(-1) // -1 means abstract array type
         _ =>
-          raise WatError::UnexpectedToken(
-            "expected value type, got '\{kw}'",
-            self.loc(),
-          )
+          raise UnexpectedToken("expected value type, got '\{kw}'", self.loc())
       }
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected value type, got \{self.current}",
         self.loc(),
       )
@@ -630,7 +587,7 @@ fn Parser::parse_value_type(self : Parser) -> @types.ValueType raise WatError {
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    if imp.desc is @types.ImportDesc::Func(_) {
+    if imp.desc is Func(_) {
       count = count + 1
     }
   }
@@ -641,7 +598,7 @@ fn count_func_imports(imports : Array[@types.Import]) -> Int {
 fn count_table_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    if imp.desc is @types.ImportDesc::Table(_) {
+    if imp.desc is Table(_) {
       count = count + 1
     }
   }
@@ -652,7 +609,7 @@ fn count_table_imports(imports : Array[@types.Import]) -> Int {
 fn count_global_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    if imp.desc is @types.ImportDesc::Global(_) {
+    if imp.desc is Global(_) {
       count = count + 1
     }
   }
@@ -663,7 +620,7 @@ fn count_global_imports(imports : Array[@types.Import]) -> Int {
 fn count_memory_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    if imp.desc is @types.ImportDesc::Memory(_) {
+    if imp.desc is Memory(_) {
       count = count + 1
     }
   }
@@ -674,7 +631,7 @@ fn count_memory_imports(imports : Array[@types.Import]) -> Int {
 fn count_tag_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
   for imp in imports {
-    if imp.desc is @types.ImportDesc::Tag(_) {
+    if imp.desc is Tag(_) {
       count = count + 1
     }
   }
@@ -687,7 +644,7 @@ pub fn parse(input : String) -> @types.Module raise WatError {
   let parser = Parser::new(input)
   let mod_ = parser.parse_module()
   if parser.current.token != Eof {
-    raise WatError::UnexpectedToken("unexpected trailing tokens", parser.loc())
+    raise UnexpectedToken("unexpected trailing tokens", parser.loc())
   }
   mod_
 }
@@ -1002,10 +959,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 mod_.funcs.push(type_idx)
                 mod_.codes.push(code)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Func(func_idx),
-                  })
+                  mod_.exports.push({ name, desc: Func(func_idx) })
                 }
               }
               InlineImport(imp, export_names) => {
@@ -1013,10 +967,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let func_idx = count_func_imports(mod_.imports)
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Func(func_idx),
-                  })
+                  mod_.exports.push({ name, desc: Func(func_idx) })
                 }
               }
             }
@@ -1026,44 +977,35 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let mem_idx = mod_.memories.length()
                 mod_.memories.push(mem)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Memory(mem_idx),
-                  })
+                  mod_.exports.push({ name, desc: Memory(mem_idx) })
                 }
               }
               MemoryImport(imp, export_names) => {
                 // Count existing memory imports
                 let mut memory_import_count = 0
                 for existing in mod_.imports {
-                  if existing.desc is @types.ImportDesc::Memory(_) {
+                  if existing.desc is Memory(_) {
                     memory_import_count += 1
                   }
                 }
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Memory(memory_import_count),
-                  })
+                  mod_.exports.push({ name, desc: Memory(memory_import_count) })
                 }
               }
               MemoryWithData(mem, export_names, data_bytes) => {
                 let mem_idx = mod_.memories.length()
                 mod_.memories.push(mem)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Memory(mem_idx),
-                  })
+                  mod_.exports.push({ name, desc: Memory(mem_idx) })
                 }
                 // Add inline data segment at offset 0
                 mod_.datas.push({
                   memory_idx: mem_idx,
                   offset: if mem.is_memory64 {
-                    [@types.Instruction::I64Const(0L)]
+                    [I64Const(0L)]
                   } else {
-                    [@types.Instruction::I32Const(0)]
+                    [I32Const(0)]
                   },
                   init: data_bytes,
                 })
@@ -1075,7 +1017,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 // Count existing global imports for correct global index
                 let mut num_global_imports = 0
                 for existing in mod_.imports {
-                  if existing.desc is @types.ImportDesc::Global(_) {
+                  if existing.desc is Global(_) {
                     num_global_imports += 1
                   }
                 }
@@ -1083,26 +1025,20 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                 let global_idx = num_global_imports + mod_.globals.length()
                 mod_.globals.push(global)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Global(global_idx),
-                  })
+                  mod_.exports.push({ name, desc: Global(global_idx) })
                 }
               }
               GlobalImport(imp, export_names) => {
                 // Count existing global imports
                 let mut global_import_count = 0
                 for existing in mod_.imports {
-                  if existing.desc is @types.ImportDesc::Global(_) {
+                  if existing.desc is Global(_) {
                     global_import_count += 1
                   }
                 }
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Global(global_import_count),
-                  })
+                  mod_.exports.push({ name, desc: Global(global_import_count) })
                 }
               }
             }
@@ -1125,10 +1061,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
               self.table_names.set(name, table_idx)
             }
             if export_name is Some(name) {
-              mod_.exports.push({
-                name,
-                desc: @types.ExportDesc::Table(table_idx),
-              })
+              mod_.exports.push({ name, desc: Table(table_idx) })
             }
             if inline_elem is Some(elem) {
               mod_.elems.push(elem)
@@ -1157,33 +1090,23 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
                   mod_.tags.length()
                 mod_.tags.push(tag)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Tag(tag_idx),
-                  })
+                  mod_.exports.push({ name, desc: Tag(tag_idx) })
                 }
               }
               TagImport(imp, export_names) => {
                 let tag_idx = count_tag_imports(mod_.imports)
                 mod_.imports.push(imp)
                 for name in export_names {
-                  mod_.exports.push({
-                    name,
-                    desc: @types.ExportDesc::Tag(tag_idx),
-                  })
+                  mod_.exports.push({ name, desc: Tag(tag_idx) })
                 }
               }
             }
           Keyword(kw) =>
-            raise WatError::UnexpectedToken(
-              "unexpected module field: \{kw}",
-              self.loc(),
-            )
-          _ =>
-            raise WatError::UnexpectedToken("expected module field", self.loc())
+            raise UnexpectedToken("unexpected module field: \{kw}", self.loc())
+          _ => raise UnexpectedToken("expected module field", self.loc())
         }
       }
-      _ => raise WatError::UnexpectedToken("expected '(' in module", self.loc())
+      _ => raise UnexpectedToken("expected '(' in module", self.loc())
     }
   }
   self.expect_rparen()

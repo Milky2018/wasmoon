@@ -113,11 +113,7 @@ fn ExecContext::push_label(
   is_loop : Bool,
   arity : Int,
 ) -> Unit {
-  self.labels.push(LabelInfo::{
-    is_loop,
-    arity,
-    stack_height: self.stack.size(),
-  })
+  self.labels.push({ is_loop, arity, stack_height: self.stack.size() })
 }
 
 ///|
@@ -155,7 +151,7 @@ fn ExecContext::push_frame(
   frame : @runtime.Frame,
 ) -> Unit raise @runtime.RuntimeError {
   if self.frames.length() >= MAX_CALL_STACK_DEPTH {
-    raise @runtime.CallStackExhausted
+    raise CallStackExhausted
   }
   self.frames.push(frame)
   self.current_frame = self.frames.length() - 1
@@ -166,7 +162,7 @@ fn ExecContext::pop_frame(
   self : ExecContext,
 ) -> Unit raise @runtime.RuntimeError {
   if self.frames.length() == 0 {
-    raise @runtime.CallStackExhausted
+    raise CallStackExhausted
   }
   self.frames.pop() |> ignore
   self.current_frame = self.frames.length() - 1
@@ -177,7 +173,7 @@ fn ExecContext::get_frame(
   self : ExecContext,
 ) -> @runtime.Frame raise @runtime.RuntimeError {
   if self.current_frame < 0 || self.current_frame >= self.frames.length() {
-    raise @runtime.CallStackExhausted
+    raise CallStackExhausted
   }
   self.frames[self.current_frame]
 }

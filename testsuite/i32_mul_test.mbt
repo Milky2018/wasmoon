@@ -1,6 +1,6 @@
 ///|
 test "i32 mul" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let source =
@@ -88,8 +88,8 @@ test "i32 mul" {
   let jit_module = @jit.JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32], // param_types
-    [@types.ValueType::I32], // result_types
+    [I32], // param_types
+    [I32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }

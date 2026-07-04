@@ -41,8 +41,8 @@ test "jit_stack_frame_with_spills" {
   inspect(
     frame.total_size,
     content=match isa {
-      @isa.AArch64 => "64"
-      @isa.AMD64 => "56"
+      AArch64 => "64"
+      AMD64 => "56"
     },
   )
 }
@@ -65,8 +65,8 @@ test "jit_stack_frame_with_fprs" {
   inspect(
     frame.total_size,
     content=match isa {
-      @isa.AArch64 => "32"
-      @isa.AMD64 => "24"
+      AArch64 => "32"
+      AMD64 => "24"
     },
   )
 }
@@ -88,8 +88,8 @@ test "jit_stack_frame_with_calls" {
   inspect(
     frame.setup_area_size,
     content=match isa {
-      @isa.AArch64 => "16"
-      @isa.AMD64 => "8"
+      AArch64 => "16"
+      AMD64 => "8"
     },
   )
   inspect(frame.saved_gprs.length(), content="0") // Only X19
@@ -100,8 +100,8 @@ test "jit_stack_frame_with_clobbered_gprs" {
   // Frame with additional clobbered GPRs
   let isa = @isa.ISA::current()
   let clobbered = match isa {
-    @isa.AArch64 => [20, 25, 26]
-    @isa.AMD64 => [3, 12, 13] // rbx, r12, r13
+    AArch64 => [20, 25, 26]
+    AMD64 => [3, 12, 13] // rbx, r12, r13
   }
   let frame = JITStackFrame::build(
     clobbered,
@@ -134,8 +134,8 @@ test "jit_stack_frame_odd_fprs" {
 test "jit_stack_frame_alignment" {
   let isa = @isa.ISA::current()
   let expected_mod = match isa {
-    @isa.AArch64 => "0"
-    @isa.AMD64 => "8"
+    AArch64 => "0"
+    AMD64 => "8"
   }
   let frame1 = JITStackFrame::build(
     [],
@@ -200,8 +200,8 @@ test "jit_stack_frame_outgoing_args" {
   inspect(
     frame.total_size,
     content=match isa {
-      @isa.AArch64 => "48"
-      @isa.AMD64 => "40"
+      AArch64 => "48"
+      AMD64 => "40"
     },
   )
 }
@@ -216,8 +216,8 @@ test "jit_stack_frame_complex" {
   // outgoing_args: 16
   let isa = @isa.ISA::current()
   let clobbered = match isa {
-    @isa.AArch64 => [20, 25, 26]
-    @isa.AMD64 => [3, 12, 13] // rbx, r12, r13
+    AArch64 => [20, 25, 26]
+    AMD64 => [3, 12, 13] // rbx, r12, r13
   }
   let frame = JITStackFrame::build(
     clobbered,
@@ -236,8 +236,8 @@ test "jit_stack_frame_complex" {
   inspect(
     frame.total_size,
     content=match isa {
-      @isa.AArch64 => "128"
-      @isa.AMD64 => "120"
+      AArch64 => "128"
+      AMD64 => "120"
     },
   )
 }
@@ -269,8 +269,8 @@ test "jit_stack_frame_gpr_save_offset" {
   // Test get_gpr_save_offset method
   let isa = @isa.ISA::current()
   let clobbered = match isa {
-    @isa.AArch64 => [20, 25]
-    @isa.AMD64 => [3, 12] // rbx, r12
+    AArch64 => [20, 25]
+    AMD64 => [3, 12] // rbx, r12
   }
   let frame = JITStackFrame::build(
     clobbered,
@@ -281,12 +281,12 @@ test "jit_stack_frame_gpr_save_offset" {
   )
   inspect(frame.saved_gprs.length(), content="2")
   let reg0 = match isa {
-    @isa.AArch64 => 20
-    @isa.AMD64 => 3
+    AArch64 => 20
+    AMD64 => 3
   }
   let reg1 = match isa {
-    @isa.AArch64 => 25
-    @isa.AMD64 => 12
+    AArch64 => 25
+    AMD64 => 12
   }
   let offset0 = frame.get_gpr_save_offset(reg0)
   let offset1 = frame.get_gpr_save_offset(reg1)
@@ -313,8 +313,8 @@ test "jit_stack_frame_incoming_stack_args" {
   inspect(
     frame.setup_area_size,
     content=match isa {
-      @isa.AArch64 => "16"
-      @isa.AMD64 => "8"
+      AArch64 => "16"
+      AMD64 => "8"
     },
   )
 }

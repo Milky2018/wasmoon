@@ -230,7 +230,7 @@ fn get_adjusted_regoff_index_with_offset(
   // index before the extend can change semantics via 32-bit wraparound.
   //
   // We only adjust already-64-bit index forms (`Ext::None`).
-  let (is_i32_index, new_ext) = if ext is @instr.IndexExtend::None {
+  let (is_i32_index, new_ext) = if ext is None {
     (false, @instr.IndexExtend::None)
   } else {
     return None
@@ -283,8 +283,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
     ctx.ir_func.next_value_id,
     0,
   )
-  let is_amd64 = @isa.ISA::current() is @isa.AMD64
-  let is_aarch64 = @isa.ISA::current() is @isa.AArch64
+  let is_amd64 = @isa.ISA::current() is AMD64
+  let is_aarch64 = @isa.ISA::current() is AArch64
   let enable_subextend_fusion = true
 
   fn ensure_bool_slot(arr : Array[Bool], idx : Int) -> Unit {
@@ -331,20 +331,17 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
       match inst.opcode {
-        @ir.Opcode::LoadPtr(ty) => {
+        LoadPtr(ty) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
-            @ir.Type::I32 | @ir.Type::F32 => 4
-            @ir.Type::I64
-            | @ir.Type::F64
-            | @ir.Type::FuncRef
-            | @ir.Type::ExternRef => 8
-            @ir.Type::V128 => 16
+            I32 | F32 => 4
+            I64 | F64 | FuncRef | ExternRef => 8
+            V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              def_inst.opcode is Iconst(off) {
               off
             } else {
               0L
@@ -353,7 +350,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             0L
           }
           let mut matched = false
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if (ty is I32 || ty is I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
             (!is_amd64 || (shift >= 0 && shift <= 3)) {
@@ -377,20 +374,17 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        @ir.Opcode::StorePtr(ty) => {
+        StorePtr(ty) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
-            @ir.Type::I32 | @ir.Type::F32 => 4
-            @ir.Type::I64
-            | @ir.Type::F64
-            | @ir.Type::FuncRef
-            | @ir.Type::ExternRef => 8
-            @ir.Type::V128 => 16
+            I32 | F32 => 4
+            I64 | F64 | FuncRef | ExternRef => 8
+            V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              def_inst.opcode is Iconst(off) {
               off
             } else {
               0L
@@ -399,7 +393,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             0L
           }
           let mut matched = false
-          if (ty is @ir.Type::I32 || ty is @ir.Type::I64) &&
+          if (ty is I32 || ty is I64) &&
             match_addr_reg_offset(ctx, base_value, access_size)
             is Some((_, am_index, _, shift, subsumed, extra_offset, has_extra)) &&
             (!is_amd64 || (shift >= 0 && shift <= 3)) {
@@ -423,13 +417,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        @ir.Opcode::LoadPtrNarrow(_, bits, _) => {
+        LoadPtrNarrow(_, bits, _) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              def_inst.opcode is Iconst(off) {
               off
             } else {
               0L
@@ -462,13 +456,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        @ir.Opcode::StorePtrNarrow(bits) => {
+        StorePtrNarrow(bits) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is @ir.Opcode::Iconst(off) {
+              def_inst.opcode is Iconst(off) {
               off
             } else {
               0L
@@ -517,12 +511,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   // but avoid skipping them when their consumer value is itself addrmode-skipped.
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
-      let is_i64 = inst.first_result() is Some(result) &&
-        result.ty is @ir.Type::I64
+      let is_i64 = inst.first_result() is Some(result) && result.ty is I64
       let is_shift_fusable_int = inst.first_result() is Some(result) &&
-        (result.ty is @ir.Type::I64 || result.ty is @ir.Type::I32)
+        (result.ty is I64 || result.ty is I32)
       match inst.opcode {
-        @ir.Opcode::Iadd => {
+        Iadd => {
           if !is_shift_fusable_int {
             continue
           }
@@ -557,19 +550,19 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if is_i64 &&
             use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
-            !(ext is @instr.IndexExtend::None) {
+            !(ext is None) {
             mark_skipped(rhs.id)
             continue
           }
           if is_i64 &&
             use_count(ctx.use_counts, lhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, lhs) is Some((_, ext)) &&
-            !(ext is @instr.IndexExtend::None) {
+            !(ext is None) {
             mark_skipped(lhs.id)
             continue
           }
         }
-        @ir.Opcode::Isub => {
+        Isub => {
           if !is_shift_fusable_int {
             continue
           }
@@ -589,11 +582,11 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             is_i64 &&
             use_count(ctx.use_counts, rhs.id) == 1 &&
             match_extend_i32_to_i64(ctx, rhs) is Some((_, ext)) &&
-            !(ext is @instr.IndexExtend::None) {
+            !(ext is None) {
             mark_skipped(rhs.id)
           }
         }
-        @ir.Opcode::Band | @ir.Opcode::Bor | @ir.Opcode::Bxor => {
+        Band | Bor | Bxor => {
           if !is_shift_fusable_int {
             continue
           }
@@ -618,7 +611,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if lhs_is_imm || rhs_is_imm {
             continue
           }
-          if inst.opcode is @ir.Opcode::Bor &&
+          if inst.opcode is Bor &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -636,7 +629,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
             continue
           }
-          if inst.opcode is @ir.Opcode::Bor &&
+          if inst.opcode is Bor &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -722,11 +715,10 @@ fn compute_use_counts(ir_func : @ir.Function) -> Array[Int] {
     // Also count uses in terminators
     if block.terminator is Some(term) {
       let term_uses = match term {
-        @ir.Terminator::Brz(cond, _, _) | @ir.Terminator::Brnz(cond, _, _) =>
-          [cond]
-        @ir.Terminator::BrTable(index, _, _) => [index]
-        @ir.Terminator::Jump(_, args) | @ir.Terminator::Return(args) => args
-        @ir.Terminator::Trap(_) => []
+        Brz(cond, _, _) | Brnz(cond, _, _) => [cond]
+        BrTable(index, _, _) => [index]
+        Jump(_, args) | Return(args) => args
+        Trap(_) => []
       }
       for v in term_uses {
         ensure_use_count_slot(use_counts, v.id)
@@ -757,7 +749,7 @@ fn compute_fused_icmps(
       return false
     }
     match def_inst_table[value.id] {
-      Some(def_inst) => def_inst.opcode is @ir.Opcode::Icmp(_)
+      Some(def_inst) => def_inst.opcode is Icmp(_)
       None => false
     }
   }
@@ -776,7 +768,7 @@ fn compute_fused_icmps(
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
-      if inst.opcode is @ir.Opcode::Select {
+      if inst.opcode is Select {
         let cond = inst.operands[0]
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
           mark_fused(cond.id)
@@ -784,8 +776,7 @@ fn compute_fused_icmps(
       }
     }
     match block.terminator {
-      Some(@ir.Terminator::Brz(cond, _, _))
-      | Some(@ir.Terminator::Brnz(cond, _, _)) =>
+      Some(Brz(cond, _, _)) | Some(Brnz(cond, _, _)) =>
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
           mark_fused(cond.id)
         }
@@ -829,12 +820,11 @@ fn try_collect_call_arg_const(
   }
   if find_defining_inst(ctx, value) is Some(inst) {
     match inst.opcode {
-      @ir.Opcode::Iconst(v) => Some(CallConstArg::Int(v))
-      @ir.Opcode::Fconst(v) =>
+      Iconst(v) => Some(Int(v))
+      Fconst(v) =>
         match value.ty {
-          @ir.Type::F32 =>
-            Some(CallConstArg::F32(v.reinterpret_as_int64().to_int()))
-          @ir.Type::F64 => Some(CallConstArg::F64(v.reinterpret_as_int64()))
+          F32 => Some(F32(v.reinterpret_as_int64().to_int()))
+          F64 => Some(F64(v.reinterpret_as_int64()))
           _ => None
         }
       _ => None
@@ -945,11 +935,10 @@ fn LoweringContext::get_block_id(
 /// Convert IR Type to @abi.RegClass
 fn ir_type_to_reg_class(ty : @ir.Type) -> @abi.RegClass {
   match ty {
-    @ir.Type::I32 | @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef =>
-      Int
-    @ir.Type::F32 => Float32
-    @ir.Type::F64 => Float64
-    @ir.Type::V128 => Vector // SIMD uses vector register class
+    I32 | I64 | FuncRef | ExternRef => Int
+    F32 => Float32
+    F64 => Float64
+    V128 => Vector // SIMD uses vector register class
   }
 }
 
@@ -957,13 +946,13 @@ fn ir_type_to_reg_class(ty : @ir.Type) -> @abi.RegClass {
 /// Convert IR Type to @instr.MemType
 fn ir_type_to_mem_type(ty : @ir.Type) -> @instr.MemType {
   match ty {
-    @ir.Type::I32 => I32
-    @ir.Type::I64 => I64
-    @ir.Type::F32 => F32
-    @ir.Type::F64 => F64
-    @ir.Type::V128 => V128
+    I32 => I32
+    I64 => I64
+    F32 => F32
+    F64 => F64
+    V128 => V128
     // Reference types use 64-bit storage (0 as null)
-    @ir.Type::FuncRef | @ir.Type::ExternRef => I64
+    FuncRef | ExternRef => I64
   }
 }
 
@@ -979,14 +968,13 @@ fn match_shl_const_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Ishl {
+  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ishl {
     // Check if shift amount is a constant
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is @ir.Opcode::Iconst(amount) {
+      shift_inst.opcode is Iconst(amount) {
       // Determine mask based on value type (i32 uses 31, i64 uses 63)
-      let is_64 = value.ty is @ir.Type::I64
+      let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
       let shift_val = amount.to_int() & mask
       // shift_val is now guaranteed to be in valid range after masking
@@ -1006,12 +994,11 @@ fn match_ushr_const_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Ushr {
+  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ushr {
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is @ir.Opcode::Iconst(amount) {
-      let is_64 = value.ty is @ir.Type::I64
+      shift_inst.opcode is Iconst(amount) {
+      let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
       let shift_val = amount.to_int() & mask
       return Some((inst.operands[0], shift_val))
@@ -1104,8 +1091,7 @@ fn match_mul_value(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, @ir.Value)? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Imul {
+  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Imul {
     return Some((inst.operands[0], inst.operands[1]))
   }
   None
@@ -1115,8 +1101,7 @@ fn match_mul_value(
 /// Check if a value is defined by bitwise NOT.
 /// Returns the inner operand if matched.
 fn match_bnot_value(ctx : LoweringContext, value : @ir.Value) -> @ir.Value? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Bnot {
+  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Bnot {
     return Some(inst.operands[0])
   }
   None
@@ -1141,8 +1126,8 @@ fn resolve_iconst_value(ctx : LoweringContext, value0 : @ir.Value) -> Int64? {
   for _ in 0..<8 {
     if find_defining_inst(ctx, value) is Some(inst) {
       match inst.opcode {
-        @ir.Opcode::Iconst(c) => return Some(c)
-        @ir.Opcode::Copy =>
+        Iconst(c) => return Some(c)
+        Copy =>
           if inst.operands.length() > 0 {
             value = inst.operands[0]
             continue
@@ -1167,8 +1152,8 @@ fn fits_i32_int64(value : Int64) -> Bool {
 /// Check whether an ADD/SUB immediate is encodable for the selected ISA.
 fn is_valid_add_sub_imm_for_isa(isa : @isa.ISA, value : Int64) -> Bool {
   match isa {
-    @isa.AArch64 => is_valid_add_imm(value)
-    @isa.AMD64 => fits_i32_int64(value)
+    AArch64 => is_valid_add_imm(value)
+    AMD64 => fits_i32_int64(value)
   }
 }
 
@@ -1184,8 +1169,8 @@ fn is_valid_logic_imm_for_isa(
   is_64 : Bool,
 ) -> Bool {
   match isa {
-    @isa.AArch64 => @instr.aarch64_logic_imm_enc_bits(value, is_64) is Some(_)
-    @isa.AMD64 => true
+    AArch64 => @instr.aarch64_logic_imm_enc_bits(value, is_64) is Some(_)
+    AMD64 => true
   }
 }
 
@@ -1225,16 +1210,15 @@ fn match_iadd_const(
   ctx : LoweringContext,
   value : @ir.Value,
 ) -> (@ir.Value, Int64)? {
-  if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode is @ir.Opcode::Iadd {
+  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Iadd {
     // Check if second operand is a constant
     if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
-      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      const_inst.opcode is Iconst(offset) {
       return Some((inst.operands[0], offset))
     }
     // Also check first operand (iadd is commutative)
     if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
-      const_inst.opcode is @ir.Opcode::Iconst(offset) {
+      const_inst.opcode is Iconst(offset) {
       return Some((inst.operands[1], offset))
     }
   }
@@ -1273,13 +1257,13 @@ fn match_extend_i32_to_i64(
 ) -> (@ir.Value, @instr.IndexExtend)? {
   if find_defining_inst(ctx, value) is Some(inst) {
     match inst.opcode {
-      @ir.Opcode::Uextend =>
-        if value.ty is @ir.Type::I64 && inst.operands[0].ty is @ir.Type::I32 {
-          return Some((inst.operands[0], @instr.IndexExtend::Uxtw))
+      Uextend =>
+        if value.ty is I64 && inst.operands[0].ty is I32 {
+          return Some((inst.operands[0], Uxtw))
         }
-      @ir.Opcode::Sextend =>
-        if value.ty is @ir.Type::I64 && inst.operands[0].ty is @ir.Type::I32 {
-          return Some((inst.operands[0], @instr.IndexExtend::Sxtw))
+      Sextend =>
+        if value.ty is I64 && inst.operands[0].ty is I32 {
+          return Some((inst.operands[0], Sxtw))
         }
       _ => ()
     }
@@ -1315,7 +1299,7 @@ fn match_addr_reg_offset(
   access_size : Int,
 ) -> (@ir.Value, @ir.Value, @instr.IndexExtend, Int, Array[Int], Int64, Bool)? {
   guard find_defining_inst(ctx, value) is Some(inst) else { return None }
-  guard inst.opcode is @ir.Opcode::Iadd else { return None }
+  guard inst.opcode is Iadd else { return None }
   let scale = log2_access_size(access_size)
   if scale is None {
     return None
@@ -1397,8 +1381,7 @@ fn match_addr_reg_offset(
     // is not semantics-preserving in general because `iadd32` wraps before
     // the extend. Splitting the constant can change addresses when overflow
     // occurs in 32-bit arithmetic.
-    if ext is @instr.IndexExtend::None &&
-      match_iadd_const(ctx, index) is Some((inner, off)) {
+    if ext is None && match_iadd_const(ctx, index) is Some((inner, off)) {
       subsumed.push(index.id)
       index = inner
       extra_offset = extra_offset + off
@@ -1415,7 +1398,7 @@ fn match_addr_reg_offset(
     }
     // Prefer shapes where the base is a known memory-base pointer.
     if find_defining_inst(ctx, base) is Some(base_inst) &&
-      base_inst.opcode is @ir.Opcode::LoadMemBase(_) {
+      base_inst.opcode is LoadMemBase(_) {
       score = score + 1
     }
     (base, index, ext, shift, subsumed, extra_offset, score)
@@ -1446,7 +1429,7 @@ fn is_valid_load_store_offset_for_isa(
   access_size : Int,
 ) -> Bool {
   match isa {
-    @isa.AArch64 => {
+    AArch64 => {
       if offset < 0L {
         return false
       }
@@ -1458,7 +1441,7 @@ fn is_valid_load_store_offset_for_isa(
       let max_offset = 4095L * access_size.to_int64()
       offset <= max_offset
     }
-    @isa.AMD64 => fits_i32_int64(offset)
+    AMD64 => fits_i32_int64(offset)
   }
 }
 
@@ -1481,9 +1464,8 @@ fn match_icmp_value(
     depth = depth + 1
     if find_defining_inst(ctx, current) is Some(inst) {
       match inst.opcode {
-        @ir.Opcode::Icmp(cc) =>
-          return Some((inst.operands[0], inst.operands[1], cc))
-        @ir.Opcode::Copy =>
+        Icmp(cc) => return Some((inst.operands[0], inst.operands[1], cc))
+        Copy =>
           if !inst.operands.is_empty() {
             current = inst.operands[0]
             continue
@@ -1503,16 +1485,16 @@ fn match_icmp_value(
 /// Convert IR IntCC to VCode Cond for conditional branches
 fn intcc_to_cond(cc : @ir.IntCC) -> @instr.Cond {
   match cc {
-    Eq => @instr.Cond::Eq
-    Ne => @instr.Cond::Ne
-    Slt => @instr.Cond::Lt
-    Sle => @instr.Cond::Le
-    Sgt => @instr.Cond::Gt
-    Sge => @instr.Cond::Ge
-    Ult => @instr.Cond::Lo
-    Ule => @instr.Cond::Ls
-    Ugt => @instr.Cond::Hi
-    Uge => @instr.Cond::Hs
+    Eq => Eq
+    Ne => Ne
+    Slt => Lt
+    Sle => Le
+    Sgt => Gt
+    Sge => Ge
+    Ult => Lo
+    Ule => Ls
+    Ugt => Hi
+    Uge => Hs
   }
 }
 
@@ -1603,7 +1585,7 @@ pub fn lower_function(
   // amd64 uses a CALL instruction, so the return address occupies 8 bytes at
   // the entry SP. Stack parameters are therefore at [entry_sp + 8 + offset].
   // (Cranelift x64 models this the same way.)
-  let stack_arg_base = if @isa.ISA::current() is @isa.AMD64 { 8 } else { 0 }
+  let stack_arg_base = if @isa.ISA::current() is AMD64 { 8 } else { 0 }
   for i in 0..<int_stack_values.length() {
     ctx.stack_param_map.set(
       int_stack_values[i].id,
@@ -1659,7 +1641,7 @@ pub fn lower_function(
   // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
   // register. Enforce this constraint universally to avoid relying on each
   // lowering site to set it correctly.
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     fixup_amd64_shift_count_constraints(ctx.vcode_func)
   }
   ctx.vcode_func
@@ -1670,7 +1652,7 @@ fn fixup_aarch64_mem0_desc_constraints(
   func : @regalloc.VCodeFunction,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if @isa.ISA::current() is @isa.AMD64 || !abi_settings.enable_pinned_reg {
+  if @isa.ISA::current() is AMD64 || !abi_settings.enable_pinned_reg {
     return
   }
   if !func.should_cache_mem0_desc() {
@@ -1679,9 +1661,8 @@ fn fixup_aarch64_mem0_desc_constraints(
   let mem0_desc = @abi.PReg::{ index: mem0_desc_index(), class: Int }
   for block in func.blocks {
     for inst in block.insts {
-      if inst.opcode is @instr.LoadMemBase(0) &&
-        inst.def_constraints.length() > 0 {
-        inst.def_constraints[0] = @abi.FixedReg(mem0_desc)
+      if inst.opcode is LoadMemBase(0) && inst.def_constraints.length() > 0 {
+        inst.def_constraints[0] = FixedReg(mem0_desc)
       }
     }
   }
@@ -1692,15 +1673,15 @@ fn fixup_amd64_shift_count_constraints(func : @regalloc.VCodeFunction) -> Unit {
   for block in func.blocks {
     for inst in block.insts {
       if (
-          inst.opcode is @instr.Shl(_) ||
-          inst.opcode is @instr.LShr(_) ||
-          inst.opcode is @instr.AShr(_) ||
-          inst.opcode is @instr.Rotr(_)
+          inst.opcode is Shl(_) ||
+          inst.opcode is LShr(_) ||
+          inst.opcode is AShr(_) ||
+          inst.opcode is Rotr(_)
         ) &&
         inst.uses.length() >= 2 {
         match inst.use_constraints[1] {
-          @abi.FixedReg(_) => ()
-          _ => inst.use_constraints[1] = @abi.FixedReg({ index: 1, class: Int }) // rcx
+          FixedReg(_) => ()
+          _ => inst.use_constraints[1] = FixedReg({ index: 1, class: Int }) // rcx
         }
       }
     }
@@ -1742,770 +1723,588 @@ fn lower_inst(
 ) -> Unit {
   match inst.opcode {
     // Constants
-    @ir.Opcode::Iconst(val) => lower_iconst(ctx, inst, block, val)
-    @ir.Opcode::Fconst(val) => lower_fconst(ctx, inst, block, val)
+    Iconst(val) => lower_iconst(ctx, inst, block, val)
+    Fconst(val) => lower_fconst(ctx, inst, block, val)
 
     // Integer arithmetic - with pattern matching for AArch64
-    @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
-    @ir.Opcode::Isub => lower_isub(ctx, inst, block)
-    @ir.Opcode::Imul => lower_imul(ctx, inst, block)
-    @ir.Opcode::Umulh => lower_umulh(ctx, inst, block)
-    @ir.Opcode::Smulh => lower_smulh(ctx, inst, block)
-    @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
-    @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
-    @ir.Opcode::Srem => lower_rem(ctx, inst, block, true)
-    @ir.Opcode::Urem => lower_rem(ctx, inst, block, false)
+    Iadd => lower_iadd(ctx, inst, block)
+    Isub => lower_isub(ctx, inst, block)
+    Imul => lower_imul(ctx, inst, block)
+    Umulh => lower_umulh(ctx, inst, block)
+    Smulh => lower_smulh(ctx, inst, block)
+    Sdiv => lower_div(ctx, inst, block, signed=true)
+    Udiv => lower_div(ctx, inst, block, signed=false)
+    Srem => lower_rem(ctx, inst, block, true)
+    Urem => lower_rem(ctx, inst, block, false)
 
     // Bitwise operations - with pattern matching for shifted operands
-    @ir.Opcode::Band => lower_band(ctx, inst, block)
-    @ir.Opcode::Bor => lower_bor(ctx, inst, block)
-    @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
-    @ir.Opcode::Ishl =>
+    Band => lower_band(ctx, inst, block)
+    Bor => lower_bor(ctx, inst, block)
+    Bxor => lower_bxor(ctx, inst, block)
+    Ishl =>
       lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
         ShlImm(amt, is_64)
       })
-    @ir.Opcode::Sshr =>
+    Sshr =>
       lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
         AShrImm(amt, is_64)
       })
-    @ir.Opcode::Ushr =>
+    Ushr =>
       lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
         LShrImm(amt, is_64)
       })
-    @ir.Opcode::Rotl => lower_rotl(ctx, inst, block)
-    @ir.Opcode::Rotr =>
+    Rotl => lower_rotl(ctx, inst, block)
+    Rotr =>
       lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(amt, is_64) {
         RotrImm(amt, is_64)
       })
-    @ir.Opcode::Bnot =>
-      lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
+    Bnot => lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
 
     // Integer comparisons
-    @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
+    Icmp(cc) => lower_icmp(ctx, inst, block, cc)
 
     // Floating point arithmetic
-    @ir.Opcode::Fadd => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fsub => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fmul => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fdiv => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fmin => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fmax => lower_binary_float(ctx, inst, block)
+    Fadd => lower_binary_float(ctx, inst, block)
+    Fsub => lower_binary_float(ctx, inst, block)
+    Fmul => lower_binary_float(ctx, inst, block)
+    Fdiv => lower_binary_float(ctx, inst, block)
+    Fmin => lower_binary_float(ctx, inst, block)
+    Fmax => lower_binary_float(ctx, inst, block)
 
     // Floating point unary operations
-    @ir.Opcode::Fsqrt => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Fabs => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Fneg => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Fceil => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Ffloor => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Ftrunc => lower_unary_float(ctx, inst, block)
-    @ir.Opcode::Fnearest => lower_unary_float(ctx, inst, block)
+    Fsqrt => lower_unary_float(ctx, inst, block)
+    Fabs => lower_unary_float(ctx, inst, block)
+    Fneg => lower_unary_float(ctx, inst, block)
+    Fceil => lower_unary_float(ctx, inst, block)
+    Ffloor => lower_unary_float(ctx, inst, block)
+    Ftrunc => lower_unary_float(ctx, inst, block)
+    Fnearest => lower_unary_float(ctx, inst, block)
 
     // Bit counting operations
-    @ir.Opcode::Clz =>
-      lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
-    @ir.Opcode::Ctz => lower_ctz(ctx, inst, block)
-    @ir.Opcode::Popcnt =>
-      lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
+    Clz => lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
+    Ctz => lower_ctz(ctx, inst, block)
+    Popcnt => lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
 
     // Floating point comparisons
-    @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
+    Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
     // Note: Load/Store opcodes removed - now desugared via FuncEnvironment to LoadPtr/StorePtr
 
     // Conversions
-    @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
-    @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
-    @ir.Opcode::Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
-    @ir.Opcode::Sextend16 =>
-      lower_sextend_inplace(ctx, inst, block, from_bits=16)
-    @ir.Opcode::Sextend32 =>
-      lower_sextend_inplace(ctx, inst, block, from_bits=32)
-    @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
-    @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
-    @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
-    @ir.Opcode::FcvtToSintSat =>
-      lower_float_to_int_sat(ctx, inst, block, signed=true)
-    @ir.Opcode::FcvtToUintSat =>
-      lower_float_to_int_sat(ctx, inst, block, signed=false)
-    @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
-    @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
-    @ir.Opcode::Fpromote => lower_promote(ctx, inst, block)
-    @ir.Opcode::Fdemote => lower_demote(ctx, inst, block)
-    @ir.Opcode::Bitcast => lower_bitcast(ctx, inst, block)
+    Sextend => lower_extend(ctx, inst, block, signed=true)
+    Uextend => lower_extend(ctx, inst, block, signed=false)
+    Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
+    Sextend16 => lower_sextend_inplace(ctx, inst, block, from_bits=16)
+    Sextend32 => lower_sextend_inplace(ctx, inst, block, from_bits=32)
+    Ireduce => lower_truncate(ctx, inst, block)
+    FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
+    FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    FcvtToSintSat => lower_float_to_int_sat(ctx, inst, block, signed=true)
+    FcvtToUintSat => lower_float_to_int_sat(ctx, inst, block, signed=false)
+    SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
+    UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
+    Fpromote => lower_promote(ctx, inst, block)
+    Fdemote => lower_demote(ctx, inst, block)
+    Bitcast => lower_bitcast(ctx, inst, block)
 
     // Misc
-    @ir.Opcode::Copy => lower_copy(ctx, inst, block)
-    @ir.Opcode::Select => lower_select(ctx, inst, block)
+    Copy => lower_copy(ctx, inst, block)
+    Select => lower_select(ctx, inst, block)
 
     // Memory management (with memidx for multi-memory support)
-    @ir.Opcode::LoadMemBase(memidx) =>
-      lower_load_mem_base(ctx, inst, block, memidx)
-    @ir.Opcode::MemoryGrow(memidx, max_pages) =>
+    LoadMemBase(memidx) => lower_load_mem_base(ctx, inst, block, memidx)
+    MemoryGrow(memidx, max_pages) =>
       lower_memory_grow(ctx, inst, block, memidx, max_pages)
-    @ir.Opcode::MemorySize(memidx) =>
-      lower_memory_size(ctx, inst, block, memidx)
-    @ir.Opcode::MemoryFill(memidx) =>
-      lower_memory_fill(ctx, inst, block, memidx)
-    @ir.Opcode::MemoryCopy(dst_memidx, src_memidx) =>
+    MemorySize(memidx) => lower_memory_size(ctx, inst, block, memidx)
+    MemoryFill(memidx) => lower_memory_fill(ctx, inst, block, memidx)
+    MemoryCopy(dst_memidx, src_memidx) =>
       lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
-    @ir.Opcode::MemoryInit(memidx, data_idx) =>
+    MemoryInit(memidx, data_idx) =>
       lower_memory_init(ctx, inst, block, memidx, data_idx)
-    @ir.Opcode::DataDrop(data_idx) =>
-      lower_data_drop(ctx, inst, block, data_idx)
+    DataDrop(data_idx) => lower_data_drop(ctx, inst, block, data_idx)
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
-    @ir.Opcode::TableGrow(table_idx) =>
-      lower_table_grow(ctx, inst, block, table_idx)
-    @ir.Opcode::TableFill(table_idx) =>
-      lower_table_fill(ctx, inst, block, table_idx)
-    @ir.Opcode::TableCopy(dst_table_idx, src_table_idx) =>
+    TableGrow(table_idx) => lower_table_grow(ctx, inst, block, table_idx)
+    TableFill(table_idx) => lower_table_fill(ctx, inst, block, table_idx)
+    TableCopy(dst_table_idx, src_table_idx) =>
       lower_table_copy(ctx, inst, block, dst_table_idx, src_table_idx)
-    @ir.Opcode::TableInit(table_idx, elem_idx) =>
+    TableInit(table_idx, elem_idx) =>
       lower_table_init(ctx, inst, block, table_idx, elem_idx)
-    @ir.Opcode::ElemDrop(elem_idx) =>
-      lower_elem_drop(ctx, inst, block, elem_idx)
+    ElemDrop(elem_idx) => lower_elem_drop(ctx, inst, block, elem_idx)
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
     // Function calls
-    @ir.Opcode::Call(func_idx) => lower_call(ctx, inst, block, func_idx)
-    @ir.Opcode::CallIndirect(type_idx, table_idx) =>
+    Call(func_idx) => lower_call(ctx, inst, block, func_idx)
+    CallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
-    @ir.Opcode::CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
+    CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
     // Tail calls - use dedicated lowering functions with Standard parameter handling
-    @ir.Opcode::ReturnCall(func_idx) =>
-      lower_return_call(ctx, inst, block, func_idx)
-    @ir.Opcode::ReturnCallIndirect(type_idx, table_idx) =>
+    ReturnCall(func_idx) => lower_return_call(ctx, inst, block, func_idx)
+    ReturnCallIndirect(type_idx, table_idx) =>
       lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
-    @ir.Opcode::ReturnCallRef(type_idx) =>
-      lower_return_call_ref(ctx, inst, block, type_idx)
+    ReturnCallRef(type_idx) => lower_return_call_ref(ctx, inst, block, type_idx)
 
     // Function reference
-    @ir.Opcode::GetFuncRef(func_idx) =>
-      lower_get_func_ref(ctx, inst, block, func_idx)
+    GetFuncRef(func_idx) => lower_get_func_ref(ctx, inst, block, func_idx)
 
     // Raw pointer operations (for trampolines)
-    @ir.Opcode::LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
-    @ir.Opcode::StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
-    @ir.Opcode::LoadPtrNarrow(result_ty, bits, signed) =>
+    LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
+    StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
+    LoadPtrNarrow(result_ty, bits, signed) =>
       lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-    @ir.Opcode::StorePtrNarrow(bits) =>
-      lower_store_ptr_narrow(ctx, inst, block, bits)
-    @ir.Opcode::CallPtr(num_args, num_results) =>
+    StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
+    CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
 
     // GC operations - i31 (simple bit manipulation, implemented inline)
-    @ir.Opcode::I31New => lower_i31_new(ctx, inst, block)
-    @ir.Opcode::I31GetS => lower_i31_get_s(ctx, inst, block)
-    @ir.Opcode::I31GetU => lower_i31_get_u(ctx, inst, block)
+    I31New => lower_i31_new(ctx, inst, block)
+    I31GetS => lower_i31_get_s(ctx, inst, block)
+    I31GetU => lower_i31_get_u(ctx, inst, block)
 
     // GC operations - type conversions (no-ops for JIT, just pass through)
-    @ir.Opcode::AnyConvertExtern | @ir.Opcode::ExternConvertAny =>
-      lower_gc_convert(ctx, inst, block)
+    AnyConvertExtern | ExternConvertAny => lower_gc_convert(ctx, inst, block)
 
     // GC operations - struct/array (use runtime libcalls)
-    @ir.Opcode::StructNew(type_idx) =>
-      lower_struct_new(ctx, inst, block, type_idx)
-    @ir.Opcode::StructNewDefault(type_idx) =>
+    StructNew(type_idx) => lower_struct_new(ctx, inst, block, type_idx)
+    StructNewDefault(type_idx) =>
       lower_struct_new_default(ctx, inst, block, type_idx)
-    @ir.Opcode::StructGet(type_idx, field_idx) =>
+    StructGet(type_idx, field_idx) =>
       lower_struct_get(ctx, inst, block, type_idx, field_idx)
-    @ir.Opcode::StructGetS(type_idx, field_idx, byte_width) =>
+    StructGetS(type_idx, field_idx, byte_width) =>
       lower_struct_get_s(ctx, inst, block, type_idx, field_idx, byte_width)
-    @ir.Opcode::StructGetU(type_idx, field_idx, byte_width) =>
+    StructGetU(type_idx, field_idx, byte_width) =>
       lower_struct_get_u(ctx, inst, block, type_idx, field_idx, byte_width)
-    @ir.Opcode::StructSet(type_idx, field_idx) =>
+    StructSet(type_idx, field_idx) =>
       lower_struct_set(ctx, inst, block, type_idx, field_idx)
-    @ir.Opcode::ArrayNew(type_idx) =>
-      lower_array_new(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayNewDefault(type_idx) =>
+    ArrayNew(type_idx) => lower_array_new(ctx, inst, block, type_idx)
+    ArrayNewDefault(type_idx) =>
       lower_array_new_default(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayNewFixed(type_idx, len) =>
+    ArrayNewFixed(type_idx, len) =>
       lower_array_new_fixed(ctx, inst, block, type_idx, len)
-    @ir.Opcode::ArrayGet(type_idx) =>
-      lower_array_get(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayGetS(type_idx, byte_width) =>
+    ArrayGet(type_idx) => lower_array_get(ctx, inst, block, type_idx)
+    ArrayGetS(type_idx, byte_width) =>
       lower_array_get_s(ctx, inst, block, type_idx, byte_width)
-    @ir.Opcode::ArrayGetU(type_idx, byte_width) =>
+    ArrayGetU(type_idx, byte_width) =>
       lower_array_get_u(ctx, inst, block, type_idx, byte_width)
-    @ir.Opcode::ArraySet(type_idx) =>
-      lower_array_set(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayLen => lower_array_len(ctx, inst, block)
-    @ir.Opcode::ArrayFill(type_idx) =>
-      lower_array_fill(ctx, inst, block, type_idx)
-    @ir.Opcode::ArrayCopy(dst_type, src_type) =>
+    ArraySet(type_idx) => lower_array_set(ctx, inst, block, type_idx)
+    ArrayLen => lower_array_len(ctx, inst, block)
+    ArrayFill(type_idx) => lower_array_fill(ctx, inst, block, type_idx)
+    ArrayCopy(dst_type, src_type) =>
       lower_array_copy(ctx, inst, block, dst_type, src_type)
-    @ir.Opcode::ArrayNewData(type_idx, data_idx) =>
+    ArrayNewData(type_idx, data_idx) =>
       lower_array_new_data(ctx, inst, block, type_idx, data_idx)
-    @ir.Opcode::ArrayNewElem(type_idx, elem_idx) =>
+    ArrayNewElem(type_idx, elem_idx) =>
       lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
-    @ir.Opcode::ArrayInitData(type_idx, data_idx) =>
+    ArrayInitData(type_idx, data_idx) =>
       lower_array_init_data(ctx, inst, block, type_idx, data_idx)
-    @ir.Opcode::ArrayInitElem(type_idx, elem_idx) =>
+    ArrayInitElem(type_idx, elem_idx) =>
       lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
-    @ir.Opcode::RefTest(type_idx, nullable) =>
+    RefTest(type_idx, nullable) =>
       lower_ref_test(ctx, inst, block, type_idx, nullable)
-    @ir.Opcode::RefCast(type_idx, nullable) =>
+    RefCast(type_idx, nullable) =>
       lower_ref_cast(ctx, inst, block, type_idx, nullable)
-    @ir.Opcode::RefEq => lower_ref_eq(ctx, inst, block)
+    RefEq => lower_ref_eq(ctx, inst, block)
 
     // Exception handling operations
-    @ir.Opcode::Throw(tag_idx) => lower_throw(ctx, inst, block, tag_idx)
-    @ir.Opcode::ThrowRef => lower_throw_ref(ctx, inst, block)
-    @ir.Opcode::TryTableBegin(handler_id) =>
+    Throw(tag_idx) => lower_throw(ctx, inst, block, tag_idx)
+    ThrowRef => lower_throw_ref(ctx, inst, block)
+    TryTableBegin(handler_id) =>
       lower_try_table_begin(ctx, inst, block, handler_id)
-    @ir.Opcode::TryTableEnd(handler_id) =>
-      lower_try_table_end(ctx, inst, block, handler_id)
-    @ir.Opcode::GetExceptionTag => lower_get_exception_tag(ctx, inst, block)
-    @ir.Opcode::GetExceptionValue(idx) =>
-      lower_get_exception_value(ctx, inst, block, idx)
-    @ir.Opcode::GetExceptionValueCount =>
-      lower_get_exception_value_count(ctx, inst, block)
-    @ir.Opcode::Delegate(depth) => lower_delegate(ctx, inst, block, depth)
-    @ir.Opcode::SpillLocalsForThrow(count) =>
+    TryTableEnd(handler_id) => lower_try_table_end(ctx, inst, block, handler_id)
+    GetExceptionTag => lower_get_exception_tag(ctx, inst, block)
+    GetExceptionValue(idx) => lower_get_exception_value(ctx, inst, block, idx)
+    GetExceptionValueCount => lower_get_exception_value_count(ctx, inst, block)
+    Delegate(depth) => lower_delegate(ctx, inst, block, depth)
+    SpillLocalsForThrow(count) =>
       lower_spill_locals_for_throw(ctx, inst, block, count)
-    @ir.Opcode::GetSpilledLocal(idx) =>
-      lower_get_spilled_local(ctx, inst, block, idx)
+    GetSpilledLocal(idx) => lower_get_spilled_local(ctx, inst, block, idx)
 
     // SIMD operations
-    @ir.Opcode::V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
-    @ir.Opcode::V128Splat8 => lower_v128_splat(ctx, inst, block, B8)
-    @ir.Opcode::V128Splat16 => lower_v128_splat(ctx, inst, block, H16)
-    @ir.Opcode::V128Splat32 => lower_v128_splat(ctx, inst, block, S32)
-    @ir.Opcode::V128Splat64 => lower_v128_splat(ctx, inst, block, D64)
-    @ir.Opcode::V128SplatF32 => lower_v128_splat_f(ctx, inst, block, true)
-    @ir.Opcode::V128SplatF64 => lower_v128_splat_f(ctx, inst, block, false)
-    @ir.Opcode::V128ExtractLane8S(lane) =>
-      lower_v128_extract_s(ctx, inst, block, B8, lane)
-    @ir.Opcode::V128ExtractLane8U(lane) =>
-      lower_v128_extract_u(ctx, inst, block, B8, lane)
-    @ir.Opcode::V128ExtractLane16S(lane) =>
+    V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
+    V128Splat8 => lower_v128_splat(ctx, inst, block, B8)
+    V128Splat16 => lower_v128_splat(ctx, inst, block, H16)
+    V128Splat32 => lower_v128_splat(ctx, inst, block, S32)
+    V128Splat64 => lower_v128_splat(ctx, inst, block, D64)
+    V128SplatF32 => lower_v128_splat_f(ctx, inst, block, true)
+    V128SplatF64 => lower_v128_splat_f(ctx, inst, block, false)
+    V128ExtractLane8S(lane) => lower_v128_extract_s(ctx, inst, block, B8, lane)
+    V128ExtractLane8U(lane) => lower_v128_extract_u(ctx, inst, block, B8, lane)
+    V128ExtractLane16S(lane) =>
       lower_v128_extract_s(ctx, inst, block, H16, lane)
-    @ir.Opcode::V128ExtractLane16U(lane) =>
+    V128ExtractLane16U(lane) =>
       lower_v128_extract_u(ctx, inst, block, H16, lane)
-    @ir.Opcode::V128ExtractLane32(lane) =>
-      lower_v128_extract_u(ctx, inst, block, S32, lane)
-    @ir.Opcode::V128ExtractLane64(lane) =>
-      lower_v128_extract_u(ctx, inst, block, D64, lane)
-    @ir.Opcode::V128ExtractLaneF32(lane) =>
+    V128ExtractLane32(lane) => lower_v128_extract_u(ctx, inst, block, S32, lane)
+    V128ExtractLane64(lane) => lower_v128_extract_u(ctx, inst, block, D64, lane)
+    V128ExtractLaneF32(lane) =>
       lower_v128_extract_f(ctx, inst, block, true, lane)
-    @ir.Opcode::V128ExtractLaneF64(lane) =>
+    V128ExtractLaneF64(lane) =>
       lower_v128_extract_f(ctx, inst, block, false, lane)
-    @ir.Opcode::V128ReplaceLane8(lane) =>
-      lower_v128_replace(ctx, inst, block, B8, lane)
-    @ir.Opcode::V128ReplaceLane16(lane) =>
-      lower_v128_replace(ctx, inst, block, H16, lane)
-    @ir.Opcode::V128ReplaceLane32(lane) =>
-      lower_v128_replace(ctx, inst, block, S32, lane)
-    @ir.Opcode::V128ReplaceLane64(lane) =>
-      lower_v128_replace(ctx, inst, block, D64, lane)
-    @ir.Opcode::V128ReplaceLaneF32(lane) =>
+    V128ReplaceLane8(lane) => lower_v128_replace(ctx, inst, block, B8, lane)
+    V128ReplaceLane16(lane) => lower_v128_replace(ctx, inst, block, H16, lane)
+    V128ReplaceLane32(lane) => lower_v128_replace(ctx, inst, block, S32, lane)
+    V128ReplaceLane64(lane) => lower_v128_replace(ctx, inst, block, D64, lane)
+    V128ReplaceLaneF32(lane) =>
       lower_v128_replace_f(ctx, inst, block, true, lane)
-    @ir.Opcode::V128ReplaceLaneF64(lane) =>
+    V128ReplaceLaneF64(lane) =>
       lower_v128_replace_f(ctx, inst, block, false, lane)
-    @ir.Opcode::V128Shuffle(lanes) =>
-      lower_v128_shuffle(ctx, inst, block, lanes)
-    @ir.Opcode::V128Swizzle => lower_v128_swizzle(ctx, inst, block)
+    V128Shuffle(lanes) => lower_v128_shuffle(ctx, inst, block, lanes)
+    V128Swizzle => lower_v128_swizzle(ctx, inst, block)
 
     // Bitwise operations
-    @ir.Opcode::V128Not => lower_v128_unary(ctx, inst, block, SIMDNot)
-    @ir.Opcode::V128And => lower_v128_binary(ctx, inst, block, SIMDAnd)
-    @ir.Opcode::V128AndNot => lower_v128_binary(ctx, inst, block, SIMDBic)
-    @ir.Opcode::V128Or => lower_v128_binary(ctx, inst, block, SIMDOr)
-    @ir.Opcode::V128Xor => lower_v128_binary(ctx, inst, block, SIMDXor)
-    @ir.Opcode::V128Bitselect => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    V128Not => lower_v128_unary(ctx, inst, block, SIMDNot)
+    V128And => lower_v128_binary(ctx, inst, block, SIMDAnd)
+    V128AndNot => lower_v128_binary(ctx, inst, block, SIMDBic)
+    V128Or => lower_v128_binary(ctx, inst, block, SIMDOr)
+    V128Xor => lower_v128_binary(ctx, inst, block, SIMDXor)
+    V128Bitselect => lower_v128_ternary(ctx, inst, block, SIMDBsl)
 
     // Any/All true, Bitmask
-    @ir.Opcode::V128AnyTrue => lower_v128_to_i32(ctx, inst, block, SIMDAnyTrue)
-    @ir.Opcode::V128AllTrue8 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(B8))
-    @ir.Opcode::V128AllTrue16 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(H16))
-    @ir.Opcode::V128AllTrue32 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(S32))
-    @ir.Opcode::V128AllTrue64 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(D64))
-    @ir.Opcode::V128Bitmask8 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDBitmask(B8))
-    @ir.Opcode::V128Bitmask16 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDBitmask(H16))
-    @ir.Opcode::V128Bitmask32 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDBitmask(S32))
-    @ir.Opcode::V128Bitmask64 =>
-      lower_v128_to_i32(ctx, inst, block, SIMDBitmask(D64))
+    V128AnyTrue => lower_v128_to_i32(ctx, inst, block, SIMDAnyTrue)
+    V128AllTrue8 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(B8))
+    V128AllTrue16 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(H16))
+    V128AllTrue32 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(S32))
+    V128AllTrue64 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(D64))
+    V128Bitmask8 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(B8))
+    V128Bitmask16 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(H16))
+    V128Bitmask32 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(S32))
+    V128Bitmask64 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(D64))
 
     // Integer arithmetic
-    @ir.Opcode::V128Add8 => lower_v128_binary(ctx, inst, block, SIMDAdd(B8))
-    @ir.Opcode::V128Add16 => lower_v128_binary(ctx, inst, block, SIMDAdd(H16))
-    @ir.Opcode::V128Add32 => lower_v128_binary(ctx, inst, block, SIMDAdd(S32))
-    @ir.Opcode::V128Add64 => lower_v128_binary(ctx, inst, block, SIMDAdd(D64))
-    @ir.Opcode::V128Sub8 => lower_v128_binary(ctx, inst, block, SIMDSub(B8))
-    @ir.Opcode::V128Sub16 => lower_v128_binary(ctx, inst, block, SIMDSub(H16))
-    @ir.Opcode::V128Sub32 => lower_v128_binary(ctx, inst, block, SIMDSub(S32))
-    @ir.Opcode::V128Sub64 => lower_v128_binary(ctx, inst, block, SIMDSub(D64))
-    @ir.Opcode::V128Mul16 => lower_v128_binary(ctx, inst, block, SIMDMul(H16))
-    @ir.Opcode::V128Mul32 => lower_v128_binary(ctx, inst, block, SIMDMul(S32))
-    @ir.Opcode::V128Mul64 => lower_v128_binary(ctx, inst, block, SIMDMul(D64))
+    V128Add8 => lower_v128_binary(ctx, inst, block, SIMDAdd(B8))
+    V128Add16 => lower_v128_binary(ctx, inst, block, SIMDAdd(H16))
+    V128Add32 => lower_v128_binary(ctx, inst, block, SIMDAdd(S32))
+    V128Add64 => lower_v128_binary(ctx, inst, block, SIMDAdd(D64))
+    V128Sub8 => lower_v128_binary(ctx, inst, block, SIMDSub(B8))
+    V128Sub16 => lower_v128_binary(ctx, inst, block, SIMDSub(H16))
+    V128Sub32 => lower_v128_binary(ctx, inst, block, SIMDSub(S32))
+    V128Sub64 => lower_v128_binary(ctx, inst, block, SIMDSub(D64))
+    V128Mul16 => lower_v128_binary(ctx, inst, block, SIMDMul(H16))
+    V128Mul32 => lower_v128_binary(ctx, inst, block, SIMDMul(S32))
+    V128Mul64 => lower_v128_binary(ctx, inst, block, SIMDMul(D64))
 
     // Saturating arithmetic
-    @ir.Opcode::V128AddSat8S =>
-      lower_v128_binary(ctx, inst, block, SIMDSqadd(B8))
-    @ir.Opcode::V128AddSat8U =>
-      lower_v128_binary(ctx, inst, block, SIMDUqadd(B8))
-    @ir.Opcode::V128AddSat16S =>
-      lower_v128_binary(ctx, inst, block, SIMDSqadd(H16))
-    @ir.Opcode::V128AddSat16U =>
-      lower_v128_binary(ctx, inst, block, SIMDUqadd(H16))
-    @ir.Opcode::V128SubSat8S =>
-      lower_v128_binary(ctx, inst, block, SIMDSqsub(B8))
-    @ir.Opcode::V128SubSat8U =>
-      lower_v128_binary(ctx, inst, block, SIMDUqsub(B8))
-    @ir.Opcode::V128SubSat16S =>
-      lower_v128_binary(ctx, inst, block, SIMDSqsub(H16))
-    @ir.Opcode::V128SubSat16U =>
-      lower_v128_binary(ctx, inst, block, SIMDUqsub(H16))
+    V128AddSat8S => lower_v128_binary(ctx, inst, block, SIMDSqadd(B8))
+    V128AddSat8U => lower_v128_binary(ctx, inst, block, SIMDUqadd(B8))
+    V128AddSat16S => lower_v128_binary(ctx, inst, block, SIMDSqadd(H16))
+    V128AddSat16U => lower_v128_binary(ctx, inst, block, SIMDUqadd(H16))
+    V128SubSat8S => lower_v128_binary(ctx, inst, block, SIMDSqsub(B8))
+    V128SubSat8U => lower_v128_binary(ctx, inst, block, SIMDUqsub(B8))
+    V128SubSat16S => lower_v128_binary(ctx, inst, block, SIMDSqsub(H16))
+    V128SubSat16U => lower_v128_binary(ctx, inst, block, SIMDUqsub(H16))
 
     // Min/Max
-    @ir.Opcode::V128Min8S => lower_v128_binary(ctx, inst, block, SIMDSmin(B8))
-    @ir.Opcode::V128Min8U => lower_v128_binary(ctx, inst, block, SIMDUmin(B8))
-    @ir.Opcode::V128Min16S => lower_v128_binary(ctx, inst, block, SIMDSmin(H16))
-    @ir.Opcode::V128Min16U => lower_v128_binary(ctx, inst, block, SIMDUmin(H16))
-    @ir.Opcode::V128Min32S => lower_v128_binary(ctx, inst, block, SIMDSmin(S32))
-    @ir.Opcode::V128Min32U => lower_v128_binary(ctx, inst, block, SIMDUmin(S32))
-    @ir.Opcode::V128Max8S => lower_v128_binary(ctx, inst, block, SIMDSmax(B8))
-    @ir.Opcode::V128Max8U => lower_v128_binary(ctx, inst, block, SIMDUmax(B8))
-    @ir.Opcode::V128Max16S => lower_v128_binary(ctx, inst, block, SIMDSmax(H16))
-    @ir.Opcode::V128Max16U => lower_v128_binary(ctx, inst, block, SIMDUmax(H16))
-    @ir.Opcode::V128Max32S => lower_v128_binary(ctx, inst, block, SIMDSmax(S32))
-    @ir.Opcode::V128Max32U => lower_v128_binary(ctx, inst, block, SIMDUmax(S32))
+    V128Min8S => lower_v128_binary(ctx, inst, block, SIMDSmin(B8))
+    V128Min8U => lower_v128_binary(ctx, inst, block, SIMDUmin(B8))
+    V128Min16S => lower_v128_binary(ctx, inst, block, SIMDSmin(H16))
+    V128Min16U => lower_v128_binary(ctx, inst, block, SIMDUmin(H16))
+    V128Min32S => lower_v128_binary(ctx, inst, block, SIMDSmin(S32))
+    V128Min32U => lower_v128_binary(ctx, inst, block, SIMDUmin(S32))
+    V128Max8S => lower_v128_binary(ctx, inst, block, SIMDSmax(B8))
+    V128Max8U => lower_v128_binary(ctx, inst, block, SIMDUmax(B8))
+    V128Max16S => lower_v128_binary(ctx, inst, block, SIMDSmax(H16))
+    V128Max16U => lower_v128_binary(ctx, inst, block, SIMDUmax(H16))
+    V128Max32S => lower_v128_binary(ctx, inst, block, SIMDSmax(S32))
+    V128Max32U => lower_v128_binary(ctx, inst, block, SIMDUmax(S32))
 
     // Average
-    @ir.Opcode::V128Avgr8U =>
-      lower_v128_binary(ctx, inst, block, SIMDUrhadd(B8))
-    @ir.Opcode::V128Avgr16U =>
-      lower_v128_binary(ctx, inst, block, SIMDUrhadd(H16))
+    V128Avgr8U => lower_v128_binary(ctx, inst, block, SIMDUrhadd(B8))
+    V128Avgr16U => lower_v128_binary(ctx, inst, block, SIMDUrhadd(H16))
 
     // Unary operations
-    @ir.Opcode::V128Abs8 => lower_v128_unary(ctx, inst, block, SIMDAbs(B8))
-    @ir.Opcode::V128Abs16 => lower_v128_unary(ctx, inst, block, SIMDAbs(H16))
-    @ir.Opcode::V128Abs32 => lower_v128_unary(ctx, inst, block, SIMDAbs(S32))
-    @ir.Opcode::V128Abs64 => lower_v128_unary(ctx, inst, block, SIMDAbs(D64))
-    @ir.Opcode::V128Neg8 => lower_v128_unary(ctx, inst, block, SIMDNeg(B8))
-    @ir.Opcode::V128Neg16 => lower_v128_unary(ctx, inst, block, SIMDNeg(H16))
-    @ir.Opcode::V128Neg32 => lower_v128_unary(ctx, inst, block, SIMDNeg(S32))
-    @ir.Opcode::V128Neg64 => lower_v128_unary(ctx, inst, block, SIMDNeg(D64))
-    @ir.Opcode::V128Popcnt8 => lower_v128_unary(ctx, inst, block, SIMDCnt)
+    V128Abs8 => lower_v128_unary(ctx, inst, block, SIMDAbs(B8))
+    V128Abs16 => lower_v128_unary(ctx, inst, block, SIMDAbs(H16))
+    V128Abs32 => lower_v128_unary(ctx, inst, block, SIMDAbs(S32))
+    V128Abs64 => lower_v128_unary(ctx, inst, block, SIMDAbs(D64))
+    V128Neg8 => lower_v128_unary(ctx, inst, block, SIMDNeg(B8))
+    V128Neg16 => lower_v128_unary(ctx, inst, block, SIMDNeg(H16))
+    V128Neg32 => lower_v128_unary(ctx, inst, block, SIMDNeg(S32))
+    V128Neg64 => lower_v128_unary(ctx, inst, block, SIMDNeg(D64))
+    V128Popcnt8 => lower_v128_unary(ctx, inst, block, SIMDCnt)
 
     // Shifts - split into SIMDBroadcastShift + SIMDShiftByVec
     // lower_v128_shift(ctx, inst, block, lane_size, negate, use_ushl)
-    @ir.Opcode::V128Shl8 => lower_v128_shift(ctx, inst, block, B8, false, false)
-    @ir.Opcode::V128Shl16 =>
-      lower_v128_shift(ctx, inst, block, H16, false, false)
-    @ir.Opcode::V128Shl32 =>
-      lower_v128_shift(ctx, inst, block, S32, false, false)
-    @ir.Opcode::V128Shl64 =>
-      lower_v128_shift(ctx, inst, block, D64, false, false)
-    @ir.Opcode::V128Shr8S => lower_v128_shift(ctx, inst, block, B8, true, false)
-    @ir.Opcode::V128Shr8U => lower_v128_shift(ctx, inst, block, B8, true, true)
-    @ir.Opcode::V128Shr16S =>
-      lower_v128_shift(ctx, inst, block, H16, true, false)
-    @ir.Opcode::V128Shr16U =>
-      lower_v128_shift(ctx, inst, block, H16, true, true)
-    @ir.Opcode::V128Shr32S =>
-      lower_v128_shift(ctx, inst, block, S32, true, false)
-    @ir.Opcode::V128Shr32U =>
-      lower_v128_shift(ctx, inst, block, S32, true, true)
-    @ir.Opcode::V128Shr64S =>
-      lower_v128_shift(ctx, inst, block, D64, true, false)
-    @ir.Opcode::V128Shr64U =>
-      lower_v128_shift(ctx, inst, block, D64, true, true)
+    V128Shl8 => lower_v128_shift(ctx, inst, block, B8, false, false)
+    V128Shl16 => lower_v128_shift(ctx, inst, block, H16, false, false)
+    V128Shl32 => lower_v128_shift(ctx, inst, block, S32, false, false)
+    V128Shl64 => lower_v128_shift(ctx, inst, block, D64, false, false)
+    V128Shr8S => lower_v128_shift(ctx, inst, block, B8, true, false)
+    V128Shr8U => lower_v128_shift(ctx, inst, block, B8, true, true)
+    V128Shr16S => lower_v128_shift(ctx, inst, block, H16, true, false)
+    V128Shr16U => lower_v128_shift(ctx, inst, block, H16, true, true)
+    V128Shr32S => lower_v128_shift(ctx, inst, block, S32, true, false)
+    V128Shr32U => lower_v128_shift(ctx, inst, block, S32, true, true)
+    V128Shr64S => lower_v128_shift(ctx, inst, block, D64, true, false)
+    V128Shr64U => lower_v128_shift(ctx, inst, block, D64, true, true)
 
     // Comparisons
-    @ir.Opcode::V128Eq8 => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, Eq))
-    @ir.Opcode::V128Eq16 =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(H16, Eq))
-    @ir.Opcode::V128Eq32 =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(S32, Eq))
-    @ir.Opcode::V128Eq64 =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(D64, Eq))
-    @ir.Opcode::V128Ne8 => lower_v128_cmp_ne(ctx, inst, block, B8)
-    @ir.Opcode::V128Ne16 => lower_v128_cmp_ne(ctx, inst, block, H16)
-    @ir.Opcode::V128Ne32 => lower_v128_cmp_ne(ctx, inst, block, S32)
-    @ir.Opcode::V128Ne64 => lower_v128_cmp_ne(ctx, inst, block, D64)
-    @ir.Opcode::V128Lt8S => lower_v128_cmp_lt(ctx, inst, block, B8, true)
-    @ir.Opcode::V128Lt8U => lower_v128_cmp_lt(ctx, inst, block, B8, false)
-    @ir.Opcode::V128Lt16S => lower_v128_cmp_lt(ctx, inst, block, H16, true)
-    @ir.Opcode::V128Lt16U => lower_v128_cmp_lt(ctx, inst, block, H16, false)
-    @ir.Opcode::V128Lt32S => lower_v128_cmp_lt(ctx, inst, block, S32, true)
-    @ir.Opcode::V128Lt32U => lower_v128_cmp_lt(ctx, inst, block, S32, false)
-    @ir.Opcode::V128Lt64S => lower_v128_cmp_lt(ctx, inst, block, D64, true)
-    @ir.Opcode::V128Gt8S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtS))
-    @ir.Opcode::V128Gt8U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtU))
-    @ir.Opcode::V128Gt16S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtS))
-    @ir.Opcode::V128Gt16U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtU))
-    @ir.Opcode::V128Gt32S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtS))
-    @ir.Opcode::V128Gt32U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtU))
-    @ir.Opcode::V128Gt64S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GtS))
-    @ir.Opcode::V128Le8S => lower_v128_cmp_le(ctx, inst, block, B8, true)
-    @ir.Opcode::V128Le8U => lower_v128_cmp_le(ctx, inst, block, B8, false)
-    @ir.Opcode::V128Le16S => lower_v128_cmp_le(ctx, inst, block, H16, true)
-    @ir.Opcode::V128Le16U => lower_v128_cmp_le(ctx, inst, block, H16, false)
-    @ir.Opcode::V128Le32S => lower_v128_cmp_le(ctx, inst, block, S32, true)
-    @ir.Opcode::V128Le32U => lower_v128_cmp_le(ctx, inst, block, S32, false)
-    @ir.Opcode::V128Le64S => lower_v128_cmp_le(ctx, inst, block, D64, true)
-    @ir.Opcode::V128Ge8S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeS))
-    @ir.Opcode::V128Ge8U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeU))
-    @ir.Opcode::V128Ge16S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeS))
-    @ir.Opcode::V128Ge16U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeU))
-    @ir.Opcode::V128Ge32S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeS))
-    @ir.Opcode::V128Ge32U =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeU))
-    @ir.Opcode::V128Ge64S =>
-      lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GeS))
+    V128Eq8 => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, Eq))
+    V128Eq16 => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, Eq))
+    V128Eq32 => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, Eq))
+    V128Eq64 => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, Eq))
+    V128Ne8 => lower_v128_cmp_ne(ctx, inst, block, B8)
+    V128Ne16 => lower_v128_cmp_ne(ctx, inst, block, H16)
+    V128Ne32 => lower_v128_cmp_ne(ctx, inst, block, S32)
+    V128Ne64 => lower_v128_cmp_ne(ctx, inst, block, D64)
+    V128Lt8S => lower_v128_cmp_lt(ctx, inst, block, B8, true)
+    V128Lt8U => lower_v128_cmp_lt(ctx, inst, block, B8, false)
+    V128Lt16S => lower_v128_cmp_lt(ctx, inst, block, H16, true)
+    V128Lt16U => lower_v128_cmp_lt(ctx, inst, block, H16, false)
+    V128Lt32S => lower_v128_cmp_lt(ctx, inst, block, S32, true)
+    V128Lt32U => lower_v128_cmp_lt(ctx, inst, block, S32, false)
+    V128Lt64S => lower_v128_cmp_lt(ctx, inst, block, D64, true)
+    V128Gt8S => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtS))
+    V128Gt8U => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtU))
+    V128Gt16S => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtS))
+    V128Gt16U => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtU))
+    V128Gt32S => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtS))
+    V128Gt32U => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtU))
+    V128Gt64S => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GtS))
+    V128Le8S => lower_v128_cmp_le(ctx, inst, block, B8, true)
+    V128Le8U => lower_v128_cmp_le(ctx, inst, block, B8, false)
+    V128Le16S => lower_v128_cmp_le(ctx, inst, block, H16, true)
+    V128Le16U => lower_v128_cmp_le(ctx, inst, block, H16, false)
+    V128Le32S => lower_v128_cmp_le(ctx, inst, block, S32, true)
+    V128Le32U => lower_v128_cmp_le(ctx, inst, block, S32, false)
+    V128Le64S => lower_v128_cmp_le(ctx, inst, block, D64, true)
+    V128Ge8S => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeS))
+    V128Ge8U => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeU))
+    V128Ge16S => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeS))
+    V128Ge16U => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeU))
+    V128Ge32S => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeS))
+    V128Ge32U => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeU))
+    V128Ge64S => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GeS))
 
     // Narrow/Extend
-    @ir.Opcode::V128Narrow16to8S =>
+    V128Narrow16to8S =>
       lower_v128_binary(ctx, inst, block, SIMDNarrow(B8, true))
-    @ir.Opcode::V128Narrow16to8U =>
+    V128Narrow16to8U =>
       lower_v128_binary(ctx, inst, block, SIMDNarrow(B8, false))
-    @ir.Opcode::V128Narrow32to16S =>
+    V128Narrow32to16S =>
       lower_v128_binary(ctx, inst, block, SIMDNarrow(H16, true))
-    @ir.Opcode::V128Narrow32to16U =>
+    V128Narrow32to16U =>
       lower_v128_binary(ctx, inst, block, SIMDNarrow(H16, false))
-    @ir.Opcode::V128ExtendLow8to16S =>
+    V128ExtendLow8to16S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(H16, true))
-    @ir.Opcode::V128ExtendHigh8to16S =>
+    V128ExtendHigh8to16S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(H16, true))
-    @ir.Opcode::V128ExtendLow8to16U =>
+    V128ExtendLow8to16U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(H16, false))
-    @ir.Opcode::V128ExtendHigh8to16U =>
+    V128ExtendHigh8to16U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(H16, false))
-    @ir.Opcode::V128ExtendLow16to32S =>
+    V128ExtendLow16to32S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(S32, true))
-    @ir.Opcode::V128ExtendHigh16to32S =>
+    V128ExtendHigh16to32S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(S32, true))
-    @ir.Opcode::V128ExtendLow16to32U =>
+    V128ExtendLow16to32U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(S32, false))
-    @ir.Opcode::V128ExtendHigh16to32U =>
+    V128ExtendHigh16to32U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(S32, false))
-    @ir.Opcode::V128ExtendLow32to64S =>
+    V128ExtendLow32to64S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(D64, true))
-    @ir.Opcode::V128ExtendHigh32to64S =>
+    V128ExtendHigh32to64S =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(D64, true))
-    @ir.Opcode::V128ExtendLow32to64U =>
+    V128ExtendLow32to64U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendLow(D64, false))
-    @ir.Opcode::V128ExtendHigh32to64U =>
+    V128ExtendHigh32to64U =>
       lower_v128_unary(ctx, inst, block, SIMDExtendHigh(D64, false))
 
     // Extended multiply
-    @ir.Opcode::V128ExtMulLow8to16S =>
+    V128ExtMulLow8to16S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(H16, true))
-    @ir.Opcode::V128ExtMulHigh8to16S =>
+    V128ExtMulHigh8to16S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(H16, true))
-    @ir.Opcode::V128ExtMulLow8to16U =>
+    V128ExtMulLow8to16U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(H16, false))
-    @ir.Opcode::V128ExtMulHigh8to16U =>
+    V128ExtMulHigh8to16U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(H16, false))
-    @ir.Opcode::V128ExtMulLow16to32S =>
+    V128ExtMulLow16to32S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(S32, true))
-    @ir.Opcode::V128ExtMulHigh16to32S =>
+    V128ExtMulHigh16to32S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(S32, true))
-    @ir.Opcode::V128ExtMulLow16to32U =>
+    V128ExtMulLow16to32U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(S32, false))
-    @ir.Opcode::V128ExtMulHigh16to32U =>
+    V128ExtMulHigh16to32U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(S32, false))
-    @ir.Opcode::V128ExtMulLow32to64S =>
+    V128ExtMulLow32to64S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(D64, true))
-    @ir.Opcode::V128ExtMulHigh32to64S =>
+    V128ExtMulHigh32to64S =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(D64, true))
-    @ir.Opcode::V128ExtMulLow32to64U =>
+    V128ExtMulLow32to64U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulLow(D64, false))
-    @ir.Opcode::V128ExtMulHigh32to64U =>
+    V128ExtMulHigh32to64U =>
       lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(D64, false))
 
     // Extended add pairwise
-    @ir.Opcode::V128ExtAddPairwise8to16S =>
+    V128ExtAddPairwise8to16S =>
       lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(H16, true))
-    @ir.Opcode::V128ExtAddPairwise8to16U =>
+    V128ExtAddPairwise8to16U =>
       lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(H16, false))
-    @ir.Opcode::V128ExtAddPairwise16to32S =>
+    V128ExtAddPairwise16to32S =>
       lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(S32, true))
-    @ir.Opcode::V128ExtAddPairwise16to32U =>
+    V128ExtAddPairwise16to32U =>
       lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(S32, false))
 
     // Dot product and Q15
-    @ir.Opcode::V128Dot16to32S => lower_v128_binary(ctx, inst, block, SIMDDot)
-    @ir.Opcode::V128Q15MulrSat16S =>
-      lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
+    V128Dot16to32S => lower_v128_binary(ctx, inst, block, SIMDDot)
+    V128Q15MulrSat16S => lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
 
     // Floating point arithmetic
-    @ir.Opcode::V128AddF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFAdd(true))
-    @ir.Opcode::V128AddF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFAdd(false))
-    @ir.Opcode::V128SubF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFSub(true))
-    @ir.Opcode::V128SubF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFSub(false))
-    @ir.Opcode::V128MulF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMul(true))
-    @ir.Opcode::V128MulF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMul(false))
-    @ir.Opcode::V128DivF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFDiv(true))
-    @ir.Opcode::V128DivF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFDiv(false))
-    @ir.Opcode::V128MinF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMin(true))
-    @ir.Opcode::V128MinF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMin(false))
-    @ir.Opcode::V128MaxF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMax(true))
-    @ir.Opcode::V128MaxF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMax(false))
-    @ir.Opcode::V128PMinF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFPMin(true))
-    @ir.Opcode::V128PMinF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFPMin(false))
-    @ir.Opcode::V128PMaxF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFPMax(true))
-    @ir.Opcode::V128PMaxF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFPMax(false))
+    V128AddF32 => lower_v128_binary(ctx, inst, block, SIMDFAdd(true))
+    V128AddF64 => lower_v128_binary(ctx, inst, block, SIMDFAdd(false))
+    V128SubF32 => lower_v128_binary(ctx, inst, block, SIMDFSub(true))
+    V128SubF64 => lower_v128_binary(ctx, inst, block, SIMDFSub(false))
+    V128MulF32 => lower_v128_binary(ctx, inst, block, SIMDFMul(true))
+    V128MulF64 => lower_v128_binary(ctx, inst, block, SIMDFMul(false))
+    V128DivF32 => lower_v128_binary(ctx, inst, block, SIMDFDiv(true))
+    V128DivF64 => lower_v128_binary(ctx, inst, block, SIMDFDiv(false))
+    V128MinF32 => lower_v128_binary(ctx, inst, block, SIMDFMin(true))
+    V128MinF64 => lower_v128_binary(ctx, inst, block, SIMDFMin(false))
+    V128MaxF32 => lower_v128_binary(ctx, inst, block, SIMDFMax(true))
+    V128MaxF64 => lower_v128_binary(ctx, inst, block, SIMDFMax(false))
+    V128PMinF32 => lower_v128_binary(ctx, inst, block, SIMDFPMin(true))
+    V128PMinF64 => lower_v128_binary(ctx, inst, block, SIMDFPMin(false))
+    V128PMaxF32 => lower_v128_binary(ctx, inst, block, SIMDFPMax(true))
+    V128PMaxF64 => lower_v128_binary(ctx, inst, block, SIMDFPMax(false))
 
     // Floating point unary
-    @ir.Opcode::V128AbsF32 => lower_v128_unary(ctx, inst, block, SIMDFAbs(true))
-    @ir.Opcode::V128AbsF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFAbs(false))
-    @ir.Opcode::V128NegF32 => lower_v128_unary(ctx, inst, block, SIMDFNeg(true))
-    @ir.Opcode::V128NegF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFNeg(false))
-    @ir.Opcode::V128SqrtF32 =>
-      lower_v128_unary(ctx, inst, block, SIMDFSqrt(true))
-    @ir.Opcode::V128SqrtF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFSqrt(false))
-    @ir.Opcode::V128CeilF32 =>
-      lower_v128_unary(ctx, inst, block, SIMDFCeil(true))
-    @ir.Opcode::V128CeilF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFCeil(false))
-    @ir.Opcode::V128FloorF32 =>
-      lower_v128_unary(ctx, inst, block, SIMDFFloor(true))
-    @ir.Opcode::V128FloorF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFFloor(false))
-    @ir.Opcode::V128TruncF32 =>
-      lower_v128_unary(ctx, inst, block, SIMDFTrunc(true))
-    @ir.Opcode::V128TruncF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFTrunc(false))
-    @ir.Opcode::V128NearestF32 =>
-      lower_v128_unary(ctx, inst, block, SIMDFNearest(true))
-    @ir.Opcode::V128NearestF64 =>
-      lower_v128_unary(ctx, inst, block, SIMDFNearest(false))
+    V128AbsF32 => lower_v128_unary(ctx, inst, block, SIMDFAbs(true))
+    V128AbsF64 => lower_v128_unary(ctx, inst, block, SIMDFAbs(false))
+    V128NegF32 => lower_v128_unary(ctx, inst, block, SIMDFNeg(true))
+    V128NegF64 => lower_v128_unary(ctx, inst, block, SIMDFNeg(false))
+    V128SqrtF32 => lower_v128_unary(ctx, inst, block, SIMDFSqrt(true))
+    V128SqrtF64 => lower_v128_unary(ctx, inst, block, SIMDFSqrt(false))
+    V128CeilF32 => lower_v128_unary(ctx, inst, block, SIMDFCeil(true))
+    V128CeilF64 => lower_v128_unary(ctx, inst, block, SIMDFCeil(false))
+    V128FloorF32 => lower_v128_unary(ctx, inst, block, SIMDFFloor(true))
+    V128FloorF64 => lower_v128_unary(ctx, inst, block, SIMDFFloor(false))
+    V128TruncF32 => lower_v128_unary(ctx, inst, block, SIMDFTrunc(true))
+    V128TruncF64 => lower_v128_unary(ctx, inst, block, SIMDFTrunc(false))
+    V128NearestF32 => lower_v128_unary(ctx, inst, block, SIMDFNearest(true))
+    V128NearestF64 => lower_v128_unary(ctx, inst, block, SIMDFNearest(false))
 
     // Floating point comparisons
-    @ir.Opcode::V128EqF32 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(true, @instr.SIMDFCmpKind::Eq),
-      )
-    @ir.Opcode::V128EqF64 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(false, @instr.SIMDFCmpKind::Eq),
-      )
-    @ir.Opcode::V128NeF32 => lower_v128_fcmp_ne(ctx, inst, block, true)
-    @ir.Opcode::V128NeF64 => lower_v128_fcmp_ne(ctx, inst, block, false)
-    @ir.Opcode::V128LtF32 =>
+    V128EqF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Eq))
+    V128EqF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Eq))
+    V128NeF32 => lower_v128_fcmp_ne(ctx, inst, block, true)
+    V128NeF64 => lower_v128_fcmp_ne(ctx, inst, block, false)
+    V128LtF32 =>
       // lt(a,b) = gt(b,a) - swap operands
-      lower_v128_binary_swap(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(true, @instr.SIMDFCmpKind::Gt),
-      )
-    @ir.Opcode::V128LtF64 =>
-      lower_v128_binary_swap(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(false, @instr.SIMDFCmpKind::Gt),
-      )
-    @ir.Opcode::V128GtF32 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(true, @instr.SIMDFCmpKind::Gt),
-      )
-    @ir.Opcode::V128GtF64 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(false, @instr.SIMDFCmpKind::Gt),
-      )
-    @ir.Opcode::V128LeF32 =>
+      lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(true, Gt))
+    V128LtF64 => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(false, Gt))
+    V128GtF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Gt))
+    V128GtF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Gt))
+    V128LeF32 =>
       // le(a,b) = ge(b,a) - swap operands
-      lower_v128_binary_swap(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(true, @instr.SIMDFCmpKind::Ge),
-      )
-    @ir.Opcode::V128LeF64 =>
-      lower_v128_binary_swap(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(false, @instr.SIMDFCmpKind::Ge),
-      )
-    @ir.Opcode::V128GeF32 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(true, @instr.SIMDFCmpKind::Ge),
-      )
-    @ir.Opcode::V128GeF64 =>
-      lower_v128_binary(
-        ctx,
-        inst,
-        block,
-        SIMDFCmp(false, @instr.SIMDFCmpKind::Ge),
-      )
+      lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(true, Ge))
+    V128LeF64 => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(false, Ge))
+    V128GeF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Ge))
+    V128GeF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Ge))
 
     // Conversions
-    @ir.Opcode::V128TruncSatF32toI32S =>
+    V128TruncSatF32toI32S =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntS(true))
-    @ir.Opcode::V128TruncSatF32toI32U =>
+    V128TruncSatF32toI32U =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntU(true))
-    @ir.Opcode::V128TruncSatF64toI32SZero =>
+    V128TruncSatF64toI32SZero =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32SZero)
-    @ir.Opcode::V128TruncSatF64toI32UZero =>
+    V128TruncSatF64toI32UZero =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32UZero)
-    @ir.Opcode::V128ConvertI32toF32S =>
+    V128ConvertI32toF32S =>
       lower_v128_unary(ctx, inst, block, SIMDIntToFloatS(true))
-    @ir.Opcode::V128ConvertI32toF32U =>
+    V128ConvertI32toF32U =>
       lower_v128_unary(ctx, inst, block, SIMDIntToFloatU(true))
-    @ir.Opcode::V128ConvertLowI32toF64S =>
+    V128ConvertLowI32toF64S =>
       lower_v128_unary(ctx, inst, block, SIMDConvertLowI32ToF64S)
-    @ir.Opcode::V128ConvertLowI32toF64U =>
+    V128ConvertLowI32toF64U =>
       lower_v128_unary(ctx, inst, block, SIMDConvertLowI32ToF64U)
-    @ir.Opcode::V128DemoteF64toF32Zero =>
+    V128DemoteF64toF32Zero =>
       lower_v128_unary(ctx, inst, block, SIMDDemoteF64ToF32Zero)
-    @ir.Opcode::V128PromoteLowF32toF64 =>
+    V128PromoteLowF32toF64 =>
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
 
     // Memory operations
-    @ir.Opcode::V128Load8x8S(_, _, offset) =>
+    V128Load8x8S(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 8, true, offset.to_int())
-    @ir.Opcode::V128Load8x8U(_, _, offset) =>
+    V128Load8x8U(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 8, false, offset.to_int())
-    @ir.Opcode::V128Load16x4S(_, _, offset) =>
+    V128Load16x4S(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 16, true, offset.to_int())
-    @ir.Opcode::V128Load16x4U(_, _, offset) =>
+    V128Load16x4U(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 16, false, offset.to_int())
-    @ir.Opcode::V128Load32x2S(_, _, offset) =>
+    V128Load32x2S(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 32, true, offset.to_int())
-    @ir.Opcode::V128Load32x2U(_, _, offset) =>
+    V128Load32x2U(_, _, offset) =>
       lower_v128_load_extend(ctx, inst, block, 32, false, offset.to_int())
-    @ir.Opcode::V128Load8Splat(_, _, offset) =>
+    V128Load8Splat(_, _, offset) =>
       lower_v128_load_splat(ctx, inst, block, B8, offset.to_int())
-    @ir.Opcode::V128Load16Splat(_, _, offset) =>
+    V128Load16Splat(_, _, offset) =>
       lower_v128_load_splat(ctx, inst, block, H16, offset.to_int())
-    @ir.Opcode::V128Load32Splat(_, _, offset) =>
+    V128Load32Splat(_, _, offset) =>
       lower_v128_load_splat(ctx, inst, block, S32, offset.to_int())
-    @ir.Opcode::V128Load64Splat(_, _, offset) =>
+    V128Load64Splat(_, _, offset) =>
       lower_v128_load_splat(ctx, inst, block, D64, offset.to_int())
-    @ir.Opcode::V128Load32Zero(_, _, offset) =>
+    V128Load32Zero(_, _, offset) =>
       lower_v128_load_zero(ctx, inst, block, false, offset.to_int())
-    @ir.Opcode::V128Load64Zero(_, _, offset) =>
+    V128Load64Zero(_, _, offset) =>
       lower_v128_load_zero(ctx, inst, block, true, offset.to_int())
-    @ir.Opcode::V128Load8Lane(_, _, offset, lane) =>
+    V128Load8Lane(_, _, offset, lane) =>
       lower_v128_load_lane(ctx, inst, block, B8, lane, offset.to_int())
-    @ir.Opcode::V128Load16Lane(_, _, offset, lane) =>
+    V128Load16Lane(_, _, offset, lane) =>
       lower_v128_load_lane(ctx, inst, block, H16, lane, offset.to_int())
-    @ir.Opcode::V128Load32Lane(_, _, offset, lane) =>
+    V128Load32Lane(_, _, offset, lane) =>
       lower_v128_load_lane(ctx, inst, block, S32, lane, offset.to_int())
-    @ir.Opcode::V128Load64Lane(_, _, offset, lane) =>
+    V128Load64Lane(_, _, offset, lane) =>
       lower_v128_load_lane(ctx, inst, block, D64, lane, offset.to_int())
-    @ir.Opcode::V128Store8Lane(_, _, offset, lane) =>
+    V128Store8Lane(_, _, offset, lane) =>
       lower_v128_store_lane(ctx, inst, block, B8, lane, offset.to_int())
-    @ir.Opcode::V128Store16Lane(_, _, offset, lane) =>
+    V128Store16Lane(_, _, offset, lane) =>
       lower_v128_store_lane(ctx, inst, block, H16, lane, offset.to_int())
-    @ir.Opcode::V128Store32Lane(_, _, offset, lane) =>
+    V128Store32Lane(_, _, offset, lane) =>
       lower_v128_store_lane(ctx, inst, block, S32, lane, offset.to_int())
-    @ir.Opcode::V128Store64Lane(_, _, offset, lane) =>
+    V128Store64Lane(_, _, offset, lane) =>
       lower_v128_store_lane(ctx, inst, block, D64, lane, offset.to_int())
 
     // ============ Relaxed SIMD ============
     // relaxed_swizzle: same as swizzle (TBL instruction, out-of-range gives 0)
-    @ir.Opcode::V128RelaxedSwizzle => lower_v128_swizzle(ctx, inst, block)
+    V128RelaxedSwizzle => lower_v128_swizzle(ctx, inst, block)
 
     // relaxed_trunc: same as trunc_sat (the relaxation is for NaN behavior)
-    @ir.Opcode::V128RelaxedTruncF32toI32S =>
+    V128RelaxedTruncF32toI32S =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntS(true))
-    @ir.Opcode::V128RelaxedTruncF32toI32U =>
+    V128RelaxedTruncF32toI32U =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntU(true))
-    @ir.Opcode::V128RelaxedTruncF64toI32SZero =>
+    V128RelaxedTruncF64toI32SZero =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32SZero)
-    @ir.Opcode::V128RelaxedTruncF64toI32UZero =>
+    V128RelaxedTruncF64toI32UZero =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32UZero)
 
     // relaxed_madd/nmadd: fused multiply-add/subtract
-    @ir.Opcode::V128RelaxedMaddF32 =>
-      lower_v128_fma(ctx, inst, block, true, false)
-    @ir.Opcode::V128RelaxedNmaddF32 =>
-      lower_v128_fma(ctx, inst, block, true, true)
-    @ir.Opcode::V128RelaxedMaddF64 =>
-      lower_v128_fma(ctx, inst, block, false, false)
-    @ir.Opcode::V128RelaxedNmaddF64 =>
-      lower_v128_fma(ctx, inst, block, false, true)
+    V128RelaxedMaddF32 => lower_v128_fma(ctx, inst, block, true, false)
+    V128RelaxedNmaddF32 => lower_v128_fma(ctx, inst, block, true, true)
+    V128RelaxedMaddF64 => lower_v128_fma(ctx, inst, block, false, false)
+    V128RelaxedNmaddF64 => lower_v128_fma(ctx, inst, block, false, true)
 
     // relaxed_laneselect: same as bitselect (BSL instruction)
-    @ir.Opcode::V128RelaxedLaneselect8 =>
-      lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    @ir.Opcode::V128RelaxedLaneselect16 =>
-      lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    @ir.Opcode::V128RelaxedLaneselect32 =>
-      lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    @ir.Opcode::V128RelaxedLaneselect64 =>
-      lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    V128RelaxedLaneselect8 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    V128RelaxedLaneselect16 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    V128RelaxedLaneselect32 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    V128RelaxedLaneselect64 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
 
     // relaxed_min/max: use FMIN/FMAX (relaxation is for NaN propagation)
-    @ir.Opcode::V128RelaxedMinF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMin(true))
-    @ir.Opcode::V128RelaxedMaxF32 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMax(true))
-    @ir.Opcode::V128RelaxedMinF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMin(false))
-    @ir.Opcode::V128RelaxedMaxF64 =>
-      lower_v128_binary(ctx, inst, block, SIMDFMax(false))
+    V128RelaxedMinF32 => lower_v128_binary(ctx, inst, block, SIMDFMin(true))
+    V128RelaxedMaxF32 => lower_v128_binary(ctx, inst, block, SIMDFMax(true))
+    V128RelaxedMinF64 => lower_v128_binary(ctx, inst, block, SIMDFMin(false))
+    V128RelaxedMaxF64 => lower_v128_binary(ctx, inst, block, SIMDFMax(false))
 
     // relaxed_q15mulr_s: same as q15mulr_s (SQRDMULH instruction)
-    @ir.Opcode::V128RelaxedQ15MulrS =>
-      lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
+    V128RelaxedQ15MulrS => lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
 
     // relaxed_dot products
-    @ir.Opcode::V128RelaxedDot8to16S =>
+    V128RelaxedDot8to16S =>
       lower_v128_binary(ctx, inst, block, SIMDRelaxedDot8to16)
-    @ir.Opcode::V128RelaxedDot8to32AddS =>
-      lower_v128_relaxed_dot_add(ctx, inst, block)
+    V128RelaxedDot8to32AddS => lower_v128_relaxed_dot_add(ctx, inst, block)
   }
 }
 
@@ -2513,16 +2312,16 @@ fn lower_inst(
 /// Convert IR IntCC to VCode CmpKind
 fn ir_intcc_to_cmp_kind(cc : @ir.IntCC) -> @instr.CmpKind {
   match cc {
-    @ir.IntCC::Eq => Eq
-    @ir.IntCC::Ne => Ne
-    @ir.IntCC::Slt => Slt
-    @ir.IntCC::Sle => Sle
-    @ir.IntCC::Sgt => Sgt
-    @ir.IntCC::Sge => Sge
-    @ir.IntCC::Ult => Ult
-    @ir.IntCC::Ule => Ule
-    @ir.IntCC::Ugt => Ugt
-    @ir.IntCC::Uge => Uge
+    Eq => Eq
+    Ne => Ne
+    Slt => Slt
+    Sle => Sle
+    Sgt => Sgt
+    Sge => Sge
+    Ult => Ult
+    Ule => Ule
+    Ugt => Ugt
+    Uge => Uge
   }
 }
 
@@ -2545,13 +2344,13 @@ fn lower_icmp(
     // Determine is_64 from operand type, not result type (result is always i32)
     // Reference types (FuncRef, ExternRef) are also 64-bit values
     let is_64 = match inst.operands[0].ty {
-      @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+      I64 | FuncRef | ExternRef => true
       _ => false
     }
     let vcode_inst = @instr.VCodeInst::new(Cmp(kind, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
-    if @isa.ISA::current() is @isa.AArch64 &&
+    if @isa.ISA::current() is AArch64 &&
       is_const_zero_value(ctx, inst.operands[1]) {
       // Cranelift-style zero-compare fast path: use xzr/wzr directly and
       // avoid materializing an explicit zero register.
@@ -2568,12 +2367,12 @@ fn lower_icmp(
 /// Convert IR FloatCC to VCode FCmpKind
 fn ir_floatcc_to_fcmp_kind(cc : @ir.FloatCC) -> @instr.FCmpKind {
   match cc {
-    @ir.FloatCC::Eq => Eq
-    @ir.FloatCC::Ne => Ne
-    @ir.FloatCC::Lt => Lt
-    @ir.FloatCC::Le => Le
-    @ir.FloatCC::Gt => Gt
-    @ir.FloatCC::Ge => Ge
+    Eq => Eq
+    Ne => Ne
+    Lt => Lt
+    Le => Le
+    Gt => Gt
+    Ge => Ge
   }
 }
 
@@ -2606,7 +2405,7 @@ fn lower_terminator(
   block : @block.VCodeBlock,
 ) -> Unit {
   match term {
-    @ir.Terminator::Jump(target, args) => {
+    Jump(target, args) => {
       let target_id = ctx.get_block_id(target)
 
       // Lower SSA block arguments directly onto the terminator.
@@ -2618,7 +2417,7 @@ fn lower_terminator(
       }
       block.set_terminator(Jump(target_id, regs))
     }
-    @ir.Terminator::Brz(cond, then_block, else_block) => {
+    Brz(cond, then_block, else_block) => {
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       // brz means branch if zero, so:
@@ -2631,7 +2430,7 @@ fn lower_terminator(
         let vcode_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
-          @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+          I64 | FuncRef | ExternRef => true
           _ => false
         }
         // Try to use BranchCmpImm if RHS is a valid immediate
@@ -2672,7 +2471,7 @@ fn lower_terminator(
         )
       }
     }
-    @ir.Terminator::Brnz(cond, then_block, else_block) => {
+    Brnz(cond, then_block, else_block) => {
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)
       // brnz means branch if nonzero, so:
@@ -2683,7 +2482,7 @@ fn lower_terminator(
         let vcode_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
-          @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+          I64 | FuncRef | ExternRef => true
           _ => false
         }
         // Try to use BranchCmpImm if RHS is a valid immediate
@@ -2722,19 +2521,19 @@ fn lower_terminator(
         )
       }
     }
-    @ir.Terminator::Return(values) => {
+    Return(values) => {
       let regs : Array[@abi.Reg] = []
       for v in values {
         regs.push(Virtual(ctx.get_vreg_for_use(v, block)))
       }
       block.set_terminator(Return(regs))
     }
-    @ir.Terminator::Trap(msg) => block.set_terminator(Trap(msg))
-    @ir.Terminator::BrTable(index, targets, default) => {
+    Trap(msg) => block.set_terminator(Trap(msg))
+    BrTable(index, targets, default) => {
       let index_vreg = ctx.get_vreg_for_use(index, block)
       let default_id = ctx.get_block_id(default)
       // WebAssembly br_table index is i32, but check IR type to be safe
-      let is_64 = index.ty is @ir.Type::I64
+      let is_64 = index.ty is I64
       if targets.is_empty() {
         // No targets, just jump to default
         block.set_terminator(Jump(default_id, []))
@@ -2856,9 +2655,9 @@ fn lower_load_ptr(
   // Convert IR type to VCode memory type and get access size
   let mem_ty = ir_type_to_mem_type(ty)
   let access_size = match ty {
-    @ir.Type::I32 | @ir.Type::F32 => 4
-    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
-    @ir.Type::V128 => 16
+    I32 | F32 => 4
+    I64 | F64 | FuncRef | ExternRef => 8
+    V128 => 16
   }
 
   // Get the base pointer and offset from operands
@@ -2869,7 +2668,7 @@ fn lower_load_ptr(
   // Check if we have an offset from a second operand (must be an iconst)
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      def_inst.opcode is Iconst(off) {
       off
     } else {
       0L
@@ -2882,7 +2681,7 @@ fn lower_load_ptr(
   //
   // On amd64, we support scales 0..3 and lower extends through regoffset as well.
   let isa = @isa.ISA::current()
-  let is_amd64 = isa is @isa.AMD64
+  let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
@@ -2974,9 +2773,9 @@ fn lower_store_ptr(
   // Convert IR type to VCode memory type and get access size
   let mem_ty = ir_type_to_mem_type(ty)
   let access_size = match ty {
-    @ir.Type::I32 | @ir.Type::F32 => 4
-    @ir.Type::I64 | @ir.Type::F64 | @ir.Type::FuncRef | @ir.Type::ExternRef => 8
-    @ir.Type::V128 => 16
+    I32 | F32 => 4
+    I64 | F64 | FuncRef | ExternRef => 8
+    V128 => 16
   }
   let base_value = inst.operands[0]
   let store_value = inst.operands[1]
@@ -2984,7 +2783,7 @@ fn lower_store_ptr(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      def_inst.opcode is Iconst(off) {
       off
     } else {
       0L
@@ -2994,7 +2793,7 @@ fn lower_store_ptr(
   }
   // Try Cranelift-style register-offset addressing for stores.
   let isa = @isa.ISA::current()
-  let is_amd64 = isa is @isa.AMD64
+  let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
@@ -3094,7 +2893,7 @@ fn lower_load_ptr_narrow(
   // Check if we have an offset from a second operand
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      def_inst.opcode is Iconst(off) {
       off
     } else {
       0L
@@ -3106,8 +2905,8 @@ fn lower_load_ptr_narrow(
   // Cranelift-style narrow register-offset addressing:
   //   load{8,16,32} [base + index{,extend}{,scale}]
   let isa = @isa.ISA::current()
-  let is_aarch64 = isa is @isa.AArch64
-  let is_amd64 = isa is @isa.AMD64
+  let is_aarch64 = isa is AArch64
+  let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)
@@ -3203,7 +3002,7 @@ fn lower_store_ptr_narrow(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is @ir.Opcode::Iconst(off) {
+      def_inst.opcode is Iconst(off) {
       off
     } else {
       0L
@@ -3215,8 +3014,8 @@ fn lower_store_ptr_narrow(
   // Cranelift-style narrow register-offset addressing:
   //   store{8,16,32} [base + index{,extend}{,scale}]
   let isa = @isa.ISA::current()
-  let is_aarch64 = isa is @isa.AArch64
-  let is_amd64 = isa is @isa.AMD64
+  let is_aarch64 = isa is AArch64
+  let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (is_aarch64 || is_amd64) &&
     match_addr_reg_offset(ctx, base_value, access_size)

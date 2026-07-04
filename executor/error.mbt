@@ -9,6 +9,12 @@ priv suberror ControlSignal {
 } derive(Debug)
 
 ///|
+priv enum ExecBlockResult {
+  ExecBlockCompleted
+  ExecBlockRaised(Error)
+}
+
+///|
 /// Internal signal used to preserve host-call error provenance.
 priv suberror InvocationSignal {
   HostInvocation(Error)

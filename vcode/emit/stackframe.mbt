@@ -123,8 +123,8 @@ pub fn JITStackFrame::build(
   // Calculate size of each region
   let setup_area_size = if has_setup_area {
     match isa {
-      @isa.AArch64 => SETUP_AREA_SIZE
-      @isa.AMD64 => X86_SETUP_AREA_SIZE
+      AArch64 => SETUP_AREA_SIZE
+      AMD64 => X86_SETUP_AREA_SIZE
     }
   } else {
     0
@@ -237,7 +237,7 @@ fn build_gpr_save_list_v3(
   let fp = isa.fp_reg_index()
   let lr = isa.lr_reg_index()
   let env = isa.machine_env(settings=abi_settings)
-  let callee : @hashset.HashSet[Int] = @hashset.new()
+  let callee : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
     callee.add(r.index)
   }

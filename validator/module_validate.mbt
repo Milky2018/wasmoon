@@ -166,7 +166,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
       let offset_type = if ctx.tables[table_idx].is_table64 {
         @types.ValueType::I64
       } else {
-        @types.ValueType::I32
+        I32
       }
       validate_const_expr(
         ctx.globals,
@@ -395,7 +395,7 @@ pub fn validate_module_with_context(
       let offset_type = if ctx.tables[table_idx].is_table64 {
         @types.ValueType::I64
       } else {
-        @types.ValueType::I32
+        I32
       }
       validate_const_expr(
         ctx.globals,

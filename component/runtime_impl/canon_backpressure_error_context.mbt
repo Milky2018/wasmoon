@@ -5,8 +5,8 @@
 ///|
 fn parse_i32_like_arg(v : @types.Value) -> Int? {
   match v {
-    @types.Value::I32(n) => Some(n)
-    @types.Value::I64(n) => Some(n.to_int())
+    I32(n) => Some(n)
+    I64(n) => Some(n.to_int())
     _ => None
   }
 }
@@ -16,10 +16,7 @@ fn instantiate_canon_backpressure_set(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -118,10 +115,7 @@ fn instantiate_canon_error_context_new(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let types = state.types
@@ -158,7 +152,7 @@ fn instantiate_canon_error_context_new(
       }
     }
     let debug_message = match lifted {
-      ComponentValue::String(s) => s
+      String(s) => s
       _ => {
         trap_canon("type mismatch")
         return []
@@ -167,7 +161,7 @@ fn instantiate_canon_error_context_new(
     let handle = alloc_error_context_handle(
       async_state, owner_component_id, debug_message,
     )
-    [@types.Value::I32(handle)]
+    [I32(handle)]
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
 }
@@ -179,10 +173,7 @@ fn instantiate_canon_error_context_debug_message(
   store : @runtime.Store,
 ) -> Unit raise ComponentRuntimeError {
   let resources = resolve_canon_resources(opts, state)
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -287,10 +278,7 @@ fn instantiate_canon_error_context_drop(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(

@@ -4,8 +4,8 @@
 test "pattern: add x, 0 -> mov x" {
   // Build IR: fn(a: i32) -> i32 { a + 0 }
   let builder = @ir.IRBuilder::new("add_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -31,8 +31,8 @@ test "pattern: add x, 0 -> mov x" {
 test "pattern: add 0, x -> mov x" {
   // Build IR: fn(a: i32) -> i32 { 0 + a }
   let builder = @ir.IRBuilder::new("zero_add_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -55,8 +55,8 @@ test "pattern: add 0, x -> mov x" {
 ///|
 test "pattern: mul x, 1 -> mov x" {
   let builder = @ir.IRBuilder::new("mul_one_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let one = builder.iconst_i32(1)
@@ -78,8 +78,8 @@ test "pattern: mul x, 1 -> mov x" {
 ///|
 test "pattern: mul x, 0 -> 0" {
   let builder = @ir.IRBuilder::new("mul_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -102,8 +102,8 @@ test "pattern: mul x, 0 -> 0" {
 ///|
 test "pattern: and x, 0 -> 0" {
   let builder = @ir.IRBuilder::new("and_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -125,8 +125,8 @@ test "pattern: and x, 0 -> 0" {
 ///|
 test "pattern: or x, 0 -> mov x" {
   let builder = @ir.IRBuilder::new("or_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -148,8 +148,8 @@ test "pattern: or x, 0 -> mov x" {
 ///|
 test "pattern: xor x, 0 -> mov x" {
   let builder = @ir.IRBuilder::new("xor_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -171,8 +171,8 @@ test "pattern: xor x, 0 -> mov x" {
 ///|
 test "pattern: shl x, 0 -> mov x" {
   let builder = @ir.IRBuilder::new("shl_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -194,8 +194,8 @@ test "pattern: shl x, 0 -> mov x" {
 ///|
 test "pattern: sub x, 0 -> mov x" {
   let builder = @ir.IRBuilder::new("sub_zero_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -218,9 +218,9 @@ test "pattern: sub x, 0 -> mov x" {
 test "no pattern match: regular add" {
   // Build IR: fn(a: i32, b: i32) -> i32 { a + b }
   let builder = @ir.IRBuilder::new("regular_add")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let result = builder.iadd(a, b)
@@ -247,8 +247,8 @@ test "no pattern match: regular add" {
 test "optimized vs non-optimized comparison" {
   // Build the same function
   let builder = @ir.IRBuilder::new("comparison")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -273,8 +273,8 @@ test "optimized vs non-optimized comparison" {
 
   // Rebuild for optimized test (builders consume the function)
   let builder2 = @ir.IRBuilder::new("comparison")
-  let a2 = builder2.add_param(@ir.Type::I32)
-  builder2.add_result(@ir.Type::I32)
+  let a2 = builder2.add_param(I32)
+  builder2.add_result(I32)
   let entry2 = builder2.create_block()
   builder2.switch_to_block(entry2)
   let zero2 = builder2.iconst_i32(0)
@@ -300,8 +300,8 @@ test "optimized vs non-optimized comparison" {
 ///|
 test "pattern: fmul x, 1.0 -> mov x" {
   let builder = @ir.IRBuilder::new("fmul_one_test")
-  let a = builder.add_param(@ir.Type::F32)
-  builder.add_result(@ir.Type::F32)
+  let a = builder.add_param(F32)
+  builder.add_result(F32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let one = builder.fconst_f32(1.0)
@@ -326,8 +326,8 @@ test "pattern: fmul x, 1.0 -> mov x" {
 ///|
 test "strength reduction: mul x, 2 -> shl x, 1" {
   let builder = @ir.IRBuilder::new("mul_pow2_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let two = builder.iconst_i32(2)
@@ -353,8 +353,8 @@ test "strength reduction: mul x, 2 -> shl x, 1" {
 ///|
 test "strength reduction: mul x, 8 -> shl x, 3" {
   let builder = @ir.IRBuilder::new("mul_pow2_8_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let eight = builder.iconst_i32(8)
@@ -380,8 +380,8 @@ test "strength reduction: mul x, 8 -> shl x, 3" {
 ///|
 test "strength reduction: 4 * x -> shl x, 2" {
   let builder = @ir.IRBuilder::new("pow2_mul_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let four = builder.iconst_i32(4)
@@ -407,8 +407,8 @@ test "strength reduction: 4 * x -> shl x, 2" {
 ///|
 test "strength reduction: udiv x, 4 -> lshr x, 2" {
   let builder = @ir.IRBuilder::new("udiv_pow2_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let four = builder.iconst_i32(4)
@@ -434,8 +434,8 @@ test "strength reduction: udiv x, 4 -> lshr x, 2" {
 ///|
 test "no strength reduction: mul x, 3 (not power of 2)" {
   let builder = @ir.IRBuilder::new("mul_non_pow2_test")
-  let a = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let three = builder.iconst_i32(3)

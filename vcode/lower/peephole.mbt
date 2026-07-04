@@ -7,10 +7,10 @@
 
 ///|
 pub fn optimize_vcode(func : @regalloc.VCodeFunction) -> Unit {
-  @peephole.optimize_vcode(func, profile=@peephole.Full)
+  @peephole.optimize_vcode(func, profile=Full)
 }
 
 ///|
 pub fn optimize_vcode_for_lowering(func : @regalloc.VCodeFunction) -> Unit {
-  @peephole.optimize_vcode(func, profile=@peephole.Lowering)
+  @peephole.optimize_vcode(func, profile=Lowering)
 }

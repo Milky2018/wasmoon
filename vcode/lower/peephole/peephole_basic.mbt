@@ -85,14 +85,13 @@ fn collect_use_counts(func : @regalloc.VCodeFunction) -> Array[Int] {
     }
     if block.terminator is Some(term) {
       let term_uses = match term {
-        @instr.VCodeTerminator::Jump(_, args)
-        | @instr.VCodeTerminator::Return(args) => args
-        @instr.VCodeTerminator::Branch(cond, _, _)
-        | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
-        | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
-        @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-        @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-        @instr.VCodeTerminator::Trap(_) => []
+        Jump(_, args) | Return(args) => args
+        Branch(cond, _, _)
+        | BranchZero(cond, _, _, _, _)
+        | BrTable(cond, _, _) => [cond]
+        BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+        BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+        Trap(_) => []
       }
       for use_ in term_uses {
         add_use(use_)
@@ -188,7 +187,7 @@ fn optimize_block(
   state : PeepholeState,
 ) -> Int {
   // Phase 1: Collect all used vregs (for dead code elimination)
-  let used : @hashset.HashSet[Int] = @hashset.new()
+  let used : @hashset.HashSet[Int] = HashSet([])
 
   // Collect uses from all instructions
   for inst in block.insts {
@@ -312,10 +311,10 @@ fn fits_i32(value : Int64) -> Bool {
 ///|
 fn is_valid_add_sub_imm_for_target(value : Int64) -> Bool {
   match @isa.ISA::current() {
-    @isa.AArch64 =>
+    AArch64 =>
       value >= 0L &&
       (value <= 4095L || ((value & 0xFFFL) == 0L && value >> 12 <= 4095L))
-    @isa.AMD64 => fits_i32(value)
+    AMD64 => fits_i32(value)
   }
 }
 
@@ -538,14 +537,12 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
   }
   if block.terminator is Some(term) {
     let term_uses = match term {
-      @instr.VCodeTerminator::Jump(_, args)
-      | @instr.VCodeTerminator::Return(args) => args
-      @instr.VCodeTerminator::Branch(cond, _, _)
-      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
-      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
-      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-      @instr.VCodeTerminator::Trap(_) => []
+      Jump(_, args) | Return(args) => args
+      Branch(cond, _, _) | BranchZero(cond, _, _, _, _) | BrTable(cond, _, _) =>
+        [cond]
+      BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      Trap(_) => []
     }
     for use_ in term_uses {
       if get_vreg_id(use_) is Some(use_id) {
@@ -556,14 +553,12 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
   }
   if block.terminator is Some(term) {
     let term_uses = match term {
-      @instr.VCodeTerminator::Jump(_, args)
-      | @instr.VCodeTerminator::Return(args) => args
-      @instr.VCodeTerminator::Branch(cond, _, _)
-      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
-      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
-      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-      @instr.VCodeTerminator::Trap(_) => []
+      Jump(_, args) | Return(args) => args
+      Branch(cond, _, _) | BranchZero(cond, _, _, _, _) | BrTable(cond, _, _) =>
+        [cond]
+      BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      Trap(_) => []
     }
     for use_ in term_uses {
       if get_vreg_id(use_) is Some(use_id) {
@@ -575,7 +570,7 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
 
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
-  let to_eliminate : @hashset.HashSet[Int] = @hashset.new()
+  let to_eliminate : @hashset.HashSet[Int] = HashSet([])
   let replace_def : Map[Int, Int] = {} // inst_idx -> new_def_vreg_id
   for i, inst in block.insts {
     if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
@@ -637,9 +632,7 @@ fn optimize_inplace_updates(block : @block.VCodeBlock) -> Int {
           let old_def = inst.defs[0]
           if old_def.reg is Virtual(old_vreg) {
             let new_vreg : @abi.VReg = { id: new_def_id, class: old_vreg.class }
-            let new_writable : @abi.Writable = {
-              reg: @abi.Reg::Virtual(new_vreg),
-            }
+            let new_writable : @abi.Writable = { reg: Virtual(new_vreg) }
             inst.defs[0] = new_writable
           }
         }
@@ -762,7 +755,7 @@ fn optimize_store_merging(
   }
 
   // Track which instructions to remove and what to insert
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = HashSet([])
   let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
   let mut merged = 0
 
@@ -837,7 +830,7 @@ fn optimize_load_merging(
   if block.insts.length() < 2 {
     return 0
   }
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = HashSet([])
   let insertions : Array[(Int, Array[@instr.VCodeInst])] = []
   let mut merged = 0
 
@@ -976,11 +969,11 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
             // Implement by extending the stored value.
             let kind = match (bits, signed) {
               (8, true) => @instr.Signed8To64
-              (8, false) => @instr.Unsigned8To64
-              (16, true) => @instr.Signed16To64
-              (16, false) => @instr.Unsigned16To64
-              (32, true) => @instr.Signed32To64
-              (32, false) => @instr.Unsigned32To64
+              (8, false) => Unsigned8To64
+              (16, true) => Signed16To64
+              (16, false) => Unsigned16To64
+              (32, true) => Signed32To64
+              (32, false) => Unsigned32To64
               _ => continue
             }
             let ext = @instr.VCodeInst::new(Extend(kind))
@@ -1045,15 +1038,12 @@ fn apply_block_transformations(
 /// Build CFG successors for a block
 fn get_successors(term : @instr.VCodeTerminator?) -> Array[Int] {
   match term {
-    Some(@instr.VCodeTerminator::Jump(target, _)) => [target]
-    Some(@instr.VCodeTerminator::Branch(_, then_b, else_b)) => [then_b, else_b]
-    Some(@instr.VCodeTerminator::BranchCmp(_, _, _, _, then_b, else_b)) =>
-      [then_b, else_b]
-    Some(@instr.VCodeTerminator::BranchZero(_, _, _, then_b, else_b)) =>
-      [then_b, else_b]
-    Some(@instr.VCodeTerminator::BranchCmpImm(_, _, _, _, then_b, else_b)) =>
-      [then_b, else_b]
-    Some(@instr.VCodeTerminator::BrTable(_, targets, default)) => {
+    Some(Jump(target, _)) => [target]
+    Some(Branch(_, then_b, else_b)) => [then_b, else_b]
+    Some(BranchCmp(_, _, _, _, then_b, else_b)) => [then_b, else_b]
+    Some(BranchZero(_, _, _, then_b, else_b)) => [then_b, else_b]
+    Some(BranchCmpImm(_, _, _, _, then_b, else_b)) => [then_b, else_b]
+    Some(BrTable(_, targets, default)) => {
       let out : Array[Int] = []
       for t in targets {
         out.push(t)
@@ -1082,7 +1072,7 @@ fn collect_terminator_uses_simple(
 /// insert/remove). Mutating the "copy" would corrupt the source set and can
 /// lead to non-termination.
 fn clone_hashset_int(set : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
-  let out : @hashset.HashSet[Int] = @hashset.new()
+  let out : @hashset.HashSet[Int] = HashSet([])
   for x in set {
     out.add(x)
   }
@@ -1109,7 +1099,7 @@ fn compute_dominators(
       }
     }
   }
-  let all : @hashset.HashSet[Int] = @hashset.new()
+  let all : @hashset.HashSet[Int] = HashSet([])
   for i in 0..<n {
     all.add(i)
   }
@@ -1118,7 +1108,7 @@ fn compute_dominators(
   let dom : Array[@hashset.HashSet[Int]] = []
   for i in 0..<n {
     if i == 0 {
-      let s : @hashset.HashSet[Int] = @hashset.new()
+      let s : @hashset.HashSet[Int] = HashSet([])
       s.add(0)
       dom.push(s)
     } else {
@@ -1129,7 +1119,7 @@ fn compute_dominators(
   while changed {
     changed = false
     for b in 1..<n {
-      let mut new_dom : @hashset.HashSet[Int] = @hashset.new()
+      let mut new_dom : @hashset.HashSet[Int] = HashSet([])
       // If block has no preds (unreachable), keep only itself.
       if preds[b].length() == 0 {
         new_dom.add(b)

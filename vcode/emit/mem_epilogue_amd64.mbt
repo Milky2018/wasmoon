@@ -37,34 +37,30 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
 
   self.annotate(term.to_string())
   match term {
-    @instr.Branch(cond, then_b, else_b) => {
+    Branch(cond, then_b, else_b) => {
       // Treat Branch as "cond != 0".
       let rt = reg_num(cond)
       // Branch inversion: if then_b is next block, invert to branch to else_b.
       if next_block == Some(then_b) {
         // cond == 0 => else_b
         self.x86_emit_test_rr32(rt, rt)
-        self.x86_emit_jcc_rel32(@instr.Cond::Eq, else_b)
+        self.x86_emit_jcc_rel32(Eq, else_b)
       } else {
         self.x86_emit_test_rr32(rt, rt)
-        self.x86_emit_jcc_rel32(@instr.Cond::Ne, then_b)
+        self.x86_emit_jcc_rel32(Ne, then_b)
         if next_block != Some(else_b) {
           self.x86_emit_jmp_rel32(else_b)
         }
       }
     }
-    @instr.BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
+    BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
       let rt = reg_num(reg)
       if is_64 {
         self.x86_emit_test_rr(rt, rt)
       } else {
         self.x86_emit_test_rr32(rt, rt)
       }
-      let cond_to_then = if is_nonzero {
-        @instr.Cond::Ne
-      } else {
-        @instr.Cond::Eq
-      }
+      let cond_to_then = if is_nonzero { @instr.Cond::Ne } else { Eq }
       if next_block == Some(then_b) {
         self.x86_emit_jcc_rel32(cond_to_then.invert(), else_b)
       } else {
@@ -74,7 +70,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         }
       }
     }
-    @instr.BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+    BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
       let rn = reg_num(lhs)
       let rm = reg_num(rhs)
       if is_64 {
@@ -91,7 +87,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         }
       }
     }
-    @instr.BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+    BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       let rn = reg_num(lhs)
       if fits_i32(imm) {
         if is_64 {
@@ -120,12 +116,12 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         }
       }
     }
-    @instr.Jump(target, args) =>
+    Jump(target, args) =>
       if args.length() > 0 || next_block != Some(target) {
         self.x86_emit_jmp_rel32(target)
       }
-    @instr.Trap(msg) => self.x86_emit_trap_imm16(trap_msg_to_imm16(msg))
-    @instr.BrTable(index, targets, default) => {
+    Trap(msg) => self.x86_emit_trap_imm16(trap_msg_to_imm16(msg))
+    BrTable(index, targets, default) => {
       // Jump table implementation for br_table (Cranelift-style rel32 table).
       //
       // Layout:
@@ -144,7 +140,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
 
       // Bounds check: if index >= num_targets (unsigned), jump to default.
       self.x86_emit_cmp_r32_imm32(index_reg, num_targets)
-      self.x86_emit_jcc_rel32(@instr.Cond::Hs, default)
+      self.x86_emit_jcc_rel32(Hs, default)
 
       // tmp = index*4
       // `br_table` index is i32 in Wasm; ensure zero-extension to avoid
@@ -175,7 +171,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
         self.add_x86_rel32_fixup(target, disp_offset, next_ip_offset)
       }
     }
-    @instr.Return(values) => {
+    Return(values) => {
       // Minimal return convention:
       // - ints go to ISA.wasm_ret_gprs()
       // - floats/vectors go to ISA.wasm_ret_fprs()
@@ -190,13 +186,9 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       let mut fp_idx = 0
       for i, v in values {
         let src = reg_num(v)
-        let ty = if i < result_types.length() {
-          result_types[i]
-        } else {
-          @ir.Type::I64
-        }
+        let ty = if i < result_types.length() { result_types[i] } else { I64 }
         match ty {
-          @ir.Type::F32 | @ir.Type::F64 | @ir.Type::V128 => {
+          F32 | F64 | V128 => {
             guard fp_idx < fp_rets.length() else {
               abort("x86_64 return: too many fp returns")
             }
@@ -209,7 +201,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
             }
             let dst = int_rets[int_idx].index
             int_moves.push((src, dst))
-            if ty is @ir.Type::I32 {
+            if ty is I32 {
               int_ret_regs_i32.push(dst)
             }
             int_idx += 1

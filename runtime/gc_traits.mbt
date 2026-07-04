@@ -27,42 +27,42 @@ pub(open) trait GcHeap {
 
   /// Allocate a struct with given type index and field values
   /// Returns the object reference index
-  alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
 
   /// Allocate an array with given type index and elements
   /// Returns the object reference index
-  alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
 
   // === Object Access ===
 
   /// Get a struct field value
-  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
 
   /// Set a struct field value
-  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 
   /// Get array length
-  array_len(Self, Int) -> Int raise RuntimeError
+  fn array_len(Self, Int) -> Int raise RuntimeError
 
   /// Get an array element
-  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 
   /// Set an array element
-  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
 
   /// Fill array elements with a value
-  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
 
   /// Copy elements between arrays
-  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
 
   // === Type Information ===
 
   /// Get the type index of an object
-  get_type_idx(Self, Int) -> Int raise RuntimeError
+  fn get_type_idx(Self, Int) -> Int raise RuntimeError
 
   /// Check if an object reference is valid and alive
-  is_valid(Self, Int) -> Bool
+  fn is_valid(Self, Int) -> Bool
 }
 
 // ============================================================
@@ -103,14 +103,14 @@ pub(open) trait GcRuntime {
   // === Collection Control ===
 
   /// Check if GC should be triggered (called after allocation)
-  should_collect(Self) -> Bool
+  fn should_collect(Self) -> Bool
 
   /// Perform garbage collection with given roots
   /// Roots are values from stack and globals that keep objects alive
-  collect(Self, Array[@types.Value]) -> Unit
+  fn collect(Self, Array[@types.Value]) -> Unit
 
   /// Force a full GC cycle regardless of threshold
-  force_collect(Self, Array[@types.Value]) -> Unit
+  fn force_collect(Self, Array[@types.Value]) -> Unit
 
   // === Barriers (for incremental/concurrent GC) ===
 
@@ -121,30 +121,30 @@ pub(open) trait GcRuntime {
   /// obj_idx: object being modified
   /// old_value: current value (being overwritten)
   /// new_value: new value being stored
-  write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
+  fn write_barrier_pre(Self, Int, @types.Value, @types.Value) -> Unit
 
   /// Write barrier: called AFTER writing a reference field
   /// Used by some GC algorithms (e.g., remembered sets)
-  write_barrier_post(Self, Int, @types.Value) -> Unit
+  fn write_barrier_post(Self, Int, @types.Value) -> Unit
 
   /// Read barrier: called before reading a reference field
   /// For most GCs, this is a no-op
   /// For concurrent compacting GC, this handles forwarding
-  read_barrier(Self, Int) -> @types.Value
+  fn read_barrier(Self, Int) -> @types.Value
 
   // === Statistics ===
 
   /// Get GC statistics
-  stats(Self) -> GcStats
+  fn stats(Self) -> GcStats
 
   /// Get number of collections performed
-  collection_count(Self) -> Int
+  fn collection_count(Self) -> Int
 
   /// Set the collection threshold (interpretation depends on implementation)
-  set_threshold(Self, Int) -> Unit
+  fn set_threshold(Self, Int) -> Unit
 
   /// Get current threshold
-  get_threshold(Self) -> Int
+  fn get_threshold(Self) -> Int
 }
 
 // ============================================================
@@ -158,23 +158,23 @@ pub(open) trait GcRuntime {
 /// Combined GC manager interface
 pub(open) trait GcManager {
   // === Heap Operations (delegated) ===
-  alloc_struct(Self, Int, Array[@types.Value]) -> Int
-  alloc_array(Self, Int, Array[@types.Value]) -> Int
-  struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_len(Self, Int) -> Int raise RuntimeError
-  array_get(Self, Int, Int) -> @types.Value raise RuntimeError
-  array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
-  array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
-  array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
-  get_type_idx(Self, Int) -> Int raise RuntimeError
-  is_valid(Self, Int) -> Bool
+  fn alloc_struct(Self, Int, Array[@types.Value]) -> Int
+  fn alloc_array(Self, Int, Array[@types.Value]) -> Int
+  fn struct_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_len(Self, Int) -> Int raise RuntimeError
+  fn array_get(Self, Int, Int) -> @types.Value raise RuntimeError
+  fn array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+  fn array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise RuntimeError
+  fn array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise RuntimeError
+  fn get_type_idx(Self, Int) -> Int raise RuntimeError
+  fn is_valid(Self, Int) -> Bool
 
   // === Runtime Operations (delegated) ===
-  should_collect(Self) -> Bool
-  collect(Self, Array[@types.Value]) -> Unit
-  stats(Self) -> GcStats
+  fn should_collect(Self) -> Bool
+  fn collect(Self, Array[@types.Value]) -> Unit
+  fn stats(Self) -> GcStats
 
   // === Barriers ===
-  write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
+  fn write_barrier(Self, Int, @types.Value, @types.Value) -> Unit
 }

@@ -7,46 +7,46 @@
 ///|
 pub fn aapcs64_arg_gprs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Int },
-    { index: 1, class: @abi.Int },
-    { index: 2, class: @abi.Int },
-    { index: 3, class: @abi.Int },
-    { index: 4, class: @abi.Int },
-    { index: 5, class: @abi.Int },
-    { index: 6, class: @abi.Int },
-    { index: 7, class: @abi.Int },
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
   ]
 }
 
 ///|
 pub fn aapcs64_ret_gprs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Int },
-    { index: 1, class: @abi.Int },
-    { index: 2, class: @abi.Int },
-    { index: 3, class: @abi.Int },
-    { index: 4, class: @abi.Int },
-    { index: 5, class: @abi.Int },
-    { index: 6, class: @abi.Int },
-    { index: 7, class: @abi.Int },
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
   ]
 }
 
 ///|
 pub fn aapcs64_callee_saved() -> Array[@abi.PReg] {
   [
-    { index: 19, class: @abi.Int },
-    { index: 20, class: @abi.Int },
-    { index: 21, class: @abi.Int },
-    { index: 22, class: @abi.Int },
-    { index: 23, class: @abi.Int },
-    { index: 24, class: @abi.Int },
-    { index: 25, class: @abi.Int },
-    { index: 26, class: @abi.Int },
-    { index: 27, class: @abi.Int },
-    { index: 28, class: @abi.Int },
-    { index: 29, class: @abi.Int }, // fp
-    { index: 30, class: @abi.Int },
+    { index: 19, class: Int },
+    { index: 20, class: Int },
+    { index: 21, class: Int },
+    { index: 22, class: Int },
+    { index: 23, class: Int },
+    { index: 24, class: Int },
+    { index: 25, class: Int },
+    { index: 26, class: Int },
+    { index: 27, class: Int },
+    { index: 28, class: Int },
+    { index: 29, class: Int }, // fp
+    { index: 30, class: Int },
   ] // lr
 }
 
@@ -55,22 +55,22 @@ pub fn aapcs64_callee_saved() -> Array[@abi.PReg] {
 /// We keep X16/X17 reserved for internal emission and indirect calls.
 pub fn allocatable_scratch_regs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Int },
-    { index: 1, class: @abi.Int },
-    { index: 2, class: @abi.Int },
-    { index: 3, class: @abi.Int },
-    { index: 4, class: @abi.Int },
-    { index: 5, class: @abi.Int },
-    { index: 6, class: @abi.Int },
-    { index: 7, class: @abi.Int },
-    { index: 8, class: @abi.Int },
-    { index: 9, class: @abi.Int },
-    { index: 10, class: @abi.Int },
-    { index: 11, class: @abi.Int },
-    { index: 12, class: @abi.Int },
-    { index: 13, class: @abi.Int },
-    { index: 14, class: @abi.Int },
-    { index: 15, class: @abi.Int },
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
+    { index: 8, class: Int },
+    { index: 9, class: Int },
+    { index: 10, class: Int },
+    { index: 11, class: Int },
+    { index: 12, class: Int },
+    { index: 13, class: Int },
+    { index: 14, class: Int },
+    { index: 15, class: Int },
   ]
 }
 
@@ -81,9 +81,9 @@ pub fn allocatable_scratch_regs() -> Array[@abi.PReg] {
 pub fn allocatable_callee_saved_regs(
   enable_pinned_reg? : Bool = true,
 ) -> Array[@abi.PReg] {
-  let fp_idx = int_reg_index(@spec.IntRegRole::FP)
-  let lr_idx = int_reg_index(@spec.IntRegRole::LR)
-  let vmctx_idx = int_reg_index(@spec.IntRegRole::Vmctx)
+  let fp_idx = int_reg_index(FP)
+  let lr_idx = int_reg_index(LR)
+  let vmctx_idx = int_reg_index(Vmctx)
   let regs : Array[@abi.PReg] = []
   for r in aapcs64_callee_saved() {
     // x29/x30 are fp/lr: allocator never uses them; keep them out.
@@ -102,48 +102,48 @@ pub fn allocatable_callee_saved_regs(
 /// AAPCS64 floating-point parameter regs (V0-V7).
 pub fn aapcs64_arg_fprs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Float64 },
-    { index: 1, class: @abi.Float64 },
-    { index: 2, class: @abi.Float64 },
-    { index: 3, class: @abi.Float64 },
-    { index: 4, class: @abi.Float64 },
-    { index: 5, class: @abi.Float64 },
-    { index: 6, class: @abi.Float64 },
-    { index: 7, class: @abi.Float64 },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
   ]
 }
 
 ///|
 pub fn aapcs64_ret_fprs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Float64 },
-    { index: 1, class: @abi.Float64 },
-    { index: 2, class: @abi.Float64 },
-    { index: 3, class: @abi.Float64 },
-    { index: 4, class: @abi.Float64 },
-    { index: 5, class: @abi.Float64 },
-    { index: 6, class: @abi.Float64 },
-    { index: 7, class: @abi.Float64 },
+    { index: 0, class: Float64 },
+    { index: 1, class: Float64 },
+    { index: 2, class: Float64 },
+    { index: 3, class: Float64 },
+    { index: 4, class: Float64 },
+    { index: 5, class: Float64 },
+    { index: 6, class: Float64 },
+    { index: 7, class: Float64 },
   ]
 }
 
 ///|
 /// Internal Wasm ABI: vmctx argument register.
 pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
-  { index: 0, class: @abi.Int }
+  { index: 0, class: Int }
 }
 
 ///|
 /// Internal Wasm ABI: user integer argument registers (excluding vmctx).
 pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
   [
-    { index: 1, class: @abi.Int },
-    { index: 2, class: @abi.Int },
-    { index: 3, class: @abi.Int },
-    { index: 4, class: @abi.Int },
-    { index: 5, class: @abi.Int },
-    { index: 6, class: @abi.Int },
-    { index: 7, class: @abi.Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
   ]
 }
 
@@ -169,14 +169,14 @@ pub fn wasm_ret_fprs() -> Array[@abi.PReg] {
 /// Callee-saved FPRs (V8-V15).
 pub fn callee_saved_fprs() -> Array[@abi.PReg] {
   [
-    { index: 8, class: @abi.Float64 },
-    { index: 9, class: @abi.Float64 },
-    { index: 10, class: @abi.Float64 },
-    { index: 11, class: @abi.Float64 },
-    { index: 12, class: @abi.Float64 },
-    { index: 13, class: @abi.Float64 },
-    { index: 14, class: @abi.Float64 },
-    { index: 15, class: @abi.Float64 },
+    { index: 8, class: Float64 },
+    { index: 9, class: Float64 },
+    { index: 10, class: Float64 },
+    { index: 11, class: Float64 },
+    { index: 12, class: Float64 },
+    { index: 13, class: Float64 },
+    { index: 14, class: Float64 },
+    { index: 15, class: Float64 },
   ]
 }
 
@@ -185,22 +185,22 @@ pub fn callee_saved_fprs() -> Array[@abi.PReg] {
 /// V16-V31 are available for allocation. (V16/V17 are reserved scratch in Wasmoon.)
 pub fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
   [
-    { index: 16, class: @abi.Float64 },
-    { index: 17, class: @abi.Float64 },
-    { index: 18, class: @abi.Float64 },
-    { index: 19, class: @abi.Float64 },
-    { index: 20, class: @abi.Float64 },
-    { index: 21, class: @abi.Float64 },
-    { index: 22, class: @abi.Float64 },
-    { index: 23, class: @abi.Float64 },
-    { index: 24, class: @abi.Float64 },
-    { index: 25, class: @abi.Float64 },
-    { index: 26, class: @abi.Float64 },
-    { index: 27, class: @abi.Float64 },
-    { index: 28, class: @abi.Float64 },
-    { index: 29, class: @abi.Float64 },
-    { index: 30, class: @abi.Float64 },
-    { index: 31, class: @abi.Float64 },
+    { index: 16, class: Float64 },
+    { index: 17, class: Float64 },
+    { index: 18, class: Float64 },
+    { index: 19, class: Float64 },
+    { index: 20, class: Float64 },
+    { index: 21, class: Float64 },
+    { index: 22, class: Float64 },
+    { index: 23, class: Float64 },
+    { index: 24, class: Float64 },
+    { index: 25, class: Float64 },
+    { index: 26, class: Float64 },
+    { index: 27, class: Float64 },
+    { index: 28, class: Float64 },
+    { index: 29, class: Float64 },
+    { index: 30, class: Float64 },
+    { index: 31, class: Float64 },
   ]
 }
 
@@ -209,24 +209,24 @@ pub fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
 /// AArch64: X0-X17.
 pub fn call_clobbered_gprs() -> Array[@abi.PReg] {
   [
-    { index: 0, class: @abi.Int },
-    { index: 1, class: @abi.Int },
-    { index: 2, class: @abi.Int },
-    { index: 3, class: @abi.Int },
-    { index: 4, class: @abi.Int },
-    { index: 5, class: @abi.Int },
-    { index: 6, class: @abi.Int },
-    { index: 7, class: @abi.Int },
-    { index: 8, class: @abi.Int },
-    { index: 9, class: @abi.Int },
-    { index: 10, class: @abi.Int },
-    { index: 11, class: @abi.Int },
-    { index: 12, class: @abi.Int },
-    { index: 13, class: @abi.Int },
-    { index: 14, class: @abi.Int },
-    { index: 15, class: @abi.Int },
-    { index: 16, class: @abi.Int },
-    { index: 17, class: @abi.Int },
+    { index: 0, class: Int },
+    { index: 1, class: Int },
+    { index: 2, class: Int },
+    { index: 3, class: Int },
+    { index: 4, class: Int },
+    { index: 5, class: Int },
+    { index: 6, class: Int },
+    { index: 7, class: Int },
+    { index: 8, class: Int },
+    { index: 9, class: Int },
+    { index: 10, class: Int },
+    { index: 11, class: Int },
+    { index: 12, class: Int },
+    { index: 13, class: Int },
+    { index: 14, class: Int },
+    { index: 15, class: Int },
+    { index: 16, class: Int },
+    { index: 17, class: Int },
   ]
 }
 
@@ -235,7 +235,7 @@ pub fn call_clobbered_gprs() -> Array[@abi.PReg] {
 pub fn call_clobbered_fprs() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<32 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }
@@ -248,7 +248,7 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg] {
     if i >= 8 && i <= 15 {
       continue
     }
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }

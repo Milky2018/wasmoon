@@ -33,7 +33,7 @@ fn lower_sextend_inplace(
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let dst_ty = result.ty
-    let is_i64 = dst_ty is @ir.Type::I64
+    let is_i64 = dst_ty is I64
     // Determine extend kind based on source bits and destination type
     let kind : @instr.ExtendKind = match (from_bits, is_i64) {
       (8, false) => Signed8To32
@@ -58,8 +58,8 @@ fn get_extend_kind(
   signed : Bool,
 ) -> @instr.ExtendKind {
   match (src_ty, dst_ty, signed) {
-    (@ir.Type::I32, @ir.Type::I64, true) => Signed32To64
-    (@ir.Type::I32, @ir.Type::I64, false) => Unsigned32To64
+    (I32, I64, true) => Signed32To64
+    (I32, I64, false) => Unsigned32To64
     // Default to 32->64 extend
     _ => if signed { Signed32To64 } else { Unsigned32To64 }
   }
@@ -107,8 +107,8 @@ fn lower_float_to_int(
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let src_ty = inst.operands[0].ty
   let dst_ty = result.ty
-  let is_f32 = src_ty is @ir.Type::F32
-  let is_i64 = dst_ty is @ir.Type::I64
+  let is_f32 = src_ty is F32
+  let is_i64 = dst_ty is I64
   let float_class : @abi.RegClass = if is_f32 { Float32 } else { Float64 }
 
   // Step 1: NaN check - FpuCmp(src, src)
@@ -119,12 +119,12 @@ fn lower_float_to_int(
   block.add_inst(nan_check)
 
   // Step 2: TrapIf(Vs) - trap if NaN
-  let trap_nan_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
+  let trap_nan_cond = if @isa.ISA::current() is AMD64 {
     // Cranelift x64 checks unorderedness via UCOMIS* parity (PF=1).
     @instr.Cond::Ps
   } else {
     // AArch64 FCMP reports unorderedness via the V flag.
-    @instr.Cond::Vs
+    Vs
   }
   let trap_nan = @instr.VCodeInst::new(TrapIf(trap_nan_cond, 3))
   block.add_inst(trap_nan)
@@ -153,17 +153,17 @@ fn lower_float_to_int(
   // Step 5: TrapIf for underflow
   // For signed: trap if src < min (Lt)
   // For unsigned: trap if src <= -1.0 (Le)
-  let trap_min_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
+  let trap_min_cond = if @isa.ISA::current() is AMD64 {
     // After x86 UCOMIS* (src, min), use CF/ZF based conditions.
     if use_le_for_min {
       @instr.Cond::Ls
     } else {
-      @instr.Cond::Lo
+      Lo
     }
   } else if use_le_for_min {
-    @instr.Cond::Le
+    Le
   } else {
-    @instr.Cond::Lt
+    Lt
   }
   let trap_min = @instr.VCodeInst::new(TrapIf(trap_min_cond, 3))
   block.add_inst(trap_min)
@@ -185,11 +185,11 @@ fn lower_float_to_int(
   block.add_inst(cmp_max)
 
   // Step 8: TrapIf(Ge) for overflow - trap if src >= max
-  let trap_max_cond = if @isa.ISA::current() is @isa.ISA::AMD64 {
+  let trap_max_cond = if @isa.ISA::current() is AMD64 {
     // After x86 UCOMIS* (src, max), src >= max iff CF=0.
     @instr.Cond::Hs
   } else {
-    @instr.Cond::Ge
+    Ge
   }
   let trap_max = @instr.VCodeInst::new(TrapIf(trap_max_cond, 3))
   block.add_inst(trap_max)
@@ -259,8 +259,8 @@ fn lower_float_to_int_sat(
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   let src_ty = inst.operands[0].ty
   let dst_ty = result.ty
-  let is_f32 = src_ty is @ir.Type::F32
-  let is_i64 = dst_ty is @ir.Type::I64
+  let is_f32 = src_ty is F32
+  let is_i64 = dst_ty is I64
 
   // AArch64 FCVTZS/FCVTZU already implements WebAssembly saturating semantics
   let fcvt = @instr.VCodeInst::new(FcvtToInt(is_f32, is_i64, signed))
@@ -284,14 +284,14 @@ fn lower_int_to_float(
     let src_ty = inst.operands[0].ty
     let dst_ty = result.ty
     let kind : @instr.IntToFloatKind = match (src_ty, dst_ty, signed) {
-      (@ir.Type::I32, @ir.Type::F32, true) => I32SToF32
-      (@ir.Type::I32, @ir.Type::F32, false) => I32UToF32
-      (@ir.Type::I64, @ir.Type::F32, true) => I64SToF32
-      (@ir.Type::I64, @ir.Type::F32, false) => I64UToF32
-      (@ir.Type::I32, @ir.Type::F64, true) => I32SToF64
-      (@ir.Type::I32, @ir.Type::F64, false) => I32UToF64
-      (@ir.Type::I64, @ir.Type::F64, true) => I64SToF64
-      (@ir.Type::I64, @ir.Type::F64, false) => I64UToF64
+      (I32, F32, true) => I32SToF32
+      (I32, F32, false) => I32UToF32
+      (I64, F32, true) => I64SToF32
+      (I64, F32, false) => I64UToF32
+      (I32, F64, true) => I32SToF64
+      (I32, F64, false) => I32UToF64
+      (I64, F64, true) => I64SToF64
+      (I64, F64, false) => I64UToF64
       _ => I64SToF64 // Default fallback
     }
     let vcode_inst = @instr.VCodeInst::new(IntToFloat(kind))
@@ -340,13 +340,13 @@ fn lower_select(
       let kind = ir_intcc_to_cmp_kind(cc)
       // Determine is_64 from comparison operand type
       let is_64 = match lhs.ty {
-        @ir.Type::I64 | @ir.Type::FuncRef | @ir.Type::ExternRef => true
+        I64 | FuncRef | ExternRef => true
         _ => false
       }
       let vcode_inst = @instr.VCodeInst::new(SelectCmp(kind, is_64))
       vcode_inst.add_def({ reg: Virtual(dst) })
       vcode_inst.add_use(Virtual(lhs_vreg))
-      if @isa.ISA::current() is @isa.AArch64 && is_const_zero_value(ctx, rhs) {
+      if @isa.ISA::current() is AArch64 && is_const_zero_value(ctx, rhs) {
         // Cranelift-style zero-compare fast path for fused cmp+select.
         vcode_inst.add_use(Physical({ index: 31, class: Int }))
       } else {

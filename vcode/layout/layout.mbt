@@ -137,7 +137,7 @@ fn resolve_threaded_jump(
       Some(block_idx) => {
         let block = blocks[block_idx]
         if block.insts.length() == 0 &&
-          block.terminator is Some(@instr.Jump(next, next_args)) &&
+          block.terminator is Some(Jump(next, next_args)) &&
           next != current &&
           block.params.length() == current_args.length() &&
           substitute_forwarded_args(next_args, block.params, current_args)
@@ -181,61 +181,61 @@ fn rewrite_terminator_targets(
   block_idx_by_id : Map[Int, Int],
 ) -> (@instr.VCodeTerminator, Bool) {
   match term {
-    @instr.Jump(target, args) => {
+    Jump(target, args) => {
       let (resolved_target, resolved_args, changed) = resolve_threaded_jump(
         target, args, func, block_idx_by_id,
       )
-      (@instr.Jump(resolved_target, resolved_args), changed)
+      (Jump(resolved_target, resolved_args), changed)
     }
-    @instr.Branch(cond, then_b, else_b) => {
+    Branch(cond, then_b, else_b) => {
       let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
       let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
       if new_then == new_else {
-        (@instr.Jump(new_then, []), true)
+        (Jump(new_then, []), true)
       } else {
         (
-          @instr.Branch(cond, new_then, new_else),
+          Branch(cond, new_then, new_else),
           new_then != then_b || new_else != else_b,
         )
       }
     }
-    @instr.BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
+    BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) => {
       let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
       let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
       if new_then == new_else {
-        (@instr.Jump(new_then, []), true)
+        (Jump(new_then, []), true)
       } else {
         (
-          @instr.BranchCmp(lhs, rhs, cond, is_64, new_then, new_else),
+          BranchCmp(lhs, rhs, cond, is_64, new_then, new_else),
           new_then != then_b || new_else != else_b,
         )
       }
     }
-    @instr.BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
+    BranchZero(reg, is_nonzero, is_64, then_b, else_b) => {
       let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
       let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
       if new_then == new_else {
-        (@instr.Jump(new_then, []), true)
+        (Jump(new_then, []), true)
       } else {
         (
-          @instr.BranchZero(reg, is_nonzero, is_64, new_then, new_else),
+          BranchZero(reg, is_nonzero, is_64, new_then, new_else),
           new_then != then_b || new_else != else_b,
         )
       }
     }
-    @instr.BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
+    BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) => {
       let new_then = resolve_threaded_target(then_b, func, block_idx_by_id)
       let new_else = resolve_threaded_target(else_b, func, block_idx_by_id)
       if new_then == new_else {
-        (@instr.Jump(new_then, []), true)
+        (Jump(new_then, []), true)
       } else {
         (
-          @instr.BranchCmpImm(lhs, imm, cond, is_64, new_then, new_else),
+          BranchCmpImm(lhs, imm, cond, is_64, new_then, new_else),
           new_then != then_b || new_else != else_b,
         )
       }
     }
-    @instr.BrTable(index, targets, default) => {
+    BrTable(index, targets, default) => {
       let new_targets : Array[Int] = []
       let mut changed = false
       for t in targets {
@@ -263,12 +263,12 @@ fn rewrite_terminator_targets(
         }
       }
       if all_same && new_default == pivot {
-        (@instr.Jump(pivot, []), true)
+        (Jump(pivot, []), true)
       } else {
-        (@instr.BrTable(index, new_targets, new_default), changed)
+        (BrTable(index, new_targets, new_default), changed)
       }
     }
-    @instr.Return(_) | @instr.Trap(_) => (term, false)
+    Return(_) | Trap(_) => (term, false)
   }
 }
 

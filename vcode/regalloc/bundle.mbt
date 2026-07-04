@@ -271,7 +271,7 @@ fn BundleSet::new_spill_bundle(
   // Spill slots are counted in 8-byte units.
   // For 128-bit vectors, reserve 16 bytes and ensure 16-byte alignment.
   let (slot, slots_used) = match reg_class {
-    @abi.Vector => {
+    Vector => {
       if self.next_spill_slot % 2 != 0 {
         self.next_spill_slot += 1
       }

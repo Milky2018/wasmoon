@@ -1,4 +1,13 @@
 ///|
+fn[T] wit_succeeds(body : () -> T raise) -> Bool {
+  try body() catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+}
+
+///|
 test "wit: resolve use from dependency interface" {
   let dep_src = "package dep:types@1.0.0;\n\n" +
     "interface t {\n" +
@@ -39,10 +48,8 @@ test "wit: resolve fails when dependency package missing" {
     "  f: func(x: a);\n" +
     "}\n"
   let root = @wit.parse_package(root_src) catch { _ => panic() }
-  let err = try? @wit.resolve_package(root, [])
-  match err {
-    Ok(_) => fail("expected resolve failure")
-    Err(_) => ()
+  if wit_succeeds(() => @wit.resolve_package(root, [])) {
+    fail("expected resolve failure")
   }
 }
 
@@ -65,8 +72,7 @@ test "wit: toplevel-use is file-scoped (no leakage across merged docs)" {
   let a = @wit.parse_package(a_src) catch { _ => panic() }
   let b = @wit.parse_package(b_src) catch { _ => panic() }
   let root = @wit.merge_package_files([a, b]) catch { _ => panic() }
-  let r = try? @wit.resolve_package(root, [dep])
-  if r is Ok(_) {
+  if wit_succeeds(() => @wit.resolve_package(root, [dep])) {
     fail("expected resolve failure due to missing file-scoped alias")
   }
 }

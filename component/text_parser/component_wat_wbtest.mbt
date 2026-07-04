@@ -33,8 +33,8 @@ test "component text parser: nested component import func" {
   }
   inspect(parsed.components.length(), content="1")
   inspect(parsed.components[0].types.length(), content="1")
-  inspect(parsed.components[0].imports.length(), content="1")
-  inspect(try? @component_model.validate_component(parsed), content="Ok(())")
+  debug_inspect(parsed.components[0].imports.length(), content="1")
+  @component_model.validate_component(parsed)
 }
 
 ///|
@@ -62,8 +62,8 @@ test "component text parser: core module and canon lift" {
   inspect(parsed.core_modules.length(), content="1")
   inspect(parsed.core_instances.length(), content="1")
   inspect(parsed.canons.length(), content="1")
-  inspect(parsed.exports.length(), content="1")
-  inspect(try? @component_model.validate_component(parsed), content="Ok(())")
+  debug_inspect(parsed.exports.length(), content="1")
+  @component_model.validate_component(parsed)
 }
 
 ///|

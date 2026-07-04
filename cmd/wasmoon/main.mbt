@@ -18,24 +18,24 @@ fn main {
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
         "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
         "arg": @clap.Arg::named(
-          nargs=@clap.Nargs::Any,
+          nargs=Any,
           help="Arguments to pass to the function (can be repeated)",
         ),
         "preload": @clap.Arg::named(
-          nargs=@clap.Nargs::Any,
+          nargs=Any,
           help="Preload module as NAME=PATH (can be repeated)",
         ),
         "dir": @clap.Arg::named(
-          nargs=@clap.Nargs::Any,
+          nargs=Any,
           help="Grant access to directory (HOST_DIR or HOST_DIR::GUEST_DIR)",
         ),
         "env": @clap.Arg::named(
-          nargs=@clap.Nargs::Any,
+          nargs=Any,
           help="Pass environment variable to WASM module (NAME=VALUE)",
         ),
         "wasi": @clap.Arg::named(
           short='S',
-          nargs=@clap.Nargs::Any,
+          nargs=Any,
           help="WASI option (e.g., inherit-env, inherit-stdin)",
         ),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
@@ -103,12 +103,12 @@ fn main {
         args={
           "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
           "func": @clap.Arg::named(
-            nargs=@clap.Nargs::AtMost(1),
+            nargs=AtMost(1),
             help="Function index to explore (default: 0)",
           ),
           "stage": @clap.Arg::named(
             short='s',
-            nargs=@clap.Nargs::Any,
+            nargs=Any,
             choices=stage_choices,
             help="Stages to show: wasm, ir, opt-ir, vcode, regalloc, mc (default all)",
           ),
@@ -254,9 +254,9 @@ fn main {
                     if arr.length() > 0 && arr[0] == "json" {
                       @commands.ComponentErrorFormat::Json
                     } else {
-                      @commands.ComponentErrorFormat::Text
+                      Text
                     }
-                  None => @commands.ComponentErrorFormat::Text
+                  None => Text
                 }
                 let status = @commands.run_component_command(
                   positional[0],
@@ -280,9 +280,9 @@ fn main {
                     if arr.length() > 0 && arr[0] == "json" {
                       @commands.ComponentErrorFormat::Json
                     } else {
-                      @commands.ComponentErrorFormat::Text
+                      Text
                     }
-                  None => @commands.ComponentErrorFormat::Text
+                  None => Text
                 }
                 let status = @commands.run_component_script_cli(
                   positional[0],

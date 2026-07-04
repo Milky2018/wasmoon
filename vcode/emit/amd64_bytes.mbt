@@ -55,7 +55,7 @@ fn emit_rex_x(mc : MachineCode, r : Int, x : Int, b : Int) -> Unit {
 fn validate_reg_idx_0_15(kind : String, idx : Int) -> Unit {
   guard idx >= 0 && idx < 16 else {
     let isa = @isa.ISA::current()
-    let isa_name = if isa is @isa.AMD64 { "AMD64" } else { "AArch64" }
+    let isa_name = if isa is AMD64 { "AMD64" } else { "AArch64" }
     abort(
       "x86_64 encode: invalid \{kind} reg idx \{idx} (expected 0..15); " +
       "c_host_arch=\{@isa.c_host_arch()}, isa=\{isa_name}, " +
@@ -1617,9 +1617,9 @@ pub fn MachineCode::x86_emit_psll_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.H16 => self.emit_byte(0xF1)
-    @instr.S32 => self.emit_byte(0xF2)
-    @instr.D64 => self.emit_byte(0xF3)
+    H16 => self.emit_byte(0xF1)
+    S32 => self.emit_byte(0xF2)
+    D64 => self.emit_byte(0xF3)
     _ => abort("x86_64 psll: unsupported lane size \{lane_size}")
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
@@ -1641,9 +1641,9 @@ pub fn MachineCode::x86_emit_psrl_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.H16 => self.emit_byte(0xD1)
-    @instr.S32 => self.emit_byte(0xD2)
-    @instr.D64 => self.emit_byte(0xD3)
+    H16 => self.emit_byte(0xD1)
+    S32 => self.emit_byte(0xD2)
+    D64 => self.emit_byte(0xD3)
     _ => abort("x86_64 psrl: unsupported lane size \{lane_size}")
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
@@ -1665,8 +1665,8 @@ pub fn MachineCode::x86_emit_psra_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.H16 => self.emit_byte(0xE1)
-    @instr.S32 => self.emit_byte(0xE2)
+    H16 => self.emit_byte(0xE1)
+    S32 => self.emit_byte(0xE2)
     _ => abort("x86_64 psra: unsupported lane size \{lane_size}")
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
@@ -2409,10 +2409,10 @@ pub fn MachineCode::x86_emit_padd_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.B8 => self.emit_byte(0xFC)
-    @instr.H16 => self.emit_byte(0xFD)
-    @instr.S32 => self.emit_byte(0xFE)
-    @instr.D64 => self.emit_byte(0xD4)
+    B8 => self.emit_byte(0xFC)
+    H16 => self.emit_byte(0xFD)
+    S32 => self.emit_byte(0xFE)
+    D64 => self.emit_byte(0xD4)
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
 }
@@ -2433,10 +2433,10 @@ pub fn MachineCode::x86_emit_psub_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.B8 => self.emit_byte(0xF8)
-    @instr.H16 => self.emit_byte(0xF9)
-    @instr.S32 => self.emit_byte(0xFA)
-    @instr.D64 => self.emit_byte(0xFB)
+    B8 => self.emit_byte(0xF8)
+    H16 => self.emit_byte(0xF9)
+    S32 => self.emit_byte(0xFA)
+    D64 => self.emit_byte(0xFB)
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
 }
@@ -2494,19 +2494,19 @@ pub fn MachineCode::x86_emit_pcmpeq_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.B8 => {
+    B8 => {
       self.emit_byte(0x74)
       emit_modrm(self, 3, dst_xmm, src_xmm)
     }
-    @instr.H16 => {
+    H16 => {
       self.emit_byte(0x75)
       emit_modrm(self, 3, dst_xmm, src_xmm)
     }
-    @instr.S32 => {
+    S32 => {
       self.emit_byte(0x76)
       emit_modrm(self, 3, dst_xmm, src_xmm)
     }
-    @instr.D64 =>
+    D64 =>
       // pcmpeqq is SSE4.1; avoid relying on it and use an emulation sequence at a higher level.
       abort("x86_64 pcmpeq.i64: use emulation sequence instead")
   }
@@ -2528,10 +2528,10 @@ pub fn MachineCode::x86_emit_pcmpgt_xmm_xmm(
   }
   self.emit_byte(0x0F)
   match lane_size {
-    @instr.B8 => self.emit_byte(0x64)
-    @instr.H16 => self.emit_byte(0x65)
-    @instr.S32 => self.emit_byte(0x66)
-    @instr.D64 => abort("x86_64 pcmpgt.i64: use emulation sequence instead")
+    B8 => self.emit_byte(0x64)
+    H16 => self.emit_byte(0x65)
+    S32 => self.emit_byte(0x66)
+    D64 => abort("x86_64 pcmpgt.i64: use emulation sequence instead")
   }
   emit_modrm(self, 3, dst_xmm, src_xmm)
 }
@@ -4678,24 +4678,24 @@ pub fn MachineCode::x86_emit_jmp_rel32(
 fn x86_cond_to_jcc_opcode(cond : @instr.Cond) -> Int {
   match cond {
     // Signed/unsigned conditions match the usual interpretation after CMP.
-    @instr.Cond::Eq => 0x84 // JE
-    @instr.Cond::Ne => 0x85 // JNE
-    @instr.Cond::Hs => 0x83 // JAE/JNB
-    @instr.Cond::Lo => 0x82 // JB
-    @instr.Cond::Mi => 0x88 // JS
-    @instr.Cond::Pl => 0x89 // JNS
-    @instr.Cond::Vs => 0x80 // JO
-    @instr.Cond::Vc => 0x81 // JNO
+    Eq => 0x84 // JE
+    Ne => 0x85 // JNE
+    Hs => 0x83 // JAE/JNB
+    Lo => 0x82 // JB
+    Mi => 0x88 // JS
+    Pl => 0x89 // JNS
+    Vs => 0x80 // JO
+    Vc => 0x81 // JNO
     // Parity conditions (x86_64-only; used after UCOMIS*).
-    @instr.Cond::Ps => 0x8A // JP/JPE (parity set)
-    @instr.Cond::Pc => 0x8B // JNP/JPO (parity clear)
-    @instr.Cond::Hi => 0x87 // JA
-    @instr.Cond::Ls => 0x86 // JBE
-    @instr.Cond::Ge => 0x8D // JGE
-    @instr.Cond::Lt => 0x8C // JL
-    @instr.Cond::Gt => 0x8F // JG
-    @instr.Cond::Le => 0x8E // JLE
-    @instr.Cond::Al => abort("x86_64 jcc: AL is not a conditional branch")
+    Ps => 0x8A // JP/JPE (parity set)
+    Pc => 0x8B // JNP/JPO (parity clear)
+    Hi => 0x87 // JA
+    Ls => 0x86 // JBE
+    Ge => 0x8D // JGE
+    Lt => 0x8C // JL
+    Gt => 0x8F // JG
+    Le => 0x8E // JLE
+    Al => abort("x86_64 jcc: AL is not a conditional branch")
   }
 }
 

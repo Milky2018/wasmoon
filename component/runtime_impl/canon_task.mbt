@@ -11,17 +11,17 @@ fn instantiate_canon_task_return(
 ) -> Unit raise ComponentRuntimeError {
   for opt in opts {
     match opt {
-      CanonOpt::Async =>
+      Async =>
         raise ImportTypeMismatch(
           "cannot specify `async` option on `task.return`",
         )
-      CanonOpt::Callback(_) =>
+      Callback(_) =>
         raise ImportTypeMismatch("cannot specify callback without async")
-      CanonOpt::PostReturn(_) =>
+      PostReturn(_) =>
         raise ImportTypeMismatch(
           "cannot specify `post-return` option on `task.return`",
         )
-      CanonOpt::Realloc(_) =>
+      Realloc(_) =>
         raise ImportTypeMismatch(
           "cannot specify `realloc` option on `task.return`",
         )

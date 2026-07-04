@@ -183,49 +183,47 @@ pub fn parse_test_value(tv : TestValue) -> @types.Value {
     "i32" => {
       // Parse as unsigned then reinterpret as signed
       let n = parse_int_safe(val)
-      @types.Value::I32(n)
+      I32(n)
     }
     "i64" => {
       let n = parse_int64_safe(val)
-      @types.Value::I64(n)
+      I64(n)
     }
     "f32" =>
       if val == "nan:canonical" ||
         val == "nan:arithmetic" ||
         val.has_prefix("nan:") {
-        @types.Value::F32(0.0 / 0.0) // NaN
+        F32(0.0 / 0.0) // NaN
       } else {
         // Parse as unsigned bits representation then reinterpret as float
         let bits = @string.parse_uint(val) catch { _ => 0U }
-        @types.Value::F32(
-          Float::reinterpret_from_int(bits.reinterpret_as_int()),
-        )
+        F32(Float::reinterpret_from_int(bits.reinterpret_as_int()))
       }
     "f64" =>
       if val == "nan:canonical" ||
         val == "nan:arithmetic" ||
         val.has_prefix("nan:") {
-        @types.Value::F64(0.0 / 0.0) // NaN
+        F64(0.0 / 0.0) // NaN
       } else {
         // Parse as unsigned bits representation then reinterpret as double
         let bits = @string.parse_uint64(val) catch { _ => 0UL }
-        @types.Value::F64(bits.reinterpret_as_int64().reinterpret_as_double())
+        F64(bits.reinterpret_as_int64().reinterpret_as_double())
       }
     "funcref" =>
       if val == "null" {
-        @types.Value::Null
+        Null
       } else {
         let idx = parse_int_safe(val)
-        @types.Value::FuncRef(idx)
+        FuncRef(idx)
       }
     "externref" =>
       if val == "null" {
-        @types.Value::Null
+        Null
       } else {
         let idx = parse_int_safe(val)
-        @types.Value::ExternRef(idx)
+        ExternRef(idx)
       }
-    _ => @types.Value::I32(0) // fallback
+    _ => I32(0) // fallback
   }
 }
 
@@ -277,9 +275,9 @@ fn json_action_to_test_action(ja : JsonAction) -> TestAction {
     .map(fn(arr) { arr.map(json_value_to_test_value) })
     .unwrap_or([])
   match ja.type_ {
-    "invoke" => TestAction::Invoke(ja.module_, ja.field.unwrap_or(""), args)
-    "get" => TestAction::Get(ja.module_, ja.field.unwrap_or(""))
-    _ => TestAction::Invoke(None, "", [])
+    "invoke" => Invoke(ja.module_, ja.field.unwrap_or(""), args)
+    "get" => Get(ja.module_, ja.field.unwrap_or(""))
+    _ => Invoke(None, "", [])
   }
 }
 
@@ -297,36 +295,28 @@ fn json_command_to_test_command(
     "assert_return" =>
       match jc.action {
         Some(action) =>
-          TestCommand::AssertReturn(
-            json_action_to_test_action(action),
-            expected,
-          )
+          AssertReturn(json_action_to_test_action(action), expected)
         None => raise ParseError("assert_return missing action")
       }
     "assert_trap" =>
       match jc.action {
-        Some(action) =>
-          TestCommand::AssertTrap(json_action_to_test_action(action), text)
+        Some(action) => AssertTrap(json_action_to_test_action(action), text)
         None => raise ParseError("assert_trap missing action")
       }
-    "assert_invalid" =>
-      TestCommand::AssertInvalid(jc.filename.unwrap_or(""), text)
-    "assert_malformed" =>
-      TestCommand::AssertMalformed(jc.filename.unwrap_or(""), text)
-    "assert_unlinkable" =>
-      TestCommand::AssertInvalid(jc.filename.unwrap_or(""), text)
+    "assert_invalid" => AssertInvalid(jc.filename.unwrap_or(""), text)
+    "assert_malformed" => AssertMalformed(jc.filename.unwrap_or(""), text)
+    "assert_unlinkable" => AssertInvalid(jc.filename.unwrap_or(""), text)
     "assert_uninstantiable" =>
-      TestCommand::AssertUninstantiable(jc.filename.unwrap_or(""), text)
-    "register" => TestCommand::Register(jc.as_.unwrap_or(""), jc.name)
+      AssertUninstantiable(jc.filename.unwrap_or(""), text)
+    "register" => Register(jc.as_.unwrap_or(""), jc.name)
     "action" =>
       match jc.action {
-        Some(action) => TestCommand::Action(json_action_to_test_action(action))
+        Some(action) => Action(json_action_to_test_action(action))
         None => raise ParseError("action missing action")
       }
     "assert_exhaustion" =>
       match jc.action {
-        Some(action) =>
-          TestCommand::AssertTrap(json_action_to_test_action(action), text)
+        Some(action) => AssertTrap(json_action_to_test_action(action), text)
         None => raise ParseError("assert_exhaustion missing action")
       }
     _ => raise ParseError("Unknown command type: \{jc.type_}")
@@ -507,11 +497,10 @@ fn run_test_command_internal(
           return
         }
       }
-      if (try? ({
+      if !succeeds(() => {
           let mod = @parser.parse_module(bytes)
           @validator.validate_module(mod)
-        }))
-        is Err(_) {
+        }) {
         result.passed += 1
       } else {
         result.failed += 1
@@ -537,7 +526,7 @@ fn run_test_command_internal(
         }
         // Convert bytes to string for WAT parsing
         let content = bytes_to_string(bytes)
-        if (try? @wat.parse(content)) is Err(_) {
+        if !succeeds(() => @wat.parse(content)) {
           result.passed += 1
         } else {
           result.failed += 1
@@ -553,7 +542,7 @@ fn run_test_command_internal(
             return
           }
         }
-        if (try? @parser.parse_module(bytes)) is Err(_) {
+        if !succeeds(() => @parser.parse_module(bytes)) {
           result.passed += 1
         } else {
           result.failed += 1
@@ -574,7 +563,7 @@ fn run_test_command_internal(
           return
         }
       }
-      if (try? ctx.load_module(bytes, None)) is Ok(_) {
+      if succeeds(() => ctx.load_module(bytes, None)) {
         result.failed += 1
         result.failures.push(
           "\{line_prefix}assert_uninstantiable should have failed: \{filename}",

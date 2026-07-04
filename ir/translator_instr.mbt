@@ -103,16 +103,16 @@ fn Translator::translate_instruction(
       let result = self.builder.icmp_eq(a, zero)
       self.push(result)
     }
-    I32Eq => self.translate_icmp(IntCC::Eq)
-    I32Ne => self.translate_icmp(IntCC::Ne)
-    I32LtS => self.translate_icmp(IntCC::Slt)
-    I32LtU => self.translate_icmp(IntCC::Ult)
-    I32GtS => self.translate_icmp(IntCC::Sgt)
-    I32GtU => self.translate_icmp(IntCC::Ugt)
-    I32LeS => self.translate_icmp(IntCC::Sle)
-    I32LeU => self.translate_icmp(IntCC::Ule)
-    I32GeS => self.translate_icmp(IntCC::Sge)
-    I32GeU => self.translate_icmp(IntCC::Uge)
+    I32Eq => self.translate_icmp(Eq)
+    I32Ne => self.translate_icmp(Ne)
+    I32LtS => self.translate_icmp(Slt)
+    I32LtU => self.translate_icmp(Ult)
+    I32GtS => self.translate_icmp(Sgt)
+    I32GtU => self.translate_icmp(Ugt)
+    I32LeS => self.translate_icmp(Sle)
+    I32LeU => self.translate_icmp(Ule)
+    I32GeS => self.translate_icmp(Sge)
+    I32GeU => self.translate_icmp(Uge)
 
     // i64 arithmetic
     I64Add => self.translate_binary_i64(fn(b, a, v) { b.iadd(a, v) })
@@ -159,16 +159,16 @@ fn Translator::translate_instruction(
       let result = self.builder.icmp_eq(a, zero)
       self.push(result)
     }
-    I64Eq => self.translate_icmp(IntCC::Eq)
-    I64Ne => self.translate_icmp(IntCC::Ne)
-    I64LtS => self.translate_icmp(IntCC::Slt)
-    I64LtU => self.translate_icmp(IntCC::Ult)
-    I64GtS => self.translate_icmp(IntCC::Sgt)
-    I64GtU => self.translate_icmp(IntCC::Ugt)
-    I64LeS => self.translate_icmp(IntCC::Sle)
-    I64LeU => self.translate_icmp(IntCC::Ule)
-    I64GeS => self.translate_icmp(IntCC::Sge)
-    I64GeU => self.translate_icmp(IntCC::Uge)
+    I64Eq => self.translate_icmp(Eq)
+    I64Ne => self.translate_icmp(Ne)
+    I64LtS => self.translate_icmp(Slt)
+    I64LtU => self.translate_icmp(Ult)
+    I64GtS => self.translate_icmp(Sgt)
+    I64GtU => self.translate_icmp(Ugt)
+    I64LeS => self.translate_icmp(Sle)
+    I64LeU => self.translate_icmp(Ule)
+    I64GeS => self.translate_icmp(Sge)
+    I64GeU => self.translate_icmp(Uge)
 
     // f32 arithmetic
     F32Add => self.translate_binary_f32(fn(b, a, v) { b.fadd(a, v) })
@@ -183,8 +183,8 @@ fn Translator::translate_instruction(
       let x = self.pop() // magnitude source
       // Use bitwise operations to implement copysign
       // result_bits = (x_bits & 0x7FFFFFFF) | (y_bits & 0x80000000)
-      let x_bits = self.builder.bitcast(Type::I32, x)
-      let y_bits = self.builder.bitcast(Type::I32, y)
+      let x_bits = self.builder.bitcast(I32, x)
+      let y_bits = self.builder.bitcast(I32, y)
       let magnitude = self.builder.band(
         x_bits,
         self.builder.iconst_i32(0x7FFFFFFF),
@@ -194,7 +194,7 @@ fn Translator::translate_instruction(
         self.builder.iconst_i32(0x80000000U.reinterpret_as_int()),
       )
       let result_bits = self.builder.bor(magnitude, sign)
-      let result = self.builder.bitcast(Type::F32, result_bits)
+      let result = self.builder.bitcast(F32, result_bits)
       self.push(result)
     }
 
@@ -208,12 +208,12 @@ fn Translator::translate_instruction(
     F32Nearest => self.translate_unary_f32(fn(b, a) { b.fnearest(a) })
 
     // f32 comparisons
-    F32Eq => self.translate_fcmp(FloatCC::Eq)
-    F32Ne => self.translate_fcmp(FloatCC::Ne)
-    F32Lt => self.translate_fcmp(FloatCC::Lt)
-    F32Gt => self.translate_fcmp(FloatCC::Gt)
-    F32Le => self.translate_fcmp(FloatCC::Le)
-    F32Ge => self.translate_fcmp(FloatCC::Ge)
+    F32Eq => self.translate_fcmp(Eq)
+    F32Ne => self.translate_fcmp(Ne)
+    F32Lt => self.translate_fcmp(Lt)
+    F32Gt => self.translate_fcmp(Gt)
+    F32Le => self.translate_fcmp(Le)
+    F32Ge => self.translate_fcmp(Ge)
 
     // f64 arithmetic
     F64Add => self.translate_binary_f64(fn(b, a, v) { b.fadd(a, v) })
@@ -228,8 +228,8 @@ fn Translator::translate_instruction(
       let x = self.pop() // magnitude source
       // Use bitwise operations to implement copysign
       // result_bits = (x_bits & 0x7FFFFFFFFFFFFFFF) | (y_bits & 0x8000000000000000)
-      let x_bits = self.builder.bitcast(Type::I64, x)
-      let y_bits = self.builder.bitcast(Type::I64, y)
+      let x_bits = self.builder.bitcast(I64, x)
+      let y_bits = self.builder.bitcast(I64, y)
       let magnitude = self.builder.band(
         x_bits,
         self.builder.iconst_i64(0x7FFFFFFFFFFFFFFFL),
@@ -239,7 +239,7 @@ fn Translator::translate_instruction(
         self.builder.iconst_i64(0x8000000000000000UL.reinterpret_as_int64()),
       )
       let result_bits = self.builder.bor(magnitude, sign)
-      let result = self.builder.bitcast(Type::F64, result_bits)
+      let result = self.builder.bitcast(F64, result_bits)
       self.push(result)
     }
 
@@ -253,48 +253,48 @@ fn Translator::translate_instruction(
     F64Nearest => self.translate_unary_f64(fn(b, a) { b.fnearest(a) })
 
     // f64 comparisons
-    F64Eq => self.translate_fcmp(FloatCC::Eq)
-    F64Ne => self.translate_fcmp(FloatCC::Ne)
-    F64Lt => self.translate_fcmp(FloatCC::Lt)
-    F64Gt => self.translate_fcmp(FloatCC::Gt)
-    F64Le => self.translate_fcmp(FloatCC::Le)
-    F64Ge => self.translate_fcmp(FloatCC::Ge)
+    F64Eq => self.translate_fcmp(Eq)
+    F64Ne => self.translate_fcmp(Ne)
+    F64Lt => self.translate_fcmp(Lt)
+    F64Gt => self.translate_fcmp(Gt)
+    F64Le => self.translate_fcmp(Le)
+    F64Ge => self.translate_fcmp(Ge)
 
     // Conversions
     I32WrapI64 => {
       let a = self.pop()
-      let result = self.builder.ireduce(Type::I32, a)
+      let result = self.builder.ireduce(I32, a)
       self.push(result)
     }
     I64ExtendI32S => {
       let a = self.pop()
-      let result = self.builder.sextend(Type::I64, a)
+      let result = self.builder.sextend(I64, a)
       self.push(result)
     }
     I64ExtendI32U => {
       let a = self.pop()
-      let result = self.builder.uextend(Type::I64, a)
+      let result = self.builder.uextend(I64, a)
       self.push(result)
     }
     // In-place sign extension instructions 
     I32Extend8S => {
       let a = self.pop()
-      let result = self.builder.sextend8(Type::I32, a)
+      let result = self.builder.sextend8(I32, a)
       self.push(result)
     }
     I32Extend16S => {
       let a = self.pop()
-      let result = self.builder.sextend16(Type::I32, a)
+      let result = self.builder.sextend16(I32, a)
       self.push(result)
     }
     I64Extend8S => {
       let a = self.pop()
-      let result = self.builder.sextend8(Type::I64, a)
+      let result = self.builder.sextend8(I64, a)
       self.push(result)
     }
     I64Extend16S => {
       let a = self.pop()
-      let result = self.builder.sextend16(Type::I64, a)
+      let result = self.builder.sextend16(I64, a)
       self.push(result)
     }
     I64Extend32S => {
@@ -314,63 +314,63 @@ fn Translator::translate_instruction(
     }
     I32TruncF32S | I32TruncF64S => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_sint(Type::I32, a)
+      let result = self.builder.fcvt_to_sint(I32, a)
       self.push(result)
     }
     I32TruncF32U | I32TruncF64U => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_uint(Type::I32, a)
+      let result = self.builder.fcvt_to_uint(I32, a)
       self.push(result)
     }
     I64TruncF32S | I64TruncF64S => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_sint(Type::I64, a)
+      let result = self.builder.fcvt_to_sint(I64, a)
       self.push(result)
     }
     I64TruncF32U | I64TruncF64U => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_uint(Type::I64, a)
+      let result = self.builder.fcvt_to_uint(I64, a)
       self.push(result)
     }
     F32ConvertI32S | F32ConvertI64S => {
       let a = self.pop()
-      let result = self.builder.sint_to_fcvt(Type::F32, a)
+      let result = self.builder.sint_to_fcvt(F32, a)
       self.push(result)
     }
     F32ConvertI32U | F32ConvertI64U => {
       let a = self.pop()
-      let result = self.builder.uint_to_fcvt(Type::F32, a)
+      let result = self.builder.uint_to_fcvt(F32, a)
       self.push(result)
     }
     F64ConvertI32S | F64ConvertI64S => {
       let a = self.pop()
-      let result = self.builder.sint_to_fcvt(Type::F64, a)
+      let result = self.builder.sint_to_fcvt(F64, a)
       self.push(result)
     }
     F64ConvertI32U | F64ConvertI64U => {
       let a = self.pop()
-      let result = self.builder.uint_to_fcvt(Type::F64, a)
+      let result = self.builder.uint_to_fcvt(F64, a)
       self.push(result)
     }
     // Saturating truncation operations
     I32TruncSatF32S | I32TruncSatF64S => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_sint_sat(Type::I32, a)
+      let result = self.builder.fcvt_to_sint_sat(I32, a)
       self.push(result)
     }
     I32TruncSatF32U | I32TruncSatF64U => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_uint_sat(Type::I32, a)
+      let result = self.builder.fcvt_to_uint_sat(I32, a)
       self.push(result)
     }
     I64TruncSatF32S | I64TruncSatF64S => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_sint_sat(Type::I64, a)
+      let result = self.builder.fcvt_to_sint_sat(I64, a)
       self.push(result)
     }
     I64TruncSatF32U | I64TruncSatF64U => {
       let a = self.pop()
-      let result = self.builder.fcvt_to_uint_sat(Type::I64, a)
+      let result = self.builder.fcvt_to_uint_sat(I64, a)
       self.push(result)
     }
     I32ReinterpretF32
@@ -380,10 +380,10 @@ fn Translator::translate_instruction(
       let a = self.pop()
       let target_ty = match instr {
         I32ReinterpretF32 => Type::I32
-        I64ReinterpretF64 => Type::I64
-        F32ReinterpretI32 => Type::F32
-        F64ReinterpretI64 => Type::F64
-        _ => Type::I32
+        I64ReinterpretF64 => I64
+        F32ReinterpretI32 => F32
+        F64ReinterpretI64 => F64
+        _ => I32
       }
       let result = self.builder.bitcast(target_ty, a)
       self.push(result)
@@ -398,7 +398,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         addr,
         offset,
       )
@@ -410,7 +410,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         addr,
         offset,
       )
@@ -422,7 +422,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::F32,
+        F32,
         addr,
         offset,
       )
@@ -434,7 +434,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::F64,
+        F64,
         addr,
         offset,
       )
@@ -448,7 +448,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         8,
         true,
         addr,
@@ -462,7 +462,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         8,
         false,
         addr,
@@ -476,7 +476,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         16,
         true,
         addr,
@@ -490,7 +490,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         16,
         false,
         addr,
@@ -504,7 +504,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         8,
         true,
         addr,
@@ -518,7 +518,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         8,
         false,
         addr,
@@ -532,7 +532,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         16,
         true,
         addr,
@@ -546,7 +546,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         16,
         false,
         addr,
@@ -560,7 +560,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         32,
         true,
         addr,
@@ -574,7 +574,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         32,
         false,
         addr,
@@ -591,7 +591,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I32,
+        I32,
         addr,
         value,
         offset,
@@ -604,7 +604,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::I64,
+        I64,
         addr,
         value,
         offset,
@@ -617,7 +617,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::F32,
+        F32,
         addr,
         value,
         offset,
@@ -630,7 +630,7 @@ fn Translator::translate_instruction(
         self.builder,
         self.vmctx,
         memidx,
-        Type::F64,
+        F64,
         addr,
         value,
         offset,
@@ -1396,28 +1396,28 @@ fn Translator::translate_atomic(
   fn load_u32(bits : Int, addr : Value) -> Value {
     align_check(addr, bits / 8)
     let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(Type::I64, 0L)
-    self.builder.load_ptr_narrow(Type::I32, bits, false, ptr, zero)
+    let zero = self.builder.iconst(I64, 0L)
+    self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
   }
 
   fn store_u32(bits : Int, addr : Value, value : Value) -> Unit {
     align_check(addr, bits / 8)
     let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(Type::I64, 0L)
+    let zero = self.builder.iconst(I64, 0L)
     self.builder.store_ptr_narrow(bits, ptr, value, zero)
   }
 
   fn load_u64(bits : Int, addr : Value) -> Value {
     align_check(addr, bits / 8)
     let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(Type::I64, 0L)
-    self.builder.load_ptr_narrow(Type::I64, bits, false, ptr, zero)
+    let zero = self.builder.iconst(I64, 0L)
+    self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
   }
 
   fn store_u64(bits : Int, addr : Value, value : Value) -> Unit {
     align_check(addr, bits / 8)
     let ptr = bounds_ptr(addr, bits / 8)
-    let zero = self.builder.iconst(Type::I64, 0L)
+    let zero = self.builder.iconst(I64, 0L)
     self.builder.store_ptr_narrow(bits, ptr, value, zero)
   }
 
@@ -1441,9 +1441,9 @@ fn Translator::translate_atomic(
       let addr = self.pop()
       align_check(addr, 4)
       let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      let actual = self.builder.load_ptr(Type::I32, ptr, zero)
-      let eq = self.builder.icmp(IntCC::Eq, actual, expected)
+      let zero = self.builder.iconst(I64, 0L)
+      let actual = self.builder.load_ptr(I32, ptr, zero)
+      let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)
       let timed_out = self.builder.iconst_i32(2)
       let result = self.builder.select(eq, timed_out, not_equal)
@@ -1457,9 +1457,9 @@ fn Translator::translate_atomic(
       let addr = self.pop()
       align_check(addr, 8)
       let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      let actual = self.builder.load_ptr(Type::I64, ptr, zero)
-      let eq = self.builder.icmp(IntCC::Eq, actual, expected)
+      let zero = self.builder.iconst(I64, 0L)
+      let actual = self.builder.load_ptr(I64, ptr, zero)
+      let eq = self.builder.icmp(Eq, actual, expected)
       let not_equal = self.builder.iconst_i32(1)
       let timed_out = self.builder.iconst_i32(2)
       let result = self.builder.select(eq, timed_out, not_equal)
@@ -1474,15 +1474,15 @@ fn Translator::translate_atomic(
       let addr = self.pop()
       align_check(addr, 4)
       let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      self.push(self.builder.load_ptr(Type::I32, ptr, zero))
+      let zero = self.builder.iconst(I64, 0L)
+      self.push(self.builder.load_ptr(I32, ptr, zero))
     }
     5 => {
       let addr = self.pop()
       align_check(addr, 8)
       let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      self.push(self.builder.load_ptr(Type::I64, ptr, zero))
+      let zero = self.builder.iconst(I64, 0L)
+      self.push(self.builder.load_ptr(I64, ptr, zero))
     }
     6 => {
       let addr = self.pop()
@@ -1511,16 +1511,16 @@ fn Translator::translate_atomic(
       let addr = self.pop()
       align_check(addr, 4)
       let ptr = bounds_ptr(addr, 4)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      self.builder.store_ptr(Type::I32, ptr, value, zero)
+      let zero = self.builder.iconst(I64, 0L)
+      self.builder.store_ptr(I32, ptr, value, zero)
     }
     12 => {
       let value = self.pop()
       let addr = self.pop()
       align_check(addr, 8)
       let ptr = bounds_ptr(addr, 8)
-      let zero = self.builder.iconst(Type::I64, 0L)
-      self.builder.store_ptr(Type::I64, ptr, value, zero)
+      let zero = self.builder.iconst(I64, 0L)
+      self.builder.store_ptr(I64, ptr, value, zero)
     }
     13 => {
       let value = self.pop()
@@ -1589,11 +1589,11 @@ fn Translator::translate_atomic(
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(Type::I64, 0L)
+      let zero = self.builder.iconst(I64, 0L)
       let old = if bits == 32 {
-        self.builder.load_ptr(Type::I32, ptr, zero)
+        self.builder.load_ptr(I32, ptr, zero)
       } else {
-        self.builder.load_ptr_narrow(Type::I32, bits, false, ptr, zero)
+        self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
       }
       let mask = if bits == 32 {
         self.builder.iconst_i32(-1)
@@ -1622,7 +1622,7 @@ fn Translator::translate_atomic(
         self.builder.band(computed, mask)
       }
       if bits == 32 {
-        self.builder.store_ptr(Type::I32, ptr, new, zero)
+        self.builder.store_ptr(I32, ptr, new, zero)
       } else {
         self.builder.store_ptr_narrow(bits, ptr, new, zero)
       }
@@ -1683,11 +1683,11 @@ fn Translator::translate_atomic(
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(Type::I64, 0L)
+      let zero = self.builder.iconst(I64, 0L)
       let old = if bits == 64 {
-        self.builder.load_ptr(Type::I64, ptr, zero)
+        self.builder.load_ptr(I64, ptr, zero)
       } else {
-        self.builder.load_ptr_narrow(Type::I64, bits, false, ptr, zero)
+        self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
       }
       let mask = if bits == 64 {
         self.builder.iconst_i64(-1L)
@@ -1718,7 +1718,7 @@ fn Translator::translate_atomic(
         self.builder.band(computed, mask)
       }
       if bits == 64 {
-        self.builder.store_ptr(Type::I64, ptr, new, zero)
+        self.builder.store_ptr(I64, ptr, new, zero)
       } else {
         self.builder.store_ptr_narrow(bits, ptr, new, zero)
       }
@@ -1740,11 +1740,11 @@ fn Translator::translate_atomic(
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(Type::I64, 0L)
+      let zero = self.builder.iconst(I64, 0L)
       let old = if bits == 32 {
-        self.builder.load_ptr(Type::I32, ptr, zero)
+        self.builder.load_ptr(I32, ptr, zero)
       } else {
-        self.builder.load_ptr_narrow(Type::I32, bits, false, ptr, zero)
+        self.builder.load_ptr_narrow(I32, bits, false, ptr, zero)
       }
       let mask = if bits == 32 {
         self.builder.iconst_i32(-1)
@@ -1763,13 +1763,13 @@ fn Translator::translate_atomic(
       } else {
         self.builder.band(replacement, mask)
       }
-      let eq = self.builder.icmp(IntCC::Eq, old, expected_m)
+      let eq = self.builder.icmp(Eq, old, expected_m)
       let store_block = self.builder.create_block()
       let cont_block = self.builder.create_block()
       self.builder.brnz(eq, store_block, cont_block)
       self.builder.switch_to_block(store_block)
       if bits == 32 {
-        self.builder.store_ptr(Type::I32, ptr, replacement_m, zero)
+        self.builder.store_ptr(I32, ptr, replacement_m, zero)
       } else {
         self.builder.store_ptr_narrow(bits, ptr, replacement_m, zero)
       }
@@ -1795,11 +1795,11 @@ fn Translator::translate_atomic(
       let access_size = bits / 8
       align_check(addr, access_size)
       let ptr = bounds_ptr(addr, access_size)
-      let zero = self.builder.iconst(Type::I64, 0L)
+      let zero = self.builder.iconst(I64, 0L)
       let old = if bits == 64 {
-        self.builder.load_ptr(Type::I64, ptr, zero)
+        self.builder.load_ptr(I64, ptr, zero)
       } else {
-        self.builder.load_ptr_narrow(Type::I64, bits, false, ptr, zero)
+        self.builder.load_ptr_narrow(I64, bits, false, ptr, zero)
       }
       let mask = if bits == 64 {
         self.builder.iconst_i64(-1L)
@@ -1820,13 +1820,13 @@ fn Translator::translate_atomic(
       } else {
         self.builder.band(replacement, mask)
       }
-      let eq = self.builder.icmp(IntCC::Eq, old, expected_m)
+      let eq = self.builder.icmp(Eq, old, expected_m)
       let store_block = self.builder.create_block()
       let cont_block = self.builder.create_block()
       self.builder.brnz(eq, store_block, cont_block)
       self.builder.switch_to_block(store_block)
       if bits == 64 {
-        self.builder.store_ptr(Type::I64, ptr, replacement_m, zero)
+        self.builder.store_ptr(I64, ptr, replacement_m, zero)
       } else {
         self.builder.store_ptr_narrow(bits, ptr, replacement_m, zero)
       }

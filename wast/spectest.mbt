@@ -7,55 +7,37 @@ pub fn create_spectest_module(
 ) -> @runtime.ModuleInstance {
   // Allocate host functions with correct types
   // print_i32: (i32) -> ()
-  let print_i32_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let print_i32_type : @types.FuncType = { params: [I32], results: [] }
   let print_i32_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_i32_type,
   )
   // print_i64: (i64) -> ()
-  let print_i64_type : @types.FuncType = {
-    params: [@types.ValueType::I64],
-    results: [],
-  }
+  let print_i64_type : @types.FuncType = { params: [I64], results: [] }
   let print_i64_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_i64_type,
   )
   // print_f32: (f32) -> ()
-  let print_f32_type : @types.FuncType = {
-    params: [@types.ValueType::F32],
-    results: [],
-  }
+  let print_f32_type : @types.FuncType = { params: [F32], results: [] }
   let print_f32_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_f32_type,
   )
   // print_f64: (f64) -> ()
-  let print_f64_type : @types.FuncType = {
-    params: [@types.ValueType::F64],
-    results: [],
-  }
+  let print_f64_type : @types.FuncType = { params: [F64], results: [] }
   let print_f64_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_f64_type,
   )
   // print_i32_f32: (i32, f32) -> ()
-  let print_i32_f32_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::F32],
-    results: [],
-  }
+  let print_i32_f32_type : @types.FuncType = { params: [I32, F32], results: [] }
   let print_i32_f32_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_i32_f32_type,
   )
   // print_f64_f64: (f64, f64) -> ()
-  let print_f64_f64_type : @types.FuncType = {
-    params: [@types.ValueType::F64, @types.ValueType::F64],
-    results: [],
-  }
+  let print_f64_f64_type : @types.FuncType = { params: [F64, F64], results: [] }
   let print_f64_f64_addr = store.alloc_host_func(
     fn(_args) { [] },
     func_type=print_f64_f64_type,
@@ -65,13 +47,10 @@ pub fn create_spectest_module(
   let print_addr = store.alloc_host_func(fn(_args) { [] }, func_type=print_type)
 
   // print_char: (i32) -> () - prints character to stdout
-  let print_char_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let print_char_type : @types.FuncType = { params: [I32], results: [] }
   let print_char_addr = store.alloc_host_func(
     fn(args) {
-      if args[0] is @types.Value::I32(c) {
+      if args[0] is I32(c) {
         @wasi.putchar(c)
       }
       []
@@ -84,67 +63,56 @@ pub fn create_spectest_module(
   let memory_addr = store.alloc_mem(memory)
 
   // Allocate table: (table 10 20 funcref)
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, Some(20))
+  let table = @runtime.Table::new(FuncRef, 10, Some(20))
   let table_addr = store.alloc_table(table)
 
   // Allocate table64: (table i64 10 20 funcref)
-  let table64 = @runtime.Table::new(
-    @types.ValueType::FuncRef,
-    10,
-    Some(20),
-    is_table64=true,
-  )
+  let table64 = @runtime.Table::new(FuncRef, 10, Some(20), is_table64=true)
   let table64_addr = store.alloc_table(table64)
 
   // Allocate globals
   // global_i32: (global i32 (i32.const 666))
   let global_i32_addr = store.alloc_global(
-    @runtime.GlobalInstance::new(
-      @types.GlobalType::{ value_type: @types.ValueType::I32, mutable: false },
-      @types.Value::I32(666),
-    ),
+    @runtime.GlobalInstance::new({ value_type: I32, mutable: false }, I32(666)),
   )
   // global_i64: (global i64 (i64.const 666))
   let global_i64_addr = store.alloc_global(
-    @runtime.GlobalInstance::new(
-      @types.GlobalType::{ value_type: @types.ValueType::I64, mutable: false },
-      @types.Value::I64(666L),
-    ),
+    @runtime.GlobalInstance::new({ value_type: I64, mutable: false }, I64(666L)),
   )
   // global_f32: (global f32 (f32.const 666))
   let global_f32_addr = store.alloc_global(
     @runtime.GlobalInstance::new(
-      @types.GlobalType::{ value_type: @types.ValueType::F32, mutable: false },
-      @types.Value::F32(666.6),
+      { value_type: F32, mutable: false },
+      F32(666.6),
     ),
   )
   // global_f64: (global f64 (f64.const 666))
   let global_f64_addr = store.alloc_global(
     @runtime.GlobalInstance::new(
-      @types.GlobalType::{ value_type: @types.ValueType::F64, mutable: false },
-      @types.Value::F64(666.6),
+      { value_type: F64, mutable: false },
+      F64(666.6),
     ),
   )
 
   // Create exports
   let exports : Array[@types.Export] = [
-    { name: "print_i32", desc: @types.ExportDesc::Func(0) },
-    { name: "print_i64", desc: @types.ExportDesc::Func(1) },
-    { name: "print_f32", desc: @types.ExportDesc::Func(2) },
-    { name: "print_f64", desc: @types.ExportDesc::Func(3) },
-    { name: "print_i32_f32", desc: @types.ExportDesc::Func(4) },
-    { name: "print_f64_f64", desc: @types.ExportDesc::Func(5) },
-    { name: "print", desc: @types.ExportDesc::Func(6) },
-    { name: "print_char", desc: @types.ExportDesc::Func(7) },
-    { name: "memory", desc: @types.ExportDesc::Memory(0) },
-    { name: "table", desc: @types.ExportDesc::Table(0) },
-    { name: "table64", desc: @types.ExportDesc::Table(1) },
-    { name: "global_i32", desc: @types.ExportDesc::Global(0) },
-    { name: "global_i64", desc: @types.ExportDesc::Global(1) },
-    { name: "global_f32", desc: @types.ExportDesc::Global(2) },
-    { name: "global_f64", desc: @types.ExportDesc::Global(3) },
+    { name: "print_i32", desc: Func(0) },
+    { name: "print_i64", desc: Func(1) },
+    { name: "print_f32", desc: Func(2) },
+    { name: "print_f64", desc: Func(3) },
+    { name: "print_i32_f32", desc: Func(4) },
+    { name: "print_f64_f64", desc: Func(5) },
+    { name: "print", desc: Func(6) },
+    { name: "print_char", desc: Func(7) },
+    { name: "memory", desc: Memory(0) },
+    { name: "table", desc: Table(0) },
+    { name: "table64", desc: Table(1) },
+    { name: "global_i32", desc: Global(0) },
+    { name: "global_i64", desc: Global(1) },
+    { name: "global_f32", desc: Global(2) },
+    { name: "global_f64", desc: Global(3) },
   ]
-  @runtime.ModuleInstance::{
+  {
     types: [],
     type_rec_groups: [],
     canonical_type_indices: [],

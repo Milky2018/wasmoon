@@ -6,10 +6,10 @@ fn atomic_check_alignment(
   access_size : Int64,
 ) -> Unit raise @runtime.RuntimeError {
   if access_size <= 0L {
-    raise @runtime.Unreachable
+    raise Unreachable
   }
   if effective_addr % access_size != 0L {
-    raise @runtime.UnalignedAtomic
+    raise UnalignedAtomic
   }
 }
 
@@ -91,7 +91,7 @@ fn ExecContext::exec_atomic(
         raise @runtime.OutOfBoundsMemoryAccess
       }
       // return 0 (no waiters in single-threaded runtime)
-      self.stack.push(@types.Value::I32(0))
+      self.stack.push(I32(0))
     }
 
     // memory.atomic.wait32
@@ -105,9 +105,9 @@ fn ExecContext::exec_atomic(
       }
       let actual = load_i32(effective_addr)
       if actual != expected {
-        self.stack.push(@types.Value::I32(1)) // not-equal
+        self.stack.push(I32(1)) // not-equal
       } else {
-        self.stack.push(@types.Value::I32(2)) // timed-out
+        self.stack.push(I32(2)) // timed-out
       }
     }
 
@@ -122,9 +122,9 @@ fn ExecContext::exec_atomic(
       }
       let actual = load_i64(effective_addr)
       if actual != expected {
-        self.stack.push(@types.Value::I32(1))
+        self.stack.push(I32(1))
       } else {
-        self.stack.push(@types.Value::I32(2))
+        self.stack.push(I32(2))
       }
     }
 
@@ -135,7 +135,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I32(load_i32(effective_addr)))
+      self.stack.push(I32(load_i32(effective_addr)))
     }
     5 => {
       let effective_addr = pop_effective_addr()
@@ -143,7 +143,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 8L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I64(load_i64(effective_addr)))
+      self.stack.push(I64(load_i64(effective_addr)))
     }
     6 => {
       let effective_addr = pop_effective_addr()
@@ -151,7 +151,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I32(load_u8(effective_addr)))
+      self.stack.push(I32(load_u8(effective_addr)))
     }
     7 => {
       let effective_addr = pop_effective_addr()
@@ -159,7 +159,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I32(load_u16(effective_addr)))
+      self.stack.push(I32(load_u16(effective_addr)))
     }
     8 => {
       let effective_addr = pop_effective_addr()
@@ -167,7 +167,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 1L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I64(load_u8(effective_addr).to_int64()))
+      self.stack.push(I64(load_u8(effective_addr).to_int64()))
     }
     9 => {
       let effective_addr = pop_effective_addr()
@@ -175,7 +175,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 2L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I64(load_u16(effective_addr).to_int64()))
+      self.stack.push(I64(load_u16(effective_addr).to_int64()))
     }
     10 => {
       let effective_addr = pop_effective_addr()
@@ -183,7 +183,7 @@ fn ExecContext::exec_atomic(
       if is_mem_oob(effective_addr, 4L, mem) {
         raise @runtime.OutOfBoundsMemoryAccess
       }
-      self.stack.push(@types.Value::I64(load_u32_to_i64(effective_addr)))
+      self.stack.push(I64(load_u32_to_i64(effective_addr)))
     }
 
     // Stores
@@ -324,7 +324,7 @@ fn ExecContext::exec_atomic(
       } else {
         store_u16(effective_addr, new)
       }
-      self.stack.push(@types.Value::I32(old))
+      self.stack.push(I32(old))
     }
 
     // RMW operations (i64)
@@ -410,7 +410,7 @@ fn ExecContext::exec_atomic(
       } else {
         store_u8(effective_addr, new.to_int())
       }
-      self.stack.push(@types.Value::I64(old))
+      self.stack.push(I64(old))
     }
 
     // cmpxchg (i32)
@@ -453,7 +453,7 @@ fn ExecContext::exec_atomic(
           store_u16(effective_addr, new)
         }
       }
-      self.stack.push(@types.Value::I32(old))
+      self.stack.push(I32(old))
     }
 
     // cmpxchg (i64)
@@ -495,7 +495,7 @@ fn ExecContext::exec_atomic(
           store_u8(effective_addr, new.to_int())
         }
       }
-      self.stack.push(@types.Value::I64(old))
+      self.stack.push(I64(old))
     }
     _ => raise @runtime.Unreachable
   }

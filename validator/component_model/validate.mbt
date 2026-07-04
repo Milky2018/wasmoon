@@ -8,8 +8,8 @@ fn valtype_nesting_depth(
   type_depths : Array[Int],
 ) -> Int {
   match ty {
-    @component.ValType::Prim(_) => 0
-    @component.ValType::TypeIdx(idx) =>
+    Prim(_) => 0
+    TypeIdx(idx) =>
       if idx < 0 || idx >= type_depths.length() {
         0
       } else {
@@ -26,11 +26,11 @@ fn effective_typedef_depth(
   match td {
     // Base types contribute depth=1 so that chains like 101 nested `list`
     // typedefs trip the component-spec limit.
-    @component.TypeDef::DefValType(_) => 1
-    @component.TypeDef::FuncType(_) => 1
-    @component.TypeDef::List(v) => 1 + valtype_nesting_depth(v, type_depths)
-    @component.TypeDef::Option(v) => 1 + valtype_nesting_depth(v, type_depths)
-    @component.TypeDef::Result(ok, err) => {
+    DefValType(_) => 1
+    FuncType(_) => 1
+    List(v) => 1 + valtype_nesting_depth(v, type_depths)
+    Option(v) => 1 + valtype_nesting_depth(v, type_depths)
+    Result(ok, err) => {
       let mut max_child = 0
       match ok {
         Some(v) => max_child = valtype_nesting_depth(v, type_depths)
@@ -47,7 +47,7 @@ fn effective_typedef_depth(
       }
       1 + max_child
     }
-    @component.TypeDef::Tuple(tys) => {
+    Tuple(tys) => {
       let mut max_child = 0
       for v in tys {
         let d = valtype_nesting_depth(v, type_depths)
@@ -57,7 +57,7 @@ fn effective_typedef_depth(
       }
       1 + max_child
     }
-    @component.TypeDef::Record(fields) => {
+    Record(fields) => {
       let mut max_child = 0
       for f in fields {
         let d = valtype_nesting_depth(f.ty, type_depths)
@@ -67,7 +67,7 @@ fn effective_typedef_depth(
       }
       1 + max_child
     }
-    @component.TypeDef::Variant(cases) => {
+    Variant(cases) => {
       let mut max_child = 0
       for c in cases {
         match c.ty {
@@ -235,11 +235,11 @@ fn validate_component_inner(
         let export_types : Map[String, CoreExternType] = {}
         for ex in core_mod.exports {
           match ex.desc {
-            @types.ExportDesc::Func(_) => exports.set(ex.name, 0x00)
-            @types.ExportDesc::Table(_) => exports.set(ex.name, 0x01)
-            @types.ExportDesc::Memory(_) => exports.set(ex.name, 0x02)
-            @types.ExportDesc::Global(_) => exports.set(ex.name, 0x03)
-            @types.ExportDesc::Tag(_) => exports.set(ex.name, 0x04)
+            Func(_) => exports.set(ex.name, 0x00)
+            Table(_) => exports.set(ex.name, 0x01)
+            Memory(_) => exports.set(ex.name, 0x02)
+            Global(_) => exports.set(ex.name, 0x03)
+            Tag(_) => exports.set(ex.name, 0x04)
           }
           match core_export_type_of_module(core_mod, ex) {
             Some(t) => export_types.set(ex.name, t)
@@ -260,7 +260,7 @@ fn validate_component_inner(
           let mut export_map : Map[String, Int]? = None
           let mut export_types : Map[String, CoreExternType]? = None
           match inst.expr {
-            @component.CoreInstanceExpr::Instantiate(module_idx, args) => {
+            Instantiate(module_idx, args) => {
               if module_idx < 0 || module_idx >= counts.core_module {
                 raise InvalidCoreModuleIndex(module_idx)
               }
@@ -285,8 +285,7 @@ fn validate_component_inner(
                 }
                 seen_arg_names.set(a.name, 1)
                 match a.sortidx.sort {
-                  @component.Sort::Core(0x12) =>
-                    providers.set(a.name, a.sortidx.idx)
+                  Core(0x12) => providers.set(a.name, a.sortidx.idx)
                   _ => ()
                 }
               }
@@ -419,7 +418,7 @@ fn validate_component_inner(
                   }
               }
             }
-            @component.CoreInstanceExpr::InlineExports(inline_exports) => {
+            InlineExports(inline_exports) => {
               let map : Map[String, Int] = {}
               let type_map : Map[String, CoreExternType] = {}
               for ex in inline_exports {
@@ -428,15 +427,14 @@ fn validate_component_inner(
                   raise DuplicateExportName(ex.name)
                 }
                 match ex.sortidx.sort {
-                  @component.Sort::Core(core_sort) => {
+                  Core(core_sort) => {
                     map.set(ex.name, core_sort)
                     match core_sort {
                       0x00 =>
                         if ex.sortidx.idx >= 0 &&
                           ex.sortidx.idx < core_func_types.length() {
                           match core_func_types[ex.sortidx.idx] {
-                            Some(ft) =>
-                              type_map.set(ex.name, CoreExternType::Func(ft))
+                            Some(ft) => type_map.set(ex.name, Func(ft))
                             None => ()
                           }
                         }
@@ -444,8 +442,7 @@ fn validate_component_inner(
                         if ex.sortidx.idx >= 0 &&
                           ex.sortidx.idx < core_memory_types.length() {
                           match core_memory_types[ex.sortidx.idx] {
-                            Some(mt) =>
-                              type_map.set(ex.name, CoreExternType::Memory(mt))
+                            Some(mt) => type_map.set(ex.name, Memory(mt))
                             None => ()
                           }
                         }
@@ -558,7 +555,7 @@ fn validate_component_inner(
           // Validate bounds/signature here where we have access to the current
           // core-func types.
           match d {
-            @component.TypeDef::ResourceType(_, _rep, dtor_idx, _kind) =>
+            ResourceType(_, _rep, dtor_idx, _kind) =>
               match dtor_idx {
                 Some(idx) =>
                   if idx < 0 || idx >= counts.core_func {
@@ -567,7 +564,7 @@ fn validate_component_inner(
                     match core_func_types.get(idx) {
                       Some(Some(ft)) => {
                         let expected : @types.FuncType = {
-                          params: [@types.ValueType::I32],
+                          params: [I32],
                           results: [],
                         }
                         if ft != expected {
@@ -592,11 +589,9 @@ fn validate_component_inner(
             raise SectionParseError(7, "type nesting is too deep")
           }
           type_table.push(Some(d))
-          local_resource_types.push(
-            d is @component.TypeDef::ResourceType(_, _, _, _),
-          )
+          local_resource_types.push(d is ResourceType(_, _, _, _))
           match d {
-            @component.TypeDef::ResourceType(_, _, _, _) => {
+            ResourceType(_, _, _, _) => {
               resource_ids.push(Some(next_resource_id))
               next_resource_id += 1
             }
@@ -829,9 +824,9 @@ fn validate_component_inner(
           )
           count_canon(c, counts)
           match c {
-            @component.Canon::Lift(_, _, tyidx) =>
+            Lift(_, _, tyidx) =>
               match type_table[tyidx] {
-                Some(@component.TypeDef::FuncType(ft)) => {
+                Some(FuncType(ft)) => {
                   func_types.push(Some(ft))
                   func_sig_shapes.push(
                     Some(funcsig_of_functype(ft, type_table, resource_ids)),

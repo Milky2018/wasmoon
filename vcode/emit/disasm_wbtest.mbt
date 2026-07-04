@@ -431,7 +431,7 @@ test "type_check_large_immediate" {
 /// Test that emit_cmp_imm handles large immediates without truncation.
 /// For non-encodable immediates it falls back to materializing the constant.
 test "cmp_imm_handles_large_values" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let mc = MachineCode::new()
@@ -466,7 +466,7 @@ test "cmp_imm_shifted12" {
 ///|
 /// Test 32-bit shifted-register arithmetic/logical encodings.
 test "emit_shifted32_variants" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   let mc = MachineCode::new()

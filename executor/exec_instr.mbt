@@ -187,7 +187,7 @@ fn ExecContext::exec_instr(
       // Check if segment has been dropped or is declarative
       // Declarative elem segments behave as if they have been dropped
       let is_dropped = self.instance.dropped_elems[elem_idx]
-      let is_declarative = elem_segment.mode is @types.ElemMode::Declarative
+      let is_declarative = elem_segment.mode is Declarative
       if (is_dropped || is_declarative) && n != 0 {
         // Dropped/declarative segments behave as if they have zero length
         raise @runtime.RuntimeError::OutOfBoundsTableAccess
@@ -217,18 +217,18 @@ fn ExecContext::exec_instr(
           }
           [RefNull(ref_type)] =>
             match ref_type {
-              FuncRef | ExternRef => @types.Value::Null
-              _ => @types.Value::Null
+              FuncRef | ExternRef => Null
+              _ => Null
             }
           [I32Const(idx)] => {
             // Legacy format: function index as i32
             let store_addr = self.instance.func_addrs[idx]
-            @types.Value::FuncRef(store_addr)
+            FuncRef(store_addr)
           }
           // GC: handle ref.i31 expressions
           [I32Const(n), RefI31] => {
             let i31_val = n & 0x7FFFFFFF
-            @types.Value::I31(i31_val)
+            I31(i31_val)
           }
           [GlobalGet(idx), RefI31] => {
             let globals = get_global_instances(
@@ -239,15 +239,15 @@ fn ExecContext::exec_instr(
               match globals[idx].get() {
                 I32(n) => {
                   let i31_val = n & 0x7FFFFFFF
-                  @types.Value::I31(i31_val)
+                  I31(i31_val)
                 }
-                _ => @types.Value::Null
+                _ => Null
               }
             } else {
-              @types.Value::Null
+              Null
             }
           }
-          _ => @types.Value::Null
+          _ => Null
         }
         table.set(d + i, value)
       }
@@ -569,11 +569,15 @@ fn ExecContext::exec_instr(
       let arity = self.block_arity(bt)
       let stack_height = self.stack.size()
       self.push_label(false, arity)
-      let result = try? self.exec_block(body)
+      let result = try self.exec_block(body) catch {
+        e => ExecBlockRaised(e)
+      } noraise {
+        _ => ExecBlockCompleted
+      }
       self.pop_label()
       match result {
-        Ok(_) => ()
-        Err(ThrowException(tag_addr, values)) => {
+        ExecBlockCompleted => ()
+        ExecBlockRaised(ThrowException(tag_addr, values)) => {
           // Find a matching handler
           for handler in handlers {
             match handler {
@@ -597,9 +601,9 @@ fn ExecContext::exec_instr(
                   for v in values {
                     self.stack.push(v)
                   }
-                  self.stack.push(@types.Value::ExnRef(exn_addr))
+                  self.stack.push(ExnRef(exn_addr))
                   let branch_values = values.copy()
-                  branch_values.push(@types.Value::ExnRef(exn_addr))
+                  branch_values.push(ExnRef(exn_addr))
                   raise BranchWith(label_idx, branch_values)
                 }
               }
@@ -612,23 +616,24 @@ fn ExecContext::exec_instr(
                 // Matches any exception and pushes exnref
                 let exn_addr = self.store.alloc_exn(tag_addr, values)
                 self.restore_stack_to(stack_height)
-                self.stack.push(@types.Value::ExnRef(exn_addr))
-                raise BranchWith(label_idx, [@types.Value::ExnRef(exn_addr)])
+                self.stack.push(ExnRef(exn_addr))
+                raise BranchWith(label_idx, [ExnRef(exn_addr)])
               }
             }
           }
           // No handler matched, re-raise the exception
           raise ThrowException(tag_addr, values)
         }
-        Err(BranchWith(0, values)) => {
+        ExecBlockRaised(BranchWith(0, values)) => {
           // Normal branch to end of try_table
           self.restore_stack_to(stack_height)
           for v in values {
             self.stack.push(v)
           }
         }
-        Err(BranchWith(n, values)) => raise BranchWith(n - 1, values)
-        Err(e) => raise e
+        ExecBlockRaised(BranchWith(n, values)) =>
+          raise BranchWith(n - 1, values)
+        ExecBlockRaised(e) => raise e
       }
     }
 

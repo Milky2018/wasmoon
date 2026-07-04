@@ -343,7 +343,7 @@ fn MachineCode::emit_instruction_simd(
           UmovD(17, rn, 1).emit(self) // X17 = Vn.D[1]
           self.emit_lsr_imm(17, 17, 63) // X17 = bit 1
           // Combine: rd = bit0 | (bit1 << 1)
-          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 1)
+          self.emit_orr_shifted(rd, 16, 17, Lsl, 1)
         }
         S32 => {
           // i32x4.bitmask: 4 lanes -> 4-bit result
@@ -352,13 +352,13 @@ fn MachineCode::emit_instruction_simd(
           self.emit_lsr_imm32(16, 16, 31) // bit 0
           UmovS(17, rn, 1).emit(self)
           self.emit_lsr_imm32(17, 17, 31)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 1) // bits 0-1
+          self.emit_orr_shifted(16, 16, 17, Lsl, 1) // bits 0-1
           UmovS(17, rn, 2).emit(self)
           self.emit_lsr_imm32(17, 17, 31)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 2) // bits 0-2
+          self.emit_orr_shifted(16, 16, 17, Lsl, 2) // bits 0-2
           UmovS(17, rn, 3).emit(self)
           self.emit_lsr_imm32(17, 17, 31)
-          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 3) // bits 0-3
+          self.emit_orr_shifted(rd, 16, 17, Lsl, 3) // bits 0-3
         }
         H16 => {
           // i16x8.bitmask: 8 lanes -> 8-bit result
@@ -367,25 +367,25 @@ fn MachineCode::emit_instruction_simd(
           self.emit_lsr_imm32(16, 16, 15) // bit 0
           UmovH(17, rn, 1).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 1)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 1)
           UmovH(17, rn, 2).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 2)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 2)
           UmovH(17, rn, 3).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 3)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 3)
           UmovH(17, rn, 4).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 4)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 4)
           UmovH(17, rn, 5).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 5)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 5)
           UmovH(17, rn, 6).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(16, 16, 17, @instr.ShiftType::Lsl, 6)
+          self.emit_orr_shifted(16, 16, 17, Lsl, 6)
           UmovH(17, rn, 7).emit(self)
           self.emit_lsr_imm32(17, 17, 15)
-          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 7)
+          self.emit_orr_shifted(rd, 16, 17, Lsl, 7)
         }
         B8 => {
           // i8x16.bitmask: 16 lanes -> 16-bit result
@@ -426,7 +426,7 @@ fn MachineCode::emit_instruction_simd(
           self.emit_ext_16b(v_shift, v_work, v_work, 8) // rotate to get high half (reuse v_shift)
           self.emit_fmov_d_to_x(17, v_shift) // X17 = high 8 bits
           // Combine: rd = low | (high << 8)
-          self.emit_orr_shifted(rd, 16, 17, @instr.ShiftType::Lsl, 8)
+          self.emit_orr_shifted(rd, 16, 17, Lsl, 8)
         }
       }
     }

@@ -10,15 +10,15 @@ pub fn call_clobbered_gprs() -> Array[@abi.PReg] {
   //
   // We use the 0..15 numbering described in `vcode/isa/amd64/roles.mbt`.
   [
-    { index: 0, class: @abi.Int }, // rax
-    { index: 1, class: @abi.Int }, // rcx
-    { index: 2, class: @abi.Int }, // rdx
-    { index: 6, class: @abi.Int }, // rsi
-    { index: 7, class: @abi.Int }, // rdi
-    { index: 8, class: @abi.Int }, // r8
-    { index: 9, class: @abi.Int }, // r9
-    { index: 10, class: @abi.Int }, // r10
-    { index: 11, class: @abi.Int },
+    { index: 0, class: Int }, // rax
+    { index: 1, class: Int }, // rcx
+    { index: 2, class: Int }, // rdx
+    { index: 6, class: Int }, // rsi
+    { index: 7, class: Int }, // rdi
+    { index: 8, class: Int }, // r8
+    { index: 9, class: Int }, // r9
+    { index: 10, class: Int }, // r10
+    { index: 11, class: Int },
   ] // r11
 }
 
@@ -27,7 +27,7 @@ pub fn call_clobbered_fprs() -> Array[@abi.PReg] {
   // SysV AMD64: all XMM registers are caller-saved.
   let regs : Array[@abi.PReg] = []
   for i in 0..<16 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }
@@ -41,7 +41,7 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg] {
 ///|
 /// Internal Wasm ABI (initial amd64 design): vmctx argument register.
 pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
-  { index: 7, class: @abi.Int } // rdi
+  { index: 7, class: Int } // rdi
 }
 
 ///|
@@ -52,11 +52,11 @@ pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
 /// observe correct stack/register argument ordering.
 pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
   [
-    { index: 6, class: @abi.Int }, // rsi
-    { index: 2, class: @abi.Int }, // rdx
-    { index: 1, class: @abi.Int }, // rcx
-    { index: 8, class: @abi.Int }, // r8
-    { index: 9, class: @abi.Int }, // r9
+    { index: 6, class: Int }, // rsi
+    { index: 2, class: Int }, // rdx
+    { index: 1, class: Int }, // rcx
+    { index: 8, class: Int }, // r8
+    { index: 9, class: Int }, // r9
   ] // r9
 }
 
@@ -65,7 +65,7 @@ pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
 pub fn wasm_arg_fprs() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<8 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }
@@ -76,14 +76,14 @@ pub fn wasm_ret_gprs() -> Array[@abi.PReg] {
   // Internal multi-value return convention: allow up to 8 integer return regs.
   // Keep r11 free as a scratch register for parallel-move breaking.
   [
-    { index: 0, class: @abi.Int }, // rax
-    { index: 2, class: @abi.Int }, // rdx
-    { index: 1, class: @abi.Int }, // rcx
-    { index: 8, class: @abi.Int }, // r8
-    { index: 9, class: @abi.Int }, // r9
-    { index: 6, class: @abi.Int }, // rsi
-    { index: 7, class: @abi.Int }, // rdi
-    { index: 10, class: @abi.Int },
+    { index: 0, class: Int }, // rax
+    { index: 2, class: Int }, // rdx
+    { index: 1, class: Int }, // rcx
+    { index: 8, class: Int }, // r8
+    { index: 9, class: Int }, // r9
+    { index: 6, class: Int }, // rsi
+    { index: 7, class: Int }, // rdi
+    { index: 10, class: Int },
   ] // r10
 }
 
@@ -92,7 +92,7 @@ pub fn wasm_ret_gprs() -> Array[@abi.PReg] {
 pub fn wasm_ret_fprs() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<8 {
-    regs.push({ index: i, class: @abi.Float64 })
+    regs.push({ index: i, class: Float64 })
   }
   regs
 }

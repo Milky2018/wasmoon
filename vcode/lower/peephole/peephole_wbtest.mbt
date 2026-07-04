@@ -98,7 +98,7 @@ test "load_store_forwarding_eliminates_redundant_load" {
   for inst in insts {
     match inst.opcode {
       StorePtrNarrow(8, 0) => has_store = true
-      Extend(@instr.Unsigned8To64) => has_extend = true
+      Extend(Unsigned8To64) => has_extend = true
       _ => ()
     }
   }
@@ -420,7 +420,7 @@ test "peephole: add/sub with negative constants fold to opposite imm op" {
       _ => ()
     }
   }
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     inspect(has_add_imm_neg7, content="true")
     inspect(has_sub_imm_neg9, content="true")
   } else {
@@ -448,14 +448,7 @@ test "fuse_cmp_branch folds cmp-result br_cmp_imm to direct compare" {
   cmp.add_use(Virtual(rhs))
   block0.add_inst(cmp)
   block0.set_terminator(
-    BranchCmpImm(
-      Virtual(cmp_res),
-      0,
-      @instr.Cond::Eq,
-      true,
-      block_true.id,
-      block_false.id,
-    ),
+    BranchCmpImm(Virtual(cmp_res), 0, Eq, true, block_true.id, block_false.id),
   )
   block_true.set_terminator(Return([]))
   block_false.set_terminator(Return([]))
@@ -471,7 +464,7 @@ test "fuse_cmp_branch folds cmp-result br_cmp_imm to direct compare" {
   inspect(has_cmp_inst, content="false")
   if block0.terminator
     is Some(BranchCmp(new_lhs, new_rhs, cond, _, then_b, else_b)) {
-    inspect(cond is @instr.Cond::Ne, content="true")
+    inspect(cond is Ne, content="true")
     inspect(then_b == block_true.id, content="true")
     inspect(else_b == block_false.id, content="true")
     if new_lhs is Virtual(lhs_vreg) {
@@ -516,7 +509,7 @@ test "fuse_cmp_branch folds cmp-result cbz to inverted compare" {
   optimize_vcode(func)
 
   if block0.terminator is Some(BranchCmp(new_lhs, new_rhs, cond, _, _, _)) {
-    inspect(cond is @instr.Cond::Ge, content="true")
+    inspect(cond is Ge, content="true")
     if new_lhs is Virtual(lhs_vreg) {
       inspect(lhs_vreg.id == lhs.id, content="true")
     } else {

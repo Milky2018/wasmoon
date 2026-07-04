@@ -89,7 +89,7 @@ fn selected_regalloc_algorithm() -> RegallocAlgorithm {
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
   // Step 1: Collect all used vregs
-  let used_vregs : Set[Int] = Set::new()
+  let used_vregs : Set[Int] = Set([])
 
   // Add function parameters (they're implicitly used)
   for param in func.params {
@@ -106,7 +106,7 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     // Instruction uses
     for inst in block.insts {
       for use_reg in inst.uses {
-        if use_reg is @abi.Virtual(vreg) {
+        if use_reg is Virtual(vreg) {
           used_vregs.add(vreg.id)
         }
       }
@@ -116,38 +116,38 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     if block.terminator is Some(term) {
       match term {
         Branch(cond, _, _) =>
-          if cond is @abi.Virtual(vreg) {
+          if cond is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         BranchCmp(lhs, rhs, _, _, _, _) => {
-          if lhs is @abi.Virtual(vreg) {
+          if lhs is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
-          if rhs is @abi.Virtual(vreg) {
+          if rhs is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         }
         BranchCmpImm(lhs, _, _, _, _, _) =>
-          if lhs is @abi.Virtual(vreg) {
+          if lhs is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         BranchZero(reg, _, _, _, _) =>
-          if reg is @abi.Virtual(vreg) {
+          if reg is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         BrTable(index, _, _) =>
-          if index is @abi.Virtual(vreg) {
+          if index is Virtual(vreg) {
             used_vregs.add(vreg.id)
           }
         Return(values) =>
           for v in values {
-            if v is @abi.Virtual(vreg) {
+            if v is Virtual(vreg) {
               used_vregs.add(vreg.id)
             }
           }
         Jump(_, args) =>
           for a in args {
-            if a is @abi.Virtual(vreg) {
+            if a is Virtual(vreg) {
               used_vregs.add(vreg.id)
             }
           }
@@ -191,7 +191,7 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
         // Keep if any defined vreg is used
         let mut any_def_used = false
         for def in inst.defs {
-          if def.reg is @abi.Virtual(vreg) {
+          if def.reg is Virtual(vreg) {
             if used_vregs.contains(vreg.id) {
               any_def_used = true
             }
@@ -271,10 +271,10 @@ fn build_reg_pools(
   // amd64 backend currently uses the native 0..15 register numbering. If any
   // higher preg indices leak into pools, x86 encoding will silently truncate and
   // can clobber rsp/rbp (e.g. x20 -> rsp). Fail fast.
-  if isa is @isa.AMD64 {
+  if isa is AMD64 {
     fn validate(pregs : Array[@abi.PReg], kind : String) -> Unit {
       for p in pregs {
-        if p.class is @abi.Int {
+        if p.class is Int {
           guard p.index >= 0 && p.index < 16 else {
             abort(
               "amd64 regalloc pool contains invalid Int preg: \{kind} index=\{p.index}",
@@ -464,7 +464,7 @@ fn AllocStats::to_string(self : AllocStats) -> String {
 }
 
 ///|
-pub impl Show for AllocStats with output(self, logger) {
+pub impl Show for AllocStats with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -479,9 +479,9 @@ fn count_instructions(func : VCodeFunction) -> AllocStats {
     for inst in block.insts {
       total_insts += 1
       match inst.opcode {
-        @instr.StackStore(_) => num_spills += 1
-        @instr.StackLoad(_) => num_reloads += 1
-        @instr.Move => num_moves += 1
+        StackStore(_) => num_spills += 1
+        StackLoad(_) => num_reloads += 1
+        Move => num_moves += 1
         _ => ()
       }
     }

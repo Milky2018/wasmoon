@@ -96,7 +96,7 @@ pub fn run_explore(
         // Fall back to export name
         let mut export_name = ""
         for exp in mod_.exports {
-          if exp.desc is @types.ExportDesc::Func(idx) && idx == actual_func_idx {
+          if exp.desc is Func(idx) && idx == actual_func_idx {
             export_name = exp.name
             break
           }

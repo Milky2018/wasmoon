@@ -25,16 +25,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -50,11 +48,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
               self.expect_rparen()
             }
@@ -96,13 +90,9 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Memory({
-            limits: { min, max },
-            is_memory64,
-            page_size_log2: 16,
-          }),
+          desc: Memory({ limits: { min, max }, is_memory64, page_size_log2: 16 }),
         }
-        return MemoryDefResult::MemoryImport(imp, export_names)
+        return MemoryImport(imp, export_names)
       }
       Keyword("export") => {
         export_names.push(
@@ -114,11 +104,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   self.advance()
                   s
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
             }
           },
@@ -140,11 +126,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
               self.expect_rparen()
             }
@@ -156,22 +138,14 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
                   self.advance()
                   s
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected module name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected module name", self.loc())
               }
               let import_name = match self.current.token {
                 String_(s) => {
                   self.advance()
                   s
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected import name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected import name", self.loc())
               }
               self.expect_rparen() // close import
               // Check for i64 keyword (memory64)
@@ -203,13 +177,13 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
               let imp : @types.Import = {
                 mod_name,
                 name: import_name,
-                desc: @types.ImportDesc::Memory({
+                desc: Memory({
                   limits: { min, max },
                   is_memory64,
                   page_size_log2: 16,
                 }),
               }
-              return MemoryDefResult::MemoryImport(imp, export_names)
+              return MemoryImport(imp, export_names)
             }
             _ => {
               self.lexer.pos = saved2
@@ -248,7 +222,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
         } else {
           min_pages
         }).to_int64()
-        return MemoryDefResult::MemoryWithData(
+        return MemoryWithData(
           {
             limits: { min, max: Some(min) },
             is_memory64: false,
@@ -310,7 +284,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
       } else {
         min_pages
       }).to_int64()
-      return MemoryDefResult::MemoryWithData(
+      return MemoryWithData(
         { limits: { min, max: Some(min) }, is_memory64, page_size_log2: 16 },
         export_names,
         Bytes::from_array(init_bytes),
@@ -344,7 +318,7 @@ fn Parser::parse_memory_def(self : Parser) -> MemoryDefResult raise WatError {
     _ => None
   }
   self.expect_rparen()
-  MemoryDefResult::MemoryDef(
+  MemoryDef(
     { limits: { min, max }, is_memory64, page_size_log2: 16 },
     export_names,
   )
@@ -377,16 +351,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -402,11 +374,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
               self.expect_rparen()
             }
@@ -450,9 +418,9 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Global({ value_type, mutable }),
+          desc: Global({ value_type, mutable }),
         }
-        return GlobalDefResult::GlobalImport(imp, export_names)
+        return GlobalImport(imp, export_names)
       }
       _ => {
         // Not an inline import, restore state
@@ -481,8 +449,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             export_names.push(s)
             self.advance()
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected export name", self.loc())
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -494,16 +461,14 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -519,11 +484,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
                   export_names.push(s)
                   self.advance()
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
               self.expect_rparen()
             }
@@ -564,9 +525,9 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Global({ value_type, mutable }),
+          desc: Global({ value_type, mutable }),
         }
-        return GlobalDefResult::GlobalImport(imp, export_names)
+        return GlobalImport(imp, export_names)
       }
       _ => {
         self.lexer.pos = saved
@@ -606,10 +567,7 @@ fn Parser::parse_global_def(self : Parser) -> GlobalDefResult raise WatError {
   // Parse init expression
   let init = self.parse_instructions()
   self.expect_rparen()
-  GlobalDefResult::GlobalDef(
-    { type_: { value_type, mutable }, init },
-    export_names,
-  )
+  GlobalDef({ type_: { value_type, mutable }, init }, export_names)
 }
 
 ///|
@@ -641,8 +599,7 @@ fn Parser::parse_table_def(
             export_name = Some(s)
             self.advance()
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected export name", self.loc())
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -670,16 +627,14 @@ fn Parser::parse_table_def(
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -714,11 +669,7 @@ fn Parser::parse_table_def(
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Table({
-            elem_type,
-            limits: { min, max },
-            is_table64,
-          }),
+          desc: Table({ elem_type, limits: { min, max }, is_table64 }),
         }
         mod_.imports.push(imp)
         // Return a placeholder table (the import is what matters)
@@ -776,7 +727,7 @@ fn Parser::parse_table_def(
                   // Named function reference like $f
                   match self.func_names.get(name) {
                     Some(idx) => {
-                      init.push([@types.Instruction::RefFunc(idx)])
+                      init.push([RefFunc(idx)])
                       self.advance()
                     }
                     None =>
@@ -786,7 +737,7 @@ fn Parser::parse_table_def(
                   }
                 Number(_) => {
                   let idx = self.parse_u32()
-                  init.push([@types.Instruction::RefFunc(idx)])
+                  init.push([RefFunc(idx)])
                 }
                 LParen => {
                   // Expression like (ref.func $f) or (ref.null func)
@@ -796,13 +747,13 @@ fn Parser::parse_table_def(
                       self.advance()
                       let idx = self.parse_func_idx()
                       self.expect_rparen()
-                      init.push([@types.Instruction::RefFunc(idx)])
+                      init.push([RefFunc(idx)])
                     }
                     Keyword("ref.null") => {
                       self.advance()
                       let ref_type = self.parse_ref_type()
                       self.expect_rparen()
-                      init.push([@types.Instruction::RefNull(ref_type)])
+                      init.push([RefNull(ref_type)])
                     }
                     Keyword("item") => {
                       self.advance()
@@ -825,9 +776,7 @@ fn Parser::parse_table_def(
             self.expect_rparen() // close table
             let table_idx = mod_.tables.length()
             let elem : @types.Element = {
-              mode: @types.ElemMode::Active(table_idx, [
-                @types.Instruction::I32Const(0),
-              ]),
+              mode: Active(table_idx, [I32Const(0)]),
               type_: elem_type,
               init,
             }
@@ -854,10 +803,7 @@ fn Parser::parse_table_def(
             self.lexer.token_start_line = saved_token_start_line
             self.lexer.token_start_column = saved_token_start_column
             self.current = LocatedToken::synthetic(LParen)
-            raise WatError::UnexpectedToken(
-              "expected elem in inline table",
-              self.loc(),
-            )
+            raise UnexpectedToken("expected elem in inline table", self.loc())
           }
         }
       } else {
@@ -916,14 +862,14 @@ fn Parser::parse_table_def(
                       Id(name) =>
                         match self.func_names.get(name) {
                           Some(idx) => {
-                            init.push([@types.Instruction::RefFunc(idx)])
+                            init.push([RefFunc(idx)])
                             self.advance()
                           }
                           None => self.advance() // Placeholder for late-bound refs
                         }
                       Number(_) => {
                         let idx = self.parse_u32()
-                        init.push([@types.Instruction::RefFunc(idx)])
+                        init.push([RefFunc(idx)])
                       }
                       LParen => {
                         self.advance()
@@ -932,13 +878,13 @@ fn Parser::parse_table_def(
                             self.advance()
                             let idx = self.parse_func_idx()
                             self.expect_rparen()
-                            init.push([@types.Instruction::RefFunc(idx)])
+                            init.push([RefFunc(idx)])
                           }
                           Keyword("ref.null") => {
                             self.advance()
                             let ref_type = self.parse_ref_type()
                             self.expect_rparen()
-                            init.push([@types.Instruction::RefNull(ref_type)])
+                            init.push([RefNull(ref_type)])
                           }
                           Keyword("item") => {
                             self.advance()
@@ -960,8 +906,8 @@ fn Parser::parse_table_def(
                   self.expect_rparen() // close table
                   let table_idx = mod_.tables.length()
                   let elem : @types.Element = {
-                    mode: @types.ElemMode::Active(table_idx, [
-                      @types.Instruction::I64Const(0L), // Use i64 for table64
+                    mode: Active(table_idx, [
+                      I64Const(0L), // Use i64 for table64
                     ]),
                     type_: elem_type,
                     init,
@@ -980,7 +926,7 @@ fn Parser::parse_table_def(
                   return (table, export_name, Some(elem), table_name)
                 }
                 _ =>
-                  raise WatError::UnexpectedToken(
+                  raise UnexpectedToken(
                     "expected elem in inline table64",
                     self.loc(),
                   )
@@ -1035,13 +981,13 @@ fn Parser::parse_table_def(
             self.advance()
             let idx = self.parse_func_idx()
             self.expect_rparen()
-            Some([@types.Instruction::RefFunc(idx)])
+            Some([RefFunc(idx)])
           }
           Keyword("ref.null") => {
             self.advance()
             let ref_type = self.parse_ref_type()
             self.expect_rparen()
-            Some([@types.Instruction::RefNull(ref_type)])
+            Some([RefNull(ref_type)])
           }
           Keyword("global.get") => {
             self.advance()
@@ -1050,13 +996,13 @@ fn Parser::parse_table_def(
             // Check if this global is imported (only imported globals can be used in table init)
             let num_imported_globals = count_global_imports(mod_.imports)
             if global_idx >= num_imported_globals {
-              raise WatError::UndefinedIdentifier(
+              raise UndefinedIdentifier(
                 "unknown global (table init can only reference imported globals)",
                 self.loc(),
               )
             }
             self.expect_rparen()
-            Some([@types.Instruction::GlobalGet(global_idx)])
+            Some([GlobalGet(global_idx)])
           }
           _ => {
             // General expression - parse it as a folded instruction
@@ -1093,7 +1039,7 @@ fn Parser::parse_export_def(
       self.advance()
       s
     }
-    _ => raise WatError::UnexpectedToken("expected export name", self.loc())
+    _ => raise UnexpectedToken("expected export name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current.token {
@@ -1112,12 +1058,11 @@ fn Parser::parse_export_def(
               self.advance()
               idx
             }
-            None =>
-              raise WatError::UndefinedIdentifier("memory $\{name}", self.loc())
+            None => raise UndefinedIdentifier("memory $\{name}", self.loc())
           }
         _ => 0
       }
-      @types.ExportDesc::Memory(idx)
+      Memory(idx)
     }
     Keyword("table") => {
       self.advance()
@@ -1129,24 +1074,23 @@ fn Parser::parse_export_def(
               self.advance()
               idx
             }
-            None =>
-              raise WatError::UndefinedIdentifier("table $\{name}", self.loc())
+            None => raise UndefinedIdentifier("table $\{name}", self.loc())
           }
         _ => 0
       }
-      @types.ExportDesc::Table(idx)
+      Table(idx)
     }
     Keyword("global") => {
       self.advance()
       let idx = self.parse_global_idx()
-      @types.ExportDesc::Global(idx)
+      Global(idx)
     }
     Keyword("tag") => {
       self.advance()
       let idx = self.parse_tag_idx()
-      @types.ExportDesc::Tag(idx)
+      Tag(idx)
     }
-    _ => raise WatError::UnexpectedToken("expected export kind", self.loc())
+    _ => raise UnexpectedToken("expected export kind", self.loc())
   }
   ignore(mod_)
   self.expect_rparen()
@@ -1165,14 +1109,14 @@ fn Parser::parse_import_def(
       self.advance()
       s
     }
-    _ => raise WatError::UnexpectedToken("expected module name", self.loc())
+    _ => raise UnexpectedToken("expected module name", self.loc())
   }
   let name = match self.current.token {
     String_(s) => {
       self.advance()
       s
     }
-    _ => raise WatError::UnexpectedToken("expected import name", self.loc())
+    _ => raise UnexpectedToken("expected import name", self.loc())
   }
   self.expect_lparen()
   let desc = match self.current.token {
@@ -1251,11 +1195,7 @@ fn Parser::parse_import_def(
           )
         _ => None
       }
-      @types.ImportDesc::Memory({
-        limits: { min, max },
-        is_memory64,
-        page_size_log2: 16,
-      })
+      Memory({ limits: { min, max }, is_memory64, page_size_log2: 16 })
     }
     Keyword("table") => {
       self.advance()
@@ -1288,7 +1228,7 @@ fn Parser::parse_import_def(
         _ => None
       }
       let elem_type = self.parse_value_type()
-      @types.ImportDesc::Table({ elem_type, limits: { min, max }, is_table64 })
+      Table({ elem_type, limits: { min, max }, is_table64 })
     }
     Keyword("global") => {
       self.advance()
@@ -1322,7 +1262,7 @@ fn Parser::parse_import_def(
       } else {
         (self.parse_value_type(), false)
       }
-      @types.ImportDesc::Global({ value_type, mutable })
+      Global({ value_type, mutable })
     }
     Keyword("tag") => {
       self.advance()
@@ -1356,10 +1296,7 @@ fn Parser::parse_import_def(
           let func_type = self.parse_func_type()
           // Tags must have no results
           if func_type.results.length() > 0 {
-            raise WatError::UnexpectedToken(
-              "tags cannot have results",
-              self.loc(),
-            )
+            raise UnexpectedToken("tags cannot have results", self.loc())
           }
           // Add this type to the module and get its index
           let idx = mod_.types.length()
@@ -1377,9 +1314,9 @@ fn Parser::parse_import_def(
         mod_.type_rec_groups.push(idx)
         idx
       }
-      @types.ImportDesc::Tag(type_idx)
+      Tag(type_idx)
     }
-    _ => raise WatError::UnexpectedToken("expected import kind", self.loc())
+    _ => raise UnexpectedToken("expected import kind", self.loc())
   }
   self.expect_rparen()
   self.expect_rparen()
@@ -1509,7 +1446,7 @@ fn Parser::parse_elem_def(
   // Check for declarative element segment: (elem declare ...)
   if self.current.token == Keyword("declare") {
     self.advance() // skip "declare"
-    return self.parse_elem_items_and_finish(@types.ElemMode::Declarative)
+    return self.parse_elem_items_and_finish(Declarative)
   }
 
   // Check what comes next to determine if this is passive or active
@@ -1526,7 +1463,7 @@ fn Parser::parse_elem_def(
     | Keyword("arrayref")
     | Keyword("anyref") =>
       // Passive element segment
-      self.parse_elem_items_and_finish(@types.ElemMode::Passive)
+      self.parse_elem_items_and_finish(Passive)
     LParen => {
       // Could be active segment with (table ...), (offset ...), (i32.const ...), or (ref ...)
       let saved = self.lexer.pos
@@ -1544,7 +1481,7 @@ fn Parser::parse_elem_def(
           self.lexer.token_start_line = saved_token_start_line
           self.lexer.token_start_column = saved_token_start_column
           self.current = LocatedToken::synthetic(LParen)
-          self.parse_elem_items_and_finish(@types.ElemMode::Passive)
+          self.parse_elem_items_and_finish(Passive)
         }
         Keyword("table") => {
           // Active with explicit table
@@ -1557,11 +1494,7 @@ fn Parser::parse_elem_def(
                   self.advance()
                   idx
                 }
-                None =>
-                  raise WatError::UndefinedIdentifier(
-                    "table $\{name}",
-                    self.loc(),
-                  )
+                None => raise UndefinedIdentifier("table $\{name}", self.loc())
               }
             _ => 0
           }
@@ -1579,39 +1512,29 @@ fn Parser::parse_elem_def(
             self.expect_rparen()
             o
           }
-          self.parse_elem_items_and_finish(
-            @types.ElemMode::Active(table_idx, offset),
-          )
+          self.parse_elem_items_and_finish(Active(table_idx, offset))
         }
         Keyword("offset") => {
           // Active with explicit offset, implicit table 0
           self.advance()
           let offset = self.parse_instructions()
           self.expect_rparen()
-          self.parse_elem_items_and_finish(@types.ElemMode::Active(0, offset))
+          self.parse_elem_items_and_finish(Active(0, offset))
         }
         _ => {
           // Active with direct offset expression like (i32.const 0), implicit table 0
           let offset = self.parse_instructions()
           self.expect_rparen()
-          self.parse_elem_items_and_finish(@types.ElemMode::Active(0, offset))
+          self.parse_elem_items_and_finish(Active(0, offset))
         }
       }
     }
     // Empty passive segment
     RParen => {
       self.expect_rparen()
-      {
-        mode: @types.ElemMode::Passive,
-        type_: @types.ValueType::FuncRef,
-        init: [],
-      }
+      { mode: Passive, type_: FuncRef, init: [] }
     }
-    _ =>
-      raise WatError::UnexpectedToken(
-        "expected elem segment content",
-        self.loc(),
-      )
+    _ => raise UnexpectedToken("expected elem segment content", self.loc())
   }
 }
 
@@ -1632,7 +1555,7 @@ fn Parser::parse_elem_items_and_finish(
       match self.current.token {
         Number(_) | Id(_) => {
           let idx = self.parse_func_idx()
-          init.push([@types.Instruction::RefFunc(idx)])
+          init.push([RefFunc(idx)])
         }
         _ => break
       }
@@ -1654,14 +1577,14 @@ fn Parser::parse_elem_items_and_finish(
           self.advance()
           let idx = self.parse_func_idx()
           self.expect_rparen()
-          init.push([@types.Instruction::RefFunc(idx)])
+          init.push([RefFunc(idx)])
         }
         Keyword("ref.null") => {
           // (ref.null func)
           self.advance()
           let ref_type = self.parse_ref_type()
           self.expect_rparen()
-          init.push([@types.Instruction::RefNull(ref_type)])
+          init.push([RefNull(ref_type)])
         }
         _ => {
           // General expression like (array.new $bvec ...)
@@ -1685,40 +1608,40 @@ fn Parser::parse_elem_type(
   match self.current.token {
     Keyword("funcref") => {
       self.advance()
-      (@types.ValueType::FuncRef, false)
+      (FuncRef, false)
     }
     Keyword("externref") => {
       self.advance()
-      (@types.ValueType::ExternRef, false)
+      (ExternRef, false)
     }
     Keyword("func") => {
       self.advance()
-      (@types.ValueType::RefFunc, true) // use indices (non-null refs)
+      (RefFunc, true) // use indices (non-null refs)
     }
     Keyword("extern") => {
       self.advance()
-      (@types.ValueType::ExternRef, true) // use indices
+      (ExternRef, true) // use indices
     }
     // GC reference type shorthands
     Keyword("i31ref") => {
       self.advance()
-      (@types.ValueType::RefNullI31, false)
+      (RefNullI31, false)
     }
     Keyword("eqref") => {
       self.advance()
-      (@types.ValueType::RefNullEq, false)
+      (RefNullEq, false)
     }
     Keyword("structref") => {
       self.advance()
-      (@types.ValueType::RefNullStruct(-1), false)
+      (RefNullStruct(-1), false)
     }
     Keyword("arrayref") => {
       self.advance()
-      (@types.ValueType::RefNullArray(-1), false)
+      (RefNullArray(-1), false)
     }
     Keyword("anyref") => {
       self.advance()
-      (@types.ValueType::AnyRef, false)
+      (AnyRef, false)
     }
     LParen => {
       // (ref null func) or similar
@@ -1727,10 +1650,10 @@ fn Parser::parse_elem_type(
     }
     Id(_) | Number(_) =>
       // Legacy syntax: direct function indices without type keyword
-      (@types.ValueType::RefFunc, true)
+      (RefFunc, true)
     _ =>
       // Default to funcref with expressions (empty elem)
-      (@types.ValueType::FuncRef, false)
+      (FuncRef, false)
   }
 }
 
@@ -1774,8 +1697,7 @@ fn Parser::parse_tag_def(
             export_names.push(s)
             self.advance()
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected export name", self.loc())
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -1787,16 +1709,14 @@ fn Parser::parse_tag_def(
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -1806,7 +1726,7 @@ fn Parser::parse_tag_def(
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Tag(type_idx),
+          desc: Tag(type_idx),
         }
         return TagImport(imp, export_names)
       }
@@ -1826,7 +1746,7 @@ fn Parser::parse_tag_def(
   // Parse type - either (type $idx) or inline (param ...)
   let type_idx = self.parse_tag_type_spec(mod_)
   self.expect_rparen() // close tag
-  TagDef(@types.TagType::{ type_idx, }, export_names)
+  TagDef({ type_idx, }, export_names)
 }
 
 ///|
@@ -1859,7 +1779,7 @@ fn Parser::parse_tag_type_spec(
       let func_type = self.parse_func_type()
       // Tags must have no results
       if func_type.results.length() > 0 {
-        raise WatError::UnexpectedToken("tags cannot have results", self.loc())
+        raise UnexpectedToken("tags cannot have results", self.loc())
       }
       // Add this type to the module and get its index
       let idx = mod_.types.length()
@@ -1890,8 +1810,8 @@ fn Parser::parse_tag_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise WatError::UndefinedIdentifier("tag $\{name}", self.loc())
+        None => raise UndefinedIdentifier("tag $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected tag index", self.loc())
+    _ => raise UnexpectedToken("expected tag index", self.loc())
   }
 }

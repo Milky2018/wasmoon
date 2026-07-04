@@ -29,10 +29,7 @@ fn Parser::parse_type_def(
           self.advance()
         }
         None =>
-          raise WatError::UnexpectedToken(
-            "unknown type identifier: \{name}",
-            self.loc(),
-          )
+          raise UnexpectedToken("unknown type identifier: \{name}", self.loc())
       }
     } else if self.current.token is Number(s) {
       supertypes.push(parse_int(s))
@@ -55,16 +52,16 @@ fn Parser::parse_type_def(
       self.advance() // skip "struct"
       let st = self.parse_struct_type(type_idx)
       self.expect_rparen() // close struct
-      @types.CompositeType::Struct(st)
+      Struct(st)
     }
     Keyword("array") => {
       self.advance() // skip "array"
       let at = self.parse_array_type()
       self.expect_rparen() // close array
-      @types.CompositeType::Array(at)
+      Array(at)
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected 'func', 'struct', or 'array', got '\{self.current.token}'",
         self.loc(),
       )
@@ -84,13 +81,13 @@ fn Parser::parse_storage_type(
   match self.current.token {
     Keyword("i8") => {
       self.advance()
-      @types.StorageType::Packed(@types.PackedType::I8)
+      Packed(I8)
     }
     Keyword("i16") => {
       self.advance()
-      @types.StorageType::Packed(@types.PackedType::I16)
+      Packed(I16)
     }
-    _ => @types.StorageType::Val(self.parse_value_type())
+    _ => Val(self.parse_value_type())
   }
 }
 
@@ -159,7 +156,7 @@ fn Parser::parse_storage_type_after_lparen(
   }
   let heap_type = self.parse_heap_type(is_nullable)
   self.expect_rparen()
-  @types.StorageType::Val(heap_type)
+  Val(heap_type)
 }
 
 ///|
@@ -172,86 +169,85 @@ fn Parser::parse_heap_type(
     Keyword("func") => {
       self.advance()
       if is_nullable {
-        @types.ValueType::FuncRef
+        FuncRef
       } else {
-        @types.ValueType::RefFunc
+        RefFunc
       }
     }
     Keyword("extern") => {
       self.advance()
       if is_nullable {
-        @types.ValueType::ExternRef
+        ExternRef
       } else {
-        @types.ValueType::RefExtern
+        RefExtern
       }
     }
     Keyword("any") => {
       self.advance()
       if is_nullable {
-        @types.ValueType::AnyRef
+        AnyRef
       } else {
-        @types.ValueType::RefAny
+        RefAny
       }
     }
     Keyword("eq") => {
       self.advance()
       if is_nullable {
-        @types.ValueType::RefNullEq
+        RefNullEq
       } else {
-        @types.ValueType::RefEq
+        RefEq
       }
     }
     Keyword("i31") => {
       self.advance()
       if is_nullable {
-        @types.ValueType::RefNullI31
+        RefNullI31
       } else {
-        @types.ValueType::RefI31
+        RefI31
       }
     }
     Keyword("struct") => {
       self.advance()
       // Abstract struct type (not a specific struct)
       if is_nullable {
-        @types.ValueType::RefNullStruct(-1)
+        RefNullStruct(-1)
       } else {
-        @types.ValueType::RefStruct(-1)
+        RefStruct(-1)
       }
     }
     Keyword("array") => {
       self.advance()
       // Abstract array type (not a specific array)
       if is_nullable {
-        @types.ValueType::RefNullArray(-1)
+        RefNullArray(-1)
       } else {
-        @types.ValueType::RefArray(-1)
+        RefArray(-1)
       }
     }
     Keyword("exn") => {
       self.advance()
-      @types.ValueType::ExnRef
+      ExnRef
     }
     Keyword("none") => {
       self.advance()
-      @types.ValueType::RefNone
+      RefNone
     }
     Keyword("nofunc") => {
       self.advance()
-      @types.ValueType::NullFuncRef
+      NullFuncRef
     }
     Keyword("noexn") => {
       self.advance()
-      @types.ValueType::NullExnRef
+      NullExnRef
     }
     Keyword("noextern") => {
       self.advance()
-      @types.ValueType::NullExternRef
+      NullExternRef
     }
     Id(name) => {
       let type_idx = match self.type_names.get(name) {
         Some(idx) => idx
-        None =>
-          raise WatError::UnexpectedToken("unknown type \{name}", self.loc())
+        None => raise UnexpectedToken("unknown type \{name}", self.loc())
       }
       self.advance()
       self.get_typed_ref(type_idx, is_nullable)
@@ -262,7 +258,7 @@ fn Parser::parse_heap_type(
       self.get_typed_ref(type_idx, is_nullable)
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected heap type, got \{self.current.token}",
         self.loc(),
       )
@@ -387,12 +383,7 @@ fn placeholder_subtype_for_rec_kind(kind : Int) -> @types.SubType {
     // array
     2 =>
       @types.SubType::simple(
-        Array({
-          element: {
-            storage_type: @types.StorageType::Val(@types.ValueType::I32),
-            mutable: false,
-          },
-        }),
+        Array({ element: { storage_type: Val(I32), mutable: false } }),
       )
     // func (default)
     _ => @types.SubType::simple(Func({ params: [], results: [] }))
@@ -609,8 +600,7 @@ fn Parser::parse_func_def(
             export_names.push(s)
             self.advance()
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected export name", self.loc())
+          _ => raise UnexpectedToken("expected export name", self.loc())
         }
         self.expect_rparen()
       }
@@ -622,16 +612,14 @@ fn Parser::parse_func_def(
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected module name", self.loc())
+          _ => raise UnexpectedToken("expected module name", self.loc())
         }
         let import_name = match self.current.token {
           String_(s) => {
             self.advance()
             s
           }
-          _ =>
-            raise WatError::UnexpectedToken("expected import name", self.loc())
+          _ => raise UnexpectedToken("expected import name", self.loc())
         }
         self.expect_rparen() // close import
 
@@ -647,11 +635,7 @@ fn Parser::parse_func_def(
                   export_names.push(s)
                   self.advance()
                 }
-                _ =>
-                  raise WatError::UnexpectedToken(
-                    "expected export name",
-                    self.loc(),
-                  )
+                _ => raise UnexpectedToken("expected export name", self.loc())
               }
               self.expect_rparen()
             }
@@ -761,9 +745,9 @@ fn Parser::parse_func_def(
         let imp : @types.Import = {
           mod_name,
           name: import_name,
-          desc: @types.ImportDesc::Func(type_idx),
+          desc: Func(type_idx),
         }
-        return FuncDefResult::InlineImport(imp, export_names)
+        return InlineImport(imp, export_names)
       }
       _ => {
         // Not export or import, restore state and break
@@ -913,7 +897,7 @@ fn Parser::parse_func_def(
   // Parse body instructions
   let body = self.parse_instructions()
   self.expect_rparen() // close func
-  FuncDefResult::FuncDef(type_idx, { locals, body }, export_names)
+  FuncDef(type_idx, { locals, body }, export_names)
 }
 
 ///|
@@ -929,9 +913,9 @@ fn Parser::parse_type_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise WatError::UndefinedIdentifier("type $\{name}", self.loc())
+        None => raise UndefinedIdentifier("type $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected type index", self.loc())
+    _ => raise UnexpectedToken("expected type index", self.loc())
   }
 }
 
@@ -948,9 +932,9 @@ fn Parser::parse_func_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise WatError::UndefinedIdentifier("func $\{name}", self.loc())
+        None => raise UndefinedIdentifier("func $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected func index", self.loc())
+    _ => raise UnexpectedToken("expected func index", self.loc())
   }
 }
 
@@ -967,10 +951,9 @@ fn Parser::parse_local_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None =>
-          raise WatError::UndefinedIdentifier("local $\{name}", self.loc())
+        None => raise UndefinedIdentifier("local $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected local index", self.loc())
+    _ => raise UnexpectedToken("expected local index", self.loc())
   }
 }
 
@@ -987,10 +970,9 @@ fn Parser::parse_global_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None =>
-          raise WatError::UndefinedIdentifier("global $\{name}", self.loc())
+        None => raise UndefinedIdentifier("global $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected global index", self.loc())
+    _ => raise UnexpectedToken("expected global index", self.loc())
   }
 }
 
@@ -1007,8 +989,7 @@ fn Parser::parse_table_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None =>
-          raise WatError::UndefinedIdentifier("table $\{name}", self.loc())
+        None => raise UndefinedIdentifier("table $\{name}", self.loc())
       }
     _ =>
       // Default to table 0 if no index specified
@@ -1035,18 +1016,11 @@ fn Parser::parse_index_for_memory_init(self : Parser) -> Int raise WatError {
           match self.data_names.get(name) {
             Some(idx) => idx
             None =>
-              raise WatError::UndefinedIdentifier(
-                "memory or data $\{name}",
-                self.loc(),
-              )
+              raise UndefinedIdentifier("memory or data $\{name}", self.loc())
           }
       }
     }
-    _ =>
-      raise WatError::UnexpectedToken(
-        "expected memory or data index",
-        self.loc(),
-      )
+    _ => raise UnexpectedToken("expected memory or data index", self.loc())
   }
 }
 
@@ -1063,10 +1037,9 @@ fn Parser::parse_data_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise WatError::UndefinedIdentifier("data $\{name}", self.loc())
+        None => raise UndefinedIdentifier("data $\{name}", self.loc())
       }
-    _ =>
-      raise WatError::UnexpectedToken("expected data segment index", self.loc())
+    _ => raise UnexpectedToken("expected data segment index", self.loc())
   }
 }
 
@@ -1083,10 +1056,9 @@ fn Parser::parse_elem_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None => raise WatError::UndefinedIdentifier("elem $\{name}", self.loc())
+        None => raise UndefinedIdentifier("elem $\{name}", self.loc())
       }
-    _ =>
-      raise WatError::UnexpectedToken("expected elem segment index", self.loc())
+    _ => raise UnexpectedToken("expected elem segment index", self.loc())
   }
 }
 
@@ -1102,28 +1074,28 @@ fn Parser::get_typed_ref(
     match self.types[type_idx].composite {
       Struct(_) =>
         if is_nullable {
-          @types.ValueType::RefNullStruct(type_idx)
+          RefNullStruct(type_idx)
         } else {
-          @types.ValueType::RefStruct(type_idx)
+          RefStruct(type_idx)
         }
       Array(_) =>
         if is_nullable {
-          @types.ValueType::RefNullArray(type_idx)
+          RefNullArray(type_idx)
         } else {
-          @types.ValueType::RefArray(type_idx)
+          RefArray(type_idx)
         }
       Func(_) =>
         if is_nullable {
-          @types.ValueType::RefNullFuncTyped(type_idx)
+          RefNullFuncTyped(type_idx)
         } else {
-          @types.ValueType::RefFuncTyped(type_idx)
+          RefFuncTyped(type_idx)
         }
     }
     // Type not yet defined, assume func type (may need forward reference handling)
   } else if is_nullable {
-    @types.ValueType::RefNullFuncTyped(type_idx)
+    RefNullFuncTyped(type_idx)
   } else {
-    @types.ValueType::RefFuncTyped(type_idx)
+    RefFuncTyped(type_idx)
   }
 }
 
@@ -1147,60 +1119,60 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
           if is_nullable {
             @types.ValueType::FuncRef
           } else {
-            @types.ValueType::RefFunc
+            RefFunc
           }
         }
         Keyword("extern") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::ExternRef
+            ExternRef
           } else {
-            @types.ValueType::RefExtern
+            RefExtern
           }
         }
         Keyword("any") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::AnyRef
+            AnyRef
           } else {
-            @types.ValueType::RefAny
+            RefAny
           }
         }
         Keyword("eq") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::RefNullEq
+            RefNullEq
           } else {
-            @types.ValueType::RefEq
+            RefEq
           }
         }
         Keyword("i31") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::RefNullI31
+            RefNullI31
           } else {
-            @types.ValueType::RefI31
+            RefI31
           }
         }
         Keyword("struct") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::RefNullStruct(-1)
+            RefNullStruct(-1)
           } else {
-            @types.ValueType::RefStruct(-1)
+            RefStruct(-1)
           }
         }
         Keyword("array") => {
           self.advance()
           if is_nullable {
-            @types.ValueType::RefNullArray(-1)
+            RefNullArray(-1)
           } else {
-            @types.ValueType::RefArray(-1)
+            RefArray(-1)
           }
         }
         Keyword("none") => {
           self.advance()
-          @types.ValueType::RefNone // bottom type (always non-null when specified as ref none)
+          RefNone // bottom type (always non-null when specified as ref none)
         }
         Id(name) =>
           match self.type_names.get(name) {
@@ -1209,11 +1181,7 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
               // Check what kind of type this is
               self.get_typed_ref(idx, is_nullable)
             }
-            None =>
-              raise WatError::UnexpectedToken(
-                "unknown type \{name}",
-                self.loc(),
-              )
+            None => raise UnexpectedToken("unknown type \{name}", self.loc())
           }
         Number(s) => {
           let idx = parse_int(s)
@@ -1221,72 +1189,71 @@ fn Parser::parse_ref_type(self : Parser) -> @types.ValueType raise WatError {
           // Check what kind of type this is
           self.get_typed_ref(idx, is_nullable)
         }
-        _ => raise WatError::UnexpectedToken("expected heap type", self.loc())
+        _ => raise UnexpectedToken("expected heap type", self.loc())
       }
       self.expect_rparen()
       result
     }
     Keyword("func") | Keyword("funcref") => {
       self.advance()
-      @types.ValueType::FuncRef
+      FuncRef
     }
     Keyword("extern") | Keyword("externref") => {
       self.advance()
-      @types.ValueType::ExternRef
+      ExternRef
     }
     Keyword("any") | Keyword("anyref") => {
       self.advance()
-      @types.ValueType::AnyRef
+      AnyRef
     }
     Keyword("exn") | Keyword("exnref") => {
       self.advance()
-      @types.ValueType::ExnRef
+      ExnRef
     }
     Keyword("none") | Keyword("nullref") => {
       self.advance()
-      @types.ValueType::NullRef
+      NullRef
     }
     Keyword("nofunc") | Keyword("nullfuncref") => {
       self.advance()
-      @types.ValueType::NullFuncRef
+      NullFuncRef
     }
     Keyword("noexn") | Keyword("nullexnref") => {
       self.advance()
-      @types.ValueType::NullExnRef
+      NullExnRef
     }
     Keyword("noextern") | Keyword("nullexternref") => {
       self.advance()
-      @types.ValueType::NullExternRef
+      NullExternRef
     }
     // GC heap types
     Keyword("i31") | Keyword("i31ref") => {
       self.advance()
-      @types.ValueType::RefNullI31
+      RefNullI31
     }
     Keyword("struct") | Keyword("structref") => {
       self.advance()
-      @types.ValueType::RefNullStruct(-1)
+      RefNullStruct(-1)
     }
     Keyword("array") | Keyword("arrayref") => {
       self.advance()
-      @types.ValueType::RefNullArray(-1)
+      RefNullArray(-1)
     }
     Keyword("eq") | Keyword("eqref") => {
       self.advance()
-      @types.ValueType::RefNullEq
+      RefNullEq
     }
     Id(name) => {
       // Type index like $t - resolve to typed reference
       let type_idx = match self.type_names.get(name) {
         Some(idx) => idx
-        None =>
-          raise WatError::UnexpectedToken("unknown type $\{name}", self.loc())
+        None => raise UnexpectedToken("unknown type $\{name}", self.loc())
       }
       self.advance()
       self.get_typed_ref(type_idx, true) // nullable heap type
     }
     _ =>
-      raise WatError::UnexpectedToken(
+      raise UnexpectedToken(
         "expected reference type (func, extern, any, exn, none, nofunc, noexn, noextern, i31, struct, array, eq)",
         self.loc(),
       )
@@ -1306,9 +1273,8 @@ fn Parser::parse_label_idx(self : Parser) -> Int raise WatError {
           self.advance()
           idx
         }
-        None =>
-          raise WatError::UndefinedIdentifier("label $\{name}", self.loc())
+        None => raise UndefinedIdentifier("label $\{name}", self.loc())
       }
-    _ => raise WatError::UnexpectedToken("expected label index", self.loc())
+    _ => raise UnexpectedToken("expected label index", self.loc())
   }
 }

@@ -51,7 +51,7 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close block in folded form (no 'end' keyword)
-        return [@types.Instruction::Block(bt, body)]
+        return [Block(bt, body)]
       }
       // Special handling for "loop" in folded form
       if kw == "loop" {
@@ -69,7 +69,7 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close loop in folded form (no 'end' keyword)
-        return [@types.Instruction::Loop(bt, body)]
+        return [Loop(bt, body)]
       }
       // Special handling for "if" in folded form
       if kw == "if" {
@@ -120,10 +120,7 @@ fn Parser::parse_folded_instructions(
               self.expect_rparen()
             }
             _ =>
-              raise WatError::UnexpectedToken(
-                "expected 'then' in folded if",
-                self.loc(),
-              )
+              raise UnexpectedToken("expected 'then' in folded if", self.loc())
           }
         }
         if self.current.token == LParen {
@@ -143,7 +140,7 @@ fn Parser::parse_folded_instructions(
         }
         self.pop_label()
         self.expect_rparen() // close if
-        result.push(@types.Instruction::If(bt, then_body, else_body))
+        result.push(If(bt, then_body, else_body))
         return result
       }
       // Special handling for "try_table" in folded form
@@ -168,26 +165,26 @@ fn Parser::parse_folded_instructions(
               self.advance() // skip "catch"
               let tag_idx = self.parse_tag_idx()
               let label_idx = self.parse_label_idx()
-              handlers.push(@types.CatchHandler::Catch(tag_idx, label_idx))
+              handlers.push(Catch(tag_idx, label_idx))
               self.expect_rparen()
             }
             Keyword("catch_ref") => {
               self.advance() // skip "catch_ref"
               let tag_idx = self.parse_tag_idx()
               let label_idx = self.parse_label_idx()
-              handlers.push(@types.CatchHandler::CatchRef(tag_idx, label_idx))
+              handlers.push(CatchRef(tag_idx, label_idx))
               self.expect_rparen()
             }
             Keyword("catch_all") => {
               self.advance() // skip "catch_all"
               let label_idx = self.parse_label_idx()
-              handlers.push(@types.CatchHandler::CatchAll(label_idx))
+              handlers.push(CatchAll(label_idx))
               self.expect_rparen()
             }
             Keyword("catch_all_ref") => {
               self.advance() // skip "catch_all_ref"
               let label_idx = self.parse_label_idx()
-              handlers.push(@types.CatchHandler::CatchAllRef(label_idx))
+              handlers.push(CatchAllRef(label_idx))
               self.expect_rparen()
             }
             _ => {
@@ -202,7 +199,7 @@ fn Parser::parse_folded_instructions(
         let body = self.parse_instructions()
         self.pop_label()
         self.expect_rparen() // close try_table in folded form (no 'end' keyword)
-        return [@types.Instruction::TryTable(bt, handlers, body)]
+        return [TryTable(bt, handlers, body)]
       }
       let instr = self.parse_plain_instruction(kw)
       // For control instructions, we've already handled them
@@ -224,7 +221,7 @@ fn Parser::parse_folded_instructions(
         }
       }
     }
-    _ => raise WatError::UnexpectedToken("expected instruction", self.loc())
+    _ => raise UnexpectedToken("expected instruction", self.loc())
   }
 }
 
@@ -236,8 +233,8 @@ fn Parser::parse_plain_instruction(
   self.advance()
   match kw {
     // Control
-    "unreachable" => @types.Instruction::Unreachable
-    "nop" => @types.Instruction::Nop
+    "unreachable" => Unreachable
+    "nop" => Nop
     "block" => {
       // Optional label name
       let label : String? = match self.current.token {
@@ -254,7 +251,7 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      @types.Instruction::Block(bt, body)
+      Block(bt, body)
     }
     "loop" => {
       // Optional label name
@@ -272,7 +269,7 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      @types.Instruction::Loop(bt, body)
+      Loop(bt, body)
     }
     "if" => {
       // Optional label name
@@ -300,10 +297,10 @@ fn Parser::parse_plain_instruction(
       self.expect_keyword("end")
       // Skip optional label after 'end' (e.g., "end $label")
       self.skip_optional_id()
-      @types.Instruction::If(bt, then_body, else_body)
+      If(bt, then_body, else_body)
     }
-    "br" => @types.Instruction::Br(self.parse_label_idx())
-    "br_if" => @types.Instruction::BrIf(self.parse_label_idx())
+    "br" => Br(self.parse_label_idx())
+    "br_if" => BrIf(self.parse_label_idx())
     "br_table" => {
       let labels : Array[Int] = []
       while self.current.token != RParen && self.current.token != Eof {
@@ -313,18 +310,15 @@ fn Parser::parse_plain_instruction(
         }
       }
       if labels.length() == 0 {
-        raise WatError::ParseError(
-          "br_table requires at least one label",
-          self.loc(),
-        )
+        raise ParseError("br_table requires at least one label", self.loc())
       }
       let default_label = labels.pop().unwrap()
-      @types.Instruction::BrTable(labels, default_label)
+      BrTable(labels, default_label)
     }
-    "return" => @types.Instruction::Return
+    "return" => Return
     // Exception handling instructions
-    "throw" => @types.Instruction::Throw(self.parse_tag_idx())
-    "throw_ref" => @types.Instruction::ThrowRef
+    "throw" => Throw(self.parse_tag_idx())
+    "throw_ref" => ThrowRef
     "try_table" => {
       // try_table has a block type followed by catch handlers and a body
       // (try_table (result i32) (catch $tag $label) ... instructions end)
@@ -339,26 +333,26 @@ fn Parser::parse_plain_instruction(
             self.advance() // skip "catch"
             let tag_idx = self.parse_tag_idx()
             let label_idx = self.parse_label_idx()
-            handlers.push(@types.CatchHandler::Catch(tag_idx, label_idx))
+            handlers.push(Catch(tag_idx, label_idx))
             self.expect_rparen()
           }
           Keyword("catch_ref") => {
             self.advance() // skip "catch_ref"
             let tag_idx = self.parse_tag_idx()
             let label_idx = self.parse_label_idx()
-            handlers.push(@types.CatchHandler::CatchRef(tag_idx, label_idx))
+            handlers.push(CatchRef(tag_idx, label_idx))
             self.expect_rparen()
           }
           Keyword("catch_all") => {
             self.advance() // skip "catch_all"
             let label_idx = self.parse_label_idx()
-            handlers.push(@types.CatchHandler::CatchAll(label_idx))
+            handlers.push(CatchAll(label_idx))
             self.expect_rparen()
           }
           Keyword("catch_all_ref") => {
             self.advance() // skip "catch_all_ref"
             let label_idx = self.parse_label_idx()
-            handlers.push(@types.CatchHandler::CatchAllRef(label_idx))
+            handlers.push(CatchAllRef(label_idx))
             self.expect_rparen()
           }
           _ => {
@@ -372,13 +366,13 @@ fn Parser::parse_plain_instruction(
       let body = self.parse_instructions()
       self.expect_keyword("end")
       self.skip_optional_id()
-      @types.Instruction::TryTable(bt, handlers, body)
+      TryTable(bt, handlers, body)
     }
-    "call" => @types.Instruction::Call(self.parse_func_idx())
+    "call" => Call(self.parse_func_idx())
     "call_ref" => {
       // call_ref $type - calls a function reference with the given type
       let type_idx = self.parse_type_idx()
-      @types.Instruction::CallRef(type_idx)
+      CallRef(type_idx)
     }
     "call_indirect" => {
       // call_indirect can have various forms:
@@ -419,7 +413,7 @@ fn Parser::parse_plain_instruction(
             let idx = self.parse_type_idx()
             // Validate type index is in range (0xffffffff becomes -1 after parsing)
             if idx < 0 || idx >= self.types.length() {
-              raise WatError::ParseError("unknown type", self.loc())
+              raise ParseError("unknown type", self.loc())
             }
             type_idx = Some(idx)
             self.expect_rparen()
@@ -462,13 +456,13 @@ fn Parser::parse_plain_instruction(
           // No explicit (type $t), find or create type from inline annotations
           self.find_or_create_func_type(inline_params, inline_results)
       }
-      @types.Instruction::CallIndirect(final_type_idx, table_idx)
+      CallIndirect(final_type_idx, table_idx)
     }
-    "return_call" => @types.Instruction::ReturnCall(self.parse_func_idx())
+    "return_call" => ReturnCall(self.parse_func_idx())
     "return_call_ref" => {
       // return_call_ref $type - tail calls a function reference with the given type
       let type_idx = self.parse_type_idx()
-      @types.Instruction::ReturnCallRef(type_idx)
+      ReturnCallRef(type_idx)
     }
     "return_call_indirect" => {
       // return_call_indirect follows the same parsing as call_indirect
@@ -505,7 +499,7 @@ fn Parser::parse_plain_instruction(
             let idx = self.parse_type_idx()
             // Validate type index is in range (0xffffffff becomes -1 after parsing)
             if idx < 0 || idx >= self.types.length() {
-              raise WatError::ParseError("unknown type", self.loc())
+              raise ParseError("unknown type", self.loc())
             }
             type_idx = Some(idx)
             self.expect_rparen()
@@ -544,11 +538,11 @@ fn Parser::parse_plain_instruction(
           // No explicit (type $t), find or create type from inline annotations
           self.find_or_create_func_type(inline_params, inline_results)
       }
-      @types.Instruction::ReturnCallIndirect(final_type_idx, table_idx)
+      ReturnCallIndirect(final_type_idx, table_idx)
     }
 
     // Parametric
-    "drop" => @types.Instruction::Drop
+    "drop" => Drop
     "select" => {
       // select can have optional (result type) annotations
       let result_types : Array[@types.ValueType] = []
@@ -581,9 +575,9 @@ fn Parser::parse_plain_instruction(
         }
       }
       if result_types.is_empty() {
-        @types.Instruction::Select
+        Select
       } else {
-        @types.Instruction::SelectTyped(result_types)
+        SelectTyped(result_types)
       }
     }
 
@@ -591,44 +585,44 @@ fn Parser::parse_plain_instruction(
     "ref.null" => {
       // Parse reference type (func or extern)
       let ref_type = self.parse_ref_type()
-      @types.Instruction::RefNull(ref_type)
+      RefNull(ref_type)
     }
-    "ref.is_null" => @types.Instruction::RefIsNull
-    "ref.func" => @types.Instruction::RefFunc(self.parse_func_idx())
-    "ref.as_non_null" => @types.Instruction::RefAsNonNull
-    "ref.eq" => @types.Instruction::RefEqInstr
-    "br_on_null" => @types.Instruction::BrOnNull(self.parse_label_idx())
-    "br_on_non_null" => @types.Instruction::BrOnNonNull(self.parse_label_idx())
+    "ref.is_null" => RefIsNull
+    "ref.func" => RefFunc(self.parse_func_idx())
+    "ref.as_non_null" => RefAsNonNull
+    "ref.eq" => RefEqInstr
+    "br_on_null" => BrOnNull(self.parse_label_idx())
+    "br_on_non_null" => BrOnNonNull(self.parse_label_idx())
     "br_on_cast" => {
       let label_idx = self.parse_label_idx()
       let from_type = self.parse_ref_type()
       let to_type = self.parse_ref_type()
-      @types.Instruction::BrOnCast(label_idx, from_type, to_type)
+      BrOnCast(label_idx, from_type, to_type)
     }
     "br_on_cast_fail" => {
       let label_idx = self.parse_label_idx()
       let from_type = self.parse_ref_type()
       let to_type = self.parse_ref_type()
-      @types.Instruction::BrOnCastFail(label_idx, from_type, to_type)
+      BrOnCastFail(label_idx, from_type, to_type)
     }
 
     // Variable
-    "local.get" => @types.Instruction::LocalGet(self.parse_local_idx())
-    "local.set" => @types.Instruction::LocalSet(self.parse_local_idx())
-    "local.tee" => @types.Instruction::LocalTee(self.parse_local_idx())
-    "global.get" => @types.Instruction::GlobalGet(self.parse_global_idx())
-    "global.set" => @types.Instruction::GlobalSet(self.parse_global_idx())
+    "local.get" => LocalGet(self.parse_local_idx())
+    "local.set" => LocalSet(self.parse_local_idx())
+    "local.tee" => LocalTee(self.parse_local_idx())
+    "global.get" => GlobalGet(self.parse_global_idx())
+    "global.set" => GlobalSet(self.parse_global_idx())
 
     // Table instructions
-    "table.get" => @types.Instruction::TableGet(self.parse_table_idx())
-    "table.set" => @types.Instruction::TableSet(self.parse_table_idx())
-    "table.size" => @types.Instruction::TableSize(self.parse_table_idx())
-    "table.grow" => @types.Instruction::TableGrow(self.parse_table_idx())
-    "table.fill" => @types.Instruction::TableFill(self.parse_table_idx())
+    "table.get" => TableGet(self.parse_table_idx())
+    "table.set" => TableSet(self.parse_table_idx())
+    "table.size" => TableSize(self.parse_table_idx())
+    "table.grow" => TableGrow(self.parse_table_idx())
+    "table.fill" => TableFill(self.parse_table_idx())
     "table.copy" => {
       let dest = self.parse_table_idx()
       let src = self.parse_table_idx()
-      @types.Instruction::TableCopy(dest, src)
+      TableCopy(dest, src)
     }
     "table.init" => {
       // table.init can have forms: (table.init $elem) or (table.init $table $elem)
@@ -652,7 +646,7 @@ fn Parser::parse_plain_instruction(
                   idx
                 }
                 None =>
-                  raise WatError::UndefinedIdentifier(
+                  raise UndefinedIdentifier(
                     "table or elem $\{name}",
                     self.loc(),
                   )
@@ -674,91 +668,44 @@ fn Parser::parse_plain_instruction(
                   self.advance()
                   idx
                 }
-                None =>
-                  raise WatError::UndefinedIdentifier(
-                    "elem $\{name}",
-                    self.loc(),
-                  )
+                None => raise UndefinedIdentifier("elem $\{name}", self.loc())
               }
             _ => 0
           }
-          @types.Instruction::TableInit(first, elem_idx)
+          TableInit(first, elem_idx)
         }
         _ =>
           // One argument: first was elem index, table defaults to 0
-          @types.Instruction::TableInit(0, first)
+          TableInit(0, first)
       }
     }
 
     // Memory
-    "i32.load" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load(m, a, o) })
-    "i64.load" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load(m, a, o) })
-    "f32.load" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F32Load(m, a, o) })
-    "f64.load" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F64Load(m, a, o) })
-    "i32.load8_s" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load8S(m, a, o) })
-    "i32.load8_u" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Load8U(m, a, o) })
-    "i32.load16_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I32Load16S(m, a, o)
-      })
-    "i32.load16_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I32Load16U(m, a, o)
-      })
-    "i64.load8_s" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load8S(m, a, o) })
-    "i64.load8_u" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Load8U(m, a, o) })
-    "i64.load16_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Load16S(m, a, o)
-      })
-    "i64.load16_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Load16U(m, a, o)
-      })
-    "i64.load32_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Load32S(m, a, o)
-      })
-    "i64.load32_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Load32U(m, a, o)
-      })
-    "i32.store" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Store(m, a, o) })
-    "i64.store" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Store(m, a, o) })
-    "f32.store" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F32Store(m, a, o) })
-    "f64.store" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::F64Store(m, a, o) })
-    "i32.store8" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I32Store8(m, a, o) })
-    "i32.store16" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I32Store16(m, a, o)
-      })
-    "i64.store8" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::I64Store8(m, a, o) })
-    "i64.store16" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Store16(m, a, o)
-      })
-    "i64.store32" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::I64Store32(m, a, o)
-      })
-    "memory.size" =>
-      @types.Instruction::MemorySize(self.parse_optional_memidx())
-    "memory.grow" =>
-      @types.Instruction::MemoryGrow(self.parse_optional_memidx())
+    "i32.load" => parse_mem_arg(self, fn(m, a, o) { I32Load(m, a, o) })
+    "i64.load" => parse_mem_arg(self, fn(m, a, o) { I64Load(m, a, o) })
+    "f32.load" => parse_mem_arg(self, fn(m, a, o) { F32Load(m, a, o) })
+    "f64.load" => parse_mem_arg(self, fn(m, a, o) { F64Load(m, a, o) })
+    "i32.load8_s" => parse_mem_arg(self, fn(m, a, o) { I32Load8S(m, a, o) })
+    "i32.load8_u" => parse_mem_arg(self, fn(m, a, o) { I32Load8U(m, a, o) })
+    "i32.load16_s" => parse_mem_arg(self, fn(m, a, o) { I32Load16S(m, a, o) })
+    "i32.load16_u" => parse_mem_arg(self, fn(m, a, o) { I32Load16U(m, a, o) })
+    "i64.load8_s" => parse_mem_arg(self, fn(m, a, o) { I64Load8S(m, a, o) })
+    "i64.load8_u" => parse_mem_arg(self, fn(m, a, o) { I64Load8U(m, a, o) })
+    "i64.load16_s" => parse_mem_arg(self, fn(m, a, o) { I64Load16S(m, a, o) })
+    "i64.load16_u" => parse_mem_arg(self, fn(m, a, o) { I64Load16U(m, a, o) })
+    "i64.load32_s" => parse_mem_arg(self, fn(m, a, o) { I64Load32S(m, a, o) })
+    "i64.load32_u" => parse_mem_arg(self, fn(m, a, o) { I64Load32U(m, a, o) })
+    "i32.store" => parse_mem_arg(self, fn(m, a, o) { I32Store(m, a, o) })
+    "i64.store" => parse_mem_arg(self, fn(m, a, o) { I64Store(m, a, o) })
+    "f32.store" => parse_mem_arg(self, fn(m, a, o) { F32Store(m, a, o) })
+    "f64.store" => parse_mem_arg(self, fn(m, a, o) { F64Store(m, a, o) })
+    "i32.store8" => parse_mem_arg(self, fn(m, a, o) { I32Store8(m, a, o) })
+    "i32.store16" => parse_mem_arg(self, fn(m, a, o) { I32Store16(m, a, o) })
+    "i64.store8" => parse_mem_arg(self, fn(m, a, o) { I64Store8(m, a, o) })
+    "i64.store16" => parse_mem_arg(self, fn(m, a, o) { I64Store16(m, a, o) })
+    "i64.store32" => parse_mem_arg(self, fn(m, a, o) { I64Store32(m, a, o) })
+    "memory.size" => MemorySize(self.parse_optional_memidx())
+    "memory.grow" => MemoryGrow(self.parse_optional_memidx())
     "memory.init" => {
       // memory.init can have one or two indices:
       // - memory.init dataidx (memidx defaults to 0)
@@ -771,255 +718,252 @@ fn Parser::parse_plain_instruction(
           // Two indices: first is memidx, second is dataidx
           let memidx = first_idx
           let dataidx = self.parse_data_idx()
-          @types.Instruction::MemoryInit(memidx, dataidx)
+          MemoryInit(memidx, dataidx)
         }
         _ =>
           // One index: it's dataidx, memidx defaults to 0
-          @types.Instruction::MemoryInit(0, first_idx)
+          MemoryInit(0, first_idx)
       }
     }
     "memory.copy" => {
       let dst = self.parse_optional_memidx()
       let src = self.parse_optional_memidx()
-      @types.Instruction::MemoryCopy(dst, src)
+      MemoryCopy(dst, src)
     }
-    "memory.fill" =>
-      @types.Instruction::MemoryFill(self.parse_optional_memidx())
-    "data.drop" => @types.Instruction::DataDrop(self.parse_data_idx())
-    "elem.drop" => @types.Instruction::ElemDrop(self.parse_elem_idx())
+    "memory.fill" => MemoryFill(self.parse_optional_memidx())
+    "data.drop" => DataDrop(self.parse_data_idx())
+    "elem.drop" => ElemDrop(self.parse_elem_idx())
 
     // Constants
-    "i32.const" => @types.Instruction::I32Const(self.parse_i32())
-    "i64.const" => @types.Instruction::I64Const(self.parse_i64())
-    "f32.const" => @types.Instruction::F32Const(self.parse_f32())
-    "f64.const" => @types.Instruction::F64Const(self.parse_f64())
+    "i32.const" => I32Const(self.parse_i32())
+    "i64.const" => I64Const(self.parse_i64())
+    "f32.const" => F32Const(self.parse_f32())
+    "f64.const" => F64Const(self.parse_f64())
 
     // i32 operations
-    "i32.eqz" => @types.Instruction::I32Eqz
-    "i32.eq" => @types.Instruction::I32Eq
-    "i32.ne" => @types.Instruction::I32Ne
-    "i32.lt_s" => @types.Instruction::I32LtS
-    "i32.lt_u" => @types.Instruction::I32LtU
-    "i32.gt_s" => @types.Instruction::I32GtS
-    "i32.gt_u" => @types.Instruction::I32GtU
-    "i32.le_s" => @types.Instruction::I32LeS
-    "i32.le_u" => @types.Instruction::I32LeU
-    "i32.ge_s" => @types.Instruction::I32GeS
-    "i32.ge_u" => @types.Instruction::I32GeU
-    "i32.clz" => @types.Instruction::I32Clz
-    "i32.ctz" => @types.Instruction::I32Ctz
-    "i32.popcnt" => @types.Instruction::I32Popcnt
-    "i32.add" => @types.Instruction::I32Add
-    "i32.sub" => @types.Instruction::I32Sub
-    "i32.mul" => @types.Instruction::I32Mul
-    "i32.div_s" => @types.Instruction::I32DivS
-    "i32.div_u" => @types.Instruction::I32DivU
-    "i32.rem_s" => @types.Instruction::I32RemS
-    "i32.rem_u" => @types.Instruction::I32RemU
-    "i32.and" => @types.Instruction::I32And
-    "i32.or" => @types.Instruction::I32Or
-    "i32.xor" => @types.Instruction::I32Xor
-    "i32.shl" => @types.Instruction::I32Shl
-    "i32.shr_s" => @types.Instruction::I32ShrS
-    "i32.shr_u" => @types.Instruction::I32ShrU
-    "i32.rotl" => @types.Instruction::I32Rotl
-    "i32.rotr" => @types.Instruction::I32Rotr
+    "i32.eqz" => I32Eqz
+    "i32.eq" => I32Eq
+    "i32.ne" => I32Ne
+    "i32.lt_s" => I32LtS
+    "i32.lt_u" => I32LtU
+    "i32.gt_s" => I32GtS
+    "i32.gt_u" => I32GtU
+    "i32.le_s" => I32LeS
+    "i32.le_u" => I32LeU
+    "i32.ge_s" => I32GeS
+    "i32.ge_u" => I32GeU
+    "i32.clz" => I32Clz
+    "i32.ctz" => I32Ctz
+    "i32.popcnt" => I32Popcnt
+    "i32.add" => I32Add
+    "i32.sub" => I32Sub
+    "i32.mul" => I32Mul
+    "i32.div_s" => I32DivS
+    "i32.div_u" => I32DivU
+    "i32.rem_s" => I32RemS
+    "i32.rem_u" => I32RemU
+    "i32.and" => I32And
+    "i32.or" => I32Or
+    "i32.xor" => I32Xor
+    "i32.shl" => I32Shl
+    "i32.shr_s" => I32ShrS
+    "i32.shr_u" => I32ShrU
+    "i32.rotl" => I32Rotl
+    "i32.rotr" => I32Rotr
     // Sign-extension operators
-    "i32.extend8_s" => @types.Instruction::I32Extend8S
-    "i32.extend16_s" => @types.Instruction::I32Extend16S
+    "i32.extend8_s" => I32Extend8S
+    "i32.extend16_s" => I32Extend16S
 
     // i64 operations
-    "i64.eqz" => @types.Instruction::I64Eqz
-    "i64.eq" => @types.Instruction::I64Eq
-    "i64.ne" => @types.Instruction::I64Ne
-    "i64.lt_s" => @types.Instruction::I64LtS
-    "i64.lt_u" => @types.Instruction::I64LtU
-    "i64.gt_s" => @types.Instruction::I64GtS
-    "i64.gt_u" => @types.Instruction::I64GtU
-    "i64.le_s" => @types.Instruction::I64LeS
-    "i64.le_u" => @types.Instruction::I64LeU
-    "i64.ge_s" => @types.Instruction::I64GeS
-    "i64.ge_u" => @types.Instruction::I64GeU
-    "i64.clz" => @types.Instruction::I64Clz
-    "i64.ctz" => @types.Instruction::I64Ctz
-    "i64.popcnt" => @types.Instruction::I64Popcnt
-    "i64.add" => @types.Instruction::I64Add
-    "i64.sub" => @types.Instruction::I64Sub
-    "i64.mul" => @types.Instruction::I64Mul
-    "i64.mul_wide_s" => @types.Instruction::I64MulWideS
-    "i64.mul_wide_u" => @types.Instruction::I64MulWideU
-    "i64.div_s" => @types.Instruction::I64DivS
-    "i64.div_u" => @types.Instruction::I64DivU
-    "i64.rem_s" => @types.Instruction::I64RemS
-    "i64.rem_u" => @types.Instruction::I64RemU
-    "i64.and" => @types.Instruction::I64And
-    "i64.or" => @types.Instruction::I64Or
-    "i64.xor" => @types.Instruction::I64Xor
-    "i64.shl" => @types.Instruction::I64Shl
-    "i64.shr_s" => @types.Instruction::I64ShrS
-    "i64.shr_u" => @types.Instruction::I64ShrU
-    "i64.rotl" => @types.Instruction::I64Rotl
-    "i64.rotr" => @types.Instruction::I64Rotr
+    "i64.eqz" => I64Eqz
+    "i64.eq" => I64Eq
+    "i64.ne" => I64Ne
+    "i64.lt_s" => I64LtS
+    "i64.lt_u" => I64LtU
+    "i64.gt_s" => I64GtS
+    "i64.gt_u" => I64GtU
+    "i64.le_s" => I64LeS
+    "i64.le_u" => I64LeU
+    "i64.ge_s" => I64GeS
+    "i64.ge_u" => I64GeU
+    "i64.clz" => I64Clz
+    "i64.ctz" => I64Ctz
+    "i64.popcnt" => I64Popcnt
+    "i64.add" => I64Add
+    "i64.sub" => I64Sub
+    "i64.mul" => I64Mul
+    "i64.mul_wide_s" => I64MulWideS
+    "i64.mul_wide_u" => I64MulWideU
+    "i64.div_s" => I64DivS
+    "i64.div_u" => I64DivU
+    "i64.rem_s" => I64RemS
+    "i64.rem_u" => I64RemU
+    "i64.and" => I64And
+    "i64.or" => I64Or
+    "i64.xor" => I64Xor
+    "i64.shl" => I64Shl
+    "i64.shr_s" => I64ShrS
+    "i64.shr_u" => I64ShrU
+    "i64.rotl" => I64Rotl
+    "i64.rotr" => I64Rotr
     // Sign-extension operators
-    "i64.extend8_s" => @types.Instruction::I64Extend8S
-    "i64.extend16_s" => @types.Instruction::I64Extend16S
-    "i64.extend32_s" => @types.Instruction::I64Extend32S
+    "i64.extend8_s" => I64Extend8S
+    "i64.extend16_s" => I64Extend16S
+    "i64.extend32_s" => I64Extend32S
 
     // f32 operations
-    "f32.abs" => @types.Instruction::F32Abs
-    "f32.neg" => @types.Instruction::F32Neg
-    "f32.ceil" => @types.Instruction::F32Ceil
-    "f32.floor" => @types.Instruction::F32Floor
-    "f32.trunc" => @types.Instruction::F32Trunc
-    "f32.nearest" => @types.Instruction::F32Nearest
-    "f32.sqrt" => @types.Instruction::F32Sqrt
-    "f32.add" => @types.Instruction::F32Add
-    "f32.sub" => @types.Instruction::F32Sub
-    "f32.mul" => @types.Instruction::F32Mul
-    "f32.div" => @types.Instruction::F32Div
-    "f32.min" => @types.Instruction::F32Min
-    "f32.max" => @types.Instruction::F32Max
-    "f32.copysign" => @types.Instruction::F32Copysign
-    "f32.eq" => @types.Instruction::F32Eq
-    "f32.ne" => @types.Instruction::F32Ne
-    "f32.lt" => @types.Instruction::F32Lt
-    "f32.gt" => @types.Instruction::F32Gt
-    "f32.le" => @types.Instruction::F32Le
-    "f32.ge" => @types.Instruction::F32Ge
+    "f32.abs" => F32Abs
+    "f32.neg" => F32Neg
+    "f32.ceil" => F32Ceil
+    "f32.floor" => F32Floor
+    "f32.trunc" => F32Trunc
+    "f32.nearest" => F32Nearest
+    "f32.sqrt" => F32Sqrt
+    "f32.add" => F32Add
+    "f32.sub" => F32Sub
+    "f32.mul" => F32Mul
+    "f32.div" => F32Div
+    "f32.min" => F32Min
+    "f32.max" => F32Max
+    "f32.copysign" => F32Copysign
+    "f32.eq" => F32Eq
+    "f32.ne" => F32Ne
+    "f32.lt" => F32Lt
+    "f32.gt" => F32Gt
+    "f32.le" => F32Le
+    "f32.ge" => F32Ge
 
     // f64 operations
-    "f64.abs" => @types.Instruction::F64Abs
-    "f64.neg" => @types.Instruction::F64Neg
-    "f64.ceil" => @types.Instruction::F64Ceil
-    "f64.floor" => @types.Instruction::F64Floor
-    "f64.trunc" => @types.Instruction::F64Trunc
-    "f64.nearest" => @types.Instruction::F64Nearest
-    "f64.sqrt" => @types.Instruction::F64Sqrt
-    "f64.add" => @types.Instruction::F64Add
-    "f64.sub" => @types.Instruction::F64Sub
-    "f64.mul" => @types.Instruction::F64Mul
-    "f64.div" => @types.Instruction::F64Div
-    "f64.min" => @types.Instruction::F64Min
-    "f64.max" => @types.Instruction::F64Max
-    "f64.copysign" => @types.Instruction::F64Copysign
-    "f64.eq" => @types.Instruction::F64Eq
-    "f64.ne" => @types.Instruction::F64Ne
-    "f64.lt" => @types.Instruction::F64Lt
-    "f64.gt" => @types.Instruction::F64Gt
-    "f64.le" => @types.Instruction::F64Le
-    "f64.ge" => @types.Instruction::F64Ge
+    "f64.abs" => F64Abs
+    "f64.neg" => F64Neg
+    "f64.ceil" => F64Ceil
+    "f64.floor" => F64Floor
+    "f64.trunc" => F64Trunc
+    "f64.nearest" => F64Nearest
+    "f64.sqrt" => F64Sqrt
+    "f64.add" => F64Add
+    "f64.sub" => F64Sub
+    "f64.mul" => F64Mul
+    "f64.div" => F64Div
+    "f64.min" => F64Min
+    "f64.max" => F64Max
+    "f64.copysign" => F64Copysign
+    "f64.eq" => F64Eq
+    "f64.ne" => F64Ne
+    "f64.lt" => F64Lt
+    "f64.gt" => F64Gt
+    "f64.le" => F64Le
+    "f64.ge" => F64Ge
 
     // Conversions
-    "i32.wrap_i64" => @types.Instruction::I32WrapI64
-    "i32.trunc_f32_s" => @types.Instruction::I32TruncF32S
-    "i32.trunc_f32_u" => @types.Instruction::I32TruncF32U
-    "i32.trunc_f64_s" => @types.Instruction::I32TruncF64S
-    "i32.trunc_f64_u" => @types.Instruction::I32TruncF64U
-    "i64.extend_i32_s" => @types.Instruction::I64ExtendI32S
-    "i64.extend_i32_u" => @types.Instruction::I64ExtendI32U
-    "i64.trunc_f32_s" => @types.Instruction::I64TruncF32S
-    "i64.trunc_f32_u" => @types.Instruction::I64TruncF32U
-    "i64.trunc_f64_s" => @types.Instruction::I64TruncF64S
-    "i64.trunc_f64_u" => @types.Instruction::I64TruncF64U
-    "f32.convert_i32_s" => @types.Instruction::F32ConvertI32S
-    "f32.convert_i32_u" => @types.Instruction::F32ConvertI32U
-    "f32.convert_i64_s" => @types.Instruction::F32ConvertI64S
-    "f32.convert_i64_u" => @types.Instruction::F32ConvertI64U
-    "f32.demote_f64" => @types.Instruction::F32DemoteF64
-    "f64.convert_i32_s" => @types.Instruction::F64ConvertI32S
-    "f64.convert_i32_u" => @types.Instruction::F64ConvertI32U
-    "f64.convert_i64_s" => @types.Instruction::F64ConvertI64S
-    "f64.convert_i64_u" => @types.Instruction::F64ConvertI64U
-    "f64.promote_f32" => @types.Instruction::F64PromoteF32
-    "i32.reinterpret_f32" => @types.Instruction::I32ReinterpretF32
-    "i64.reinterpret_f64" => @types.Instruction::I64ReinterpretF64
-    "f32.reinterpret_i32" => @types.Instruction::F32ReinterpretI32
-    "f64.reinterpret_i64" => @types.Instruction::F64ReinterpretI64
+    "i32.wrap_i64" => I32WrapI64
+    "i32.trunc_f32_s" => I32TruncF32S
+    "i32.trunc_f32_u" => I32TruncF32U
+    "i32.trunc_f64_s" => I32TruncF64S
+    "i32.trunc_f64_u" => I32TruncF64U
+    "i64.extend_i32_s" => I64ExtendI32S
+    "i64.extend_i32_u" => I64ExtendI32U
+    "i64.trunc_f32_s" => I64TruncF32S
+    "i64.trunc_f32_u" => I64TruncF32U
+    "i64.trunc_f64_s" => I64TruncF64S
+    "i64.trunc_f64_u" => I64TruncF64U
+    "f32.convert_i32_s" => F32ConvertI32S
+    "f32.convert_i32_u" => F32ConvertI32U
+    "f32.convert_i64_s" => F32ConvertI64S
+    "f32.convert_i64_u" => F32ConvertI64U
+    "f32.demote_f64" => F32DemoteF64
+    "f64.convert_i32_s" => F64ConvertI32S
+    "f64.convert_i32_u" => F64ConvertI32U
+    "f64.convert_i64_s" => F64ConvertI64S
+    "f64.convert_i64_u" => F64ConvertI64U
+    "f64.promote_f32" => F64PromoteF32
+    "i32.reinterpret_f32" => I32ReinterpretF32
+    "i64.reinterpret_f64" => I64ReinterpretF64
+    "f32.reinterpret_i32" => F32ReinterpretI32
+    "f64.reinterpret_i64" => F64ReinterpretI64
 
     // Saturating truncation instructions (nontrapping float-to-int)
-    "i32.trunc_sat_f32_s" => @types.Instruction::I32TruncSatF32S
-    "i32.trunc_sat_f32_u" => @types.Instruction::I32TruncSatF32U
-    "i32.trunc_sat_f64_s" => @types.Instruction::I32TruncSatF64S
-    "i32.trunc_sat_f64_u" => @types.Instruction::I32TruncSatF64U
-    "i64.trunc_sat_f32_s" => @types.Instruction::I64TruncSatF32S
-    "i64.trunc_sat_f32_u" => @types.Instruction::I64TruncSatF32U
-    "i64.trunc_sat_f64_s" => @types.Instruction::I64TruncSatF64S
-    "i64.trunc_sat_f64_u" => @types.Instruction::I64TruncSatF64U
+    "i32.trunc_sat_f32_s" => I32TruncSatF32S
+    "i32.trunc_sat_f32_u" => I32TruncSatF32U
+    "i32.trunc_sat_f64_s" => I32TruncSatF64S
+    "i32.trunc_sat_f64_u" => I32TruncSatF64U
+    "i64.trunc_sat_f32_s" => I64TruncSatF32S
+    "i64.trunc_sat_f32_u" => I64TruncSatF32U
+    "i64.trunc_sat_f64_s" => I64TruncSatF64S
+    "i64.trunc_sat_f64_u" => I64TruncSatF64U
 
     // GC instructions - struct operations
-    "struct.new" => @types.Instruction::StructNew(self.parse_type_idx())
-    "struct.new_default" =>
-      @types.Instruction::StructNewDefault(self.parse_type_idx())
+    "struct.new" => StructNew(self.parse_type_idx())
+    "struct.new_default" => StructNewDefault(self.parse_type_idx())
     "struct.get" => {
       let type_idx = self.parse_type_idx()
       let field_idx = self.parse_field_idx(type_idx)
-      @types.Instruction::StructGet(type_idx, field_idx)
+      StructGet(type_idx, field_idx)
     }
     "struct.get_s" => {
       let type_idx = self.parse_type_idx()
       let field_idx = self.parse_field_idx(type_idx)
-      @types.Instruction::StructGetS(type_idx, field_idx)
+      StructGetS(type_idx, field_idx)
     }
     "struct.get_u" => {
       let type_idx = self.parse_type_idx()
       let field_idx = self.parse_field_idx(type_idx)
-      @types.Instruction::StructGetU(type_idx, field_idx)
+      StructGetU(type_idx, field_idx)
     }
     "struct.set" => {
       let type_idx = self.parse_type_idx()
       let field_idx = self.parse_field_idx(type_idx)
-      @types.Instruction::StructSet(type_idx, field_idx)
+      StructSet(type_idx, field_idx)
     }
 
     // GC instructions - array operations
-    "array.new" => @types.Instruction::ArrayNew(self.parse_type_idx())
-    "array.new_default" =>
-      @types.Instruction::ArrayNewDefault(self.parse_type_idx())
+    "array.new" => ArrayNew(self.parse_type_idx())
+    "array.new_default" => ArrayNewDefault(self.parse_type_idx())
     "array.new_fixed" => {
       let type_idx = self.parse_type_idx()
       let len = self.parse_u32()
-      @types.Instruction::ArrayNewFixed(type_idx, len)
+      ArrayNewFixed(type_idx, len)
     }
-    "array.get" => @types.Instruction::ArrayGet(self.parse_type_idx())
-    "array.get_s" => @types.Instruction::ArrayGetS(self.parse_type_idx())
-    "array.get_u" => @types.Instruction::ArrayGetU(self.parse_type_idx())
-    "array.set" => @types.Instruction::ArraySet(self.parse_type_idx())
-    "array.len" => @types.Instruction::ArrayLen
-    "array.fill" => @types.Instruction::ArrayFill(self.parse_type_idx())
+    "array.get" => ArrayGet(self.parse_type_idx())
+    "array.get_s" => ArrayGetS(self.parse_type_idx())
+    "array.get_u" => ArrayGetU(self.parse_type_idx())
+    "array.set" => ArraySet(self.parse_type_idx())
+    "array.len" => ArrayLen
+    "array.fill" => ArrayFill(self.parse_type_idx())
     "array.copy" => {
       let dst_type_idx = self.parse_type_idx()
       let src_type_idx = self.parse_type_idx()
-      @types.Instruction::ArrayCopy(dst_type_idx, src_type_idx)
+      ArrayCopy(dst_type_idx, src_type_idx)
     }
     "array.new_data" => {
       let type_idx = self.parse_type_idx()
       let data_idx = self.parse_data_idx()
-      @types.Instruction::ArrayNewData(type_idx, data_idx)
+      ArrayNewData(type_idx, data_idx)
     }
     "array.new_elem" => {
       let type_idx = self.parse_type_idx()
       let elem_idx = self.parse_elem_idx()
-      @types.Instruction::ArrayNewElem(type_idx, elem_idx)
+      ArrayNewElem(type_idx, elem_idx)
     }
     "array.init_data" => {
       let type_idx = self.parse_type_idx()
       let data_idx = self.parse_data_idx()
-      @types.Instruction::ArrayInitData(type_idx, data_idx)
+      ArrayInitData(type_idx, data_idx)
     }
     "array.init_elem" => {
       let type_idx = self.parse_type_idx()
       let elem_idx = self.parse_elem_idx()
-      @types.Instruction::ArrayInitElem(type_idx, elem_idx)
+      ArrayInitElem(type_idx, elem_idx)
     }
 
     // GC instructions - i31
-    "ref.i31" => @types.Instruction::RefI31
-    "i31.get_s" => @types.Instruction::I31GetS
-    "i31.get_u" => @types.Instruction::I31GetU
+    "ref.i31" => RefI31
+    "i31.get_s" => I31GetS
+    "i31.get_u" => I31GetU
 
     // GC instructions - type conversion
-    "any.convert_extern" => @types.Instruction::AnyConvertExtern
-    "extern.convert_any" => @types.Instruction::ExternConvertAny
+    "any.convert_extern" => AnyConvertExtern
+    "extern.convert_any" => ExternConvertAny
 
     // GC instructions - type testing and casting
     "ref.test" => {
@@ -1027,9 +971,9 @@ fn Parser::parse_plain_instruction(
       // Uses RefTestNull if the type is nullable, otherwise RefTest
       let vt = self.parse_value_type()
       if vt.is_nullable() {
-        @types.Instruction::RefTestNull(vt)
+        RefTestNull(vt)
       } else {
-        @types.Instruction::RefTest(vt)
+        RefTest(vt)
       }
     }
     "ref.cast" => {
@@ -1037,109 +981,83 @@ fn Parser::parse_plain_instruction(
       // Uses RefCastNull if the type is nullable, otherwise RefCast
       let vt = self.parse_value_type()
       if vt.is_nullable() {
-        @types.Instruction::RefCastNull(vt)
+        RefCastNull(vt)
       } else {
-        @types.Instruction::RefCast(vt)
+        RefCast(vt)
       }
     }
     // SIMD instructions
     "v128.const" => {
       let bytes = self.parse_v128_const()
-      @types.Instruction::V128Const(bytes)
+      V128Const(bytes)
     }
 
     // SIMD memory operations
-    "v128.load" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::V128Load(m, a, o) })
-    "v128.store" =>
-      parse_mem_arg(self, fn(m, a, o) { @types.Instruction::V128Store(m, a, o) })
+    "v128.load" => parse_mem_arg(self, fn(m, a, o) { V128Load(m, a, o) })
+    "v128.store" => parse_mem_arg(self, fn(m, a, o) { V128Store(m, a, o) })
     "v128.load8x8_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load8x8S(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load8x8S(m, a, o) })
     "v128.load8x8_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load8x8U(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load8x8U(m, a, o) })
     "v128.load16x4_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load16x4S(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load16x4S(m, a, o) })
     "v128.load16x4_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load16x4U(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load16x4U(m, a, o) })
     "v128.load32x2_s" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load32x2S(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load32x2S(m, a, o) })
     "v128.load32x2_u" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load32x2U(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load32x2U(m, a, o) })
     "v128.load8_splat" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load8Splat(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load8Splat(m, a, o) })
     "v128.load16_splat" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load16Splat(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load16Splat(m, a, o) })
     "v128.load32_splat" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load32Splat(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load32Splat(m, a, o) })
     "v128.load64_splat" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load64Splat(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load64Splat(m, a, o) })
     "v128.load32_zero" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load32Zero(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load32Zero(m, a, o) })
     "v128.load64_zero" =>
-      parse_mem_arg(self, fn(m, a, o) {
-        @types.Instruction::V128Load64Zero(m, a, o)
-      })
+      parse_mem_arg(self, fn(m, a, o) { V128Load64Zero(m, a, o) })
     "v128.load8_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Load8Lane(memidx, align, offset, lane)
+      V128Load8Lane(memidx, align, offset, lane)
     }
     "v128.load16_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Load16Lane(memidx, align, offset, lane)
+      V128Load16Lane(memidx, align, offset, lane)
     }
     "v128.load32_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Load32Lane(memidx, align, offset, lane)
+      V128Load32Lane(memidx, align, offset, lane)
     }
     "v128.load64_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Load64Lane(memidx, align, offset, lane)
+      V128Load64Lane(memidx, align, offset, lane)
     }
     "v128.store8_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Store8Lane(memidx, align, offset, lane)
+      V128Store8Lane(memidx, align, offset, lane)
     }
     "v128.store16_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Store16Lane(memidx, align, offset, lane)
+      V128Store16Lane(memidx, align, offset, lane)
     }
     "v128.store32_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Store32Lane(memidx, align, offset, lane)
+      V128Store32Lane(memidx, align, offset, lane)
     }
     "v128.store64_lane" => {
       let (memidx, align, offset) = parse_mem_arg_tuple(self)
       let lane = self.parse_u32()
-      @types.Instruction::V128Store64Lane(memidx, align, offset, lane)
+      V128Store64Lane(memidx, align, offset, lane)
     }
 
     // SIMD shuffle and swizzle
@@ -1149,299 +1067,275 @@ fn Parser::parse_plain_instruction(
       for i in 0..<16 {
         lanes[i] = self.parse_u32()
       }
-      @types.Instruction::I8x16Shuffle(lanes)
+      I8x16Shuffle(lanes)
     }
-    "i8x16.swizzle" => @types.Instruction::I8x16Swizzle
+    "i8x16.swizzle" => I8x16Swizzle
 
     // SIMD splat
-    "i8x16.splat" => @types.Instruction::I8x16Splat
-    "i16x8.splat" => @types.Instruction::I16x8Splat
-    "i32x4.splat" => @types.Instruction::I32x4Splat
-    "i64x2.splat" => @types.Instruction::I64x2Splat
-    "f32x4.splat" => @types.Instruction::F32x4Splat
-    "f64x2.splat" => @types.Instruction::F64x2Splat
+    "i8x16.splat" => I8x16Splat
+    "i16x8.splat" => I16x8Splat
+    "i32x4.splat" => I32x4Splat
+    "i64x2.splat" => I64x2Splat
+    "f32x4.splat" => F32x4Splat
+    "f64x2.splat" => F64x2Splat
 
     // SIMD extract lane
-    "i8x16.extract_lane_s" =>
-      @types.Instruction::I8x16ExtractLaneS(self.parse_u32())
-    "i8x16.extract_lane_u" =>
-      @types.Instruction::I8x16ExtractLaneU(self.parse_u32())
-    "i16x8.extract_lane_s" =>
-      @types.Instruction::I16x8ExtractLaneS(self.parse_u32())
-    "i16x8.extract_lane_u" =>
-      @types.Instruction::I16x8ExtractLaneU(self.parse_u32())
-    "i32x4.extract_lane" =>
-      @types.Instruction::I32x4ExtractLane(self.parse_u32())
-    "i64x2.extract_lane" =>
-      @types.Instruction::I64x2ExtractLane(self.parse_u32())
-    "f32x4.extract_lane" =>
-      @types.Instruction::F32x4ExtractLane(self.parse_u32())
-    "f64x2.extract_lane" =>
-      @types.Instruction::F64x2ExtractLane(self.parse_u32())
+    "i8x16.extract_lane_s" => I8x16ExtractLaneS(self.parse_u32())
+    "i8x16.extract_lane_u" => I8x16ExtractLaneU(self.parse_u32())
+    "i16x8.extract_lane_s" => I16x8ExtractLaneS(self.parse_u32())
+    "i16x8.extract_lane_u" => I16x8ExtractLaneU(self.parse_u32())
+    "i32x4.extract_lane" => I32x4ExtractLane(self.parse_u32())
+    "i64x2.extract_lane" => I64x2ExtractLane(self.parse_u32())
+    "f32x4.extract_lane" => F32x4ExtractLane(self.parse_u32())
+    "f64x2.extract_lane" => F64x2ExtractLane(self.parse_u32())
 
     // SIMD replace lane
-    "i8x16.replace_lane" =>
-      @types.Instruction::I8x16ReplaceLane(self.parse_u32())
-    "i16x8.replace_lane" =>
-      @types.Instruction::I16x8ReplaceLane(self.parse_u32())
-    "i32x4.replace_lane" =>
-      @types.Instruction::I32x4ReplaceLane(self.parse_u32())
-    "i64x2.replace_lane" =>
-      @types.Instruction::I64x2ReplaceLane(self.parse_u32())
-    "f32x4.replace_lane" =>
-      @types.Instruction::F32x4ReplaceLane(self.parse_u32())
-    "f64x2.replace_lane" =>
-      @types.Instruction::F64x2ReplaceLane(self.parse_u32())
+    "i8x16.replace_lane" => I8x16ReplaceLane(self.parse_u32())
+    "i16x8.replace_lane" => I16x8ReplaceLane(self.parse_u32())
+    "i32x4.replace_lane" => I32x4ReplaceLane(self.parse_u32())
+    "i64x2.replace_lane" => I64x2ReplaceLane(self.parse_u32())
+    "f32x4.replace_lane" => F32x4ReplaceLane(self.parse_u32())
+    "f64x2.replace_lane" => F64x2ReplaceLane(self.parse_u32())
 
     // SIMD comparisons - i8x16
-    "i8x16.eq" => @types.Instruction::I8x16Eq
-    "i8x16.ne" => @types.Instruction::I8x16Ne
-    "i8x16.lt_s" => @types.Instruction::I8x16LtS
-    "i8x16.lt_u" => @types.Instruction::I8x16LtU
-    "i8x16.gt_s" => @types.Instruction::I8x16GtS
-    "i8x16.gt_u" => @types.Instruction::I8x16GtU
-    "i8x16.le_s" => @types.Instruction::I8x16LeS
-    "i8x16.le_u" => @types.Instruction::I8x16LeU
-    "i8x16.ge_s" => @types.Instruction::I8x16GeS
-    "i8x16.ge_u" => @types.Instruction::I8x16GeU
+    "i8x16.eq" => I8x16Eq
+    "i8x16.ne" => I8x16Ne
+    "i8x16.lt_s" => I8x16LtS
+    "i8x16.lt_u" => I8x16LtU
+    "i8x16.gt_s" => I8x16GtS
+    "i8x16.gt_u" => I8x16GtU
+    "i8x16.le_s" => I8x16LeS
+    "i8x16.le_u" => I8x16LeU
+    "i8x16.ge_s" => I8x16GeS
+    "i8x16.ge_u" => I8x16GeU
 
     // SIMD comparisons - i16x8
-    "i16x8.eq" => @types.Instruction::I16x8Eq
-    "i16x8.ne" => @types.Instruction::I16x8Ne
-    "i16x8.lt_s" => @types.Instruction::I16x8LtS
-    "i16x8.lt_u" => @types.Instruction::I16x8LtU
-    "i16x8.gt_s" => @types.Instruction::I16x8GtS
-    "i16x8.gt_u" => @types.Instruction::I16x8GtU
-    "i16x8.le_s" => @types.Instruction::I16x8LeS
-    "i16x8.le_u" => @types.Instruction::I16x8LeU
-    "i16x8.ge_s" => @types.Instruction::I16x8GeS
-    "i16x8.ge_u" => @types.Instruction::I16x8GeU
+    "i16x8.eq" => I16x8Eq
+    "i16x8.ne" => I16x8Ne
+    "i16x8.lt_s" => I16x8LtS
+    "i16x8.lt_u" => I16x8LtU
+    "i16x8.gt_s" => I16x8GtS
+    "i16x8.gt_u" => I16x8GtU
+    "i16x8.le_s" => I16x8LeS
+    "i16x8.le_u" => I16x8LeU
+    "i16x8.ge_s" => I16x8GeS
+    "i16x8.ge_u" => I16x8GeU
 
     // SIMD comparisons - i32x4
-    "i32x4.eq" => @types.Instruction::I32x4Eq
-    "i32x4.ne" => @types.Instruction::I32x4Ne
-    "i32x4.lt_s" => @types.Instruction::I32x4LtS
-    "i32x4.lt_u" => @types.Instruction::I32x4LtU
-    "i32x4.gt_s" => @types.Instruction::I32x4GtS
-    "i32x4.gt_u" => @types.Instruction::I32x4GtU
-    "i32x4.le_s" => @types.Instruction::I32x4LeS
-    "i32x4.le_u" => @types.Instruction::I32x4LeU
-    "i32x4.ge_s" => @types.Instruction::I32x4GeS
-    "i32x4.ge_u" => @types.Instruction::I32x4GeU
+    "i32x4.eq" => I32x4Eq
+    "i32x4.ne" => I32x4Ne
+    "i32x4.lt_s" => I32x4LtS
+    "i32x4.lt_u" => I32x4LtU
+    "i32x4.gt_s" => I32x4GtS
+    "i32x4.gt_u" => I32x4GtU
+    "i32x4.le_s" => I32x4LeS
+    "i32x4.le_u" => I32x4LeU
+    "i32x4.ge_s" => I32x4GeS
+    "i32x4.ge_u" => I32x4GeU
 
     // SIMD comparisons - i64x2
-    "i64x2.eq" => @types.Instruction::I64x2Eq
-    "i64x2.ne" => @types.Instruction::I64x2Ne
-    "i64x2.lt_s" => @types.Instruction::I64x2LtS
-    "i64x2.gt_s" => @types.Instruction::I64x2GtS
-    "i64x2.le_s" => @types.Instruction::I64x2LeS
-    "i64x2.ge_s" => @types.Instruction::I64x2GeS
+    "i64x2.eq" => I64x2Eq
+    "i64x2.ne" => I64x2Ne
+    "i64x2.lt_s" => I64x2LtS
+    "i64x2.gt_s" => I64x2GtS
+    "i64x2.le_s" => I64x2LeS
+    "i64x2.ge_s" => I64x2GeS
 
     // SIMD comparisons - f32x4
-    "f32x4.eq" => @types.Instruction::F32x4Eq
-    "f32x4.ne" => @types.Instruction::F32x4Ne
-    "f32x4.lt" => @types.Instruction::F32x4Lt
-    "f32x4.gt" => @types.Instruction::F32x4Gt
-    "f32x4.le" => @types.Instruction::F32x4Le
-    "f32x4.ge" => @types.Instruction::F32x4Ge
+    "f32x4.eq" => F32x4Eq
+    "f32x4.ne" => F32x4Ne
+    "f32x4.lt" => F32x4Lt
+    "f32x4.gt" => F32x4Gt
+    "f32x4.le" => F32x4Le
+    "f32x4.ge" => F32x4Ge
 
     // SIMD comparisons - f64x2
-    "f64x2.eq" => @types.Instruction::F64x2Eq
-    "f64x2.ne" => @types.Instruction::F64x2Ne
-    "f64x2.lt" => @types.Instruction::F64x2Lt
-    "f64x2.gt" => @types.Instruction::F64x2Gt
-    "f64x2.le" => @types.Instruction::F64x2Le
-    "f64x2.ge" => @types.Instruction::F64x2Ge
+    "f64x2.eq" => F64x2Eq
+    "f64x2.ne" => F64x2Ne
+    "f64x2.lt" => F64x2Lt
+    "f64x2.gt" => F64x2Gt
+    "f64x2.le" => F64x2Le
+    "f64x2.ge" => F64x2Ge
 
     // SIMD bitwise
-    "v128.not" => @types.Instruction::V128Not
-    "v128.and" => @types.Instruction::V128And
-    "v128.andnot" => @types.Instruction::V128AndNot
-    "v128.or" => @types.Instruction::V128Or
-    "v128.xor" => @types.Instruction::V128Xor
-    "v128.bitselect" => @types.Instruction::V128Bitselect
-    "v128.any_true" => @types.Instruction::V128AnyTrue
+    "v128.not" => V128Not
+    "v128.and" => V128And
+    "v128.andnot" => V128AndNot
+    "v128.or" => V128Or
+    "v128.xor" => V128Xor
+    "v128.bitselect" => V128Bitselect
+    "v128.any_true" => V128AnyTrue
 
     // i8x16 operations
-    "i8x16.abs" => @types.Instruction::I8x16Abs
-    "i8x16.neg" => @types.Instruction::I8x16Neg
-    "i8x16.popcnt" => @types.Instruction::I8x16Popcnt
-    "i8x16.all_true" => @types.Instruction::I8x16AllTrue
-    "i8x16.bitmask" => @types.Instruction::I8x16Bitmask
-    "i8x16.narrow_i16x8_s" => @types.Instruction::I8x16NarrowI16x8S
-    "i8x16.narrow_i16x8_u" => @types.Instruction::I8x16NarrowI16x8U
-    "i8x16.shl" => @types.Instruction::I8x16Shl
-    "i8x16.shr_s" => @types.Instruction::I8x16ShrS
-    "i8x16.shr_u" => @types.Instruction::I8x16ShrU
-    "i8x16.add" => @types.Instruction::I8x16Add
-    "i8x16.add_sat_s" => @types.Instruction::I8x16AddSatS
-    "i8x16.add_sat_u" => @types.Instruction::I8x16AddSatU
-    "i8x16.sub" => @types.Instruction::I8x16Sub
-    "i8x16.sub_sat_s" => @types.Instruction::I8x16SubSatS
-    "i8x16.sub_sat_u" => @types.Instruction::I8x16SubSatU
-    "i8x16.min_s" => @types.Instruction::I8x16MinS
-    "i8x16.min_u" => @types.Instruction::I8x16MinU
-    "i8x16.max_s" => @types.Instruction::I8x16MaxS
-    "i8x16.max_u" => @types.Instruction::I8x16MaxU
-    "i8x16.avgr_u" => @types.Instruction::I8x16AvgrU
+    "i8x16.abs" => I8x16Abs
+    "i8x16.neg" => I8x16Neg
+    "i8x16.popcnt" => I8x16Popcnt
+    "i8x16.all_true" => I8x16AllTrue
+    "i8x16.bitmask" => I8x16Bitmask
+    "i8x16.narrow_i16x8_s" => I8x16NarrowI16x8S
+    "i8x16.narrow_i16x8_u" => I8x16NarrowI16x8U
+    "i8x16.shl" => I8x16Shl
+    "i8x16.shr_s" => I8x16ShrS
+    "i8x16.shr_u" => I8x16ShrU
+    "i8x16.add" => I8x16Add
+    "i8x16.add_sat_s" => I8x16AddSatS
+    "i8x16.add_sat_u" => I8x16AddSatU
+    "i8x16.sub" => I8x16Sub
+    "i8x16.sub_sat_s" => I8x16SubSatS
+    "i8x16.sub_sat_u" => I8x16SubSatU
+    "i8x16.min_s" => I8x16MinS
+    "i8x16.min_u" => I8x16MinU
+    "i8x16.max_s" => I8x16MaxS
+    "i8x16.max_u" => I8x16MaxU
+    "i8x16.avgr_u" => I8x16AvgrU
 
     // i16x8 operations
-    "i16x8.abs" => @types.Instruction::I16x8Abs
-    "i16x8.neg" => @types.Instruction::I16x8Neg
-    "i16x8.all_true" => @types.Instruction::I16x8AllTrue
-    "i16x8.bitmask" => @types.Instruction::I16x8Bitmask
-    "i16x8.narrow_i32x4_s" => @types.Instruction::I16x8NarrowI32x4S
-    "i16x8.narrow_i32x4_u" => @types.Instruction::I16x8NarrowI32x4U
-    "i16x8.extend_low_i8x16_s" => @types.Instruction::I16x8ExtendLowI8x16S
-    "i16x8.extend_high_i8x16_s" => @types.Instruction::I16x8ExtendHighI8x16S
-    "i16x8.extend_low_i8x16_u" => @types.Instruction::I16x8ExtendLowI8x16U
-    "i16x8.extend_high_i8x16_u" => @types.Instruction::I16x8ExtendHighI8x16U
-    "i16x8.shl" => @types.Instruction::I16x8Shl
-    "i16x8.shr_s" => @types.Instruction::I16x8ShrS
-    "i16x8.shr_u" => @types.Instruction::I16x8ShrU
-    "i16x8.add" => @types.Instruction::I16x8Add
-    "i16x8.add_sat_s" => @types.Instruction::I16x8AddSatS
-    "i16x8.add_sat_u" => @types.Instruction::I16x8AddSatU
-    "i16x8.sub" => @types.Instruction::I16x8Sub
-    "i16x8.sub_sat_s" => @types.Instruction::I16x8SubSatS
-    "i16x8.sub_sat_u" => @types.Instruction::I16x8SubSatU
-    "i16x8.mul" => @types.Instruction::I16x8Mul
-    "i16x8.min_s" => @types.Instruction::I16x8MinS
-    "i16x8.min_u" => @types.Instruction::I16x8MinU
-    "i16x8.max_s" => @types.Instruction::I16x8MaxS
-    "i16x8.max_u" => @types.Instruction::I16x8MaxU
-    "i16x8.avgr_u" => @types.Instruction::I16x8AvgrU
-    "i16x8.extmul_low_i8x16_s" => @types.Instruction::I16x8ExtMulLowI8x16S
-    "i16x8.extmul_high_i8x16_s" => @types.Instruction::I16x8ExtMulHighI8x16S
-    "i16x8.extmul_low_i8x16_u" => @types.Instruction::I16x8ExtMulLowI8x16U
-    "i16x8.extmul_high_i8x16_u" => @types.Instruction::I16x8ExtMulHighI8x16U
-    "i16x8.q15mulr_sat_s" => @types.Instruction::I16x8Q15MulrSatS
-    "i16x8.extadd_pairwise_i8x16_s" =>
-      @types.Instruction::I16x8ExtAddPairwiseI8x16S
-    "i16x8.extadd_pairwise_i8x16_u" =>
-      @types.Instruction::I16x8ExtAddPairwiseI8x16U
+    "i16x8.abs" => I16x8Abs
+    "i16x8.neg" => I16x8Neg
+    "i16x8.all_true" => I16x8AllTrue
+    "i16x8.bitmask" => I16x8Bitmask
+    "i16x8.narrow_i32x4_s" => I16x8NarrowI32x4S
+    "i16x8.narrow_i32x4_u" => I16x8NarrowI32x4U
+    "i16x8.extend_low_i8x16_s" => I16x8ExtendLowI8x16S
+    "i16x8.extend_high_i8x16_s" => I16x8ExtendHighI8x16S
+    "i16x8.extend_low_i8x16_u" => I16x8ExtendLowI8x16U
+    "i16x8.extend_high_i8x16_u" => I16x8ExtendHighI8x16U
+    "i16x8.shl" => I16x8Shl
+    "i16x8.shr_s" => I16x8ShrS
+    "i16x8.shr_u" => I16x8ShrU
+    "i16x8.add" => I16x8Add
+    "i16x8.add_sat_s" => I16x8AddSatS
+    "i16x8.add_sat_u" => I16x8AddSatU
+    "i16x8.sub" => I16x8Sub
+    "i16x8.sub_sat_s" => I16x8SubSatS
+    "i16x8.sub_sat_u" => I16x8SubSatU
+    "i16x8.mul" => I16x8Mul
+    "i16x8.min_s" => I16x8MinS
+    "i16x8.min_u" => I16x8MinU
+    "i16x8.max_s" => I16x8MaxS
+    "i16x8.max_u" => I16x8MaxU
+    "i16x8.avgr_u" => I16x8AvgrU
+    "i16x8.extmul_low_i8x16_s" => I16x8ExtMulLowI8x16S
+    "i16x8.extmul_high_i8x16_s" => I16x8ExtMulHighI8x16S
+    "i16x8.extmul_low_i8x16_u" => I16x8ExtMulLowI8x16U
+    "i16x8.extmul_high_i8x16_u" => I16x8ExtMulHighI8x16U
+    "i16x8.q15mulr_sat_s" => I16x8Q15MulrSatS
+    "i16x8.extadd_pairwise_i8x16_s" => I16x8ExtAddPairwiseI8x16S
+    "i16x8.extadd_pairwise_i8x16_u" => I16x8ExtAddPairwiseI8x16U
 
     // i32x4 operations
-    "i32x4.abs" => @types.Instruction::I32x4Abs
-    "i32x4.neg" => @types.Instruction::I32x4Neg
-    "i32x4.all_true" => @types.Instruction::I32x4AllTrue
-    "i32x4.bitmask" => @types.Instruction::I32x4Bitmask
-    "i32x4.extend_low_i16x8_s" => @types.Instruction::I32x4ExtendLowI16x8S
-    "i32x4.extend_high_i16x8_s" => @types.Instruction::I32x4ExtendHighI16x8S
-    "i32x4.extend_low_i16x8_u" => @types.Instruction::I32x4ExtendLowI16x8U
-    "i32x4.extend_high_i16x8_u" => @types.Instruction::I32x4ExtendHighI16x8U
-    "i32x4.shl" => @types.Instruction::I32x4Shl
-    "i32x4.shr_s" => @types.Instruction::I32x4ShrS
-    "i32x4.shr_u" => @types.Instruction::I32x4ShrU
-    "i32x4.add" => @types.Instruction::I32x4Add
-    "i32x4.sub" => @types.Instruction::I32x4Sub
-    "i32x4.mul" => @types.Instruction::I32x4Mul
-    "i32x4.min_s" => @types.Instruction::I32x4MinS
-    "i32x4.min_u" => @types.Instruction::I32x4MinU
-    "i32x4.max_s" => @types.Instruction::I32x4MaxS
-    "i32x4.max_u" => @types.Instruction::I32x4MaxU
-    "i32x4.dot_i16x8_s" => @types.Instruction::I32x4DotI16x8S
-    "i32x4.extmul_low_i16x8_s" => @types.Instruction::I32x4ExtMulLowI16x8S
-    "i32x4.extmul_high_i16x8_s" => @types.Instruction::I32x4ExtMulHighI16x8S
-    "i32x4.extmul_low_i16x8_u" => @types.Instruction::I32x4ExtMulLowI16x8U
-    "i32x4.extmul_high_i16x8_u" => @types.Instruction::I32x4ExtMulHighI16x8U
-    "i32x4.extadd_pairwise_i16x8_s" =>
-      @types.Instruction::I32x4ExtAddPairwiseI16x8S
-    "i32x4.extadd_pairwise_i16x8_u" =>
-      @types.Instruction::I32x4ExtAddPairwiseI16x8U
-    "i32x4.trunc_sat_f32x4_s" => @types.Instruction::I32x4TruncSatF32x4S
-    "i32x4.trunc_sat_f32x4_u" => @types.Instruction::I32x4TruncSatF32x4U
-    "i32x4.trunc_sat_f64x2_s_zero" =>
-      @types.Instruction::I32x4TruncSatF64x2SZero
-    "i32x4.trunc_sat_f64x2_u_zero" =>
-      @types.Instruction::I32x4TruncSatF64x2UZero
+    "i32x4.abs" => I32x4Abs
+    "i32x4.neg" => I32x4Neg
+    "i32x4.all_true" => I32x4AllTrue
+    "i32x4.bitmask" => I32x4Bitmask
+    "i32x4.extend_low_i16x8_s" => I32x4ExtendLowI16x8S
+    "i32x4.extend_high_i16x8_s" => I32x4ExtendHighI16x8S
+    "i32x4.extend_low_i16x8_u" => I32x4ExtendLowI16x8U
+    "i32x4.extend_high_i16x8_u" => I32x4ExtendHighI16x8U
+    "i32x4.shl" => I32x4Shl
+    "i32x4.shr_s" => I32x4ShrS
+    "i32x4.shr_u" => I32x4ShrU
+    "i32x4.add" => I32x4Add
+    "i32x4.sub" => I32x4Sub
+    "i32x4.mul" => I32x4Mul
+    "i32x4.min_s" => I32x4MinS
+    "i32x4.min_u" => I32x4MinU
+    "i32x4.max_s" => I32x4MaxS
+    "i32x4.max_u" => I32x4MaxU
+    "i32x4.dot_i16x8_s" => I32x4DotI16x8S
+    "i32x4.extmul_low_i16x8_s" => I32x4ExtMulLowI16x8S
+    "i32x4.extmul_high_i16x8_s" => I32x4ExtMulHighI16x8S
+    "i32x4.extmul_low_i16x8_u" => I32x4ExtMulLowI16x8U
+    "i32x4.extmul_high_i16x8_u" => I32x4ExtMulHighI16x8U
+    "i32x4.extadd_pairwise_i16x8_s" => I32x4ExtAddPairwiseI16x8S
+    "i32x4.extadd_pairwise_i16x8_u" => I32x4ExtAddPairwiseI16x8U
+    "i32x4.trunc_sat_f32x4_s" => I32x4TruncSatF32x4S
+    "i32x4.trunc_sat_f32x4_u" => I32x4TruncSatF32x4U
+    "i32x4.trunc_sat_f64x2_s_zero" => I32x4TruncSatF64x2SZero
+    "i32x4.trunc_sat_f64x2_u_zero" => I32x4TruncSatF64x2UZero
 
     // i64x2 operations
-    "i64x2.abs" => @types.Instruction::I64x2Abs
-    "i64x2.neg" => @types.Instruction::I64x2Neg
-    "i64x2.all_true" => @types.Instruction::I64x2AllTrue
-    "i64x2.bitmask" => @types.Instruction::I64x2Bitmask
-    "i64x2.extend_low_i32x4_s" => @types.Instruction::I64x2ExtendLowI32x4S
-    "i64x2.extend_high_i32x4_s" => @types.Instruction::I64x2ExtendHighI32x4S
-    "i64x2.extend_low_i32x4_u" => @types.Instruction::I64x2ExtendLowI32x4U
-    "i64x2.extend_high_i32x4_u" => @types.Instruction::I64x2ExtendHighI32x4U
-    "i64x2.shl" => @types.Instruction::I64x2Shl
-    "i64x2.shr_s" => @types.Instruction::I64x2ShrS
-    "i64x2.shr_u" => @types.Instruction::I64x2ShrU
-    "i64x2.add" => @types.Instruction::I64x2Add
-    "i64x2.sub" => @types.Instruction::I64x2Sub
-    "i64x2.mul" => @types.Instruction::I64x2Mul
-    "i64x2.extmul_low_i32x4_s" => @types.Instruction::I64x2ExtMulLowI32x4S
-    "i64x2.extmul_high_i32x4_s" => @types.Instruction::I64x2ExtMulHighI32x4S
-    "i64x2.extmul_low_i32x4_u" => @types.Instruction::I64x2ExtMulLowI32x4U
-    "i64x2.extmul_high_i32x4_u" => @types.Instruction::I64x2ExtMulHighI32x4U
+    "i64x2.abs" => I64x2Abs
+    "i64x2.neg" => I64x2Neg
+    "i64x2.all_true" => I64x2AllTrue
+    "i64x2.bitmask" => I64x2Bitmask
+    "i64x2.extend_low_i32x4_s" => I64x2ExtendLowI32x4S
+    "i64x2.extend_high_i32x4_s" => I64x2ExtendHighI32x4S
+    "i64x2.extend_low_i32x4_u" => I64x2ExtendLowI32x4U
+    "i64x2.extend_high_i32x4_u" => I64x2ExtendHighI32x4U
+    "i64x2.shl" => I64x2Shl
+    "i64x2.shr_s" => I64x2ShrS
+    "i64x2.shr_u" => I64x2ShrU
+    "i64x2.add" => I64x2Add
+    "i64x2.sub" => I64x2Sub
+    "i64x2.mul" => I64x2Mul
+    "i64x2.extmul_low_i32x4_s" => I64x2ExtMulLowI32x4S
+    "i64x2.extmul_high_i32x4_s" => I64x2ExtMulHighI32x4S
+    "i64x2.extmul_low_i32x4_u" => I64x2ExtMulLowI32x4U
+    "i64x2.extmul_high_i32x4_u" => I64x2ExtMulHighI32x4U
 
     // f32x4 operations
-    "f32x4.abs" => @types.Instruction::F32x4Abs
-    "f32x4.neg" => @types.Instruction::F32x4Neg
-    "f32x4.sqrt" => @types.Instruction::F32x4Sqrt
-    "f32x4.add" => @types.Instruction::F32x4Add
-    "f32x4.sub" => @types.Instruction::F32x4Sub
-    "f32x4.mul" => @types.Instruction::F32x4Mul
-    "f32x4.div" => @types.Instruction::F32x4Div
-    "f32x4.min" => @types.Instruction::F32x4Min
-    "f32x4.max" => @types.Instruction::F32x4Max
-    "f32x4.pmin" => @types.Instruction::F32x4Pmin
-    "f32x4.pmax" => @types.Instruction::F32x4Pmax
-    "f32x4.ceil" => @types.Instruction::F32x4Ceil
-    "f32x4.floor" => @types.Instruction::F32x4Floor
-    "f32x4.trunc" => @types.Instruction::F32x4Trunc
-    "f32x4.nearest" => @types.Instruction::F32x4Nearest
-    "f32x4.convert_i32x4_s" => @types.Instruction::F32x4ConvertI32x4S
-    "f32x4.convert_i32x4_u" => @types.Instruction::F32x4ConvertI32x4U
-    "f32x4.demote_f64x2_zero" => @types.Instruction::F32x4DemoteF64x2Zero
+    "f32x4.abs" => F32x4Abs
+    "f32x4.neg" => F32x4Neg
+    "f32x4.sqrt" => F32x4Sqrt
+    "f32x4.add" => F32x4Add
+    "f32x4.sub" => F32x4Sub
+    "f32x4.mul" => F32x4Mul
+    "f32x4.div" => F32x4Div
+    "f32x4.min" => F32x4Min
+    "f32x4.max" => F32x4Max
+    "f32x4.pmin" => F32x4Pmin
+    "f32x4.pmax" => F32x4Pmax
+    "f32x4.ceil" => F32x4Ceil
+    "f32x4.floor" => F32x4Floor
+    "f32x4.trunc" => F32x4Trunc
+    "f32x4.nearest" => F32x4Nearest
+    "f32x4.convert_i32x4_s" => F32x4ConvertI32x4S
+    "f32x4.convert_i32x4_u" => F32x4ConvertI32x4U
+    "f32x4.demote_f64x2_zero" => F32x4DemoteF64x2Zero
 
     // f64x2 operations
-    "f64x2.abs" => @types.Instruction::F64x2Abs
-    "f64x2.neg" => @types.Instruction::F64x2Neg
-    "f64x2.sqrt" => @types.Instruction::F64x2Sqrt
-    "f64x2.add" => @types.Instruction::F64x2Add
-    "f64x2.sub" => @types.Instruction::F64x2Sub
-    "f64x2.mul" => @types.Instruction::F64x2Mul
-    "f64x2.div" => @types.Instruction::F64x2Div
-    "f64x2.min" => @types.Instruction::F64x2Min
-    "f64x2.max" => @types.Instruction::F64x2Max
-    "f64x2.pmin" => @types.Instruction::F64x2Pmin
-    "f64x2.pmax" => @types.Instruction::F64x2Pmax
-    "f64x2.ceil" => @types.Instruction::F64x2Ceil
-    "f64x2.floor" => @types.Instruction::F64x2Floor
-    "f64x2.trunc" => @types.Instruction::F64x2Trunc
-    "f64x2.nearest" => @types.Instruction::F64x2Nearest
-    "f64x2.convert_low_i32x4_s" => @types.Instruction::F64x2ConvertLowI32x4S
-    "f64x2.convert_low_i32x4_u" => @types.Instruction::F64x2ConvertLowI32x4U
-    "f64x2.promote_low_f32x4" => @types.Instruction::F64x2PromoteLowF32x4
+    "f64x2.abs" => F64x2Abs
+    "f64x2.neg" => F64x2Neg
+    "f64x2.sqrt" => F64x2Sqrt
+    "f64x2.add" => F64x2Add
+    "f64x2.sub" => F64x2Sub
+    "f64x2.mul" => F64x2Mul
+    "f64x2.div" => F64x2Div
+    "f64x2.min" => F64x2Min
+    "f64x2.max" => F64x2Max
+    "f64x2.pmin" => F64x2Pmin
+    "f64x2.pmax" => F64x2Pmax
+    "f64x2.ceil" => F64x2Ceil
+    "f64x2.floor" => F64x2Floor
+    "f64x2.trunc" => F64x2Trunc
+    "f64x2.nearest" => F64x2Nearest
+    "f64x2.convert_low_i32x4_s" => F64x2ConvertLowI32x4S
+    "f64x2.convert_low_i32x4_u" => F64x2ConvertLowI32x4U
+    "f64x2.promote_low_f32x4" => F64x2PromoteLowF32x4
 
     // Relaxed SIMD instructions
-    "i8x16.relaxed_swizzle" => @types.Instruction::I8x16RelaxedSwizzle
-    "i32x4.relaxed_trunc_f32x4_s" => @types.Instruction::I32x4RelaxedTruncF32x4S
-    "i32x4.relaxed_trunc_f32x4_u" => @types.Instruction::I32x4RelaxedTruncF32x4U
-    "i32x4.relaxed_trunc_f64x2_s_zero" =>
-      @types.Instruction::I32x4RelaxedTruncF64x2SZero
-    "i32x4.relaxed_trunc_f64x2_u_zero" =>
-      @types.Instruction::I32x4RelaxedTruncF64x2UZero
-    "f32x4.relaxed_madd" => @types.Instruction::F32x4RelaxedMadd
-    "f32x4.relaxed_nmadd" => @types.Instruction::F32x4RelaxedNmadd
-    "f64x2.relaxed_madd" => @types.Instruction::F64x2RelaxedMadd
-    "f64x2.relaxed_nmadd" => @types.Instruction::F64x2RelaxedNmadd
-    "i8x16.relaxed_laneselect" => @types.Instruction::I8x16RelaxedLaneselect
-    "i16x8.relaxed_laneselect" => @types.Instruction::I16x8RelaxedLaneselect
-    "i32x4.relaxed_laneselect" => @types.Instruction::I32x4RelaxedLaneselect
-    "i64x2.relaxed_laneselect" => @types.Instruction::I64x2RelaxedLaneselect
-    "f32x4.relaxed_min" => @types.Instruction::F32x4RelaxedMin
-    "f32x4.relaxed_max" => @types.Instruction::F32x4RelaxedMax
-    "f64x2.relaxed_min" => @types.Instruction::F64x2RelaxedMin
-    "f64x2.relaxed_max" => @types.Instruction::F64x2RelaxedMax
-    "i16x8.relaxed_q15mulr_s" => @types.Instruction::I16x8RelaxedQ15mulrS
-    "i16x8.relaxed_dot_i8x16_i7x16_s" =>
-      @types.Instruction::I16x8RelaxedDotI8x16I7x16S
-    "i32x4.relaxed_dot_i8x16_i7x16_add_s" =>
-      @types.Instruction::I32x4RelaxedDotI8x16I7x16AddS
-    _ => raise WatError::InvalidInstruction(kw, self.loc())
+    "i8x16.relaxed_swizzle" => I8x16RelaxedSwizzle
+    "i32x4.relaxed_trunc_f32x4_s" => I32x4RelaxedTruncF32x4S
+    "i32x4.relaxed_trunc_f32x4_u" => I32x4RelaxedTruncF32x4U
+    "i32x4.relaxed_trunc_f64x2_s_zero" => I32x4RelaxedTruncF64x2SZero
+    "i32x4.relaxed_trunc_f64x2_u_zero" => I32x4RelaxedTruncF64x2UZero
+    "f32x4.relaxed_madd" => F32x4RelaxedMadd
+    "f32x4.relaxed_nmadd" => F32x4RelaxedNmadd
+    "f64x2.relaxed_madd" => F64x2RelaxedMadd
+    "f64x2.relaxed_nmadd" => F64x2RelaxedNmadd
+    "i8x16.relaxed_laneselect" => I8x16RelaxedLaneselect
+    "i16x8.relaxed_laneselect" => I16x8RelaxedLaneselect
+    "i32x4.relaxed_laneselect" => I32x4RelaxedLaneselect
+    "i64x2.relaxed_laneselect" => I64x2RelaxedLaneselect
+    "f32x4.relaxed_min" => F32x4RelaxedMin
+    "f32x4.relaxed_max" => F32x4RelaxedMax
+    "f64x2.relaxed_min" => F64x2RelaxedMin
+    "f64x2.relaxed_max" => F64x2RelaxedMax
+    "i16x8.relaxed_q15mulr_s" => I16x8RelaxedQ15mulrS
+    "i16x8.relaxed_dot_i8x16_i7x16_s" => I16x8RelaxedDotI8x16I7x16S
+    "i32x4.relaxed_dot_i8x16_i7x16_add_s" => I32x4RelaxedDotI8x16I7x16AddS
+    _ => raise InvalidInstruction(kw, self.loc())
   }
 }
 
@@ -1648,17 +1542,17 @@ fn Parser::parse_block_type(self : Parser) -> @types.BlockType raise WatError {
   // Determine the block type variant
   // If we have explicit type index, use it (param/result are just annotations)
   if type_idx is Some(idx) {
-    return @types.BlockType::TypeIndex(idx)
+    return TypeIndex(idx)
   }
   if params.length() > 0 {
     // Has parameters - use InlineType
-    @types.BlockType::InlineType(params, results)
+    InlineType(params, results)
   } else if results.length() == 0 {
-    @types.BlockType::Empty
+    Empty
   } else if results.length() == 1 {
-    @types.BlockType::Value(results[0])
+    Value(results[0])
   } else {
-    @types.BlockType::MultiValue(results)
+    MultiValue(results)
   }
 }
 

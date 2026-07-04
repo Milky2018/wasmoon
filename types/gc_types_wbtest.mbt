@@ -21,8 +21,8 @@ test "SubType::from_func wraps FuncType correctly" {
   inspect(subtype.final_, content="true")
   inspect(subtype.supertypes.length(), content="0")
   guard subtype.composite is Func(ft) else { return }
-  inspect(ft.params, content="[F32, F64]")
-  inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params, content="[F32, F64]")
+  debug_inspect(ft.results, content="[I32]")
 }
 
 ///|
@@ -30,8 +30,8 @@ test "SubType::func convenience function" {
   let subtype = SubType::func([I32, I32], [I32])
   inspect(subtype.final_, content="true")
   guard subtype.composite is Func(ft) else { return }
-  inspect(ft.params, content="[I32, I32]")
-  inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params, content="[I32, I32]")
+  debug_inspect(ft.results, content="[I32]")
 }
 
 ///|
@@ -140,7 +140,7 @@ test "CompositeType::Func variant" {
   let ft : FuncType = { params: [I32], results: [I32] }
   let composite = CompositeType::Func(ft)
   guard composite is Func(f) else { return }
-  inspect(f.params, content="[I32]")
+  debug_inspect(f.params, content="[I32]")
 }
 
 ///|
@@ -177,8 +177,8 @@ test "func_types_to_subtypes with single type" {
   inspect(subtypes.length(), content="1")
   inspect(subtypes[0].final_, content="true")
   guard subtypes[0].composite is Func(ft) else { return }
-  inspect(ft.params, content="[I32]")
-  inspect(ft.results, content="[I64]")
+  debug_inspect(ft.params, content="[I32]")
+  debug_inspect(ft.results, content="[I64]")
 }
 
 ///|
@@ -221,10 +221,10 @@ test "extract_func_types with func subtypes" {
   ]
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="2")
-  inspect(func_types[0].params, content="[I32]")
-  inspect(func_types[0].results, content="[I32]")
-  inspect(func_types[1].params, content="[F64, F64]")
-  inspect(func_types[1].results, content="[F64]")
+  debug_inspect(func_types[0].params, content="[I32]")
+  debug_inspect(func_types[0].results, content="[I32]")
+  debug_inspect(func_types[1].params, content="[F64, F64]")
+  debug_inspect(func_types[1].results, content="[F64]")
 }
 
 ///|
@@ -232,9 +232,7 @@ test "extract_func_types with struct subtype returns placeholder" {
   let struct_type : StructType = {
     fields: [{ storage_type: Val(I32), mutable: false }],
   }
-  let subtypes : Array[SubType] = [
-    SubType::simple(CompositeType::Struct(struct_type)),
-  ]
+  let subtypes : Array[SubType] = [SubType::simple(Struct(struct_type))]
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="1")
   // Struct types get empty function placeholder
@@ -247,9 +245,7 @@ test "extract_func_types with array subtype returns placeholder" {
   let array_type : ArrayType = {
     element: { storage_type: Val(I64), mutable: true },
   }
-  let subtypes : Array[SubType] = [
-    SubType::simple(CompositeType::Array(array_type)),
-  ]
+  let subtypes : Array[SubType] = [SubType::simple(Array(array_type))]
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="1")
   // Array types get empty function placeholder
@@ -265,18 +261,18 @@ test "extract_func_types with mixed types" {
   }
   let subtypes : Array[SubType] = [
     SubType::func([I32], [I32]),
-    SubType::simple(CompositeType::Struct(struct_type)),
+    SubType::simple(Struct(struct_type)),
     SubType::func([F64], [F64]),
-    SubType::simple(CompositeType::Array(array_type)),
+    SubType::simple(Array(array_type)),
   ]
   let func_types = extract_func_types(subtypes)
   inspect(func_types.length(), content="4")
   // Index 0: actual func type
-  inspect(func_types[0].params, content="[I32]")
+  debug_inspect(func_types[0].params, content="[I32]")
   // Index 1: struct placeholder
   inspect(func_types[1].params.length(), content="0")
   // Index 2: actual func type
-  inspect(func_types[2].params, content="[F64]")
+  debug_inspect(func_types[2].params, content="[F64]")
   // Index 3: array placeholder
   inspect(func_types[3].params.length(), content="0")
 }
@@ -415,7 +411,7 @@ test "SubType with supertype" {
   let subtype : SubType = {
     final_: false,
     supertypes: [0], // extends type at index 0
-    composite: CompositeType::Func({ params: [I32], results: [I32] }),
+    composite: Func({ params: [I32], results: [I32] }),
   }
   inspect(subtype.final_, content="false")
   inspect(subtype.supertypes.length(), content="1")
@@ -424,13 +420,11 @@ test "SubType with supertype" {
 
 ///|
 test "SubType final vs non-final" {
-  let final_type = SubType::simple(
-    CompositeType::Func({ params: [], results: [] }),
-  )
+  let final_type = SubType::simple(Func({ params: [], results: [] }))
   let open_type : SubType = {
     final_: false,
     supertypes: [],
-    composite: CompositeType::Func({ params: [], results: [] }),
+    composite: Func({ params: [], results: [] }),
   }
   inspect(final_type.final_, content="true")
   inspect(open_type.final_, content="false")
@@ -482,10 +476,10 @@ test "Module::get_func_type returns correct FuncType" {
   mod_.types.push(SubType::func([], [F64]))
   let ft0 = mod_.get_func_type(0)
   let ft1 = mod_.get_func_type(1)
-  inspect(ft0.params, content="[I32, I32]")
-  inspect(ft0.results, content="[I32]")
-  inspect(ft1.params, content="[]")
-  inspect(ft1.results, content="[F64]")
+  debug_inspect(ft0.params, content="[I32, I32]")
+  debug_inspect(ft0.results, content="[I32]")
+  debug_inspect(ft1.params, content="[]")
+  debug_inspect(ft1.results, content="[F64]")
 }
 
 ///|
@@ -497,7 +491,7 @@ test "Module::get_struct_type returns correct StructType" {
       { storage_type: Val(I64), mutable: true },
     ],
   }
-  mod_.types.push(SubType::simple(CompositeType::Struct(struct_type)))
+  mod_.types.push(SubType::simple(Struct(struct_type)))
   let st = mod_.get_struct_type(0)
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
@@ -510,7 +504,7 @@ test "Module::get_array_type returns correct ArrayType" {
   let array_type : ArrayType = {
     element: { storage_type: Packed(I8), mutable: true },
   }
-  mod_.types.push(SubType::simple(CompositeType::Array(array_type)))
+  mod_.types.push(SubType::simple(Array(array_type)))
   let at = mod_.get_array_type(0)
   inspect(at.element.storage_type, content="Packed(I8)")
   inspect(at.element.mutable, content="true")
@@ -524,8 +518,8 @@ test "Module::is_func_type correctly identifies function types" {
     element: { storage_type: Val(I32), mutable: true },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
-  mod_.types.push(SubType::simple(CompositeType::Struct(struct_type))) // index 1: struct
-  mod_.types.push(SubType::simple(CompositeType::Array(array_type))) // index 2: array
+  mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
+  mod_.types.push(SubType::simple(Array(array_type))) // index 2: array
   inspect(mod_.is_func_type(0), content="true")
   inspect(mod_.is_func_type(1), content="false")
   inspect(mod_.is_func_type(2), content="false")
@@ -539,8 +533,8 @@ test "Module::is_struct_type correctly identifies struct types" {
     element: { storage_type: Val(I32), mutable: true },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
-  mod_.types.push(SubType::simple(CompositeType::Struct(struct_type))) // index 1: struct
-  mod_.types.push(SubType::simple(CompositeType::Array(array_type))) // index 2: array
+  mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
+  mod_.types.push(SubType::simple(Array(array_type))) // index 2: array
   inspect(mod_.is_struct_type(0), content="false")
   inspect(mod_.is_struct_type(1), content="true")
   inspect(mod_.is_struct_type(2), content="false")
@@ -554,8 +548,8 @@ test "Module::is_array_type correctly identifies array types" {
     element: { storage_type: Val(I32), mutable: true },
   }
   mod_.types.push(SubType::func([I32], [I32])) // index 0: func
-  mod_.types.push(SubType::simple(CompositeType::Struct(struct_type))) // index 1: struct
-  mod_.types.push(SubType::simple(CompositeType::Array(array_type))) // index 2: array
+  mod_.types.push(SubType::simple(Struct(struct_type))) // index 1: struct
+  mod_.types.push(SubType::simple(Array(array_type))) // index 2: array
   inspect(mod_.is_array_type(0), content="false")
   inspect(mod_.is_array_type(1), content="false")
   inspect(mod_.is_array_type(2), content="true")
@@ -569,16 +563,12 @@ test "Module with mixed type definitions" {
   mod_.types.push(SubType::func([I32, I32], [I32])) // 1: add signature
   mod_.types.push(
     SubType::simple(
-      CompositeType::Struct({
-        fields: [{ storage_type: Val(I32), mutable: true }],
-      }),
+      Struct({ fields: [{ storage_type: Val(I32), mutable: true }] }),
     ),
   ) // 2: point struct
   mod_.types.push(
     SubType::simple(
-      CompositeType::Array({
-        element: { storage_type: Val(F64), mutable: true },
-      }),
+      Array({ element: { storage_type: Val(F64), mutable: true } }),
     ),
   ) // 3: f64 array
   mod_.types.push(SubType::func([RefNullStruct(2)], [I32])) // 4: func taking struct ref
@@ -591,7 +581,7 @@ test "Module with mixed type definitions" {
   inspect(mod_.is_func_type(4), content="true")
   // Get specific types
   let add_type = mod_.get_func_type(1)
-  inspect(add_type.params, content="[I32, I32]")
+  debug_inspect(add_type.params, content="[I32, I32]")
   let point_type = mod_.get_struct_type(2)
   inspect(point_type.fields.length(), content="1")
   let arr_type = mod_.get_array_type(3)

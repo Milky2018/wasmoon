@@ -12,7 +12,7 @@ pub(all) enum FuncInst {
 ///|
 /// Keep `Debug` support for `Store` while `FuncInst` contains non-debuggable
 /// host function closures.
-pub impl Debug for FuncInst with to_repr(self) {
+pub impl Debug for FuncInst with fn to_repr(self) {
   match self {
     WasmFunc(code) => Repr::ctor("WasmFunc", [(None, to_repr(code))])
     HostFunc(_) => Repr::ctor("HostFunc", [(None, Repr::literal("<native>"))])
@@ -20,7 +20,7 @@ pub impl Debug for FuncInst with to_repr(self) {
 }
 
 ///|
-pub impl Show for FuncInst with output(self, logger) {
+pub impl Show for FuncInst with fn output(self, logger) {
   match self {
     WasmFunc(code) => logger.write_string("WasmFunc(\{code})")
     HostFunc(_) => logger.write_string("HostFunc(<native>)")
@@ -55,7 +55,7 @@ pub fn Imports::add_func(
   name : String,
   func_addr : Int,
 ) -> Unit {
-  self.entries.push((mod_name, name, ExternVal::Func(func_addr)))
+  self.entries.push((mod_name, name, Func(func_addr)))
 }
 
 ///|
@@ -65,7 +65,7 @@ pub fn Imports::add_memory(
   name : String,
   mem_addr : Int,
 ) -> Unit {
-  self.entries.push((mod_name, name, ExternVal::Memory(mem_addr)))
+  self.entries.push((mod_name, name, Memory(mem_addr)))
 }
 
 ///|
@@ -75,7 +75,7 @@ pub fn Imports::add_table(
   name : String,
   table_addr : Int,
 ) -> Unit {
-  self.entries.push((mod_name, name, ExternVal::Table(table_addr)))
+  self.entries.push((mod_name, name, Table(table_addr)))
 }
 
 ///|
@@ -85,7 +85,7 @@ pub fn Imports::add_global(
   name : String,
   global_addr : Int,
 ) -> Unit {
-  self.entries.push((mod_name, name, ExternVal::Global(global_addr)))
+  self.entries.push((mod_name, name, Global(global_addr)))
 }
 
 ///|
@@ -95,7 +95,7 @@ pub fn Imports::add_tag(
   name : String,
   tag_addr : Int,
 ) -> Unit {
-  self.entries.push((mod_name, name, ExternVal::Tag(tag_addr)))
+  self.entries.push((mod_name, name, Tag(tag_addr)))
 }
 
 ///|

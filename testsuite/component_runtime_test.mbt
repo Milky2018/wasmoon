@@ -149,29 +149,21 @@ test "component runtime: host import export" {
   let linker = @runtime_impl.ComponentLinker::new()
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [
-      { label: "", ty: @component.ValType::Prim(@component.PrimValType::S32) },
-    ],
-    result: Some(@component.ValType::Prim(@component.PrimValType::S32)),
+    params: [{ label: "", ty: Prim(S32) }],
+    result: Some(Prim(S32)),
   }
   let host = fn(
     args : Array[@runtime_impl.ComponentValue],
   ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     match args {
-      [@runtime_impl.ComponentValue::S32(n)] =>
-        [@runtime_impl.ComponentValue::S32(n + 1)]
-      _ =>
-        raise @runtime_impl.ComponentRuntimeError::HostCallError(
-          "unexpected args",
-        )
+      [S32(n)] => [S32(n + 1)]
+      _ => raise HostCallError("unexpected args")
     }
   }
   linker.add_func("", func_type, host)
   let instance = linker.instantiate("host_import", component)
-  let results = instance.call_exported_func("", [
-    @runtime_impl.ComponentValue::S32(41),
-  ])
-  inspect(results, content="[S32(42)]")
+  let results = instance.call_exported_func("", [S32(41)])
+  debug_inspect(results, content="[S32(42)]")
 }
 
 ///|
@@ -200,10 +192,8 @@ test "component runtime: canon lift core func" {
   }
   let linker = @runtime_impl.ComponentLinker::new()
   let instance = linker.instantiate("canon_lift", component)
-  let results = instance.call_exported_func("inc", [
-    @runtime_impl.ComponentValue::S32(41),
-  ])
-  inspect(results, content="[S32(42)]")
+  let results = instance.call_exported_func("inc", [S32(41)])
+  debug_inspect(results, content="[S32(42)]")
 }
 
 ///|
@@ -226,28 +216,22 @@ test "component runtime: canon lower to core func" {
   let linker = @runtime_impl.ComponentLinker::new()
   let func_type : @component.FuncType = {
     is_async: false,
-    params: [
-      { label: "", ty: @component.ValType::Prim(@component.PrimValType::S32) },
-    ],
-    result: Some(@component.ValType::Prim(@component.PrimValType::S32)),
+    params: [{ label: "", ty: Prim(S32) }],
+    result: Some(Prim(S32)),
   }
   let host = fn(
     args : Array[@runtime_impl.ComponentValue],
   ) -> Array[@runtime_impl.ComponentValue] raise @runtime_impl.ComponentRuntimeError {
     match args {
-      [@runtime_impl.ComponentValue::S32(n)] =>
-        [@runtime_impl.ComponentValue::S32(n + 1)]
-      _ =>
-        raise @runtime_impl.ComponentRuntimeError::HostCallError(
-          "unexpected args",
-        )
+      [S32(n)] => [S32(n + 1)]
+      _ => raise HostCallError("unexpected args")
     }
   }
   linker.add_func("inc", func_type, host)
   let instance = linker.instantiate("canon_lower", component)
   let exported = instance.get_export("core")
   let core_func = match exported {
-    Some(@runtime_impl.ComponentExtern::CoreFunc(f)) => f
+    Some(CoreFunc(f)) => f
     _ => return fail("missing core func export")
   }
   let store = linker.get_store()
@@ -255,9 +239,9 @@ test "component runtime: canon lower to core func" {
     store,
     core_func.instance,
     core_func.func_idx,
-    [@types.Value::I32(41)],
+    [I32(41)],
   ) catch {
     e => return fail("call core func failed: \{e}")
   }
-  inspect(results, content="[I32(42)]")
+  debug_inspect(results, content="[I32(42)]")
 }

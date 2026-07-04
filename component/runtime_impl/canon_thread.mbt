@@ -87,8 +87,7 @@ fn schedule_explicit_thread(
   let key = handle_key(owner_component_id, handle)
   match async_state.threads.get(key) {
     Some(t) => {
-      if t.parent_task_id != root_task_id ||
-        t.phase[0] == GuestThreadPhase::Completed {
+      if t.parent_task_id != root_task_id || t.phase[0] == Completed {
         return false
       }
       if t.scheduled[0] {
@@ -127,8 +126,7 @@ fn pop_runnable_explicit_thread(
     match async_state.threads.get(key) {
       Some(t) => {
         t.scheduled[0] = false
-        if t.phase[0] != GuestThreadPhase::Completed &&
-          t.parent_task_id == root_task_id {
+        if t.phase[0] != Completed && t.parent_task_id == root_task_id {
           return Some(h)
         }
       }
@@ -201,7 +199,7 @@ fn run_explicit_thread_once(
   if t.parent_task_id != root_task_id {
     raise CanonCallError("unknown thread handle index \{handle}")
   }
-  if t.phase[0] == GuestThreadPhase::Completed {
+  if t.phase[0] == Completed {
     return
   }
 
@@ -222,8 +220,7 @@ fn run_explicit_thread_once(
   let mut done = false
   let mut wait_ws : Int64? = None
   let _ = try {
-    call_core_func(store, t.start_func, [@types.Value::I32(t.context)])
-    |> ignore
+    call_core_func(store, t.start_func, [I32(t.context)]) |> ignore
     done = true
     ()
   } catch {
@@ -237,13 +234,13 @@ fn run_explicit_thread_once(
   pop_task(async_state)
 
   if done {
-    t.phase[0] = GuestThreadPhase::Completed
+    t.phase[0] = Completed
     t.waiting_ws[0] = None
     cleanup_thread_task(async_state, t.task_id)
     return
   }
 
-  t.phase[0] = GuestThreadPhase::Suspended
+  t.phase[0] = Suspended
   t.waiting_ws[0] = wait_ws
 }
 
@@ -356,7 +353,7 @@ fn execute_thread_suspension_intrinsic(
   ) catch {
     e => {
       trap_canon(canon_err_message(e))
-      return [@types.Value::I32(0)]
+      return [I32(0)]
     }
   }
 
@@ -374,11 +371,11 @@ fn execute_thread_suspension_intrinsic(
     if cur < replay_upto {
       async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
         1
-      return [@types.Value::I32(0)]
+      return [I32(0)]
     }
 
     if maybe_consume_cancelled(async_state, task_id, cancellable) {
-      return [@types.Value::I32(1)]
+      return [I32(1)]
     }
 
     match target {
@@ -387,7 +384,7 @@ fn execute_thread_suspension_intrinsic(
             async_state, owner_component_id, root_task_id, h,
           ) {
           trap_canon("unknown thread handle index \{h}")
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
       None => ()
     }
@@ -400,8 +397,8 @@ fn execute_thread_suspension_intrinsic(
     }
 
     async_state.yield_replay_upto.set(task_id, replay_upto + 1)
-    canon_suspend[0] = Some(CanonSuspend::Yield)
-    raise @runtime.RuntimeError::Unreachable
+    canon_suspend[0] = Some(Yield)
+    raise Unreachable
   }
 
   // Implicit `thread.yield` is modeled as cooperative suspension. On replay
@@ -412,11 +409,11 @@ fn execute_thread_suspension_intrinsic(
     cur < replay_upto {
     async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
       1
-    return [@types.Value::I32(0)]
+    return [I32(0)]
   }
 
   if maybe_consume_cancelled(async_state, task_id, cancellable) {
-    return [@types.Value::I32(1)]
+    return [I32(1)]
   }
 
   if schedule_current {
@@ -430,19 +427,19 @@ fn execute_thread_suspension_intrinsic(
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
       }
       if schedule_current {
         consume_main_scheduled(async_state, root_task_id) |> ignore
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
       let resumed = dispatch_until_main_scheduled(
         async_state, store, owner_component_id, root_task_id,
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
       }
       if !resumed {
@@ -453,9 +450,9 @@ fn execute_thread_suspension_intrinsic(
             "wasm trap: deadlock detected: event loop cannot make further progress",
           )
         }
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
-      [@types.Value::I32(0)]
+      [I32(0)]
     }
     None => {
       if schedule_current {
@@ -473,7 +470,7 @@ fn execute_thread_suspension_intrinsic(
             ) catch {
               e => {
                 trap_canon(canon_err_message(e))
-                return [@types.Value::I32(0)]
+                return [I32(0)]
               }
             }
             ran_explicit = true
@@ -482,21 +479,21 @@ fn execute_thread_suspension_intrinsic(
         }
         consume_main_scheduled(async_state, root_task_id) |> ignore
         if ran_explicit {
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
         if !async_state.task_can_block[0] {
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
         async_state.yield_replay_upto.set(task_id, replay_upto + 1)
-        canon_suspend[0] = Some(CanonSuspend::Yield)
-        raise @runtime.RuntimeError::Unreachable
+        canon_suspend[0] = Some(Yield)
+        raise Unreachable
       }
       let resumed = dispatch_until_main_scheduled(
         async_state, store, owner_component_id, root_task_id,
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
-          return [@types.Value::I32(0)]
+          return [I32(0)]
         }
       }
       if !resumed {
@@ -507,9 +504,9 @@ fn execute_thread_suspension_intrinsic(
             "wasm trap: deadlock detected: event loop cannot make further progress",
           )
         }
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
-      [@types.Value::I32(0)]
+      [I32(0)]
     }
   }
 }
@@ -527,7 +524,7 @@ fn resolve_start_core_func(
     e => raise CanonCallError(e.to_string())
   }
   let func_addr = match v {
-    @types.Value::FuncRef(addr) => addr
+    FuncRef(addr) => addr
     _ => raise CanonCallError("thread start function is not a funcref")
   }
   let owner = match store.get_func_owner(func_addr) {
@@ -552,10 +549,7 @@ fn instantiate_canon_thread_index(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -567,10 +561,10 @@ fn instantiate_canon_thread_index(
     let task_id = current_task_id(async_state)
     ensure_task_thread(async_state, owner_component_id, task_id)
     match current_thread_handle_opt(async_state, owner_component_id, task_id) {
-      Some(h) => [@types.Value::I32(h)]
+      Some(h) => [I32(h)]
       None => {
         trap_canon("no current thread")
-        [@types.Value::I32(0)]
+        [I32(0)]
       }
     }
   }
@@ -583,10 +577,7 @@ fn instantiate_canon_thread_yield(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -613,10 +604,7 @@ fn instantiate_canon_thread_yield_to(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -626,10 +614,10 @@ fn instantiate_canon_thread_yield_to(
       trap_canon("cannot leave component instance")
     }
     let target = match args {
-      [@types.Value::I32(h)] => h
+      [I32(h)] => h
       _ => {
         trap_canon("type mismatch")
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     execute_thread_suspension_intrinsic(
@@ -650,10 +638,7 @@ fn instantiate_canon_thread_switch_to(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -663,10 +648,10 @@ fn instantiate_canon_thread_switch_to(
       trap_canon("cannot leave component instance")
     }
     let target = match args {
-      [@types.Value::I32(h)] => h
+      [I32(h)] => h
       _ => {
         trap_canon("type mismatch")
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     execute_thread_suspension_intrinsic(
@@ -686,10 +671,7 @@ fn instantiate_canon_thread_resume_later(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [],
-  }
+  let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -699,7 +681,7 @@ fn instantiate_canon_thread_resume_later(
       trap_canon("cannot leave component instance")
     }
     let target = match args {
-      [@types.Value::I32(h)] => h
+      [I32(h)] => h
       _ => {
         trap_canon("type mismatch")
         return []
@@ -730,10 +712,7 @@ fn instantiate_canon_thread_suspend(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let host = fn(
@@ -761,10 +740,7 @@ fn instantiate_canon_thread_new_indirect(
   state : BuildState,
   store : @runtime.Store,
 ) -> Unit {
-  let core_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
   let table_addr = if table_idx >= 0 && table_idx < state.core_tables.length() {
@@ -779,23 +755,23 @@ fn instantiate_canon_thread_new_indirect(
       trap_canon("cannot leave component instance")
     }
     let (start_idx, context) = match args {
-      [@types.Value::I32(fi), @types.Value::I32(ctx)] => (fi, ctx)
+      [I32(fi), I32(ctx)] => (fi, ctx)
       _ => {
         trap_canon("type mismatch")
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     let table_addr = match table_addr {
       Some(addr) => addr
       None => {
         trap_canon("invalid core table index \{table_idx}")
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
     let start_func = resolve_start_core_func(store, table_addr, start_idx) catch {
       e => {
         trap_canon(canon_err_message(e))
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
 
@@ -804,7 +780,7 @@ fn instantiate_canon_thread_new_indirect(
     ) catch {
       e => {
         trap_canon(canon_err_message(e))
-        return [@types.Value::I32(0)]
+        return [I32(0)]
       }
     }
 
@@ -824,12 +800,12 @@ fn instantiate_canon_thread_new_indirect(
       task_id: thread_task_id,
       start_func,
       context,
-      phase: [GuestThreadPhase::NotStarted],
+      phase: [NotStarted],
       scheduled: [false],
       waiting_ws: [None],
     })
 
-    [@types.Value::I32(id)]
+    [I32(id)]
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
 }

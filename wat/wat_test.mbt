@@ -249,10 +249,10 @@ test "parse data segment with offset keyword" {
 ///|
 test "reject trailing tokens after module" {
   let wat = "(module))"
-  let result = try? parse(wat)
-  match result {
-    Err(_) => ()
-    Ok(_) => fail("expected parse error but parsing succeeded")
+  try parse(wat) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected parse error but parsing succeeded")
   }
 }
 
@@ -268,7 +268,7 @@ test "format_wat_error shows source context" {
     #|    invalid.instruction
     #|  )
     #|)
-  let err = WatError::InvalidInstruction("invalid.instruction", SourceLoc::{
+  let err = WatError::InvalidInstruction("invalid.instruction", {
     line: 3,
     column: 5,
   })
@@ -294,7 +294,7 @@ test "format_wat_error with undefined identifier" {
     #|    call $undefined_func
     #|  )
     #|)
-  let err = WatError::UndefinedIdentifier("func $undefined_func", SourceLoc::{
+  let err = WatError::UndefinedIdentifier("func $undefined_func", {
     line: 3,
     column: 10,
   })
@@ -306,7 +306,7 @@ test "format_wat_error with undefined identifier" {
 ///|
 test "format_wat_error with unexpected token" {
   let source = "(module unexpected)"
-  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", SourceLoc::{
+  let err = WatError::UnexpectedToken("expected ')', got 'unexpected'", {
     line: 1,
     column: 9,
   })
@@ -339,7 +339,7 @@ test "parse inline table elem with named function" {
   inspect(mod_.elems.length(), content="1")
   // The element should contain the function index for $func (which is 0)
   inspect(mod_.elems[0].init.length(), content="1")
-  inspect(mod_.elems[0].init[0], content="[RefFunc(0)]")
+  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(0)]")
 }
 
 ///|
@@ -357,7 +357,7 @@ test "parse inline table elem with named function - multiple funcs" {
   inspect(mod_.elems.length(), content="1")
   // $func is the 4th function (index 3)
   inspect(mod_.elems[0].init.length(), content="1")
-  inspect(mod_.elems[0].init[0], content="[RefFunc(3)]")
+  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(3)]")
 }
 
 ///|
@@ -384,7 +384,7 @@ test "parse type index in call_indirect" {
   inspect(mod_.types.length(), content="3")
   // Check the call_indirect instruction - $check is type 0
   let test_func = mod_.codes[mod_.codes.length() - 1]
-  inspect(
+  debug_inspect(
     test_func.body,
     content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
   )
@@ -442,10 +442,10 @@ test "parse inline table elem - func index with dummy" {
     #|)
   let mod_ = parse(wat)
   // $func is the 2nd function (index 1)
-  inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
+  debug_inspect(mod_.elems[0].init[0], content="[RefFunc(1)]")
   // With explicit types first, $check is type 0
   let test_func = mod_.codes[mod_.codes.length() - 1]
-  inspect(
+  debug_inspect(
     test_func.body,
     content="[I32Const(1), I32Const(2), I32Const(0), CallIndirect(0, 0)]",
   )
@@ -474,7 +474,7 @@ test "check funcs type indices" {
   // func 0 ($dummy): type 1 = () -> ()
   // func 1 ($func): type 0 = (i32, i32) -> i32 (matches $check)
   // func 2 (test): type 2 = () -> i32
-  inspect(mod_.funcs, content="[1, 0, 2]")
+  debug_inspect(mod_.funcs, content="[1, 0, 2]")
   // Types:
   inspect(mod_.types.length(), content="3")
   inspect(
@@ -601,7 +601,7 @@ test "type-rec parsing with struct" {
   // - Type 1: struct placeholder () -> ()
   // Both in same rec group (id=0)
   inspect(mod_.types.length(), content="2")
-  inspect(mod_.type_rec_groups, content="[0, 0]")
+  debug_inspect(mod_.type_rec_groups, content="[0, 0]")
   inspect(mod_.funcs.length(), content="1")
   inspect(mod_.globals.length(), content="1")
 }
@@ -616,7 +616,7 @@ test "parse two simple rec groups" {
   let mod_ = try! parse(wat)
   // Should have 2 types: $f1 at 0, $f2 at 1
   inspect(mod_.types.length(), content="2")
-  inspect(mod_.type_rec_groups, content="[0, 1]")
+  debug_inspect(mod_.type_rec_groups, content="[0, 1]")
 }
 
 ///|
@@ -632,9 +632,9 @@ test "parse multiple rec groups with struct" {
   // - rec group 0: $f1 (func), struct placeholder
   // - rec group 2: $f2 (func), struct placeholder
   inspect(mod_.types.length(), content="4")
-  inspect(mod_.type_rec_groups, content="[0, 0, 2, 2]")
+  debug_inspect(mod_.type_rec_groups, content="[0, 0, 2, 2]")
   // Function $f should have type $f2 = index 2
-  inspect(mod_.funcs, content="[2]")
+  debug_inspect(mod_.funcs, content="[2]")
 }
 
 // ============================================================
@@ -761,8 +761,8 @@ test "parse mixed func, struct, array types" {
   inspect(mod_.is_array_type(2), content="true")
   // Check func type
   let ft = mod_.get_func_type(0)
-  inspect(ft.params, content="[I32, I32]")
-  inspect(ft.results, content="[I32]")
+  debug_inspect(ft.params, content="[I32, I32]")
+  debug_inspect(ft.results, content="[I32]")
   // Check struct type
   let st = mod_.get_struct_type(1)
   inspect(st.fields.length(), content="2")
@@ -950,7 +950,7 @@ test "parse memory64 import" {
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="mem")
-  if mod_.imports[0].desc is @types.ImportDesc::Memory(mem_type) {
+  if mod_.imports[0].desc is Memory(mem_type) {
     inspect(mem_type.is_memory64, content="true")
     inspect(mem_type.limits.min, content="1")
     inspect(@debug.to_string(mem_type.limits.max), content="Some(2)")
@@ -1036,7 +1036,7 @@ test "parse table64 import" {
   inspect(mod_.imports.length(), content="1")
   inspect(mod_.imports[0].mod_name, content="env")
   inspect(mod_.imports[0].name, content="tbl")
-  if mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) {
+  if mod_.imports[0].desc is Table(tbl_type) {
     inspect(tbl_type.is_table64, content="true")
     inspect(tbl_type.limits.min, content="1")
     inspect(@debug.to_string(tbl_type.limits.max), content="Some(10)")
@@ -1057,7 +1057,7 @@ test "parse table64 elem segment with i64 offset" {
   inspect(mod_.tables[0].type_.is_table64, content="true")
   inspect(mod_.elems.length(), content="1")
   // Check elem mode offset expression
-  if mod_.elems[0].mode is @types.ElemMode::Active(_, offset_expr) {
+  if mod_.elems[0].mode is Active(_, offset_expr) {
     inspect(offset_expr[0], content="I64Const(0)")
   } else {
     panic()
@@ -1142,9 +1142,7 @@ test "parse table64 import with large 64-bit limits" {
     #|  (import "m" "t" (table i64 0xffff_ffff_ffff 0x1_0000_0000_0000 funcref))
     #|)
   let mod_ = parse(wat)
-  guard mod_.imports[0].desc is @types.ImportDesc::Table(tbl_type) else {
-    return
-  }
+  guard mod_.imports[0].desc is Table(tbl_type) else { return }
   inspect(tbl_type.is_table64, content="true")
   // 0xffffffffffff = 281474976710655
   inspect(tbl_type.limits.min, content="281474976710655")

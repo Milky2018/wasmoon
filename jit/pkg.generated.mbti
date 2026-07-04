@@ -628,7 +628,7 @@ pub struct WasmTrapFrame {
 
 // Traits
 pub trait DynamicArgs {
-  to_int64_array(Self) -> Array[Int64]
+  fn to_int64_array(Self) -> Array[Int64]
 }
 pub impl DynamicArgs for Unit
 pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B)
@@ -636,7 +636,7 @@ pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64] DynamicArgs
 pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64, D : @types.ToInt64] DynamicArgs for (A, B, C, D)
 
 pub trait DynamicReturn {
-  from_int64_array(Array[Int64]) -> Self
+  fn from_int64_array(Array[Int64]) -> Self
 }
 pub impl DynamicReturn for Unit
 pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)

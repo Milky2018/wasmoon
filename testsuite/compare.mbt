@@ -3,14 +3,14 @@
 /// JIT GC encoding: null=0, i31=(val<<1)|1, struct/array=gc_ref<<1
 fn decode_gc_ref(raw : Int64) -> @types.Value {
   if raw == 0L {
-    @types.Value::Null
+    Null
   } else if (raw & 1L) == 1L {
     // i31: (value << 1) | 1, decode by shifting right
-    @types.Value::I31((raw >> 1).to_int())
+    I31((raw >> 1).to_int())
   } else {
     // Heap reference: gc_ref << 1, decode by shifting right
     // Note: Could be struct or array, we use StructRef as default
-    @types.Value::StructRef((raw >> 1).to_int())
+    StructRef((raw >> 1).to_int())
   }
 }
 
@@ -18,10 +18,10 @@ fn decode_gc_ref(raw : Int64) -> @types.Value {
 /// Decode JIT struct reference
 fn decode_struct_ref(raw : Int64) -> @types.Value {
   if raw == 0L {
-    @types.Value::Null
+    Null
   } else {
     // gc_ref = raw >> 1 (1-based)
-    @types.Value::StructRef((raw >> 1).to_int())
+    StructRef((raw >> 1).to_int())
   }
 }
 
@@ -29,10 +29,10 @@ fn decode_struct_ref(raw : Int64) -> @types.Value {
 /// Decode JIT array reference
 fn decode_array_ref(raw : Int64) -> @types.Value {
   if raw == 0L {
-    @types.Value::Null
+    Null
   } else {
     // gc_ref = raw >> 1 (1-based)
-    @types.Value::ArrayRef((raw >> 1).to_int())
+    ArrayRef((raw >> 1).to_int())
   }
 }
 
@@ -40,13 +40,13 @@ fn decode_array_ref(raw : Int64) -> @types.Value {
 /// Decode JIT i31 reference
 fn decode_i31_ref(raw : Int64) -> @types.Value {
   if raw == 0L {
-    @types.Value::Null
+    Null
   } else if (raw & 1L) == 1L {
     // i31: (value << 1) | 1
-    @types.Value::I31((raw >> 1).to_int())
+    I31((raw >> 1).to_int())
   } else {
     // Unexpected: non-i31 value in i31 slot
-    @types.Value::Null
+    Null
   }
 }
 
@@ -78,7 +78,7 @@ pub fn compare_result_is_match(result : CompareResult) -> Bool {
 }
 
 ///|
-pub impl Show for CompareResult with output(self, logger) {
+pub impl Show for CompareResult with fn output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
   } else {
@@ -183,7 +183,7 @@ pub fn jit_results_to_values(
         let high = results[slot_idx + 1]
         slot_idx += 2
         // Reconstruct 16 bytes from two Int64 values using Buffer
-        let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+        let buf : @buffer.Buffer = Buffer(size_hint=16)
         // Low 8 bytes (little-endian)
         for i in 0..<8 {
           buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
@@ -241,7 +241,7 @@ pub fn value_to_jit_arg_typed(
 ///|
 /// Convert @types.Value to Int64 for JIT call (legacy)
 pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
-  value_to_jit_arg_typed(value, @types.ValueType::I64)
+  value_to_jit_arg_typed(value, I64)
 }
 
 ///|
@@ -298,7 +298,7 @@ pub fn compare_jit_interp(
   // AMD64 JIT is still being brought up. For now, keep testsuite stable by
   // skipping JIT-vs-interpreter comparisons on amd64 (Ubuntu CI), while the
   // amd64 backend is validated by WAST runners.
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return { jit_result: interp_result, interp_result, match_: true }
   }
 
@@ -319,7 +319,7 @@ pub fn compare_jit_interp(
 ///|
 fn find_func_index_by_name(mod_ : @types.Module, name : String) -> Int? {
   for exp in mod_.exports {
-    if exp.name == name && exp.desc is @types.ExportDesc::Func(idx) {
+    if exp.name == name && exp.desc is Func(idx) {
       return Some(idx)
     }
   }
@@ -477,12 +477,8 @@ pub fn run_jit(
     // Encode args with type context for correct null handling
     let jit_args : Array[Int64] = []
     for i, arg in args {
-      let ty = if i < param_types.length() {
-        param_types[i]
-      } else {
-        @types.ValueType::I64
-      }
-      if ty is @types.ValueType::V128 {
+      let ty = if i < param_types.length() { param_types[i] } else { I64 }
+      if ty is V128 {
         match arg {
           V128(bytes) => {
             guard bytes.length() == 16 else {
@@ -529,8 +525,8 @@ pub fn run_jit(
 ///|
 pub fn current_target_arch() -> @cwasm.TargetArch {
   match @isa.ISA::current() {
-    @isa.AArch64 => @cwasm.AArch64
-    @isa.AMD64 => @cwasm.X86_64
+    AArch64 => AArch64
+    AMD64 => X86_64
   }
 }
 
@@ -600,10 +596,7 @@ fn extract_elem_segment_initial_dropped(mod_ : @types.Module) -> Array[Bool] {
   for elem in mod_.elems {
     // Active elem segments are implicitly dropped after instantiation-time init.
     // Declarative elem segments behave as dropped (unusable for table.init, etc).
-    dropped.push(
-      elem.mode is @types.ElemMode::Active(_, _) ||
-      elem.mode is @types.ElemMode::Declarative,
-    )
+    dropped.push(elem.mode is Active(_, _) || elem.mode is Declarative)
   }
   dropped
 }
@@ -741,7 +734,7 @@ pub fn init_elem_segments(
   for table_idx, _table in mod_.tables {
     // Process elem segments for this table
     for elem in mod_.elems {
-      if elem.mode is @types.ElemMode::Active(elem_table_idx, offset_expr) &&
+      if elem.mode is Active(elem_table_idx, offset_expr) &&
         elem_table_idx == table_idx {
         let offset = eval_elem_offset_expr(offset_expr, globals)
         for i, init_expr in elem.init {
@@ -841,9 +834,9 @@ test "compare_jit_interp: i32 add" {
   let func_type = mod_.get_func_type(func_type_idx)
   let param_types = func_type.params
   let result_types = func_type.results
-  let args = [@types.Value::I32(3), @types.Value::I32(5)]
+  let args = [@types.Value::I32(3), I32(5)]
   let jit_result = run_jit(
     mod_, "add", func_idx, args, param_types, result_types,
   )
-  inspect(jit_result, content="Ok([I32(8)])")
+  debug_inspect(jit_result, content="Ok([I32(8)])")
 }

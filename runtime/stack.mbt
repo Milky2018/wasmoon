@@ -135,7 +135,7 @@ pub fn Stack::pop_n(
   if self.sp < n {
     raise StackUnderflow
   }
-  let values : Array[@types.Value] = Array::make(n, @types.Value::I32(0))
+  let values : Array[@types.Value] = Array::make(n, I32(0))
   // Pop in reverse order so the array maintains stack order
   for i = n - 1; i >= 0; i = i - 1 {
     self.sp = self.sp - 1

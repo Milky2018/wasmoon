@@ -19,9 +19,9 @@ fn Parser::read_elem_segment(
   let uses_expressions = (flags & 0x04) != 0
   let mode : @types.ElemMode = if is_passive_or_declarative {
     if has_table_index_or_is_declarative {
-      @types.ElemMode::Declarative
+      Declarative
     } else {
-      @types.ElemMode::Passive
+      Passive
     }
   } else {
     // Active segment
@@ -31,7 +31,7 @@ fn Parser::read_elem_segment(
       0
     }
     let offset = self.read_expr()
-    @types.ElemMode::Active(table_idx, offset)
+    Active(table_idx, offset)
   }
 
   // Read element type
@@ -55,10 +55,10 @@ fn Parser::read_elem_segment(
     if kind != 0x00 {
       raise ParseError("unsupported element kind: \{kind}")
     }
-    @types.ValueType::FuncRef
+    FuncRef
   } else {
     // flags 0: no elemkind, implicit funcref
-    @types.ValueType::FuncRef
+    FuncRef
   }
 
   // Read init expressions or function indices
@@ -71,11 +71,10 @@ fn Parser::read_elem_segment(
     } else {
       // Read function index, convert to ref.func expression
       let func_idx = self.read_u32()
-      init.push([@types.Instruction::RefFunc(func_idx)])
+      init.push([RefFunc(func_idx)])
     }
   }
-  let normalized_elem_type = if !uses_expressions &&
-    elem_type == @types.ValueType::FuncRef {
+  let normalized_elem_type = if !uses_expressions && elem_type == FuncRef {
     // Index-based element segments contain only ref.func values (non-null).
     @types.ValueType::RefFunc
   } else {

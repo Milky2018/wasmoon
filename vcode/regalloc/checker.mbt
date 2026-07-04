@@ -12,8 +12,8 @@
 ///|
 fn reg_kind(preg : @abi.PReg) -> Int {
   match preg.class {
-    @abi.Int => 0
-    @abi.Float32 | @abi.Float64 | @abi.Vector => 1
+    Int => 0
+    Float32 | Float64 | Vector => 1
   }
 }
 
@@ -24,7 +24,7 @@ fn alias_key(preg : @abi.PReg) -> Int {
 
 ///|
 fn build_index_set(regs : Array[@abi.PReg]) -> @hashset.HashSet[Int] {
-  let set : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let set : @hashset.HashSet[Int] = HashSet([])
   for r in regs {
     set.add(r.index) |> ignore
   }
@@ -33,7 +33,7 @@ fn build_index_set(regs : Array[@abi.PReg]) -> @hashset.HashSet[Int] {
 
 ///|
 fn build_index_set_int(xs : Array[Int]) -> @hashset.HashSet[Int] {
-  let set : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let set : @hashset.HashSet[Int] = HashSet([])
   for x in xs {
     set.add(x) |> ignore
   }
@@ -93,7 +93,7 @@ pub fn verify_allocation(
   // Function parameters and block parameters may legitimately reside in ABI
   // argument registers (x0-x7/v0-v7). Block params are SSA phis and often
   // coalesce with incoming args.
-  let param_ids : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let param_ids : @hashset.HashSet[Int] = HashSet([])
   for p in func.params {
     param_ids.add(p.id) |> ignore
   }
@@ -102,7 +102,7 @@ pub fn verify_allocation(
       param_ids.add(p.id) |> ignore
     }
   }
-  let wasm_int_arg_regs : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let wasm_int_arg_regs : @hashset.HashSet[Int] = HashSet([])
   wasm_int_arg_regs.add(isa.wasm_vmctx_arg_preg().index) |> ignore
   for preg in isa.wasm_user_arg_gprs() {
     wasm_int_arg_regs.add(preg.index) |> ignore
@@ -110,7 +110,7 @@ pub fn verify_allocation(
   let wasm_float_arg_regs = build_index_set(isa.wasm_arg_fprs())
 
   // Call-clobbered sets.
-  let call_clobbered_int : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_int : @hashset.HashSet[Int] = HashSet([])
   for r in isa.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
@@ -118,12 +118,12 @@ pub fn verify_allocation(
   // V8-V15 (AAPCS64) the same way as same-ABI calls.
   //
   // Vector values are handled separately below and must never cross calls.
-  let call_clobbered_float_c : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_float_c : @hashset.HashSet[Int] = HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_c.add(r.index) |> ignore
   }
   // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
-  let call_clobbered_float_wasm : @hashset.HashSet[Int] = @hashset.HashSet::new()
+  let call_clobbered_float_wasm : @hashset.HashSet[Int] = HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
     call_clobbered_float_wasm.add(r.index) |> ignore
   }
@@ -134,15 +134,8 @@ pub fn verify_allocation(
       if use_pos.constraint is FixedReg(fr) {
         // Compare by bank (int vs float/vector) and index.
         let same_bank = match (fr.class, preg.class) {
-          (@abi.Int, @abi.Int) => true
-          (
-            @abi.Float32
-            | @abi.Float64
-            | @abi.Vector,
-            @abi.Float32
-            | @abi.Float64
-            | @abi.Vector,
-          ) => true
+          (Int, Int) => true
+          (Float32 | Float64 | Vector, Float32 | Float64 | Vector) => true
           _ => false
         }
         if same_bank && fr.index == preg.index {
@@ -159,13 +152,11 @@ pub fn verify_allocation(
     let (vreg_id, preg) = entry
     if ranges.get_by_vreg(vreg_id) is Some(lr) {
       // Scratch regs must never be assigned.
-      if preg.class is @abi.Int && scratch_int.contains(preg.index) {
+      if preg.class is Int && scratch_int.contains(preg.index) {
         abort("regalloc verifier: assigned scratch GPR x\{preg.index}")
       }
       if (
-          preg.class is @abi.Float32 ||
-          preg.class is @abi.Float64 ||
-          preg.class is @abi.Vector
+          preg.class is Float32 || preg.class is Float64 || preg.class is Vector
         ) &&
         scratch_float.contains(preg.index) {
         abort("regalloc verifier: assigned scratch V\{preg.index}")
@@ -174,7 +165,7 @@ pub fn verify_allocation(
       // Allocatable set checks.
       let fixed_reg = lr.get_fixed_reg()
       match lr.vreg.class {
-        @abi.Int =>
+        Int =>
           if !allowed_int.contains(preg.index) {
             // Allow parameters in ABI argument registers.
             let is_arg_gpr = wasm_int_arg_regs.contains(preg.index)
@@ -187,7 +178,7 @@ pub fn verify_allocation(
               )
             }
           }
-        @abi.Float32 | @abi.Float64 =>
+        Float32 | Float64 =>
           if !allowed_float.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
             wasm_float_arg_regs.contains(preg.index)) &&
@@ -196,7 +187,7 @@ pub fn verify_allocation(
               "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
             )
           }
-        @abi.Vector =>
+        Vector =>
           if !allowed_vector.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
             wasm_float_arg_regs.contains(preg.index)) &&
@@ -209,15 +200,15 @@ pub fn verify_allocation(
 
       // Call-clobber safety.
       if lr.crosses_call {
-        if lr.vreg.class is @abi.Vector {
+        if lr.vreg.class is Vector {
           abort("regalloc verifier: vector value live across call must spill")
         }
-        if preg.class is @abi.Int && call_clobbered_int.contains(preg.index) {
+        if preg.class is Int && call_clobbered_int.contains(preg.index) {
           abort(
             "regalloc verifier: value live across call assigned to caller-saved x\{preg.index}",
           )
         }
-        if preg.class is @abi.Float32 || preg.class is @abi.Float64 {
+        if preg.class is Float32 || preg.class is Float64 {
           // If this value crosses any C call, use the scalar same-ABI
           // caller-saved subset (V8-V15 low 64-bit remain preserved).
           if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
@@ -274,5 +265,5 @@ pub fn verify_allocation_aarch64(
   alloc : RegAllocResult,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
-  verify_allocation(func, liveness, alloc, @isa.ISA::AArch64, settings~)
+  verify_allocation(func, liveness, alloc, AArch64, settings~)
 }

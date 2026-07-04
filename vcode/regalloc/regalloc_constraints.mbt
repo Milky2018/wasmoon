@@ -14,7 +14,7 @@ fn RegMove::to_string(self : RegMove) -> String {
 }
 
 ///|
-pub impl Show for RegMove with output(self, logger) {
+pub impl Show for RegMove with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -49,8 +49,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
   fn class_bank(cls : @abi.RegClass) -> Int {
     match cls {
-      @abi.Int => 0
-      @abi.Float32 | @abi.Float64 | @abi.Vector => 1
+      Int => 0
+      Float32 | Float64 | Vector => 1
     }
   }
 
@@ -85,7 +85,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   }
   let result : Array[RegMove] = []
   let pending : Array[RegMove] = []
-  let seen : Set[Int] = Set::new()
+  let seen : Set[Int] = Set([])
   fn same_loc(a : Loc, b : Loc) -> Bool {
     match (a, b) {
       (Reg(ra), Reg(rb)) => ra.index == rb.index && ra.class == rb.class
@@ -96,10 +96,10 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
   fn class_key(cls : @abi.RegClass) -> Int {
     match cls {
-      @abi.Int => 0
-      @abi.Float32 => 1
-      @abi.Float64 => 2
-      @abi.Vector => 3
+      Int => 0
+      Float32 => 1
+      Float64 => 2
+      Vector => 3
     }
   }
 
@@ -124,7 +124,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     }
 
     let idx = match class {
-      @abi.Int => {
+      Int => {
         guard machine_env.scratch_int.length() >= 2 else {
           abort("resolve_parallel_moves: missing integer scratch registers")
         }
@@ -134,7 +134,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
           avoid_idx,
         )
       }
-      @abi.Float32 | @abi.Float64 | @abi.Vector => {
+      Float32 | Float64 | Vector => {
         guard machine_env.scratch_float.length() >= 2 else {
           abort("resolve_parallel_moves: missing float scratch registers")
         }
@@ -185,8 +185,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
   // avoid clobbering (e.g. D1 <- D0 would overwrite S1).
   fn reg_kind(preg : @abi.PReg) -> Int {
     match preg.class {
-      @abi.Int => 0
-      @abi.Float32 | @abi.Float64 | @abi.Vector => 1 // Vector uses same Vn registers
+      Int => 0
+      Float32 | Float64 | Vector => 1 // Vector uses same Vn registers
     }
   }
 
@@ -208,7 +208,7 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
 
   // Build a set of source registers for quick lookup
   fn rebuild_src_set(pending : Array[RegMove]) -> Set[Int] {
-    let srcs : Set[Int] = Set::new()
+    let srcs : Set[Int] = Set([])
     for mv in pending {
       srcs.add(loc_key(mv.from, mv.class))
     }
@@ -222,8 +222,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
     avoid_b : Loc,
   ) -> Loc {
     let candidates = match class {
-      @abi.Int => machine_env.scratch_int
-      @abi.Float32 | @abi.Float64 | @abi.Vector => machine_env.scratch_float
+      Int => machine_env.scratch_int
+      Float32 | Float64 | Vector => machine_env.scratch_float
     }
     for idx in candidates {
       let candidate = Loc::Reg({ index: idx, class })
@@ -327,9 +327,9 @@ pub fn process_constraints(
 
       // Process use constraints (moves before the instruction)
       for i, constraint in inst.use_constraints {
-        if constraint is @abi.FixedReg(required_preg) {
+        if constraint is FixedReg(required_preg) {
           let use_reg = inst.uses[i]
-          if use_reg is @abi.Virtual(vreg) {
+          if use_reg is Virtual(vreg) {
             // Check if already allocated to the required register
             match alloc.assignments.get(vreg.id) {
               Some(assigned_preg) =>
@@ -354,7 +354,7 @@ pub fn process_constraints(
                   })
                 }
             }
-          } else if use_reg is @abi.Physical(preg) {
+          } else if use_reg is Physical(preg) {
             if preg.index != required_preg.index {
               edits.before.push({
                 from: Reg(preg),
@@ -368,9 +368,9 @@ pub fn process_constraints(
 
       // Process def constraints (moves after the instruction)
       for i, constraint in inst.def_constraints {
-        if constraint is @abi.FixedReg(required_preg) {
+        if constraint is FixedReg(required_preg) {
           let def = inst.defs[i]
-          if def.reg is @abi.Virtual(vreg) {
+          if def.reg is Virtual(vreg) {
             // Check if already allocated to the required register
             match alloc.assignments.get(vreg.id) {
               Some(assigned_preg) =>

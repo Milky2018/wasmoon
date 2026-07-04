@@ -10,6 +10,6 @@ fn Writable::to_string(self : Writable) -> String {
 }
 
 ///|
-pub impl Show for Writable with output(self, logger) {
+pub impl Show for Writable with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

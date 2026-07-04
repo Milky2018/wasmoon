@@ -4,7 +4,7 @@ fn MachineCode::emit_instruction(
   inst : @instr.VCodeInst,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if @isaregs.current_isa() is @isa.AMD64 {
+  if @isaregs.current_isa() is AMD64 {
     self.emit_instruction_x86_64(inst, stack_frame)
     return
   }
@@ -995,10 +995,9 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       match ext {
-        @instr.IndexExtend::Uxtw => self.emit_add_uxtw(rd, rn, rm, amount)
-        @instr.IndexExtend::Sxtw => self.emit_add_sxtw(rd, rn, rm, amount)
-        @instr.IndexExtend::None =>
-          abort("AddExtend expects Uxtw or Sxtw, got None")
+        Uxtw => self.emit_add_uxtw(rd, rn, rm, amount)
+        Sxtw => self.emit_add_sxtw(rd, rn, rm, amount)
+        None => abort("AddExtend expects Uxtw or Sxtw, got None")
       }
     }
     SubExtend(ext, amount) => {
@@ -1006,10 +1005,9 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       match ext {
-        @instr.IndexExtend::Uxtw => self.emit_sub_uxtw(rd, rn, rm, amount)
-        @instr.IndexExtend::Sxtw => self.emit_sub_sxtw(rd, rn, rm, amount)
-        @instr.IndexExtend::None =>
-          abort("SubExtend expects Uxtw or Sxtw, got None")
+        Uxtw => self.emit_sub_uxtw(rd, rn, rm, amount)
+        Sxtw => self.emit_sub_sxtw(rd, rn, rm, amount)
+        None => abort("SubExtend expects Uxtw or Sxtw, got None")
       }
     }
     AddShifted32(shift, amount) => {
@@ -1151,7 +1149,7 @@ fn MachineCode::emit_instruction(
       // safe in-place tail stack forwarding for all cases, so lower to
       // call+return to preserve correctness.
       let target = match inst.use_constraints[0] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
       if stack_arg_bytes > 0 {
@@ -1493,7 +1491,7 @@ fn MachineCode::emit_instruction(
       // Standard call: all arguments are already in place.
       // Use a fixed-reg constraint if present; otherwise use assigned reg.
       let target = match inst.use_constraints[0] {
-        @abi.FixedReg(preg) => preg.index
+        FixedReg(preg) => preg.index
         _ => reg_num(inst.uses[0])
       }
       self.emit_blr(target)

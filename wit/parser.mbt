@@ -140,7 +140,7 @@ fn Lexer::skip_ws_and_comments(self : Lexer) -> Unit raise WitError {
           self.bump() |> ignore
           while true {
             if self.i >= self.src.length() {
-              raise WitError::Error("unterminated block comment")
+              raise Error("unterminated block comment")
             }
             let b = self.bump().unwrap_or(0)
             if b == 42 && self.peek(0) is Some(47) {
@@ -276,7 +276,7 @@ fn Lexer::lex_one(self : Lexer) -> (TokenKind, Int, Int) raise WitError {
         }
         (k, line, col)
       } else {
-        raise WitError::Error("unexpected character")
+        raise Error("unexpected character")
       }
   }
 }
@@ -320,7 +320,7 @@ fn Lexer::lex_string(self : Lexer) -> String raise WitError {
   let sb = StringBuilder::new()
   while true {
     if self.i >= self.src.length() {
-      raise WitError::Error("unterminated string literal")
+      raise Error("unterminated string literal")
     }
     let cu = self.bump().unwrap_or(0)
     if cu == 34 {
@@ -334,7 +334,7 @@ fn Lexer::lex_string(self : Lexer) -> String raise WitError {
         110 => sb.write_char('\n')
         114 => sb.write_char('\r')
         116 => sb.write_char('\t')
-        _ => raise WitError::Error("unsupported string escape")
+        _ => raise Error("unsupported string escape")
       }
     } else {
       sb.write_char(cu.unsafe_to_char())
@@ -1125,7 +1125,7 @@ fn Parser::parse_named_type_list(
 ///|
 fn Parser::parse_ident(self : Parser) -> String raise WitError {
   if self.i >= self.toks.length() {
-    raise WitError::Error("unexpected EOF")
+    raise Error("unexpected EOF")
   }
   match self.toks[self.i].kind {
     Ident(s) => {
@@ -1162,10 +1162,10 @@ fn Parser::eat_kw(self : Parser, k : TokenKind) -> Unit {
 ///|
 fn Parser::err_here(self : Parser, msg : String) -> WitError {
   if self.i >= self.toks.length() {
-    WitError::Error(msg + " at EOF")
+    Error(msg + " at EOF")
   } else {
     let t = self.toks[self.i]
-    WitError::Error(msg + " at " + t.line.to_string() + ":" + t.col.to_string())
+    Error(msg + " at " + t.line.to_string() + ":" + t.col.to_string())
   }
 }
 

@@ -3,7 +3,7 @@
 /// This test verifies that global CSE correctly eliminates redundant
 /// computations across basic blocks
 test "cross_block_cse" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // This function computes p0 + p1 twice:

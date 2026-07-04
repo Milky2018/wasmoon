@@ -17,7 +17,7 @@ pub suberror JITTrap {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for JITTrap with output(self, logger) {
+pub impl Show for JITTrap with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -211,7 +211,7 @@ fn JITContext::new(total_funcs : Int) -> JITContext? {
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(ctx)
   // Check if allocation succeeded by verifying the pointer is valid
   if ctx_ptr != 0L {
-    Some(JITContext::{ ctx, trampoline_cache: Map::new() })
+    Some({ ctx, trampoline_cache: Map([]) })
   } else {
     None
   }
@@ -711,7 +711,7 @@ pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
   if table_ptr == 0L {
     return None
   }
-  Some(JITTable::{ table_ptr, size, max })
+  Some({ table_ptr, size, max })
 }
 
 ///|
@@ -1161,7 +1161,7 @@ fn JITContext::call_multi_return(
   // For results, V128 needs 2 slots
   let mut num_result_slots = 0
   for result_type in result_types {
-    if result_type is @types.ValueType::V128 {
+    if result_type is V128 {
       num_result_slots = num_result_slots + 2
     } else {
       num_result_slots = num_result_slots + 1

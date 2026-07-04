@@ -12,9 +12,9 @@ test "wide-arithmetic: i64.mul_wide_u" {
     #|  )
     #|)
   let interp = run_interp_only(source, "test", [])
-  inspect(interp, content="Ok([I64(-2), I64(1)])")
+  debug_inspect(interp, content="Ok([I64(-2), I64(1)])")
   let result = compare_jit_interp(source, "test", [])
-  inspect(result, content="matched")
+  inspect(compare_result_is_match(result), content="true")
 }
 
 ///|
@@ -28,7 +28,7 @@ test "wide-arithmetic: i64.mul_wide_s" {
     #|  )
     #|)
   let interp = run_interp_only(source, "test", [])
-  inspect(interp, content="Ok([I64(-2), I64(-1)])")
+  debug_inspect(interp, content="Ok([I64(-2), I64(-1)])")
   let result = compare_jit_interp(source, "test", [])
-  inspect(result, content="matched")
+  inspect(compare_result_is_match(result), content="true")
 }

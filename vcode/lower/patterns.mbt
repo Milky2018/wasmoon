@@ -60,28 +60,28 @@ pub enum PatternOpcode {
 /// Convert IR Opcode to Pattern Opcode for matching
 fn opcode_to_pattern(opcode : @ir.Opcode) -> PatternOpcode? {
   match opcode {
-    @ir.Opcode::Iadd => Some(Iadd)
-    @ir.Opcode::Isub => Some(Isub)
-    @ir.Opcode::Imul => Some(Imul)
-    @ir.Opcode::Sdiv => Some(Sdiv)
-    @ir.Opcode::Udiv => Some(Udiv)
-    @ir.Opcode::Band => Some(Band)
-    @ir.Opcode::Bor => Some(Bor)
-    @ir.Opcode::Bxor => Some(Bxor)
-    @ir.Opcode::Ishl => Some(Ishl)
-    @ir.Opcode::Sshr => Some(Sshr)
-    @ir.Opcode::Ushr => Some(Ushr)
-    @ir.Opcode::Fadd => Some(Fadd)
-    @ir.Opcode::Fsub => Some(Fsub)
-    @ir.Opcode::Fmul => Some(Fmul)
-    @ir.Opcode::Fdiv => Some(Fdiv)
-    @ir.Opcode::Iconst(_) => Some(Iconst)
-    @ir.Opcode::Fconst(_) => Some(Fconst)
-    @ir.Opcode::Icmp(_) => Some(Icmp)
-    @ir.Opcode::Fcmp(_) => Some(Fcmp)
+    Iadd => Some(Iadd)
+    Isub => Some(Isub)
+    Imul => Some(Imul)
+    Sdiv => Some(Sdiv)
+    Udiv => Some(Udiv)
+    Band => Some(Band)
+    Bor => Some(Bor)
+    Bxor => Some(Bxor)
+    Ishl => Some(Ishl)
+    Sshr => Some(Sshr)
+    Ushr => Some(Ushr)
+    Fadd => Some(Fadd)
+    Fsub => Some(Fsub)
+    Fmul => Some(Fmul)
+    Fdiv => Some(Fdiv)
+    Iconst(_) => Some(Iconst)
+    Fconst(_) => Some(Fconst)
+    Icmp(_) => Some(Icmp)
+    Fcmp(_) => Some(Fcmp)
     // Note: Load/Store with memidx removed - use LoadPtr/StorePtr now
-    @ir.Opcode::Copy => Some(Copy)
-    @ir.Opcode::Select => Some(Select)
+    Copy => Some(Copy)
+    Select => Some(Select)
     _ => None
   }
 }
@@ -152,17 +152,17 @@ fn match_pattern_impl(
     }
     ConstInt(expected) =>
       // Check if this is an iconst with the expected value
-      if inst.opcode is @ir.Opcode::Iconst(val) {
+      if inst.opcode is Iconst(val) {
         val == expected
       } else {
         false
       }
     ConstFloat(expected) =>
       // Check if this is an fconst with the expected value
-      if inst.opcode is @ir.Opcode::Fconst(val) {
+      if inst.opcode is Fconst(val) {
         // For F32, bits are packed in the lower 32 bits of the Double
         // For F64, the Double is the actual value
-        if inst.first_result() is Some(r) && r.ty is @ir.Type::F32 {
+        if inst.first_result() is Some(r) && r.ty is F32 {
           let stored_bits = val.reinterpret_as_int64().to_int()
           let expected_bits = Float::from_double(expected).reinterpret_as_int()
           stored_bits == expected_bits
@@ -174,7 +174,7 @@ fn match_pattern_impl(
       }
     AnyConstInt =>
       // Match any integer constant
-      if inst.opcode is @ir.Opcode::Iconst(val) {
+      if inst.opcode is Iconst(val) {
         result.add_int_const(val)
         true
       } else {
@@ -188,9 +188,9 @@ fn match_pattern_impl(
         None => return false
       }
       // For iconst/fconst, capture the constant
-      if inst.opcode is @ir.Opcode::Iconst(v) {
+      if inst.opcode is Iconst(v) {
         result.add_int_const(v)
-      } else if inst.opcode is @ir.Opcode::Fconst(v) {
+      } else if inst.opcode is Fconst(v) {
         result.add_float_const(v)
       }
       // Match sub-patterns against operands
@@ -207,7 +207,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is @ir.Opcode::Iconst(val) {
+                if def.opcode is Iconst(val) {
                   if val != expected {
                     return false
                   }
@@ -222,10 +222,9 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is @ir.Opcode::Fconst(val) {
+                if def.opcode is Fconst(val) {
                   // For F32, bits are packed in the lower 32 bits of the Double
-                  let matches = if def.first_result() is Some(r) &&
-                    r.ty is @ir.Type::F32 {
+                  let matches = if def.first_result() is Some(r) && r.ty is F32 {
                     let stored_bits = val.reinterpret_as_int64().to_int()
                     let expected_bits = Float::from_double(expected).reinterpret_as_int()
                     stored_bits == expected_bits
@@ -247,7 +246,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is @ir.Opcode::Iconst(val) {
+                if def.opcode is Iconst(val) {
                   result.add_int_const(val)
                 } else {
                   return false
@@ -530,9 +529,9 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let vcode_inst = @instr.VCodeInst::new(@instr.Move)
-        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
-        vcode_inst.add_use(@abi.Virtual(src))
+        let vcode_inst = @instr.VCodeInst::new(Move)
+        vcode_inst.add_def({ reg: Virtual(dst) })
+        vcode_inst.add_use(Virtual(src))
         block.add_inst(vcode_inst)
         true
       } else {
@@ -542,8 +541,8 @@ pub fn lower_inst_with_patterns(
       // Emit a load constant
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
-        let vcode_inst = @instr.VCodeInst::new(@instr.LoadConst(val))
-        vcode_inst.add_def({ reg: @abi.Virtual(dst) })
+        let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
+        vcode_inst.add_def({ reg: Virtual(dst) })
         block.add_inst(vcode_inst)
         true
       } else {
@@ -554,12 +553,12 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let is_64 = result.ty is @ir.Type::I64
+        let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let shl_inst = @instr.VCodeInst::new(@instr.ShlImm(shift, is_64))
-        shl_inst.add_def({ reg: @abi.Virtual(dst) })
-        shl_inst.add_use(@abi.Virtual(src))
+        let shl_inst = @instr.VCodeInst::new(ShlImm(shift, is_64))
+        shl_inst.add_def({ reg: Virtual(dst) })
+        shl_inst.add_use(Virtual(src))
         block.add_inst(shl_inst)
         true
       } else {
@@ -570,12 +569,12 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let is_64 = result.ty is @ir.Type::I64
+        let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let lshr_inst = @instr.VCodeInst::new(@instr.LShrImm(shift, is_64))
-        lshr_inst.add_def({ reg: @abi.Virtual(dst) })
-        lshr_inst.add_use(@abi.Virtual(src))
+        let lshr_inst = @instr.VCodeInst::new(LShrImm(shift, is_64))
+        lshr_inst.add_def({ reg: Virtual(dst) })
+        lshr_inst.add_use(Virtual(src))
         block.add_inst(lshr_inst)
         true
       } else {
@@ -666,68 +665,59 @@ fn lower_inst_default(
 ) -> Unit {
   match inst.opcode {
     // Constants
-    @ir.Opcode::Iconst(val) => lower_iconst(ctx, inst, block, val)
-    @ir.Opcode::Fconst(val) => lower_fconst(ctx, inst, block, val)
+    Iconst(val) => lower_iconst(ctx, inst, block, val)
+    Fconst(val) => lower_fconst(ctx, inst, block, val)
 
     // Integer arithmetic
-    @ir.Opcode::Iadd => lower_iadd(ctx, inst, block)
-    @ir.Opcode::Isub => lower_isub(ctx, inst, block)
-    @ir.Opcode::Imul => lower_imul(ctx, inst, block)
-    @ir.Opcode::Sdiv => lower_div(ctx, inst, block, signed=true)
-    @ir.Opcode::Udiv => lower_div(ctx, inst, block, signed=false)
+    Iadd => lower_iadd(ctx, inst, block)
+    Isub => lower_isub(ctx, inst, block)
+    Imul => lower_imul(ctx, inst, block)
+    Sdiv => lower_div(ctx, inst, block, signed=true)
+    Udiv => lower_div(ctx, inst, block, signed=false)
 
     // Bitwise operations
-    @ir.Opcode::Band => lower_band(ctx, inst, block)
-    @ir.Opcode::Bor => lower_bor(ctx, inst, block)
-    @ir.Opcode::Bxor => lower_bxor(ctx, inst, block)
-    @ir.Opcode::Ishl =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.Shl(is_64) }, fn(
-        amt,
-        is_64,
-      ) {
-        @instr.ShlImm(amt, is_64)
+    Band => lower_band(ctx, inst, block)
+    Bor => lower_bor(ctx, inst, block)
+    Bxor => lower_bxor(ctx, inst, block)
+    Ishl =>
+      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
+        ShlImm(amt, is_64)
       })
-    @ir.Opcode::Sshr =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.AShr(is_64) }, fn(
-        amt,
-        is_64,
-      ) {
-        @instr.AShrImm(amt, is_64)
+    Sshr =>
+      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
+        AShrImm(amt, is_64)
       })
-    @ir.Opcode::Ushr =>
-      lower_shift(ctx, inst, block, fn(is_64) { @instr.LShr(is_64) }, fn(
-        amt,
-        is_64,
-      ) {
-        @instr.LShrImm(amt, is_64)
+    Ushr =>
+      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
+        LShrImm(amt, is_64)
       })
 
     // Integer comparisons
-    @ir.Opcode::Icmp(cc) => lower_icmp(ctx, inst, block, cc)
+    Icmp(cc) => lower_icmp(ctx, inst, block, cc)
 
     // Floating point arithmetic
-    @ir.Opcode::Fadd => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fsub => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fmul => lower_binary_float(ctx, inst, block)
-    @ir.Opcode::Fdiv => lower_binary_float(ctx, inst, block)
+    Fadd => lower_binary_float(ctx, inst, block)
+    Fsub => lower_binary_float(ctx, inst, block)
+    Fmul => lower_binary_float(ctx, inst, block)
+    Fdiv => lower_binary_float(ctx, inst, block)
 
     // Floating point comparisons
-    @ir.Opcode::Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
+    Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
     // Note: Load/Store with memidx removed - use LoadPtr/StorePtr via FuncEnvironment
 
     // Conversions
-    @ir.Opcode::Sextend => lower_extend(ctx, inst, block, signed=true)
-    @ir.Opcode::Uextend => lower_extend(ctx, inst, block, signed=false)
-    @ir.Opcode::Ireduce => lower_truncate(ctx, inst, block)
-    @ir.Opcode::FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
-    @ir.Opcode::FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
-    @ir.Opcode::SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
-    @ir.Opcode::UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
+    Sextend => lower_extend(ctx, inst, block, signed=true)
+    Uextend => lower_extend(ctx, inst, block, signed=false)
+    Ireduce => lower_truncate(ctx, inst, block)
+    FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
+    FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
+    SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
+    UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
 
     // Misc
-    @ir.Opcode::Copy => lower_copy(ctx, inst, block)
-    @ir.Opcode::Select => lower_select(ctx, inst, block)
+    Copy => lower_copy(ctx, inst, block)
+    Select => lower_select(ctx, inst, block)
     opcode => abort("unimplemented vcode lowering for opcode \{opcode}")
   }
 }

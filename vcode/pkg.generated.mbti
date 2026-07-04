@@ -22,27 +22,6 @@ type AArch64
 pub fn AArch64::new() -> Self
 pub impl TargetISA for AArch64
 
-type AArch64Regs
-pub fn AArch64Regs::d0(Self) -> @abi.PReg
-pub fn AArch64Regs::d1(Self) -> @abi.PReg
-pub fn AArch64Regs::d2(Self) -> @abi.PReg
-pub fn AArch64Regs::d3(Self) -> @abi.PReg
-pub fn AArch64Regs::d4(Self) -> @abi.PReg
-pub fn AArch64Regs::d5(Self) -> @abi.PReg
-pub fn AArch64Regs::d6(Self) -> @abi.PReg
-pub fn AArch64Regs::d7(Self) -> @abi.PReg
-pub fn AArch64Regs::fp(Self) -> @abi.PReg
-pub fn AArch64Regs::lr(Self) -> @abi.PReg
-pub fn AArch64Regs::new() -> Self
-pub fn AArch64Regs::x0(Self) -> @abi.PReg
-pub fn AArch64Regs::x1(Self) -> @abi.PReg
-pub fn AArch64Regs::x2(Self) -> @abi.PReg
-pub fn AArch64Regs::x3(Self) -> @abi.PReg
-pub fn AArch64Regs::x4(Self) -> @abi.PReg
-pub fn AArch64Regs::x5(Self) -> @abi.PReg
-pub fn AArch64Regs::x6(Self) -> @abi.PReg
-pub fn AArch64Regs::x7(Self) -> @abi.PReg
-
 type CodeCache
 pub fn CodeCache::clear(Self) -> Unit
 pub fn CodeCache::contains(Self, Int) -> Bool
@@ -175,23 +154,23 @@ pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VRe
 
 // Traits
 pub(open) trait GcCompiler {
-  config(Self) -> GcCompilerConfig
-  gen_alloc_struct(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, Array[@abi.VReg]) -> @abi.VReg
-  gen_alloc_array(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
-  gen_write_barrier_pre(Self, @regalloc.VCodeFunction, @abi.VReg, Int, @abi.VReg, @abi.VReg) -> Unit
-  gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
-  gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
-  gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
-  record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
-  get_safepoints(Self) -> Array[GcSafepoint]
-  clear_safepoints(Self) -> Unit
+  fn config(Self) -> GcCompilerConfig
+  fn gen_alloc_struct(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, Array[@abi.VReg]) -> @abi.VReg
+  fn gen_alloc_array(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
+  fn gen_write_barrier_pre(Self, @regalloc.VCodeFunction, @abi.VReg, Int, @abi.VReg, @abi.VReg) -> Unit
+  fn gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
+  fn gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
+  fn gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
+  fn record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
+  fn get_safepoints(Self) -> Array[GcSafepoint]
+  fn clear_safepoints(Self) -> Unit
 }
 
 pub(open) trait TargetISA {
-  name(Self) -> String
-  gpr_count(Self) -> Int
-  fpr_count(Self) -> Int
-  get_preg(Self, @abi.RegClass, Int) -> @abi.PReg?
-  pointer_size(Self) -> Int
+  fn name(Self) -> String
+  fn gpr_count(Self) -> Int
+  fn fpr_count(Self) -> Int
+  fn get_preg(Self, @abi.RegClass, Int) -> @abi.PReg?
+  fn pointer_size(Self) -> Int
 }
 

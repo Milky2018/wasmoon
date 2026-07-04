@@ -1,18 +1,27 @@
 // Executor Tests
 
 ///|
+fn[T] runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "execute simple add function" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32, @types.ValueType::I32],
-    [@types.ValueType::I32],
+    [I32, I32],
+    [I32],
     [LocalGet(0), LocalGet(1), I32Add],
     "add",
   )
   let (store, instance) = instantiate_module(mod)
-  let results = call_exported_func(store, instance, "add", [
-    @types.Value::I32(5),
-    @types.Value::I32(10),
-  ])
+  let results = call_exported_func(store, instance, "add", [I32(5), I32(10)])
   match results[0] {
     I32(n) => inspect(n, content="15")
     _ => fail("Expected I32 result")
@@ -32,18 +41,13 @@ test "execute function with local variables" {
     I32Mul, // tmp * 2
   ]
   let mod = {
-    ..@types.Module::simple(
-      [@types.ValueType::I32, @types.ValueType::I32],
-      [@types.ValueType::I32],
-      body,
-      "double_sum",
-    ),
-    codes: [{ locals: [@types.ValueType::I32], body }],
+    ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
+    codes: [{ locals: [I32], body }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "double_sum", [
-    @types.Value::I32(3),
-    @types.Value::I32(4),
+    I32(3),
+    I32(4),
   ])
   match results[0] {
     I32(n) => inspect(n, content="14") // (3 + 4) * 2 = 14
@@ -54,16 +58,13 @@ test "execute function with local variables" {
 ///|
 test "execute i64 addition" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I64, @types.ValueType::I64],
-    [@types.ValueType::I64],
+    [I64, I64],
+    [I64],
     [LocalGet(0), LocalGet(1), I64Add],
     "i64_add",
   )
   let (store, instance) = instantiate_module(mod)
-  let args = [
-    @types.Value::I64(1000000000000L),
-    @types.Value::I64(2000000000000L),
-  ]
+  let args = [@types.Value::I64(1000000000000L), I64(2000000000000L)]
   let results = call_exported_func(store, instance, "i64_add", args)
   match results[0] {
     I64(n) => inspect(n, content="3000000000000")
@@ -74,13 +75,13 @@ test "execute i64 addition" {
 ///|
 test "execute f32 arithmetic" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F32, @types.ValueType::F32],
-    [@types.ValueType::F32],
+    [F32, F32],
+    [F32],
     [LocalGet(1), F32Const(2.0), F32Mul, LocalGet(0), F32Add],
     "f32_test",
   )
   let (store, instance) = instantiate_module(mod)
-  let args = [@types.Value::F32(3.5), @types.Value::F32(4.0)]
+  let args = [@types.Value::F32(3.5), F32(4.0)]
   let results = call_exported_func(store, instance, "f32_test", args)
   match results[0] {
     F32(f) => inspect(f, content="11.5") // 3.5 + 4.0 * 2.0 = 11.5
@@ -91,13 +92,13 @@ test "execute f32 arithmetic" {
 ///|
 test "execute f64 arithmetic" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64, @types.ValueType::F64],
-    [@types.ValueType::F64],
+    [F64, F64],
+    [F64],
     [LocalGet(0), LocalGet(1), F64Sub, F64Const(0.5), F64Mul],
     "f64_test",
   )
   let (store, instance) = instantiate_module(mod)
-  let args = [@types.Value::F64(10.0), @types.Value::F64(6.0)]
+  let args = [@types.Value::F64(10.0), F64(6.0)]
   let results = call_exported_func(store, instance, "f64_test", args)
   match results[0] {
     F64(d) => inspect(d, content="2") // (10.0 - 6.0) * 0.5 = 2.0
@@ -108,13 +109,13 @@ test "execute f64 arithmetic" {
 ///|
 test "execute i64 comparison" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I64, @types.ValueType::I64],
-    [@types.ValueType::I32],
+    [I64, I64],
+    [I32],
     [LocalGet(0), LocalGet(1), I64LtS],
     "i64_lt",
   )
   let (store, instance) = instantiate_module(mod)
-  let args = [@types.Value::I64(100L), @types.Value::I64(200L)]
+  let args = [@types.Value::I64(100L), I64(200L)]
   let results = call_exported_func(store, instance, "i64_lt", args)
   match results[0] {
     I32(n) => inspect(n, content="1") // 100 < 200 = true (1)
@@ -125,8 +126,8 @@ test "execute i64 comparison" {
 ///|
 test "numeric conversion: i32.wrap_i64" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I64],
-    [@types.ValueType::I32],
+    [I64],
+    [I32],
     [LocalGet(0), I32WrapI64],
     "wrap",
   )
@@ -142,8 +143,8 @@ test "numeric conversion: i32.wrap_i64" {
 ///|
 test "numeric conversion: i64.extend_i32_s" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::I64],
+    [I32],
+    [I64],
     [LocalGet(0), I64ExtendI32S],
     "extend_s",
   )
@@ -159,8 +160,8 @@ test "numeric conversion: i64.extend_i32_s" {
 ///|
 test "numeric conversion: f64.convert_i32_s" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::F64],
+    [I32],
+    [F64],
     [LocalGet(0), F64ConvertI32S],
     "convert",
   )
@@ -176,8 +177,8 @@ test "numeric conversion: f64.convert_i32_s" {
 ///|
 test "numeric conversion: i32.reinterpret_f32" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F32],
-    [@types.ValueType::I32],
+    [F32],
+    [I32],
     [LocalGet(0), I32ReinterpretF32],
     "reinterpret",
   )
@@ -193,8 +194,8 @@ test "numeric conversion: i32.reinterpret_f32" {
 ///|
 test "saturating truncation: i32.trunc_sat_f32_s overflow" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F32],
-    [@types.ValueType::I32],
+    [F32],
+    [I32],
     [LocalGet(0), I32TruncSatF32S],
     "trunc_sat",
   )
@@ -210,8 +211,8 @@ test "saturating truncation: i32.trunc_sat_f32_s overflow" {
 ///|
 test "saturating truncation: i32.trunc_sat_f64_u negative" {
   let mod = @types.Module::simple(
-    [@types.ValueType::F64],
-    [@types.ValueType::I32],
+    [F64],
+    [I32],
     [LocalGet(0), I32TruncSatF64U],
     "trunc_sat_u",
   )
@@ -229,7 +230,7 @@ test "memory: i32.store and i32.load" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(42),
@@ -256,7 +257,7 @@ test "memory: i64.store and i64.load" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I64],
+      [I64],
       [
         I32Const(0),
         I64Const(1234567890123L),
@@ -283,7 +284,7 @@ test "memory: f32.store and f32.load" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::F32],
+      [F32],
       [
         I32Const(0),
         F32Const(3.14),
@@ -313,7 +314,7 @@ test "memory: load with offset" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(8),
         I32Const(100),
@@ -340,7 +341,7 @@ test "memory: i32.load8_s sign extension" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(255),
@@ -367,7 +368,7 @@ test "memory: i32.load8_u zero extension" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [
         I32Const(0),
         I32Const(255),
@@ -394,7 +395,7 @@ test "memory: memory.size and memory.grow" {
   let mod = {
     ..@types.Module::simple(
       [],
-      [@types.ValueType::I32],
+      [I32],
       [MemorySize(0), Drop, I32Const(2), MemoryGrow(0), Drop, MemorySize(0)],
       "test",
     ),
@@ -414,8 +415,8 @@ test "memory: memory.size and memory.grow" {
 test "control flow: simple block" {
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
-    [Block(Value(@types.ValueType::I32), [I32Const(42)])],
+    [I32],
+    [Block(Value(I32), [I32Const(42)])],
     "test",
   )
   let (store, instance) = instantiate_module(mod)
@@ -430,8 +431,8 @@ test "control flow: simple block" {
 test "control flow: br exits block" {
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
-    [Block(Value(@types.ValueType::I32), [I32Const(10), Br(0), I32Const(20)])],
+    [I32],
+    [Block(Value(I32), [I32Const(10), Br(0), I32Const(20)])],
     "test",
   )
   let (store, instance) = instantiate_module(mod)
@@ -445,10 +446,10 @@ test "control flow: br exits block" {
 ///|
 test "control flow: br_if conditional" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::I32],
+    [I32],
+    [I32],
     [
-      Block(Value(@types.ValueType::I32), [
+      Block(Value(I32), [
         I32Const(100),
         LocalGet(0),
         BrIf(0),
@@ -496,8 +497,8 @@ test "control flow: loop with br" {
     LocalGet(1),
   ]
   let mod = {
-    ..@types.Module::simple([], [@types.ValueType::I32], body, "test"),
-    codes: [{ locals: [@types.ValueType::I32, @types.ValueType::I32], body }],
+    ..@types.Module::simple([], [I32], body, "test"),
+    codes: [{ locals: [I32, I32], body }],
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -510,12 +511,9 @@ test "control flow: loop with br" {
 ///|
 test "control flow: if-else" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32],
-    [@types.ValueType::I32],
-    [
-      LocalGet(0),
-      If(Value(@types.ValueType::I32), [I32Const(111)], [I32Const(222)]),
-    ],
+    [I32],
+    [I32],
+    [LocalGet(0), If(Value(I32), [I32Const(111)], [I32Const(222)])],
     "test",
   )
   let (store, instance) = instantiate_module(mod)
@@ -536,13 +534,8 @@ test "control flow: if-else" {
 test "control flow: nested blocks with br" {
   let mod = @types.Module::simple(
     [],
-    [@types.ValueType::I32],
-    [
-      Block(Value(@types.ValueType::I32), [
-        Block(Empty, [I32Const(50), Br(1)]),
-        I32Const(99),
-      ]),
-    ],
+    [I32],
+    [Block(Value(I32), [Block(Empty, [I32Const(50), Br(1)]), I32Const(99)])],
     "test",
   )
   let (store, instance) = instantiate_module(mod)
@@ -556,8 +549,8 @@ test "control flow: nested blocks with br" {
 ///|
 test "control flow: select" {
   let mod = @types.Module::simple(
-    [@types.ValueType::I32, @types.ValueType::I32, @types.ValueType::I32],
-    [@types.ValueType::I32],
+    [I32, I32, I32],
+    [I32],
     [LocalGet(0), LocalGet(1), LocalGet(2), Select],
     "test",
   )
@@ -595,14 +588,8 @@ test "function call: call instruction" {
     locals: [],
     body: [I32Const(3), I32Const(4), Call(0)],
   }
-  let add_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let main_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let add_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let main_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(add_type),
@@ -614,7 +601,7 @@ test "function call: call instruction" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "main", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [add_func, main_func],
@@ -648,10 +635,7 @@ test "function call: nested calls" {
     locals: [],
     body: [LocalGet(0), Call(0), Call(1)], // double then add_one
   }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
@@ -660,7 +644,7 @@ test "function call: nested calls" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @types.ExportDesc::Func(2) }],
+    exports: [{ name: "main", desc: Func(2) }],
     start: None,
     elems: [],
     codes: [double_func, add_one_func, main_func],
@@ -700,18 +684,8 @@ test "function call: call_indirect" {
       CallIndirect(0, 0),
     ],
   } // type 0, table 0
-  let binary_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let apply_type : @types.FuncType = {
-    params: [
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-      @types.ValueType::I32,
-    ],
-    results: [@types.ValueType::I32],
-  }
+  let binary_type : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let apply_type : @types.FuncType = { params: [I32, I32, I32], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(binary_type),
@@ -723,7 +697,7 @@ test "function call: call_indirect" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 2, max: None },
           is_table64: false,
         },
@@ -732,12 +706,12 @@ test "function call: call_indirect" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "apply", desc: @types.ExportDesc::Func(2) }],
+    exports: [{ name: "apply", desc: Func(2) }],
     start: None,
     elems: [
       {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
+        mode: Active(0, [I32Const(0)]),
+        type_: FuncRef,
         init: [[RefFunc(0)], [RefFunc(1)]],
       },
     ],
@@ -780,13 +754,10 @@ test "host function: simple call" {
   let host_fn : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = args => {
     match args[0] {
       I32(n) => [I32(n * 2)]
-      _ => raise @runtime.TypeMismatch
+      _ => raise TypeMismatch
     }
   }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
   let host_addr = store.alloc_host_func(host_fn, func_type=unary_type)
 
   // Create a module that imports and calls the host function
@@ -804,7 +775,7 @@ test "host function: simple call" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "main", desc: @types.ExportDesc::Func(1) }], // func 1 is main (after import)
+    exports: [{ name: "main", desc: Func(1) }], // func 1 is main (after import)
     start: None,
     elems: [],
     codes: [main_func],
@@ -836,7 +807,7 @@ test "host function: caller can access exported memory" {
     args,
   ) => {
     if args.length() != 0 {
-      raise @runtime.TypeMismatch
+      raise TypeMismatch
     }
     let mem = caller.get_exported_memory("mem")
     match mem {
@@ -844,7 +815,7 @@ test "host function: caller can access exported memory" {
         m.store_i32(0, 7)
         []
       }
-      None => raise @runtime.UndefinedElement
+      None => raise UndefinedElement
     }
   }
   let host_type : @types.FuncType = { params: [], results: [] }
@@ -857,10 +828,7 @@ test "host function: caller can access exported memory" {
   // - exports a memory as "mem"
   // - imports "env.write_mem0" and calls it
   // - reads mem[0] and returns it
-  let main_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let main_type : @types.FuncType = { params: [], results: [I32] }
   let main_func : @types.FunctionCode = {
     locals: [],
     body: [Call(0), I32Const(0), I32Load(0, 2, 0)],
@@ -878,10 +846,7 @@ test "host function: caller can access exported memory" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
     globals: [],
-    exports: [
-      { name: "mem", desc: @types.ExportDesc::Memory(0) },
-      { name: "main", desc: @types.ExportDesc::Func(1) },
-    ],
+    exports: [{ name: "mem", desc: Memory(0) }, { name: "main", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [main_func],
@@ -917,10 +882,7 @@ test "memory import: shared memory between modules" {
     locals: [],
     body: [I32Const(0), I32Load(0, 2, 0)], // load from address 0
   }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -939,7 +901,7 @@ test "memory import: shared memory between modules" {
     tables: [],
     memories: [], // No local memories, only imported
     globals: [],
-    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "read", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -993,7 +955,7 @@ test "memory import: write to imported memory" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "write", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "write", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [write_func],
@@ -1021,10 +983,7 @@ test "import validation: missing import raises error" {
 
   // Create a module that requires an import but don't provide it
   let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -1033,7 +992,7 @@ test "import validation: missing import raises error" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [func],
@@ -1047,8 +1006,11 @@ test "import validation: missing import raises error" {
 
   // Should raise UnknownImport
   inspect(
-    try? instantiate_module_with_imports(store, mod, imports),
-    content="Err(unknown import: env.missing_func)",
+    runtime_has_error(
+      () => instantiate_module_with_imports(store, mod, imports),
+      err => err is UnknownImport("env", "missing_func"),
+    ),
+    content="true",
   )
 }
 

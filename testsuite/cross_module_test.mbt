@@ -19,9 +19,9 @@ test "cross-module: simple function import" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "call_add",
-    [@types.Value::I32(3), @types.Value::I32(5)],
+    [I32(3), I32(5)],
   )
-  inspect(result, content="matched")
+  inspect(result.matched, content="true")
 }
 
 ///|
@@ -33,9 +33,9 @@ test "cross-module: multiple function imports" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "add_then_sub",
-    [@types.Value::I32(10), @types.Value::I32(5), @types.Value::I32(3)],
+    [I32(10), I32(5), I32(3)],
   )
-  inspect(result, content="matched")
+  inspect(result.matched, content="true")
 }
 
 ///|
@@ -47,9 +47,9 @@ test "cross-module: float function import" {
     [("mod_a", mod_a_src)],
     mod_b_src,
     "call_addf",
-    [@types.Value::F32(1.5), @types.Value::F32(2.5)],
+    [F32(1.5), F32(2.5)],
   )
-  inspect(result, content="matched")
+  inspect(result.matched, content="true")
 }
 
 ///|
@@ -62,10 +62,10 @@ test "cross-module: chain imports" {
     [("mod_a", mod_a_src), ("mod_b", mod_b_src)],
     mod_c_src,
     "octuple",
-    [@types.Value::I32(1)],
+    [I32(1)],
   )
   // 1 * 8 = 8
-  inspect(result, content="matched")
+  inspect(result.matched, content="true")
 }
 
 ///|
@@ -103,10 +103,9 @@ test "cross-module: shared memory export/import (jit + interp)" {
   }
 
   // Interpreter writes, interpreter reads through import.
-  @executor.call_exported_func(store, inst_a, "set0", [@types.Value::I32(11)])
-  |> ignore
+  @executor.call_exported_func(store, inst_a, "set0", [I32(11)]) |> ignore
   let b0 = @executor.call_exported_func(store, inst_b, "read0", [])
-  inspect(b0, content="[I32(11)]")
+  debug_inspect(b0, content="[I32(11)]")
 
   // Compile module B to JIT and point it at the store's shared memory descriptor.
   let precompiled = @cwasm.PrecompiledModule::new(current_target_arch())
@@ -138,7 +137,7 @@ test "cross-module: shared memory export/import (jit + interp)" {
   }
   let f_read0 = jm.get_func_by_name("read0").unwrap()
   let r0 = jm.call_with_context(f_read0, [])
-  inspect(r0, content="[11]")
+  debug_inspect(r0, content="[11]")
 
   // Grow via JIT and write into the new page; interpreter observes immediately.
   let f_grow = jm.get_func_by_name("grow").unwrap()
@@ -146,7 +145,7 @@ test "cross-module: shared memory export/import (jit + interp)" {
   let f_write1 = jm.get_func_by_name("write1").unwrap()
   let _ = jm.call_with_context(f_write1, [42L])
   let a1 = @executor.call_exported_func(store, inst_a, "get1", [])
-  inspect(a1, content="[I32(42)]")
+  debug_inspect(a1, content="[I32(42)]")
 
   // JIT-only: compile module A as well and verify JIT↔JIT sharing.
   let precompiled_a = @cwasm.PrecompiledModule::new(current_target_arch())
@@ -181,13 +180,13 @@ test "cross-module: shared memory export/import (jit + interp)" {
   let f_set0 = jm_a.get_func_by_name("set0").unwrap()
   let _ = jm_a.call_with_context(f_set0, [13L])
   let r0b = jm.call_with_context(f_read0, [])
-  inspect(r0b, content="[13]")
+  debug_inspect(r0b, content="[13]")
 
   // JIT(B) writes, JIT(A) reads from grown page.
   let _ = jm.call_with_context(f_write1, [99L])
   let f_get1 = jm_a.get_func_by_name("get1").unwrap()
   let r1a = jm_a.call_with_context(f_get1, [])
-  inspect(r1a, content="[99]")
+  debug_inspect(r1a, content="[99]")
 }
 
 ///|
@@ -199,14 +198,14 @@ struct CrossModuleResult {
 }
 
 ///|
-pub impl Show for CrossModuleResult with output(self, logger) {
+pub impl Show for CrossModuleResult with fn output(self, logger) {
   if self.matched {
     logger.write_string("matched")
   } else {
     logger.write_string("JIT: ")
-    logger.write_object(self.jit_result)
+    logger.write_string(to_repr(self.jit_result).to_string())
     logger.write_string(", Interp: ")
-    logger.write_object(self.interp_result)
+    logger.write_string(to_repr(self.interp_result).to_string())
   }
 }
 
@@ -317,7 +316,7 @@ fn run_cross_module_jit(
     let base = module_func_base[i]
     let mod_exports : Map[String, Int] = {}
     for exp in mod_.exports {
-      guard exp.desc is @types.ExportDesc::Func(local_idx) else { continue }
+      guard exp.desc is Func(local_idx) else { continue }
       mod_exports.set(exp.name, base + local_idx)
     }
     export_map.set(name, mod_exports)
@@ -453,7 +452,7 @@ fn run_cross_module_jit(
 ///|
 fn get_exported_func_name(mod_ : @types.Module, func_idx : Int) -> String {
   for exp in mod_.exports {
-    if exp.desc is @types.ExportDesc::Func(idx) && idx == func_idx {
+    if exp.desc is Func(idx) && idx == func_idx {
       return exp.name
     }
   }

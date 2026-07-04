@@ -68,7 +68,7 @@ pub(all) enum Canon {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Canon with output(self, logger) {
+pub impl Show for Canon with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -78,7 +78,7 @@ fn parse_context_core_valtype(
 ) -> @types.ValueType raise ComponentParseError {
   let b = reader.read_u8()
   match b {
-    0x7f => @types.ValueType::I32
+    0x7f => I32
     _ => raise InvalidCanonSection
   }
 }
@@ -143,15 +143,15 @@ fn parse_opts(reader : Reader) -> Array[CanonOpt] raise ComponentParseError {
     let tag = reader.read_u8()
     let opt = match tag {
       0x00 => CanonOpt::StringEncoding(Utf8)
-      0x01 => CanonOpt::StringEncoding(Utf16)
-      0x02 => CanonOpt::StringEncoding(Latin1Utf16)
-      0x03 => CanonOpt::Memory(reader.read_leb_u32())
-      0x04 => CanonOpt::Realloc(reader.read_leb_u32())
-      0x05 => CanonOpt::PostReturn(reader.read_leb_u32())
-      0x08 => CanonOpt::CoreType(reader.read_leb_u32())
-      0x09 => CanonOpt::Gc
-      0x06 => CanonOpt::Async
-      0x07 => CanonOpt::Callback(reader.read_leb_u32())
+      0x01 => StringEncoding(Utf16)
+      0x02 => StringEncoding(Latin1Utf16)
+      0x03 => Memory(reader.read_leb_u32())
+      0x04 => Realloc(reader.read_leb_u32())
+      0x05 => PostReturn(reader.read_leb_u32())
+      0x08 => CoreType(reader.read_leb_u32())
+      0x09 => Gc
+      0x06 => Async
+      0x07 => Callback(reader.read_leb_u32())
       _ => raise InvalidCanonSection
     }
     opts.push(opt)
@@ -172,7 +172,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       let core_func = reader.read_leb_u32()
       let opts = parse_opts(reader)
       let ft = reader.read_typeidx()
-      Canon::Lift(core_func, opts, ft)
+      Lift(core_func, opts, ft)
     }
     0x01 => {
       // 0x01 0x00 f:<funcidx> opts:<opts>
@@ -182,27 +182,27 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       }
       let func = reader.read_leb_u32()
       let opts = parse_opts(reader)
-      Canon::Lower(func, opts)
+      Lower(func, opts)
     }
-    0x08 => Canon::BackpressureSet
-    0x05 => Canon::TaskCancel
+    0x08 => BackpressureSet
+    0x05 => TaskCancel
     0x06 => {
       let async_flag = reader.read_u8()
       if async_flag != 0x00 && async_flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::SubtaskCancel(async_flag == 0x01)
+      SubtaskCancel(async_flag == 0x01)
     }
-    0x02 => Canon::ResourceNew(reader.read_typeidx())
-    0x03 => Canon::ResourceDrop(reader.read_typeidx())
-    0x04 => Canon::ResourceRep(reader.read_typeidx())
+    0x02 => ResourceNew(reader.read_typeidx())
+    0x03 => ResourceDrop(reader.read_typeidx())
+    0x04 => ResourceRep(reader.read_typeidx())
     0x0a => {
       let vt = parse_context_core_valtype(reader)
       let idx = reader.read_leb_u32()
       if idx != 0 {
         raise InvalidCanonSection
       }
-      Canon::ContextGet(vt, idx)
+      ContextGet(vt, idx)
     }
     0x0b => {
       let vt = parse_context_core_valtype(reader)
@@ -210,59 +210,59 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       if idx != 0 {
         raise InvalidCanonSection
       }
-      Canon::ContextSet(vt, idx)
+      ContextSet(vt, idx)
     }
     0x09 => {
       let result = parse_canon_resultlist(reader)
       let opts = parse_opts(reader)
-      Canon::TaskReturn(result, opts)
+      TaskReturn(result, opts)
     }
     0x0c => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::ThreadYield(flag == 0x01)
+      ThreadYield(flag == 0x01)
     }
-    0x26 => Canon::ThreadIndex
+    0x26 => ThreadIndex
     0x27 => {
       let ty = reader.read_leb_u32()
       let table = reader.read_leb_u32()
-      Canon::ThreadNewIndirect(ty, table)
+      ThreadNewIndirect(ty, table)
     }
     0x28 => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::ThreadSwitchTo(flag == 0x01)
+      ThreadSwitchTo(flag == 0x01)
     }
     0x29 => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::ThreadSuspend(flag == 0x01)
+      ThreadSuspend(flag == 0x01)
     }
-    0x2a => Canon::ThreadResumeLater
+    0x2a => ThreadResumeLater
     0x2b => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::ThreadYieldTo(flag == 0x01)
+      ThreadYieldTo(flag == 0x01)
     }
-    0x0d => Canon::SubtaskDrop
-    0x0e => Canon::StreamNew(reader.read_typeidx())
+    0x0d => SubtaskDrop
+    0x0e => StreamNew(reader.read_typeidx())
     0x0f => {
       let ty = reader.read_typeidx()
       let opts = parse_opts(reader)
-      Canon::StreamRead(ty, opts)
+      StreamRead(ty, opts)
     }
     0x10 => {
       let ty = reader.read_typeidx()
       let opts = parse_opts(reader)
-      Canon::StreamWrite(ty, opts)
+      StreamWrite(ty, opts)
     }
     0x11 => {
       let ty = reader.read_typeidx()
@@ -270,7 +270,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       if async_flag != 0x00 && async_flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::StreamCancelRead(ty, async_flag == 0x01)
+      StreamCancelRead(ty, async_flag == 0x01)
     }
     0x12 => {
       let ty = reader.read_typeidx()
@@ -278,20 +278,20 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       if async_flag != 0x00 && async_flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::StreamCancelWrite(ty, async_flag == 0x01)
+      StreamCancelWrite(ty, async_flag == 0x01)
     }
-    0x13 => Canon::StreamDropReadable(reader.read_typeidx())
-    0x14 => Canon::StreamDropWritable(reader.read_typeidx())
-    0x15 => Canon::FutureNew(reader.read_typeidx())
+    0x13 => StreamDropReadable(reader.read_typeidx())
+    0x14 => StreamDropWritable(reader.read_typeidx())
+    0x15 => FutureNew(reader.read_typeidx())
     0x16 => {
       let ty = reader.read_typeidx()
       let opts = parse_opts(reader)
-      Canon::FutureRead(ty, opts)
+      FutureRead(ty, opts)
     }
     0x17 => {
       let ty = reader.read_typeidx()
       let opts = parse_opts(reader)
-      Canon::FutureWrite(ty, opts)
+      FutureWrite(ty, opts)
     }
     0x18 => {
       let ty = reader.read_typeidx()
@@ -299,7 +299,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       if async_flag != 0x00 && async_flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::FutureCancelRead(ty, async_flag == 0x01)
+      FutureCancelRead(ty, async_flag == 0x01)
     }
     0x19 => {
       let ty = reader.read_typeidx()
@@ -307,38 +307,38 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       if async_flag != 0x00 && async_flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::FutureCancelWrite(ty, async_flag == 0x01)
+      FutureCancelWrite(ty, async_flag == 0x01)
     }
-    0x1a => Canon::FutureDropReadable(reader.read_typeidx())
-    0x1b => Canon::FutureDropWritable(reader.read_typeidx())
+    0x1a => FutureDropReadable(reader.read_typeidx())
+    0x1b => FutureDropWritable(reader.read_typeidx())
     0x1c => {
       let opts = parse_opts(reader)
-      Canon::ErrorContextNew(opts)
+      ErrorContextNew(opts)
     }
     0x1d => {
       let opts = parse_opts(reader)
-      Canon::ErrorContextDebugMessage(opts)
+      ErrorContextDebugMessage(opts)
     }
-    0x1e => Canon::ErrorContextDrop
-    0x1f => Canon::WaitableSetNew
+    0x1e => ErrorContextDrop
+    0x1f => WaitableSetNew
     0x20 => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::WaitableSetWait(flag == 0x01, reader.read_leb_u32())
+      WaitableSetWait(flag == 0x01, reader.read_leb_u32())
     }
     0x21 => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
-      Canon::WaitableSetPoll(flag == 0x01, reader.read_leb_u32())
+      WaitableSetPoll(flag == 0x01, reader.read_leb_u32())
     }
-    0x22 => Canon::WaitableSetDrop
-    0x23 => Canon::WaitableJoin
-    0x24 => Canon::BackpressureInc
-    0x25 => Canon::BackpressureDec
+    0x22 => WaitableSetDrop
+    0x23 => WaitableJoin
+    0x24 => BackpressureInc
+    0x25 => BackpressureDec
     _ => raise UnsupportedCanonOpcode(tag)
   }
 }
@@ -367,7 +367,7 @@ pub(all) struct Start {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Start with output(self, logger) {
+pub impl Show for Start with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 

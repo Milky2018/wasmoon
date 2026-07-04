@@ -80,22 +80,22 @@ pub(all) enum ExceptionLibcall {
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
 /// `derive(Debug)`.
-pub impl Show for CallConv with output(self, logger) {
+pub impl Show for CallConv with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for GCLibcall with output(self, logger) {
+pub impl Show for GCLibcall with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for JITLibcall with output(self, logger) {
+pub impl Show for JITLibcall with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
 ///|
-pub impl Show for ExceptionLibcall with output(self, logger) {
+pub impl Show for ExceptionLibcall with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -118,13 +118,13 @@ pub fn VCodeInst::new(opcode : VCodeOpcode) -> VCodeInst {
 ///|
 pub fn VCodeInst::add_def(self : VCodeInst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
-  self.def_constraints.push(@abi.Any)
+  self.def_constraints.push(Any)
 }
 
 ///|
 pub fn VCodeInst::add_use(self : VCodeInst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
-  self.use_constraints.push(@abi.Any)
+  self.use_constraints.push(Any)
 }
 
 ///|
@@ -135,7 +135,7 @@ pub fn VCodeInst::add_use_fixed(
   preg : @abi.PReg,
 ) -> Unit {
   self.uses.push(reg)
-  self.use_constraints.push(@abi.FixedReg(preg))
+  self.use_constraints.push(FixedReg(preg))
 }
 
 ///|
@@ -146,7 +146,7 @@ pub fn VCodeInst::add_def_fixed(
   preg : @abi.PReg,
 ) -> Unit {
   self.defs.push(reg)
-  self.def_constraints.push(@abi.FixedReg(preg))
+  self.def_constraints.push(FixedReg(preg))
 }
 
 ///|
@@ -192,7 +192,7 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
 }
 
 ///|
-pub impl Show for VCodeInst with output(self, logger) {
+pub impl Show for VCodeInst with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1286,7 +1286,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
 }
 
 ///|
-pub impl Show for VCodeOpcode with output(self, logger) {
+pub impl Show for VCodeOpcode with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1312,7 +1312,7 @@ fn MemType::to_string(self : MemType) -> String {
 }
 
 ///|
-pub impl Show for MemType with output(self, logger) {
+pub impl Show for MemType with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1348,7 +1348,7 @@ fn CmpKind::to_string(self : CmpKind) -> String {
 }
 
 ///|
-pub impl Show for CmpKind with output(self, logger) {
+pub impl Show for CmpKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1376,7 +1376,7 @@ fn FCmpKind::to_string(self : FCmpKind) -> String {
 }
 
 ///|
-pub impl Show for FCmpKind with output(self, logger) {
+pub impl Show for FCmpKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1412,7 +1412,7 @@ fn ExtendKind::to_string(self : ExtendKind) -> String {
 }
 
 ///|
-pub impl Show for ExtendKind with output(self, logger) {
+pub impl Show for ExtendKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1462,7 +1462,7 @@ fn FloatToIntKind::to_string(self : FloatToIntKind) -> String {
 }
 
 ///|
-pub impl Show for FloatToIntKind with output(self, logger) {
+pub impl Show for FloatToIntKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1495,7 +1495,7 @@ fn IntToFloatKind::to_string(self : IntToFloatKind) -> String {
 }
 
 ///|
-pub impl Show for IntToFloatKind with output(self, logger) {
+pub impl Show for IntToFloatKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1547,7 +1547,7 @@ fn Cond::to_string(self : Cond) -> String {
 }
 
 ///|
-pub impl Show for Cond with output(self, logger) {
+pub impl Show for Cond with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1681,7 +1681,7 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
 }
 
 ///|
-pub impl Show for VCodeTerminator with output(self, logger) {
+pub impl Show for VCodeTerminator with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1737,7 +1737,7 @@ fn IndexExtend::to_string(self : IndexExtend) -> String {
 }
 
 ///|
-pub impl Show for IndexExtend with output(self, logger) {
+pub impl Show for IndexExtend with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1751,7 +1751,7 @@ fn ShiftType::to_string(self : ShiftType) -> String {
 }
 
 ///|
-pub impl Show for ShiftType with output(self, logger) {
+pub impl Show for ShiftType with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1775,7 +1775,7 @@ fn LaneSize::to_string(self : LaneSize) -> String {
 }
 
 ///|
-pub impl Show for LaneSize with output(self, logger) {
+pub impl Show for LaneSize with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1801,7 +1801,7 @@ fn SIMDCmpKind::to_string(self : SIMDCmpKind) -> String {
 }
 
 ///|
-pub impl Show for SIMDCmpKind with output(self, logger) {
+pub impl Show for SIMDCmpKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1823,6 +1823,6 @@ fn SIMDFCmpKind::to_string(self : SIMDFCmpKind) -> String {
 }
 
 ///|
-pub impl Show for SIMDFCmpKind with output(self, logger) {
+pub impl Show for SIMDFCmpKind with fn output(self, logger) {
   logger.write_string(self.to_string())
 }

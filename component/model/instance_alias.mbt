@@ -20,7 +20,7 @@ pub(all) enum InstanceExpr {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for InstanceExpr with output(self, logger) {
+pub impl Show for InstanceExpr with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 
@@ -97,7 +97,7 @@ pub fn parse_instance_section(
   let n = reader.read_leb_u32()
   let instances : Array[Instance] = []
   for _ in 0..<n {
-    instances.push(Instance::{ expr: parse_instanceexpr(reader) })
+    instances.push({ expr: parse_instanceexpr(reader) })
   }
   if !reader.is_eof() {
     raise InvalidInstanceSection
@@ -119,7 +119,7 @@ pub(all) struct Alias {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Alias with output(self, logger) {
+pub impl Show for Alias with fn output(self, logger) {
   logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
 }
 

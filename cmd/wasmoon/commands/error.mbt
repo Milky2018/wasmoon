@@ -10,7 +10,7 @@ priv suberror CliError {
 }
 
 ///|
-impl Show for CliError with output(self, logger) {
+impl Show for CliError with fn output(self, logger) {
   let msg = match self {
     FileNotFound(path) => "file \{path} not found"
     ParseModuleError(e) => "parse wasm module error: \{e}"

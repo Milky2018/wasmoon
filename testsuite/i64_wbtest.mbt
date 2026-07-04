@@ -2,6 +2,18 @@
 // These tests are extracted from the official WebAssembly testsuite
 
 ///|
+fn[T] i64_runtime_has_error(
+  body : () -> T raise @runtime.RuntimeError,
+  matches : (@runtime.RuntimeError) -> Bool,
+) -> Bool {
+  try body() catch {
+    err => matches(err)
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 /// Create i64 arithmetic test module
 fn create_i64_arithmetic_module() -> @types.Module {
   let add_func : @types.FunctionCode = {
@@ -32,10 +44,7 @@ fn create_i64_arithmetic_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64RemU],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64, @types.ValueType::I64],
-    results: [@types.ValueType::I64],
-  }
+  let func_type : @types.FuncType = { params: [I64, I64], results: [I64] }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -45,13 +54,13 @@ fn create_i64_arithmetic_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "add", desc: @types.ExportDesc::Func(0) },
-      { name: "sub", desc: @types.ExportDesc::Func(1) },
-      { name: "mul", desc: @types.ExportDesc::Func(2) },
-      { name: "div_s", desc: @types.ExportDesc::Func(3) },
-      { name: "div_u", desc: @types.ExportDesc::Func(4) },
-      { name: "rem_s", desc: @types.ExportDesc::Func(5) },
-      { name: "rem_u", desc: @types.ExportDesc::Func(6) },
+      { name: "add", desc: Func(0) },
+      { name: "sub", desc: Func(1) },
+      { name: "mul", desc: Func(2) },
+      { name: "div_s", desc: Func(3) },
+      { name: "div_u", desc: Func(4) },
+      { name: "rem_s", desc: Func(5) },
+      { name: "rem_u", desc: Func(6) },
     ],
     start: None,
     elems: [],
@@ -148,11 +157,16 @@ test "wasm-testsuite: i64.div_s trap on zero" {
   let (store, instance) = @executor.instantiate_module(mod)
   // (assert_trap (invoke "div_s" (i64.const 1) (i64.const 0)) "integer divide by zero")
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I64(1L),
-      I64(0L),
-    ]),
-    content="Err(integer divide by zero)",
+    i64_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I64(1L),
+          I64(0L),
+        ])
+      },
+      err => err is DivisionByZero,
+    ),
+    content="true",
   )
 }
 
@@ -163,11 +177,16 @@ test "wasm-testsuite: i64.div_s trap on overflow" {
   // (assert_trap (invoke "div_s" (i64.const 0x8000000000000000) (i64.const -1)) "integer overflow")
   // INT64_MIN / -1 overflows
   inspect(
-    try? @executor.call_exported_func(store, instance, "div_s", [
-      I64(-9223372036854775808L),
-      I64(-1L),
-    ]),
-    content="Err(integer overflow)",
+    i64_runtime_has_error(
+      () => {
+        @executor.call_exported_func(store, instance, "div_s", [
+          I64(-9223372036854775808L),
+          I64(-1L),
+        ])
+      },
+      err => err is IntegerOverflow,
+    ),
+    content="true",
   )
 }
 
@@ -266,10 +285,7 @@ fn create_i64_bitwise_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I64Rotr],
   }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I64, @types.ValueType::I64],
-    results: [@types.ValueType::I64],
-  }
+  let func_type : @types.FuncType = { params: [I64, I64], results: [I64] }
   {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -279,14 +295,14 @@ fn create_i64_bitwise_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "and", desc: @types.ExportDesc::Func(0) },
-      { name: "or", desc: @types.ExportDesc::Func(1) },
-      { name: "xor", desc: @types.ExportDesc::Func(2) },
-      { name: "shl", desc: @types.ExportDesc::Func(3) },
-      { name: "shr_s", desc: @types.ExportDesc::Func(4) },
-      { name: "shr_u", desc: @types.ExportDesc::Func(5) },
-      { name: "rotl", desc: @types.ExportDesc::Func(6) },
-      { name: "rotr", desc: @types.ExportDesc::Func(7) },
+      { name: "and", desc: Func(0) },
+      { name: "or", desc: Func(1) },
+      { name: "xor", desc: Func(2) },
+      { name: "shl", desc: Func(3) },
+      { name: "shr_s", desc: Func(4) },
+      { name: "shr_u", desc: Func(5) },
+      { name: "rotl", desc: Func(6) },
+      { name: "rotr", desc: Func(7) },
     ],
     start: None,
     elems: [],
@@ -410,10 +426,7 @@ fn create_i64_unary_module() -> @types.Module {
     locals: [],
     body: [LocalGet(0), I64Extend32S],
   }
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I64],
-    results: [@types.ValueType::I64],
-  }
+  let unary_type : @types.FuncType = { params: [I64], results: [I64] }
   {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
@@ -423,12 +436,12 @@ fn create_i64_unary_module() -> @types.Module {
     memories: [],
     globals: [],
     exports: [
-      { name: "clz", desc: @types.ExportDesc::Func(0) },
-      { name: "ctz", desc: @types.ExportDesc::Func(1) },
-      { name: "popcnt", desc: @types.ExportDesc::Func(2) },
-      { name: "extend8_s", desc: @types.ExportDesc::Func(3) },
-      { name: "extend16_s", desc: @types.ExportDesc::Func(4) },
-      { name: "extend32_s", desc: @types.ExportDesc::Func(5) },
+      { name: "clz", desc: Func(0) },
+      { name: "ctz", desc: Func(1) },
+      { name: "popcnt", desc: Func(2) },
+      { name: "extend8_s", desc: Func(3) },
+      { name: "extend16_s", desc: Func(4) },
+      { name: "extend32_s", desc: Func(5) },
     ],
     start: None,
     elems: [],

@@ -27,10 +27,10 @@ fn make_wasm_module(sections : Array[FixedArray[Int]]) -> Bytes {
 ///|
 fn parse_wasm(sections : Array[FixedArray[Int]]) -> @types.Module? {
   let data = make_wasm_module(sections)
-  let result = try? @parser.parse_module(data)
-  match result {
-    Ok(m) => Some(m)
-    Err(_) => None
+  try @parser.parse_module(data) catch {
+    _ => None
+  } noraise {
+    m => Some(m)
   }
 }
 
@@ -249,16 +249,14 @@ test "binary parse gc: rec group allows forward type refs" {
   inspect(m_opt is Some(_), content="true")
   guard m_opt is Some(m) else { return }
   let ok0 = match m.types[0].composite {
-    Func(ft) =>
-      ft.params == [@types.ValueType::RefStruct(1)] && ft.results == [I32]
+    Func(ft) => ft.params == [RefStruct(1)] && ft.results == [I32]
     _ => false
   }
   inspect(ok0, content="true")
   let ok1 = match m.types[1].composite {
     Struct(st) =>
       st.fields.length() == 1 &&
-      st.fields[0].storage_type ==
-      @types.StorageType::Val(@types.ValueType::RefNullFuncTyped(0)) &&
+      st.fields[0].storage_type == Val(RefNullFuncTyped(0)) &&
       st.fields[0].mutable == true
     _ => false
   }

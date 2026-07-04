@@ -23,20 +23,17 @@ test "jit hostcall: imported host func receives Caller and can access exported m
       let mem = caller.get_exported_memory("mem") catch { _ => None }
       match mem {
         Some(m) => m.store_i32(0, 123) catch { e => raise e }
-        None => raise @runtime.RuntimeError::UndefinedElement
+        None => raise UndefinedElement
       }
       if args.length() != 1 {
-        raise @runtime.RuntimeError::TypeMismatch
+        raise TypeMismatch
       }
       match args[0] {
-        @types.Value::I32(n) => [@types.Value::I32(n + 1)]
-        _ => raise @runtime.RuntimeError::TypeMismatch
+        I32(n) => [I32(n + 1)]
+        _ => raise TypeMismatch
       }
     },
-    func_type={
-      params: [@types.ValueType::I32],
-      results: [@types.ValueType::I32],
-    },
+    func_type={ params: [I32], results: [I32] },
   )
   let instance = @executor.instantiate_with_linker(linker, "test", mod_)
 
@@ -80,9 +77,15 @@ test "jit hostcall: imported host func receives Caller and can access exported m
   let external_imports = @wast.build_external_imports_for_jit(
     mod_, instance, store,
   )
-  let load_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try? @jit.JITModule::load_with_imports(
-    precompiled, func_signatures, external_imports,
-  )
+  let load_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
+    @jit.JITModule::load_with_imports(
+      precompiled, func_signatures, external_imports,
+    )
+  catch {
+    e => Err(e)
+  } noraise {
+    jm => Ok(jm)
+  }
   let jm = match load_result {
     Ok(m) => m
     Err(err) => abort("jit load failed: \{err}")

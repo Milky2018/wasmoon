@@ -9,29 +9,29 @@
 /// leaked signal should be surfaced as `unreachable` externally.
 fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
   match e {
-    @runtime.StackUnderflow => @runtime.StackUnderflow
-    @runtime.StackOverflow => @runtime.StackOverflow
-    @runtime.TypeMismatch => @runtime.TypeMismatch
-    @runtime.OutOfBoundsMemoryAccess => @runtime.OutOfBoundsMemoryAccess
-    @runtime.OutOfBoundsTableAccess => @runtime.OutOfBoundsTableAccess
-    @runtime.OutOfBoundsArrayAccess => @runtime.OutOfBoundsArrayAccess
-    @runtime.UndefinedElement => @runtime.UndefinedElement
-    @runtime.UninitializedElement => @runtime.UninitializedElement
-    @runtime.IndirectCallTypeMismatch => @runtime.IndirectCallTypeMismatch
-    @runtime.DivisionByZero => @runtime.DivisionByZero
-    @runtime.IntegerOverflow => @runtime.IntegerOverflow
-    @runtime.InvalidConversion => @runtime.InvalidConversion
-    @runtime.OutOfMemory => @runtime.OutOfMemory
-    @runtime.Unreachable => @runtime.Unreachable
-    @runtime.CallStackExhausted => @runtime.CallStackExhausted
+    @runtime.StackUnderflow => StackUnderflow
+    @runtime.StackOverflow => StackOverflow
+    @runtime.TypeMismatch => TypeMismatch
+    @runtime.OutOfBoundsMemoryAccess => OutOfBoundsMemoryAccess
+    @runtime.OutOfBoundsTableAccess => OutOfBoundsTableAccess
+    @runtime.OutOfBoundsArrayAccess => OutOfBoundsArrayAccess
+    @runtime.UndefinedElement => UndefinedElement
+    @runtime.UninitializedElement => UninitializedElement
+    @runtime.IndirectCallTypeMismatch => IndirectCallTypeMismatch
+    @runtime.DivisionByZero => DivisionByZero
+    @runtime.IntegerOverflow => IntegerOverflow
+    @runtime.InvalidConversion => InvalidConversion
+    @runtime.OutOfMemory => OutOfMemory
+    @runtime.Unreachable => Unreachable
+    @runtime.CallStackExhausted => CallStackExhausted
     @runtime.UnknownImport(_, _) as err => err
-    @runtime.LinkError => @runtime.LinkError
+    @runtime.LinkError => LinkError
     @runtime.LinkErrorDetail(_) as err => err
-    @runtime.NullReference => @runtime.NullReference
-    @runtime.UnalignedAtomic => @runtime.UnalignedAtomic
+    @runtime.NullReference => NullReference
+    @runtime.UnalignedAtomic => UnalignedAtomic
     @runtime.InvalidConstantExpression(_) as err => err
     InvocationSignal::HostInvocation(err) => normalize_runtime_error(err)
-    _ => @runtime.Unreachable
+    _ => Unreachable
   }
 }
 
@@ -106,7 +106,7 @@ pub fn instantiate_module(
         e => abort(e.to_string())
       }
     } else {
-      @types.Value::Null
+      Null
     }
     let table = @runtime.Table::new(
       table_def.type_.elem_type,
@@ -217,16 +217,14 @@ pub fn eval_const_expr(
         if idx < globals.length() {
           stack.push(globals[idx].get())
         } else {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "global.get out of range: " + idx.to_string(),
           )
         }
       // GC: i31 reference creation
       RefI31 =>
         if stack.length() < 1 {
-          raise @runtime.InvalidConstantExpression(
-            "ref.i31 requires an i32 operand",
-          )
+          raise InvalidConstantExpression("ref.i31 requires an i32 operand")
         } else {
           let val = stack.pop().unwrap()
           match val {
@@ -235,24 +233,19 @@ pub fn eval_const_expr(
               let i31_val = n & 0x7FFFFFFF
               stack.push(I31(i31_val))
             }
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "ref.i31 operand must be i32",
-              )
+            _ => raise InvalidConstantExpression("ref.i31 operand must be i32")
           }
         }
       // GC: array.new_default - create array with default values
       ArrayNewDefault(type_idx) =>
         if stack.length() < 1 {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "array.new_default requires a length operand",
           )
         } else if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "array.new_default requires a store",
-          )
+          raise InvalidConstantExpression("array.new_default requires a store")
         } else if type_idx < 0 || type_idx >= types.length() {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "array.new_default type index out of range: " + type_idx.to_string(),
           )
         } else {
@@ -261,7 +254,7 @@ pub fn eval_const_expr(
             let array_type = match types[type_idx].composite {
               Array(at) => at
               _ =>
-                raise @runtime.InvalidConstantExpression(
+                raise InvalidConstantExpression(
                   "array.new_default expects an array type at index " +
                   type_idx.to_string(),
                 )
@@ -273,7 +266,7 @@ pub fn eval_const_expr(
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
           } else {
-            raise @runtime.InvalidConstantExpression(
+            raise InvalidConstantExpression(
               "array.new_default length must be i32",
             )
           }
@@ -281,11 +274,11 @@ pub fn eval_const_expr(
       // GC: array.new - create array with initial value
       ArrayNew(type_idx) =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "array.new requires (init, len) operands",
           )
         } else if store is None {
-          raise @runtime.InvalidConstantExpression("array.new requires a store")
+          raise InvalidConstantExpression("array.new requires a store")
         } else {
           let len_val = stack.pop().unwrap()
           let init_val = stack.pop().unwrap()
@@ -294,19 +287,15 @@ pub fn eval_const_expr(
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
           } else {
-            raise @runtime.InvalidConstantExpression(
-              "array.new length must be i32",
-            )
+            raise InvalidConstantExpression("array.new length must be i32")
           }
         }
       // GC: array.new_fixed - create array from fixed number of stack values
       ArrayNewFixed(type_idx, len) =>
         if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "array.new_fixed requires a store",
-          )
+          raise InvalidConstantExpression("array.new_fixed requires a store")
         } else if type_idx < 0 || type_idx >= types.length() {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "array.new_fixed type index out of range: " + type_idx.to_string(),
           )
         } else {
@@ -314,7 +303,7 @@ pub fn eval_const_expr(
           match types[type_idx].composite {
             Array(_) => ()
             _ =>
-              raise @runtime.InvalidConstantExpression(
+              raise InvalidConstantExpression(
                 "array.new_fixed expects an array type at index " +
                 type_idx.to_string(),
               )
@@ -324,17 +313,14 @@ pub fn eval_const_expr(
             stack.push(ArrayRef(ref_idx))
           } else if stack.length() >= len {
             // Pop elements in reverse order (last element pushed first).
-            let elements : Array[@types.Value] = Array::make(
-              len,
-              @types.Value::Null,
-            )
+            let elements : Array[@types.Value] = Array::make(len, Null)
             for i = len - 1; i >= 0; i = i - 1 {
               elements[i] = stack.pop().unwrap()
             }
             let ref_idx = store.unwrap().alloc_array(type_idx, elements)
             stack.push(ArrayRef(ref_idx))
           } else {
-            raise @runtime.InvalidConstantExpression(
+            raise InvalidConstantExpression(
               "array.new_fixed requires " +
               len.to_string() +
               " element operands",
@@ -344,11 +330,9 @@ pub fn eval_const_expr(
       // GC: struct.new_default - create struct with default values
       StructNewDefault(type_idx) =>
         if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "struct.new_default requires a store",
-          )
+          raise InvalidConstantExpression("struct.new_default requires a store")
         } else if type_idx < 0 || type_idx >= types.length() {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "struct.new_default type index out of range: " +
             type_idx.to_string(),
           )
@@ -356,7 +340,7 @@ pub fn eval_const_expr(
           let struct_type = match types[type_idx].composite {
             Struct(st) => st
             _ =>
-              raise @runtime.InvalidConstantExpression(
+              raise InvalidConstantExpression(
                 "struct.new_default expects a struct type at index " +
                 type_idx.to_string(),
               )
@@ -371,18 +355,16 @@ pub fn eval_const_expr(
       // GC: struct.new - create struct from stack values
       StructNew(type_idx) =>
         if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "struct.new requires a store",
-          )
+          raise InvalidConstantExpression("struct.new requires a store")
         } else if type_idx < 0 || type_idx >= types.length() {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "struct.new type index out of range: " + type_idx.to_string(),
           )
         } else {
           let struct_type = match types[type_idx].composite {
             Struct(st) => st
             _ =>
-              raise @runtime.InvalidConstantExpression(
+              raise InvalidConstantExpression(
                 "struct.new expects a struct type at index " +
                 type_idx.to_string(),
               )
@@ -390,17 +372,14 @@ pub fn eval_const_expr(
           let num_fields = struct_type.fields.length()
           if stack.length() >= num_fields {
             // Pop fields in reverse order (last field pushed first)
-            let fields : Array[@types.Value] = Array::make(
-              num_fields,
-              @types.Value::Null,
-            )
+            let fields : Array[@types.Value] = Array::make(num_fields, Null)
             for i = num_fields - 1; i >= 0; i = i - 1 {
               fields[i] = stack.pop().unwrap()
             }
             let ref_idx = store.unwrap().alloc_struct(type_idx, fields)
             stack.push(StructRef(ref_idx))
           } else {
-            raise @runtime.InvalidConstantExpression(
+            raise InvalidConstantExpression(
               "struct.new requires " +
               num_fields.to_string() +
               " field operands",
@@ -410,17 +389,15 @@ pub fn eval_const_expr(
       // GC: any.convert_extern - convert externref to anyref
       AnyConvertExtern =>
         if stack.length() < 1 {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "any.convert_extern requires 1 operand",
           )
         } else if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "any.convert_extern requires a store",
-          )
+          raise InvalidConstantExpression("any.convert_extern requires a store")
         } else {
           let val = stack.pop().unwrap()
           match val {
-            Null => stack.push(@types.Value::Null)
+            Null => stack.push(Null)
             ExternRef(_) => {
               // Unwrap: host externrefs stay as ExternRef, wrapped internals get unwrapped
               let unwrapped = store.unwrap().unwrap_extern(val)
@@ -432,17 +409,15 @@ pub fn eval_const_expr(
       // GC: extern.convert_any - convert anyref to externref
       ExternConvertAny =>
         if stack.length() < 1 {
-          raise @runtime.InvalidConstantExpression(
+          raise InvalidConstantExpression(
             "extern.convert_any requires 1 operand",
           )
         } else if store is None {
-          raise @runtime.InvalidConstantExpression(
-            "extern.convert_any requires a store",
-          )
+          raise InvalidConstantExpression("extern.convert_any requires a store")
         } else {
           let val = stack.pop().unwrap()
           match val {
-            Null => stack.push(@types.Value::Null)
+            Null => stack.push(Null)
             ExternRef(_) =>
               // Already an externref, pass through
               stack.push(val)
@@ -457,109 +432,79 @@ pub fn eval_const_expr(
       // i32 arithmetic operations
       I32Add =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i32.add requires 2 operands",
-          )
+          raise InvalidConstantExpression("i32.add requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I32(av), I32(bv)) => stack.push(I32(av + bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i32.add operands must be i32",
-              )
+            _ => raise InvalidConstantExpression("i32.add operands must be i32")
           }
         }
       I32Sub =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i32.sub requires 2 operands",
-          )
+          raise InvalidConstantExpression("i32.sub requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I32(av), I32(bv)) => stack.push(I32(av - bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i32.sub operands must be i32",
-              )
+            _ => raise InvalidConstantExpression("i32.sub operands must be i32")
           }
         }
       I32Mul =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i32.mul requires 2 operands",
-          )
+          raise InvalidConstantExpression("i32.mul requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I32(av), I32(bv)) => stack.push(I32(av * bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i32.mul operands must be i32",
-              )
+            _ => raise InvalidConstantExpression("i32.mul operands must be i32")
           }
         }
       // i64 arithmetic operations
       I64Add =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i64.add requires 2 operands",
-          )
+          raise InvalidConstantExpression("i64.add requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I64(av), I64(bv)) => stack.push(I64(av + bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i64.add operands must be i64",
-              )
+            _ => raise InvalidConstantExpression("i64.add operands must be i64")
           }
         }
       I64Sub =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i64.sub requires 2 operands",
-          )
+          raise InvalidConstantExpression("i64.sub requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I64(av), I64(bv)) => stack.push(I64(av - bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i64.sub operands must be i64",
-              )
+            _ => raise InvalidConstantExpression("i64.sub operands must be i64")
           }
         }
       I64Mul =>
         if stack.length() < 2 {
-          raise @runtime.InvalidConstantExpression(
-            "i64.mul requires 2 operands",
-          )
+          raise InvalidConstantExpression("i64.mul requires 2 operands")
         } else {
           let b = stack.pop().unwrap()
           let a = stack.pop().unwrap()
           match (a, b) {
             (I64(av), I64(bv)) => stack.push(I64(av * bv))
-            _ =>
-              raise @runtime.InvalidConstantExpression(
-                "i64.mul operands must be i64",
-              )
+            _ => raise InvalidConstantExpression("i64.mul operands must be i64")
           }
         }
       _ =>
-        raise @runtime.InvalidConstantExpression(
+        raise InvalidConstantExpression(
           "unsupported const expr instruction: " + instr.to_string(),
         )
     }
   }
   if stack.length() != 1 {
-    raise @runtime.InvalidConstantExpression(
+    raise InvalidConstantExpression(
       "expected 1 value on stack, got " + stack.length().to_string(),
     )
   }
@@ -647,7 +592,7 @@ fn eval_elem_init_expr(
       } else {
         idx // fallback, should not happen for valid modules
       }
-      Some(@types.Value::FuncRef(store_addr))
+      Some(FuncRef(store_addr))
     }
     [I32Const(idx)] => {
       // Legacy format: function index as i32
@@ -656,9 +601,9 @@ fn eval_elem_init_expr(
       } else {
         idx // fallback
       }
-      Some(@types.Value::FuncRef(store_addr))
+      Some(FuncRef(store_addr))
     }
-    [RefNull(_)] => Some(@types.Value::Null)
+    [RefNull(_)] => Some(Null)
     [GlobalGet(idx)] =>
       // Get funcref from global
       if idx < globals.length() {
@@ -670,7 +615,7 @@ fn eval_elem_init_expr(
     [I32Const(n), RefI31] => {
       // i31 stores only the lower 31 bits
       let i31_val = n & 0x7FFFFFFF
-      Some(@types.Value::I31(i31_val))
+      Some(I31(i31_val))
     }
     [GlobalGet(idx), RefI31] =>
       // ref.i31 with global value
@@ -678,7 +623,7 @@ fn eval_elem_init_expr(
         match globals[idx].get() {
           I32(n) => {
             let i31_val = n & 0x7FFFFFFF
-            Some(@types.Value::I31(i31_val))
+            Some(I31(i31_val))
           }
           _ => None
         }
@@ -703,7 +648,7 @@ pub fn instantiate_module_with_init(
   // Initialize element segments (populate tables with function references)
   for elem_idx, elem in mod.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+    if elem.mode is Active(table_idx, offset_expr) {
       if instance.table_addrs.length() > table_idx {
         let table = store.get_table(instance.table_addrs[table_idx])
 
@@ -714,7 +659,7 @@ pub fn instantiate_module_with_init(
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
         if offset < 0 || offset + elem.init.length() > table.size() {
-          raise @runtime.OutOfBoundsTableAccess
+          raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
@@ -751,7 +696,7 @@ pub fn instantiate_module_with_init(
   if mod.start is Some(start_func_idx) {
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)
     })
     |> ignore
@@ -828,11 +773,11 @@ fn import_desc_kind(desc : @types.ImportDesc) -> String {
 ///|
 fn extern_val_kind(v : @runtime.ExternVal) -> String {
   match v {
-    @runtime.ExternVal::Func(_) => "func"
-    @runtime.ExternVal::Memory(_) => "memory"
-    @runtime.ExternVal::Table(_) => "table"
-    @runtime.ExternVal::Global(_) => "global"
-    @runtime.ExternVal::Tag(_) => "tag"
+    Func(_) => "func"
+    Memory(_) => "memory"
+    Table(_) => "table"
+    Global(_) => "global"
+    Tag(_) => "tag"
   }
 }
 
@@ -892,7 +837,7 @@ pub fn validate_imports_with_diagnostics(
     match imp.desc {
       Func(type_idx) =>
         match extern_val {
-          @runtime.ExternVal::Func(addr) => {
+          Func(addr) => {
             let expected_type = mod.get_func_type(type_idx)
             let actual_type = match store.get_func_type_opt(addr) {
               Some(type_) => type_
@@ -952,7 +897,7 @@ pub fn validate_imports_with_diagnostics(
                     ImportTypeMismatch,
                     expected_type.to_string(),
                     Some(actual_type.to_string()),
-                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{expected_rec_info}",
+                    "import \{imp.mod_name}.\{imp.name} expects singleton rec group type, got \{to_repr(expected_rec_info)}",
                   )
                   continue
                 }
@@ -975,7 +920,7 @@ pub fn validate_imports_with_diagnostics(
         }
       Memory(expected_mem_type) =>
         match extern_val {
-          @runtime.ExternVal::Memory(addr) => {
+          Memory(addr) => {
             let actual_mem = try store.get_mem(addr) catch {
               _ => {
                 push_import_diagnostic(
@@ -1061,7 +1006,7 @@ pub fn validate_imports_with_diagnostics(
         }
       Table(expected_table_type) =>
         match extern_val {
-          @runtime.ExternVal::Table(addr) => {
+          Table(addr) => {
             let actual_table = try store.get_table(addr) catch {
               _ => {
                 push_import_diagnostic(
@@ -1162,7 +1107,7 @@ pub fn validate_imports_with_diagnostics(
         }
       Global(expected_global_type) =>
         match extern_val {
-          @runtime.ExternVal::Global(addr) => {
+          Global(addr) => {
             let actual_global = try store.get_global(addr) catch {
               _ => {
                 push_import_diagnostic(
@@ -1230,7 +1175,7 @@ pub fn validate_imports_with_diagnostics(
         }
       Tag(expected_type_idx) =>
         match extern_val {
-          @runtime.ExternVal::Tag(addr) => {
+          Tag(addr) => {
             let actual_type = try store.get_tag_type(addr) catch {
               _ => {
                 push_import_diagnostic(
@@ -1409,7 +1354,7 @@ pub fn instantiate_module_with_imports(
                 )
                 // Check if T_export <: T_import
                 if !ctx.is_subtype(actual_type_idx, type_idx) {
-                  raise @runtime.LinkErrorDetail(
+                  raise LinkErrorDetail(
                     "import \{imp.mod_name}.\{imp.name}: exported type is not a subtype of imported type",
                   )
                 }
@@ -1423,13 +1368,13 @@ pub fn instantiate_module_with_imports(
                 )
                 // Host functions must be imported by singleton rec group types
                 if expected_rec_info != (0, 1) {
-                  raise @runtime.LinkErrorDetail(
-                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{expected_rec_info}",
+                  raise LinkErrorDetail(
+                    "import \{imp.mod_name}.\{imp.name}: expected singleton rec group type, got \{to_repr(expected_rec_info)}",
                   )
                 }
                 // Compare types structurally
                 if !@types.func_types_equal(expected_type, actual_type) {
-                  raise @runtime.LinkErrorDetail(
+                  raise LinkErrorDetail(
                     "import \{imp.mod_name}.\{imp.name}: type mismatch; expected=\{expected_type} actual=\{actual_type}",
                   )
                 }
@@ -1438,7 +1383,7 @@ pub fn instantiate_module_with_imports(
             func_addrs.push(addr)
             func_type_indices.push(type_idx)
           }
-          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
+          _ => raise UnknownImport(imp.mod_name, imp.name)
         }
       Memory(expected_mem_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1448,26 +1393,26 @@ pub fn instantiate_module_with_imports(
             let actual_limits = actual_mem.get_limits()
             // Memory64 status must match
             if actual_mem.is_memory64() != expected_mem_type.is_memory64 {
-              raise @runtime.LinkError
+              raise LinkError
             }
             // Import memory limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
             if actual_limits.0 < expected_mem_type.limits.min.to_int() {
-              raise @runtime.LinkError
+              raise LinkError
             }
             if expected_mem_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
                   if actual_max > expected_max.to_int() {
-                    raise @runtime.LinkError
+                    raise LinkError
                   }
-                None => raise @runtime.LinkError
+                None => raise LinkError
               }
             } // actual has no max but expected does
             mem_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
+          _ => raise UnknownImport(imp.mod_name, imp.name)
         }
       Table(expected_table_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1478,30 +1423,30 @@ pub fn instantiate_module_with_imports(
             let actual_limits = actual_table.get_limits()
             // Element types must match
             if actual_elem_type != expected_table_type.elem_type {
-              raise @runtime.LinkError
+              raise LinkError
             }
             // Table64 status must match
             if actual_table.is_table64() != expected_table_type.is_table64 {
-              raise @runtime.LinkError
+              raise LinkError
             }
             // Limits must be compatible:
             // - actual min >= expected min
             // - if expected has max, actual must have max <= expected max
             if actual_limits.0 < expected_table_type.limits.min.to_int() {
-              raise @runtime.LinkError
+              raise LinkError
             }
             if expected_table_type.limits.max is Some(expected_max) {
               match actual_limits.1 {
                 Some(actual_max) =>
                   if actual_max > expected_max.to_int() {
-                    raise @runtime.LinkError
+                    raise LinkError
                   }
-                None => raise @runtime.LinkError
+                None => raise LinkError
               }
             }
             table_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
+          _ => raise UnknownImport(imp.mod_name, imp.name)
         }
       Global(expected_global_type) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1514,10 +1459,10 @@ pub fn instantiate_module_with_imports(
             if actual_type.mutable {
               // Mutable globals: exact match required
               if actual_type.value_type != expected_global_type.value_type {
-                raise @runtime.LinkError
+                raise LinkError
               }
               if actual_type.mutable != expected_global_type.mutable {
-                raise @runtime.LinkError
+                raise LinkError
               }
             } else {
               // Immutable globals: expected must be supertype of actual
@@ -1526,16 +1471,16 @@ pub fn instantiate_module_with_imports(
                   actual_type.value_type,
                   expected_global_type.value_type,
                 ) {
-                raise @runtime.LinkError
+                raise LinkError
               }
               // Import must also be immutable for immutable export
               if expected_global_type.mutable {
-                raise @runtime.LinkError
+                raise LinkError
               }
             }
             global_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
+          _ => raise UnknownImport(imp.mod_name, imp.name)
         }
       Tag(expected_type_idx) =>
         match imports.resolve(imp.mod_name, imp.name) {
@@ -1561,7 +1506,7 @@ pub fn instantiate_module_with_imports(
                 if expected_rec_info.1 == 1 && actual_rec_info.1 == 1 {
                   // Both are singleton - structural comparison
                   if expected_type.params != actual_type.params {
-                    raise @runtime.LinkError
+                    raise LinkError
                   }
                 } else {
                   // At least one is in a multi-type rec group - use canonical comparison
@@ -1584,19 +1529,19 @@ pub fn instantiate_module_with_imports(
                   // Check bidirectional subtyping for equality
                   if !(ctx.is_subtype(actual_type_idx, expected_type_idx) &&
                     ctx.is_subtype(expected_type_idx, actual_type_idx)) {
-                    raise @runtime.LinkError
+                    raise LinkError
                   }
                 }
               }
               None =>
                 // No owner - fallback to structural comparison
                 if expected_type.params != actual_type.params {
-                  raise @runtime.LinkError
+                  raise LinkError
                 }
             }
             tag_addrs.push(addr)
           }
-          _ => raise @runtime.UnknownImport(imp.mod_name, imp.name)
+          _ => raise UnknownImport(imp.mod_name, imp.name)
         }
     }
   }
@@ -1657,7 +1602,7 @@ pub fn instantiate_module_with_imports(
           store=Some(store),
           types=mod.types,
         )
-      None => @types.Value::Null
+      None => Null
     }
     let min_elems = table_def.type_.limits.min.to_int()
     let table = @runtime.Table::new(
@@ -1710,7 +1655,7 @@ pub fn instantiate_module_with_imports(
   // Initialize active element segments (populate tables with function references)
   for elem_idx, elem in mod.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+    if elem.mode is Active(table_idx, offset_expr) {
       if table_addrs.length() > table_idx {
         let table = store.get_table(table_addrs[table_idx])
         // Evaluate offset expression using extended const expr evaluator
@@ -1720,7 +1665,7 @@ pub fn instantiate_module_with_imports(
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
         if offset < 0 || offset + elem.init.length() > table.size() {
-          raise @runtime.OutOfBoundsTableAccess
+          raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
@@ -1777,7 +1722,7 @@ pub fn instantiate_module_with_imports(
   if mod.start is Some(start_func_idx) {
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)
     })
     |> ignore
@@ -1902,7 +1847,7 @@ pub fn call_exported_func_with_options(
                 call_export_failure(
                   Trap,
                   "internal control signal escaped during function invocation",
-                  runtime_error=Some(@runtime.Unreachable),
+                  runtime_error=Some(Unreachable),
                 ),
               )
             InvocationSignal::HostInvocation(err) => {
@@ -1956,13 +1901,13 @@ pub fn call_exported_func(
           let ctx = ExecContext::new(store, instance)
           // Catch any leaked ControlSignal and convert to RuntimeError
           ctx.call_func(func_idx, args) catch {
-            BranchWith(_, _) | Return => raise @runtime.Unreachable
+            BranchWith(_, _) | Return => raise Unreachable
             e => raise normalize_runtime_error(e)
           }
         } // Unknown error
-        _ => raise @runtime.UndefinedElement
+        _ => raise UndefinedElement
       }
-    None => raise @runtime.UndefinedElement
+    None => raise UndefinedElement
   }
 }
 
@@ -1977,7 +1922,7 @@ pub fn call_func_by_index(
   let ctx = ExecContext::new(store, instance)
   // Catch any leaked ControlSignal and convert to RuntimeError
   ctx.call_func(func_idx, args) catch {
-    BranchWith(_, _) | Return => raise @runtime.Unreachable
+    BranchWith(_, _) | Return => raise Unreachable
     e => raise normalize_runtime_error(e)
   }
 }
@@ -2001,7 +1946,7 @@ pub fn call_func_by_index_with_exception(
   let ctx = ExecContext::new(store, instance)
   let results = ctx.call_func(func_idx, args) catch {
     ThrowException(tag_addr, values) => return Thrown(tag_addr, values)
-    BranchWith(_, _) | Return => raise @runtime.Unreachable
+    BranchWith(_, _) | Return => raise Unreachable
     e => raise normalize_runtime_error(e)
   }
   Returned(results)
@@ -2022,9 +1967,9 @@ pub fn get_exported_global(
           let global = store.get_global(global_addr)
           global.get()
         }
-        _ => raise @runtime.UndefinedElement
+        _ => raise UndefinedElement
       }
-    None => raise @runtime.UndefinedElement
+    None => raise UndefinedElement
   }
 }
 
@@ -2065,7 +2010,7 @@ pub fn instantiate_with_linker(
   // Initialize element segments (populate tables with function references)
   for elem_idx, elem in mod.elems {
     // Only process active element segments
-    if elem.mode is @types.ElemMode::Active(table_idx, offset_expr) {
+    if elem.mode is Active(table_idx, offset_expr) {
       if instance.table_addrs.length() > table_idx {
         let table = store.get_table(instance.table_addrs[table_idx])
         // Evaluate offset expression using extended const expr evaluator
@@ -2075,7 +2020,7 @@ pub fn instantiate_with_linker(
         // Check bounds before initializing
         // offset + num_elements must not exceed table size
         if offset < 0 || offset + elem.init.length() > table.size() {
-          raise @runtime.OutOfBoundsTableAccess
+          raise OutOfBoundsTableAccess
         }
 
         // Set table entries - evaluate init expression to get value
@@ -2095,7 +2040,7 @@ pub fn instantiate_with_linker(
   if mod.start is Some(start_func_idx) {
     let ctx = ExecContext::new(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
-      BranchWith(_, _) | Return => raise @runtime.Unreachable
+      BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)
     })
     |> ignore

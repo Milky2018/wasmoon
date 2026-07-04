@@ -215,7 +215,7 @@ pub fn VCodeFunction::has_calls(self : VCodeFunction) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
       let call_type = inst.opcode.call_type()
-      if call_type is @instr.Regular || call_type is @instr.TailCall {
+      if call_type is Regular || call_type is TailCall {
         return true
       }
     }
@@ -341,6 +341,6 @@ pub fn VCodeFunction::print(self : VCodeFunction) -> String {
 }
 
 ///|
-pub impl Show for VCodeFunction with output(self, logger) {
+pub impl Show for VCodeFunction with fn output(self, logger) {
   logger.write_string(self.print())
 }

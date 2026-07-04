@@ -27,7 +27,7 @@ pub fn Frame::get_local(
   idx : Int,
 ) -> @types.Value raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
-    raise RuntimeError::TypeMismatch
+    raise TypeMismatch
   }
   self.locals[idx]
 }
@@ -39,7 +39,7 @@ pub fn Frame::set_local(
   value : @types.Value,
 ) -> Unit raise RuntimeError {
   if idx < 0 || idx >= self.locals.length() {
-    raise RuntimeError::TypeMismatch
+    raise TypeMismatch
   }
   self.locals[idx] = value
 }

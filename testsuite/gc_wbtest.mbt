@@ -24,7 +24,7 @@ test "gc: struct.new and struct.get" {
       #|)
     ),
   )
-  inspect(results, content="[I32(10)]")
+  debug_inspect(results, content="[I32(10)]")
 }
 
 ///|
@@ -42,7 +42,7 @@ test "gc: struct.new and struct.get second field" {
       #|)
     ),
   )
-  inspect(results, content="[I32(20)]")
+  debug_inspect(results, content="[I32(20)]")
 }
 
 ///|
@@ -60,7 +60,7 @@ test "gc: struct.new_default" {
       #|)
     ),
   )
-  inspect(results, content="[I32(0)]")
+  debug_inspect(results, content="[I32(0)]")
 }
 
 ///|
@@ -79,7 +79,7 @@ test "gc: struct.set" {
       #|)
     ),
   )
-  inspect(results, content="[I32(100)]")
+  debug_inspect(results, content="[I32(100)]")
 }
 
 ///|
@@ -97,7 +97,7 @@ test "gc: array.new and array.len" {
       #|)
     ),
   )
-  inspect(results, content="[I32(5)]")
+  debug_inspect(results, content="[I32(5)]")
 }
 
 ///|
@@ -116,7 +116,7 @@ test "gc: array.new and array.get" {
       #|)
     ),
   )
-  inspect(results, content="[I32(42)]")
+  debug_inspect(results, content="[I32(42)]")
 }
 
 ///|
@@ -135,7 +135,7 @@ test "gc: array.new_default" {
       #|)
     ),
   )
-  inspect(results, content="[I32(0)]")
+  debug_inspect(results, content="[I32(0)]")
 }
 
 ///|
@@ -154,7 +154,7 @@ test "gc: array.new_fixed" {
       #|)
     ),
   )
-  inspect(results, content="[I32(20)]")
+  debug_inspect(results, content="[I32(20)]")
 }
 
 ///|
@@ -171,7 +171,7 @@ test "gc: const expr array.new_fixed (empty)" {
       #|)
     ),
   )
-  inspect(results, content="[I32(0)]")
+  debug_inspect(results, content="[I32(0)]")
 }
 
 ///|
@@ -213,7 +213,7 @@ test "gc: array.set" {
       #|)
     ),
   )
-  inspect(results, content="[I32(99)]")
+  debug_inspect(results, content="[I32(99)]")
 }
 
 ///|
@@ -243,7 +243,7 @@ test "gc: array.fill" {
   )
   // arr[0]=0, arr[1]=42, arr[2]=42, arr[3]=42, arr[4]=0
   // sum of 0+1+2+3 = 0 + 42 + 42 + 42 = 126
-  inspect(results, content="[I32(126)]")
+  debug_inspect(results, content="[I32(126)]")
 }
 
 ///|
@@ -260,7 +260,7 @@ test "gc: ref.i31 and i31.get_u" {
       #|)
     ),
   )
-  inspect(results, content="[I32(123)]")
+  debug_inspect(results, content="[I32(123)]")
 }
 
 ///|
@@ -277,7 +277,7 @@ test "gc: ref.i31 and i31.get_s positive" {
       #|)
     ),
   )
-  inspect(results, content="[I32(123)]")
+  debug_inspect(results, content="[I32(123)]")
 }
 
 ///|
@@ -295,5 +295,5 @@ test "gc: ref.i31 high bits" {
     ),
   )
   // 0x7FFFFFFF should be preserved (max positive i31)
-  inspect(results, content="[I32(2147483647)]")
+  debug_inspect(results, content="[I32(2147483647)]")
 }

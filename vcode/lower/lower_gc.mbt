@@ -52,21 +52,21 @@ fn lower_i31_get_s(
   block.add_inst(trap_inst)
 
   // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
-  let decoded = ctx.new_vreg(@abi.Int)
+  let decoded = ctx.new_vreg(Int)
   let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits
-  let tmp = ctx.new_vreg(@abi.Int)
+  let tmp = ctx.new_vreg(Int)
   let trunc_inst = @instr.VCodeInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
   trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
   // Step 3: Sign-extend from 31 bits by shifting left then arithmetic right
-  let tmp2 = ctx.new_vreg(@abi.Int)
+  let tmp2 = ctx.new_vreg(Int)
   let shl_inst = @instr.VCodeInst::new(ShlImm(1, false))
   shl_inst.add_def({ reg: Virtual(tmp2) })
   shl_inst.add_use(Virtual(tmp))
@@ -98,21 +98,21 @@ fn lower_i31_get_u(
   block.add_inst(trap_inst)
 
   // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
-  let decoded = ctx.new_vreg(@abi.Int)
+  let decoded = ctx.new_vreg(Int)
   let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits
-  let tmp = ctx.new_vreg(@abi.Int)
+  let tmp = ctx.new_vreg(Int)
   let trunc_inst = @instr.VCodeInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
   trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
   // Step 3: Mask with 0x7FFFFFFF for 31 bits (already decoded, just ensure upper bit is clear)
-  let mask = ctx.new_vreg(@abi.Int)
+  let mask = ctx.new_vreg(Int)
   let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask) })
   block.add_inst(load_mask)
@@ -234,7 +234,7 @@ fn lower_ref_eq(
 
   // Compare two references as i64 values
   // Use Cmp(Eq, true) for 64-bit equality comparison
-  let cmp_inst = @instr.VCodeInst::new(Cmp(@instr.CmpKind::Eq, true))
+  let cmp_inst = @instr.VCodeInst::new(Cmp(Eq, true))
   cmp_inst.add_def({ reg: Virtual(dst) })
   cmp_inst.add_use(Virtual(ref1_vreg))
   cmp_inst.add_use(Virtual(ref2_vreg))
@@ -339,7 +339,7 @@ fn lower_struct_get(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if result is a float type - C libcall returns int64, need bitcast
-  let is_float = result.ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = result.ty is (F32 | F64)
   if is_float {
     // For float results: call returns int64, then bitcast to float
     let int_result = ctx.vcode_func.new_vreg(Int)
@@ -498,7 +498,7 @@ fn lower_struct_set(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if value is a float type - C libcall expects int64, need bitcast
-  let is_float = inst.operands[1].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = inst.operands[1].ty is (F32 | F64)
   let actual_val_vreg = if is_float {
     // For float values: bitcast to int before passing to C function
     let int_val = ctx.vcode_func.new_vreg(Int)
@@ -536,7 +536,7 @@ fn lower_array_new(
   let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
 
   // Check if init value is float - C libcall expects int64, need bitcast
-  let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = inst.operands[0].ty is (F32 | F64)
   let actual_init_vreg = if is_float {
     let int_val = ctx.vcode_func.new_vreg(Int)
     let bitcast = @instr.VCodeInst::new(Bitcast)
@@ -598,7 +598,7 @@ fn lower_array_new_fixed(
     // Spill all element values to outgoing args area as contiguous int64_t[].
     let stack_space = (len * 8 + 15) / 16 * 16
     ctx.vcode_func.update_max_outgoing_args_size(stack_space)
-    let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+    let is_float = inst.operands[0].ty is (F32 | F64)
     for i in 0..<len {
       let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let actual_elem = if is_float {
@@ -637,7 +637,7 @@ fn lower_array_new_fixed(
     return
   }
 
-  let is_float = inst.operands[0].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = inst.operands[0].ty is (F32 | F64)
   let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let actual_first = if is_float {
     let int_val = ctx.vcode_func.new_vreg(Int)
@@ -706,7 +706,7 @@ fn lower_array_get(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if result is a float type - C libcall returns int64, need bitcast
-  let is_float = result.ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = result.ty is (F32 | F64)
   if is_float {
     // For float results: call returns int64, then bitcast to float
     let int_result = ctx.vcode_func.new_vreg(Int)
@@ -852,7 +852,7 @@ fn lower_array_set(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if value is a float type - C libcall expects int64, need bitcast
-  let is_float = inst.operands[2].ty is (@ir.Type::F32 | @ir.Type::F64)
+  let is_float = inst.operands[2].ty is (F32 | F64)
   let actual_val_vreg = if is_float {
     // For float values: bitcast to int before passing to C function
     let int_val = ctx.vcode_func.new_vreg(Int)

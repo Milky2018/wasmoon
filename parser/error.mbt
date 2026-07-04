@@ -69,7 +69,7 @@ fn int_to_hex(n : Int) -> String {
 
 ///|
 /// Provide human-readable error messages for parser errors
-pub impl Show for ParserError with output(self, logger) {
+pub impl Show for ParserError with fn output(self, logger) {
   let msg = match self {
     UnexpectedEndOfInput => "unexpected end of input"
     UnexpectedEnd => "unexpected end"

@@ -1,11 +1,8 @@
 ///|
 test "reference types: ref.null funcref" {
   // Function: push null funcref and check if it's null
-  let body : Array[@types.Instruction] = [
-    RefNull(@types.ValueType::FuncRef),
-    RefIsNull,
-  ]
-  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
+  let body : Array[@types.Instruction] = [RefNull(FuncRef), RefIsNull]
+  let mod = @types.Module::simple([], [I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -17,11 +14,8 @@ test "reference types: ref.null funcref" {
 ///|
 test "reference types: ref.null externref" {
   // Function: push null externref and check if it's null
-  let body : Array[@types.Instruction] = [
-    RefNull(@types.ValueType::ExternRef),
-    RefIsNull,
-  ]
-  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
+  let body : Array[@types.Instruction] = [RefNull(ExternRef), RefIsNull]
+  let mod = @types.Module::simple([], [I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -39,10 +33,7 @@ test "reference types: ref.func" {
     locals: [],
     body: [RefFunc(0), RefIsNull],
   }
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(i32_type)],
     type_rec_groups: [0],
@@ -51,7 +42,7 @@ test "reference types: ref.func" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [func0, func1],
@@ -77,10 +68,7 @@ test "reference types: ref.is_null with non-null value" {
     locals: [],
     body: [I32Const(0), TableGet(0), RefIsNull], // get table[0], check if null
   }
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(i32_type)],
     type_rec_groups: [0],
@@ -89,7 +77,7 @@ test "reference types: ref.is_null with non-null value" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -98,14 +86,10 @@ test "reference types: ref.is_null with non-null value" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [
-      {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(0)]],
-      },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(0)]] },
     ], // table[0] = func 0
     codes: [dummy_func, check_func],
     datas: [],
@@ -138,10 +122,7 @@ test "reference types: ref.func used with table.set" {
       CallIndirect(0, 0),
     ],
   } // call table[0] with type 0
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [@types.SubType::from_func(i32_type)],
     type_rec_groups: [0],
@@ -150,7 +131,7 @@ test "reference types: ref.func used with table.set" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -159,7 +140,7 @@ test "reference types: ref.func used with table.set" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [target_func, test_func],
@@ -178,7 +159,7 @@ test "reference types: ref.func used with table.set" {
 ///|
 test "multi-value: function returning two values" {
   // Function returns (i32, i32) pair
-  let results_types = [@types.ValueType::I32, @types.ValueType::I32]
+  let results_types = [@types.ValueType::I32, I32]
   let body : Array[@types.Instruction] = [I32Const(10), I32Const(20)]
   let mod = @types.Module::simple([], results_types, body, "test")
   let (store, instance) = instantiate_module(mod)
@@ -197,11 +178,7 @@ test "multi-value: function returning two values" {
 ///|
 test "multi-value: function returning three values" {
   // Function returns (i32, i64, f32)
-  let results_types = [
-    @types.ValueType::I32,
-    @types.ValueType::I64,
-    @types.ValueType::F32,
-  ]
+  let results_types = [@types.ValueType::I32, I64, F32]
   let body : Array[@types.Instruction] = [
     I32Const(1),
     I64Const(2L),
@@ -246,14 +223,8 @@ test "multi-value: call function with multi-value return" {
     locals: [],
     body: [I32Const(10), I32Const(20), Call(0), I32Add], // swap(10, 20) returns (20, 10), then add
   }
-  let swap_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
-  let test_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let swap_type : @types.FuncType = { params: [I32, I32], results: [I32, I32] }
+  let test_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(swap_type),
@@ -265,7 +236,7 @@ test "multi-value: call function with multi-value return" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [swap_func, test_func],
@@ -288,20 +259,14 @@ test "multi-value: block returning two values" {
     locals: [],
     body: [
       Block(
-        @types.BlockType::TypeIndex(0),
+        TypeIndex(0),
         [I32Const(100), I32Const(200)], // block returns two values
       ),
       I32Add,
     ],
   } // add them
-  let block_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let block_type : @types.FuncType = { params: [], results: [I32, I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(block_type),
@@ -313,7 +278,7 @@ test "multi-value: block returning two values" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -337,21 +302,15 @@ test "multi-value: if returning two values" {
     body: [
       LocalGet(0), // condition
       If(
-        @types.BlockType::TypeIndex(0),
+        TypeIndex(0),
         [I32Const(10), I32Const(20)], // then: (10, 20)
         [I32Const(30), I32Const(40)], // else: (30, 40)
       ),
       I32Add,
     ],
   } // add results
-  let block_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32, @types.ValueType::I32],
-  }
-  let func_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let block_type : @types.FuncType = { params: [], results: [I32, I32] }
+  let func_type : @types.FuncType = { params: [I32], results: [I32] }
   let mod : @types.Module = {
     types: [
       @types.SubType::from_func(block_type),
@@ -363,7 +322,7 @@ test "multi-value: if returning two values" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "test", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func],
@@ -391,10 +350,8 @@ test "multi-value: if returning two values" {
 ///|
 test "multi-value: block with single Value type" {
   // Block with Value(I32) returns single value (existing behavior)
-  let body : Array[@types.Instruction] = [
-    Block(@types.BlockType::Value(@types.ValueType::I32), [I32Const(42)]),
-  ]
-  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
+  let body : Array[@types.Instruction] = [Block(Value(I32), [I32Const(42)])]
+  let mod = @types.Module::simple([], [I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -406,11 +363,8 @@ test "multi-value: block with single Value type" {
 ///|
 test "multi-value: empty block" {
   // Block with Empty type returns nothing
-  let body : Array[@types.Instruction] = [
-    Block(@types.BlockType::Empty, [Nop]),
-    I32Const(99),
-  ]
-  let mod = @types.Module::simple([], [@types.ValueType::I32], body, "test")
+  let body : Array[@types.Instruction] = [Block(Empty, [Nop]), I32Const(99)]
+  let mod = @types.Module::simple([], [I32], body, "test")
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
   match results[0] {
@@ -427,10 +381,7 @@ test "module linking: basic import from another module" {
 
   // Module A: exports "get_value" -> returns 42
   let func_a : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
-  let func_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
   let mod_a : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
@@ -439,7 +390,7 @@ test "module linking: basic import from another module" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "get_value", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "get_value", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [func_a],
@@ -458,14 +409,12 @@ test "module linking: basic import from another module" {
   let mod_b : @types.Module = {
     types: [@types.SubType::from_func(func_type)],
     type_rec_groups: [0],
-    imports: [
-      { mod_name: "mod_a", name: "get_value", desc: @types.ImportDesc::Func(0) },
-    ],
+    imports: [{ mod_name: "mod_a", name: "get_value", desc: Func(0) }],
     funcs: [0], // type index for the defined function
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }], // func 0 is import, func 1 is defined
+    exports: [{ name: "test", desc: Func(1) }], // func 0 is import, func 1 is defined
     start: None,
     elems: [],
     codes: [func_b],
@@ -506,8 +455,8 @@ test "module linking: import memory from another module" {
     ],
     globals: [],
     exports: [
-      { name: "mem", desc: @types.ExportDesc::Memory(0) },
-      { name: "store", desc: @types.ExportDesc::Func(0) },
+      { name: "mem", desc: Memory(0) },
+      { name: "store", desc: Func(0) },
     ],
     start: None,
     elems: [],
@@ -527,10 +476,7 @@ test "module linking: import memory from another module" {
     locals: [],
     body: [I32Const(0), I32Load(0, 0, 0)],
   } // return mem[0]
-  let i32_type : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
+  let i32_type : @types.FuncType = { params: [], results: [I32] }
   let mod_b : @types.Module = {
     types: [@types.SubType::from_func(i32_type)],
     type_rec_groups: [0],
@@ -538,7 +484,7 @@ test "module linking: import memory from another module" {
       {
         mod_name: "mod_a",
         name: "mem",
-        desc: @types.ImportDesc::Memory({
+        desc: Memory({
           limits: { min: 1, max: None },
           is_memory64: false,
           page_size_log2: 16,
@@ -549,7 +495,7 @@ test "module linking: import memory from another module" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "read", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "read", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [read_func],
@@ -579,10 +525,7 @@ test "module linking: three modules chain" {
     locals: [],
     body: [LocalGet(0), LocalGet(1), I32Add],
   }
-  let add_type : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let add_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let mod_a : @types.Module = {
     types: [@types.SubType::from_func(add_type)],
     type_rec_groups: [0],
@@ -591,7 +534,7 @@ test "module linking: three modules chain" {
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "add", desc: @types.ExportDesc::Func(0) }],
+    exports: [{ name: "add", desc: Func(0) }],
     start: None,
     elems: [],
     codes: [add_func],
@@ -608,24 +551,19 @@ test "module linking: three modules chain" {
     locals: [],
     body: [LocalGet(0), LocalGet(0), Call(0)],
   } // Call imported add
-  let unary_type : @types.FuncType = {
-    params: [@types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let unary_type : @types.FuncType = { params: [I32], results: [I32] }
   let mod_b : @types.Module = {
     types: [
       @types.SubType::from_func(add_type),
       @types.SubType::from_func(unary_type),
     ],
     type_rec_groups: [0, 1],
-    imports: [
-      { mod_name: "math", name: "add", desc: @types.ImportDesc::Func(0) },
-    ],
+    imports: [{ mod_name: "math", name: "add", desc: Func(0) }],
     funcs: [1], // double uses unary_type
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "double", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "double", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [double_func],
@@ -646,14 +584,12 @@ test "module linking: three modules chain" {
   let mod_c : @types.Module = {
     types: [@types.SubType::from_func(unary_type)],
     type_rec_groups: [0],
-    imports: [
-      { mod_name: "utils", name: "double", desc: @types.ImportDesc::Func(0) },
-    ],
+    imports: [{ mod_name: "utils", name: "double", desc: Func(0) }],
     funcs: [0],
     tables: [],
     memories: [],
     globals: [],
-    exports: [{ name: "quad", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "quad", desc: Func(1) }],
     start: None,
     elems: [],
     codes: [quad_func],
@@ -667,7 +603,7 @@ test "module linking: three modules chain" {
 
   // quad(5) = double(double(5)) = double(10) = 20
   let results = call_exported_func(linker.get_store(), instance_c, "quad", [
-    @types.Value::I32(5),
+    I32(5),
   ])
   match results[0] {
     I32(n) => inspect(n, content="20")
@@ -678,7 +614,7 @@ test "module linking: three modules chain" {
 ///|
 test "call_indirect with imports path" {
   // This simulates the path used by run.mbt with instantiate_module_with_imports
-  let type_ : @types.FuncType = { params: [], results: [@types.ValueType::I32] }
+  let type_ : @types.FuncType = { params: [], results: [I32] }
   let func_code : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
   let test_code : @types.FunctionCode = {
     locals: [],
@@ -692,7 +628,7 @@ test "call_indirect with imports path" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -701,14 +637,10 @@ test "call_indirect with imports path" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(1) }],
+    exports: [{ name: "test", desc: Func(1) }],
     start: None,
     elems: [
-      {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(0)]],
-      },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(0)]] },
     ],
     codes: [func_code, test_code],
     datas: [],
@@ -733,14 +665,8 @@ test "call_indirect with imports path" {
 test "call_indirect with multiple funcs and explicit type" {
   // This simulates the issue where $check type index was wrong
   let type_empty : @types.FuncType = { params: [], results: [] }
-  let type_result_i32 : @types.FuncType = {
-    params: [],
-    results: [@types.ValueType::I32],
-  }
-  let type_binary : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
+  let type_result_i32 : @types.FuncType = { params: [], results: [I32] }
+  let type_binary : @types.FuncType = { params: [I32, I32], results: [I32] }
   // Types: 0 = () -> (), 1 = () -> i32, 2 = (i32, i32) -> i32, 3 = (i32, i32) -> i32
   let dummy_func : @types.FunctionCode = { locals: [], body: [] }
   let test1_func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
@@ -763,7 +689,7 @@ test "call_indirect with multiple funcs and explicit type" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -772,15 +698,11 @@ test "call_indirect with multiple funcs and explicit type" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(3) }],
+    exports: [{ name: "test", desc: Func(3) }],
     start: None,
     // elem init contains func index 2 ($func)
     elems: [
-      {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(2)]],
-      },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(2)]] },
     ],
     codes: [dummy_func, test1_func, func_code, test_code],
     datas: [],
@@ -808,15 +730,9 @@ test "call_indirect type index bug reproduction" {
   // call_indirect type_idx: 2 ($check)
 
   let type0 : @types.FuncType = { params: [], results: [] }
-  let type1 : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let type2 : @types.FuncType = {
-    params: [@types.ValueType::I32, @types.ValueType::I32],
-    results: [@types.ValueType::I32],
-  }
-  let type3 : @types.FuncType = { params: [], results: [@types.ValueType::I32] }
+  let type1 : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let type2 : @types.FuncType = { params: [I32, I32], results: [I32] }
+  let type3 : @types.FuncType = { params: [], results: [I32] }
   let dummy_func : @types.FunctionCode = { locals: [], body: [] }
   let func_code : @types.FunctionCode = { locals: [], body: [LocalGet(0)] }
   let test_code : @types.FunctionCode = {
@@ -837,7 +753,7 @@ test "call_indirect type index bug reproduction" {
     tables: [
       {
         type_: {
-          elem_type: @types.ValueType::FuncRef,
+          elem_type: FuncRef,
           limits: { min: 1, max: None },
           is_table64: false,
         },
@@ -846,15 +762,11 @@ test "call_indirect type index bug reproduction" {
     ],
     memories: [],
     globals: [],
-    exports: [{ name: "test", desc: @types.ExportDesc::Func(2) }],
+    exports: [{ name: "test", desc: Func(2) }],
     start: None,
     // elem init: func index 1 ($func)
     elems: [
-      {
-        mode: @types.ElemMode::Active(0, [I32Const(0)]),
-        type_: @types.ValueType::FuncRef,
-        init: [[RefFunc(1)]],
-      },
+      { mode: Active(0, [I32Const(0)]), type_: FuncRef, init: [[RefFunc(1)]] },
     ],
     codes: [dummy_func, func_code, test_code],
     datas: [],

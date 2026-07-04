@@ -4,9 +4,9 @@
 test "Stack operations with type conversion" {
   let stack = @runtime.Stack::new()
   // Push mixed types and verify correct pop
-  stack.push(@types.Value::I32(100))
-  stack.push(@types.Value::I64(200L))
-  stack.push(@types.Value::F64(2.718))
+  stack.push(I32(100))
+  stack.push(I64(200L))
+  stack.push(F64(2.718))
   // Pop in reverse order
   inspect(stack.pop_f64(), content="2.718")
   inspect(stack.pop_i64(), content="200")
@@ -39,24 +39,21 @@ test "Memory grow respects max limit" {
 
 ///|
 test "Table set and get with funcref" {
-  let table = @runtime.Table::new(@types.ValueType::FuncRef, 10, None)
-  table.set(0, @types.Value::FuncRef(42))
-  table.set(5, @types.Value::FuncRef(100))
-  inspect(try? table.get(0), content="Ok(FuncRef(42))")
-  inspect(try? table.get(5), content="Ok(FuncRef(100))")
+  let table = @runtime.Table::new(FuncRef, 10, None)
+  table.set(0, FuncRef(42))
+  table.set(5, FuncRef(100))
+  inspect(table.get(0), content="FuncRef(42)")
+  inspect(table.get(5), content="FuncRef(100)")
   // Uninitialized element returns Null (call_indirect would trap on this)
-  inspect(try? table.get(1), content="Ok(Null)")
+  inspect(table.get(1), content="Null")
 }
 
 ///|
 test "GlobalInstance mutable vs immutable" {
   // Mutable global
-  let mut_gt : @types.GlobalType = {
-    value_type: @types.ValueType::I32,
-    mutable: true,
-  }
-  let mut_g = @runtime.GlobalInstance::new(mut_gt, @types.Value::I32(100))
-  mut_g.set(@types.Value::I32(200))
+  let mut_gt : @types.GlobalType = { value_type: I32, mutable: true }
+  let mut_g = @runtime.GlobalInstance::new(mut_gt, I32(100))
+  mut_g.set(I32(200))
   inspect(mut_g.get(), content="I32(200)")
 }
 
@@ -75,14 +72,10 @@ test "Store allocates and retrieves memory" {
 
 ///|
 test "Frame local variable access" {
-  let frame = @runtime.Frame::new(
-    0,
-    [@types.Value::I32(10), @types.Value::I64(20L), @types.Value::F64(3.14)],
-    0,
-  )
+  let frame = @runtime.Frame::new(0, [I32(10), I64(20L), F64(3.14)], 0)
   // Get and set operations
   inspect(frame.get_local(0), content="I32(10)")
-  frame.set_local(0, @types.Value::I32(100))
+  frame.set_local(0, I32(100))
   inspect(frame.get_local(0), content="I32(100)")
   inspect(frame.get_local(2), content="F64(3.14)")
 }
@@ -107,16 +100,16 @@ test "Imports resolution for module linking" {
 
 ///|
 test "format_runtime_error provides descriptive message" {
-  let formatted = @runtime.format_runtime_error(@runtime.DivisionByZero)
+  let formatted = @runtime.format_runtime_error(DivisionByZero)
   assert_true(formatted.contains("integer divide by zero"))
 }
 
 ///|
 test "RuntimeErrorContext formats with call stack" {
-  let ctx = @runtime.RuntimeErrorContext::new(@runtime.OutOfBoundsMemoryAccess).with_call_stack([
-      @runtime.CallStackEntry::{ func_idx: 0, func_name: Some("main") },
-      @runtime.CallStackEntry::{ func_idx: 1, func_name: None },
-      @runtime.CallStackEntry::{ func_idx: 2, func_name: Some("helper") },
+  let ctx = @runtime.RuntimeErrorContext::new(OutOfBoundsMemoryAccess).with_call_stack([
+      { func_idx: 0, func_name: Some("main") },
+      { func_idx: 1, func_name: None },
+      { func_idx: 2, func_name: Some("helper") },
     ],
   )
   let formatted = ctx.format()
@@ -129,7 +122,7 @@ test "RuntimeErrorContext formats with call stack" {
 
 ///|
 test "RuntimeErrorContext formats with instruction" {
-  let ctx = @runtime.RuntimeErrorContext::new(@runtime.Unreachable)
+  let ctx = @runtime.RuntimeErrorContext::new(Unreachable)
     .with_instruction("unreachable")
     .with_func_idx(5)
   let formatted = ctx.format()
@@ -143,27 +136,27 @@ test "RuntimeErrorContext formats with instruction" {
 test "all RuntimeError types have descriptive messages" {
   // Verify each error type produces a non-empty message
   let errors : Array[@runtime.RuntimeError] = [
-    @runtime.StackUnderflow,
-    @runtime.StackOverflow,
-    @runtime.TypeMismatch,
-    @runtime.OutOfBoundsMemoryAccess,
-    @runtime.OutOfBoundsTableAccess,
-    @runtime.OutOfBoundsArrayAccess,
-    @runtime.UndefinedElement,
-    @runtime.UninitializedElement,
-    @runtime.IndirectCallTypeMismatch,
-    @runtime.DivisionByZero,
-    @runtime.IntegerOverflow,
-    @runtime.InvalidConversion,
-    @runtime.OutOfMemory,
-    @runtime.Unreachable,
-    @runtime.CallStackExhausted,
-    @runtime.UnknownImport("test_mod", "test_field"),
-    @runtime.LinkError,
-    @runtime.LinkErrorDetail("test detail"),
-    @runtime.NullReference,
-    @runtime.UnalignedAtomic,
-    @runtime.InvalidConstantExpression("test detail"),
+    StackUnderflow,
+    StackOverflow,
+    TypeMismatch,
+    OutOfBoundsMemoryAccess,
+    OutOfBoundsTableAccess,
+    OutOfBoundsArrayAccess,
+    UndefinedElement,
+    UninitializedElement,
+    IndirectCallTypeMismatch,
+    DivisionByZero,
+    IntegerOverflow,
+    InvalidConversion,
+    OutOfMemory,
+    Unreachable,
+    CallStackExhausted,
+    UnknownImport("test_mod", "test_field"),
+    LinkError,
+    LinkErrorDetail("test detail"),
+    NullReference,
+    UnalignedAtomic,
+    InvalidConstantExpression("test detail"),
   ]
   for err in errors {
     let formatted = @runtime.format_runtime_error(err)

@@ -2,20 +2,16 @@
 test "wat_printer: element segments" {
   let mod_ = @types.Module::new()
   mod_.elems.push({
-    mode: @types.ElemMode::Passive,
-    type_: @types.ValueType::FuncRef,
-    init: [[@types.Instruction::RefFunc(0)], [@types.Instruction::RefFunc(1)]],
+    mode: Passive,
+    type_: FuncRef,
+    init: [[RefFunc(0)], [RefFunc(1)]],
   })
   mod_.elems.push({
-    mode: @types.ElemMode::Active(0, [@types.Instruction::I32Const(0)]),
-    type_: @types.ValueType::FuncRef,
-    init: [[@types.Instruction::RefFunc(0)], [@types.Instruction::RefFunc(1)]],
+    mode: Active(0, [I32Const(0)]),
+    type_: FuncRef,
+    init: [[RefFunc(0)], [RefFunc(1)]],
   })
-  mod_.elems.push({
-    mode: @types.ElemMode::Declarative,
-    type_: @types.ValueType::FuncRef,
-    init: [[@types.Instruction::RefFunc(0)]],
-  })
+  mod_.elems.push({ mode: Declarative, type_: FuncRef, init: [[RefFunc(0)]] })
   let output = module_to_wat(mod_)
   let expected =
     #|(module

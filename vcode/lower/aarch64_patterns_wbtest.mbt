@@ -4,9 +4,9 @@
 test "aarch64: add with shifted operand" {
   // Build IR: fn(a: i32, b: i32) -> i32 { a + (b << 2) }
   let builder = @ir.IRBuilder::new("add_shifted_test")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let shift_amount = builder.iconst_i32(2)
@@ -46,10 +46,10 @@ test "aarch64: add with shifted operand" {
 test "aarch64: madd pattern" {
   // Build IR: fn(a: i32, b: i32, c: i32) -> i32 { a + b * c }
   let builder = @ir.IRBuilder::new("madd_test")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  let c = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  let c = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_result = builder.imul(b, c)
@@ -87,10 +87,10 @@ test "aarch64: madd pattern" {
 test "aarch64: msub pattern" {
   // Build IR: fn(a: i32, b: i32, c: i32) -> i32 { a - b * c }
   let builder = @ir.IRBuilder::new("msub_test")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  let c = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  let c = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let mul_result = builder.imul(b, c)
@@ -127,9 +127,9 @@ test "aarch64: msub pattern" {
 test "aarch64: mneg pattern" {
   // Build IR: fn(a: i32, b: i32) -> i32 { -(a * b) } => { 0 - (a * b) }
   let builder = @ir.IRBuilder::new("mneg_test")
-  let a = builder.add_param(@ir.Type::I32)
-  let b = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let a = builder.add_param(I32)
+  let b = builder.add_param(I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
@@ -235,7 +235,7 @@ test "apply_aarch64_rule: add_shifted" {
   }
   // Create a minimal function to get a context
   let builder = @ir.IRBuilder::new("test")
-  builder.add_result(@ir.Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c = builder.iconst_i32(0)
@@ -253,7 +253,7 @@ test "apply_aarch64_rule: add_shifted" {
     "aarch64_add_shifted", result, test_inst, ctx,
   )
   match apply_result {
-    AArch64RewriteResult::AddShifted(src1, src2, shift) => {
+    AddShifted(src1, src2, shift) => {
       inspect(src1, content="0")
       inspect(src2, content="1")
       inspect(shift, content="3")
@@ -266,7 +266,7 @@ test "apply_aarch64_rule: add_shifted" {
 test "apply_aarch64_rule: madd" {
   let result : MatchResult = { values: [], int_consts: [], float_consts: [] }
   let builder = @ir.IRBuilder::new("test")
-  builder.add_result(@ir.Type::I32)
+  builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
   let c = builder.iconst_i32(0)
@@ -282,7 +282,7 @@ test "apply_aarch64_rule: madd" {
   let test_inst = ir_func.blocks[0].instructions[0]
   let apply_result = apply_aarch64_rule("aarch64_madd", result, test_inst, ctx)
   match apply_result {
-    AArch64RewriteResult::Madd(acc, src1, src2) => {
+    Madd(acc, src1, src2) => {
       inspect(acc, content="0")
       inspect(src1, content="1")
       inspect(src2, content="2")

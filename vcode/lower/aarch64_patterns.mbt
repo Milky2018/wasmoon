@@ -156,12 +156,12 @@ pub fn apply_aarch64_rule(
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::AddShifted(0, 1, shift)
+          AddShifted(0, 1, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
     // add(shl(x, n), y) -> add_shifted(y, x, lsl #n)
     "aarch64_shifted_add" =>
@@ -169,68 +169,68 @@ pub fn apply_aarch64_rule(
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
           // Note: operands are swapped
-          AArch64RewriteResult::AddShifted(2, 0, shift)
+          AddShifted(2, 0, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
     // sub(x, shl(y, n)) -> sub_shifted(x, y, lsl #n)
     "aarch64_sub_shifted" =>
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::SubShifted(0, 1, shift)
+          SubShifted(0, 1, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
     // add(a, mul(b, c)) -> madd(a, b, c)
-    "aarch64_madd" => AArch64RewriteResult::Madd(0, 1, 2)
+    "aarch64_madd" => Madd(0, 1, 2)
     // add(mul(a, b), c) -> madd(c, a, b)
-    "aarch64_madd_comm" => AArch64RewriteResult::Madd(2, 0, 1)
+    "aarch64_madd_comm" => Madd(2, 0, 1)
     // sub(a, mul(b, c)) -> msub(a, b, c)
-    "aarch64_msub" => AArch64RewriteResult::Msub(0, 1, 2)
+    "aarch64_msub" => Msub(0, 1, 2)
     // sub(0, mul(a, b)) -> mneg(a, b)
-    "aarch64_mneg" => AArch64RewriteResult::Mneg(0, 1)
+    "aarch64_mneg" => Mneg(0, 1)
     // Logical operations with shifted operand
     "aarch64_and_shifted" =>
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(And(true), 0, 1, shift)
+          LogicalShifted(And(true), 0, 1, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
     "aarch64_orr_shifted" =>
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(Or(true), 0, 1, shift)
+          LogicalShifted(Or(true), 0, 1, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
     "aarch64_eor_shifted" =>
       if result.int_consts.length() > 0 {
         let shift = result.int_consts[0].to_int()
         if shift >= 0 && shift <= 63 {
-          AArch64RewriteResult::LogicalShifted(Xor(true), 0, 1, shift)
+          LogicalShifted(Xor(true), 0, 1, shift)
         } else {
-          AArch64RewriteResult::NoMatch
+          NoMatch
         }
       } else {
-        AArch64RewriteResult::NoMatch
+        NoMatch
       }
-    _ => AArch64RewriteResult::NoMatch
+    _ => NoMatch
   }
 }
 

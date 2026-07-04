@@ -24,7 +24,7 @@ fn ValidationResult::add_error(self : ValidationResult, error : String) -> Unit 
 pub fn validate_function(func : Function) -> ValidationResult {
   let result = ValidationResult::new()
   // Track all defined values
-  let defined_values : @hashmap.HashMap[Int, Type] = @hashmap.new()
+  let defined_values : @hashmap.HashMap[Int, Type] = HashMap([])
   // Add function parameters as defined
   for param in func.params {
     let (v, ty) = param
@@ -112,7 +112,7 @@ fn validate_instruction(
 
         // mulhi ops are only defined for i64
         if (inst.opcode is Umulh || inst.opcode is Smulh) &&
-          !types_match(a.ty, Type::I64) {
+          !types_match(a.ty, I64) {
           result.add_error("mulhi expects i64 operands, got \{a.ty}")
         }
       }
@@ -143,7 +143,7 @@ fn validate_instruction(
       // Result should be i32
       match inst.first_result() {
         Some(r) =>
-          if !types_match(r.ty, Type::I32) {
+          if !types_match(r.ty, I32) {
             result.add_error("Icmp result should be i32, got \{r.ty}")
           }
         None => ()
@@ -179,7 +179,7 @@ fn validate_instruction(
       // Result should be i32
       match inst.first_result() {
         Some(r) =>
-          if !types_match(r.ty, Type::I32) {
+          if !types_match(r.ty, I32) {
             result.add_error("Fcmp result should be i32, got \{r.ty}")
           }
         None => ()
@@ -533,27 +533,26 @@ fn validate_simd_instruction(
   match opcode {
     V128Const(_) =>
       if validate_simd_operand_count(inst, result, 0) {
-        validate_simd_result_type(inst, result, Type::V128)
+        validate_simd_result_type(inst, result, V128)
       }
     V128Splat8 | V128Splat16 | V128Splat32 =>
-      validate_simd_splat(inst, result, Type::I32)
-    V128Splat64 => validate_simd_splat(inst, result, Type::I64)
-    V128SplatF32 => validate_simd_splat(inst, result, Type::F32)
-    V128SplatF64 => validate_simd_splat(inst, result, Type::F64)
+      validate_simd_splat(inst, result, I32)
+    V128Splat64 => validate_simd_splat(inst, result, I64)
+    V128SplatF32 => validate_simd_splat(inst, result, F32)
+    V128SplatF64 => validate_simd_splat(inst, result, F64)
     V128ExtractLane8S(_)
     | V128ExtractLane8U(_)
     | V128ExtractLane16S(_)
     | V128ExtractLane16U(_)
-    | V128ExtractLane32(_) =>
-      validate_simd_extract_lane(inst, result, Type::I32)
-    V128ExtractLane64(_) => validate_simd_extract_lane(inst, result, Type::I64)
-    V128ExtractLaneF32(_) => validate_simd_extract_lane(inst, result, Type::F32)
-    V128ExtractLaneF64(_) => validate_simd_extract_lane(inst, result, Type::F64)
+    | V128ExtractLane32(_) => validate_simd_extract_lane(inst, result, I32)
+    V128ExtractLane64(_) => validate_simd_extract_lane(inst, result, I64)
+    V128ExtractLaneF32(_) => validate_simd_extract_lane(inst, result, F32)
+    V128ExtractLaneF64(_) => validate_simd_extract_lane(inst, result, F64)
     V128ReplaceLane8(_) | V128ReplaceLane16(_) | V128ReplaceLane32(_) =>
-      validate_simd_replace_lane(inst, result, Type::I32)
-    V128ReplaceLane64(_) => validate_simd_replace_lane(inst, result, Type::I64)
-    V128ReplaceLaneF32(_) => validate_simd_replace_lane(inst, result, Type::F32)
-    V128ReplaceLaneF64(_) => validate_simd_replace_lane(inst, result, Type::F64)
+      validate_simd_replace_lane(inst, result, I32)
+    V128ReplaceLane64(_) => validate_simd_replace_lane(inst, result, I64)
+    V128ReplaceLaneF32(_) => validate_simd_replace_lane(inst, result, F32)
+    V128ReplaceLaneF64(_) => validate_simd_replace_lane(inst, result, F64)
     V128AnyTrue
     | V128AllTrue8
     | V128AllTrue16
@@ -874,8 +873,8 @@ fn validate_simd_unary_v128_to_v128(
   result : ValidationResult,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 1) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -885,8 +884,8 @@ fn validate_simd_unary_v128_to_i32(
   result : ValidationResult,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 1) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
-    validate_simd_result_type(inst, result, Type::I32)
+    validate_simd_operand_type(inst, result, 0, V128)
+    validate_simd_result_type(inst, result, I32)
   }
 }
 
@@ -896,9 +895,9 @@ fn validate_simd_binary_v128_to_v128(
   result : ValidationResult,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 2) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
-    validate_simd_operand_type(inst, result, 1, Type::V128)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
+    validate_simd_operand_type(inst, result, 1, V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -908,19 +907,19 @@ fn validate_simd_ternary_v128_to_v128(
   result : ValidationResult,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 3) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
-    validate_simd_operand_type(inst, result, 1, Type::V128)
-    validate_simd_operand_type(inst, result, 2, Type::V128)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
+    validate_simd_operand_type(inst, result, 1, V128)
+    validate_simd_operand_type(inst, result, 2, V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
 ///|
 fn validate_simd_shift(inst : Inst, result : ValidationResult) -> Unit {
   if validate_simd_operand_count(inst, result, 2) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
-    validate_simd_operand_type(inst, result, 1, Type::I32)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
+    validate_simd_operand_type(inst, result, 1, I32)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -932,7 +931,7 @@ fn validate_simd_splat(
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 1) {
     validate_simd_operand_type(inst, result, 0, scalar_type)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -943,7 +942,7 @@ fn validate_simd_extract_lane(
   lane_type : Type,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 1) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
     validate_simd_result_type(inst, result, lane_type)
   }
 }
@@ -955,9 +954,9 @@ fn validate_simd_replace_lane(
   lane_type : Type,
 ) -> Unit {
   if validate_simd_operand_count(inst, result, 2) {
-    validate_simd_operand_type(inst, result, 0, Type::V128)
+    validate_simd_operand_type(inst, result, 0, V128)
     validate_simd_operand_type(inst, result, 1, lane_type)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -965,7 +964,7 @@ fn validate_simd_replace_lane(
 fn validate_simd_load(inst : Inst, result : ValidationResult) -> Unit {
   if validate_simd_operand_count(inst, result, 1) {
     validate_simd_operand_is_integer(inst, result, 0)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -973,8 +972,8 @@ fn validate_simd_load(inst : Inst, result : ValidationResult) -> Unit {
 fn validate_simd_load_lane(inst : Inst, result : ValidationResult) -> Unit {
   if validate_simd_operand_count(inst, result, 2) {
     validate_simd_operand_is_integer(inst, result, 0)
-    validate_simd_operand_type(inst, result, 1, Type::V128)
-    validate_simd_result_type(inst, result, Type::V128)
+    validate_simd_operand_type(inst, result, 1, V128)
+    validate_simd_result_type(inst, result, V128)
   }
 }
 
@@ -982,7 +981,7 @@ fn validate_simd_load_lane(inst : Inst, result : ValidationResult) -> Unit {
 fn validate_simd_store_lane(inst : Inst, result : ValidationResult) -> Unit {
   if validate_simd_operand_count(inst, result, 2) {
     validate_simd_operand_is_integer(inst, result, 0)
-    validate_simd_operand_type(inst, result, 1, Type::V128)
+    validate_simd_operand_type(inst, result, 1, V128)
     validate_simd_no_result(inst, result)
   }
 }

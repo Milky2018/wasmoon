@@ -35,7 +35,7 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 ///|
 /// Convert two Int64 (low and high) to V128 Bytes (16 bytes, little-endian)
 fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
-  let buf : @buffer.Buffer = @buffer.new(size_hint=16)
+  let buf : @buffer.Buffer = Buffer(size_hint=16)
   // Write low 8 bytes
   buf.write_byte((low & 0xFFL).to_byte())
   buf.write_byte(((low >> 8) & 0xFFL).to_byte())
@@ -68,7 +68,7 @@ pub struct WastResult {
 
 ///|
 pub fn WastResult::new() -> WastResult {
-  WastResult::{ passed: 0, failed: 0, skipped: 0, failures: [] }
+  { passed: 0, failed: 0, skipped: 0, failures: [] }
 }
 
 ///|
@@ -182,17 +182,17 @@ pub fn WastContext::new(
     Some(instance) => instance
     None => @runtime.ModuleInstance::new() // Fallback: shouldn't happen
   }
-  let registered_modules : Map[String, @runtime.ModuleInstance] = Map::new()
+  let registered_modules : Map[String, @runtime.ModuleInstance] = Map([])
   registered_modules.set("spectest", spectest_instance)
   registered_modules.set("wasi_snapshot_preview1", wasi_instance)
-  WastContext::{
+  {
     store,
     current_module: None,
-    named_modules: Map::new(),
-    module_definitions: Map::new(),
+    named_modules: Map([]),
+    module_definitions: Map([]),
     registered_modules,
-    overridden_builtin_modules: @hashset.new(),
-    jit_modules: Map::new(),
+    overridden_builtin_modules: HashSet([]),
+    jit_modules: Map([]),
     current_jit: None,
     use_jit,
     jit_compiler,
@@ -524,7 +524,7 @@ pub fn run_wast_command(
         values => {
           result.failed = result.failed + 1
           result.failures.push(
-            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{values})",
+            "line \{line}: assert_exception \{action_desc}: expected exception but none thrown (returned \{to_repr(values)})",
           )
         }
       }
@@ -695,7 +695,16 @@ fn run_assert_trap(
   _expected_msg : String,
 ) -> Bool {
   // Should trap
-  (try? invoke_action(ctx, action)) is Err(_)
+  !succeeds(() => invoke_action(ctx, action))
+}
+
+///|
+fn[T] succeeds(body : () -> T raise) -> Bool {
+  try body() catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
 }
 
 ///|
@@ -707,7 +716,7 @@ pub(all) suberror WastRunnerError {
 }
 
 ///|
-pub impl Show for WastRunnerError with output(self, logger) {
+pub impl Show for WastRunnerError with fn output(self, logger) {
   match self {
     ModuleNotFound(name) => logger.write_string("module not found: \{name}")
     NoCurrentModule => logger.write_string("no current module")
@@ -902,7 +911,7 @@ pub fn invoke_action(
                 use_subtype_indirect_check=jit.use_subtype_indirect_check,
               )
               let results = jit.jit_module.call_with_context(f, i64_args) catch {
-                @jit.JITExit(code) => {
+                JITExit(code) => {
                   // Tear down GC context on exit
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
@@ -914,7 +923,7 @@ pub fn invoke_action(
                   sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError("WASI exit: \{code}")
                 }
-                @jit.JITTrap(msg) => {
+                JITTrap(msg) => {
                   // Tear down GC context on trap
                   @jit.gc_teardown(jit.jit_module.get_context_ptr())
                   if temp_gc_func_table_ptr != 0L {
@@ -944,7 +953,7 @@ pub fn invoke_action(
                   break
                 }
                 match result_type {
-                  @types.ValueType::V128 => {
+                  V128 => {
                     // V128 uses two slots: low (first) and high (second)
                     if result_idx + 1 >= results.length() {
                       break
@@ -952,7 +961,7 @@ pub fn invoke_action(
                     let low = results[result_idx]
                     let high = results[result_idx + 1]
                     let bytes = int64_pair_to_v128_le(low, high)
-                    values.push(@types.Value::V128(bytes))
+                    values.push(V128(bytes))
                     result_idx = result_idx + 2
                   }
                   _ => {
@@ -1029,31 +1038,31 @@ fn convert_jit_result(
   c_heap : @jit.CHeap?,
 ) -> @types.Value {
   match ty {
-    I32 => @types.Value::I32(@types.FromInt64::from_int64_bits(v))
-    I64 => @types.Value::I64(@types.FromInt64::from_int64_bits(v))
-    F32 => @types.Value::F32(@types.FromInt64::from_int64_bits(v))
-    F64 => @types.Value::F64(@types.FromInt64::from_int64_bits(v))
+    I32 => I32(@types.FromInt64::from_int64_bits(v))
+    I64 => I64(@types.FromInt64::from_int64_bits(v))
+    F32 => F32(@types.FromInt64::from_int64_bits(v))
+    F64 => F64(@types.FromInt64::from_int64_bits(v))
     // Reference types: JIT null is 0.
     // Funcref may be IR-encoded as negative: value = -(func_idx + 1).
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else if v < 0L {
         let func_idx = (-(v + 1L)).to_int()
-        @types.Value::FuncRef(func_idx)
+        FuncRef(func_idx)
       } else {
         // Tagged pointer funcref (bit 61 set) - keep previous decoding fallback.
         let func_idx = (v & 0x1FFFFFFFFFFFFFFFL).to_int()
-        @types.Value::FuncRef(func_idx)
+        FuncRef(func_idx)
       }
     ExternRef | RefExtern | NullExternRef =>
       // Externref encoding: null=0, non-null=EXTERNREF_TAG | (host_idx << 1)
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         match @jit.decode_externref(v) {
-          Some(idx) => @types.Value::ExternRef(idx)
-          None => @types.Value::ExternRef(v.to_int())
+          Some(idx) => ExternRef(idx)
+          None => ExternRef(v.to_int())
         }
       }
     // GC reference types - decode using c_heap encoding
@@ -1061,16 +1070,16 @@ fn convert_jit_result(
     // Note: ExternRef can also appear here after any.convert_extern, tagged with EXTERNREF_TAG
     AnyRef | RefAny | RefEq | RefNullEq =>
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else if (v & EXTERNREF_TAG) != 0L {
         // Host externref that was converted to anyref via any.convert_extern
         match @jit.decode_externref(v) {
-          Some(idx) => @types.Value::ExternRef(idx)
-          None => @types.Value::ExternRef(v.to_int())
+          Some(idx) => ExternRef(idx)
+          None => ExternRef(v.to_int())
         }
       } else if (v & 1L) == 1L {
         // i31 (odd)
-        @types.Value::I31((v >> 1).to_int())
+        I31((v >> 1).to_int())
       } else {
         // Struct/array ref (even, non-zero) - query heap for the actual kind
         // JIT encodes as gc_ref << 1 where gc_ref is 1-based
@@ -1080,36 +1089,36 @@ fn convert_jit_result(
         match c_heap {
           Some(heap) =>
             if heap.is_array(heap_idx) {
-              @types.Value::ArrayRef(heap_idx)
+              ArrayRef(heap_idx)
             } else {
-              @types.Value::StructRef(heap_idx)
+              StructRef(heap_idx)
             }
           None =>
             // No heap available, default to StructRef
-            @types.Value::StructRef(heap_idx)
+            StructRef(heap_idx)
         }
       }
     StructRef | RefStructAbs | RefStruct(_) | RefNullStruct(_) =>
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         let gc_ref = (v >> 1).to_int()
-        @types.Value::StructRef(gc_ref - 1)
+        StructRef(gc_ref - 1)
       }
     ArrayRef | RefArrayAbs | RefArray(_) | RefNullArray(_) =>
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
         let gc_ref = (v >> 1).to_int()
-        @types.Value::ArrayRef(gc_ref - 1)
+        ArrayRef(gc_ref - 1)
       }
     RefI31 | RefNullI31 =>
       if v == NULL_REF {
-        @types.Value::Null
+        Null
       } else {
-        @types.Value::I31((v >> 1).to_int())
+        I31((v >> 1).to_int())
       }
-    NullRef | ExnRef | NullExnRef | RefNone => @types.Value::Null
+    NullRef | ExnRef | NullExnRef | RefNone => Null
     V128 => abort("V128 not supported in JIT")
   }
 }
@@ -1117,24 +1126,23 @@ fn convert_jit_result(
 ///|
 pub fn wast_value_to_runtime(v : @wat.WastValue) -> @types.Value {
   match v {
-    I32(n) => @types.Value::I32(n)
-    I64(n) => @types.Value::I64(n)
-    F32(n) => @types.Value::F32(n)
-    F64(n) => @types.Value::F64(n)
-    V128(bytes) => @types.Value::V128(bytes)
-    F32CanonicalNan | F32ArithmeticNan =>
-      @types.Value::F32((0.0 : Float) / (0.0 : Float))
-    F64CanonicalNan | F64ArithmeticNan => @types.Value::F64(0.0 / 0.0)
+    I32(n) => I32(n)
+    I64(n) => I64(n)
+    F32(n) => F32(n)
+    F64(n) => F64(n)
+    V128(bytes) => V128(bytes)
+    F32CanonicalNan | F32ArithmeticNan => F32((0.0 : Float) / (0.0 : Float))
+    F64CanonicalNan | F64ArithmeticNan => F64(0.0 / 0.0)
     V128Pattern(_) =>
       // For patterns, use a placeholder - actual matching is done in values_match
-      @types.Value::V128(Bytes::make(16, b'\x00'))
-    RefNull(_) => @types.Value::Null
-    RefExtern(n) => @types.Value::ExternRef(n)
-    RefHost(n) => @types.Value::ExternRef(n) // ref.host is like ref.extern for testing
-    RefFunc => @types.Value::FuncRef(0) // Placeholder
-    RefExternAny => @types.Value::ExternRef(0) // Placeholder for matching
+      V128(Bytes::make(16, b'\x00'))
+    RefNull(_) => Null
+    RefExtern(n) => ExternRef(n)
+    RefHost(n) => ExternRef(n) // ref.host is like ref.extern for testing
+    RefFunc => FuncRef(0) // Placeholder
+    RefExternAny => ExternRef(0) // Placeholder for matching
     // GC reference types - these are abstract type matchers, not concrete values
-    RefArray | RefStruct | RefEq | RefI31 | RefAny => @types.Value::Null // Placeholder
+    RefArray | RefStruct | RefEq | RefI31 | RefAny => Null // Placeholder
     // Either is for matching, not for conversion to runtime value
     Either(_) => abort("Either not valid as runtime value")
   }
@@ -1253,23 +1261,21 @@ fn v128_pattern_match(
 fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
   match source {
     Binary(bytes) =>
-      (try? ({
+      succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
-      }))
-      is Ok(_)
+      })
     Quote(parts) => {
       // Join quoted parts and parse as WAT
       let wat_source = "(module " +
         parts.iter().fold(init="", fn(acc, s) { acc + s }) +
         ")"
-      (try? ({
+      succeeds(() => {
         let mod_ = @wat.parse(wat_source)
         @validator.validate_module(mod_)
-      }))
-      is Ok(_)
+      })
     }
-    Inline(mod_) => (try? @validator.validate_module(mod_)) is Ok(_)
+    Inline(mod_) => succeeds(() => @validator.validate_module(mod_))
     FailedToParse(_) => false // Module failed to parse, so it's invalid
   }
 }
@@ -1277,7 +1283,7 @@ fn validate_module_source(source : @wat.WastModuleSource) -> Bool {
 ///|
 fn parse_module_source(source : @wat.WastModuleSource) -> Bool {
   match source {
-    Binary(bytes) => (try? @parser.parse_module(bytes)) is Ok(_)
+    Binary(bytes) => succeeds(() => @parser.parse_module(bytes))
     Quote(_) => false // Quoted source is assumed to fail parsing
     Inline(_) => true // Already parsed successfully
     FailedToParse(_) => false // Module failed to parse
@@ -1292,7 +1298,7 @@ fn try_instantiate_source(
   let imports = ctx.build_imports()
   match source {
     Binary(bytes) =>
-      (try? ({
+      succeeds(() => {
         let mod_ = @parser.parse_module(bytes)
         @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
@@ -1301,10 +1307,9 @@ fn try_instantiate_source(
           imports,
         )
         ctx.current_module = Some(instance)
-      }))
-      is Ok(_)
+      })
     Inline(mod_) =>
-      (try? ({
+      succeeds(() => {
         @validator.validate_module(mod_)
         let instance = @executor.instantiate_module_with_imports(
           ctx.store,
@@ -1312,8 +1317,7 @@ fn try_instantiate_source(
           imports,
         )
         ctx.current_module = Some(instance)
-      }))
-      is Ok(_)
+      })
     Quote(_) => false
     FailedToParse(_) => false // Module failed to parse, can't instantiate
   }
@@ -1464,13 +1468,10 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = (try? (@executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        |> ignore))
-        is Err(_)
+      let trapped = !succeeds(() => {
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
+      })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -
@@ -1506,13 +1507,10 @@ fn try_instantiate_source_traps(
       let before_mems = ctx.store.mems.length()
       let before_globals = ctx.store.globals.length()
       let before_tags = ctx.store.tags.length()
-      let trapped = (try? (@executor.instantiate_module_with_imports(
-          ctx.store,
-          mod_,
-          imports,
-        )
-        |> ignore))
-        is Err(_)
+      let trapped = !succeeds(() => {
+        @executor.instantiate_module_with_imports(ctx.store, mod_, imports)
+        |> ignore
+      })
       if trapped && ctx.use_jit && ctx.jit_compiler is Some(_) {
         if ctx.store.instances.length() > before_instances {
           let trapped_instance = ctx.store.instances[ctx.store.instances.length() -

@@ -77,7 +77,7 @@ pub fn WasiContext::new() -> WasiContext {
     exit_code: None,
     preopens: [],
     next_fd: 3, // 0=stdin, 1=stdout, 2=stderr
-    open_files: @hashmap.new(),
+    open_files: HashMap([]),
     stdout_callback: write_native_stdout,
     stderr_callback: write_native_stderr,
     stdin_callback: fn() { b"" },
@@ -263,7 +263,7 @@ fn write_native_stderr(bytes : Bytes) -> Unit {
 /// Build the WasiContext
 pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
   let preopens : Array[(Fd, String, String)] = []
-  let open_files : @hashmap.HashMap[Int, OpenFile] = @hashmap.new()
+  let open_files : @hashmap.HashMap[Int, OpenFile] = HashMap([])
   let mut fd = 3
   for preopen in self.preopens {
     let (host, guest) = preopen

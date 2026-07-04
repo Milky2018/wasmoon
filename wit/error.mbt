@@ -17,7 +17,7 @@ fn WitError::to_string(self : WitError) -> String {
 }
 
 ///|
-pub impl Show for WitError with output(self, logger) {
+pub impl Show for WitError with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

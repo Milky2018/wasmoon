@@ -136,10 +136,7 @@ pub fn Linker::add_host_func(
   let idx = find_or_create_host_module(self.modules, mod_name)
   let (_, instance) = self.modules[idx]
   instance.func_addrs.push(func_addr)
-  instance.exports.push({
-    name,
-    desc: @types.ExportDesc::Func(instance.func_addrs.length() - 1),
-  })
+  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
 }
 
 ///|
@@ -188,10 +185,7 @@ pub fn Linker::add_host_func_with_caller(
   let idx = find_or_create_host_module(self.modules, mod_name)
   let (_, instance) = self.modules[idx]
   instance.func_addrs.push(func_addr)
-  instance.exports.push({
-    name,
-    desc: @types.ExportDesc::Func(instance.func_addrs.length() - 1),
-  })
+  instance.exports.push({ name, desc: Func(instance.func_addrs.length() - 1) })
 }
 
 ///|
@@ -237,10 +231,7 @@ pub fn Linker::add_memory(
   let idx = find_or_create_host_module(self.modules, mod_name)
   let (_, instance) = self.modules[idx]
   instance.mem_addrs.push(mem_addr)
-  instance.exports.push({
-    name,
-    desc: @types.ExportDesc::Memory(instance.mem_addrs.length() - 1),
-  })
+  instance.exports.push({ name, desc: Memory(instance.mem_addrs.length() - 1) })
 }
 
 ///|
@@ -286,10 +277,7 @@ pub fn Linker::add_table(
   let idx = find_or_create_host_module(self.modules, mod_name)
   let (_, instance) = self.modules[idx]
   instance.table_addrs.push(table_addr)
-  instance.exports.push({
-    name,
-    desc: @types.ExportDesc::Table(instance.table_addrs.length() - 1),
-  })
+  instance.exports.push({ name, desc: Table(instance.table_addrs.length() - 1) })
 }
 
 ///|
@@ -337,6 +325,6 @@ pub fn Linker::add_global(
   instance.global_addrs.push(global_addr)
   instance.exports.push({
     name,
-    desc: @types.ExportDesc::Global(instance.global_addrs.length() - 1),
+    desc: Global(instance.global_addrs.length() - 1),
   })
 }

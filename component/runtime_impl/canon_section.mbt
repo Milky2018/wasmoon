@@ -15,91 +15,84 @@ fn process_canon_section(
   }
   for c in canons {
     match c {
-      Canon::Lift(core_func_idx, opts, type_idx) =>
+      Lift(core_func_idx, opts, type_idx) =>
         instantiate_canon_lift(
           core_func_idx, opts, type_idx, state, may_enter_self,
         )
-      Canon::Lower(func_idx, opts) =>
+      Lower(func_idx, opts) =>
         instantiate_canon_lower(func_idx, opts, state, store)
-      Canon::BackpressureSet => instantiate_canon_backpressure_set(state, store)
-      Canon::BackpressureInc => instantiate_canon_backpressure_inc(state, store)
-      Canon::BackpressureDec => instantiate_canon_backpressure_dec(state, store)
-      Canon::ResourceNew(tyidx) =>
-        instantiate_canon_resource_new(tyidx, state, store)
-      Canon::ResourceRep(tyidx) =>
-        instantiate_canon_resource_rep(tyidx, state, store)
-      Canon::ResourceDrop(tyidx) =>
+      BackpressureSet => instantiate_canon_backpressure_set(state, store)
+      BackpressureInc => instantiate_canon_backpressure_inc(state, store)
+      BackpressureDec => instantiate_canon_backpressure_dec(state, store)
+      ResourceNew(tyidx) => instantiate_canon_resource_new(tyidx, state, store)
+      ResourceRep(tyidx) => instantiate_canon_resource_rep(tyidx, state, store)
+      ResourceDrop(tyidx) =>
         instantiate_canon_resource_drop(tyidx, state, store)
-      Canon::TaskReturn(result, opts) =>
+      TaskReturn(result, opts) =>
         instantiate_canon_task_return(result, opts, state, store)
-      Canon::TaskCancel => instantiate_canon_task_cancel(state, store)
-      Canon::ThreadIndex => instantiate_canon_thread_index(state, store)
-      Canon::ThreadYield(_cancellable) =>
+      TaskCancel => instantiate_canon_task_cancel(state, store)
+      ThreadIndex => instantiate_canon_thread_index(state, store)
+      ThreadYield(_cancellable) =>
         instantiate_canon_thread_yield(_cancellable, state, store)
-      Canon::ThreadYieldTo(_cancellable) =>
+      ThreadYieldTo(_cancellable) =>
         instantiate_canon_thread_yield_to(_cancellable, state, store)
-      Canon::ThreadSwitchTo(_cancellable) =>
+      ThreadSwitchTo(_cancellable) =>
         instantiate_canon_thread_switch_to(_cancellable, state, store)
-      Canon::ThreadResumeLater =>
-        instantiate_canon_thread_resume_later(state, store)
-      Canon::ThreadSuspend(_cancellable) =>
+      ThreadResumeLater => instantiate_canon_thread_resume_later(state, store)
+      ThreadSuspend(_cancellable) =>
         instantiate_canon_thread_suspend(_cancellable, state, store)
-      Canon::ThreadNewIndirect(_type_idx, _table_idx) =>
+      ThreadNewIndirect(_type_idx, _table_idx) =>
         instantiate_canon_thread_new_indirect(
           _type_idx, _table_idx, state, store,
         )
-      Canon::WaitableSetNew => instantiate_canon_waitable_set_new(state, store)
-      Canon::WaitableSetWait(_cancellable, memidx) =>
+      WaitableSetNew => instantiate_canon_waitable_set_new(state, store)
+      WaitableSetWait(_cancellable, memidx) =>
         instantiate_canon_waitable_set_wait(_cancellable, memidx, state, store)
-      Canon::WaitableSetPoll(_cancellable, memidx) =>
+      WaitableSetPoll(_cancellable, memidx) =>
         instantiate_canon_waitable_set_poll(_cancellable, memidx, state, store)
-      Canon::WaitableSetDrop =>
-        instantiate_canon_waitable_set_drop(state, store)
-      Canon::WaitableJoin => instantiate_canon_waitable_join(state, store)
-      Canon::SubtaskCancel(is_async_cancel) =>
+      WaitableSetDrop => instantiate_canon_waitable_set_drop(state, store)
+      WaitableJoin => instantiate_canon_waitable_join(state, store)
+      SubtaskCancel(is_async_cancel) =>
         instantiate_canon_subtask_cancel(is_async_cancel, state, store)
-      Canon::SubtaskDrop => instantiate_canon_subtask_drop(state, store)
-      Canon::StreamNew(_tyidx) =>
-        instantiate_canon_stream_new(_tyidx, state, store)
-      Canon::StreamRead(_tyidx, opts) =>
+      SubtaskDrop => instantiate_canon_subtask_drop(state, store)
+      StreamNew(_tyidx) => instantiate_canon_stream_new(_tyidx, state, store)
+      StreamRead(_tyidx, opts) =>
         instantiate_canon_stream_read(_tyidx, opts, state, store)
-      Canon::StreamWrite(_tyidx, opts) =>
+      StreamWrite(_tyidx, opts) =>
         instantiate_canon_stream_write(_tyidx, opts, state, store)
-      Canon::StreamCancelRead(_tyidx, is_async_cancel) =>
+      StreamCancelRead(_tyidx, is_async_cancel) =>
         instantiate_canon_stream_cancel_read(
           _tyidx, is_async_cancel, state, store,
         )
-      Canon::StreamCancelWrite(_tyidx, is_async_cancel) =>
+      StreamCancelWrite(_tyidx, is_async_cancel) =>
         instantiate_canon_stream_cancel_write(
           _tyidx, is_async_cancel, state, store,
         )
-      Canon::StreamDropReadable(_tyidx) =>
+      StreamDropReadable(_tyidx) =>
         instantiate_canon_stream_drop_readable(_tyidx, state, store)
-      Canon::StreamDropWritable(_tyidx) =>
+      StreamDropWritable(_tyidx) =>
         instantiate_canon_stream_drop_writable(_tyidx, state, store)
-      Canon::FutureNew(_tyidx) =>
-        instantiate_canon_future_new(_tyidx, state, store)
-      Canon::FutureRead(_tyidx, _opts) =>
+      FutureNew(_tyidx) => instantiate_canon_future_new(_tyidx, state, store)
+      FutureRead(_tyidx, _opts) =>
         instantiate_canon_future_read(_tyidx, _opts, state, store)
-      Canon::FutureWrite(_tyidx, _opts) =>
+      FutureWrite(_tyidx, _opts) =>
         instantiate_canon_future_write(_tyidx, _opts, state, store)
-      Canon::FutureCancelRead(_tyidx, _is_async) =>
+      FutureCancelRead(_tyidx, _is_async) =>
         instantiate_canon_future_cancel_read(_tyidx, _is_async, state, store)
-      Canon::FutureCancelWrite(_tyidx, _is_async) =>
+      FutureCancelWrite(_tyidx, _is_async) =>
         instantiate_canon_future_cancel_write(_tyidx, _is_async, state, store)
-      Canon::FutureDropReadable(_tyidx) =>
+      FutureDropReadable(_tyidx) =>
         instantiate_canon_future_drop_readable(_tyidx, state, store)
-      Canon::FutureDropWritable(_tyidx) =>
+      FutureDropWritable(_tyidx) =>
         instantiate_canon_future_drop_writable(_tyidx, state, store)
-      Canon::ErrorContextNew(opts) =>
+      ErrorContextNew(opts) =>
         instantiate_canon_error_context_new(opts, state, store)
-      Canon::ErrorContextDebugMessage(opts) =>
+      ErrorContextDebugMessage(opts) =>
         instantiate_canon_error_context_debug_message(opts, state, store)
-      Canon::ErrorContextDrop =>
-        instantiate_canon_error_context_drop(state, store)
-      Canon::ContextGet(_vt, _idx) =>
+      ErrorContextDrop => instantiate_canon_error_context_drop(state, store)
+      ContextGet(_vt, _idx) =>
         instantiate_canon_context_get(_vt, _idx, state, store)
-      Canon::ContextSet(_vt, _idx) =>
+      ContextSet(_vt, _idx) =>
         instantiate_canon_context_set(_vt, _idx, state, store)
     }
   }

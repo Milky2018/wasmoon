@@ -82,9 +82,9 @@ test "TypeEquivalenceContext: different referenced types" {
 ///|
 test "get_rec_group_info: singleton rec group" {
   let rec_groups : Array[Int] = [0, 1, 2]
-  inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
-  inspect(get_rec_group_info(rec_groups, 1), content="(0, 1)")
-  inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
+  debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
+  debug_inspect(get_rec_group_info(rec_groups, 1), content="(0, 1)")
+  debug_inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
 }
 
 ///|
@@ -92,15 +92,15 @@ test "get_rec_group_info: multi-type rec group" {
   // (rec (type $t0 ...) (type $t1 ...))
   // (type $t2 ...)
   let rec_groups : Array[Int] = [0, 0, 1]
-  inspect(get_rec_group_info(rec_groups, 0), content="(0, 2)")
-  inspect(get_rec_group_info(rec_groups, 1), content="(1, 2)")
-  inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
+  debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 2)")
+  debug_inspect(get_rec_group_info(rec_groups, 1), content="(1, 2)")
+  debug_inspect(get_rec_group_info(rec_groups, 2), content="(0, 1)")
 }
 
 ///|
 test "get_rec_group_info: empty rec groups" {
   let rec_groups : Array[Int] = []
-  inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
+  debug_inspect(get_rec_group_info(rec_groups, 0), content="(0, 1)")
 }
 
 ///|

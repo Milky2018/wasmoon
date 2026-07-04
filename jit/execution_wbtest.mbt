@@ -33,10 +33,10 @@ test "collect_gc_root_args filters non-gc values" {
   let args = [2L, 3L, 8L, 10L, 12L]
   let param_types = [
     @types.RefStruct(0),
-    @types.RefStruct(1),
-    @types.I64,
-    @types.RefArray(2),
-    @types.FuncRef,
+    RefStruct(1),
+    I64,
+    RefArray(2),
+    FuncRef,
   ]
   let roots = collect_gc_root_args(args, param_types)
   inspect(roots.length(), content="2")
@@ -47,9 +47,9 @@ test "collect_gc_root_args filters non-gc values" {
 ///|
 test "trap report: structured data available after jit trap" {
   let builder = @ir.IRBuilder::new("trap_div")
-  let _vmctx = builder.add_param(@ir.Type::I64)
-  let rhs = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::I32)
+  let _vmctx = builder.add_param(I64)
+  let rhs = builder.add_param(I32)
+  builder.add_result(I32)
 
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -64,8 +64,8 @@ test "trap report: structured data available after jit trap" {
   let jit_module = JITModule::from_single_function(
     mc.get_bytes(),
     "trap_div",
-    [@types.ValueType::I32],
-    [@types.ValueType::I32],
+    [I32],
+    [I32],
     4096L,
   )
   guard jit_module is Some(jm) else {
@@ -99,15 +99,15 @@ test "trap report: structured data available after jit trap" {
 
 ///|
 test "execute br_table with f32 locals (f32_br_2locals.wast)" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // Build IR function: fn test(vmctx, selector) -> f32
   // ABI: X0=vmctx, X1+=user params
   let builder = @ir.IRBuilder::new("test")
-  let _vmctx = builder.add_param(@ir.Type::I64)
-  let selector = builder.add_param(@ir.Type::I32)
-  builder.add_result(@ir.Type::F32)
+  let _vmctx = builder.add_param(I64)
+  let selector = builder.add_param(I32)
+  builder.add_result(F32)
 
   // Create all blocks
   let entry = builder.create_block()
@@ -118,7 +118,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let exit = builder.create_block()
 
   // Add block parameter for exit (the merged local2 value)
-  let local2_phi = builder.add_block_param(exit, @ir.Type::F32)
+  let local2_phi = builder.add_block_param(exit, F32)
 
   // Entry block: set up locals and br_table
   builder.switch_to_block(entry)
@@ -193,8 +193,8 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
   let jit_module = JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32], // param_types
-    [@types.ValueType::F32], // result_types
+    [I32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -225,7 +225,7 @@ test "execute br_table with f32 locals (f32_br_2locals.wast)" {
 
 ///|
 test "end-to-end: f32_br_2locals.wast from source" {
-  if @isa.ISA::current() is @isa.AMD64 {
+  if @isa.ISA::current() is AMD64 {
     return
   }
   // The actual WAST source from spec/f32_br_2locals.wast
@@ -270,7 +270,7 @@ test "end-to-end: f32_br_2locals.wast from source" {
   // Extract module from first command
   let (first_cmd, _) = script.commands[0]
   let wasm_module : @types.Module = match first_cmd {
-    @wast.WastCommand::Module(m, _) => m
+    Module(m, _) => m
     _ => {
       inspect(false, content="First command should be Module")
       return
@@ -550,8 +550,8 @@ test "end-to-end: f32_br_2locals.wast from source" {
   let jit_module = JITModule::from_single_function(
     code_bytes,
     "test",
-    [@types.ValueType::I32], // param_types
-    [@types.ValueType::F32], // result_types
+    [I32], // param_types
+    [F32], // result_types
     4096L, // mem_size
   )
   guard jit_module is Some(jm) else { return }
@@ -564,21 +564,21 @@ test "end-to-end: f32_br_2locals.wast from source" {
   let results : Array[(Int64, Float, Float)] = []
   for i in 1..<script.commands.length() {
     let (cmd, _) = script.commands[i]
-    if cmd is @wast.WastCommand::AssertReturn(action, expected) &&
-      action is @wast.WastAction::Invoke(_, func_name, args) {
+    if cmd is AssertReturn(action, expected) &&
+      action is Invoke(_, func_name, args) {
       assert_eq(func_name, "test")
       assert_eq(args.length(), 1)
       assert_eq(expected.length(), 1)
 
       // Get input argument
       let arg = match args[0] {
-        @wast.WastValue::I32(n) => n
+        I32(n) => n
         x => fail("Input is not I32: \{x}")
       }
 
       // Get expected result
       let expected_f32 = match expected[0] {
-        @wast.WastValue::F32(f) => f
+        F32(f) => f
         x => fail("Output is not F32: \{x}")
       }
 
@@ -594,9 +594,12 @@ test "end-to-end: f32_br_2locals.wast from source" {
   // Show all test results: (input, expected, actual)
   // Expected: all 4 tests pass with correct values
   // Case 3 (default) returns 0.0 because local2 is never set when jumping directly to end
-  inspect(results, content="[(0, 10, 10), (1, 10, 10), (2, 10, 10), (3, 0, 0)]")
-  assert_eq(results[0], (0, 10, 10))
-  assert_eq(results[1], (1, 10, 10))
-  assert_eq(results[2], (2, 10, 10))
-  assert_eq(results[3], (3, 0, 0))
+  debug_inspect(
+    results,
+    content="[(0, 10, 10), (1, 10, 10), (2, 10, 10), (3, 0, 0)]",
+  )
+  inspect(results[0] == (0, 10, 10), content="true")
+  inspect(results[1] == (1, 10, 10), content="true")
+  inspect(results[2] == (2, 10, 10), content="true")
+  inspect(results[3] == (3, 0, 0), content="true")
 }

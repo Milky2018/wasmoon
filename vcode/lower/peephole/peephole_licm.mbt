@@ -33,7 +33,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
     for h in succs {
       if h >= 0 && h < n && dom[b.id].contains(h) {
         // Natural loop nodes.
-        let loop_nodes : @hashset.HashSet[Int] = @hashset.new()
+        let loop_nodes : @hashset.HashSet[Int] = HashSet([])
         loop_nodes.add(h)
         loop_nodes.add(b.id)
         let work : Array[Int] = [b.id]
@@ -62,7 +62,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
         let preheader_id = outside_preds[0]
 
         // Compute all vreg ids used outside loop.
-        let used_outside : @hashset.HashSet[Int] = @hashset.new()
+        let used_outside : @hashset.HashSet[Int] = HashSet([])
         for i in 0..<n {
           if loop_nodes.contains(i) {
             continue
@@ -98,7 +98,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
             }
           }
           if blk.terminator is Some(term) {
-            let used : @hashset.HashSet[Int] = @hashset.new()
+            let used : @hashset.HashSet[Int] = HashSet([])
             collect_terminator_uses_simple(term, used)
             for uid in used {
               let c = use_count_in_loop.get(uid).unwrap_or(0)
@@ -108,7 +108,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
         }
 
         // Build set of vregs defined inside the loop.
-        let defs_in_loop : @hashset.HashSet[Int] = @hashset.new()
+        let defs_in_loop : @hashset.HashSet[Int] = HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
@@ -171,7 +171,7 @@ fn licm_hoist_invariants(func : @regalloc.VCodeFunction) -> Unit {
 
         // Hoist invariants from loop blocks to preheader.
         let hoisted : Array[@instr.VCodeInst] = []
-        let hoisted_defs : @hashset.HashSet[Int] = @hashset.new()
+        let hoisted_defs : @hashset.HashSet[Int] = HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
@@ -244,13 +244,13 @@ fn cse_immutable_loads(func : @regalloc.VCodeFunction) -> Unit {
   let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
   // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
   // vmctx-derived base loads can be CSE'd even before prelude rewrites.
-  let vmctx_aliases : @hashset.HashSet[Int] = @hashset.new()
+  let vmctx_aliases : @hashset.HashSet[Int] = HashSet([])
   let params = func.get_params()
   if params.length() > 0 {
     vmctx_aliases.add(params[0].id)
   }
   // Collect all vregs that are func_table pointers.
-  let func_table_ptrs : @hashset.HashSet[Int] = @hashset.new()
+  let func_table_ptrs : @hashset.HashSet[Int] = HashSet([])
   fn is_vmctx_alias(
     reg : @abi.Reg,
     copies : Map[Int, Int],
@@ -454,52 +454,52 @@ fn is_valid_add_imm(val : Int64) -> Bool {
 /// Convert a compare kind to a branch condition.
 fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
   match kind {
-    Eq => @instr.Cond::Eq
-    Ne => @instr.Cond::Ne
-    Slt => @instr.Cond::Lt
-    Sle => @instr.Cond::Le
-    Sgt => @instr.Cond::Gt
-    Sge => @instr.Cond::Ge
-    Ult => @instr.Cond::Lo
-    Ule => @instr.Cond::Ls
-    Ugt => @instr.Cond::Hi
-    Uge => @instr.Cond::Hs
+    Eq => Eq
+    Ne => Ne
+    Slt => Lt
+    Sle => Le
+    Sgt => Gt
+    Sge => Ge
+    Ult => Lo
+    Ule => Ls
+    Ugt => Hi
+    Uge => Hs
   }
 }
 
 ///|
 fn invert_cond(cond : @instr.Cond) -> @instr.Cond {
   match cond {
-    @instr.Cond::Eq => @instr.Cond::Ne
-    @instr.Cond::Ne => @instr.Cond::Eq
-    @instr.Cond::Hs => @instr.Cond::Lo
-    @instr.Cond::Lo => @instr.Cond::Hs
-    @instr.Cond::Mi => @instr.Cond::Pl
-    @instr.Cond::Pl => @instr.Cond::Mi
-    @instr.Cond::Vs => @instr.Cond::Vc
-    @instr.Cond::Vc => @instr.Cond::Vs
-    @instr.Cond::Ps => @instr.Cond::Pc
-    @instr.Cond::Pc => @instr.Cond::Ps
-    @instr.Cond::Hi => @instr.Cond::Ls
-    @instr.Cond::Ls => @instr.Cond::Hi
-    @instr.Cond::Ge => @instr.Cond::Lt
-    @instr.Cond::Lt => @instr.Cond::Ge
-    @instr.Cond::Gt => @instr.Cond::Le
-    @instr.Cond::Le => @instr.Cond::Gt
-    @instr.Cond::Al => @instr.Cond::Al
+    Eq => Ne
+    Ne => Eq
+    Hs => Lo
+    Lo => Hs
+    Mi => Pl
+    Pl => Mi
+    Vs => Vc
+    Vc => Vs
+    Ps => Pc
+    Pc => Ps
+    Hi => Ls
+    Ls => Hi
+    Ge => Lt
+    Lt => Ge
+    Gt => Le
+    Le => Gt
+    Al => Al
   }
 }
 
 ///|
 fn eval_cmp_imm_cond(lhs : Int, rhs : Int, cond : @instr.Cond) -> Bool {
   match cond {
-    @instr.Cond::Eq => lhs == rhs
-    @instr.Cond::Ne => lhs != rhs
-    @instr.Cond::Hs | @instr.Cond::Ge => lhs >= rhs
-    @instr.Cond::Lo | @instr.Cond::Lt => lhs < rhs
-    @instr.Cond::Hi | @instr.Cond::Gt => lhs > rhs
-    @instr.Cond::Ls | @instr.Cond::Le => lhs <= rhs
-    @instr.Cond::Al => true
+    Eq => lhs == rhs
+    Ne => lhs != rhs
+    Hs | Ge => lhs >= rhs
+    Lo | Lt => lhs < rhs
+    Hi | Gt => lhs > rhs
+    Ls | Le => lhs <= rhs
+    Al => true
     _ => false
   }
 }
@@ -535,18 +535,9 @@ fn build_cmp_branch_terminator(
   if rhs is Virtual(rhs_vreg) &&
     const_defs.get(rhs_vreg.id) is Some(val) &&
     is_valid_add_imm(val) {
-    @instr.VCodeTerminator::BranchCmpImm(
-      lhs,
-      val.to_int(),
-      cond,
-      cmp_is_64,
-      then_id,
-      else_id,
-    )
+    BranchCmpImm(lhs, val.to_int(), cond, cmp_is_64, then_id, else_id)
   } else {
-    @instr.VCodeTerminator::BranchCmp(
-      lhs, rhs, cond, cmp_is_64, then_id, else_id,
-    )
+    BranchCmp(lhs, rhs, cond, cmp_is_64, then_id, else_id)
   }
 }
 
@@ -578,7 +569,7 @@ fn dce_trivially_dead(func : @regalloc.VCodeFunction) -> Unit {
   let mut changed = true
   while changed {
     changed = false
-    let used : @hashset.HashSet[Int] = @hashset.new()
+    let used : @hashset.HashSet[Int] = HashSet([])
     for block in func.blocks {
       for inst in block.insts {
         collect_uses(inst, used)
@@ -652,14 +643,12 @@ fn propagate_single_use_moves(
   }
   if block.terminator is Some(term) {
     let term_uses = match term {
-      @instr.VCodeTerminator::Jump(_, args)
-      | @instr.VCodeTerminator::Return(args) => args
-      @instr.VCodeTerminator::Branch(cond, _, _)
-      | @instr.VCodeTerminator::BranchZero(cond, _, _, _, _)
-      | @instr.VCodeTerminator::BrTable(cond, _, _) => [cond]
-      @instr.VCodeTerminator::BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
-      @instr.VCodeTerminator::BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
-      @instr.VCodeTerminator::Trap(_) => []
+      Jump(_, args) | Return(args) => args
+      Branch(cond, _, _) | BranchZero(cond, _, _, _, _) | BrTable(cond, _, _) =>
+        [cond]
+      BranchCmp(lhs, rhs, _, _, _, _) => [lhs, rhs]
+      BranchCmpImm(lhs, _, _, _, _, _) => [lhs]
+      Trap(_) => []
     }
     for use_ in term_uses {
       if get_vreg_id(use_) is Some(vid) {
@@ -679,7 +668,7 @@ fn propagate_single_use_moves(
   }
 
   let copies : Map[Int, @abi.VReg] = {}
-  let to_remove : @hashset.HashSet[Int] = @hashset.new()
+  let to_remove : @hashset.HashSet[Int] = HashSet([])
   for i, inst in block.insts {
     if inst.opcode is Move &&
       inst.defs.length() == 1 &&
@@ -722,17 +711,17 @@ fn propagate_single_use_moves(
   }
   if block.terminator is Some(term) {
     let new_term = match term {
-      @instr.VCodeTerminator::Jump(target, args) => {
+      Jump(target, args) => {
         let new_args : Array[@abi.Reg] = []
         for arg in args {
           new_args.push(rewrite_reg(arg))
         }
         @instr.VCodeTerminator::Jump(target, new_args)
       }
-      @instr.VCodeTerminator::Branch(cond, then_id, else_id) =>
-        @instr.VCodeTerminator::Branch(rewrite_reg(cond), then_id, else_id)
-      @instr.VCodeTerminator::BranchCmp(lhs, rhs, cond, is_64, then_id, else_id) =>
-        @instr.VCodeTerminator::BranchCmp(
+      Branch(cond, then_id, else_id) =>
+        Branch(rewrite_reg(cond), then_id, else_id)
+      BranchCmp(lhs, rhs, cond, is_64, then_id, else_id) =>
+        BranchCmp(
           rewrite_reg(lhs),
           rewrite_reg(rhs),
           cond,
@@ -740,46 +729,20 @@ fn propagate_single_use_moves(
           then_id,
           else_id,
         )
-      @instr.VCodeTerminator::BranchZero(
-        cond,
-        is_nonzero,
-        is_64,
-        then_id,
-        else_id
-      ) =>
-        @instr.VCodeTerminator::BranchZero(
-          rewrite_reg(cond),
-          is_nonzero,
-          is_64,
-          then_id,
-          else_id,
-        )
-      @instr.VCodeTerminator::BranchCmpImm(
-        lhs,
-        imm,
-        cond,
-        is_64,
-        then_id,
-        else_id
-      ) =>
-        @instr.VCodeTerminator::BranchCmpImm(
-          rewrite_reg(lhs),
-          imm,
-          cond,
-          is_64,
-          then_id,
-          else_id,
-        )
-      @instr.VCodeTerminator::Return(args) => {
+      BranchZero(cond, is_nonzero, is_64, then_id, else_id) =>
+        BranchZero(rewrite_reg(cond), is_nonzero, is_64, then_id, else_id)
+      BranchCmpImm(lhs, imm, cond, is_64, then_id, else_id) =>
+        BranchCmpImm(rewrite_reg(lhs), imm, cond, is_64, then_id, else_id)
+      Return(args) => {
         let new_args : Array[@abi.Reg] = []
         for arg in args {
           new_args.push(rewrite_reg(arg))
         }
-        @instr.VCodeTerminator::Return(new_args)
+        Return(new_args)
       }
-      @instr.VCodeTerminator::BrTable(index, targets, default_id) =>
-        @instr.VCodeTerminator::BrTable(rewrite_reg(index), targets, default_id)
-      @instr.VCodeTerminator::Trap(msg) => @instr.VCodeTerminator::Trap(msg)
+      BrTable(index, targets, default_id) =>
+        BrTable(rewrite_reg(index), targets, default_id)
+      Trap(msg) => Trap(msg)
     }
     block.set_terminator(new_term)
   }
@@ -832,7 +795,7 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     use_inst_idx : Int,
   ) -> @abi.VReg {
     let mut cur = reg
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = HashSet([])
     while copies.get(cur.id) is Some(next) {
       if next.id == cur.id || visited.contains(cur.id) {
         break
@@ -877,28 +840,17 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
     if block.terminator is Some(term) {
       let use_idx = block.insts.length()
       let new_term = match term {
-        @instr.VCodeTerminator::Jump(target, args) => {
+        Jump(target, args) => {
           let new_args : Array[@abi.Reg] = []
           for arg in args {
             new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
           @instr.VCodeTerminator::Jump(target, new_args)
         }
-        @instr.VCodeTerminator::Branch(cond, then_id, else_id) =>
-          @instr.VCodeTerminator::Branch(
-            rewrite_reg(cond, block.id, use_idx),
-            then_id,
-            else_id,
-          )
-        @instr.VCodeTerminator::BranchCmp(
-          lhs,
-          rhs,
-          cond,
-          is_64,
-          then_id,
-          else_id
-        ) =>
-          @instr.VCodeTerminator::BranchCmp(
+        Branch(cond, then_id, else_id) =>
+          Branch(rewrite_reg(cond, block.id, use_idx), then_id, else_id)
+        BranchCmp(lhs, rhs, cond, is_64, then_id, else_id) =>
+          BranchCmp(
             rewrite_reg(lhs, block.id, use_idx),
             rewrite_reg(rhs, block.id, use_idx),
             cond,
@@ -906,29 +858,16 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
             then_id,
             else_id,
           )
-        @instr.VCodeTerminator::BranchZero(
-          cond,
-          is_nonzero,
-          is_64,
-          then_id,
-          else_id
-        ) =>
-          @instr.VCodeTerminator::BranchZero(
+        BranchZero(cond, is_nonzero, is_64, then_id, else_id) =>
+          BranchZero(
             rewrite_reg(cond, block.id, use_idx),
             is_nonzero,
             is_64,
             then_id,
             else_id,
           )
-        @instr.VCodeTerminator::BranchCmpImm(
-          lhs,
-          imm,
-          cond,
-          is_64,
-          then_id,
-          else_id
-        ) =>
-          @instr.VCodeTerminator::BranchCmpImm(
+        BranchCmpImm(lhs, imm, cond, is_64, then_id, else_id) =>
+          BranchCmpImm(
             rewrite_reg(lhs, block.id, use_idx),
             imm,
             cond,
@@ -936,20 +875,16 @@ fn propagate_moves_global(func : @regalloc.VCodeFunction) -> Unit {
             then_id,
             else_id,
           )
-        @instr.VCodeTerminator::Return(args) => {
+        Return(args) => {
           let new_args : Array[@abi.Reg] = []
           for arg in args {
             new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
-          @instr.VCodeTerminator::Return(new_args)
+          Return(new_args)
         }
-        @instr.VCodeTerminator::BrTable(index, targets, default_id) =>
-          @instr.VCodeTerminator::BrTable(
-            rewrite_reg(index, block.id, use_idx),
-            targets,
-            default_id,
-          )
-        @instr.VCodeTerminator::Trap(msg) => @instr.VCodeTerminator::Trap(msg)
+        BrTable(index, targets, default_id) =>
+          BrTable(rewrite_reg(index, block.id, use_idx), targets, default_id)
+        Trap(msg) => Trap(msg)
       }
       block.set_terminator(new_term)
     }
@@ -963,12 +898,12 @@ fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
   // paths. Keep barriers for C/indirect calls (and subtype checks) where the
   // callee/slow path may mutate runtime-managed memory state.
   match opcode {
-    @instr.CallDirect(_, _, _, @instr.Wasm) => false
-    @instr.CallDirect(_, _, _, @instr.C) => true
-    @instr.CallPtr(_, _, @instr.C) => true
-    @instr.CallPtr(_, _, @instr.Wasm) => true
-    @instr.ReturnCallIndirect(_, _) => true
-    @instr.TypeCheckSubtypeIndirect(_) => true
+    CallDirect(_, _, _, Wasm) => false
+    CallDirect(_, _, _, C) => true
+    CallPtr(_, _, C) => true
+    CallPtr(_, _, Wasm) => true
+    ReturnCallIndirect(_, _) => true
+    TypeCheckSubtypeIndirect(_) => true
     _ => false
   }
 }
@@ -1164,38 +1099,21 @@ fn fuse_cmp_branch(func : @regalloc.VCodeFunction) -> Unit {
     let mut else_id = -1
     let mut branch_when_cmp_true = true
     match blk.terminator {
-      Some(@instr.VCodeTerminator::Branch(cond, then_b, else_b)) =>
+      Some(Branch(cond, then_b, else_b)) =>
         if cond is Virtual(cond_vreg) {
           cond_vreg_opt = Some(cond_vreg)
           then_id = then_b
           else_id = else_b
           branch_when_cmp_true = true
         }
-      Some(
-        @instr.VCodeTerminator::BranchZero(
-          cond,
-          is_nonzero,
-          _is_64,
-          then_b,
-          else_b
-        )
-      ) =>
+      Some(BranchZero(cond, is_nonzero, _is_64, then_b, else_b)) =>
         if cond is Virtual(cond_vreg) {
           cond_vreg_opt = Some(cond_vreg)
           then_id = then_b
           else_id = else_b
           branch_when_cmp_true = is_nonzero
         }
-      Some(
-        @instr.VCodeTerminator::BranchCmpImm(
-          lhs,
-          imm,
-          cond,
-          _is_64,
-          then_b,
-          else_b
-        )
-      ) =>
+      Some(BranchCmpImm(lhs, imm, cond, _is_64, then_b, else_b)) =>
         if lhs is Virtual(cond_vreg) &&
           classify_cmp_result_branching(imm, cond) is Some(should_branch) {
           cond_vreg_opt = Some(cond_vreg)
@@ -1272,9 +1190,7 @@ fn build_jump_forwarding_map(
   let forwarding : Map[Int, JumpForwardInfo] = {}
   for block in func.blocks {
     guard block.insts.length() == 0 else { continue }
-    guard block.terminator is Some(@instr.VCodeTerminator::Jump(target, args)) else {
-      continue
-    }
+    guard block.terminator is Some(Jump(target, args)) else { continue }
     guard target != block.id else { continue }
     guard args.length() == block.params.length() else { continue }
     let arg_indices : Array[Int] = []
@@ -1322,7 +1238,7 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
     let mut cur_target = target
     let mut cur_args = args
     let mut changed = false
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = HashSet([])
     while true {
       if visited.contains(cur_target) {
         break
@@ -1360,7 +1276,7 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
     forwarding : Map[Int, JumpForwardInfo],
   ) -> Int {
     let mut cur_target = target
-    let visited : @hashset.HashSet[Int] = @hashset.new()
+    let visited : @hashset.HashSet[Int] = HashSet([])
     while true {
       if visited.contains(cur_target) {
         break
@@ -1382,81 +1298,52 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
   let mut rewrites = 0
   for block in func.blocks {
     match block.terminator {
-      Some(@instr.VCodeTerminator::Jump(target, args)) => {
+      Some(Jump(target, args)) => {
         let resolved = resolve_jump(target, args, forwarding)
         if resolved.changed {
-          block.set_terminator(
-            @instr.VCodeTerminator::Jump(resolved.target, resolved.args),
-          )
+          block.set_terminator(Jump(resolved.target, resolved.args))
           rewrites = rewrites + 1
         }
       }
-      Some(@instr.VCodeTerminator::Branch(cond, then_b, else_b)) => {
+      Some(Branch(cond, then_b, else_b)) => {
+        let new_then = resolve_target_no_args(then_b, forwarding)
+        let new_else = resolve_target_no_args(else_b, forwarding)
+        if new_then != then_b || new_else != else_b {
+          block.set_terminator(Branch(cond, new_then, new_else))
+          rewrites = rewrites + 1
+        }
+      }
+      Some(BranchCmp(lhs, rhs, cond, is_64, then_b, else_b)) => {
         let new_then = resolve_target_no_args(then_b, forwarding)
         let new_else = resolve_target_no_args(else_b, forwarding)
         if new_then != then_b || new_else != else_b {
           block.set_terminator(
-            @instr.VCodeTerminator::Branch(cond, new_then, new_else),
+            BranchCmp(lhs, rhs, cond, is_64, new_then, new_else),
           )
           rewrites = rewrites + 1
         }
       }
-      Some(
-        @instr.VCodeTerminator::BranchCmp(lhs, rhs, cond, is_64, then_b, else_b)
-      ) => {
+      Some(BranchZero(reg, is_nonzero, is_64, then_b, else_b)) => {
         let new_then = resolve_target_no_args(then_b, forwarding)
         let new_else = resolve_target_no_args(else_b, forwarding)
         if new_then != then_b || new_else != else_b {
           block.set_terminator(
-            @instr.VCodeTerminator::BranchCmp(
-              lhs, rhs, cond, is_64, new_then, new_else,
-            ),
+            BranchZero(reg, is_nonzero, is_64, new_then, new_else),
           )
           rewrites = rewrites + 1
         }
       }
-      Some(
-        @instr.VCodeTerminator::BranchZero(
-          reg,
-          is_nonzero,
-          is_64,
-          then_b,
-          else_b
-        )
-      ) => {
+      Some(BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b)) => {
         let new_then = resolve_target_no_args(then_b, forwarding)
         let new_else = resolve_target_no_args(else_b, forwarding)
         if new_then != then_b || new_else != else_b {
           block.set_terminator(
-            @instr.VCodeTerminator::BranchZero(
-              reg, is_nonzero, is_64, new_then, new_else,
-            ),
+            BranchCmpImm(lhs, imm, cond, is_64, new_then, new_else),
           )
           rewrites = rewrites + 1
         }
       }
-      Some(
-        @instr.VCodeTerminator::BranchCmpImm(
-          lhs,
-          imm,
-          cond,
-          is_64,
-          then_b,
-          else_b
-        )
-      ) => {
-        let new_then = resolve_target_no_args(then_b, forwarding)
-        let new_else = resolve_target_no_args(else_b, forwarding)
-        if new_then != then_b || new_else != else_b {
-          block.set_terminator(
-            @instr.VCodeTerminator::BranchCmpImm(
-              lhs, imm, cond, is_64, new_then, new_else,
-            ),
-          )
-          rewrites = rewrites + 1
-        }
-      }
-      Some(@instr.VCodeTerminator::BrTable(index, targets, default_id)) => {
+      Some(BrTable(index, targets, default_id)) => {
         let new_targets : Array[Int] = []
         let mut changed = false
         for target in targets {
@@ -1471,9 +1358,7 @@ fn thread_trivial_jump_blocks(func : @regalloc.VCodeFunction) -> Int {
           changed = true
         }
         if changed {
-          block.set_terminator(
-            @instr.VCodeTerminator::BrTable(index, new_targets, new_default),
-          )
+          block.set_terminator(BrTable(index, new_targets, new_default))
           rewrites = rewrites + 1
         }
       }

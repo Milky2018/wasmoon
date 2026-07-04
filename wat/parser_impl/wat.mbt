@@ -27,7 +27,7 @@ fn WatError::to_string(self : WatError) -> String {
 }
 
 ///|
-pub impl Show for WatError with output(self, logger) {
+pub impl Show for WatError with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -44,7 +44,7 @@ fn SourceLoc::to_string(self : SourceLoc) -> String {
 }
 
 ///|
-pub impl Show for SourceLoc with output(self, logger) {
+pub impl Show for SourceLoc with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 

@@ -108,8 +108,7 @@ fn validate_component_section_alias(
     // If we are aliasing an instance export that has a known ascribed
     // instance type, propagate its export signature into the new
     // instance index-space entry.
-    if (a.sort, a.target)
-      is (@component.Sort::Instance, Export(instance_idx, name)) {
+    if (a.sort, a.target) is (Instance, Export(instance_idx, name)) {
       let parent = if instance_idx >= 0 && instance_idx < instance_sigs.length() {
         instance_sigs[instance_idx]
       } else {
@@ -164,7 +163,7 @@ fn validate_component_section_alias(
             match map.get(name) {
               Some(kind) =>
                 match a.sort {
-                  @component.Sort::Core(core_sort) =>
+                  Core(core_sort) =>
                     if core_sort != kind {
                       raise AliasTargetMismatch("core export \{name}")
                     }
@@ -179,7 +178,7 @@ fn validate_component_section_alias(
     }
     // Capture core memory types for later canonical ABI checks.
     match (a.sort, a.target) {
-      (@component.Sort::Core(0x00), CoreExport(core_instance_idx, name)) => {
+      (Core(0x00), CoreExport(core_instance_idx, name)) => {
         let export_types = if core_instance_idx >= 0 &&
           core_instance_idx < core_instance_export_types.length() {
           core_instance_export_types[core_instance_idx]
@@ -189,13 +188,13 @@ fn validate_component_section_alias(
         match export_types {
           Some(map) =>
             match map.get(name) {
-              Some(CoreExternType::Func(ft)) => new_core_func_ty = Some(ft)
+              Some(Func(ft)) => new_core_func_ty = Some(ft)
               _ => ()
             }
           None => ()
         }
       }
-      (@component.Sort::Core(0x02), CoreExport(core_instance_idx, name)) => {
+      (Core(0x02), CoreExport(core_instance_idx, name)) => {
         let export_types = if core_instance_idx >= 0 &&
           core_instance_idx < core_instance_export_types.length() {
           core_instance_export_types[core_instance_idx]
@@ -205,7 +204,7 @@ fn validate_component_section_alias(
         match export_types {
           Some(map) =>
             match map.get(name) {
-              Some(CoreExternType::Memory(mt)) => new_core_memory_ty = Some(mt)
+              Some(Memory(mt)) => new_core_memory_ty = Some(mt)
               _ => ()
             }
           None => ()
@@ -262,7 +261,7 @@ fn validate_component_section_alias(
           match tmap {
             Some(map) =>
               match map.get(name) {
-                Some(ExportedTypeInfo::Existing(idx)) => {
+                Some(Existing(idx)) => {
                   if idx >= 0 && idx < type_table.length() {
                     new_td = type_table[idx]
                   }
@@ -279,18 +278,11 @@ fn validate_component_section_alias(
                     new_depth = type_depths[idx]
                   }
                 }
-                Some(ExportedTypeInfo::Resource(rid)) => {
-                  new_td = Some(
-                    @component.TypeDef::ResourceType(
-                      -1,
-                      0x7f,
-                      None,
-                      @component.ResourceKind::HostDefined,
-                    ),
-                  )
+                Some(Resource(rid)) => {
+                  new_td = Some(ResourceType(-1, 0x7f, None, HostDefined))
                   new_rid = Some(rid)
                 }
-                Some(ExportedTypeInfo::Opaque) => {
+                Some(Opaque) => {
                   let sigmap = if instance_idx >= 0 &&
                     instance_idx < instance_export_type_sigs.length() {
                     instance_export_type_sigs[instance_idx]
@@ -330,7 +322,7 @@ fn validate_component_section_alias(
     } else {
       count_alias(a.sort, counts)
       match a.sort {
-        @component.Sort::Func => {
+        Func => {
           let mut new_ft : @component.FuncType? = None
           let mut new_sig : FuncSigShape? = None
           match a.target {
@@ -364,7 +356,7 @@ fn validate_component_section_alias(
           func_types.push(new_ft)
           func_sig_shapes.push(new_sig)
         }
-        @component.Sort::Instance => {
+        Instance => {
           instance_sigs.push(new_instance_sig)
           instance_export_type_idxs.push(None)
           instance_export_func_idxs.push(None)
@@ -375,7 +367,7 @@ fn validate_component_section_alias(
           instance_nested_instance_func_sigs.push(new_instance_nested_func_sigs)
           instance_sizes.push(1)
         }
-        @component.Sort::Component => {
+        Component => {
           component_import_sorts.push(None)
           component_import_instance_sigs.push(None)
           component_import_func_sigs.push(None)
@@ -392,7 +384,7 @@ fn validate_component_section_alias(
           component_export_func_sigs.push(None)
           component_sizes.push(new_component_size)
         }
-        @component.Sort::Core(core_sort) =>
+        Core(core_sort) =>
           if core_sort == 0x11 {
             core_module_exports.push(None)
             core_module_export_types.push(None)

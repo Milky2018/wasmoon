@@ -4,8 +4,8 @@
 /// Keep these tests lightweight; CI acceptance uses full WAST runners.
 test "ISA::current matches host arch" {
   match c_host_arch() {
-    0 => inspect(ISA::current() is ISA::AArch64, content="true")
-    1 => inspect(ISA::current() is ISA::AMD64, content="true")
+    0 => inspect(ISA::current() is AArch64, content="true")
+    1 => inspect(ISA::current() is AMD64, content="true")
     _ => inspect(false, content="true")
   }
 }
@@ -38,8 +38,8 @@ test "Wasm ABI arg/ret reg counts (shape)" {
 ///|
 test "AArch64 MachineEnv reserves scratch regs" {
   let env = ISA::AArch64.machine_env()
-  inspect(env.scratch_int, content="[16, 17]")
-  inspect(env.scratch_float, content="[16, 17]")
+  debug_inspect(env.scratch_int, content="[16, 17]")
+  debug_inspect(env.scratch_float, content="[16, 17]")
 }
 
 ///|
@@ -54,6 +54,6 @@ test "amd64 call-clobbered sets basic shape" {
 ///|
 test "amd64 MachineEnv reserves scratch regs" {
   let env = ISA::AMD64.machine_env()
-  inspect(env.scratch_int, content="[10, 11]")
-  inspect(env.scratch_float, content="[14, 15]")
+  debug_inspect(env.scratch_int, content="[10, 11]")
+  debug_inspect(env.scratch_float, content="[14, 15]")
 }

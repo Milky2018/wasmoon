@@ -7,41 +7,41 @@
 ///|
 fn value_type_to_reg_class(ty : @types.ValueType) -> @abi.RegClass {
   match ty {
-    @types.ValueType::F32 => @abi.Float32
-    @types.ValueType::F64 => @abi.Float64
-    @types.ValueType::V128 => @abi.Vector
-    _ => @abi.Int
+    F32 => Float32
+    F64 => Float64
+    V128 => Vector
+    _ => Int
   }
 }
 
 ///|
 fn value_type_to_mem_type(ty : @types.ValueType) -> @instr.MemType {
   match ty {
-    @types.ValueType::I32 => @instr.MemType::I32
-    @types.ValueType::I64 => @instr.MemType::I64
-    @types.ValueType::F32 => @instr.MemType::F32
-    @types.ValueType::F64 => @instr.MemType::F64
-    @types.ValueType::V128 => @instr.MemType::V128
-    _ => @instr.MemType::I64
+    I32 => I32
+    I64 => I64
+    F32 => F32
+    F64 => F64
+    V128 => V128
+    _ => I64
   }
 }
 
 ///|
 fn value_type_to_ir_type(ty : @types.ValueType) -> @ir.Type {
   match ty {
-    @types.ValueType::I32 => @ir.Type::I32
-    @types.ValueType::I64 => @ir.Type::I64
-    @types.ValueType::F32 => @ir.Type::F32
-    @types.ValueType::F64 => @ir.Type::F64
-    @types.ValueType::V128 => @ir.Type::V128
-    _ => @ir.Type::I64
+    I32 => I32
+    I64 => I64
+    F32 => F32
+    F64 => F64
+    V128 => V128
+    _ => I64
   }
 }
 
 ///|
 fn slot_count_for_type(ty : @types.ValueType) -> Int {
   match ty {
-    @types.ValueType::V128 => 2
+    V128 => 2
     _ => 1
   }
 }
@@ -75,7 +75,7 @@ pub fn emit_hostcall_import_trampoline(
   let func = @regalloc.VCodeFunction::new("host_import_trampoline")
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
-  let _vmctx_param = func.add_param(@abi.Int)
+  let _vmctx_param = func.add_param(Int)
 
   // Pre-compute stack overflow layout for incoming params.
   let max_int_reg = isa.wasm_user_arg_gprs().length()
@@ -84,7 +84,7 @@ pub fn emit_hostcall_import_trampoline(
   let mut total_float = 0
   for ty in param_types {
     let cls = value_type_to_reg_class(ty)
-    if cls is @abi.Int {
+    if cls is Int {
       total_int = total_int + 1
     } else {
       total_float = total_float + 1
@@ -99,7 +99,7 @@ pub fn emit_hostcall_import_trampoline(
   let mut float_seen = 0
   for ty in param_types {
     let cls = value_type_to_reg_class(ty)
-    if cls is @abi.Int {
+    if cls is Int {
       continue
     }
     if float_seen >= max_float_reg {
@@ -117,7 +117,7 @@ pub fn emit_hostcall_import_trampoline(
   float_seen = 0
   for i, ty in param_types {
     let cls = value_type_to_reg_class(ty)
-    if cls is @abi.Int {
+    if cls is Int {
       if int_seen < max_int_reg {
         param_vregs[i] = Some(func.add_param(cls))
       }
@@ -152,7 +152,7 @@ pub fn emit_hostcall_import_trampoline(
   let block = func.new_block()
 
   // Base pointer to values_vec: current SP after prologue.
-  let sp_vreg = func.new_vreg(@abi.Int)
+  let sp_vreg = func.new_vreg(Int)
   let load_sp = @instr.VCodeInst::new(LoadSP)
   load_sp.add_def({ reg: Virtual(sp_vreg) })
   block.add_inst(load_sp)
@@ -169,7 +169,7 @@ pub fn emit_hostcall_import_trampoline(
       Some(v) => v
       None => {
         let tmp = func.new_vreg(cls)
-        let stack_off = if cls is @abi.Int {
+        let stack_off = if cls is Int {
           int_offsets[int_seen - max_int_reg]
         } else {
           float_offsets[float_seen - max_float_reg]
@@ -181,10 +181,10 @@ pub fn emit_hostcall_import_trampoline(
       }
     }
     match cls {
-      @abi.Vector => {
+      Vector => {
         // Store as two i64 slots to avoid alignment requirements for Q stores.
-        let lo = func.new_vreg(@abi.Int)
-        let hi = func.new_vreg(@abi.Int)
+        let lo = func.new_vreg(Int)
+        let hi = func.new_vreg(Int)
         let ex0 = @instr.VCodeInst::new(SIMDExtractU(D64, 0))
         ex0.add_def({ reg: Virtual(lo) })
         ex0.add_use(Virtual(src_vreg))
@@ -209,7 +209,7 @@ pub fn emit_hostcall_import_trampoline(
     slot_off = slot_off + bytes_for_type(ty)
 
     // Update class counters (used to compute stack offsets).
-    if cls is @abi.Int {
+    if cls is Int {
       int_seen = int_seen + 1
     } else {
       float_seen = float_seen + 1
@@ -217,26 +217,26 @@ pub fn emit_hostcall_import_trampoline(
   }
 
   // Prepare C call: wasmoon_jit_hostcall(ctx, host_func_addr, values_ptr, arg_slots, result_slots)
-  let func_ptr_vreg = func.new_vreg(@abi.Int)
+  let func_ptr_vreg = func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(LoadJITFuncPtr(HostCall))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
   // ctx argument comes from pinned VMCTX register (X21).
-  let ctx_arg = func.new_vreg(@abi.Int)
+  let ctx_arg = func.new_vreg(Int)
   let mv_ctx = @instr.VCodeInst::new(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
-  mv_ctx.add_use(Physical({ index: @isaregs.vmctx_index(), class: @abi.Int }))
+  mv_ctx.add_use(Physical({ index: @isaregs.vmctx_index(), class: Int }))
   block.add_inst(mv_ctx)
-  let host_addr_vreg = func.new_vreg(@abi.Int)
+  let host_addr_vreg = func.new_vreg(Int)
   let c_host = @instr.VCodeInst::new(LoadConst(host_func_addr.to_int64()))
   c_host.add_def({ reg: Virtual(host_addr_vreg) })
   block.add_inst(c_host)
-  let arg_slots_vreg = func.new_vreg(@abi.Int)
+  let arg_slots_vreg = func.new_vreg(Int)
   let c_arg_slots = @instr.VCodeInst::new(LoadConst(arg_slots.to_int64()))
   c_arg_slots.add_def({ reg: Virtual(arg_slots_vreg) })
   block.add_inst(c_arg_slots)
-  let result_slots_vreg = func.new_vreg(@abi.Int)
+  let result_slots_vreg = func.new_vreg(Int)
   let c_res_slots = @instr.VCodeInst::new(LoadConst(result_slots.to_int64()))
   c_res_slots.add_def({ reg: Virtual(result_slots_vreg) })
   block.add_inst(c_res_slots)
@@ -244,9 +244,9 @@ pub fn emit_hostcall_import_trampoline(
   fn c_arg_gpr_indices() -> Array[Int] {
     match @isa.ISA::current() {
       // AAPCS64: X0-X7
-      @isa.AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+      AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
-      @isa.AMD64 => [7, 6, 2, 1, 8, 9]
+      AMD64 => [7, 6, 2, 1, 8, 9]
     }
   }
 
@@ -254,21 +254,15 @@ pub fn emit_hostcall_import_trampoline(
   // Call target in IP1.
   call.add_use_fixed(Virtual(func_ptr_vreg), {
     index: @isaregs.scratch2_index(),
-    class: @abi.Int,
+    class: Int,
   })
-  call.add_use_fixed(Virtual(ctx_arg), { index: arg_regs[0], class: @abi.Int })
-  call.add_use_fixed(Virtual(host_addr_vreg), {
-    index: arg_regs[1],
-    class: @abi.Int,
-  })
-  call.add_use_fixed(Virtual(sp_vreg), { index: arg_regs[2], class: @abi.Int })
-  call.add_use_fixed(Virtual(arg_slots_vreg), {
-    index: arg_regs[3],
-    class: @abi.Int,
-  })
+  call.add_use_fixed(Virtual(ctx_arg), { index: arg_regs[0], class: Int })
+  call.add_use_fixed(Virtual(host_addr_vreg), { index: arg_regs[1], class: Int })
+  call.add_use_fixed(Virtual(sp_vreg), { index: arg_regs[2], class: Int })
+  call.add_use_fixed(Virtual(arg_slots_vreg), { index: arg_regs[3], class: Int })
   call.add_use_fixed(Virtual(result_slots_vreg), {
     index: arg_regs[4],
-    class: @abi.Int,
+    class: Int,
   })
   add_call_clobbers(call)
   block.add_inst(call)
@@ -278,20 +272,18 @@ pub fn emit_hostcall_import_trampoline(
   let ret_regs : Array[@abi.Reg] = []
   for ty in result_types {
     match ty {
-      @types.ValueType::V128 => {
-        let lo = func.new_vreg(@abi.Int)
-        let hi = func.new_vreg(@abi.Int)
-        let ld0 = @instr.VCodeInst::new(LoadPtr(@instr.MemType::I64, res_off))
+      V128 => {
+        let lo = func.new_vreg(Int)
+        let hi = func.new_vreg(Int)
+        let ld0 = @instr.VCodeInst::new(LoadPtr(I64, res_off))
         ld0.add_def({ reg: Virtual(lo) })
         ld0.add_use(Virtual(sp_vreg))
         block.add_inst(ld0)
-        let ld1 = @instr.VCodeInst::new(
-          LoadPtr(@instr.MemType::I64, res_off + 8),
-        )
+        let ld1 = @instr.VCodeInst::new(LoadPtr(I64, res_off + 8))
         ld1.add_def({ reg: Virtual(hi) })
         ld1.add_use(Virtual(sp_vreg))
         block.add_inst(ld1)
-        let vec = func.new_vreg(@abi.Vector)
+        let vec = func.new_vreg(Vector)
         let splat = @instr.VCodeInst::new(SIMDSplat(D64))
         splat.add_def({ reg: Virtual(vec) })
         splat.add_use(Virtual(lo))
@@ -315,7 +307,7 @@ pub fn emit_hostcall_import_trampoline(
     }
     res_off = res_off + bytes_for_type(ty)
   }
-  block.set_terminator(@instr.VCodeTerminator::Return(ret_regs))
+  block.set_terminator(Return(ret_regs))
 
   // Allocate registers and emit machine code.
   let allocated = @regalloc.allocate_registers_backtracking(func)

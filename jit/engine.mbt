@@ -28,7 +28,7 @@ fn CompilationStatus::to_string(self : CompilationStatus) -> String {
 }
 
 ///|
-pub impl Show for CompilationStatus with output(self, logger) {
+pub impl Show for CompilationStatus with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -235,6 +235,6 @@ fn JITEngine::to_string(self : JITEngine) -> String {
 }
 
 ///|
-pub impl Show for JITEngine with output(self, logger) {
+pub impl Show for JITEngine with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
