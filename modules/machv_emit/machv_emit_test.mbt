@@ -35,6 +35,15 @@ test "plan signed i8 immediate chunks" {
 }
 
 ///|
+test "check signed immediate ranges" {
+  inspect(fits_signed_i8(-128), content="true")
+  inspect(fits_signed_i8(127), content="true")
+  inspect(fits_signed_i8(128), content="false")
+  inspect(fits_signed_i32(-2147483648), content="true")
+  inspect(fits_signed_i32(2147483647), content="true")
+}
+
+///|
 test "emit AArch64 move, add, and return bytes" {
   let func = @machv.Function::new("entry")
   let entry = func.new_block()

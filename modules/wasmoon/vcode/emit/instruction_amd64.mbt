@@ -111,14 +111,6 @@ fn MachineCode::emit_instruction_x86_64(
     }
   }
 
-  fn fits_i8(value : Int) -> Bool {
-    value >= -128 && value <= 127
-  }
-
-  fn fits_i32(value : Int) -> Bool {
-    value >= -2147483648 && value <= 2147483647
-  }
-
   fn pick_scratch_gpr(
     isa : @isa.ISA,
     avoid0 : Int,
@@ -451,14 +443,14 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      if fits_i32(imm) {
+      if @machv_emit.fits_signed_i32(imm) {
         if is_64 {
-          if fits_i8(imm) {
+          if @machv_emit.fits_signed_i8(imm) {
             self.x86_emit_add_r_imm8(rd, imm)
           } else {
             self.x86_emit_add_r_imm32(rd, imm)
           }
-        } else if fits_i8(imm) {
+        } else if @machv_emit.fits_signed_i8(imm) {
           self.x86_emit_add_r32_imm8(rd, imm)
         } else {
           self.x86_emit_add_r32_imm32(rd, imm)
@@ -483,14 +475,14 @@ fn MachineCode::emit_instruction_x86_64(
           self.x86_emit_mov_rr32(rd, rn)
         }
       }
-      if fits_i32(imm) {
+      if @machv_emit.fits_signed_i32(imm) {
         if is_64 {
-          if fits_i8(imm) {
+          if @machv_emit.fits_signed_i8(imm) {
             self.x86_emit_sub_r_imm8(rd, imm)
           } else {
             self.x86_emit_sub_r_imm32(rd, imm)
           }
-        } else if fits_i8(imm) {
+        } else if @machv_emit.fits_signed_i8(imm) {
           self.x86_emit_sub_r32_imm8(rd, imm)
         } else {
           self.x86_emit_sub_r32_imm32(rd, imm)

@@ -15,3 +15,13 @@ pub fn plan_signed_i8_chunks(value : Int) -> Array[Int] {
   }
   chunks
 }
+
+///|
+pub fn fits_signed_i8(value : Int) -> Bool {
+  value >= -128 && value <= 127
+}
+
+///|
+pub fn fits_signed_i32(value : Int) -> Bool {
+  value >= -2147483648 && value <= 2147483647
+}
