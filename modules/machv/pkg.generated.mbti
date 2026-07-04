@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub let spill_slot_base : Int
 
 // Errors
 pub suberror VerifyError {
@@ -17,12 +18,30 @@ pub impl Show for VerifyError
 // Types and methods
 pub(all) struct Block {
   id : Int
+  params : Array[VReg]
   instructions : Array[Instruction]
   successors : Array[Int]
+  mut terminator : Terminator?
 } derive(@debug.Debug)
+pub fn Block::add_param(Self, VReg) -> Unit
 pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
 pub fn Block::new(Int) -> Self
+pub fn Block::set_terminator(Self, Terminator) -> Unit
+
+pub(all) enum Cond {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Ult
+  Ule
+  Ugt
+  Uge
+  Custom(String)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Constraint {
   operand_index : Int
@@ -31,18 +50,33 @@ pub(all) struct Constraint {
 
 pub(all) struct Function {
   name : String
+  params : Array[VReg]
+  results : Array[RegClass]
   blocks : Array[Block]
   stack_slots : Array[StackSlot]
+  mut num_spill_slots : Int
+  param_pregs : Array[PReg?]
+  mut int_stack_params : Int
+  mut max_outgoing_args_size : Int
   mut next_block_id : Int
   mut next_inst_id : Int
   mut next_vreg_id : Int
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
+pub fn Function::add_param(Self, RegClass) -> VReg
+pub fn Function::add_param_preg(Self, PReg?) -> Unit
+pub fn Function::add_result(Self, RegClass) -> Unit
+pub fn Function::get_max_outgoing_args_size(Self) -> Int
+pub fn Function::get_num_spill_slots(Self) -> Int
 pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> Block
 pub fn Function::new_inst(Self, Opcode) -> Instruction
 pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
 pub fn Function::new_vreg(Self, RegClass) -> VReg
+pub fn Function::push_param(Self, VReg) -> Unit
+pub fn Function::set_int_stack_params(Self, Int) -> Unit
+pub fn Function::set_num_spill_slots(Self, Int) -> Unit
+pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
 pub fn Function::verify(Self) -> Unit raise VerifyError
 
 pub(all) struct Instruction {
@@ -78,6 +112,12 @@ pub fn Operand::def(Reg) -> Self
 pub fn Operand::use_def(Reg) -> Self
 pub fn Operand::use_reg(Reg) -> Self
 
+pub(all) enum OperandConstraint {
+  Any
+  FixedReg(PReg)
+} derive(Eq, @debug.Debug)
+pub impl Show for OperandConstraint
+
 pub(all) enum OperandRole {
   Use
   Def
@@ -88,17 +128,24 @@ pub(all) struct PReg {
   index : Int
   class : RegClass
 } derive(Eq, @debug.Debug)
+pub fn PReg::get_spill_slot(Self) -> Int
+pub fn PReg::is_spilled(Self) -> Bool
+pub fn PReg::spilled(Int, RegClass) -> Self
+pub impl Show for PReg
 
 pub(all) enum Reg {
   Virtual(VReg)
   Physical(PReg)
 } derive(Eq, @debug.Debug)
+pub impl Show for Reg
 
 pub(all) enum RegClass {
   Int
-  Float
+  Float32
+  Float64
   Vector
 } derive(Eq, @debug.Debug)
+pub impl Show for RegClass
 
 pub(all) enum StackEffect {
   None
@@ -112,10 +159,27 @@ pub(all) struct StackSlot {
   align : Int
 } derive(Eq, @debug.Debug)
 
+pub(all) enum Terminator {
+  TermJump(Int, Array[Reg])
+  TermBranch(Reg, Int, Int)
+  TermBranchCmp(Reg, Reg, Cond, Bool, Int, Int)
+  TermBranchZero(Reg, Bool, Bool, Int, Int)
+  TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Int)
+  TermReturn(Array[Reg])
+  TermTrap(String)
+  TermBrTable(Reg, Array[Int], Int)
+} derive(Eq, @debug.Debug)
+
 pub(all) struct VReg {
   id : Int
   class : RegClass
 } derive(Eq, @debug.Debug)
+pub impl Show for VReg
+
+pub(all) struct Writable {
+  reg : Reg
+} derive(Eq, @debug.Debug)
+pub impl Show for Writable
 
 // Type aliases
 

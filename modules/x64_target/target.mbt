@@ -29,7 +29,7 @@ fn int_reg(index : Int) -> @machv.PReg {
 
 ///|
 fn float_reg(index : Int) -> @machv.PReg {
-  { index, class: Float }
+  { index, class: Float64 }
 }
 
 ///|
@@ -121,7 +121,8 @@ pub fn allocatable_regs() -> Array[@machv.PReg] {
 ///|
 fn class_for_type(ty : @milkir.Type) -> @machv.RegClass {
   match ty {
-    F32 | F64 => Float
+    F32 => Float32
+    F64 => Float64
     V128 => Vector
     I32 | I64 | Ptr | Ref => Int
   }

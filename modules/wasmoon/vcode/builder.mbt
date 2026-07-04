@@ -326,7 +326,7 @@ pub fn VCodeBuilder::load(
   offset : Int,
 ) -> @abi.VReg {
   let class = match ty {
-    F32 => @abi.Float32
+    F32 => @machv.Float32
     F64 => Float64
     _ => Int
   }

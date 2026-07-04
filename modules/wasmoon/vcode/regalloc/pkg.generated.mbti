@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon/vcode/regalloc"
 
 import {
+  "Milky2018/machv",
   "Milky2018/wasmoon/ir",
   "Milky2018/wasmoon/vcode/abi",
   "Milky2018/wasmoon/vcode/block",
@@ -12,7 +13,7 @@ import {
 }
 
 // Values
-pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], param_precolor_strict? : Bool, algorithm? : RegallocAlgorithm) -> RegAllocResult
+pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], param_precolor_strict? : Bool, algorithm? : RegallocAlgorithm) -> RegAllocResult
 
 pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
 
@@ -60,12 +61,12 @@ pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, 
 
 // Types and methods
 type AArch64StackFrame
-pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
+pub fn AArch64StackFrame::alloc_spill(Self, @machv.VReg) -> Int
 pub fn AArch64StackFrame::finalize(Self) -> Unit
 pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.VCodeInst]
 pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.VCodeInst]
 pub fn AArch64StackFrame::new() -> Self
-pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
+pub fn AArch64StackFrame::save_callee_reg(Self, @machv.PReg) -> Int
 pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
 pub impl Show for AArch64StackFrame
@@ -74,7 +75,7 @@ type AllocStats
 pub impl Show for AllocStats
 
 pub enum Allocation {
-  Reg(@abi.PReg)
+  Reg(@machv.PReg)
   Spill(Int)
   Unallocated
 }
@@ -83,16 +84,16 @@ pub impl Show for Allocation
 type BacktrackingAllocator
 pub fn BacktrackingAllocator::allocate(Self) -> Unit
 pub fn BacktrackingAllocator::generate_result(Self) -> RegAllocResult
-pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], algorithm? : RegallocAlgorithm) -> Self
+pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], Array[@machv.PReg], algorithm? : RegallocAlgorithm) -> Self
 
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
 pub fn Bundle::crosses_c_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_wasm_call(Self, LiveRangeSet) -> Bool
-pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
+pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @machv.PReg?
 pub fn Bundle::has_fixed_constraint(Self, LiveRangeSet) -> Bool
-pub fn Bundle::new(Int, @abi.RegClass) -> Self
+pub fn Bundle::new(Int, @machv.RegClass) -> Self
 pub fn Bundle::overlaps(Self, Self, LiveRangeSet) -> Bool
 pub fn Bundle::to_string(Self, LiveRangeSet) -> String
 pub fn Bundle::total_length(Self, LiveRangeSet) -> Int
@@ -103,19 +104,19 @@ pub fn BundleSet::length(Self) -> Int
 pub fn BundleSet::new() -> Self
 
 pub(all) enum Edit {
-  Move(Loc, Loc, @abi.RegClass)
+  Move(Loc, Loc, @machv.RegClass)
 }
 pub impl Show for Edit
 
 type InstEdits
 
 pub struct LiveInterval {
-  vreg : @abi.VReg
+  vreg : @machv.VReg
   start : ProgPoint
   mut end : ProgPoint
   uses : Array[ProgPoint]
-  hint : @abi.PReg?
-  assigned : @abi.PReg?
+  hint : @machv.PReg?
+  assigned : @machv.PReg?
   spill_slot : Int?
   mut crosses_call : Bool
   mut crosses_c_call : Bool
@@ -124,9 +125,9 @@ pub impl Show for LiveInterval
 
 type LiveRange
 pub fn LiveRange::end(Self, FixedArray[Int]) -> ProgPoint?
-pub fn LiveRange::get_fixed_reg(Self) -> @abi.PReg?
+pub fn LiveRange::get_fixed_reg(Self) -> @machv.PReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
-pub fn LiveRange::new(Int, @abi.VReg) -> Self
+pub fn LiveRange::new(Int, @machv.VReg) -> Self
 pub fn LiveRange::overlaps(Self, Self, FixedArray[Int]) -> Bool
 pub fn LiveRange::start(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::total_length(Self) -> Int
@@ -150,7 +151,7 @@ pub struct LivenessResult {
 }
 
 pub(all) enum Loc {
-  Reg(@abi.PReg)
+  Reg(@machv.PReg)
   Spill(Int)
 }
 pub fn Loc::get_spill_slot(Self) -> Int
@@ -159,7 +160,7 @@ pub impl Show for Loc
 
 pub enum OperandConstraint {
   AnyReg
-  FixedReg(@abi.PReg)
+  FixedReg(@machv.PReg)
 }
 pub impl Show for OperandConstraint
 
@@ -216,7 +217,7 @@ pub(all) enum ProgPos {
 } derive(Eq, Hash, @debug.Debug)
 
 pub struct RegAllocResult {
-  assignments : Map[Int, @abi.PReg]
+  assignments : Map[Int, @machv.PReg]
   spill_slots : Map[Int, Int]
   num_spill_slots : Int
   inst_edits : Array[(Int, Int, InstEdits)]
@@ -234,12 +235,12 @@ type SpillBundle
 pub fn SpillBundle::new(Int, Int) -> Self
 
 type StackFrame
-pub fn StackFrame::add_callee_saved(Self, @abi.PReg) -> Int
+pub fn StackFrame::add_callee_saved(Self, @machv.PReg) -> Int
 pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
-pub fn StackFrame::alloc_spill_slot(Self, @abi.VReg, Int, Int) -> Int
+pub fn StackFrame::alloc_spill_slot(Self, @machv.VReg, Int, Int) -> Int
 pub fn StackFrame::finalize(Self) -> Unit
-pub fn StackFrame::get_callee_saved(Self) -> Array[@abi.PReg]
+pub fn StackFrame::get_callee_saved(Self) -> Array[@machv.PReg]
 pub fn StackFrame::new(Int) -> Self
 pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
@@ -249,10 +250,10 @@ type StackSlot
 pub impl Show for StackSlot
 
 pub enum StackSlotKind {
-  Spill(@abi.VReg)
+  Spill(@machv.VReg)
   Local(Int)
   OutgoingArg(Int)
-  CalleeSaved(@abi.PReg)
+  CalleeSaved(@machv.PReg)
 }
 pub impl Show for StackSlotKind
 
@@ -266,19 +267,19 @@ pub impl Show for UsePosition
 
 pub struct VCodeFunction {
   name : String
-  params : Array[@abi.VReg]
-  results : Array[@abi.RegClass]
+  params : Array[@machv.VReg]
+  results : Array[@machv.RegClass]
   result_types : Array[@ir.Type]
   blocks : Array[@block.VCodeBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int
-  param_pregs : Array[@abi.PReg?]
+  param_pregs : Array[@machv.PReg?]
   mut int_stack_params : Int
   mut max_outgoing_args_size : Int
 }
-pub fn VCodeFunction::add_param(Self, @abi.RegClass) -> @abi.VReg
-pub fn VCodeFunction::add_param_preg(Self, @abi.PReg?) -> Unit
-pub fn VCodeFunction::add_result(Self, @abi.RegClass) -> Unit
+pub fn VCodeFunction::add_param(Self, @machv.RegClass) -> @machv.VReg
+pub fn VCodeFunction::add_param_preg(Self, @machv.PReg?) -> Unit
+pub fn VCodeFunction::add_result(Self, @machv.RegClass) -> Unit
 pub fn VCodeFunction::add_result_type(Self, @ir.Type) -> Unit
 pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
 pub fn VCodeFunction::clone_base(Self) -> Self
@@ -286,20 +287,21 @@ pub fn VCodeFunction::get_blocks(Self) -> Array[@block.VCodeBlock]
 pub fn VCodeFunction::get_max_outgoing_args_size(Self) -> Int
 pub fn VCodeFunction::get_name(Self) -> String
 pub fn VCodeFunction::get_num_spill_slots(Self) -> Int
-pub fn VCodeFunction::get_param_pregs(Self) -> Array[@abi.PReg?]
-pub fn VCodeFunction::get_params(Self) -> Array[@abi.VReg]
+pub fn VCodeFunction::get_param_pregs(Self) -> Array[@machv.PReg?]
+pub fn VCodeFunction::get_params(Self) -> Array[@machv.VReg]
 pub fn VCodeFunction::get_result_types(Self) -> Array[@ir.Type]
 pub fn VCodeFunction::has_calls(Self) -> Bool
 pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
 pub fn VCodeFunction::new(String) -> Self
 pub fn VCodeFunction::new_block(Self) -> @block.VCodeBlock
-pub fn VCodeFunction::new_vreg(Self, @abi.RegClass) -> @abi.VReg
+pub fn VCodeFunction::new_vreg(Self, @machv.RegClass) -> @machv.VReg
 pub fn VCodeFunction::print(Self) -> String
-pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
+pub fn VCodeFunction::push_param(Self, @machv.VReg) -> Unit
 pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
 pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
 pub fn VCodeFunction::should_cache_func_table(Self) -> Bool
 pub fn VCodeFunction::should_cache_mem0_desc(Self) -> Bool
+pub fn VCodeFunction::to_machv(Self) -> @machv.Function
 pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
 pub fn VCodeFunction::uses_func_table(Self) -> Bool
 pub fn VCodeFunction::uses_mem0(Self) -> Bool

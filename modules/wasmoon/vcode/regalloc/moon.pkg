@@ -1,4 +1,5 @@
 import {
+  "Milky2018/machv",
   "Milky2018/wasmoon/ir",
   "Milky2018/wasmoon/perf",
   "Milky2018/wasmoon/vcode/abi",

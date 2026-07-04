@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/vcode"
 
 import {
-  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/machv",
   "Milky2018/wasmoon/vcode/block",
   "Milky2018/wasmoon/vcode/emit",
   "Milky2018/wasmoon/vcode/instr",
@@ -115,53 +115,53 @@ pub fn PlatformABI::requires_16_byte_stack_align(Self) -> Bool
 pub impl Show for PlatformABI
 
 type VCodeBuilder
-pub fn VCodeBuilder::add(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
-pub fn VCodeBuilder::add_result(Self, @abi.RegClass) -> Unit
-pub fn VCodeBuilder::ashr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::band(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::bor(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::branch(Self, @abi.VReg, @block.VCodeBlock, @block.VCodeBlock) -> Unit
-pub fn VCodeBuilder::bxor(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::cmp(Self, @instr.CmpKind, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::add(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::add_param(Self, @machv.RegClass) -> @machv.VReg
+pub fn VCodeBuilder::add_result(Self, @machv.RegClass) -> Unit
+pub fn VCodeBuilder::ashr(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::band(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::bor(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::branch(Self, @machv.VReg, @block.VCodeBlock, @block.VCodeBlock) -> Unit
+pub fn VCodeBuilder::bxor(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::cmp(Self, @instr.CmpKind, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
 pub fn VCodeBuilder::create_block(Self) -> @block.VCodeBlock
 pub fn VCodeBuilder::current_block(Self) -> @block.VCodeBlock?
-pub fn VCodeBuilder::fadd(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::fcmp(Self, @instr.FCmpKind, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::fconst(Self, Double) -> @abi.VReg
-pub fn VCodeBuilder::fdiv(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::fmul(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::fsub(Self, @abi.VReg, @abi.VReg) -> @abi.VReg
+pub fn VCodeBuilder::fadd(Self, @machv.VReg, @machv.VReg) -> @machv.VReg
+pub fn VCodeBuilder::fcmp(Self, @instr.FCmpKind, @machv.VReg, @machv.VReg) -> @machv.VReg
+pub fn VCodeBuilder::fconst(Self, Double) -> @machv.VReg
+pub fn VCodeBuilder::fdiv(Self, @machv.VReg, @machv.VReg) -> @machv.VReg
+pub fn VCodeBuilder::fmul(Self, @machv.VReg, @machv.VReg) -> @machv.VReg
+pub fn VCodeBuilder::fsub(Self, @machv.VReg, @machv.VReg) -> @machv.VReg
 pub fn VCodeBuilder::get_function(Self) -> @regalloc.VCodeFunction
-pub fn VCodeBuilder::iconst(Self, Int64) -> @abi.VReg
-pub fn VCodeBuilder::jump(Self, @block.VCodeBlock, args? : Array[@abi.VReg]) -> Unit
-pub fn VCodeBuilder::load(Self, @instr.MemType, @abi.VReg, Int) -> @abi.VReg
-pub fn VCodeBuilder::lshr(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::mov(Self, @abi.VReg) -> @abi.VReg
-pub fn VCodeBuilder::mul(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::iconst(Self, Int64) -> @machv.VReg
+pub fn VCodeBuilder::jump(Self, @block.VCodeBlock, args? : Array[@machv.VReg]) -> Unit
+pub fn VCodeBuilder::load(Self, @instr.MemType, @machv.VReg, Int) -> @machv.VReg
+pub fn VCodeBuilder::lshr(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::mov(Self, @machv.VReg) -> @machv.VReg
+pub fn VCodeBuilder::mul(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
 pub fn VCodeBuilder::new(String) -> Self
 pub fn VCodeBuilder::print(Self) -> String
-pub fn VCodeBuilder::return_(Self, Array[@abi.VReg]) -> Unit
-pub fn VCodeBuilder::sdiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::shl(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
-pub fn VCodeBuilder::store(Self, @instr.MemType, @abi.VReg, @abi.VReg, Int) -> Unit
-pub fn VCodeBuilder::sub(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::return_(Self, Array[@machv.VReg]) -> Unit
+pub fn VCodeBuilder::sdiv(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::shl(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
+pub fn VCodeBuilder::store(Self, @instr.MemType, @machv.VReg, @machv.VReg, Int) -> Unit
+pub fn VCodeBuilder::sub(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
 pub fn VCodeBuilder::switch_to_block(Self, @block.VCodeBlock) -> Unit
 pub fn VCodeBuilder::trap(Self, String) -> Unit
-pub fn VCodeBuilder::udiv(Self, @abi.VReg, @abi.VReg, is_64? : Bool) -> @abi.VReg
+pub fn VCodeBuilder::udiv(Self, @machv.VReg, @machv.VReg, is_64? : Bool) -> @machv.VReg
 
 // Type aliases
 
 // Traits
 pub(open) trait GcCompiler {
   fn config(Self) -> GcCompilerConfig
-  fn gen_alloc_struct(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, Array[@abi.VReg]) -> @abi.VReg
-  fn gen_alloc_array(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, @abi.VReg, @abi.VReg?) -> @abi.VReg
-  fn gen_write_barrier_pre(Self, @regalloc.VCodeFunction, @abi.VReg, Int, @abi.VReg, @abi.VReg) -> Unit
-  fn gen_write_barrier_post(Self, @regalloc.VCodeFunction, @abi.VReg, @abi.VReg) -> Unit
-  fn gen_read_barrier(Self, @regalloc.VCodeFunction, @abi.VReg) -> @abi.VReg
+  fn gen_alloc_struct(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, Array[@machv.VReg]) -> @machv.VReg
+  fn gen_alloc_array(Self, @regalloc.VCodeFunction, @block.VCodeBlock, Int, @machv.VReg, @machv.VReg?) -> @machv.VReg
+  fn gen_write_barrier_pre(Self, @regalloc.VCodeFunction, @machv.VReg, Int, @machv.VReg, @machv.VReg) -> Unit
+  fn gen_write_barrier_post(Self, @regalloc.VCodeFunction, @machv.VReg, @machv.VReg) -> Unit
+  fn gen_read_barrier(Self, @regalloc.VCodeFunction, @machv.VReg) -> @machv.VReg
   fn gen_safepoint_poll(Self, @regalloc.VCodeFunction) -> Unit
-  fn record_safepoint(Self, Int, Array[@abi.VReg]) -> Unit
+  fn record_safepoint(Self, Int, Array[@machv.VReg]) -> Unit
   fn get_safepoints(Self) -> Array[GcSafepoint]
   fn clear_safepoints(Self) -> Unit
 }
@@ -170,7 +170,7 @@ pub(open) trait TargetISA {
   fn name(Self) -> String
   fn gpr_count(Self) -> Int
   fn fpr_count(Self) -> Int
-  fn get_preg(Self, @abi.RegClass, Int) -> @abi.PReg?
+  fn get_preg(Self, @machv.RegClass, Int) -> @machv.PReg?
   fn pointer_size(Self) -> Int
 }
 

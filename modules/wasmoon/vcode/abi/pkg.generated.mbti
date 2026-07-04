@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/vcode/abi"
 
+import {
+  "Milky2018/machv",
+}
+
 // Values
 pub const FLOAT_PARAM_BASE_REG : Int = 0
 
@@ -70,56 +74,56 @@ pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 80
 
 pub const VMCTX_TABLE_SIZES_OFFSET : Int = 72
 
-pub fn aapcs64_arg_fprs() -> Array[PReg]
+pub fn aapcs64_arg_fprs() -> Array[@machv.PReg]
 
-pub fn aapcs64_arg_gprs() -> Array[PReg]
+pub fn aapcs64_arg_gprs() -> Array[@machv.PReg]
 
-pub fn aapcs64_callee_saved() -> Array[PReg]
+pub fn aapcs64_callee_saved() -> Array[@machv.PReg]
 
-pub fn aapcs64_ret_fprs() -> Array[PReg]
+pub fn aapcs64_ret_fprs() -> Array[@machv.PReg]
 
-pub fn aapcs64_ret_gprs() -> Array[PReg]
+pub fn aapcs64_ret_gprs() -> Array[@machv.PReg]
 
 pub fn align_up(Int, Int) -> Int
 
-pub fn allocatable_callee_saved_fprs() -> Array[PReg]
+pub fn allocatable_callee_saved_fprs() -> Array[@machv.PReg]
 
-pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[PReg]
+pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[@machv.PReg]
 
-pub fn allocatable_scratch_fprs() -> Array[PReg]
+pub fn allocatable_scratch_fprs() -> Array[@machv.PReg]
 
-pub fn allocatable_scratch_regs() -> Array[PReg]
+pub fn allocatable_scratch_regs() -> Array[@machv.PReg]
 
 pub fn build_aarch64_machine_env(settings? : ABISettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
 
-pub fn call_clobbered_fprs() -> Array[PReg]
+pub fn call_clobbered_fprs() -> Array[@machv.PReg]
 
-pub fn call_clobbered_fprs_same_abi() -> Array[PReg]
+pub fn call_clobbered_fprs_same_abi() -> Array[@machv.PReg]
 
-pub fn call_clobbered_gprs() -> Array[PReg]
+pub fn call_clobbered_gprs() -> Array[@machv.PReg]
 
-pub fn callee_saved_fprs() -> Array[PReg]
+pub fn callee_saved_fprs() -> Array[@machv.PReg]
 
 pub let spill_slot_base : Int
 
-pub fn wasm_layout_overflow_stack(Int, Array[RegClass]) -> (Array[Int], Array[Int], Int)
+pub fn wasm_layout_overflow_stack(Int, Array[@machv.RegClass]) -> (Array[Int], Array[Int], Int)
 
-pub fn wasm_stack_slot_align(RegClass) -> Int
+pub fn wasm_stack_slot_align(@machv.RegClass) -> Int
 
-pub fn wasm_stack_slot_size(RegClass) -> Int
+pub fn wasm_stack_slot_size(@machv.RegClass) -> Int
 
 // Errors
 
 // Types and methods
 pub struct AArch64MachineEnv {
-  preferred_int : Array[PReg]
-  nonpreferred_int : Array[PReg]
-  preferred_float : Array[PReg]
-  nonpreferred_float : Array[PReg]
-  preferred_vector : Array[PReg]
-  nonpreferred_vector : Array[PReg]
-  callee_saved_int : Array[PReg]
-  callee_saved_float : Array[PReg]
+  preferred_int : Array[@machv.PReg]
+  nonpreferred_int : Array[@machv.PReg]
+  preferred_float : Array[@machv.PReg]
+  nonpreferred_float : Array[@machv.PReg]
+  preferred_vector : Array[@machv.PReg]
+  nonpreferred_vector : Array[@machv.PReg]
+  callee_saved_int : Array[@machv.PReg]
+  callee_saved_float : Array[@machv.PReg]
   scratch_int : Array[Int]
   scratch_float : Array[Int]
 }
@@ -135,47 +139,18 @@ pub enum CallConv {
   SystemV
 }
 
-pub(all) enum OperandConstraint {
-  Any
-  FixedReg(PReg)
-}
-pub impl Show for OperandConstraint
-
-pub(all) struct PReg {
-  index : Int
-  class : RegClass
-}
-pub fn PReg::get_spill_slot(Self) -> Int
-pub fn PReg::is_spilled(Self) -> Bool
-pub fn PReg::spilled(Int, RegClass) -> Self
-pub impl Show for PReg
-
-pub(all) enum Reg {
-  Virtual(VReg)
-  Physical(PReg)
-}
-pub impl Show for Reg
-
-pub(all) enum RegClass {
-  Int
-  Float32
-  Float64
-  Vector
-} derive(Eq)
-pub impl Show for RegClass
-
-pub(all) struct VReg {
-  id : Int
-  class : RegClass
-}
-pub impl Show for VReg
-
-pub(all) struct Writable {
-  reg : Reg
-}
-pub impl Show for Writable
-
 // Type aliases
+pub using @machv {type OperandConstraint}
+
+pub using @machv {type PReg}
+
+pub using @machv {type Reg}
+
+pub using @machv {type RegClass}
+
+pub using @machv {type VReg}
+
+pub using @machv {type Writable}
 
 // Traits
 

@@ -2,7 +2,7 @@
 package "Milky2018/wasmoon/vcode/instr"
 
 import {
-  "Milky2018/wasmoon/vcode/abi",
+  "Milky2018/machv",
   "moonbitlang/core/debug",
 }
 
@@ -224,15 +224,15 @@ pub impl Show for ShiftType
 
 pub struct VCodeInst {
   opcode : VCodeOpcode
-  defs : Array[@abi.Writable]
-  uses : Array[@abi.Reg]
-  use_constraints : Array[@abi.OperandConstraint]
-  def_constraints : Array[@abi.OperandConstraint]
+  defs : Array[@machv.Writable]
+  uses : Array[@machv.Reg]
+  use_constraints : Array[@machv.OperandConstraint]
+  def_constraints : Array[@machv.OperandConstraint]
 }
-pub fn VCodeInst::add_def(Self, @abi.Writable) -> Unit
-pub fn VCodeInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
-pub fn VCodeInst::add_use(Self, @abi.Reg) -> Unit
-pub fn VCodeInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
+pub fn VCodeInst::add_def(Self, @machv.Writable) -> Unit
+pub fn VCodeInst::add_def_fixed(Self, @machv.Writable, @machv.PReg) -> Unit
+pub fn VCodeInst::add_use(Self, @machv.Reg) -> Unit
+pub fn VCodeInst::add_use_fixed(Self, @machv.Reg, @machv.PReg) -> Unit
 pub fn VCodeInst::new(VCodeOpcode) -> Self
 pub impl Show for VCodeInst
 
@@ -341,7 +341,7 @@ pub(all) enum VCodeOpcode {
   TypeCheckSubtypeIndirect(Int)
   StackLoad(Int)
   StackStore(Int)
-  LoadStackParam(Int, @abi.RegClass)
+  LoadStackParam(Int, @machv.RegClass)
   LoadMemBase(Int)
   LoadPtr(MemType, Int)
   LoadPtrRegOffset(MemType, IndexExtend, Int, Int)
@@ -451,14 +451,14 @@ pub fn VCodeOpcode::call_type(Self) -> CallType
 pub impl Show for VCodeOpcode
 
 pub(all) enum VCodeTerminator {
-  Jump(Int, Array[@abi.Reg])
-  Branch(@abi.Reg, Int, Int)
-  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
-  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
-  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
-  Return(Array[@abi.Reg])
+  Jump(Int, Array[@machv.Reg])
+  Branch(@machv.Reg, Int, Int)
+  BranchCmp(@machv.Reg, @machv.Reg, Cond, Bool, Int, Int)
+  BranchZero(@machv.Reg, Bool, Bool, Int, Int)
+  BranchCmpImm(@machv.Reg, Int, Cond, Bool, Int, Int)
+  Return(Array[@machv.Reg])
   Trap(String)
-  BrTable(@abi.Reg, Array[Int], Int)
+  BrTable(@machv.Reg, Array[Int], Int)
 }
 pub impl Show for VCodeTerminator
 

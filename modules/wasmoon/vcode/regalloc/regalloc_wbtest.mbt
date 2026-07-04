@@ -40,6 +40,30 @@ test "liveness: simple function" {
 }
 
 ///|
+test "bridge VCode function into MachV model" {
+  let func = VCodeFunction::new("test_add")
+  let a = func.add_param(Int)
+  let b = func.add_param(Int)
+  func.add_result(Int)
+  let block = func.new_block()
+
+  let add_inst = @instr.VCodeInst::new(Add(true))
+  let result_vreg = func.new_vreg(Int)
+  add_inst.add_def({ reg: Virtual(result_vreg) })
+  add_inst.add_use(Virtual(a))
+  add_inst.add_use(Virtual(b))
+  block.add_inst(add_inst)
+  block.set_terminator(Return([Virtual(result_vreg)]))
+
+  let mach = func.to_machv()
+  inspect(mach.params.length(), content="2")
+  inspect(mach.results.length(), content="1")
+  inspect(mach.blocks.length(), content="1")
+  inspect(mach.blocks[0].instructions.length(), content="1")
+  inspect(mach.blocks[0].terminator is Some(TermReturn(_)), content="true")
+}
+
+///|
 test "apply_allocation: rewrites virtual to physical" {
   // Create a simple function
   let func = VCodeFunction::new("test_rewrite")

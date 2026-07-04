@@ -2,7 +2,7 @@
 fn class_to_regalloc(class : @machv.RegClass) -> @regalloc.RegClass {
   match class {
     Int => Int
-    Float => Float
+    Float32 | Float64 => Float
     Vector => Vector
   }
 }

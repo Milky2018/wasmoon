@@ -31,6 +31,33 @@ pub(all) struct Instruction {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum Cond {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Ult
+  Ule
+  Ugt
+  Uge
+  Custom(String)
+} derive(Eq, Debug)
+
+///|
+pub(all) enum Terminator {
+  TermJump(Int, Array[Reg])
+  TermBranch(Reg, Int, Int)
+  TermBranchCmp(Reg, Reg, Cond, Bool, Int, Int)
+  TermBranchZero(Reg, Bool, Bool, Int, Int)
+  TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Int)
+  TermReturn(Array[Reg])
+  TermTrap(String)
+  TermBrTable(Reg, Array[Int], Int)
+} derive(Eq, Debug)
+
+///|
 pub fn Instruction::new(id : Int, opcode : Opcode) -> Instruction {
   {
     id,
