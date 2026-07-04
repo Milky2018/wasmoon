@@ -107,6 +107,8 @@ pub(all) enum Cond {
   Ule
   Ugt
   Uge
+  Parity
+  NotParity
   Custom(String)
 } derive(Eq, Debug)
 

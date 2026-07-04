@@ -252,6 +252,77 @@ test "emit X64 integer compare bytes" {
 }
 
 ///|
+test "emit X64 scalar float compare bytes" {
+  let func = @machv.Function::new("x64_float_cmp")
+  let entry = func.new_block()
+  let cmp_eq = func.new_inst(FloatCmp(Eq))
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Float64 })),
+  )
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float64 })),
+  )
+  cmp_eq.add_operand(@machv.Operand::def(Physical({ index: 8, class: Int })))
+  cmp_eq.add_operand(
+    @machv.Operand::use_def(Physical({ index: 11, class: Int })),
+  )
+  entry.append(cmp_eq)
+  let cmp_lt = func.new_inst(FloatCmp(Lt))
+  cmp_lt.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float32 })),
+  )
+  cmp_lt.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Float32 })),
+  )
+  cmp_lt.add_operand(@machv.Operand::def(Physical({ index: 9, class: Int })))
+  entry.append(cmp_lt)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  102,
+      #|  15,
+      #|  46,
+      #|  193,
+      #|  65,
+      #|  15,
+      #|  148,
+      #|  192,
+      #|  65,
+      #|  15,
+      #|  155,
+      #|  195,
+      #|  69,
+      #|  15,
+      #|  182,
+      #|  192,
+      #|  69,
+      #|  15,
+      #|  182,
+      #|  219,
+      #|  69,
+      #|  33,
+      #|  216,
+      #|  15,
+      #|  46,
+      #|  218,
+      #|  65,
+      #|  15,
+      #|  151,
+      #|  193,
+      #|  69,
+      #|  15,
+      #|  182,
+      #|  201,
+      #|  195,
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit X64 integer shift bytes" {
   let func = @machv.Function::new("x64_int_shift")
   let entry = func.new_block()
@@ -695,6 +766,59 @@ test "emit AArch64 integer compare bytes" {
       #|  235,
       #|  230,
       #|  39,
+      #|  159,
+      #|  154,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
+}
+
+///|
+test "emit AArch64 scalar float compare bytes" {
+  let func = @machv.Function::new("float_cmp")
+  let entry = func.new_block()
+  let cmp_eq = func.new_inst(FloatCmp(Eq))
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Float64 })),
+  )
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Float64 })),
+  )
+  cmp_eq.add_operand(@machv.Operand::def(Physical({ index: 5, class: Int })))
+  entry.append(cmp_eq)
+  let cmp_ne = func.new_inst(FloatCmp(Ne))
+  cmp_ne.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Float32 })),
+  )
+  cmp_ne.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Float32 })),
+  )
+  cmp_ne.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
+  entry.append(cmp_ne)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  0,
+      #|  32,
+      #|  97,
+      #|  30,
+      #|  229,
+      #|  23,
+      #|  159,
+      #|  154,
+      #|  64,
+      #|  32,
+      #|  35,
+      #|  30,
+      #|  230,
+      #|  7,
       #|  159,
       #|  154,
       #|  192,

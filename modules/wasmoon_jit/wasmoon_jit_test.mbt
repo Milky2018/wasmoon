@@ -257,6 +257,68 @@ test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR float compare through reusable x64 JIT pipeline" {
+  let signature = @milkir.Signature::new([F64, F64], [I32])
+  let milk = @milkir.Function::new("fcmp_eq_x64", signature)
+  let lhs = milk.new_value(F64)
+  let rhs = milk.new_value(F64)
+  let output = milk.new_value(I32)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fcmp(Eq), [lhs, rhs], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_ucomisd = false
+  let mut has_setnp = false
+  for i in 0..<(plan.object.code.length() - 2) {
+    if plan.object.code[i] == 0x66 &&
+      plan.object.code[i + 1] == 0x0f &&
+      plan.object.code[i + 2] == 0x2e {
+      has_ucomisd = true
+    }
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x9b {
+      has_setnp = true
+    }
+  }
+  inspect(has_ucomisd, content="true")
+  inspect(has_setnp, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
+test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
+  let signature = @milkir.Signature::new([F32, F32], [I32])
+  let milk = @milkir.Function::new("fcmp_lt_aarch64", signature)
+  let lhs = milk.new_value(F32)
+  let rhs = milk.new_value(F32)
+  let output = milk.new_value(I32)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fcmp(Lt), [lhs, rhs], [output]))
+  entry.set_terminator(Return([output]))
+  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_fcmp_s = false
+  let mut has_cset_mi = false
+  for i in 0..<(plan.object.code.length() - 3) {
+    if (plan.object.code[i + 2] & 0xe0) == 0x20 &&
+      plan.object.code[i + 3] == 0x1e {
+      has_fcmp_s = true
+    }
+    if (plan.object.code[i + 1] & 0xf0) == 0xa0 &&
+      plan.object.code[i + 2] == 0x9f &&
+      plan.object.code[i + 3] == 0x9a {
+      has_cset_mi = true
+    }
+  }
+  inspect(has_fcmp_s, content="true")
+  inspect(has_cset_mi, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+}
+
+///|
 test "emit MachV regalloc stack spills through reusable x64 pipeline" {
   let func = @machv.Function::new("spilled_x64")
   let entry = func.new_block()

@@ -99,6 +99,22 @@ fn emit_x64_or_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_and_rr32(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: and r/m32, r32.
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x21)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_or_rr32(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: or r/m32, r32.
+  emit_x64_rex_if_needed(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x09)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
 fn emit_x64_xor_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: xor r/m64, r64.
   emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
@@ -182,6 +198,24 @@ fn emit_x64_movq_xmm_r64(object : CodeObject, dst_xmm : Int, src : Int) -> Unit 
   object.code.push(0x0f)
   object.code.push(0x6e)
   emit_x64_modrm(object, 3, dst_xmm, src)
+}
+
+///|
+fn emit_x64_ucomis_rr(
+  object : CodeObject,
+  lhs : Int,
+  rhs : Int,
+  class : @machv.RegClass,
+) -> Unit {
+  match class {
+    Float32 => ()
+    Float64 => object.code.push(0x66)
+    _ => abort("unreachable float compare class")
+  }
+  emit_x64_rex_if_needed(object, (lhs >> 3) & 1, (rhs >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0x2e)
+  emit_x64_modrm(object, 3, lhs, rhs)
 }
 
 ///|
@@ -410,6 +444,8 @@ fn x64_jcc_opcode(cond : @machv.Cond) -> Int {
     Ule => 0x86
     Ugt => 0x87
     Uge => 0x83
+    Parity => 0x8a
+    NotParity => 0x8b
     Custom(name) =>
       abort("x64_jcc_opcode: unsupported custom condition \{name}")
   }
@@ -428,6 +464,8 @@ fn aarch64_cond_bits(cond : @machv.Cond) -> Int {
     Lt => 11
     Gt => 12
     Le => 13
+    Parity | NotParity =>
+      abort("aarch64_cond_bits: parity conditions are x64-only")
     Custom(name) =>
       abort("aarch64_cond_bits: unsupported custom condition \{name}")
   }
@@ -510,6 +548,23 @@ fn emit_aarch64_cmp_rr(
   // CMP is SUBS with XZR/WZR destination.
   let base = if is_64 { 0xeb00001f } else { 0x6b00001f }
   emit_u32_le(object, base | ((rhs & 0x1f) << 16) | ((lhs & 0x1f) << 5))
+}
+
+///|
+fn emit_aarch64_fcmp_rr(
+  object : CodeObject,
+  lhs : Int,
+  rhs : Int,
+  class : @machv.RegClass,
+) -> Unit {
+  let b0 = (lhs & 7) << 5
+  let b1 = ((lhs >> 3) & 3) | 0x20
+  let b2 = match class {
+    Float32 => 0x20 | (rhs & 31)
+    Float64 => 0x60 | (rhs & 31)
+    _ => abort("unreachable float compare class")
+  }
+  emit_u32_le(object, b0 | (b1 << 8) | (b2 << 16) | (0x1e << 24))
 }
 
 ///|
@@ -868,6 +923,31 @@ fn emit_aarch64_int_cmp(
   )
   // TODO(machv_emit): encode 32-bit comparisons once MachV carries lane width.
   emit_aarch64_cmp_rr(object, lhs, rhs, true)
+  emit_aarch64_cset(object, dst, cond)
+}
+
+///|
+fn emit_aarch64_float_cmp(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  cond : @machv.Cond,
+) -> Unit raise EmitError {
+  let (lhs, lhs_class) = require_float_preg(
+    find_operand(inst, Use, 0, "fcmp"),
+    "fcmp lhs",
+  )
+  let (rhs, rhs_class) = require_float_preg(
+    find_operand(inst, Use, 1, "fcmp"),
+    "fcmp rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "fcmp"),
+    "fcmp destination",
+  )
+  require_same_float_class(lhs_class, rhs_class, "fcmp")
+  // AArch64 FCMP reports unordered operands as NZCV=0011. The condition mapping
+  // matches WebAssembly ordered comparisons, with Ne intentionally true for NaN.
+  emit_aarch64_fcmp_rr(object, lhs, rhs, lhs_class)
   emit_aarch64_cset(object, dst, cond)
 }
 
@@ -1920,6 +2000,70 @@ fn emit_x64_int_cmp(
 }
 
 ///|
+fn emit_x64_float_cmp(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  cond : @machv.Cond,
+) -> Unit raise EmitError {
+  let (lhs, lhs_class) = require_float_preg(
+    find_operand(inst, Use, 0, "fcmp"),
+    "fcmp lhs",
+  )
+  let (rhs, rhs_class) = require_float_preg(
+    find_operand(inst, Use, 1, "fcmp"),
+    "fcmp rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "fcmp"),
+    "fcmp destination",
+  )
+  require_same_float_class(lhs_class, rhs_class, "fcmp")
+  // UCOMIS* sets ZF/CF/PF. PF=1 means unordered; Eq is ordered-and-equal, while
+  // Ne is unordered-or-not-equal, matching WebAssembly scalar float comparisons.
+  match cond {
+    Eq | Ne => {
+      let scratch = require_int_preg(
+        find_operand(inst, UseDef, 0, "fcmp"),
+        "fcmp parity scratch",
+      )
+      if scratch == dst {
+        raise UnsupportedOperand(
+          message="x64 fcmp eq/ne requires a scratch register distinct from the destination",
+        )
+      }
+      emit_x64_ucomis_rr(object, lhs, rhs, lhs_class)
+      if cond == Eq {
+        emit_x64_setcc_r8(object, Eq, dst)
+        emit_x64_setcc_r8(object, NotParity, scratch)
+        emit_x64_movzx_r32_r8(object, dst, dst)
+        emit_x64_movzx_r32_r8(object, scratch, scratch)
+        emit_x64_and_rr32(object, dst, scratch)
+      } else {
+        emit_x64_setcc_r8(object, Ne, dst)
+        emit_x64_setcc_r8(object, Parity, scratch)
+        emit_x64_movzx_r32_r8(object, dst, dst)
+        emit_x64_movzx_r32_r8(object, scratch, scratch)
+        emit_x64_or_rr32(object, dst, scratch)
+      }
+    }
+    Gt | Ge => {
+      emit_x64_ucomis_rr(object, lhs, rhs, lhs_class)
+      emit_x64_setcc_r8(object, if cond == Gt { Ugt } else { Uge }, dst)
+      emit_x64_movzx_r32_r8(object, dst, dst)
+    }
+    Lt | Le => {
+      emit_x64_ucomis_rr(object, rhs, lhs, lhs_class)
+      emit_x64_setcc_r8(object, if cond == Lt { Ugt } else { Uge }, dst)
+      emit_x64_movzx_r32_r8(object, dst, dst)
+    }
+    Ult | Ule | Ugt | Uge | Parity | NotParity | Custom(_) =>
+      raise UnsupportedOperand(
+        message="x64 fcmp requires a scalar float comparison condition",
+      )
+  }
+}
+
+///|
 fn emit_x64_int_shift(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2180,6 +2324,7 @@ fn write_aarch64_inst_bytes(
     FloatDiv => emit_aarch64_float_binop3(object, inst, 0x2018, 0x6018, "fdiv")
     FloatMin => emit_aarch64_float_binop3(object, inst, 0x2058, 0x6058, "fmin")
     FloatMax => emit_aarch64_float_binop3(object, inst, 0x2048, 0x6048, "fmax")
+    FloatCmp(cond) => emit_aarch64_float_cmp(object, inst, cond)
     FloatSqrt => emit_aarch64_float_unop(object, inst, 0x21c0, 0x61c0, "fsqrt")
     FloatAbs => emit_aarch64_float_unop(object, inst, 0x20c0, 0x60c0, "fabs")
     FloatNeg => emit_aarch64_float_unop(object, inst, 0x2140, 0x6140, "fneg")
@@ -2263,6 +2408,7 @@ fn write_x64_inst_bytes(
     FloatDiv => emit_x64_float_binop3(object, inst, 0x5e, "fdiv")
     FloatMin => emit_x64_float_binop3(object, inst, 0x5d, "fmin")
     FloatMax => emit_x64_float_binop3(object, inst, 0x5f, "fmax")
+    FloatCmp(cond) => emit_x64_float_cmp(object, inst, cond)
     FloatSqrt => emit_x64_float_unop(object, inst, 0x51, "fsqrt")
     FloatAbs => emit_x64_float_abs_or_neg(object, inst, true, "fabs")
     FloatNeg => emit_x64_float_abs_or_neg(object, inst, false, "fneg")

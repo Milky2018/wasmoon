@@ -485,6 +485,30 @@ fn lower_fconst(
 }
 
 ///|
+fn lower_fcmp(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  cc : @milkir.FloatCC,
+) -> Unit {
+  let lowered = out.new_inst(FloatCmp(floatcc_to_machv(cc)))
+  add_uses(lowered, inst.args)
+  add_defs(lowered, inst.results)
+  match cc {
+    Eq | Ne => {
+      // TODO(x64_target): replace this fixed allocatable scratch with a
+      // first-class MachV temporary/clobber model once regalloc can reserve
+      // per-instruction temps.
+      let scratch = out.new_vreg(Int)
+      lowered.add_operand(@machv.Operand::use_def(Virtual(scratch)))
+      add_fixed_constraint(lowered, lowered.operands.length() - 1, int_reg(9))
+    }
+    Lt | Le | Gt | Ge => ()
+  }
+  block.append(lowered)
+}
+
+///|
 fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
   match opcode {
     Iadd => IntAdd
@@ -610,6 +634,10 @@ fn lower_inst(
     }
     Fconst(value) => {
       lower_fconst(out, block, inst, value)
+      return
+    }
+    Fcmp(cc) => {
+      lower_fcmp(out, block, inst, cc)
       return
     }
     _ => ()
