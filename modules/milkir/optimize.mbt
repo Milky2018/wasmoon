@@ -520,6 +520,148 @@ pub fn simplify_branches(func : Function) -> OptResult {
 }
 
 ///|
+priv enum PhiAbstractValue {
+  None
+  One(Int)
+  Many
+} derive(Eq)
+
+///|
+fn PhiAbstractValue::join(
+  self : PhiAbstractValue,
+  other : PhiAbstractValue,
+) -> PhiAbstractValue {
+  match (self, other) {
+    (None, v) => v
+    (v, None) => v
+    (Many, _) | (_, Many) => Many
+    (One(a), One(b)) => if a == b { One(a) } else { Many }
+  }
+}
+
+///|
+fn build_value_array(func : Function, value_count : Int) -> Array[Value?] {
+  let values : Array[Value?] = Array::make(value_count, None)
+  for i, ty in func.signature.params {
+    if i >= 0 && i < value_count {
+      values[i] = Some({ id: i, ty })
+    }
+  }
+  for block in func.blocks {
+    for param in block.params {
+      if param.id >= 0 && param.id < value_count {
+        values[param.id] = Some(param)
+      }
+    }
+    for inst in block.instructions {
+      for result in inst.results {
+        if result.id >= 0 && result.id < value_count {
+          values[result.id] = Some(result)
+        }
+      }
+    }
+  }
+  values
+}
+
+///|
+fn build_block_index_array(func : Function) -> Array[Int] {
+  let block_index = Array::make(func.next_block_id, -1)
+  for i, block in func.blocks {
+    if block.id >= 0 && block.id < block_index.length() {
+      block_index[block.id] = i
+    }
+  }
+  block_index
+}
+
+///|
+fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
+  let count = replace_ids.length()
+  for key in 0..<count {
+    if replace_ids[key] < 0 {
+      continue
+    }
+    let path : Array[Int] = []
+    let mut current = key
+    let mut steps = 0
+    while steps < 1024 {
+      path.push(current)
+      if current < 0 || current >= count {
+        break
+      }
+      let next = replace_ids[current]
+      if next < 0 || next == current {
+        break
+      }
+      current = next
+      steps = steps + 1
+    }
+    for visited in path {
+      if visited >= 0 && visited < count {
+        replace_ids[visited] = current
+      }
+    }
+  }
+}
+
+///|
+fn collect_param_pairs(
+  func : Function,
+  block_index : Array[Int],
+  state : Array[PhiAbstractValue?],
+  target : Int,
+  args : Array[Value],
+  pairs : Array[(Int, Int)],
+) -> Unit {
+  if args.length() == 0 ||
+    target < 0 ||
+    target >= block_index.length() ||
+    block_index[target] < 0 {
+    return
+  }
+  let target_block = func.blocks[block_index[target]]
+  let count = if target_block.params.length() < args.length() {
+    target_block.params.length()
+  } else {
+    args.length()
+  }
+  for i in 0..<count {
+    let formal = target_block.params[i]
+    if formal.id >= 0 &&
+      formal.id < state.length() &&
+      state[formal.id] is Some(_) {
+      pairs.push((formal.id, args[i].id))
+    }
+  }
+}
+
+///|
+fn collect_propagation_pairs(
+  func : Function,
+  block_index : Array[Int],
+  state : Array[PhiAbstractValue?],
+) -> Array[(Int, Int)] {
+  let pairs : Array[(Int, Int)] = []
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, args)) =>
+        collect_param_pairs(func, block_index, state, target, args, pairs)
+      Some(Branch(_, true_target, true_args, false_target, false_args)) => {
+        collect_param_pairs(
+          func, block_index, state, true_target, true_args, pairs,
+        )
+        collect_param_pairs(
+          func, block_index, state, false_target, false_args, pairs,
+        )
+      }
+      _ => ()
+    }
+  }
+  pairs
+}
+
+///|
 fn keep_values_by_index(
   values : Array[Value],
   keep_indices : Array[Int],
@@ -531,6 +673,336 @@ fn keep_values_by_index(
     }
   }
   kept
+}
+
+///|
+fn keep_indices_for_target(
+  target : Int,
+  block_index : Array[Int],
+  params_to_keep : Array[Array[Int]],
+) -> Array[Int]? {
+  if target >= 0 &&
+    target < block_index.length() &&
+    block_index[target] >= 0 &&
+    block_index[target] < params_to_keep.length() {
+    Some(params_to_keep[block_index[target]])
+  } else {
+    None
+  }
+}
+
+///|
+fn trim_terminator_args(
+  term : Terminator,
+  block_index : Array[Int],
+  params_to_keep : Array[Array[Int]],
+) -> Terminator? {
+  match term {
+    Jump(target, args) =>
+      match keep_indices_for_target(target, block_index, params_to_keep) {
+        Some(keep) =>
+          if keep.length() != args.length() {
+            Some(Jump(target, keep_values_by_index(args, keep)))
+          } else {
+            None
+          }
+        None => None
+      }
+    Branch(cond, true_target, true_args, false_target, false_args) => {
+      let mut changed = false
+      let new_true_args = match
+        keep_indices_for_target(true_target, block_index, params_to_keep) {
+        Some(keep) =>
+          if keep.length() != true_args.length() {
+            changed = true
+            keep_values_by_index(true_args, keep)
+          } else {
+            true_args
+          }
+        None => true_args
+      }
+      let new_false_args = match
+        keep_indices_for_target(false_target, block_index, params_to_keep) {
+        Some(keep) =>
+          if keep.length() != false_args.length() {
+            changed = true
+            keep_values_by_index(false_args, keep)
+          } else {
+            false_args
+          }
+        None => false_args
+      }
+      if changed {
+        Some(
+          Branch(cond, true_target, new_true_args, false_target, new_false_args),
+        )
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn replacement_for(value : Value, replace_values : Array[Value?]) -> Value? {
+  if value.id >= 0 && value.id < replace_values.length() {
+    match replace_values[value.id] {
+      Some(replacement) =>
+        if replacement.id != value.id {
+          Some(replacement)
+        } else {
+          None
+        }
+      None => None
+    }
+  } else {
+    None
+  }
+}
+
+///|
+fn replace_value_array(
+  values : Array[Value],
+  replace_values : Array[Value?],
+) -> Array[Value]? {
+  let mut updated : Array[Value]? = None
+  for i, value in values {
+    if replacement_for(value, replace_values) is Some(replacement) {
+      if updated is None {
+        updated = Some(values.copy())
+      }
+      if updated is Some(items) {
+        items[i] = replacement
+      }
+    }
+  }
+  updated
+}
+
+///|
+fn replace_terminator_values(
+  term : Terminator,
+  replace_values : Array[Value?],
+) -> Terminator? {
+  match term {
+    Return(values) =>
+      match replace_value_array(values, replace_values) {
+        Some(updated) => Some(Return(updated))
+        None => None
+      }
+    Jump(target, args) =>
+      match replace_value_array(args, replace_values) {
+        Some(updated) => Some(Jump(target, updated))
+        None => None
+      }
+    Branch(cond, true_target, true_args, false_target, false_args) => {
+      let new_cond = replacement_for(cond, replace_values).unwrap_or(cond)
+      let new_true_args = replace_value_array(true_args, replace_values).unwrap_or(
+        true_args,
+      )
+      let new_false_args = replace_value_array(false_args, replace_values).unwrap_or(
+        false_args,
+      )
+      if new_cond.id != cond.id ||
+        !value_arrays_equal(new_true_args, true_args) ||
+        !value_arrays_equal(new_false_args, false_args) {
+        Some(
+          Branch(
+            new_cond, true_target, new_true_args, false_target, new_false_args,
+          ),
+        )
+      } else {
+        None
+      }
+    }
+    Brz(cond, true_target, false_target) =>
+      match replacement_for(cond, replace_values) {
+        Some(replacement) => Some(Brz(replacement, true_target, false_target))
+        None => None
+      }
+    Brnz(cond, true_target, false_target) =>
+      match replacement_for(cond, replace_values) {
+        Some(replacement) => Some(Brnz(replacement, true_target, false_target))
+        None => None
+      }
+    BrTable(index, targets, default_target) =>
+      match replacement_for(index, replace_values) {
+        Some(replacement) => Some(BrTable(replacement, targets, default_target))
+        None => None
+      }
+    TrapExit(_) => None
+  }
+}
+
+///|
+/// Remove block parameters that always receive the same SSA value.
+///
+/// This mirrors Cranelift-style constant-phi elimination at the generic MilkIR
+/// level. It uses value identity only; frontend-specific numeric equivalence
+/// belongs in separate legality-aware passes.
+pub fn eliminate_constant_block_params(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("const_block_param_elim")
+  if func.blocks.length() == 0 || func.next_value_id <= 0 {
+    return result
+  }
+  let entry_id = func.blocks[0].id
+  let block_index = build_block_index_array(func)
+  let state : Array[PhiAbstractValue?] = Array::make(func.next_value_id, None)
+  let mut has_params = false
+  for block in func.blocks {
+    if block.id == entry_id {
+      continue
+    }
+    for param in block.params {
+      if param.id >= 0 && param.id < state.length() {
+        state[param.id] = Some(None)
+        has_params = true
+      }
+    }
+  }
+  if !has_params {
+    return result
+  }
+  let pairs = collect_propagation_pairs(func, block_index, state)
+  if pairs.length() == 0 {
+    return result
+  }
+  let dependent_pairs : Array[Array[Int]?] = Array::make(
+    func.next_value_id,
+    None,
+  )
+  for pair_index, pair in pairs {
+    let (_, actual_id) = pair
+    if actual_id >= 0 &&
+      actual_id < state.length() &&
+      state[actual_id] is Some(_) {
+      let deps = dependent_pairs[actual_id].unwrap_or([])
+      deps.push(pair_index)
+      dependent_pairs[actual_id] = Some(deps)
+    }
+  }
+  let queue : Array[Int] = []
+  let in_queue = Array::make(pairs.length(), false)
+  for pair_index, _ in pairs {
+    queue.push(pair_index)
+    in_queue[pair_index] = true
+  }
+  let mut queue_head = 0
+  let mut steps = 0
+  let max_steps = pairs.length() * 16 + 1024
+  while queue_head < queue.length() && steps < max_steps {
+    let pair_index = queue[queue_head]
+    queue_head = queue_head + 1
+    in_queue[pair_index] = false
+    steps = steps + 1
+    let (formal_id, actual_id) = pairs[pair_index]
+    if formal_id < 0 || formal_id >= state.length() {
+      continue
+    }
+    let old_value = state[formal_id].unwrap_or(None)
+    if old_value is Many {
+      continue
+    }
+    let actual_value = if actual_id >= 0 && actual_id < state.length() {
+      match state[actual_id] {
+        Some(absval) => absval
+        None => One(actual_id)
+      }
+    } else {
+      One(actual_id)
+    }
+    let new_value = old_value.join(actual_value)
+    if new_value != old_value {
+      state[formal_id] = Some(new_value)
+      if dependent_pairs[formal_id] is Some(deps) {
+        for dep_index in deps {
+          if dep_index >= 0 &&
+            dep_index < in_queue.length() &&
+            !in_queue[dep_index] {
+            queue.push(dep_index)
+            in_queue[dep_index] = true
+          }
+        }
+      }
+    }
+  }
+
+  let params_to_keep : Array[Array[Int]] = []
+  let replace_ids = Array::make(func.next_value_id, -1)
+  let mut will_change = false
+  for block in func.blocks {
+    let keep : Array[Int] = []
+    for i, param in block.params {
+      if param.id >= 0 && param.id < state.length() {
+        match state[param.id] {
+          Some(One(replacement_id)) => {
+            replace_ids[param.id] = replacement_id
+            will_change = true
+          }
+          _ => keep.push(i)
+        }
+      } else {
+        keep.push(i)
+      }
+    }
+    params_to_keep.push(keep)
+  }
+  if !will_change {
+    return result
+  }
+  compress_replace_array(replace_ids)
+  for block in func.blocks {
+    if block.id >= 0 &&
+      block.id < block_index.length() &&
+      block_index[block.id] >= 0 &&
+      block_index[block.id] < params_to_keep.length() {
+      let keep = params_to_keep[block_index[block.id]]
+      if keep.length() != block.params.length() {
+        let old_params = block.params.copy()
+        block.params.clear()
+        for index in keep {
+          block.params.push(old_params[index])
+        }
+        result.mark_changed()
+      }
+    }
+  }
+  for block in func.blocks {
+    if block.terminator is Some(term) {
+      if trim_terminator_args(term, block_index, params_to_keep)
+        is Some(updated) {
+        block.terminator = Some(updated)
+        result.mark_changed()
+      }
+    }
+  }
+  let all_values = build_value_array(func, func.next_value_id)
+  let replace_values : Array[Value?] = Array::make(func.next_value_id, None)
+  for from_id, to_id in replace_ids {
+    if to_id >= 0 && to_id < all_values.length() {
+      replace_values[from_id] = all_values[to_id]
+    }
+  }
+  for block in func.blocks {
+    for inst in block.instructions {
+      if replace_value_array(inst.args, replace_values) is Some(updated_args) {
+        inst.args.clear()
+        for arg in updated_args {
+          inst.args.push(arg)
+        }
+        result.mark_changed()
+      }
+    }
+    if block.terminator is Some(term) {
+      if replace_terminator_values(term, replace_values) is Some(updated) {
+        block.terminator = Some(updated)
+        result.mark_changed()
+      }
+    }
+  }
+  result
 }
 
 ///|
@@ -960,6 +1432,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, eliminate_common_subexpressions(func))
       merge_opt_result(result, eliminate_dead_code(func))
       merge_opt_result(result, simplify_branches(func))
+      merge_opt_result(result, eliminate_constant_block_params(func))
       merge_opt_result(result, eliminate_dead_block_params(func))
       merge_opt_result(result, merge_blocks(func))
       merge_opt_result(result, thread_jumps(func))

@@ -387,6 +387,94 @@ test "optimizer keeps block params forwarded through jump args" {
 }
 
 ///|
+test "optimizer removes constant block params and rewrites uses" {
+  let builder = IRBuilder::new("const_block_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let target = builder.create_block()
+  builder.switch_to_block(entry)
+  let arg = builder.iconst_i32(7)
+  builder.jump(target, [arg])
+  let param = builder.add_block_param(target, I32)
+  builder.switch_to_block(target)
+  builder.return_([param])
+  let func = builder.get_function()
+  let result = eliminate_constant_block_params(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function const_block_params() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 7
+      #|    jump block1
+      #|block1:
+      #|    return v0
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer removes constant branch block params" {
+  let builder = IRBuilder::new("branch_const_block_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let join = builder.create_block()
+  builder.switch_to_block(entry)
+  let cond = builder.iconst_i32(1)
+  let arg = builder.iconst_i32(7)
+  if builder.current_block() is Some(block) {
+    block.set_terminator(Branch(cond, join.id, [arg], join.id, [arg]))
+  }
+  let param = builder.add_block_param(join, I32)
+  builder.switch_to_block(join)
+  builder.return_([param])
+  let func = builder.get_function()
+  let result = eliminate_constant_block_params(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function branch_const_block_params() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i32 = iconst 7
+      #|    branch v0, block1(), block1()
+      #|block1:
+      #|    return v1
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer keeps varying branch block params" {
+  let builder = IRBuilder::new("branch_varying_block_params")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let join = builder.create_block()
+  builder.switch_to_block(entry)
+  let cond = builder.iconst_i32(1)
+  let lhs = builder.iconst_i32(7)
+  let rhs = builder.iconst_i32(9)
+  if builder.current_block() is Some(block) {
+    block.set_terminator(Branch(cond, join.id, [lhs], join.id, [rhs]))
+  }
+  let param = builder.add_block_param(join, I32)
+  builder.switch_to_block(join)
+  builder.return_([param])
+  let func = builder.get_function()
+  let result = eliminate_constant_block_params(func)
+  inspect(result.changed, content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer removes unreachable blocks" {
   let builder = IRBuilder::new("unreachable")
   builder.add_result(I32)
