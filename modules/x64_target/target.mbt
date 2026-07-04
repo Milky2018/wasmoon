@@ -148,26 +148,41 @@ fn add_defs(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
 }
 
 ///|
+fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
+  match cc {
+    Eq => Eq
+    Ne => Ne
+    Slt => Lt
+    Sle => Le
+    Sgt => Gt
+    Sge => Ge
+    Ult => Ult
+    Ule => Ule
+    Ugt => Ugt
+    Uge => Uge
+  }
+}
+
+///|
 fn opcode_name(opcode : @milkir.Opcode) -> String {
   match opcode {
     Iadd => "x64.iadd"
     Isub => "x64.isub"
     Imul => "x64.imul"
     IcmpEq => "x64.icmp_eq"
+    Icmp(_) => "x64.icmp"
     Fadd => "x64.fadd"
     Fsub => "x64.fsub"
     Fmul => "x64.fmul"
     Select => "x64.select"
-    Load => "x64.load"
-    Store => "x64.store"
-    StackAddr(_) => "x64.stack_addr"
-    Call(symbol) => "x64.call:" + symbol.name
-    CallIndirect(_) => "x64.call_indirect"
-    CallPtr(_, _) => "x64.call_ptr"
-    Trap(reason) => "x64.trap:" + reason
-    Custom(name) => "x64.custom:" + name
     Iconst(_) => "x64.iconst"
     Fconst(_) => "x64.fconst"
+    Call(symbol) => "x64.call:" + symbol.name
+    Trap(reason) => "x64.trap:" + reason
+    StackAddr(_) => "x64.stack_addr"
+    CallIndirect(_) => "x64.call_indirect"
+    CallPtr(_, _) => "x64.call_ptr"
+    Custom(name) => "x64.custom:" + name
     Umulh => "x64.umulh"
     Smulh => "x64.smulh"
     Sdiv => "x64.sdiv"
@@ -186,7 +201,6 @@ fn opcode_name(opcode : @milkir.Opcode) -> String {
     Clz => "x64.clz"
     Ctz => "x64.ctz"
     Popcnt => "x64.popcnt"
-    Icmp(_) => "x64.icmp"
     Fdiv => "x64.fdiv"
     Fmin => "x64.fmin"
     Fmax => "x64.fmax"
@@ -214,8 +228,28 @@ fn opcode_name(opcode : @milkir.Opcode) -> String {
     Sextend16 => "x64.sextend16"
     Sextend32 => "x64.sextend32"
     Copy => "x64.copy"
-    LoadPtr(_) => "x64.load_ptr"
-    StorePtr(_) => "x64.store_ptr"
+    Load | LoadPtr(_) => "x64.load_ptr"
+    Store | StorePtr(_) => "x64.store_ptr"
+  }
+}
+
+///|
+fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
+  match opcode {
+    Iadd => IntAdd
+    Isub => IntSub
+    Imul => IntMul
+    IcmpEq => IntCmp(Eq)
+    Icmp(cc) => IntCmp(intcc_to_machv(cc))
+    Fadd => FloatAdd
+    Fsub => FloatSub
+    Fmul => FloatMul
+    Select => Select
+    Iconst(value) => IntConst(value)
+    Fconst(value) => FloatConst(value)
+    Call(symbol) => Call(symbol.name)
+    Trap(reason) => Trap(reason)
+    _ => Target(opcode_name(opcode))
   }
 }
 
@@ -225,7 +259,7 @@ fn lower_inst(
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
-  let lowered = out.new_inst(Target(opcode_name(inst.opcode)))
+  let lowered = out.new_inst(opcode_for(inst.opcode))
   add_uses(lowered, inst.args)
   add_defs(lowered, inst.results)
   // TODO(x64_target): replace textual target opcodes with selected x64 machine

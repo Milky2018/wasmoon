@@ -163,26 +163,41 @@ fn add_defs(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
 }
 
 ///|
+fn intcc_to_machv(cc : @milkir.IntCC) -> @machv.Cond {
+  match cc {
+    Eq => Eq
+    Ne => Ne
+    Slt => Lt
+    Sle => Le
+    Sgt => Gt
+    Sge => Ge
+    Ult => Ult
+    Ule => Ule
+    Ugt => Ugt
+    Uge => Uge
+  }
+}
+
+///|
 fn opcode_name(opcode : @milkir.Opcode) -> String {
   match opcode {
     Iadd => "aarch64.iadd"
     Isub => "aarch64.isub"
     Imul => "aarch64.imul"
     IcmpEq => "aarch64.icmp_eq"
+    Icmp(_) => "aarch64.icmp"
     Fadd => "aarch64.fadd"
     Fsub => "aarch64.fsub"
     Fmul => "aarch64.fmul"
     Select => "aarch64.select"
-    Load => "aarch64.load"
-    Store => "aarch64.store"
-    StackAddr(_) => "aarch64.stack_addr"
-    Call(symbol) => "aarch64.call:" + symbol.name
-    CallIndirect(_) => "aarch64.call_indirect"
-    CallPtr(_, _) => "aarch64.call_ptr"
-    Trap(reason) => "aarch64.trap:" + reason
-    Custom(name) => "aarch64.custom:" + name
     Iconst(_) => "aarch64.iconst"
     Fconst(_) => "aarch64.fconst"
+    Call(symbol) => "aarch64.call:" + symbol.name
+    Trap(reason) => "aarch64.trap:" + reason
+    StackAddr(_) => "aarch64.stack_addr"
+    CallIndirect(_) => "aarch64.call_indirect"
+    CallPtr(_, _) => "aarch64.call_ptr"
+    Custom(name) => "aarch64.custom:" + name
     Umulh => "aarch64.umulh"
     Smulh => "aarch64.smulh"
     Sdiv => "aarch64.sdiv"
@@ -201,7 +216,6 @@ fn opcode_name(opcode : @milkir.Opcode) -> String {
     Clz => "aarch64.clz"
     Ctz => "aarch64.ctz"
     Popcnt => "aarch64.popcnt"
-    Icmp(_) => "aarch64.icmp"
     Fdiv => "aarch64.fdiv"
     Fmin => "aarch64.fmin"
     Fmax => "aarch64.fmax"
@@ -229,8 +243,28 @@ fn opcode_name(opcode : @milkir.Opcode) -> String {
     Sextend16 => "aarch64.sextend16"
     Sextend32 => "aarch64.sextend32"
     Copy => "aarch64.copy"
-    LoadPtr(_) => "aarch64.load_ptr"
-    StorePtr(_) => "aarch64.store_ptr"
+    Load | LoadPtr(_) => "aarch64.load_ptr"
+    Store | StorePtr(_) => "aarch64.store_ptr"
+  }
+}
+
+///|
+fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
+  match opcode {
+    Iadd => IntAdd
+    Isub => IntSub
+    Imul => IntMul
+    IcmpEq => IntCmp(Eq)
+    Icmp(cc) => IntCmp(intcc_to_machv(cc))
+    Fadd => FloatAdd
+    Fsub => FloatSub
+    Fmul => FloatMul
+    Select => Select
+    Iconst(value) => IntConst(value)
+    Fconst(value) => FloatConst(value)
+    Call(symbol) => Call(symbol.name)
+    Trap(reason) => Trap(reason)
+    _ => Target(opcode_name(opcode))
   }
 }
 
@@ -240,7 +274,7 @@ fn lower_inst(
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
-  let lowered = out.new_inst(Target(opcode_name(inst.opcode)))
+  let lowered = out.new_inst(opcode_for(inst.opcode))
   add_uses(lowered, inst.args)
   add_defs(lowered, inst.results)
   // TODO(aarch64_target): replace textual target opcodes with selected AArch64

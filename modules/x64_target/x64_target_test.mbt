@@ -20,10 +20,7 @@ test "x64 lowers MilkIR arithmetic into MachV" {
   let lowered = lower_function(func)
   inspect(lowered.blocks.length(), content="1")
   inspect(lowered.blocks[0].instructions.length(), content="2")
-  inspect(
-    lowered.blocks[0].instructions[0].opcode == Target("x64.iadd"),
-    content="true",
-  )
+  inspect(lowered.blocks[0].instructions[0].opcode == IntAdd, content="true")
   inspect(lowered.blocks[0].instructions[1].opcode == Return, content="true")
   inspect(lowered.verify(), content="()")
 }

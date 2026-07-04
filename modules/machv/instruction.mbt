@@ -6,9 +6,20 @@
 pub(all) enum Opcode {
   Target(String)
   Move
+  IntConst(Int64)
+  FloatConst(Double)
+  IntAdd
+  IntSub
+  IntMul
+  IntCmp(Cond)
+  FloatAdd
+  FloatSub
+  FloatMul
+  Select
   Load(StackSlot)
   Store(StackSlot)
   Call(String)
+  Trap(String)
   Jump(Int)
   Branch(Int, Int)
   Return
