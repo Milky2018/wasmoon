@@ -923,6 +923,18 @@ test "lower ref conversion copies through native linear fast path" {
 }
 
 ///|
+test "pure if rejects trapping i31 get in branch expression" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [LocalGet(0), If(Value(I32), [I32Const(7)], [RefNull(RefNullI31), I31GetS])],
+    "if_i31_trap_arm",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
+}
+
+///|
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
   let env = EmbeddingEnvironment::new()

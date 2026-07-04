@@ -1058,8 +1058,6 @@ fn push_simple_expr_instr(
     F32ReinterpretI32 => push_unary_opcode_as(builder, expr_stack, F32, Bitcast)
     F64ReinterpretI64 => push_unary_opcode_as(builder, expr_stack, F64, Bitcast)
     RefI31 => push_i31_new(builder, expr_stack)
-    I31GetS => push_i31_get(builder, expr_stack, true)
-    I31GetU => push_i31_get(builder, expr_stack, false)
     AnyConvertExtern | ExternConvertAny =>
       push_unary_opcode(builder, expr_stack, Copy)
     Select | SelectTyped(_) => push_select(builder, expr_stack)
