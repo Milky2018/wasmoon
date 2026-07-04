@@ -287,6 +287,40 @@ test "emit AArch64 wide integer constants" {
 }
 
 ///|
+test "emit AArch64 integer division bytes" {
+  let func = @machv.Function::new("int_div")
+  let entry = func.new_block()
+  let signed_div = func.new_inst(IntDiv(true))
+  signed_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  signed_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  signed_div.add_operand(
+    @machv.Operand::def(Physical({ index: 2, class: Int })),
+  )
+  entry.append(signed_div)
+  let unsigned_div = func.new_inst(IntDiv(false))
+  unsigned_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  unsigned_div.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  unsigned_div.add_operand(
+    @machv.Operand::def(Physical({ index: 3, class: Int })),
+  )
+  entry.append(unsigned_div)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[2, 12, 193, 154, 67, 8, 193, 154, 192, 3, 95, 214]",
+  )
+}
+
+///|
 test "emit AArch64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()

@@ -979,6 +979,21 @@ fn write_aarch64_inst_bytes(
     IntAdd => emit_aarch64_int_add(object, inst)
     IntSub => emit_aarch64_int_binop3(object, inst, 0xcb000000, "sub")
     IntMul => emit_aarch64_int_mul(object, inst)
+    IntDiv(signed) =>
+      emit_aarch64_int_binop3(
+        object,
+        inst,
+        if signed {
+          0x9ac00c00
+        } else {
+          0x9ac00800
+        },
+        if signed {
+          "sdiv"
+        } else {
+          "udiv"
+        },
+      )
     IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
