@@ -11,6 +11,7 @@ import {
   "Milky2018/wasmoon/vcode/emit",
   "Milky2018/wasmoon/vcode/isa",
   "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
   "Milky2018/wasmoon/vcode/lower",
   "Milky2018/wasmoon/vcode/regalloc",

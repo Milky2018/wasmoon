@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/jit"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/vcode",
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
   "Milky2018/wasmoon_jit/jit_ffi",
   "moonbitlang/core/debug",
@@ -61,13 +62,13 @@ pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
 
 pub fn gc_end_frame(Int64) -> Unit
 
-pub fn gc_set_heap(Int64, CHeap) -> Unit
+pub fn gc_set_heap(Int64, @wasmoon_jit.CHeap) -> Unit
 
 pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
 
 pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
 
-pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
+pub fn gc_setup(@wasmoon_jit.CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise @wasmoon_jit.GCSetupError
 
 pub fn gc_teardown(Int64) -> Unit
 
@@ -246,20 +247,6 @@ pub fn untag_funcref_ptr(Int64) -> Int64
 pub fn value_to_i64(@types.Value) -> Int64
 
 // Errors
-pub(all) suberror CHeapError {
-  OutOfBoundsArrayAccess
-  NullReference
-  OutOfMemory
-}
-
-pub suberror GCSetupError {
-  MissingJITContext
-  InvalidFuncCount(num_funcs~ : Int)
-  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
-  MissingFunctionTableContext(num_funcs~ : Int)
-} derive(@debug.Debug)
-pub impl Show for GCSetupError
-
 pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int)
   UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
@@ -289,40 +276,6 @@ pub struct BacktraceFrame {
   offset : Int64
   func_idx : Int
 }
-
-pub struct CHeap {
-  ptr : Int64
-} derive(@debug.Debug)
-pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
-pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
-pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
-pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
-pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
-pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
-pub fn CHeap::array_len(Self, Int) -> Int
-pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
-pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
-pub fn CHeap::free(Self) -> Unit
-pub fn CHeap::get_barrier_writes(Self) -> Int
-pub fn CHeap::get_base(Self) -> Int64
-pub fn CHeap::get_capacity(Self) -> Int64
-pub fn CHeap::get_kind(Self, Int) -> Int
-pub fn CHeap::get_object_count(Self) -> Int
-pub fn CHeap::get_offset(Self, Int) -> Int
-pub fn CHeap::get_ptr(Self) -> Int64
-pub fn CHeap::get_size(Self) -> Int64
-pub fn CHeap::get_total_allocations(Self) -> Int
-pub fn CHeap::get_total_collections(Self) -> Int
-pub fn CHeap::get_type_idx(Self, Int) -> Int
-pub fn CHeap::get_usage_ratio(Self) -> Double
-pub fn CHeap::is_array(Self, Int) -> Bool
-pub fn CHeap::is_struct(Self, Int) -> Bool
-pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::new(capacity? : Int) -> Self
-pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
-pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
-pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
-pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
 
 pub(all) struct CallCounter {
   counts : Map[Int, Int]
@@ -625,6 +578,11 @@ pub struct WasmTrapFrame {
 }
 
 // Type aliases
+pub using @wasmoon_jit {type CHeap}
+
+pub using @wasmoon_jit {type CHeapError}
+
+pub using @wasmoon_jit {type GCSetupError}
 
 // Traits
 pub trait DynamicArgs {

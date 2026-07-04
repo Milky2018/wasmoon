@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/runtime"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon_jit",
   "moonbitlang/core/debug",
 }
 
@@ -362,7 +363,7 @@ pub struct Store {
   tag_owners : Array[FuncOwner]
   exns : Array[ExnInstance]
   heap : MarkSweepHeap
-  mut c_heap : @jit.CHeap?
+  mut c_heap : @wasmoon_jit.CHeap?
   mut module_types : Array[@types.SubType]
   mut module_rec_groups : Array[Int]
   wrapped_externs : Array[@types.Value]

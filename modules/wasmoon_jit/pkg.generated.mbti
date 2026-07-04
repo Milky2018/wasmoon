@@ -5,6 +5,7 @@ import {
   "Milky2018/machv",
   "Milky2018/machv_emit",
   "Milky2018/milkir",
+  "Milky2018/wasm_core/types",
   "moonbitlang/core/debug",
 }
 
@@ -15,6 +16,10 @@ pub fn decode_funcref_idx(Int64) -> Int?
 
 pub fn decode_gc_heap_ref(Int64) -> Int?
 
+pub fn decode_heap_ref(Int64) -> Int
+
+pub fn decode_i31(Int64) -> Int
+
 pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn encode_externref(Int) -> Int64
@@ -23,9 +28,63 @@ pub fn encode_funcref_idx(Int) -> Int64
 
 pub fn encode_gc_heap_ref(Int) -> Int64
 
+pub fn encode_heap_ref(Int) -> Int64
+
+pub fn encode_i31(Int) -> Int64
+
 pub fn encode_null_ref() -> Int64
 
+pub fn gc_begin_frame(Int64, Int64) -> Unit
+
+pub fn gc_clear_heap(Int64) -> Unit
+
+pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
+
+pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
+
+pub fn gc_end_frame(Int64) -> Unit
+
+pub fn gc_set_heap(Int64, CHeap) -> Unit
+
+pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
+
+pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
+
+pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
+
+pub fn gc_teardown(Int64) -> Unit
+
+pub fn get_gc_array_copy_ptr() -> Int64
+
+pub fn get_gc_array_fill_ptr() -> Int64
+
+pub fn get_gc_array_get_ptr() -> Int64
+
+pub fn get_gc_array_len_ptr() -> Int64
+
+pub fn get_gc_array_new_ptr() -> Int64
+
+pub fn get_gc_array_set_ptr() -> Int64
+
+pub fn get_gc_ref_cast_ptr() -> Int64
+
+pub fn get_gc_ref_test_ptr() -> Int64
+
+pub fn get_gc_struct_get_ptr() -> Int64
+
+pub fn get_gc_struct_new_ptr() -> Int64
+
+pub fn get_gc_struct_set_ptr() -> Int64
+
+pub fn get_gc_type_check_subtype_ptr() -> Int64
+
+pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
+
 pub fn is_funcref_ptr(Int64) -> Bool
+
+pub fn is_i31(Int64) -> Bool
+
+pub fn is_null(Int64) -> Bool
 
 pub fn is_null_ref(Int64) -> Bool
 
@@ -39,11 +98,29 @@ pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emi
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
+pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
+
 pub fn tag_funcref_ptr(Int64) -> Int64
 
 pub fn untag_funcref_ptr(Int64) -> Int64
 
+pub fn value_to_i64(@types.Value) -> Int64
+
 // Errors
+pub(all) suberror CHeapError {
+  OutOfBoundsArrayAccess
+  NullReference
+  OutOfMemory
+}
+
+pub suberror GCSetupError {
+  MissingJITContext
+  InvalidFuncCount(num_funcs~ : Int)
+  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
+  MissingFunctionTableContext(num_funcs~ : Int)
+} derive(@debug.Debug)
+pub impl Show for GCSetupError
+
 pub suberror JitPipelineError {
   PipelineFailure(message~ : String)
 } derive(Eq, @debug.Debug)
@@ -55,6 +132,40 @@ pub suberror LinkError {
 pub impl Show for LinkError
 
 // Types and methods
+pub struct CHeap {
+  ptr : Int64
+} derive(@debug.Debug)
+pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
+pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
+pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
+pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
+pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
+pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
+pub fn CHeap::array_len(Self, Int) -> Int
+pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
+pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn CHeap::free(Self) -> Unit
+pub fn CHeap::get_barrier_writes(Self) -> Int
+pub fn CHeap::get_base(Self) -> Int64
+pub fn CHeap::get_capacity(Self) -> Int64
+pub fn CHeap::get_kind(Self, Int) -> Int
+pub fn CHeap::get_object_count(Self) -> Int
+pub fn CHeap::get_offset(Self, Int) -> Int
+pub fn CHeap::get_ptr(Self) -> Int64
+pub fn CHeap::get_size(Self) -> Int64
+pub fn CHeap::get_total_allocations(Self) -> Int
+pub fn CHeap::get_total_collections(Self) -> Int
+pub fn CHeap::get_type_idx(Self, Int) -> Int
+pub fn CHeap::get_usage_ratio(Self) -> Double
+pub fn CHeap::is_array(Self, Int) -> Bool
+pub fn CHeap::is_struct(Self, Int) -> Bool
+pub fn CHeap::is_valid(Self, Int) -> Bool
+pub fn CHeap::new(capacity? : Int) -> Self
+pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
+pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
+pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
+pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
+
 pub(all) struct CwasmArtifact {
   version : Int
   code : Array[Int]
