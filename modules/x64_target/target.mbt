@@ -342,8 +342,8 @@ fn lower_int_div(
   div.add_operand(@machv.Operand::use_reg(Virtual(lhs_tmp)))
   div.add_operand(@machv.Operand::use_reg(Virtual(rhs_tmp)))
   div.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
-  // TODO(x64_target): make the RDX side effect a first-class MachV tied/clobber
-  // operand once regalloc models clobbers during live-range construction.
+  // TODO(x64_target): make the RDX side effect a first-class tied physical-def
+  // operand instead of a fake virtual result.
   let rdx_tmp = out.new_vreg(Int)
   div.add_operand(@machv.Operand::def(Virtual(rdx_tmp)))
   add_fixed_constraint(div, 0, int_reg(0))
@@ -380,8 +380,8 @@ fn lower_int_rem(
   rem.add_operand(@machv.Operand::use_reg(Virtual(rhs_tmp)))
   let rdx_tmp = out.new_vreg(Int)
   rem.add_operand(@machv.Operand::def(Virtual(rdx_tmp)))
-  // TODO(x64_target): make the RAX quotient side effect a first-class MachV
-  // tied/clobber operand once regalloc models clobbers during live ranges.
+  // TODO(x64_target): make the RAX quotient side effect a first-class tied
+  // physical-def operand instead of a fake virtual result.
   rem.add_operand(@machv.Operand::def(Virtual(lhs_tmp)))
   add_fixed_constraint(rem, 0, int_reg(0))
   add_fixed_constraint(rem, 1, int_reg(8))

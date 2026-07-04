@@ -191,6 +191,20 @@ pub fn LiveRange::overlaps(
 }
 
 ///|
+fn LiveRange::is_live_across(
+  self : LiveRange,
+  point : ProgramPoint,
+  block_order : Array[Int],
+) -> Bool {
+  match (self.start(), self.end()) {
+    (Some(start), Some(end)) =>
+      start.compare_with_order(point, block_order) < 0 &&
+      point.compare_with_order(end, block_order) < 0
+    _ => false
+  }
+}
+
+///|
 pub fn LiveRange::start(self : LiveRange) -> ProgramPoint? {
   if self.ranges.length() == 0 {
     None

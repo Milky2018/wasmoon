@@ -132,6 +132,30 @@ test "allocate_function rejects unsatisfied projected fixed constraint" {
 }
 
 ///|
+test "allocate_function avoids projected clobbered registers" {
+  let func = @machv.Function::new("clobber")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let def_inst = func.new_inst(Target("def"))
+  def_inst.add_operand(@machv.Operand::def(Virtual(v0)))
+  entry.append(def_inst)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let call_inst = func.new_inst(Target("call"))
+  call_inst.add_clobber(p0)
+  entry.append(call_inst)
+  let use_inst = func.new_inst(Target("use"))
+  use_inst.add_operand(@machv.Operand::use_reg(Virtual(v0)))
+  entry.append(use_inst)
+  let allocation = allocate_function(func, [p0, p1])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) ==
+    Some(Reg({ id: 1, class: Int })),
+    content="true",
+  )
+}
+
+///|
 test "apply inserts reloads and spills for stack allocated operands" {
   let func = @machv.Function::new("reload_spill")
   let entry = func.new_block()

@@ -12,6 +12,7 @@ pub suberror VerifyError {
     location~ : Location
   )
   RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
+  ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
 }
 
 ///|
@@ -49,6 +50,27 @@ fn verify_range_assignment(
 }
 
 ///|
+fn verify_clobber_safety(
+  program : Program,
+  range : LiveRange,
+  preg : PhysicalReg,
+  block_order : Array[Int],
+) -> Unit raise VerifyError {
+  for block in program.blocks {
+    for inst_index, inst in block.instructions {
+      let point = ProgramPoint::new(block.id, inst_index)
+      if range.is_live_across(point, block_order) {
+        for clobber in inst.clobbers {
+          if clobber == preg {
+            raise ClobberedRegister(vreg=range.vreg, preg~)
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
 pub fn verify_allocation(
   program : Program,
   allocation : Allocation,
@@ -56,7 +78,12 @@ pub fn verify_allocation(
   let ranges = build_live_ranges(program)
   for range in ranges.ranges {
     match allocation.location_of(range.vreg) {
-      Some(location) => verify_range_assignment(range, location)
+      Some(location) => {
+        verify_range_assignment(range, location)
+        if location is Reg(preg) {
+          verify_clobber_safety(program, range, preg, ranges.block_order)
+        }
+      }
       None => raise Unassigned(vreg=range.vreg)
     }
   }

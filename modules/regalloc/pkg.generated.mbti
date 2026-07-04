@@ -26,6 +26,7 @@ pub suberror VerifyError {
   FixedConstraintViolation(vreg~ : VirtualReg, required~ : PhysicalReg, actual~ : Location)
   OverlappingAllocation(left~ : VirtualReg, right~ : VirtualReg, location~ : Location)
   RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
+  ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
 }
 
 // Types and methods

@@ -13,6 +13,53 @@ fn compatible_regs(
 }
 
 ///|
+fn contains_reg(regs : Array[PhysicalReg], preg : PhysicalReg) -> Bool {
+  for reg in regs {
+    if reg == preg {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn is_clobbered_while_live(
+  program : Program,
+  range : LiveRange,
+  preg : PhysicalReg,
+  block_order : Array[Int],
+) -> Bool {
+  for block in program.blocks {
+    for inst_index, inst in block.instructions {
+      let point = ProgramPoint::new(block.id, inst_index)
+      if range.is_live_across(point, block_order) {
+        for clobber in inst.clobbers {
+          if clobber == preg {
+            return true
+          }
+        }
+      }
+    }
+  }
+  false
+}
+
+///|
+fn available_regs_for_range(
+  program : Program,
+  range : LiveRange,
+  block_order : Array[Int],
+) -> Array[PhysicalReg] {
+  let out : Array[PhysicalReg] = []
+  for preg in compatible_regs(program.physical_regs, range.vreg.class) {
+    if !is_clobbered_while_live(program, range, preg, block_order) {
+      out.push(preg)
+    }
+  }
+  out
+}
+
+///|
 fn expire_old_intervals(
   active : Array[(LiveRange, PhysicalReg)],
   current : LiveRange,
@@ -92,6 +139,7 @@ fn range_end_order(range : LiveRange, block_order : Array[Int]) -> Int {
 fn choose_spill_candidate(
   active : Array[(LiveRange, PhysicalReg)],
   current : LiveRange,
+  allowed_regs : Array[PhysicalReg],
   block_order : Array[Int],
 ) -> Int? {
   let mut best_index = -1
@@ -103,7 +151,9 @@ fn choose_spill_candidate(
       Some(required) => preg == required
       None => true
     }
-    if same_required_reg && range.vreg.class == current.vreg.class {
+    if same_required_reg &&
+      range.vreg.class == current.vreg.class &&
+      contains_reg(allowed_regs, preg) {
       let end = range_end_order(range, block_order)
       if end > best_end {
         best_end = end
@@ -130,7 +180,7 @@ pub fn allocate(program : Program) -> Allocation {
   let active : Array[(LiveRange, PhysicalReg)] = []
   for interval in ranges.ranges {
     expire_old_intervals(active, interval, ranges.block_order)
-    let regs = compatible_regs(program.physical_regs, interval.vreg.class)
+    let regs = available_regs_for_range(program, interval, ranges.block_order)
     match choose_free_reg(regs, active, interval.get_fixed_reg()) {
       Some(preg) => {
         allocation.assign(interval.vreg, Reg(preg))
@@ -138,7 +188,8 @@ pub fn allocate(program : Program) -> Allocation {
         active.push((interval, preg))
       }
       None =>
-        match choose_spill_candidate(active, interval, ranges.block_order) {
+        match
+          choose_spill_candidate(active, interval, regs, ranges.block_order) {
           Some(evicted_index) => {
             let (evicted, preg) = active.remove(evicted_index)
             allocation.assign(evicted.vreg, spill_slot_for(allocation, evicted))

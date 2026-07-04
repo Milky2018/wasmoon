@@ -126,6 +126,27 @@ test "linear scan honors fixed register constraints by evicting active range" {
 }
 
 ///|
+test "linear scan avoids registers clobbered while range is live" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0, r1])
+  let block = Block::new(0)
+  let def_inst = Instruction::new(0)
+  def_inst.add_operand(Operand::def(v0))
+  block.append(def_inst)
+  let call_inst = Instruction::new(1)
+  call_inst.add_clobber(r0)
+  block.append(call_inst)
+  let use_inst = Instruction::new(2)
+  use_inst.add_operand(Operand::use_reg(v0))
+  block.append(use_inst)
+  program.add_block(block)
+  let allocation = allocate(program)
+  inspect(allocation.location_of(v0) == Some(Reg(r1)), content="true")
+}
+
+///|
 test "verify_allocation accepts allocator output" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
@@ -137,6 +158,33 @@ test "verify_allocation accepts allocator output" {
   program.add_block(block)
   let allocation = allocate(program)
   inspect(verify_allocation(program, allocation), content="()")
+}
+
+///|
+test "verify_allocation rejects clobbered live register" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let program = Program::new([r0, r1])
+  let block = Block::new(0)
+  let def_inst = Instruction::new(0)
+  def_inst.add_operand(Operand::def(v0))
+  block.append(def_inst)
+  let call_inst = Instruction::new(1)
+  call_inst.add_clobber(r0)
+  block.append(call_inst)
+  let use_inst = Instruction::new(2)
+  use_inst.add_operand(Operand::use_reg(v0))
+  block.append(use_inst)
+  program.add_block(block)
+  let allocation = Allocation::new()
+  allocation.assign(v0, Reg(r0))
+  try verify_allocation(program, allocation) catch {
+    ClobberedRegister(_) => inspect("clobber", content="clobber")
+    _ => fail("unexpected verifier error")
+  } noraise {
+    _ => fail("expected clobber")
+  }
 }
 
 ///|
