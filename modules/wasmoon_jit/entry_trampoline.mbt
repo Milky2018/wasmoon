@@ -98,6 +98,20 @@ fn build_entry_trampoline_milkir(
 }
 
 ///|
+pub fn can_use_reusable_entry_trampoline(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+) -> Bool {
+  // TODO(ISS-022): expand this gate as the reusable entry trampoline gains full
+  // production ABI coverage. Today it is intentionally limited to the scalar
+  // register-only signature covered by the reusable MilkIR/MachV pipeline test.
+  if param_types.length() != 2 || result_types.length() != 1 {
+    return false
+  }
+  param_types[0] is I64 && param_types[1] is I64 && result_types[0] is I64
+}
+
+///|
 pub fn plan_entry_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],

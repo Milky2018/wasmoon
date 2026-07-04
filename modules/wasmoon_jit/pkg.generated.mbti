@@ -28,6 +28,8 @@ pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 pub fn c_jit_write_u32(Int64, Int) -> Unit
 
+pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
+
 pub fn decode_externref(Int64) -> Int?
 
 pub fn decode_funcref_idx(Int64) -> Int?

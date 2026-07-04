@@ -847,20 +847,6 @@ pub fn get_spectest_print_char_ptr() -> Int64 {
   @wasmoon_jit.get_spectest_print_char_ptr()
 }
 
-///|
-fn can_use_reusable_entry_trampoline(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
-) -> Bool {
-  // TODO(ISS-022): expand this gate as the reusable entry trampoline gains full
-  // production ABI coverage. Today it is intentionally limited to the scalar
-  // register-only signature covered by the reusable MilkIR/MachV pipeline test.
-  if param_types.length() != 2 || result_types.length() != 1 {
-    return false
-  }
-  param_types[0] is I64 && param_types[1] is I64 && result_types[0] is I64
-}
-
 // ============ Multi-value Return Support ============
 
 ///|
@@ -878,7 +864,7 @@ fn JITContext::call_multi_return(
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
   let num_params = param_types.length() // Number of actual WASM parameters
-  let use_reusable_trampoline = can_use_reusable_entry_trampoline(
+  let use_reusable_trampoline = @wasmoon_jit.can_use_reusable_entry_trampoline(
     param_types, result_types,
   )
 

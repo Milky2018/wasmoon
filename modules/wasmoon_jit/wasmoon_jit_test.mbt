@@ -246,6 +246,18 @@ test "entry trampoline reports TODO for V128 lane packing" {
 }
 
 ///|
+test "entry trampoline production gate is conservative" {
+  inspect(can_use_reusable_entry_trampoline([I64, I64], [I64]), content="true")
+  inspect(
+    can_use_reusable_entry_trampoline([I64, I64, I64], [I64]),
+    content="false",
+  )
+  inspect(can_use_reusable_entry_trampoline([F64], [F64]), content="false")
+  inspect(can_use_reusable_entry_trampoline([V128], []), content="false")
+  inspect(can_use_reusable_entry_trampoline([I64], [I64, I64]), content="false")
+}
+
+///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([F64, F64], [F64])
   let milk = @milkir.Function::new("fadd64", signature)
