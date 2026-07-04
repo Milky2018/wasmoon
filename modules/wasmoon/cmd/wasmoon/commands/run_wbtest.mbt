@@ -190,6 +190,73 @@ test "compile api: reusable pipeline lowers memory.size for non-zero memory" {
 }
 
 ///|
+test "compile api: reusable pipeline lowers non-zero memory load store" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [
+        I32Const(0),
+        I32Const(7),
+        I32Store(1, 2, 0),
+        I32Const(0),
+        I32Load(1, 2, 0),
+      ],
+      "memory1_roundtrip",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  guard compiled is Some(reusable) else {
+    fail("non-zero memory load/store did not compile through reusable pipeline")
+  }
+  inspect(reusable.entry.code.length() > 0, content="true")
+  inspect(reusable.milk_dump.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(
+    reusable.milk_dump.contains("trap \"memory out of bounds\""),
+    content="true",
+  )
+}
+
+///|
+test "compile api: reusable pipeline rejects memory64 load for now" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [I64Const(0L), I32Load(0, 2, 0)],
+      "memory64_load",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+    ],
+  }
+  let isa = @isa.ISA::current()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    isa,
+    current_emit_target(isa),
+    2,
+  )
+  inspect(compiled is None, content="true")
+}
+
+///|
 test "compile api: parse failure emits failed stage" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(Bytes::from_array([0x00, 0x01, 0x02]), on_progress=fn(

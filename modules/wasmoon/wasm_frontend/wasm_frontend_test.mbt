@@ -257,7 +257,10 @@ test "lower globals through native VMContext loads and stores" {
     ],
   }
   let env = EmbeddingEnvironment::new()
-  let func = lower_function(env, mod_, 0)
+  let lowered = try_lower_native_function(env, mod_, 0)
+  guard lowered is Some(func) else {
+    fail("global roundtrip did not lower natively")
+  }
   let text = func.print()
   inspect(text.contains("load_ptr.i64"), content="true")
   inspect(text.contains("store_ptr.i32"), content="true")
@@ -825,6 +828,55 @@ test "lower non-zero memory.size through native descriptor loads" {
   inspect(text.contains("ushr"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
+}
+
+///|
+test "lower non-zero memory load store with explicit bounds check" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [
+        I32Const(0),
+        I32Const(7),
+        I32Store(1, 2, 0),
+        I32Const(0),
+        I32Load(1, 2, 0),
+      ],
+      "memory1_roundtrip",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("trap \"memory out of bounds\""), content="true")
+  inspect(text.contains("load_ptr.i32"), content="true")
+  inspect(text.contains("store_ptr.i32"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "native frontend rejects memory64 load until CFG fixups are complete" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32],
+      [I64Const(0L), I32Load(0, 2, 0)],
+      "memory64_load",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let lowered = try_lower_native_function(env, mod_, 0)
+  inspect(lowered is None, content="true")
 }
 
 ///|

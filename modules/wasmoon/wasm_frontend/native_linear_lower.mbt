@@ -38,6 +38,15 @@ const FUNC_TABLE_ENTRY_STRIDE : Int = 8
 const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
 
 ///|
+fn type_byte_size(ty : @milkir.Type) -> Int {
+  match ty {
+    I32 | F32 => 4
+    I64 | F64 | Ptr | Ref => 8
+    V128 => 16
+  }
+}
+
+///|
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
   match ty {
     I32 => Some(builder.iconst_i32(0))
@@ -647,20 +656,43 @@ fn memory_index_type(
 }
 
 ///|
-fn push_memory_size(
+fn load_memory_base(
   builder : @milkir.IRBuilder,
-  stack : Array[@milkir.Value],
-  vmctx : @milkir.Value?,
-  memory_types : Array[@types.MemoryType],
+  context : @milkir.Value,
   memidx : Int,
-) -> Bool {
-  guard vmctx is Some(context) else { return false }
-  guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
-    return false
-  }
+) -> @milkir.Value {
   // TODO(ISS-023): source VMContext memory layout from the reusable embedding
   // ABI instead of copy-first constants from legacy VCode lowering.
-  let size_bytes = if memidx == 0 {
+  if memidx == 0 {
+    builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_MEMORY0_BASE_OFFSET.to_int64()),
+    )
+  } else {
+    let memories_ptr = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_MEMORIES_OFFSET.to_int64()),
+    )
+    let memory_ptr = builder.load_ptr(
+      I64,
+      memories_ptr,
+      builder.iconst_i64((memidx * 8).to_int64()),
+    )
+    builder.load_ptr(I64, memory_ptr, builder.iconst_i64(0L))
+  }
+}
+
+///|
+fn load_memory_size_bytes(
+  builder : @milkir.IRBuilder,
+  context : @milkir.Value,
+  memidx : Int,
+) -> @milkir.Value {
+  // TODO(ISS-023): source VMContext memory layout from the reusable embedding
+  // ABI instead of copy-first constants from legacy VCode lowering.
+  if memidx == 0 {
     builder.load_ptr(
       I64,
       context,
@@ -683,6 +715,21 @@ fn push_memory_size(
       builder.iconst_i64(MEMORY_CURRENT_LENGTH_OFFSET.to_int64()),
     )
   }
+}
+
+///|
+fn push_memory_size(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  memory_types : Array[@types.MemoryType],
+  memidx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
+    return false
+  }
+  let size_bytes = load_memory_size_bytes(builder, context, memidx)
   let page_shift = builder.iconst_i64(
     memory_types[memidx].page_size_log2.to_int64(),
   )
@@ -1189,29 +1236,17 @@ fn push_memory_base(
   vmctx : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value? {
-  if memidx != 0 {
-    // TODO(ISS-023): move the full multi-memory descriptor layout into the
-    // reusable embedding ABI before lowering non-zero memory bases natively.
-    None
-  } else {
-    // TODO(ISS-023): source VMContext memory0 layout from the reusable
-    // embedding ABI instead of copy-first constants from legacy VCode lowering.
-    Some(
-      builder.load_ptr(
-        I64,
-        vmctx,
-        builder.iconst_i64(VMCTX_MEMORY0_BASE_OFFSET.to_int64()),
-      ),
-    )
-  }
+  Some(load_memory_base(builder, vmctx, memidx))
 }
 
 ///|
-fn extend_memory32_addr(
+fn extend_memory_addr(
   builder : @milkir.IRBuilder,
+  memory_types : Array[@types.MemoryType],
+  memidx : Int,
   addr : @milkir.Value,
 ) -> @milkir.Value? {
-  if addr.ty == I64 {
+  if memory_types[memidx].is_memory64 || addr.ty == I64 {
     Some(addr)
   } else {
     emit_op(builder, I64, Uextend, [addr])
@@ -1219,21 +1254,78 @@ fn extend_memory32_addr(
 }
 
 ///|
-fn memory32_effective_addr(
+fn push_memory_bounds_check(
+  builder : @milkir.IRBuilder,
+  memory_types : Array[@types.MemoryType],
+  memidx : Int,
+  addr_i64 : @milkir.Value,
+  addr_plus_offset : @milkir.Value,
+  memory_size : @milkir.Value,
+  access_size : Int,
+) -> Bool {
+  let size_value = builder.iconst_i64(access_size.to_int64())
+  let end_addr = builder.iadd(addr_plus_offset, size_value)
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  if memory_types[memidx].is_memory64 {
+    guard emit_op(builder, I32, Icmp(Uge), [addr_plus_offset, addr_i64])
+      is Some(no_overflow1) else {
+      return false
+    }
+    let check2_block = builder.create_block()
+    builder.brnz(no_overflow1, check2_block, trap_block)
+    builder.switch_to_block(check2_block)
+    guard emit_op(builder, I32, Icmp(Uge), [end_addr, addr_plus_offset])
+      is Some(no_overflow2) else {
+      return false
+    }
+    let range_block = builder.create_block()
+    builder.brnz(no_overflow2, range_block, trap_block)
+    builder.switch_to_block(range_block)
+  }
+  guard emit_op(builder, I32, Icmp(Ule), [end_addr, memory_size])
+    is Some(in_bounds) else {
+    return false
+  }
+  builder.brnz(in_bounds, continue_block, trap_block)
+  builder.switch_to_block(trap_block)
+  builder.trap("memory out of bounds")
+  builder.switch_to_block(continue_block)
+  true
+}
+
+///|
+fn memory_effective_addr(
   builder : @milkir.IRBuilder,
   vmctx : @milkir.Value,
+  memory_types : Array[@types.MemoryType],
   memidx : Int,
   wasm_addr : @milkir.Value,
   offset : Int64,
+  access_size : Int,
 ) -> @milkir.Value? {
+  if memory_types[memidx].is_memory64 {
+    // TODO(ISS-023): enable memory64 load/store after machv_emit can reliably
+    // patch the multi-block overflow-check CFG produced by this frontend.
+    return None
+  }
   guard push_memory_base(builder, vmctx, memidx) is Some(base) else {
     return None
   }
-  guard extend_memory32_addr(builder, wasm_addr) is Some(addr_i64) else {
+  guard extend_memory_addr(builder, memory_types, memidx, wasm_addr)
+    is Some(addr_i64) else {
     return None
   }
   let offset_value = builder.iconst_i64(offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_value)
+  if memidx != 0 || memory_types[memidx].is_memory64 {
+    let memory_size = load_memory_size_bytes(builder, vmctx, memidx)
+    if !push_memory_bounds_check(
+        builder, memory_types, memidx, addr_i64, addr_plus_offset, memory_size, access_size,
+      ) {
+      return None
+    }
+  }
   Some(builder.iadd(base, addr_plus_offset))
 }
 
@@ -1248,15 +1340,19 @@ fn push_memory_load(
   offset : Int64,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  if memidx != 0 ||
-    memidx >= mod_.memories.length() ||
-    mod_.memories[memidx].is_memory64 {
-    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
-    // for memory64 and non-zero memories into the native MilkIR frontend.
+  if memidx < 0 || memidx >= mod_.memories.length() {
     return false
   }
   guard pop_value(stack) is Some(wasm_addr) else { return false }
-  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+  guard memory_effective_addr(
+      builder,
+      context,
+      mod_.memories,
+      memidx,
+      wasm_addr,
+      offset,
+      type_byte_size(ty),
+    )
     is Some(effective_addr) else {
     return false
   }
@@ -1277,15 +1373,19 @@ fn push_memory_load_narrow(
   offset : Int64,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  if memidx != 0 ||
-    memidx >= mod_.memories.length() ||
-    mod_.memories[memidx].is_memory64 {
-    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
-    // for memory64 and non-zero narrow memory loads into the native frontend.
+  if memidx < 0 || memidx >= mod_.memories.length() {
     return false
   }
   guard pop_value(stack) is Some(wasm_addr) else { return false }
-  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+  guard memory_effective_addr(
+      builder,
+      context,
+      mod_.memories,
+      memidx,
+      wasm_addr,
+      offset,
+      bits / 8,
+    )
     is Some(effective_addr) else {
     return false
   }
@@ -1312,16 +1412,20 @@ fn push_memory_store(
   offset : Int64,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  if memidx != 0 ||
-    memidx >= mod_.memories.length() ||
-    mod_.memories[memidx].is_memory64 {
-    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
-    // for memory64 and non-zero memories into the native MilkIR frontend.
+  if memidx < 0 || memidx >= mod_.memories.length() {
     return false
   }
   guard pop_value(stack) is Some(value) else { return false }
   guard pop_value(stack) is Some(wasm_addr) else { return false }
-  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+  guard memory_effective_addr(
+      builder,
+      context,
+      mod_.memories,
+      memidx,
+      wasm_addr,
+      offset,
+      type_byte_size(ty),
+    )
     is Some(effective_addr) else {
     return false
   }
@@ -1340,16 +1444,20 @@ fn push_memory_store_narrow(
   offset : Int64,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  if memidx != 0 ||
-    memidx >= mod_.memories.length() ||
-    mod_.memories[memidx].is_memory64 {
-    // TODO(ISS-023): copy the legacy FuncEnvironment bounds-check lowering
-    // for memory64 and non-zero narrow memory stores into the native frontend.
+  if memidx < 0 || memidx >= mod_.memories.length() {
     return false
   }
   guard pop_value(stack) is Some(value) else { return false }
   guard pop_value(stack) is Some(wasm_addr) else { return false }
-  guard memory32_effective_addr(builder, context, memidx, wasm_addr, offset)
+  guard memory_effective_addr(
+      builder,
+      context,
+      mod_.memories,
+      memidx,
+      wasm_addr,
+      offset,
+      bits / 8,
+    )
     is Some(effective_addr) else {
     return false
   }
