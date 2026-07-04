@@ -151,6 +151,39 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
 }
 
 ///|
+test "plan scalar entry trampoline through reusable JIT pipeline" {
+  let params : Array[@types.ValueType] = [I64, I64]
+  let results : Array[@types.ValueType] = [I64]
+  let plan = plan_entry_trampoline_for_target(params, results, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  debug_inspect(plan.target, content="X64")
+  inspect(plan.entry_symbol, content="entry_trampoline")
+  inspect(plan.object.code.length() > 0, content="true")
+  let artifact = try! CwasmArtifact::from_jit_plan(
+    plan,
+    RuntimeSymbolResolver::new(),
+    11,
+  )
+  let restored = try! @cwasm.deserialize(artifact.serialize())
+  inspect(restored.functions[0].func_idx, content="11")
+  inspect(restored.functions[0].name, content="entry_trampoline")
+  inspect(restored.functions[0].code.length() > 0, content="true")
+}
+
+///|
+test "entry trampoline reports TODO for V128 lane packing" {
+  let params : Array[@types.ValueType] = [V128]
+  let results : Array[@types.ValueType] = []
+  try plan_entry_trampoline_for_target(params, results, X64) catch {
+    PipelineFailure(message=msg) =>
+      inspect(msg.contains("TODO(ISS-022)"), content="true")
+  } noraise {
+    _ => fail("expected V128 trampoline planning to report TODO")
+  }
+}
+
+///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([F64, F64], [F64])
   let milk = @milkir.Function::new("fadd64", signature)

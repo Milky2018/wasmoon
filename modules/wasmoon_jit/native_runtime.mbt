@@ -1,9 +1,10 @@
 /// Native JIT runtime primitives shared by Wasmoon integration code.
 ///
 /// This module intentionally owns only Wasmoon-independent FFI wrappers and
-/// managed native handles. The higher-level `JITContext` call trampoline still
-/// lives in `Milky2018/wasmoon/jit` until it stops depending on legacy vcode
-/// emission.
+/// managed native handles. Entry trampoline planning now lives in
+/// `wasmoon_jit`; the production `JITContext` wrapper remains in
+/// `Milky2018/wasmoon/jit` until its call path switches to that reusable
+/// trampoline planner.
 
 ///|
 pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}

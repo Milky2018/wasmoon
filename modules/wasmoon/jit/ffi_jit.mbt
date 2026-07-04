@@ -111,8 +111,9 @@ pub type MemoryInfo = @wasmoon_jit.MemoryInfo
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(ISS-022): move this context into `wasmoon_jit` after entry-trampoline
-/// generation no longer depends on legacy `wasmoon/vcode/emit`.
+/// TODO(ISS-022): switch `call_multi_return` to
+/// `wasmoon_jit.plan_entry_trampoline_for_target`, then move this context into
+/// `wasmoon_jit`.
 /// Uses Standard on-demand loading from vmctx:
 /// +0: memory0 descriptor, +8: memory0_base, +16: memory0_size,
 /// +24: func_table, +32: table0_base.
