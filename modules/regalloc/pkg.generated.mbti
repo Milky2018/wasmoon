@@ -20,6 +20,8 @@ pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> A
 
 pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 
+pub fn eviction_cutoff(Int?, Int?) -> Int?
+
 pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
 
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
@@ -33,6 +35,10 @@ pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
+
+pub fn should_take_eviction_candidate(Int?, PhysicalReg?, Int, PhysicalReg, PhysicalReg?) -> Bool
+
+pub fn should_take_split_candidate(Int?, ProgramPoint?, Int, ProgramPoint, Array[Int]) -> Bool
 
 pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
 

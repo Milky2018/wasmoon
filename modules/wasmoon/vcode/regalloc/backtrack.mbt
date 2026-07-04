@@ -16,12 +16,6 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
-/// Check whether two pregs refer to the same hardware register bank + index.
-fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
-  a.index == b.index && reg_class_compatible(a.class, b.class)
-}
-
-///|
 fn backtrack_core_reg_class(class : @abi.RegClass) -> @core_regalloc.RegClass {
   match class {
     Int => Int
@@ -75,6 +69,24 @@ fn backtrack_preg_from_probe(
           }
       }
   }
+}
+
+///|
+fn backtrack_core_point(point : ProgPoint) -> @core_regalloc.ProgramPoint {
+  let pos = match point.pos {
+    Before => 0
+    After => 1
+  }
+  @core_regalloc.ProgramPoint::new(point.block, point.inst * 2 + pos)
+}
+
+///|
+fn backtrack_core_block_order(block_order : FixedArray[Int]) -> Array[Int] {
+  let out : Array[Int] = []
+  for i in 0..<block_order.length() {
+    out.push(block_order[i])
+  }
+  out
 }
 
 ///|
@@ -935,12 +947,9 @@ fn BacktrackingAllocator::try_evict(
     // regalloc2-style high-cost cutoff:
     // when we already have a best candidate (evict/split), stop considering
     // higher-cost registers early.
-    let cutoff = match (best_conflict_cost, best_split_cost) {
-      (Some(a), Some(b)) => Some(if a > b { a } else { b })
-      (Some(a), None) => Some(a)
-      (None, Some(b)) => Some(b)
-      (None, None) => None
-    }
+    let cutoff = @core_regalloc.eviction_cutoff(
+      best_conflict_cost, best_split_cost,
+    )
     let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
       bundle, preg, spans, cutoff, scratch_conflicts,
     )
@@ -951,21 +960,19 @@ fn BacktrackingAllocator::try_evict(
       return (Some(preg), None)
     }
     if first_conflict_point is Some(point) {
-      match (best_split_cost, best_split) {
-        (None, None) => {
-          best_split_cost = Some(max_conflict_weight)
-          best_split = Some((point, preg))
-        }
-        (Some(existing_cost), Some((existing_point, _existing_preg))) =>
-          if max_conflict_weight < existing_cost {
-            best_split_cost = Some(max_conflict_weight)
-            best_split = Some((point, preg))
-          } else if max_conflict_weight == existing_cost &&
-            point.compare_with_order(existing_point, self.block_order) > 0 {
-            best_split_cost = Some(max_conflict_weight)
-            best_split = Some((point, preg))
-          }
-        _ => ()
+      let best_split_point = match best_split {
+        Some((existing_point, _)) => Some(backtrack_core_point(existing_point))
+        None => None
+      }
+      if @core_regalloc.should_take_split_candidate(
+          best_split_cost,
+          best_split_point,
+          max_conflict_weight,
+          backtrack_core_point(point),
+          backtrack_core_block_order(self.block_order),
+        ) {
+        best_split_cost = Some(max_conflict_weight)
+        best_split = Some((point, preg))
       }
     }
 
@@ -973,23 +980,13 @@ fn BacktrackingAllocator::try_evict(
     // Mirrors regalloc2's "lowest conflict cost" selection strategy:
     // - reject pinned / heavier-or-equal conflicts
     // - choose the candidate with minimum maximum conflict spill weight.
-    let mut take_candidate = false
-    match best_conflict_cost {
-      None => take_candidate = true
-      Some(existing_cost) =>
-        if max_conflict_weight < existing_cost {
-          take_candidate = true
-        } else if max_conflict_weight == existing_cost {
-          // Tie-break: prefer the hint register if one is provided.
-          if hint_preg is Some(hint) &&
-            preg_same_bank_and_index(preg, hint) &&
-            best_preg is Some(current_best) &&
-            !preg_same_bank_and_index(current_best, hint) {
-            take_candidate = true
-          }
-        }
-    }
-    if take_candidate {
+    if @core_regalloc.should_take_eviction_candidate(
+        best_conflict_cost,
+        best_preg.map(backtrack_core_preg),
+        max_conflict_weight,
+        backtrack_core_preg(preg),
+        hint_preg.map(backtrack_core_preg),
+      ) {
       best_preg = Some(preg)
       best_conflict_cost = Some(max_conflict_weight)
       best_conflicts.clear()

@@ -447,6 +447,36 @@ test "plan register probe order uses phased rotation and skip" {
 }
 
 ///|
+test "eviction policy chooses cutoff, best conflict, and later split" {
+  debug_inspect(eviction_cutoff(Some(3), Some(5)), content="Some(5)")
+  debug_inspect(eviction_cutoff(Some(3), None), content="Some(3)")
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r0), 3, r1, None),
+    content="true",
+  )
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r0), 4, r1, Some(r1)),
+    content="true",
+  )
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r1), 4, r0, Some(r1)),
+    content="false",
+  )
+  inspect(
+    should_take_split_candidate(
+      Some(5),
+      Some(ProgramPoint::new(0, 1)),
+      5,
+      ProgramPoint::new(0, 3),
+      [0],
+    ),
+    content="true",
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
