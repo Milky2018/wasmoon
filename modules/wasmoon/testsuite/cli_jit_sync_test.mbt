@@ -33,11 +33,12 @@ test "cli jit sync: memory.grow visible after jit" {
     let mc = @emit.emit_function(allocated)
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     precompiled.add_function(
-      func_idx,
-      func_name,
-      compiled,
-      func_type.params.length(),
-      func_type.results.length(),
+      compiled.to_cwasm_entry(
+        func_idx,
+        func_name,
+        func_type.params.length(),
+        func_type.results.length(),
+      ),
     )
   }
   let jm = @jit.JITModule::load(precompiled, func_signatures) catch {

@@ -45,11 +45,16 @@ test "precompiled module: add function" {
   let mod = PrecompiledModule::new(AArch64)
 
   // Create a simple compiled function
-  let mc = @emit.MachineCode::new()
-  mc.emit_nop()
-  mc.emit_ret(30)
-  let func = @vcode.CompiledFunction::new("add", mc, 16)
-  mod.add_function(0, "add", func, 2, 1)
+  let entry = CompiledEntry::new(
+    0,
+    "add",
+    [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
+    16,
+    0,
+    2,
+    1,
+  )
+  mod.add_function(entry)
   inspect(mod.function_count(), content="1")
   inspect(mod.functions[0].num_params, content="2")
   inspect(mod.functions[0].num_results, content="1")
@@ -58,14 +63,21 @@ test "precompiled module: add function" {
 ///|
 test "serialize and deserialize: preserves direct-call fixups" {
   let mod = PrecompiledModule::new(AArch64)
-  let mc = @emit.MachineCode::new()
-  mc.emit_nop()
-  mc.emit_ret(30)
-  mc.add_func_addr_fixup(0, 23, 16)
-  mc.add_call_fixup(4, 42, veneer_offset=8)
-  mc.add_call_fixup(12, -1000, veneer_offset=-1)
-  let func = @vcode.CompiledFunction::new("f", mc, 0)
-  mod.add_function(7, "f", func, 1, 0)
+  let entry = CompiledEntry::new(
+    7,
+    "f",
+    [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
+    0,
+    0,
+    1,
+    0,
+    func_addr_fixups=[{ offset: 0, func_idx: 23, reg: 16 }],
+    call_fixups=[
+      { offset: 4, func_idx: 42, veneer_offset: 8 },
+      { offset: 12, func_idx: -1000, veneer_offset: -1 },
+    ],
+  )
+  mod.add_function(entry)
 
   let restored = deserialize(mod.serialize()) catch { _ => panic() }
   inspect(restored.functions.length(), content="1")
@@ -88,10 +100,16 @@ test "serialize and deserialize: roundtrip" {
   let mod = PrecompiledModule::new(AArch64)
 
   // Add a function
-  let mc = @emit.MachineCode::new()
-  mc.emit_nop()
-  let func = @vcode.CompiledFunction::new("test", mc, 32)
-  mod.add_function(42, "test", func, 3, 1)
+  let entry = CompiledEntry::new(
+    42,
+    "test",
+    [0x1F, 0x20, 0x03, 0xD5],
+    32,
+    0,
+    3,
+    1,
+  )
+  mod.add_function(entry)
 
   // Serialize
   let bytes = mod.serialize()
@@ -115,10 +133,21 @@ test "serialize and deserialize: multiple functions" {
 
   // Add multiple functions
   for i in 0..<3 {
-    let mc = @emit.MachineCode::new()
-    mc.emit_nop()
-    let func = @vcode.CompiledFunction::new("func_\{i}", mc, i * 16)
-    mod.add_function(i, "func_\{i}", func, i, if i > 0 { 1 } else { 0 })
+    mod.add_function(
+      CompiledEntry::new(
+        i,
+        "func_\{i}",
+        [0x1F, 0x20, 0x03, 0xD5],
+        i * 16,
+        0,
+        i,
+        if i > 0 {
+          1
+        } else {
+          0
+        },
+      ),
+    )
   }
 
   // Serialize and deserialize
@@ -162,21 +191,22 @@ test "deserialize: unsupported version" {
 ///|
 test "serialize and deserialize: preserves gc metadata" {
   let mod = PrecompiledModule::new(AArch64)
-  let mc = @emit.MachineCode::new()
-  mc.emit_nop()
-  mc.emit_ret(30)
-  let safepoints : Array[@vcode.GcSafepoint] = [
-    @vcode.GcSafepoint::new(4, [1, 2], 9L),
-    @vcode.GcSafepoint::new(12, [], 42L),
+  let safepoints : Array[GcSafepoint] = [
+    GcSafepoint::new(4, [1, 2], 9L),
+    GcSafepoint::new(12, [], 42L),
   ]
-  let func = @vcode.CompiledFunction::new(
+  let entry = CompiledEntry::new(
+    3,
     "gc_func",
-    mc,
+    [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
+    0,
+    0,
+    1,
     0,
     gc_safepoints=safepoints,
     gc_stackmap_blob=b"\xAA\xBB\xCC",
   )
-  mod.add_function(3, "gc_func", func, 1, 0)
+  mod.add_function(entry)
 
   let restored = deserialize(mod.serialize()) catch { _ => panic() }
   inspect(restored.functions.length(), content="1")
@@ -191,13 +221,12 @@ test "serialize and deserialize: preserves gc metadata" {
 }
 
 ///|
-test "compiled entry: to_compiled_function" {
+test "compiled entry: preserves raw code metadata" {
   let code : Array[Int] = [0xD5, 0x03, 0x20, 0x1F, 0xC0, 0x03, 0x5F, 0xD6]
   let entry = CompiledEntry::new(0, "test", code, 16, 0, 2, 1)
-  let func = entry.to_compiled_function()
-  inspect(func.name, content="test")
-  inspect(func.frame_size, content="16")
-  inspect(func.get_code().length(), content="8")
+  inspect(entry.name, content="test")
+  inspect(entry.frame_size, content="16")
+  inspect(entry.code.length(), content="8")
 }
 
 ///|
@@ -291,11 +320,17 @@ test "complete module: memory + data + function roundtrip" {
   mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)
 
   // Add a compiled function
-  let mc = @emit.MachineCode::new()
-  mc.emit_nop()
-  mc.emit_ret(30)
-  let func = @vcode.CompiledFunction::new("_start", mc, 32)
-  mod.add_function(0, "_start", func, 0, 0)
+  mod.add_function(
+    CompiledEntry::new(
+      0,
+      "_start",
+      [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
+      32,
+      0,
+      0,
+      0,
+    ),
+  )
 
   // Serialize
   let bytes = mod.serialize()

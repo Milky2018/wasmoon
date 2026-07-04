@@ -70,11 +70,12 @@ fn run_jit_with_backtrace(
     let mc = @emit.emit_function(allocated_func, force_frame_setup=true)
     let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)
     precompiled.add_function(
-      f_idx,
-      f_name,
-      compiled,
-      func_type_inner.params.length(),
-      func_type_inner.results.length(),
+      compiled.to_cwasm_entry(
+        f_idx,
+        f_name,
+        func_type_inner.params.length(),
+        func_type_inner.results.length(),
+      ),
     )
   }
 

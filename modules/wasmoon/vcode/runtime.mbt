@@ -257,6 +257,120 @@ pub fn CompiledFunction::get_gc_stackmap_blob(self : CompiledFunction) -> Bytes 
 }
 
 ///|
+fn cwasm_func_addr_fixups(
+  fixups : Array[@emit.FuncAddrFixup],
+) -> Array[@cwasm.FuncAddrFixup] {
+  let result : Array[@cwasm.FuncAddrFixup] = []
+  for fixup in fixups {
+    result.push({
+      offset: fixup.offset,
+      func_idx: fixup.func_idx,
+      reg: fixup.reg,
+    })
+  }
+  result
+}
+
+///|
+fn cwasm_call_fixups(
+  fixups : Array[@emit.CallFixup],
+) -> Array[@cwasm.CallFixup] {
+  let result : Array[@cwasm.CallFixup] = []
+  for fixup in fixups {
+    result.push({
+      offset: fixup.offset,
+      func_idx: fixup.func_idx,
+      veneer_offset: fixup.veneer_offset,
+    })
+  }
+  result
+}
+
+///|
+fn cwasm_gc_safepoints(
+  safepoints : Array[GcSafepoint],
+) -> Array[@cwasm.GcSafepoint] {
+  let result : Array[@cwasm.GcSafepoint] = []
+  for safepoint in safepoints {
+    result.push(
+      @cwasm.GcSafepoint::new(
+        safepoint.code_offset,
+        safepoint.live_refs,
+        safepoint.metadata,
+      ),
+    )
+  }
+  result
+}
+
+///|
+pub fn gc_safepoints_from_cwasm(
+  safepoints : Array[@cwasm.GcSafepoint],
+) -> Array[GcSafepoint] {
+  let result : Array[GcSafepoint] = []
+  for safepoint in safepoints {
+    result.push(
+      GcSafepoint::new(
+        safepoint.code_offset,
+        safepoint.live_refs,
+        safepoint.metadata,
+      ),
+    )
+  }
+  result
+}
+
+///|
+pub fn CompiledFunction::to_cwasm_entry(
+  self : CompiledFunction,
+  func_idx : Int,
+  name : String,
+  num_params : Int,
+  num_results : Int,
+) -> @cwasm.CompiledEntry {
+  @cwasm.CompiledEntry::new(
+    func_idx,
+    name,
+    self.get_code(),
+    self.frame_size,
+    self.entry_offset,
+    num_params,
+    num_results,
+    func_addr_fixups=cwasm_func_addr_fixups(self.get_func_addr_fixups()),
+    call_fixups=cwasm_call_fixups(self.get_call_fixups()),
+    gc_safepoints=cwasm_gc_safepoints(self.get_gc_safepoints()),
+    gc_stackmap_blob=self.get_gc_stackmap_blob(),
+  )
+}
+
+///|
+pub fn compiled_function_from_cwasm_entry(
+  entry : @cwasm.CompiledEntry,
+) -> CompiledFunction {
+  let mc = @emit.MachineCode::new()
+  for b in entry.code {
+    mc.emit_byte(b)
+  }
+  for fixup in entry.func_addr_fixups {
+    mc.add_func_addr_fixup(fixup.offset, fixup.func_idx, fixup.reg)
+  }
+  for fixup in entry.call_fixups {
+    mc.add_call_fixup(
+      fixup.offset,
+      fixup.func_idx,
+      veneer_offset=fixup.veneer_offset,
+    )
+  }
+  CompiledFunction::new(
+    entry.name,
+    mc,
+    entry.frame_size,
+    gc_safepoints=gc_safepoints_from_cwasm(entry.gc_safepoints),
+    gc_stackmap_blob=entry.gc_stackmap_blob,
+  )
+}
+
+///|
 fn CompiledFunction::to_string(self : CompiledFunction) -> String {
   let status = if self.valid { "valid" } else { "invalid" }
   "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, safepoints=\{self.gc_safepoints.length()}, \{status})"

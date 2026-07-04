@@ -1807,7 +1807,7 @@ fn compile_module_to_jit(
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
-      func_idx, func_name, compiled, num_params, num_results,
+      compiled.to_cwasm_entry(func_idx, func_name, num_params, num_results),
     )
     emit_compile_progress(
       on_progress,

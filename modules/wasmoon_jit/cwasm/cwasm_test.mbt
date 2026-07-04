@@ -5,8 +5,7 @@ test "PrecompiledModule serialize and deserialize roundtrip" {
   let pcm = @cwasm.PrecompiledModule::new(AArch64)
   // Create a CompiledFunction mock via CompiledEntry
   let entry = @cwasm.CompiledEntry::new(0, "add", [0xD503201F], 32, 0, 2, 1)
-  let cf = entry.to_compiled_function()
-  pcm.add_function(0, "add", cf, 2, 1)
+  pcm.add_function(entry)
   inspect(pcm.function_count(), content="1")
   // Serialize
   let serialized = pcm.serialize()
@@ -44,8 +43,8 @@ test "PrecompiledModule serialize roundtrip with multiple functions" {
     1,
     1,
   )
-  pcm.add_function(0, "func0", entry1.to_compiled_function(), 0, 0)
-  pcm.add_function(1, "func1", entry2.to_compiled_function(), 1, 1)
+  pcm.add_function(entry1)
+  pcm.add_function(entry2)
   // Serialize and deserialize
   let serialized = pcm.serialize()
   let pcm2 = @cwasm.deserialize(serialized)

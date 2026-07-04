@@ -7,13 +7,18 @@ import {
   "Milky2018/wasmoon/vcode/emit",
   "Milky2018/wasmoon/vcode/instr",
   "Milky2018/wasmoon/vcode/regalloc",
+  "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub fn compiled_function_from_cwasm_entry(@cwasm.CompiledEntry) -> CompiledFunction
+
 pub fn dump_regalloc(String, @regalloc.LivenessResult, @regalloc.RegAllocResult) -> Unit
 
 pub fn dump_vcode(@regalloc.VCodeFunction, String) -> Unit
+
+pub fn gc_safepoints_from_cwasm(Array[@cwasm.GcSafepoint]) -> Array[GcSafepoint]
 
 // Errors
 
@@ -51,6 +56,7 @@ pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
 pub fn CompiledFunction::invalidate(Self) -> Unit
 pub fn CompiledFunction::is_valid(Self) -> Bool
 pub fn CompiledFunction::new(String, @emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
+pub fn CompiledFunction::to_cwasm_entry(Self, Int, String, Int, Int) -> @cwasm.CompiledEntry
 pub impl Show for CompiledFunction
 
 type ExecutableRegion

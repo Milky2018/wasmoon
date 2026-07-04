@@ -397,11 +397,12 @@ pub fn run_jit(
       // Add to precompiled module
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)
       precompiled.add_function(
-        f_idx,
-        f_name,
-        compiled,
-        func_type.params.length(),
-        func_type.results.length(),
+        compiled.to_cwasm_entry(
+          f_idx,
+          f_name,
+          func_type.params.length(),
+          func_type.results.length(),
+        ),
       )
     }
 

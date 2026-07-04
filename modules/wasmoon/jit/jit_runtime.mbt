@@ -244,14 +244,15 @@ fn install_direct_call_stubs(
 ///|
 fn patch_load_imm64_fixed(
   exec_ptr : Int64,
-  fixup : @emit.FuncAddrFixup,
+  offset : Int,
+  reg : Int,
   func_ptr : Int64,
 ) -> Unit {
-  let bytes = emit_load_imm64_fixed_bytes(fixup.reg, func_ptr)
+  let bytes = emit_load_imm64_fixed_bytes(reg, func_ptr)
   if bytes.length() != 16 {
     abort("unexpected load_imm64_fixed size")
   }
-  let base = exec_ptr + fixup.offset.to_int64()
+  let base = exec_ptr + offset.to_int64()
   c_jit_write_i64(base, pack_u64_le(bytes, 0))
   c_jit_write_i64(base + 8L, pack_u64_le(bytes, 8))
 }
@@ -296,7 +297,7 @@ fn apply_func_addr_fixups(
             None => abort("unknown runtime func fixup idx \{fixup.func_idx}")
           }
         }
-        patch_load_imm64_fixed(exec_ptr, fixup, target_ptr)
+        patch_load_imm64_fixed(exec_ptr, fixup.offset, fixup.reg, target_ptr)
       }
     }
   }
@@ -305,7 +306,7 @@ fn apply_func_addr_fixups(
 ///|
 fn patch_call_veneer_target(
   exec_ptr : Int64,
-  fixup : @emit.CallFixup,
+  fixup : @cwasm.CallFixup,
   target_ptr : Int64,
 ) -> Unit {
   // Veneer layout (16 bytes):
@@ -318,7 +319,7 @@ fn patch_call_veneer_target(
 ///|
 fn patch_direct_call(
   exec_ptr : Int64,
-  fixup : @emit.CallFixup,
+  fixup : @cwasm.CallFixup,
   target_ptr : Int64,
 ) -> Unit {
   let pc = exec_ptr + fixup.offset.to_int64()
@@ -484,7 +485,12 @@ pub fn JITModule::load_with_imports(
                           )
                       }
                     }
-                    patch_load_imm64_fixed(ec.ptr(), fixup, target_ptr)
+                    patch_load_imm64_fixed(
+                      ec.ptr(),
+                      fixup.offset,
+                      fixup.reg,
+                      target_ptr,
+                    )
                   }
                   jit_module.import_exec_codes.push(ec)
                   ctx.set_func(i, ec.ptr())
@@ -543,7 +549,7 @@ pub fn JITModule::load_with_imports(
             // Install per-function GC safepoint metadata (if present).
             jit_module.gc_set_func_safepoints(
               entry.func_idx,
-              entry.gc_safepoints,
+              @vcode.gc_safepoints_from_cwasm(entry.gc_safepoints),
               entry.gc_stackmap_blob,
             )
             |> ignore

@@ -6,7 +6,7 @@ import {
   "Milky2018/wasmoon/component/text_parser",
   "Milky2018/wasmoon/wit",
   "Milky2018/wasmoon/wasi",
-  "Milky2018/wasmoon/cwasm",
+  "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/x/sys",
   "moonbitlang/x/fs",
   "TheWaWaR/clap",

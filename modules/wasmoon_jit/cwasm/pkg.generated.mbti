@@ -1,10 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon/cwasm"
+package "Milky2018/wasmoon_jit/cwasm"
 
 import {
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon/vcode",
-  "Milky2018/wasmoon/vcode/emit",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -19,6 +18,12 @@ pub suberror DeserializeError {
 pub impl Show for DeserializeError
 
 // Types and methods
+pub(all) struct CallFixup {
+  offset : Int
+  func_idx : Int
+  veneer_offset : Int
+}
+
 pub(all) struct CompiledEntry {
   func_idx : Int
   name : String
@@ -27,13 +32,12 @@ pub(all) struct CompiledEntry {
   entry_offset : Int
   num_params : Int
   num_results : Int
-  func_addr_fixups : Array[@emit.FuncAddrFixup]
-  call_fixups : Array[@emit.CallFixup]
-  gc_safepoints : Array[@vcode.GcSafepoint]
+  func_addr_fixups : Array[FuncAddrFixup]
+  call_fixups : Array[CallFixup]
+  gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 }
-pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@emit.FuncAddrFixup], call_fixups? : Array[@emit.CallFixup], gc_safepoints? : Array[@vcode.GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
-pub fn CompiledEntry::to_compiled_function(Self) -> @vcode.CompiledFunction
+pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[FuncAddrFixup], call_fixups? : Array[CallFixup], gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
 pub impl Show for CompiledEntry
 
 pub(all) struct DataEntry {
@@ -51,6 +55,19 @@ pub(all) struct ElemEntry {
 }
 pub fn ElemEntry::new(Int, Int, Array[Int]) -> Self
 pub impl Show for ElemEntry
+
+pub(all) struct FuncAddrFixup {
+  offset : Int
+  func_idx : Int
+  reg : Int
+}
+
+pub(all) struct GcSafepoint {
+  code_offset : Int
+  live_refs : Array[Int]
+  metadata : Int64
+} derive(@debug.Debug)
+pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
 
 pub(all) struct GlobalDef {
   value_type : Int
@@ -91,7 +108,7 @@ pub(all) struct PrecompiledModule {
 }
 pub fn PrecompiledModule::add_data_segment(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_element(Self, Int, Int, Array[Int]) -> Unit
-pub fn PrecompiledModule::add_function(Self, Int, String, @vcode.CompiledFunction, Int, Int) -> Unit
+pub fn PrecompiledModule::add_function(Self, CompiledEntry) -> Unit
 pub fn PrecompiledModule::add_global(Self, Int, Bool, Int64) -> Unit
 pub fn PrecompiledModule::add_import(Self, String, String, Int, Int) -> Unit
 pub fn PrecompiledModule::add_memory(Self, Int, Int?) -> Unit

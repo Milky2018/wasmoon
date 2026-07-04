@@ -122,6 +122,50 @@ pub impl Show for ImportEntry with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
+// ============ JIT Metadata ============
+
+///|
+/// Fixup for direct function address loads.
+pub(all) struct FuncAddrFixup {
+  // Offset in the code buffer where the load starts
+  offset : Int
+  // Target function index
+  func_idx : Int
+  // Destination register (physical)
+  reg : Int
+}
+
+///|
+/// Fixup for direct function call branches.
+pub(all) struct CallFixup {
+  // Offset in the code buffer where the call instruction starts
+  offset : Int
+  // Target function index
+  func_idx : Int
+  // Offset of a local call veneer (load-absolute + br), -1 when absent
+  veneer_offset : Int
+}
+
+///|
+/// Information about a GC safepoint in generated code.
+pub(all) struct GcSafepoint {
+  // Offset in generated machine code where this safepoint is
+  code_offset : Int
+  // Which virtual registers contain live GC references at this point
+  live_refs : Array[Int]
+  // Additional metadata, such as root-count or stackmap index
+  metadata : Int64
+} derive(Debug)
+
+///|
+pub fn GcSafepoint::new(
+  code_offset : Int,
+  live_refs : Array[Int],
+  metadata : Int64,
+) -> GcSafepoint {
+  { code_offset, live_refs, metadata }
+}
+
 // ============ Compiled Function Entry ============
 
 ///|
@@ -142,11 +186,11 @@ pub(all) struct CompiledEntry {
   // Number of results (0 or 1 for WASM 1.0)
   num_results : Int
   // Direct function address fixups
-  func_addr_fixups : Array[@emit.FuncAddrFixup]
+  func_addr_fixups : Array[FuncAddrFixup]
   // Direct function call fixups
-  call_fixups : Array[@emit.CallFixup]
+  call_fixups : Array[CallFixup]
   // GC safepoint metadata
-  gc_safepoints : Array[@vcode.GcSafepoint]
+  gc_safepoints : Array[GcSafepoint]
   // Compact GC stackmap payload
   gc_stackmap_blob : Bytes
 }
@@ -160,9 +204,9 @@ pub fn CompiledEntry::new(
   entry_offset : Int,
   num_params : Int,
   num_results : Int,
-  func_addr_fixups? : Array[@emit.FuncAddrFixup] = [],
-  call_fixups? : Array[@emit.CallFixup] = [],
-  gc_safepoints? : Array[@vcode.GcSafepoint] = [],
+  func_addr_fixups? : Array[FuncAddrFixup] = [],
+  call_fixups? : Array[CallFixup] = [],
+  gc_safepoints? : Array[GcSafepoint] = [],
   gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledEntry {
   {
@@ -441,25 +485,8 @@ pub fn PrecompiledModule::add_import(
 /// Add a compiled function
 pub fn PrecompiledModule::add_function(
   self : PrecompiledModule,
-  func_idx : Int,
-  name : String,
-  compiled : @vcode.CompiledFunction,
-  num_params : Int,
-  num_results : Int,
+  entry : CompiledEntry,
 ) -> Unit {
-  let entry = CompiledEntry::new(
-    func_idx,
-    name,
-    compiled.get_code(),
-    compiled.frame_size,
-    compiled.entry_offset,
-    num_params,
-    num_results,
-    func_addr_fixups=compiled.get_func_addr_fixups(),
-    call_fixups=compiled.get_call_fixups(),
-    gc_safepoints=compiled.get_gc_safepoints(),
-    gc_stackmap_blob=compiled.get_gc_stackmap_blob(),
-  )
   self.functions.push(entry)
 }
 
@@ -904,9 +931,9 @@ pub fn deserialize(
     // Function signature
     let num_params = reader.read_u32()
     let num_results = reader.read_u32()
-    let func_addr_fixups : Array[@emit.FuncAddrFixup] = []
-    let call_fixups : Array[@emit.CallFixup] = []
-    let gc_safepoints : Array[@vcode.GcSafepoint] = []
+    let func_addr_fixups : Array[FuncAddrFixup] = []
+    let call_fixups : Array[CallFixup] = []
+    let gc_safepoints : Array[GcSafepoint] = []
     let mut gc_stackmap_blob : Bytes = b""
     let func_addr_fixup_count = reader.read_u32()
     for _ in 0..<func_addr_fixup_count {
@@ -931,9 +958,7 @@ pub fn deserialize(
       for _ in 0..<live_ref_count {
         live_refs.push(reader.read_u32())
       }
-      gc_safepoints.push(
-        @vcode.GcSafepoint::new(code_offset, live_refs, metadata),
-      )
+      gc_safepoints.push(GcSafepoint::new(code_offset, live_refs, metadata))
     }
     let stackmap_blob_size = reader.read_u32()
     let stackmap_raw = reader.read_bytes(stackmap_blob_size)
@@ -1154,34 +1179,4 @@ fn ByteReader::read_string(self : ByteReader, len : Int) -> String {
     }
   }
   builder.to_string()
-}
-
-// ============ Conversion to Runtime ============
-
-///|
-/// Convert a CompiledEntry to a runtime CompiledFunction
-pub fn CompiledEntry::to_compiled_function(
-  self : CompiledEntry,
-) -> @vcode.CompiledFunction {
-  let mc = @emit.MachineCode::new()
-  for b in self.code {
-    mc.emit_byte(b)
-  }
-  for fixup in self.func_addr_fixups {
-    mc.add_func_addr_fixup(fixup.offset, fixup.func_idx, fixup.reg)
-  }
-  for fixup in self.call_fixups {
-    mc.add_call_fixup(
-      fixup.offset,
-      fixup.func_idx,
-      veneer_offset=fixup.veneer_offset,
-    )
-  }
-  @vcode.CompiledFunction::new(
-    self.name,
-    mc,
-    self.frame_size,
-    gc_safepoints=self.gc_safepoints,
-    gc_stackmap_blob=self.gc_stackmap_blob,
-  )
 }

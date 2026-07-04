@@ -122,11 +122,12 @@ test "cross-module: shared memory export/import (jit + interp)" {
     let mc = @emit.emit_function(allocated)
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     precompiled.add_function(
-      func_idx,
-      func_name,
-      compiled,
-      func_type.params.length(),
-      func_type.results.length(),
+      compiled.to_cwasm_entry(
+        func_idx,
+        func_name,
+        func_type.params.length(),
+        func_type.results.length(),
+      ),
     )
   }
   let jm = @jit.JITModule::load(precompiled, func_signatures) catch {
@@ -162,11 +163,12 @@ test "cross-module: shared memory export/import (jit + interp)" {
     let mc = @emit.emit_function(allocated)
     let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     precompiled_a.add_function(
-      func_idx,
-      func_name,
-      compiled,
-      func_type.params.length(),
-      func_type.results.length(),
+      compiled.to_cwasm_entry(
+        func_idx,
+        func_name,
+        func_type.params.length(),
+        func_type.results.length(),
+      ),
     )
   }
   let jm_a = @jit.JITModule::load(precompiled_a, func_signatures_a) catch {
@@ -402,11 +404,12 @@ fn run_cross_module_jit(
       let mc = @emit.emit_function(allocated_func)
       let compiled = @vcode.CompiledFunction::new(f_name, mc, 0)
       precompiled.add_function(
-        global_idx,
-        f_name,
-        compiled,
-        func_type.params.length(),
-        func_type.results.length(),
+        compiled.to_cwasm_entry(
+          global_idx,
+          f_name,
+          func_type.params.length(),
+          func_type.results.length(),
+        ),
       )
       all_signatures[global_idx] = (func_type.params, func_type.results)
 
