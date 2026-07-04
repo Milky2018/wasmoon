@@ -187,6 +187,31 @@ test "lower terminal current-block br_table through native linear fast path" {
 }
 
 ///|
+test "lower terminal current-block ref branches through native linear fast path" {
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let null_branch = @types.Module::simple(
+    [],
+    [FuncRef],
+    [Block(Value(FuncRef), [RefNull(FuncRef), BrOnNull(0)])],
+    "block_exit_br_on_null",
+  )
+  let non_null_branch = @types.Module::simple(
+    [],
+    [FuncRef],
+    [Block(Value(FuncRef), [RefNull(FuncRef), BrOnNonNull(0)])],
+    "block_exit_br_on_non_null",
+  )
+  inspect(
+    try_lower_native_function(env, null_branch, 0) is Some(_),
+    content="true",
+  )
+  inspect(
+    try_lower_native_function(env, non_null_branch, 0) is Some(_),
+    content="true",
+  )
+}
+
+///|
 test "lower globals through native VMContext loads and stores" {
   let mod_ = {
     ..@types.Module::simple(

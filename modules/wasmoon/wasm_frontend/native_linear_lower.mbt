@@ -1272,6 +1272,15 @@ fn append_linear_exit_block_body(
         } else {
           return false
         }
+      BrOnNull(depth) | BrOnNonNull(depth) =>
+        if depth == 0 {
+          // At the end of a block, both reference-branch outcomes leave the
+          // same reference value as the current block result in the native
+          // frontend's uniform reference representation.
+          return true
+        } else {
+          return false
+        }
       _ => if !append_linear_block_body(out, [instr]) { return false }
     }
   }
