@@ -63,6 +63,13 @@ pub(all) struct DenseCfgEdges {
 } derive(Debug)
 
 ///|
+pub(all) struct DenseCfgLoop {
+  header : Int
+  body : Array[Int]
+  latch : Int
+} derive(Debug)
+
+///|
 pub fn build_dense_successor_edges(
   block_ids : Array[Int],
   block_successor_ids : Array[Array[Int]],
@@ -194,4 +201,150 @@ pub fn compute_reachable_reverse_postorder_from_successors(
   }
   postorder.rev_in_place()
   postorder
+}
+
+///|
+fn intersect_dominators(
+  idom : Array[Int],
+  rpo_num : Array[Int],
+  b1_init : Int,
+  b2_init : Int,
+) -> Int {
+  let mut b1 = b1_init
+  let mut b2 = b2_init
+  while b1 != b2 {
+    while rpo_num[b1] > rpo_num[b2] {
+      b1 = idom[b1]
+    }
+    while rpo_num[b2] > rpo_num[b1] {
+      b2 = idom[b2]
+    }
+  }
+  b1
+}
+
+///|
+pub fn compute_dominators_from_edges(edges : DenseCfgEdges) -> Array[Int] {
+  let size = edges.succs.length()
+  let idom : Array[Int] = Array::make(size, -1)
+  if size == 0 {
+    return idom
+  }
+  idom[0] = 0
+  let rpo = compute_reachable_reverse_postorder_from_successors(edges.succs)
+  let rpo_num : Array[Int] = Array::make(size, -1)
+  for i, block_id in rpo {
+    rpo_num[block_id] = i
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    for block_id in rpo {
+      if block_id == 0 {
+        continue
+      }
+      let mut new_idom = -1
+      if block_id < edges.preds.length() {
+        for pred in edges.preds[block_id] {
+          if pred >= 0 && pred < size && idom[pred] != -1 {
+            if new_idom == -1 {
+              new_idom = pred
+            } else {
+              new_idom = intersect_dominators(idom, rpo_num, new_idom, pred)
+            }
+          }
+        }
+      }
+      if new_idom != -1 && idom[block_id] != new_idom {
+        idom[block_id] = new_idom
+        changed = true
+      }
+    }
+  }
+  idom
+}
+
+///|
+fn dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
+  if a == b {
+    return true
+  }
+  let mut current = b
+  while current != -1 && current != 0 {
+    current = idom[current]
+    if current == a {
+      return true
+    }
+  }
+  a == 0 && current == 0
+}
+
+///|
+pub fn find_back_edges_from_edges(edges : DenseCfgEdges) -> Array[(Int, Int)] {
+  let idom = compute_dominators_from_edges(edges)
+  let back_edges : Array[(Int, Int)] = []
+  for block_id in 0..<edges.succs.length() {
+    for succ in edges.succs[block_id] {
+      if succ >= 0 &&
+        succ < idom.length() &&
+        dominates_with_idom(idom, succ, block_id) {
+        back_edges.push((block_id, succ))
+      }
+    }
+  }
+  back_edges
+}
+
+///|
+fn find_loop_body(
+  edges : DenseCfgEdges,
+  header : Int,
+  latches : Array[Int],
+) -> Array[Int] {
+  let body : Map[Int, Bool] = {}
+  body.set(header, true)
+  let worklist : Array[Int] = []
+  for latch in latches {
+    if latch != header {
+      worklist.push(latch)
+      body.set(latch, true)
+    }
+  }
+  while worklist.length() > 0 {
+    let block = worklist.pop().unwrap()
+    if block < 0 || block >= edges.preds.length() {
+      continue
+    }
+    for pred in edges.preds[block] {
+      if !body.get(pred).unwrap_or(false) {
+        body.set(pred, true)
+        worklist.push(pred)
+      }
+    }
+  }
+  let result : Array[Int] = []
+  body.each(fn(block, _) { result.push(block) })
+  result.sort()
+  result
+}
+
+///|
+pub fn find_loops_from_edges(edges : DenseCfgEdges) -> Array[DenseCfgLoop] {
+  let loops : Array[DenseCfgLoop] = []
+  let header_to_latches : Map[Int, Array[Int]] = {}
+  for edge in find_back_edges_from_edges(edges) {
+    let (latch, header) = edge
+    match header_to_latches.get(header) {
+      Some(latches) => latches.push(latch)
+      None => header_to_latches.set(header, [latch])
+    }
+  }
+  header_to_latches.each(fn(header, latches) {
+    loops.push({
+      header,
+      body: find_loop_body(edges, header, latches),
+      latch: latches[0],
+    })
+  })
+  loops
 }

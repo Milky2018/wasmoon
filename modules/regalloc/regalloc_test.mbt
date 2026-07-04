@@ -165,6 +165,20 @@ test "build dense CFG edges from sparse block ids" {
 }
 
 ///|
+test "dense CFG computes dominators and loops" {
+  let edges = build_dense_successor_edges([0, 1, 2, 3], [[1], [3, 2], [1], []])
+  debug_inspect(compute_dominators_from_edges(edges), content="[0, 0, 1, 1]")
+  let back_edges = find_back_edges_from_edges(edges)
+  inspect(back_edges.length(), content="1")
+  debug_inspect(back_edges[0], content="(2, 1)")
+  let loops = find_loops_from_edges(edges)
+  inspect(loops.length(), content="1")
+  inspect(loops[0].header, content="1")
+  inspect(loops[0].latch, content="2")
+  debug_inspect(loops[0].body, content="[1, 2]")
+}
+
+///|
 test "count sorted integer points in open range" {
   let points = [2, 4, 4, 8, 10]
   inspect(lower_bound_sorted_int(points, 4), content="1")

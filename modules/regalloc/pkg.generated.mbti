@@ -26,6 +26,8 @@ pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
 
 pub fn compute_dense_live_sets(Int, Int, DenseCfgEdges, Array[LiveSetUseDef]) -> DenseLiveSets
 
+pub fn compute_dominators_from_edges(DenseCfgEdges) -> Array[Int]
+
 pub fn compute_reachable_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
@@ -37,6 +39,10 @@ pub fn compute_spill_weight(Array[UsePosition], Array[Int]) -> Int
 pub fn count_sorted_ints_in_open_range(Array[Int], Int, Int) -> Int
 
 pub fn eviction_cutoff(Int?, Int?) -> Int?
+
+pub fn find_back_edges_from_edges(DenseCfgEdges) -> Array[(Int, Int)]
+
+pub fn find_loops_from_edges(DenseCfgEdges) -> Array[DenseCfgLoop]
 
 pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
 
@@ -189,6 +195,12 @@ pub(all) struct ConflictScanResult {
 pub(all) struct DenseCfgEdges {
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
+} derive(@debug.Debug)
+
+pub(all) struct DenseCfgLoop {
+  header : Int
+  body : Array[Int]
+  latch : Int
 } derive(@debug.Debug)
 
 pub(all) struct DenseLiveSets {
