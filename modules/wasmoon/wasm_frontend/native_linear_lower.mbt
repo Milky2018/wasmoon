@@ -880,6 +880,46 @@ fn finish_linear_return(
 }
 
 ///|
+fn append_linear_block_body(
+  out : Array[@types.Instruction],
+  body : Array[@types.Instruction],
+) -> Bool {
+  for instr in body {
+    match instr {
+      Block(_, nested) =>
+        if !append_linear_block_body(out, nested) {
+          return false
+        }
+      Br(_)
+      | BrIf(_)
+      | BrTable(_, _)
+      | BrOnNull(_)
+      | BrOnNonNull(_)
+      | Loop(_, _)
+      | If(_, _, _)
+      | TryTable(_, _, _) =>
+        // TODO(ISS-023): lower structured labels and branch stack effects
+        // directly instead of using the legacy translator bridge.
+        return false
+      _ => out.push(instr)
+    }
+  }
+  true
+}
+
+///|
+fn flatten_linear_blocks(
+  body : Array[@types.Instruction],
+) -> Array[@types.Instruction]? {
+  let out : Array[@types.Instruction] = []
+  if append_linear_block_body(out, body) {
+    Some(out)
+  } else {
+    None
+  }
+}
+
+///|
 fn try_lower_linear_function(
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
@@ -888,6 +928,7 @@ fn try_lower_linear_function(
   let func_type = get_func_type(mod_, func_local_idx)
   get_code(mod_, func_local_idx)
   let code = mod_.codes[func_local_idx]
+  guard flatten_linear_blocks(code.body) is Some(body) else { return None }
   let global_types = collect_global_types(mod_)
   let table_types = collect_table_types(mod_)
   let memory_types = collect_memory_types(mod_)
@@ -912,7 +953,7 @@ fn try_lower_linear_function(
   }
   let stack : Array[@milkir.Value] = []
   let mut terminated = false
-  for instr in code.body {
+  for instr in body {
     if terminated {
       // TODO(ISS-023): native wasm_frontend should model unreachable tails
       // directly instead of falling back to the legacy translator.
