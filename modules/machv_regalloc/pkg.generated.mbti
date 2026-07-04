@@ -22,6 +22,8 @@ pub(all) struct ApplyResult {
   spill_slots : Array[@machv.StackSlot]
 } derive(@debug.Debug)
 
+type ScratchBinding derive(Eq, @debug.Debug)
+
 // Type aliases
 
 // Traits

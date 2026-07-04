@@ -213,22 +213,44 @@ fn count_regs_in_class(
 }
 
 ///|
-fn find_scratch_reg(
+fn same_reg_bank(lhs : @machv.PReg, rhs : @machv.PReg) -> Bool {
+  lhs.index == rhs.index &&
+  class_to_regalloc(lhs.class) == class_to_regalloc(rhs.class)
+}
+
+///|
+fn scratch_is_used(
+  used_scratch : Array[@machv.PReg],
+  candidate : @machv.PReg,
+) -> Bool {
+  for used in used_scratch {
+    if same_reg_bank(used, candidate) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn find_scratch_reg_excluding(
   physical_regs : Array[@machv.PReg],
   class : @machv.RegClass,
+  used_scratch : Array[@machv.PReg],
 ) -> @machv.PReg? {
   for offset in 0..<physical_regs.length() {
     let i = physical_regs.length() - 1 - offset
     let preg = physical_regs[i]
-    if preg.class == class {
+    if preg.class == class && !scratch_is_used(used_scratch, preg) {
       return Some(preg)
     }
   }
   for offset in 0..<physical_regs.length() {
     let i = physical_regs.length() - 1 - offset
     let preg = physical_regs[i]
-    if class_to_regalloc(preg.class) == class_to_regalloc(class) {
-      return Some({ index: preg.index, class })
+    let candidate : @machv.PReg = { index: preg.index, class }
+    if class_to_regalloc(preg.class) == class_to_regalloc(class) &&
+      !scratch_is_used(used_scratch, candidate) {
+      return Some(candidate)
     }
   }
   None
@@ -239,8 +261,15 @@ fn is_reserved_scratch(
   physical_regs : Array[@machv.PReg],
   preg : @machv.PReg,
 ) -> Bool {
-  count_regs_in_class(physical_regs, preg.class) > 1 &&
-  find_scratch_reg(physical_regs, preg.class) == Some(preg)
+  if count_regs_in_class(physical_regs, preg.class) <= 1 {
+    return false
+  }
+  for candidate in physical_regs {
+    if class_to_regalloc(candidate.class) == class_to_regalloc(preg.class) {
+      return candidate != preg
+    }
+  }
+  false
 }
 
 ///|
@@ -254,6 +283,60 @@ fn allocatable_regs_for_spills(
     }
   }
   out
+}
+
+///|
+struct ScratchBinding {
+  slot : Int
+  class : @machv.RegClass
+  scratch : @machv.PReg
+} derive(Eq, Debug)
+
+///|
+fn bound_scratch(
+  bindings : Array[ScratchBinding],
+  slot : Int,
+  class : @machv.RegClass,
+) -> @machv.PReg? {
+  for binding in bindings {
+    if binding.slot == slot && binding.class == class {
+      return Some(binding.scratch)
+    }
+  }
+  None
+}
+
+///|
+fn used_scratch_regs(bindings : Array[ScratchBinding]) -> Array[@machv.PReg] {
+  let out : Array[@machv.PReg] = []
+  for binding in bindings {
+    out.push(binding.scratch)
+  }
+  out
+}
+
+///|
+fn reserve_scratch(
+  physical_regs : Array[@machv.PReg],
+  bindings : Array[ScratchBinding],
+  slot : Int,
+  class : @machv.RegClass,
+) -> @machv.PReg? {
+  if bound_scratch(bindings, slot, class) is Some(scratch) {
+    return Some(scratch)
+  }
+  match
+    find_scratch_reg_excluding(
+      physical_regs,
+      class,
+      used_scratch_regs(bindings),
+    ) {
+    Some(scratch) => {
+      bindings.push({ slot, class, scratch })
+      Some(scratch)
+    }
+    None => None
+  }
 }
 
 ///|
@@ -351,12 +434,14 @@ fn rewrite_spilled_operand(
   operand : @machv.Operand,
   before : Array[@machv.Instruction],
   after : Array[@machv.Instruction],
-) -> @machv.Operand {
+  scratch_bindings : Array[ScratchBinding],
+) -> @machv.Operand raise @regalloc.VerifyError {
   match operand.reg {
     Virtual(vreg) =>
       match allocation.location_of(vreg_to_regalloc(vreg)) {
         Some(Spill(slot)) =>
-          match find_scratch_reg(physical_regs, vreg.class) {
+          match
+            reserve_scratch(physical_regs, scratch_bindings, slot, vreg.class) {
             Some(scratch) => {
               let physical : @machv.Reg = Physical(scratch)
               let stack_slot = spill_slots[slot]
@@ -372,7 +457,12 @@ fn rewrite_spilled_operand(
               }
               { reg: physical, role: operand.role, tie_id: operand.tie_id }
             }
-            None => operand
+            None => {
+              @regalloc.raise_scratch_register_unavailable(
+                message="no scratch register available for spilled MachV operand",
+              )
+              abort("unreachable")
+            }
           }
         _ => rewrite_allocated_operand(allocation, operand)
       }
@@ -388,23 +478,27 @@ fn rewrite_spilled_reg(
   physical_regs : Array[@machv.PReg],
   reg : @machv.Reg,
   before : Array[@machv.Instruction],
-) -> @machv.Reg {
+  scratch_bindings : Array[ScratchBinding],
+) -> @machv.Reg raise @regalloc.VerifyError {
   match reg {
     Virtual(vreg) =>
       match allocation.location_of(vreg_to_regalloc(vreg)) {
         Some(Spill(slot)) =>
-          match find_scratch_reg(physical_regs, vreg.class) {
+          match
+            reserve_scratch(physical_regs, scratch_bindings, slot, vreg.class) {
             Some(scratch) => {
-              // TODO(machv_regalloc): reserve distinct terminator reload
-              // temporaries when multiple spilled terminator operands of the
-              // same register class are live at the same edge.
               let physical : @machv.Reg = Physical(scratch)
               let reload = func.new_inst(Load(spill_slots[slot]))
               reload.add_operand(@machv.Operand::def(physical))
               before.push(reload)
               physical
             }
-            None => reg
+            None => {
+              @regalloc.raise_scratch_register_unavailable(
+                message="no scratch register available for spilled MachV terminator operand",
+              )
+              abort("unreachable")
+            }
           }
         _ => rewrite_allocated_reg(allocation, reg)
       }
@@ -420,12 +514,13 @@ fn rewrite_reg_array(
   physical_regs : Array[@machv.PReg],
   regs : Array[@machv.Reg],
   before : Array[@machv.Instruction],
-) -> Array[@machv.Reg] {
+  scratch_bindings : Array[ScratchBinding],
+) -> Array[@machv.Reg] raise @regalloc.VerifyError {
   let out : Array[@machv.Reg] = []
   for reg in regs {
     out.push(
       rewrite_spilled_reg(
-        func, allocation, spill_slots, physical_regs, reg, before,
+        func, allocation, spill_slots, physical_regs, reg, before, scratch_bindings,
       ),
     )
   }
@@ -440,27 +535,28 @@ fn rewrite_terminator(
   physical_regs : Array[@machv.PReg],
   term : @machv.Terminator,
   before : Array[@machv.Instruction],
-) -> @machv.Terminator {
+) -> @machv.Terminator raise @regalloc.VerifyError {
+  let scratch_bindings : Array[ScratchBinding] = []
   match term {
     TermJump(target, args) =>
       TermJump(
         target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, args, before,
+          func, allocation, spill_slots, physical_regs, args, before, scratch_bindings,
         ),
       )
     TermBranch(cond, true_target, true_args, false_target, false_args) =>
       TermBranch(
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, cond, before,
+          func, allocation, spill_slots, physical_regs, cond, before, scratch_bindings,
         ),
         true_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, true_args, before,
+          func, allocation, spill_slots, physical_regs, true_args, before, scratch_bindings,
         ),
         false_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, false_args, before,
+          func, allocation, spill_slots, physical_regs, false_args, before, scratch_bindings,
         ),
       )
     TermBranchCmp(
@@ -475,20 +571,20 @@ fn rewrite_terminator(
     ) =>
       TermBranchCmp(
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, lhs, before,
+          func, allocation, spill_slots, physical_regs, lhs, before, scratch_bindings,
         ),
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, rhs, before,
+          func, allocation, spill_slots, physical_regs, rhs, before, scratch_bindings,
         ),
         cond,
         is_64,
         true_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, true_args, before,
+          func, allocation, spill_slots, physical_regs, true_args, before, scratch_bindings,
         ),
         false_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, false_args, before,
+          func, allocation, spill_slots, physical_regs, false_args, before, scratch_bindings,
         ),
       )
     TermBranchZero(
@@ -502,17 +598,17 @@ fn rewrite_terminator(
     ) =>
       TermBranchZero(
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, value, before,
+          func, allocation, spill_slots, physical_regs, value, before, scratch_bindings,
         ),
         is_nonzero,
         is_64,
         true_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, true_args, before,
+          func, allocation, spill_slots, physical_regs, true_args, before, scratch_bindings,
         ),
         false_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, false_args, before,
+          func, allocation, spill_slots, physical_regs, false_args, before, scratch_bindings,
         ),
       )
     TermBranchCmpImm(
@@ -527,31 +623,31 @@ fn rewrite_terminator(
     ) =>
       TermBranchCmpImm(
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, value, before,
+          func, allocation, spill_slots, physical_regs, value, before, scratch_bindings,
         ),
         imm,
         cond,
         is_64,
         true_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, true_args, before,
+          func, allocation, spill_slots, physical_regs, true_args, before, scratch_bindings,
         ),
         false_target,
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, false_args, before,
+          func, allocation, spill_slots, physical_regs, false_args, before, scratch_bindings,
         ),
       )
     TermReturn(results) =>
       TermReturn(
         rewrite_reg_array(
-          func, allocation, spill_slots, physical_regs, results, before,
+          func, allocation, spill_slots, physical_regs, results, before, scratch_bindings,
         ),
       )
     TermTrap(_) => term
     TermBrTable(value, targets, default_target) =>
       TermBrTable(
         rewrite_spilled_reg(
-          func, allocation, spill_slots, physical_regs, value, before,
+          func, allocation, spill_slots, physical_regs, value, before, scratch_bindings,
         ),
         targets,
         default_target,
@@ -633,7 +729,7 @@ fn append_location_move(
       out.push(store)
     }
     (Spill(_), Spill(_)) =>
-      @regalloc.raise_edge_copy_scratch_unavailable(
+      @regalloc.raise_scratch_register_unavailable(
         message="unresolved spill-to-spill MachV edge copy; missing scratch register",
       )
   }
@@ -886,15 +982,16 @@ fn rewrite_operands_and_spills(
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
-) -> Unit {
+) -> Unit raise @regalloc.VerifyError {
   for block in func.blocks {
     let rewritten : Array[@machv.Instruction] = []
     for inst in block.instructions {
       let before : Array[@machv.Instruction] = []
       let after : Array[@machv.Instruction] = []
+      let scratch_bindings : Array[ScratchBinding] = []
       for i, operand in inst.operands {
         inst.operands[i] = rewrite_spilled_operand(
-          func, allocation, spill_slots, physical_regs, operand, before, after,
+          func, allocation, spill_slots, physical_regs, operand, before, after, scratch_bindings,
         )
       }
       for reload in before {

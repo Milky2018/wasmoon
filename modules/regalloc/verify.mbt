@@ -19,14 +19,14 @@ pub suberror VerifyError {
     left_location~ : Location,
     right_location~ : Location
   )
-  EdgeCopyScratchUnavailable(message~ : String)
+  ScratchRegisterUnavailable(message~ : String)
 }
 
 ///|
-pub fn raise_edge_copy_scratch_unavailable(
+pub fn raise_scratch_register_unavailable(
   message~ : String,
 ) -> Unit raise VerifyError {
-  raise EdgeCopyScratchUnavailable(message~)
+  raise ScratchRegisterUnavailable(message~)
 }
 
 ///|
