@@ -448,6 +448,78 @@ pub fn eliminate_dead_code(func : Function) -> OptResult {
 }
 
 ///|
+fn collect_constants(func : Function) -> @hashmap.HashMap[Int, ConstValue] {
+  let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
+  for block in func.blocks {
+    for inst in block.instructions {
+      record_const(inst, constants)
+    }
+  }
+  constants
+}
+
+///|
+fn int_const_is_zero(value : ConstValue) -> Bool? {
+  match value {
+    CI32(v) => Some(v == 0)
+    CI64(v) => Some(v == 0L)
+    _ => None
+  }
+}
+
+///|
+fn int_const_to_table_index(value : ConstValue) -> Int? {
+  match value {
+    CI32(v) => Some(v)
+    // TODO(milkir): decide whether large i64 br_table indices should be
+    // truncated or rejected by frontend-specific legality before simplifying.
+    CI64(v) => Some(v.to_int())
+    _ => None
+  }
+}
+
+///|
+/// Simplify conditional branches whose condition is a known integer constant.
+pub fn simplify_branches(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("simplify_branches")
+  let constants = collect_constants(func)
+  for block in func.blocks {
+    match block.terminator {
+      Some(Brz(cond, true_target, false_target)) =>
+        if constants.get(cond.id) is Some(value) &&
+          int_const_is_zero(value) is Some(is_zero) {
+          block.terminator = Some(
+            Jump(if is_zero { true_target } else { false_target }, []),
+          )
+          result.mark_changed()
+        }
+      Some(Brnz(cond, true_target, false_target)) =>
+        if constants.get(cond.id) is Some(value) &&
+          int_const_is_zero(value) is Some(is_zero) {
+          block.terminator = Some(
+            Jump(if !is_zero { true_target } else { false_target }, []),
+          )
+          result.mark_changed()
+        }
+      Some(BrTable(index, targets, default_target)) =>
+        if constants.get(index.id) is Some(value) &&
+          int_const_to_table_index(value) is Some(target_index) {
+          let target = if target_index >= 0 && target_index < targets.length() {
+            targets[target_index]
+          } else {
+            default_target
+          }
+          block.terminator = Some(Jump(target, []))
+          result.mark_changed()
+        }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
 fn keep_values_by_index(
   values : Array[Value],
   keep_indices : Array[Int],
@@ -607,6 +679,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, fold_constants(func))
       merge_opt_result(result, eliminate_common_subexpressions(func))
       merge_opt_result(result, eliminate_dead_code(func))
+      merge_opt_result(result, simplify_branches(func))
       merge_opt_result(result, eliminate_dead_block_params(func))
       merge_opt_result(result, eliminate_unreachable_blocks(func))
       result

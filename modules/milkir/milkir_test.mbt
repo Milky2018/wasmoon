@@ -421,6 +421,84 @@ test "optimizer removes unreachable blocks" {
 }
 
 ///|
+test "optimizer simplifies constant brz" {
+  let builder = IRBuilder::new("branch_simp_brz")
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let zero = builder.iconst_i32(0)
+  builder.brz(zero, then_block, else_block)
+  builder.switch_to_block(then_block)
+  let then_value = builder.iconst_i32(42)
+  builder.return_([then_value])
+  builder.switch_to_block(else_block)
+  let else_value = builder.iconst_i32(100)
+  builder.return_([else_value])
+  let func = builder.get_function()
+  let result = simplify_branches(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function branch_simp_brz() -> i32 {
+      #|block0:
+      #|    v0:i32 = iconst 0
+      #|    jump block1
+      #|block1:
+      #|    v1:i32 = iconst 42
+      #|    return v1
+      #|block2:
+      #|    v2:i32 = iconst 100
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer simplifies constant br_table" {
+  let builder = IRBuilder::new("branch_simp_table")
+  let entry = builder.create_block()
+  let target0 = builder.create_block()
+  let target1 = builder.create_block()
+  let default_target = builder.create_block()
+  builder.switch_to_block(entry)
+  let index = builder.iconst_i32(1)
+  builder.br_table(index, [target0, target1], default_target)
+  builder.switch_to_block(target0)
+  builder.trap("target0")
+  builder.switch_to_block(target1)
+  builder.trap("target1")
+  builder.switch_to_block(default_target)
+  builder.trap("default")
+  let func = builder.get_function()
+  let result = simplify_branches(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function branch_simp_table() {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    jump block2
+      #|block1:
+      #|    trap "target0"
+      #|block2:
+      #|    trap "target1"
+      #|block3:
+      #|    trap "default"
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "CSE keeps duplicate loads without alias metadata" {
   let builder = IRBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)

@@ -22,6 +22,8 @@ pub fn instruction_count(Function) -> Int
 
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
+pub fn simplify_branches(Function) -> OptResult
+
 // Errors
 pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
