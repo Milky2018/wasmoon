@@ -192,6 +192,29 @@ test "plan MilkIR integer compare through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer shift through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("shl64", signature)
+  let value = milk.new_value(I64)
+  let count = milk.new_value(I64)
+  let shifted = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Ishl, [value, count], [shifted]))
+  entry.set_terminator(Return([shifted]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_shift_cl = false
+  for byte in plan.object.code {
+    if byte == 0xd3 {
+      has_shift_cl = true
+    }
+  }
+  inspect(has_shift_cl, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)

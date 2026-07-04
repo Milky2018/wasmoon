@@ -351,6 +351,36 @@ fn lower_int_div(
 }
 
 ///|
+fn lower_int_shift(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @milkir.Inst,
+  opcode : @machv.Opcode,
+) -> Unit {
+  let value_tmp = out.new_vreg(Int)
+  let count_tmp = out.new_vreg(Int)
+  let value_move = out.new_inst(Move)
+  value_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[0])))
+  value_move.add_operand(@machv.Operand::def(Virtual(value_tmp)))
+  block.append(value_move)
+  let count_move = out.new_inst(Move)
+  count_move.add_operand(@machv.Operand::use_reg(reg_for_value(inst.args[1])))
+  count_move.add_operand(@machv.Operand::def(Virtual(count_tmp)))
+  block.append(count_move)
+
+  let shift = out.new_inst(opcode)
+  shift.add_operand(@machv.Operand::use_reg(Virtual(value_tmp)))
+  shift.add_operand(@machv.Operand::use_reg(Virtual(count_tmp)))
+  shift.add_operand(@machv.Operand::def(Virtual(value_tmp)))
+  add_fixed_constraint(shift, 1, int_reg(1))
+  block.append(shift)
+  let result_move = out.new_inst(Move)
+  result_move.add_operand(@machv.Operand::use_reg(Virtual(value_tmp)))
+  add_defs(result_move, inst.results)
+  block.append(result_move)
+}
+
+///|
 fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
   match opcode {
     Iadd => IntAdd
@@ -436,6 +466,18 @@ fn lower_inst(
     }
     Udiv => {
       lower_int_div(out, block, inst, false)
+      return
+    }
+    Ishl => {
+      lower_int_shift(out, block, inst, IntShl)
+      return
+    }
+    Sshr => {
+      lower_int_shift(out, block, inst, IntShr(true))
+      return
+    }
+    Ushr => {
+      lower_int_shift(out, block, inst, IntShr(false))
       return
     }
     _ => ()

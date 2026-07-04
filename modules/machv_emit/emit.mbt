@@ -123,6 +123,13 @@ fn emit_x64_not_r64(object : CodeObject, reg : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_shift_r_cl(object : CodeObject, dst : Int, subopcode : Int) -> Unit {
+  emit_x64_rex_w(object, 0, (dst >> 3) & 1)
+  object.code.push(0xd3)
+  emit_x64_modrm(object, 3, subopcode, dst)
+}
+
+///|
 fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
   emit_x64_rex_w(object, 0, (dst >> 3) & 1)
@@ -537,6 +544,37 @@ fn emit_aarch64_int_cmp(
   // TODO(machv_emit): encode 32-bit comparisons once MachV carries lane width.
   emit_aarch64_cmp_rr(object, lhs, rhs, true)
   emit_aarch64_cset(object, dst, cond)
+}
+
+///|
+fn emit_aarch64_int_shift(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  kind : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let value = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} value",
+  )
+  let count = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} count",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): encode 32-bit shifts once MachV carries lane width.
+  emit_u32_le(
+    object,
+    (dst & 31) |
+    ((value & 7) << 5) |
+    (((value >> 3) & 3) << 8) |
+    ((kind & 15) << 10) |
+    ((0xc0 | (count & 31)) << 16) |
+    (0x9a << 24),
+  )
 }
 
 ///|
@@ -1144,6 +1182,35 @@ fn emit_x64_int_cmp(
 }
 
 ///|
+fn emit_x64_int_shift(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  subopcode : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let value = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} value",
+  )
+  let count = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} count",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  if count != 1 {
+    raise UnsupportedOperand(message="\{context} count must be in rcx")
+  }
+  // TODO(machv_emit): encode 32-bit shifts once MachV carries lane width.
+  if dst != value {
+    emit_x64_mov_rr(object, dst, value)
+  }
+  emit_x64_shift_r_cl(object, dst, subopcode)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1174,6 +1241,22 @@ fn write_aarch64_inst_bytes(
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
     IntCmp(cond) => emit_aarch64_int_cmp(object, inst, cond)
+    IntShl => emit_aarch64_int_shift(object, inst, 8, "shl")
+    IntShr(signed) =>
+      emit_aarch64_int_shift(
+        object,
+        inst,
+        if signed {
+          10
+        } else {
+          9
+        },
+        if signed {
+          "sshr"
+        } else {
+          "ushr"
+        },
+      )
     FloatAdd => emit_aarch64_float_binop3(object, inst, 0x2028, 0x6028, "fadd")
     FloatSub => emit_aarch64_float_binop3(object, inst, 0x2038, 0x6038, "fsub")
     FloatMul => emit_aarch64_float_binop3(object, inst, 0x2008, 0x6008, "fmul")
@@ -1216,6 +1299,22 @@ fn write_x64_inst_bytes(
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
     IntCmp(cond) => emit_x64_int_cmp(object, inst, cond)
+    IntShl => emit_x64_int_shift(object, inst, 4, "shl")
+    IntShr(signed) =>
+      emit_x64_int_shift(
+        object,
+        inst,
+        if signed {
+          7
+        } else {
+          5
+        },
+        if signed {
+          "sshr"
+        } else {
+          "ushr"
+        },
+      )
     FloatAdd => emit_x64_float_binop3(object, inst, 0x58, "fadd")
     FloatSub => emit_x64_float_binop3(object, inst, 0x5c, "fsub")
     FloatMul => emit_x64_float_binop3(object, inst, 0x59, "fmul")

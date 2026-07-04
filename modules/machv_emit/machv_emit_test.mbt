@@ -183,6 +183,33 @@ test "emit X64 integer compare bytes" {
 }
 
 ///|
+test "emit X64 integer shift bytes" {
+  let func = @machv.Function::new("x64_int_shift")
+  let entry = func.new_block()
+  let shl = func.new_inst(IntShl)
+  shl.add_operand(@machv.Operand::use_reg(Physical({ index: 8, class: Int })))
+  shl.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  shl.add_operand(@machv.Operand::def(Physical({ index: 10, class: Int })))
+  entry.append(shl)
+  let ushr = func.new_inst(IntShr(false))
+  ushr.add_operand(@machv.Operand::use_reg(Physical({ index: 8, class: Int })))
+  ushr.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  ushr.add_operand(@machv.Operand::def(Physical({ index: 8, class: Int })))
+  entry.append(ushr)
+  let sshr = func.new_inst(IntShr(true))
+  sshr.add_operand(@machv.Operand::use_reg(Physical({ index: 9, class: Int })))
+  sshr.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  sshr.add_operand(@machv.Operand::def(Physical({ index: 9, class: Int })))
+  entry.append(sshr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[77, 137, 194, 73, 211, 226, 73, 211, 232, 73, 211, 249, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -446,6 +473,52 @@ test "emit AArch64 integer compare bytes" {
       #|  230,
       #|  39,
       #|  159,
+      #|  154,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
+}
+
+///|
+test "emit AArch64 integer shift bytes" {
+  let func = @machv.Function::new("int_shift")
+  let entry = func.new_block()
+  let shl = func.new_inst(IntShl)
+  shl.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  shl.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  shl.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(shl)
+  let ushr = func.new_inst(IntShr(false))
+  ushr.add_operand(@machv.Operand::use_reg(Physical({ index: 4, class: Int })))
+  ushr.add_operand(@machv.Operand::use_reg(Physical({ index: 5, class: Int })))
+  ushr.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  entry.append(ushr)
+  let sshr = func.new_inst(IntShr(true))
+  sshr.add_operand(@machv.Operand::use_reg(Physical({ index: 7, class: Int })))
+  sshr.add_operand(@machv.Operand::use_reg(Physical({ index: 8, class: Int })))
+  sshr.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
+  entry.append(sshr)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  32,
+      #|  32,
+      #|  194,
+      #|  154,
+      #|  131,
+      #|  36,
+      #|  197,
+      #|  154,
+      #|  230,
+      #|  40,
+      #|  200,
       #|  154,
       #|  192,
       #|  3,
