@@ -76,6 +76,62 @@ test "lower globals through native VMContext loads and stores" {
 }
 
 ///|
+test "lower table size and get through native VMContext loads" {
+  let table : @types.Table = {
+    type_: {
+      elem_type: FuncRef,
+      limits: { min: 2, max: None },
+      is_table64: false,
+    },
+    init: None,
+  }
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [I32, I64],
+      [TableSize(0), I32Const(0), TableGet(0)],
+      "table_probe",
+    ),
+    tables: [table],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("ireduce"), content="true")
+  inspect(text.contains("trap \"table out of bounds\""), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower table set through native table fill custom shape" {
+  let table : @types.Table = {
+    type_: {
+      elem_type: FuncRef,
+      limits: { min: 2, max: None },
+      is_table64: false,
+    },
+    init: None,
+  }
+  let mod_ = {
+    ..@types.Module::simple(
+      [I64],
+      [],
+      [I32Const(0), LocalGet(0), TableSet(0)],
+      "table_set",
+    ),
+    tables: [table],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("wasmoon.TableFill"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower linear explicit return without legacy bridge" {
   let mod_ = @types.Module::simple(
     [I64, I64],

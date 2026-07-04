@@ -2,7 +2,22 @@
 const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
+const VMCTX_TABLE0_BASE_OFFSET : Int = 32
+
+///|
+const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
+
+///|
+const VMCTX_TABLES_OFFSET : Int = 56
+
+///|
+const VMCTX_TABLE_SIZES_OFFSET : Int = 72
+
+///|
 const GLOBAL_STRIDE : Int = 16
+
+///|
+const TABLE_ENTRY_STRIDE : Int = 16
 
 ///|
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
@@ -198,6 +213,20 @@ fn collect_global_types(mod_ : @types.Module) -> Array[@types.GlobalType] {
 }
 
 ///|
+fn collect_table_types(mod_ : @types.Module) -> Array[@types.TableType] {
+  let tables : Array[@types.TableType] = []
+  for import_ in mod_.imports {
+    if import_.desc is Table(table_type) {
+      tables.push(table_type)
+    }
+  }
+  for table in mod_.tables {
+    tables.push(table.type_)
+  }
+  tables
+}
+
+///|
 fn push_direct_call(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -269,6 +298,159 @@ fn push_global_set(
   let field_offset = builder.iconst_i64((global_idx * GLOBAL_STRIDE).to_int64())
   builder.store_ptr(ty, globals_ptr, value, field_offset)
   true
+}
+
+///|
+fn table_is_64(table_types : Array[@types.TableType], table_idx : Int) -> Bool? {
+  if table_idx < 0 || table_idx >= table_types.length() {
+    None
+  } else {
+    Some(table_types[table_idx].is_table64)
+  }
+}
+
+///|
+fn push_table_size(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  table_types : Array[@types.TableType],
+  table_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  guard table_is_64(table_types, table_idx) is Some(is_table64) else {
+    return false
+  }
+  // TODO(ISS-023): source VMContext table layout from the reusable embedding
+  // ABI instead of copy-first constants from the legacy FuncEnvironment.
+  let size_i64 = if table_idx == 0 {
+    builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64()),
+    )
+  } else {
+    let sizes_ptr = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLE_SIZES_OFFSET.to_int64()),
+    )
+    builder.load_ptr(
+      I64,
+      sizes_ptr,
+      builder.iconst_i64((table_idx * 8).to_int64()),
+    )
+  }
+  if is_table64 {
+    stack.push(size_i64)
+  } else {
+    guard emit_op(builder, I32, Ireduce, [size_i64]) is Some(size_i32) else {
+      return false
+    }
+    stack.push(size_i32)
+  }
+  true
+}
+
+///|
+fn load_table_size_and_base(
+  builder : @milkir.IRBuilder,
+  context : @milkir.Value,
+  table_idx : Int,
+) -> (@milkir.Value, @milkir.Value) {
+  if table_idx == 0 {
+    let size = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64()),
+    )
+    let base = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLE0_BASE_OFFSET.to_int64()),
+    )
+    (size, base)
+  } else {
+    let idx_offset = builder.iconst_i64((table_idx * 8).to_int64())
+    let sizes_ptr = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLE_SIZES_OFFSET.to_int64()),
+    )
+    let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
+    let tables_ptr = builder.load_ptr(
+      I64,
+      context,
+      builder.iconst_i64(VMCTX_TABLES_OFFSET.to_int64()),
+    )
+    let base = builder.load_ptr(I64, tables_ptr, idx_offset)
+    (size, base)
+  }
+}
+
+///|
+fn push_table_get(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  vmctx : @milkir.Value?,
+  table_types : Array[@types.TableType],
+  table_idx : Int,
+) -> Bool {
+  guard vmctx is Some(context) else { return false }
+  guard table_is_64(table_types, table_idx) is Some(is_table64) else {
+    return false
+  }
+  guard pop_value(stack) is Some(elem_idx) else { return false }
+  let (table_size, table_base) = load_table_size_and_base(
+    builder, context, table_idx,
+  )
+  let elem_idx_i64 = if is_table64 {
+    elem_idx
+  } else {
+    guard emit_op(builder, I64, Uextend, [elem_idx]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
+  guard emit_op(builder, I32, Icmp(Ult), [elem_idx_i64, table_size])
+    is Some(in_bounds) else {
+    return false
+  }
+  let trap_block = builder.create_block()
+  let continue_block = builder.create_block()
+  builder.brnz(in_bounds, continue_block, trap_block)
+  builder.switch_to_block(trap_block)
+  builder.trap("table out of bounds")
+  builder.switch_to_block(continue_block)
+  let byte_offset = builder.imul(
+    elem_idx_i64,
+    builder.iconst_i64(TABLE_ENTRY_STRIDE.to_int64()),
+  )
+  let addr = builder.iadd(table_base, byte_offset)
+  stack.push(builder.load_ptr(I64, addr, builder.iconst_i64(0L)))
+  true
+}
+
+///|
+fn push_table_set(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  table_types : Array[@types.TableType],
+  table_idx : Int,
+) -> Bool {
+  guard table_is_64(table_types, table_idx) is Some(_) else { return false }
+  guard pop_value(stack) is Some(value) else { return false }
+  guard pop_value(stack) is Some(elem_idx) else { return false }
+  let one = if elem_idx.ty == I32 {
+    builder.iconst_i32(1)
+  } else {
+    builder.iconst_i64(1L)
+  }
+  // TODO(ISS-023): lower this custom helper to a reusable runtime call instead
+  // of preserving the legacy TableFill custom opcode shape.
+  emit_void_op(builder, Custom("wasmoon.TableFill(\{table_idx})"), [
+    elem_idx, value, one,
+  ])
 }
 
 ///|
@@ -398,6 +580,7 @@ fn try_lower_linear_function(
   get_code(mod_, func_local_idx)
   let code = mod_.codes[func_local_idx]
   let global_types = collect_global_types(mod_)
+  let table_types = collect_table_types(mod_)
   let builder = @milkir.IRBuilder::new(function_name(mod_, func_local_idx))
   let locals : Array[@milkir.Value] = []
   let mut vmctx : @milkir.Value? = None
@@ -452,6 +635,18 @@ fn try_lower_linear_function(
         }
       GlobalSet(idx) =>
         if !push_global_set(builder, stack, vmctx, global_types, idx) {
+          return None
+        }
+      TableSize(idx) =>
+        if !push_table_size(builder, stack, vmctx, table_types, idx) {
+          return None
+        }
+      TableGet(idx) =>
+        if !push_table_get(builder, stack, vmctx, table_types, idx) {
+          return None
+        }
+      TableSet(idx) =>
+        if !push_table_set(builder, stack, table_types, idx) {
           return None
         }
       I32Const(value) => stack.push(builder.iconst_i32(value))
