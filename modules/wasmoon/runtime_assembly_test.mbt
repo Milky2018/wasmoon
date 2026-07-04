@@ -23,3 +23,19 @@ test "wasmoon consumes reusable compiler infrastructure" {
   inspect(assembly.aarch64_abi.pointer_size, content="8")
   inspect(assembly.jit_glue.length(), content="6")
 }
+
+///|
+test "wasmoon plans wasm function through reusable compiler infrastructure" {
+  let mod_ = @types.Module::simple(
+    [I32, I32],
+    [I32],
+    [LocalGet(0), LocalGet(1), I32Add],
+    "add",
+  )
+  let env = @wasm_frontend.EmbeddingEnvironment::new(hidden_context_type=None)
+  let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
+  inspect(plan.entry_symbol, content="wasm_func_0")
+  debug_inspect(plan.target, content="X64")
+  inspect(plan.object.code.length() > 0, content="true")
+  inspect(plan.object.debug_entries.length() > 0, content="true")
+}

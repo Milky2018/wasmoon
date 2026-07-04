@@ -7,6 +7,8 @@ import {
   "Milky2018/machv_emit",
   "Milky2018/milkir",
   "Milky2018/regalloc",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/wasm_frontend",
   "Milky2018/wasmoon_jit",
   "Milky2018/x64_target",
   "moonbitlang/core/debug",
@@ -15,9 +17,15 @@ import {
 // Values
 pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise @machv_emit.EmitError
 
+pub fn plan_wasm_function_with_compiler_infra(@wasm_frontend.EmbeddingEnvironment, @types.Module, Int, @machv_emit.EmitTarget, opt_level? : Int) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError
+
 pub fn runtime_assembly() -> RuntimeAssembly
 
 // Errors
+pub suberror WasmCompilerPipelineError {
+  WasmCompilerPipelineFailure(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for WasmCompilerPipelineError
 
 // Types and methods
 pub(all) struct CompilerInfrastructureAssembly {

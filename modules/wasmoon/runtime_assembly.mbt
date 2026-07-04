@@ -26,6 +26,16 @@ pub(all) struct CompilerInfrastructureAssembly {
 } derive(Debug)
 
 ///|
+pub suberror WasmCompilerPipelineError {
+  WasmCompilerPipelineFailure(message~ : String)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for WasmCompilerPipelineError with fn output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
+
+///|
 pub fn runtime_assembly() -> RuntimeAssembly {
   {
     product_module: "Milky2018/wasmoon",
@@ -59,5 +69,23 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),
     jit_glue: @wasmoon_jit.default_native_glue(),
+  }
+}
+
+///|
+pub fn plan_wasm_function_with_compiler_infra(
+  env : @wasm_frontend.EmbeddingEnvironment,
+  mod_ : @types.Module,
+  func_local_idx : Int,
+  target : @machv_emit.EmitTarget,
+  opt_level? : Int = 2,
+) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
+  try {
+    let milk = @wasm_frontend.lower_function(env, mod_, func_local_idx)
+    @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
+    |> ignore
+    @wasmoon_jit.plan_milkir_integration_for_target(milk, target)
+  } catch {
+    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
   }
 }

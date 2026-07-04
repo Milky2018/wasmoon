@@ -5,12 +5,13 @@ import {
   "Milky2018/machv_regalloc",
   "Milky2018/milkir",
   "Milky2018/regalloc",
+  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon/wasm_frontend",
   "Milky2018/x64_target",
 }
 
 import {
-  "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/wat",
   "Milky2018/wasmoon/runtime",
