@@ -21,7 +21,11 @@ test "wasmoon consumes reusable compiler infrastructure" {
   inspect(assembly.code_object.debug_entries.length(), content="1")
   inspect(assembly.x64_abi.pointer_size, content="8")
   inspect(assembly.aarch64_abi.pointer_size, content="8")
-  inspect(assembly.jit_glue.length(), content="6")
+  inspect(assembly.jit_glue.length(), content="9")
+  inspect(
+    @wasmoon_jit.native_glue_covers_jit_ffi_stubs(glue=assembly.jit_glue),
+    content="true",
+  )
 }
 
 ///|

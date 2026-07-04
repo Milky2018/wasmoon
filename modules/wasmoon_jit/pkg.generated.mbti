@@ -286,6 +286,8 @@ pub fn is_null_ref(Int64) -> Bool
 
 pub fn is_wasi_exit_trap_code(Int) -> Bool
 
+pub fn jit_ffi_native_stub_sources() -> Array[String]
+
 pub fn jit_runtime_fixup_idx(Int) -> Int
 
 pub fn jit_trap_message(Int) -> String
@@ -301,6 +303,10 @@ pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarge
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
+
+pub fn native_glue_covers_jit_ffi_stubs(glue? : Array[NativeGlueBinding]) -> Bool
+
+pub fn native_glue_covers_source(Array[NativeGlueBinding], String) -> Bool
 
 pub fn patch_aarch64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
 
@@ -635,6 +641,7 @@ pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
 pub(all) struct NativeGlueBinding {
   kind : NativeGlueKind
   symbol : String
+  sources : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub(all) enum NativeGlueKind {
@@ -643,7 +650,10 @@ pub(all) enum NativeGlueKind {
   StackSwitch
   HostCallBridge
   WasmMemoryOp
+  GcRuntime
+  ExceptionHandling
   WasiPreview1
+  DebugInfo
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Profiler {

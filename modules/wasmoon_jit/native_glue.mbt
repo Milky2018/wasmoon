@@ -5,13 +5,17 @@ pub(all) enum NativeGlueKind {
   StackSwitch
   HostCallBridge
   WasmMemoryOp
+  GcRuntime
+  ExceptionHandling
   WasiPreview1
+  DebugInfo
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct NativeGlueBinding {
   kind : NativeGlueKind
   symbol : String
+  sources : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -33,17 +37,81 @@ pub impl Show for JitPipelineError with fn output(self, logger) {
 }
 
 ///|
-pub fn default_native_glue() -> Array[NativeGlueBinding] {
-  // TODO(wasmoon_jit): replace these manifest records with direct ownership
-  // checks over the moved jit_ffi C/assembly sources.
+pub fn jit_ffi_native_stub_sources() -> Array[String] {
   [
-    { kind: ExecutableMemory, symbol: "wasmoon_jit_exec_mem" },
-    { kind: TrapHandler, symbol: "wasmoon_jit_trap" },
-    { kind: StackSwitch, symbol: "wasmoon_jit_stack_switch" },
-    { kind: HostCallBridge, symbol: "wasmoon_jit_hostcall" },
-    { kind: WasmMemoryOp, symbol: "wasmoon_jit_memory_op" },
-    { kind: WasiPreview1, symbol: "wasmoon_jit_wasi_preview1" },
+    "jit.c", "trap.c", "exec_mem.c", "jit_context.c", "memory_ops.c", "segment_ops.c",
+    "gc_type_cache.c", "gc_ops.c", "gc_allocator.c", "gc_heap.c", "exception.c",
+    "wasi.c", "wasm_stack.c", "trampoline_call_x86_64.S", "stack_switch_aarch64.S",
+    "stack_switch_x86_64.S", "dwarf.c",
   ]
+}
+
+///|
+pub fn default_native_glue() -> Array[NativeGlueBinding] {
+  [
+    {
+      kind: ExecutableMemory,
+      symbol: "wasmoon_jit_exec_mem",
+      sources: ["exec_mem.c"],
+    },
+    { kind: TrapHandler, symbol: "wasmoon_jit_trap", sources: ["trap.c"] },
+    {
+      kind: StackSwitch,
+      symbol: "wasmoon_jit_stack_switch",
+      sources: [
+        "wasm_stack.c", "trampoline_call_x86_64.S", "stack_switch_aarch64.S", "stack_switch_x86_64.S",
+      ],
+    },
+    {
+      kind: HostCallBridge,
+      symbol: "wasmoon_jit_hostcall",
+      sources: ["jit.c", "jit_context.c"],
+    },
+    {
+      kind: WasmMemoryOp,
+      symbol: "wasmoon_jit_memory_op",
+      sources: ["memory_ops.c", "segment_ops.c"],
+    },
+    {
+      kind: GcRuntime,
+      symbol: "wasmoon_jit_gc",
+      sources: ["gc_type_cache.c", "gc_ops.c", "gc_allocator.c", "gc_heap.c"],
+    },
+    {
+      kind: ExceptionHandling,
+      symbol: "wasmoon_jit_exception",
+      sources: ["exception.c"],
+    },
+    { kind: WasiPreview1, symbol: "wasmoon_jit_wasi", sources: ["wasi.c"] },
+    { kind: DebugInfo, symbol: "wasmoon_jit_dwarf", sources: ["dwarf.c"] },
+  ]
+}
+
+///|
+pub fn native_glue_covers_source(
+  glue : Array[NativeGlueBinding],
+  source : String,
+) -> Bool {
+  for binding in glue {
+    for owned in binding.sources {
+      if owned == source {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+pub fn native_glue_covers_jit_ffi_stubs(
+  glue? : Array[NativeGlueBinding] = default_native_glue(),
+) -> Bool {
+  for source in jit_ffi_native_stub_sources() {
+    if !native_glue_covers_source(glue, source) {
+      return false
+    }
+  }
+  true
 }
 
 ///|

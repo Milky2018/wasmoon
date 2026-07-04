@@ -354,7 +354,16 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
   let x64_plan = try! plan_integration_for_target(milk, mach, X64)
   inspect(x64_plan.entry_symbol, content="entry")
   debug_inspect(x64_plan.target, content="X64")
-  inspect(x64_plan.native_glue.length(), content="6")
+  inspect(x64_plan.native_glue.length(), content="9")
+  inspect(jit_ffi_native_stub_sources().length(), content="17")
+  inspect(
+    native_glue_covers_jit_ffi_stubs(glue=x64_plan.native_glue),
+    content="true",
+  )
+  inspect(
+    native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
+    content="true",
+  )
   inspect(x64_plan.object.debug_entries.length(), content="1")
   inspect(x64_plan.object.code.length(), content="1")
   debug_inspect(x64_plan.object.code, content="[195]")
