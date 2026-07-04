@@ -147,6 +147,35 @@ fn emit_x64_cmp_rr(object : CodeObject, lhs : Int, rhs : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_setcc_r8(
+  object : CodeObject,
+  cond : @machv.Cond,
+  dst : Int,
+) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: setcc r/m8.
+  let b = (dst >> 3) & 1
+  if b != 0 || (dst & 7) >= 4 {
+    emit_x64_rex_if_needed(object, 0, b)
+  }
+  object.code.push(0x0f)
+  object.code.push(x64_jcc_opcode(cond) + 0x10)
+  emit_x64_modrm(object, 3, 0, dst)
+}
+
+///|
+fn emit_x64_movzx_r32_r8(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: movzx r32, r/m8.
+  let r = (dst >> 3) & 1
+  let b = (src >> 3) & 1
+  if r != 0 || b != 0 || (src & 7) >= 4 {
+    emit_x64_rex_if_needed(object, r, b)
+  }
+  object.code.push(0x0f)
+  object.code.push(0xb6)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
 fn emit_x64_cmp_imm32(object : CodeObject, lhs : Int, imm : Int) -> Unit {
   // Copied from legacy `vcode/emit/amd64_bytes`: cmp r/m64, imm32.
   emit_x64_rex_w(object, 0, (lhs >> 3) & 1)
@@ -255,6 +284,19 @@ fn emit_x64_jmp_rel32(object : CodeObject) -> Unit {
 fn emit_aarch64_b_cond(object : CodeObject, cond : @machv.Cond) -> Unit {
   // Copied from legacy `vcode/emit/instructions_bytes`: B.cond with patched imm19.
   emit_u32_le(object, 0x54000000 | aarch64_cond_bits(cond))
+}
+
+///|
+fn emit_aarch64_cset(
+  object : CodeObject,
+  dst : Int,
+  cond : @machv.Cond,
+) -> Unit {
+  // Copied from legacy `vcode/emit/instructions_bytes`: CSET as CSINC.
+  let inv_cond = aarch64_cond_bits(cond) ^ 1
+  let b0 = (dst & 31) | 0xe0
+  let b1 = 0x07 | ((inv_cond & 15) << 4) | 0x04
+  emit_u32_le(object, b0 | (b1 << 8) | (159 << 16) | (154 << 24))
 }
 
 ///|
@@ -478,6 +520,23 @@ fn emit_aarch64_int_not(
     (((src & 31) | 32) << 16) |
     (170 << 24),
   )
+}
+
+///|
+fn emit_aarch64_int_cmp(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  cond : @machv.Cond,
+) -> Unit raise EmitError {
+  let lhs = require_int_preg(find_operand(inst, Use, 0, "cmp"), "cmp lhs")
+  let rhs = require_int_preg(find_operand(inst, Use, 1, "cmp"), "cmp rhs")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "cmp"),
+    "cmp destination",
+  )
+  // TODO(machv_emit): encode 32-bit comparisons once MachV carries lane width.
+  emit_aarch64_cmp_rr(object, lhs, rhs, true)
+  emit_aarch64_cset(object, dst, cond)
 }
 
 ///|
@@ -1067,6 +1126,24 @@ fn emit_x64_int_not(
 }
 
 ///|
+fn emit_x64_int_cmp(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  cond : @machv.Cond,
+) -> Unit raise EmitError {
+  let lhs = require_int_preg(find_operand(inst, Use, 0, "cmp"), "cmp lhs")
+  let rhs = require_int_preg(find_operand(inst, Use, 1, "cmp"), "cmp rhs")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "cmp"),
+    "cmp destination",
+  )
+  // TODO(machv_emit): encode 32-bit comparisons once MachV carries lane width.
+  emit_x64_cmp_rr(object, lhs, rhs)
+  emit_x64_setcc_r8(object, cond, dst)
+  emit_x64_movzx_r32_r8(object, dst, dst)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -1096,6 +1173,7 @@ fn write_aarch64_inst_bytes(
     IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
+    IntCmp(cond) => emit_aarch64_int_cmp(object, inst, cond)
     FloatAdd => emit_aarch64_float_binop3(object, inst, 0x2028, 0x6028, "fadd")
     FloatSub => emit_aarch64_float_binop3(object, inst, 0x2038, 0x6038, "fsub")
     FloatMul => emit_aarch64_float_binop3(object, inst, 0x2008, 0x6008, "fmul")
@@ -1137,6 +1215,7 @@ fn write_x64_inst_bytes(
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
+    IntCmp(cond) => emit_x64_int_cmp(object, inst, cond)
     FloatAdd => emit_x64_float_binop3(object, inst, 0x58, "fadd")
     FloatSub => emit_x64_float_binop3(object, inst, 0x5c, "fsub")
     FloatMul => emit_x64_float_binop3(object, inst, 0x59, "fmul")

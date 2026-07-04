@@ -164,6 +164,34 @@ test "plan MilkIR integer not through reusable JIT pipeline" {
 }
 
 ///|
+test "plan MilkIR integer compare through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I32])
+  let milk = @milkir.Function::new("icmp_slt64", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let is_less = milk.new_value(I32)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Icmp(Slt), [lhs, rhs], [is_less]))
+  entry.set_terminator(Return([is_less]))
+  let plan = plan_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut has_setcc = false
+  let mut has_movzx = false
+  for i in 0..<(plan.object.code.length() - 1) {
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x9c {
+      has_setcc = true
+    }
+    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xb6 {
+      has_movzx = true
+    }
+  }
+  inspect(has_setcc, content="true")
+  inspect(has_movzx, content="true")
+  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+}
+
+///|
 test "wrap reusable JIT plan as cwasm artifact" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let milk = @milkir.Function::new("add64_artifact", signature)

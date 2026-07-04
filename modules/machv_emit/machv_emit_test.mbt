@@ -166,6 +166,23 @@ test "emit X64 integer not bytes" {
 }
 
 ///|
+test "emit X64 integer compare bytes" {
+  let func = @machv.Function::new("x64_int_cmp")
+  let entry = func.new_block()
+  let cmp = func.new_inst(IntCmp(Lt))
+  cmp.add_operand(@machv.Operand::use_reg(Physical({ index: 10, class: Int })))
+  cmp.add_operand(@machv.Operand::use_reg(Physical({ index: 11, class: Int })))
+  cmp.add_operand(@machv.Operand::def(Physical({ index: 9, class: Int })))
+  entry.append(cmp)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content="[77, 57, 218, 65, 15, 156, 193, 69, 15, 182, 201, 195]",
+  )
+}
+
+///|
 test "emit X64 pointer memory bytes" {
   let func = @machv.Function::new("mem")
   let entry = func.new_block()
@@ -384,6 +401,59 @@ test "emit AArch64 integer not bytes" {
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function(func)
   debug_inspect(object.code, content="[227, 3, 36, 170, 192, 3, 95, 214]")
+}
+
+///|
+test "emit AArch64 integer compare bytes" {
+  let func = @machv.Function::new("int_cmp")
+  let entry = func.new_block()
+  let cmp_eq = func.new_inst(IntCmp(Eq))
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 0, class: Int })),
+  )
+  cmp_eq.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 1, class: Int })),
+  )
+  cmp_eq.add_operand(@machv.Operand::def(Physical({ index: 5, class: Int })))
+  entry.append(cmp_eq)
+  let cmp_ult = func.new_inst(IntCmp(Ult))
+  cmp_ult.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 2, class: Int })),
+  )
+  cmp_ult.add_operand(
+    @machv.Operand::use_reg(Physical({ index: 3, class: Int })),
+  )
+  cmp_ult.add_operand(@machv.Operand::def(Physical({ index: 6, class: Int })))
+  entry.append(cmp_ult)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  31,
+      #|  0,
+      #|  1,
+      #|  235,
+      #|  229,
+      #|  23,
+      #|  159,
+      #|  154,
+      #|  95,
+      #|  0,
+      #|  3,
+      #|  235,
+      #|  230,
+      #|  39,
+      #|  159,
+      #|  154,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
 }
 
 ///|
