@@ -44,6 +44,10 @@ pub fn decode_i31(Int64) -> Int
 
 pub fn default_native_glue() -> Array[NativeGlueBinding]
 
+pub fn direct_call_idx_memory_copy_mem0() -> Int
+
+pub fn direct_call_idx_memory_fill_mem0() -> Int
+
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
 
 pub fn encode_externref(Int) -> Int64
@@ -279,6 +283,8 @@ pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@ty
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
 
 pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?
 

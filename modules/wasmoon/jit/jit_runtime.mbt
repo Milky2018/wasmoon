@@ -110,16 +110,6 @@ pub fn JITModule::new() -> JITModule {
 }
 
 ///|
-fn direct_call_idx_memory_fill_mem0() -> Int {
-  -1001
-}
-
-///|
-fn direct_call_idx_memory_copy_mem0() -> Int {
-  -1002
-}
-
-///|
 fn install_direct_call_stubs(
   jit_module : JITModule,
 ) -> Unit raise JITModuleLoadError {
@@ -144,11 +134,11 @@ fn install_direct_call_stubs(
   }
 
   install_one(
-    direct_call_idx_memory_fill_mem0(),
+    @wasmoon_jit.direct_call_idx_memory_fill_mem0(),
     @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
   )
   install_one(
-    direct_call_idx_memory_copy_mem0(),
+    @wasmoon_jit.direct_call_idx_memory_copy_mem0(),
     @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
   )
 }
@@ -198,16 +188,14 @@ fn apply_call_fixups(
     if jit_module.functions.get(entry.func_idx) is Some(func) {
       let exec_ptr = func.exec_code.ptr()
       for fixup in entry.call_fixups {
-        let target_ptr = if fixup.func_idx >= 0 {
-          c_jit_read_i64(func_table_ptr + fixup.func_idx.to_int64() * 8L)
-        } else {
-          match jit_module.direct_call_targets.get(fixup.func_idx) {
-            Some(ptr) => ptr
-            None =>
-              abort(
-                "missing direct-call target for pseudo idx \{fixup.func_idx}",
-              )
-          }
+        let target_ptr = match
+          @wasmoon_jit.resolve_call_fixup_target(
+            fixup.func_idx,
+            func_table_ptr,
+            jit_module.direct_call_targets,
+          ) {
+          Some(ptr) => ptr
+          None => abort("missing direct-call target for idx \{fixup.func_idx}")
         }
         @wasmoon_jit.patch_aarch64_direct_call(exec_ptr, fixup, target_ptr)
       }

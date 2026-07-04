@@ -76,6 +76,20 @@ test "build AArch64 direct-call stubs in wasmoon_jit" {
 }
 
 ///|
+test "resolve direct-call fixup targets in wasmoon_jit" {
+  inspect(direct_call_idx_memory_fill_mem0(), content="-1001")
+  inspect(direct_call_idx_memory_copy_mem0(), content="-1002")
+  let targets : Map[Int, Int64] = {}
+  targets.set(direct_call_idx_memory_fill_mem0(), 0x1234L)
+  debug_inspect(
+    resolve_call_fixup_target(direct_call_idx_memory_fill_mem0(), 0L, targets),
+    content="Some(4660)",
+  )
+  debug_inspect(resolve_call_fixup_target(-9999, 0L, targets), content="None")
+  debug_inspect(resolve_call_fixup_target(3, 0L, targets), content="None")
+}
+
+///|
 test "encode AArch64 BL immediate for direct-call fixups" {
   debug_inspect(
     encode_aarch64_bl_imm26(0x1000L, 0x1008L),

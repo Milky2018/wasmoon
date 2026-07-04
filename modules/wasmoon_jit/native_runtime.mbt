@@ -675,6 +675,16 @@ pub fn build_aarch64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
 }
 
 ///|
+pub fn direct_call_idx_memory_fill_mem0() -> Int {
+  -1001
+}
+
+///|
+pub fn direct_call_idx_memory_copy_mem0() -> Int {
+  -1002
+}
+
+///|
 pub fn patch_aarch64_load_imm64_fixed(
   exec_ptr : Int64,
   offset : Int,
@@ -702,6 +712,22 @@ pub fn resolve_func_addr_fixup_target(
     Some(c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L))
   } else {
     resolve_runtime_func_fixup_idx(func_idx)
+  }
+}
+
+///|
+pub fn resolve_call_fixup_target(
+  func_idx : Int,
+  func_table_ptr : Int64,
+  direct_call_targets : Map[Int, Int64],
+) -> Int64? {
+  if func_idx >= 0 {
+    if func_table_ptr == 0L {
+      return None
+    }
+    Some(c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L))
+  } else {
+    direct_call_targets.get(func_idx)
   }
 }
 
