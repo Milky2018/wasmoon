@@ -298,20 +298,15 @@ pub fn BacktrackingAllocator::new(
   algorithm? : RegallocAlgorithm = Backtracking,
 ) -> BacktrackingAllocator {
   let loop_depths = compute_loop_depths(func)
-  let num_blocks = func.blocks.length()
   let block_order = ranges.block_order
-  let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
-  for block_idx in 0..<num_blocks {
-    block_idx_by_order[block_order[block_idx]] = block_idx
+  let block_lengths : Array[Int] = []
+  for block in func.blocks {
+    block_lengths.push(block.insts.length())
   }
-  let block_point_base : Array[Int] = Array::make(num_blocks, 0)
-  let mut point_cursor = 0
-  for ord in 0..<num_blocks {
-    block_point_base[ord] = point_cursor
-    let block_idx = block_idx_by_order[ord]
-    let block_len = func.blocks[block_idx].insts.length()
-    point_cursor = point_cursor + (block_len + 2) * 2
-  }
+  let block_point_base = @core_regalloc.compute_block_point_bases(
+    backtrack_core_block_order(block_order),
+    block_lengths,
+  )
   // Keep register probing/regalloc retries aligned with regalloc2 behavior:
   // no large-function downscaling on the main allocation search.
   let split_probe_limit = 1 << 30

@@ -410,6 +410,14 @@ test "ordered span conflict scan skips ended occupied spans" {
 }
 
 ///|
+test "compute block point bases from block order and lengths" {
+  debug_inspect(
+    compute_block_point_bases([2, 0, 1], [3, 1, 0]),
+    content="[0, 6, 10]",
+  )
+}
+
+///|
 test "scan conflicts rejects pinned and cutoff conflicts" {
   let span : OrderedProgramSpan = {
     start: ProgramPoint::new(0, 0),
