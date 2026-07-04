@@ -1683,6 +1683,100 @@ fn emit_aarch64_call_ptr(
 }
 
 ///|
+fn emit_aarch64_sp_adjust(
+  object : CodeObject,
+  frame_size : Int,
+  subtract : Bool,
+) -> Unit raise EmitError {
+  if frame_size == 0 {
+    return
+  }
+  guard frame_size >= 0 && frame_size <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 frame size requires unsigned 12-bit SP adjustment",
+    )
+  }
+  let base = if subtract { 0xd10003ff } else { 0x910003ff }
+  emit_u32_le(object, base | ((frame_size & 0xfff) << 10))
+}
+
+///|
+fn emit_aarch64_save_restore_gpr(
+  object : CodeObject,
+  reg : Int,
+  offset : Int,
+  save : Bool,
+) -> Unit raise EmitError {
+  let imm12 = require_scaled_stack_offset(offset, 8, "AArch64 callee-save GPR")
+  let base = if save { 0xf9000000 } else { 0xf9400000 }
+  emit_u32_le(object, base | ((imm12 & 0xfff) << 10) | (31 << 5) | (reg & 0x1f))
+}
+
+///|
+fn emit_aarch64_save_restore_fpr(
+  object : CodeObject,
+  reg : Int,
+  offset : Int,
+  save : Bool,
+) -> Unit raise EmitError {
+  let imm12 = require_scaled_stack_offset(offset, 8, "AArch64 callee-save FPR")
+  let base = if save { 0xfd000000 } else { 0xfd400000 }
+  emit_u32_le(object, base | ((imm12 & 0xfff) << 10) | (31 << 5) | (reg & 0x1f))
+}
+
+///|
+fn emit_aarch64_prologue(
+  object : CodeObject,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  emit_aarch64_sp_adjust(object, frame.frame_size, true)
+  for reg in frame.saved_gprs {
+    emit_aarch64_save_restore_gpr(
+      object,
+      reg,
+      frame.get_gpr_save_offset(reg),
+      true,
+    )
+  }
+  for reg in frame.saved_fprs {
+    emit_aarch64_save_restore_fpr(
+      object,
+      reg,
+      frame.get_fpr_save_offset(reg),
+      true,
+    )
+  }
+}
+
+///|
+fn emit_aarch64_epilogue(
+  object : CodeObject,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  for offset in 0..<frame.saved_fprs.length() {
+    let i = frame.saved_fprs.length() - 1 - offset
+    let reg = frame.saved_fprs[i]
+    emit_aarch64_save_restore_fpr(
+      object,
+      reg,
+      frame.get_fpr_save_offset(reg),
+      false,
+    )
+  }
+  for offset in 0..<frame.saved_gprs.length() {
+    let i = frame.saved_gprs.length() - 1 - offset
+    let reg = frame.saved_gprs[i]
+    emit_aarch64_save_restore_gpr(
+      object,
+      reg,
+      frame.get_gpr_save_offset(reg),
+      false,
+    )
+  }
+  emit_aarch64_sp_adjust(object, frame.frame_size, false)
+}
+
+///|
 fn emit_aarch64_stack_addr(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -2609,6 +2703,39 @@ fn emit_x64_call_ptr(
 }
 
 ///|
+fn emit_x64_sp_adjust(
+  object : CodeObject,
+  frame_size : Int,
+  subtract : Bool,
+) -> Unit {
+  if frame_size == 0 {
+    return
+  }
+  object.code.push(0x48)
+  object.code.push(0x81)
+  object.code.push(if subtract { 0xec } else { 0xc4 })
+  emit_u32_le(object, frame_size)
+}
+
+///|
+fn emit_x64_prologue(object : CodeObject, frame : StackFrameLayout) -> Unit {
+  emit_x64_sp_adjust(object, frame.frame_size, true)
+  for reg in frame.saved_gprs {
+    emit_x64_int_stack_store(object, reg, frame.get_gpr_save_offset(reg))
+  }
+}
+
+///|
+fn emit_x64_epilogue(object : CodeObject, frame : StackFrameLayout) -> Unit {
+  for offset in 0..<frame.saved_gprs.length() {
+    let i = frame.saved_gprs.length() - 1 - offset
+    let reg = frame.saved_gprs[i]
+    emit_x64_int_stack_load(object, reg, frame.get_gpr_save_offset(reg))
+  }
+  emit_x64_sp_adjust(object, frame.frame_size, false)
+}
+
+///|
 fn emit_x64_stack_addr(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -3119,6 +3246,7 @@ fn emit_terminator(
   block_id : Int,
   term : @machv.Terminator,
   frame : StackFrameLayout,
+  emit_abi_frame : Bool,
 ) -> Unit raise EmitError {
   match term {
     TermBranch(_, _, _, _, _)
@@ -3140,6 +3268,12 @@ fn emit_terminator(
   let opcode = opcode_for_terminator(term)
   let inst = @machv.Instruction::new(-1, opcode)
   let offset = object.current_offset()
+  if emit_abi_frame && term is TermReturn(_) {
+    match target {
+      AArch64 => emit_aarch64_epilogue(object, frame)
+      X64 => emit_x64_epilogue(object, frame)
+    }
+  }
   write_inst_bytes(object, target, inst, frame)
   record_relocations(object, offset, opcode)
   object.debug_entries.push({
@@ -3148,6 +3282,131 @@ fn emit_terminator(
     inst_id: -1,
     opcode: opcode_debug_name(opcode),
   })
+}
+
+///|
+fn int_array_contains(values : Array[Int], value : Int) -> Bool {
+  for item in values {
+    if item == value {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn is_callee_saved_gpr(target : EmitTarget, reg : Int) -> Bool {
+  match target {
+    AArch64 => reg >= 19 && reg <= 28
+    X64 =>
+      reg == 3 || reg == 5 || reg == 12 || reg == 13 || reg == 14 || reg == 15
+  }
+}
+
+///|
+fn is_callee_saved_fpr(target : EmitTarget, reg : Int) -> Bool {
+  match target {
+    AArch64 => reg >= 8 && reg <= 15
+    X64 => false
+  }
+}
+
+///|
+fn record_saved_reg(
+  target : EmitTarget,
+  reg : @machv.Reg,
+  saved_gprs : Array[Int],
+  saved_fprs : Array[Int],
+) -> Unit {
+  if reg is Physical(preg) && !preg.is_spilled() {
+    match preg.class {
+      Int =>
+        if is_callee_saved_gpr(target, preg.index) &&
+          !int_array_contains(saved_gprs, preg.index) {
+          saved_gprs.push(preg.index)
+        }
+      Float32 | Float64 | Vector =>
+        if is_callee_saved_fpr(target, preg.index) &&
+          !int_array_contains(saved_fprs, preg.index) {
+          saved_fprs.push(preg.index)
+        }
+    }
+  }
+}
+
+///|
+fn collect_terminator_saved_regs(
+  target : EmitTarget,
+  term : @machv.Terminator,
+  saved_gprs : Array[Int],
+  saved_fprs : Array[Int],
+) -> Unit {
+  match term {
+    TermJump(_, args) | TermReturn(args) =>
+      for arg in args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+    TermBranch(cond, _, true_args, _, false_args) => {
+      record_saved_reg(target, cond, saved_gprs, saved_fprs)
+      for arg in true_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+      for arg in false_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+    }
+    TermBranchCmp(lhs, rhs, _, _, _, true_args, _, false_args) => {
+      record_saved_reg(target, lhs, saved_gprs, saved_fprs)
+      record_saved_reg(target, rhs, saved_gprs, saved_fprs)
+      for arg in true_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+      for arg in false_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+    }
+    TermBranchZero(value, _, _, _, true_args, _, false_args) => {
+      record_saved_reg(target, value, saved_gprs, saved_fprs)
+      for arg in true_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+      for arg in false_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+    }
+    TermBranchCmpImm(value, _, _, _, _, true_args, _, false_args) => {
+      record_saved_reg(target, value, saved_gprs, saved_fprs)
+      for arg in true_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+      for arg in false_args {
+        record_saved_reg(target, arg, saved_gprs, saved_fprs)
+      }
+    }
+    TermBrTable(value, _, _) =>
+      record_saved_reg(target, value, saved_gprs, saved_fprs)
+    TermTrap(_) => ()
+  }
+}
+
+///|
+fn collect_saved_regs(
+  func : @machv.Function,
+  target : EmitTarget,
+) -> (Array[Int], Array[Int]) {
+  let saved_gprs : Array[Int] = []
+  let saved_fprs : Array[Int] = []
+  for block in func.blocks {
+    for inst in block.instructions {
+      for operand in inst.operands {
+        record_saved_reg(target, operand.reg, saved_gprs, saved_fprs)
+      }
+    }
+    if block.terminator is Some(term) {
+      collect_terminator_saved_regs(target, term, saved_gprs, saved_fprs)
+    }
+  }
+  (saved_gprs, saved_fprs)
 }
 
 ///|
@@ -3281,10 +3540,16 @@ pub fn emit_function_for_target(
   target : EmitTarget,
 ) -> CodeObject raise EmitError {
   let object = CodeObject::new()
+  let emit_abi_frame = func.params.length() > 0
+  let (saved_gprs, saved_fprs) = if emit_abi_frame {
+    collect_saved_regs(func, target)
+  } else {
+    ([], [])
+  }
   let frame = if func.stack_slots.length() > 0 {
     StackFrameLayout::build_with_slots(
-      [],
-      [],
+      saved_gprs,
+      saved_fprs,
       func.stack_slots,
       false,
       0,
@@ -3292,8 +3557,8 @@ pub fn emit_function_for_target(
     )
   } else {
     StackFrameLayout::build(
-      [],
-      [],
+      saved_gprs,
+      saved_fprs,
       func.get_num_spill_slots(),
       false,
       0,
@@ -3302,13 +3567,23 @@ pub fn emit_function_for_target(
   }
   object.frame_size = frame.frame_size
   let block_offsets : Array[(Int, Int)] = []
+  let mut emitted_prologue = false
   for block in func.blocks {
+    if !emitted_prologue {
+      if emit_abi_frame {
+        match target {
+          AArch64 => emit_aarch64_prologue(object, frame)
+          X64 => emit_x64_prologue(object, frame)
+        }
+      }
+      emitted_prologue = true
+    }
     block_offsets.push((block.id, object.current_offset()))
     for inst in block.instructions {
       emit_instruction(object, target, block.id, inst, frame)
     }
     if block.terminator is Some(term) {
-      emit_terminator(object, target, block.id, term, frame)
+      emit_terminator(object, target, block.id, term, frame, emit_abi_frame)
     }
   }
   patch_block_fixups(object, target, block_offsets)
