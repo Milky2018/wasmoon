@@ -172,17 +172,7 @@ pub fn jit_results_to_values(
         let low = results[slot_idx]
         let high = results[slot_idx + 1]
         slot_idx += 2
-        // Reconstruct 16 bytes from two Int64 values using Buffer
-        let buf : @buffer.Buffer = Buffer(size_hint=16)
-        // Low 8 bytes (little-endian)
-        for i in 0..<8 {
-          buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
-        }
-        // High 8 bytes (little-endian)
-        for i in 0..<8 {
-          buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
-        }
-        V128(buf.contents())
+        V128(@types.int64_pair_to_v128_le(low, high))
       }
     }
     values.push(value)

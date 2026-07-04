@@ -62,6 +62,19 @@ pub fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
   result
 }
 
+///|
+/// Encode a Wasm v128 lane pair as 16 little-endian bytes.
+pub fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
+  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  for i in 0..<8 {
+    buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
+  }
+  for i in 0..<8 {
+    buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
+  }
+  buf.contents()
+}
+
 // ============ Hex Conversion Utilities ============
 
 ///|

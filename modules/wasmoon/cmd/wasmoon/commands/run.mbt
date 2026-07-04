@@ -189,14 +189,7 @@ fn convert_jit_results(
         let low = results[slot_idx]
         let high = results[slot_idx + 1]
         slot_idx += 2
-        let buf : @buffer.Buffer = Buffer(size_hint=16)
-        for i in 0..<8 {
-          buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
-        }
-        for i in 0..<8 {
-          buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
-        }
-        V128(buf.contents())
+        V128(@types.int64_pair_to_v128_le(low, high))
       }
     }
     values.push(value)

@@ -315,7 +315,7 @@ pub fn sync_jit_globals_to_store(
         V128 => {
           // Read both 64-bit halves and construct V128
           let high_value = @wasmoon_jit.c_jit_read_i64(offset + 8L)
-          V128(int64_pair_to_v128_le(raw_value, high_value))
+          V128(@types.int64_pair_to_v128_le(raw_value, high_value))
         }
       }
       // We already checked mutability, so set should succeed
@@ -1188,7 +1188,7 @@ fn decode_value(
     V128 => {
       let lo = read_slot_i64(values_ptr, slot_idx)
       let hi = read_slot_i64(values_ptr, slot_idx + 1)
-      (V128(int64_pair_to_v128_le(lo, hi)), 2)
+      (V128(@types.int64_pair_to_v128_le(lo, hi)), 2)
     }
     _ =>
       (

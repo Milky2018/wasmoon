@@ -70,6 +70,8 @@ pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
 
 pub fn get_rec_group_info(Array[Int], Int) -> (Int, Int)
 
+pub fn int64_pair_to_v128_le(Int64, Int64) -> Bytes
+
 pub fn int_to_hex(Int) -> String
 
 pub fn to_hex_byte(Int) -> String

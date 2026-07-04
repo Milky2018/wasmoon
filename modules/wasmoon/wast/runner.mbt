@@ -12,31 +12,6 @@ pub const EXTERNREF_TAG : Int64 = @types.EXTERNREF_TAG
 pub const FUNCREF_TAG : Int64 = @types.FUNCREF_TAG
 
 ///|
-/// Convert two Int64 (low and high) to V128 Bytes (16 bytes, little-endian)
-fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
-  let buf : @buffer.Buffer = Buffer(size_hint=16)
-  // Write low 8 bytes
-  buf.write_byte((low & 0xFFL).to_byte())
-  buf.write_byte(((low >> 8) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 16) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 24) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 32) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 40) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 48) & 0xFFL).to_byte())
-  buf.write_byte(((low >> 56) & 0xFFL).to_byte())
-  // Write high 8 bytes
-  buf.write_byte((high & 0xFFL).to_byte())
-  buf.write_byte(((high >> 8) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 16) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 24) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 32) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 40) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 48) & 0xFFL).to_byte())
-  buf.write_byte(((high >> 56) & 0xFFL).to_byte())
-  buf.contents()
-}
-
-///|
 /// Result of running WAST commands
 pub struct WastResult {
   mut passed : Int
@@ -940,7 +915,7 @@ pub fn invoke_action(
                     }
                     let low = results[result_idx]
                     let high = results[result_idx + 1]
-                    let bytes = int64_pair_to_v128_le(low, high)
+                    let bytes = @types.int64_pair_to_v128_le(low, high)
                     values.push(V128(bytes))
                     result_idx = result_idx + 2
                   }
