@@ -305,6 +305,115 @@ fn inst_result_is_used(inst : Inst, used : @hashmap.HashMap[Int, Bool]) -> Bool 
 }
 
 ///|
+priv struct ExprKey {
+  opcode : Opcode
+  args : Array[Value]
+  result_types : Array[Type]
+} derive(Eq, Hash)
+
+///|
+fn expr_key(inst : Inst) -> ExprKey {
+  {
+    opcode: inst.opcode,
+    args: inst.args.copy(),
+    result_types: inst.results.map(fn(v) { v.ty }),
+  }
+}
+
+///|
+fn is_pure_cse_candidate(inst : Inst) -> Bool {
+  guard inst.results.length() == 1 else { return false }
+  match inst.opcode {
+    Store
+    | StorePtr(_)
+    | Call(_)
+    | CallIndirect(_)
+    | CallPtr(_, _)
+    | Trap(_)
+    | Custom(_)
+    | Load
+    | LoadPtr(_)
+    | Sdiv
+    | Udiv
+    | Srem
+    | Urem
+    | FcvtToSint
+    | FcvtToUint => false
+    // TODO(milkir): allow memory and trap-prone operations once MilkIR carries
+    // alias, volatility, trapping, and overflow legality metadata.
+    _ => true
+  }
+}
+
+///|
+fn build_block_index(func : Function) -> @hashmap.HashMap[Int, Int] {
+  let block_index : @hashmap.HashMap[Int, Int] = HashMap([])
+  for i, block in func.blocks {
+    block_index.set(block.id, i)
+  }
+  block_index
+}
+
+///|
+fn restore_expr_table(
+  table : @hashmap.HashMap[ExprKey, Value],
+  local_entries : Array[(ExprKey, Value?)],
+) -> Unit {
+  for entry in local_entries.rev_iter() {
+    let (key, previous) = entry
+    match previous {
+      Some(value) => table.set(key, value)
+      None => table.remove(key)
+    }
+  }
+}
+
+///|
+pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("cse")
+  if func.blocks.length() == 0 {
+    return result
+  }
+  let cfg = CFG::build(func)
+  let idom = cfg.compute_dominators()
+  let domtree = build_dominator_tree(idom)
+  let block_index = build_block_index(func)
+  let expressions : @hashmap.HashMap[ExprKey, Value] = HashMap([])
+  fn visit(block_id : Int) {
+    guard block_index.get(block_id) is Some(index) else { return }
+    let block = func.blocks[index]
+    let local_entries : Array[(ExprKey, Value?)] = []
+    for inst in block.instructions {
+      if !is_pure_cse_candidate(inst) {
+        continue
+      }
+      let key = expr_key(inst)
+      match expressions.get(key) {
+        Some(existing) => {
+          inst.opcode = Copy
+          inst.args.clear()
+          inst.args.push(existing)
+          result.mark_changed()
+        }
+        None => {
+          local_entries.push((key, expressions.get(key)))
+          expressions.set(key, inst.results[0])
+        }
+      }
+    }
+    if block_id < domtree.length() {
+      for child in domtree[block_id] {
+        visit(child)
+      }
+    }
+    restore_expr_table(expressions, local_entries)
+  }
+  visit(0)
+  result
+}
+
+///|
 pub fn eliminate_dead_code(func : Function) -> OptResult {
   let result = OptResult::new()
   result.add_pass("dce")
@@ -356,6 +465,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
     O2 | O3 => {
       let result = OptResult::new()
       merge_opt_result(result, fold_constants(func))
+      merge_opt_result(result, eliminate_common_subexpressions(func))
       merge_opt_result(result, eliminate_dead_code(func))
       result
     }

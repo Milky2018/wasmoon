@@ -262,3 +262,99 @@ test "dead code pass keeps unused loads without alias metadata" {
   inspect(opt.changed, content="false")
   inspect(instruction_count(func), content="3")
 }
+
+///|
+test "optimizer CSE replaces duplicate pure expression with copy" {
+  let builder = IRBuilder::new("cse_local")
+  let lhs = builder.add_param(I32)
+  let rhs = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let _sum0 = builder.iadd(lhs, rhs)
+  let sum1 = builder.iadd(lhs, rhs)
+  builder.return_([sum1])
+  let func = builder.get_function()
+  let result = optimize_with_level(func, O2)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function cse_local(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    v3:i32 = copy v2
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "optimizer CSE reuses expressions from dominating blocks" {
+  let builder = IRBuilder::new("cse_global")
+  let lhs = builder.add_param(I32)
+  let rhs = builder.add_param(I32)
+  let cond = builder.add_param(I32)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  builder.switch_to_block(entry)
+  let sum0 = builder.iadd(lhs, rhs)
+  builder.brnz(cond, then_block, else_block)
+  builder.switch_to_block(then_block)
+  let sum1 = builder.iadd(lhs, rhs)
+  builder.return_([sum1])
+  builder.switch_to_block(else_block)
+  builder.return_([sum0])
+  let func = builder.get_function()
+  let result = optimize_with_level(func, O2)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function cse_global(v0:i32, v1:i32, v2:i32) -> i32 {
+      #|block0:
+      #|    v3:i32 = iadd v0, v1
+      #|    brnz v2, block1, block2
+      #|block1:
+      #|    v4:i32 = copy v3
+      #|    return v4
+      #|block2:
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "CSE keeps duplicate loads without alias metadata" {
+  let builder = IRBuilder::new("no_load_cse")
+  let ptr = builder.add_param(Ptr)
+  builder.add_result(I32)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  let offset = builder.iconst_i64(0L)
+  let _loaded0 = builder.load_ptr(I32, ptr, offset)
+  let loaded1 = builder.load_ptr(I32, ptr, offset)
+  builder.return_([loaded1])
+  let func = builder.get_function()
+  let result = eliminate_common_subexpressions(func)
+  inspect(result.changed, content="false")
+  inspect(
+    func.print(),
+    content=(
+      #|function no_load_cse(v0:ptr) -> i32 {
+      #|block0:
+      #|    v1:i64 = iconst 0
+      #|    v2:i32 = load_ptr.i32 v0, v1
+      #|    v3:i32 = load_ptr.i32 v0, v1
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
+}
