@@ -9,7 +9,25 @@ import {
 }
 
 // Values
+pub fn decode_externref(Int64) -> Int?
+
+pub fn decode_funcref_idx(Int64) -> Int?
+
+pub fn decode_gc_heap_ref(Int64) -> Int?
+
 pub fn default_native_glue() -> Array[NativeGlueBinding]
+
+pub fn encode_externref(Int) -> Int64
+
+pub fn encode_funcref_idx(Int) -> Int64
+
+pub fn encode_gc_heap_ref(Int) -> Int64
+
+pub fn encode_null_ref() -> Int64
+
+pub fn is_funcref_ptr(Int64) -> Bool
+
+pub fn is_null_ref(Int64) -> Bool
 
 pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
@@ -20,6 +38,10 @@ pub fn plan_integration(@milkir.Function, @machv.Function) -> JitIntegrationPlan
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn tag_funcref_ptr(Int64) -> Int64
+
+pub fn untag_funcref_ptr(Int64) -> Int64
 
 // Errors
 pub suberror JitPipelineError {

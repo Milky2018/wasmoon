@@ -97,3 +97,15 @@ test "wrap reusable JIT plan as cwasm artifact" {
   inspect(artifact.code.length() > 0, content="true")
   inspect(artifact.debug_entries.length(), content="2")
 }
+
+///|
+test "reference encoding helpers roundtrip JIT values" {
+  inspect(is_null_ref(encode_null_ref()), content="true")
+  debug_inspect(decode_funcref_idx(encode_funcref_idx(7)), content="Some(7)")
+  let tagged = tag_funcref_ptr(0x1000L)
+  inspect(is_funcref_ptr(tagged), content="true")
+  inspect(untag_funcref_ptr(tagged), content="4096")
+  debug_inspect(decode_externref(encode_externref(11)), content="Some(11)")
+  debug_inspect(decode_gc_heap_ref(encode_gc_heap_ref(3)), content="Some(3)")
+  debug_inspect(decode_gc_heap_ref(encode_null_ref()), content="None")
+}

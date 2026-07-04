@@ -1,4 +1,5 @@
 import {
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon/vcode",
   "Milky2018/wasmoon/vcode/emit",
