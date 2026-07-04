@@ -306,6 +306,33 @@ test "compact spill slots honors vector alignment and no-share edges" {
 }
 
 ///|
+test "priority work queue pops by priority with stable tie-breaks" {
+  let queue = PriorityWorkQueue::new()
+  queue.push(3, 10)
+  queue.push(1, 20)
+  queue.push(2, 20)
+  queue.push(0, 10)
+  inspect(queue.length(), content="4")
+  debug_inspect(
+    queue.pop(),
+    content="Some({ item_id: 1, priority: 20, seq: 1 })",
+  )
+  debug_inspect(
+    queue.pop(),
+    content="Some({ item_id: 2, priority: 20, seq: 2 })",
+  )
+  debug_inspect(
+    queue.pop(),
+    content="Some({ item_id: 3, priority: 10, seq: 0 })",
+  )
+  debug_inspect(
+    queue.pop(),
+    content="Some({ item_id: 0, priority: 10, seq: 3 })",
+  )
+  debug_inspect(queue.pop(), content="None")
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

@@ -149,6 +149,21 @@ pub(all) struct PhysicalReg {
   class : RegClass
 } derive(Eq, @debug.Debug)
 
+pub(all) struct PriorityWorkItem {
+  item_id : Int
+  priority : Int
+  seq : Int
+} derive(Eq, @debug.Debug)
+
+pub struct PriorityWorkQueue {
+  items : Array[PriorityWorkItem]
+  mut next_seq : Int
+}
+pub fn PriorityWorkQueue::length(Self) -> Int
+pub fn PriorityWorkQueue::new() -> Self
+pub fn PriorityWorkQueue::pop(Self) -> PriorityWorkItem?
+pub fn PriorityWorkQueue::push(Self, Int, Int) -> Unit
+
 pub(all) struct Program {
   blocks : Array[Block]
   physical_regs : Array[PhysicalReg]
