@@ -362,7 +362,7 @@ test "lower linear saturating conversion and reinterpret natively" {
 }
 
 ///|
-test "lower control flow into MilkIR blocks and terminators" {
+test "lower pure if into native MilkIR select" {
   let mod_ = @types.Module::simple(
     [I32],
     [I32],
@@ -372,8 +372,8 @@ test "lower control flow into MilkIR blocks and terminators" {
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(func.blocks.length() > 1, content="true")
-  inspect(text.contains("br"), content="true")
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("select"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }

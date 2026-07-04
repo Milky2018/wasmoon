@@ -763,6 +763,73 @@ fn push_ref_eq(
 }
 
 ///|
+fn single_block_result_type(block_type : @types.BlockType) -> @types.ValueType? {
+  match block_type {
+    Value(ty) => Some(ty)
+    _ => None
+  }
+}
+
+///|
+fn push_simple_expr_value(
+  builder : @milkir.IRBuilder,
+  locals : Array[@milkir.Value],
+  instr : @types.Instruction,
+) -> @milkir.Value? {
+  match instr {
+    LocalGet(idx) =>
+      if idx >= 0 && idx < locals.length() {
+        Some(locals[idx])
+      } else {
+        None
+      }
+    I32Const(value) => Some(builder.iconst_i32(value))
+    I64Const(value) => Some(builder.iconst_i64(value))
+    F32Const(value) => Some(builder.fconst_f32(value))
+    F64Const(value) => Some(builder.fconst_f64(value))
+    RefNull(ref_type) => {
+      let ty = wasm_value_type_to_milkir(ref_type)
+      emit_op(builder, ty, Iconst(@types.NULL_REF), [])
+    }
+    _ => None
+  }
+}
+
+///|
+fn push_simple_if_select(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  locals : Array[@milkir.Value],
+  block_type : @types.BlockType,
+  then_body : Array[@types.Instruction],
+  else_body : Array[@types.Instruction],
+) -> Bool {
+  guard single_block_result_type(block_type) is Some(result_ty) else {
+    return false
+  }
+  if then_body.length() != 1 || else_body.length() != 1 {
+    return false
+  }
+  guard pop_value(stack) is Some(cond) else { return false }
+  guard push_simple_expr_value(builder, locals, then_body[0])
+    is Some(true_value) else {
+    return false
+  }
+  guard push_simple_expr_value(builder, locals, else_body[0])
+    is Some(false_value) else {
+    return false
+  }
+  let expected_ty = wasm_value_type_to_milkir(result_ty)
+  if true_value.ty != expected_ty || false_value.ty != expected_ty {
+    return false
+  }
+  // TODO(ISS-023): lower general structured `if` control flow with block
+  // parameters and branch labels. This select form is only for pure expressions.
+  stack.push(builder.select(cond, true_value, false_value))
+  true
+}
+
+///|
 fn push_memory_base(
   builder : @milkir.IRBuilder,
   vmctx : @milkir.Value,
@@ -896,7 +963,6 @@ fn append_linear_block_body(
       | BrOnNull(_)
       | BrOnNonNull(_)
       | Loop(_, _)
-      | If(_, _, _)
       | TryTable(_, _, _) =>
         // TODO(ISS-023): lower structured labels and branch stack effects
         // directly instead of using the legacy translator bridge.
@@ -959,6 +1025,12 @@ fn try_lower_linear_function(
     }
     match instr {
       Nop => ()
+      If(block_type, then_body, else_body) =>
+        if !push_simple_if_select(
+            builder, stack, locals, block_type, then_body, else_body,
+          ) {
+          return None
+        }
       LocalGet(idx) => {
         if idx < 0 || idx >= locals.length() {
           return None
