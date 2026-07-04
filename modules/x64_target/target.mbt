@@ -134,6 +134,11 @@ fn reg_for_value(value : @milkir.Value) -> @machv.Reg {
 }
 
 ///|
+fn regs_for_values(values : Array[@milkir.Value]) -> Array[@machv.Reg] {
+  values.map(reg_for_value)
+}
+
+///|
 fn add_uses(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
   for value in values {
     inst.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
@@ -269,52 +274,52 @@ fn lower_inst(
 
 ///|
 fn lower_terminator(
-  out : @machv.Function,
   block : @machv.Block,
   terminator : @milkir.Terminator,
 ) -> Unit {
   match terminator {
-    Return(values) => {
-      let inst = out.new_inst(Return)
-      add_uses(inst, values)
-      block.append(inst)
-    }
-    Jump(target, values) => {
-      let inst = out.new_inst(Jump(target))
-      add_uses(inst, values)
-      block.append(inst)
-      block.add_successor(target)
-    }
-    Branch(cond, true_target, true_args, false_target, false_args) => {
-      let inst = out.new_inst(Branch(true_target, false_target))
-      inst.add_operand(@machv.Operand::use_reg(reg_for_value(cond)))
-      add_uses(inst, true_args)
-      add_uses(inst, false_args)
-      block.append(inst)
-      block.add_successor(true_target)
-      block.add_successor(false_target)
-    }
-    TrapExit(reason) => {
-      let inst = out.new_inst(Target("x64.trap_exit:" + reason))
-      block.append(inst)
-    }
-    Brz(cond, true_target, false_target)
-    | Brnz(cond, true_target, false_target) => {
-      let inst = out.new_inst(Branch(true_target, false_target))
-      inst.add_operand(@machv.Operand::use_reg(reg_for_value(cond)))
-      block.append(inst)
-      block.add_successor(true_target)
-      block.add_successor(false_target)
-    }
-    BrTable(index, targets, default_target) => {
-      let inst = out.new_inst(Target("x64.br_table"))
-      inst.add_operand(@machv.Operand::use_reg(reg_for_value(index)))
-      block.append(inst)
-      for target in targets {
-        block.add_successor(target)
-      }
-      block.add_successor(default_target)
-    }
+    Return(values) => block.set_terminator(TermReturn(regs_for_values(values)))
+    Jump(target, values) =>
+      block.set_terminator(TermJump(target, regs_for_values(values)))
+    Branch(cond, true_target, true_args, false_target, false_args) =>
+      block.set_terminator(
+        TermBranch(
+          reg_for_value(cond),
+          true_target,
+          regs_for_values(true_args),
+          false_target,
+          regs_for_values(false_args),
+        ),
+      )
+    TrapExit(reason) => block.set_terminator(TermTrap(reason))
+    Brz(cond, true_target, false_target) =>
+      block.set_terminator(
+        TermBranchZero(
+          reg_for_value(cond),
+          false,
+          true,
+          true_target,
+          [],
+          false_target,
+          [],
+        ),
+      )
+    Brnz(cond, true_target, false_target) =>
+      block.set_terminator(
+        TermBranchZero(
+          reg_for_value(cond),
+          true,
+          true,
+          true_target,
+          [],
+          false_target,
+          [],
+        ),
+      )
+    BrTable(index, targets, default_target) =>
+      block.set_terminator(
+        TermBrTable(reg_for_value(index), targets, default_target),
+      )
   }
 }
 
@@ -327,7 +332,7 @@ pub fn lower_function(func : @milkir.Function) -> @machv.Function {
       lower_inst(out, block, inst)
     }
     if milk_block.terminator is Some(terminator) {
-      lower_terminator(out, block, terminator)
+      lower_terminator(block, terminator)
     }
   }
   out

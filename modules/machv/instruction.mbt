@@ -59,10 +59,10 @@ pub(all) enum Cond {
 ///|
 pub(all) enum Terminator {
   TermJump(Int, Array[Reg])
-  TermBranch(Reg, Int, Int)
-  TermBranchCmp(Reg, Reg, Cond, Bool, Int, Int)
-  TermBranchZero(Reg, Bool, Bool, Int, Int)
-  TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Int)
+  TermBranch(Reg, Int, Array[Reg], Int, Array[Reg])
+  TermBranchCmp(Reg, Reg, Cond, Bool, Int, Array[Reg], Int, Array[Reg])
+  TermBranchZero(Reg, Bool, Bool, Int, Array[Reg], Int, Array[Reg])
+  TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Array[Reg], Int, Array[Reg])
   TermReturn(Array[Reg])
   TermTrap(String)
   TermBrTable(Reg, Array[Int], Int)

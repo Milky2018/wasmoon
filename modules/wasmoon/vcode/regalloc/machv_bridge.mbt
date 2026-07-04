@@ -66,13 +66,22 @@ fn @instr.VCodeTerminator::to_machv(
 ) -> @machv.Terminator {
   match self {
     Jump(target, args) => TermJump(target, args)
-    Branch(cond, then_b, else_b) => TermBranch(cond, then_b, else_b)
+    Branch(cond, then_b, else_b) => TermBranch(cond, then_b, [], else_b, [])
     BranchCmp(lhs, rhs, cond, is_64, then_b, else_b) =>
-      TermBranchCmp(lhs, rhs, cond_to_machv(cond), is_64, then_b, else_b)
+      TermBranchCmp(lhs, rhs, cond_to_machv(cond), is_64, then_b, [], else_b, [])
     BranchZero(reg, is_nonzero, is_64, then_b, else_b) =>
-      TermBranchZero(reg, is_nonzero, is_64, then_b, else_b)
+      TermBranchZero(reg, is_nonzero, is_64, then_b, [], else_b, [])
     BranchCmpImm(lhs, imm, cond, is_64, then_b, else_b) =>
-      TermBranchCmpImm(lhs, imm, cond_to_machv(cond), is_64, then_b, else_b)
+      TermBranchCmpImm(
+        lhs,
+        imm,
+        cond_to_machv(cond),
+        is_64,
+        then_b,
+        [],
+        else_b,
+        [],
+      )
     Return(values) => TermReturn(values)
     Trap(message) => TermTrap(message)
     BrTable(index, targets, default) => TermBrTable(index, targets, default)

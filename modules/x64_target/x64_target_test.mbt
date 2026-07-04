@@ -19,8 +19,8 @@ test "x64 lowers MilkIR arithmetic into MachV" {
   entry.set_terminator(Return([sum]))
   let lowered = lower_function(func)
   inspect(lowered.blocks.length(), content="1")
-  inspect(lowered.blocks[0].instructions.length(), content="2")
+  inspect(lowered.blocks[0].instructions.length(), content="1")
   inspect(lowered.blocks[0].instructions[0].opcode == IntAdd, content="true")
-  inspect(lowered.blocks[0].instructions[1].opcode == Return, content="true")
+  inspect(lowered.blocks[0].terminator is Some(TermReturn(_)), content="true")
   inspect(lowered.verify(), content="()")
 }

@@ -16,10 +16,10 @@ pub(all) struct Loop {
 fn terminator_successor_ids(term : Terminator) -> Array[Int] {
   match term {
     TermJump(target, _) => [target]
-    TermBranch(_, then_b, else_b)
-    | TermBranchCmp(_, _, _, _, then_b, else_b)
-    | TermBranchCmpImm(_, _, _, _, then_b, else_b)
-    | TermBranchZero(_, _, _, then_b, else_b) => [then_b, else_b]
+    TermBranch(_, then_b, _, else_b, _)
+    | TermBranchCmp(_, _, _, _, then_b, _, else_b, _)
+    | TermBranchCmpImm(_, _, _, _, then_b, _, else_b, _)
+    | TermBranchZero(_, _, _, then_b, _, else_b, _) => [then_b, else_b]
     TermBrTable(_, targets, default) => {
       let result : Array[Int] = []
       for target in targets {

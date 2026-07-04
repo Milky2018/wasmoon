@@ -31,10 +31,10 @@ pub fn Block::add_param(self : Block, param : VReg) -> Unit {
 fn terminator_successors(term : Terminator) -> Array[Int] {
   match term {
     TermJump(target, _) => [target]
-    TermBranch(_, true_target, false_target)
-    | TermBranchCmp(_, _, _, _, true_target, false_target)
-    | TermBranchZero(_, _, _, true_target, false_target)
-    | TermBranchCmpImm(_, _, _, _, true_target, false_target) =>
+    TermBranch(_, true_target, _, false_target, _)
+    | TermBranchCmp(_, _, _, _, true_target, _, false_target, _)
+    | TermBranchZero(_, _, _, true_target, _, false_target, _)
+    | TermBranchCmpImm(_, _, _, _, true_target, _, false_target, _) =>
       [true_target, false_target]
     TermBrTable(_, targets, default_target) => {
       let out : Array[Int] = []
