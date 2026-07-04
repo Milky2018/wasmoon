@@ -10,6 +10,8 @@ pub fn allocate(Program) -> Allocation
 
 pub fn allocation_iteration_limit(Int) -> Int
 
+pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
+
 pub fn build_live_ranges(Program) -> LiveRangeSet
 
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
@@ -171,6 +173,11 @@ pub(all) struct ConflictScanResult {
   first_conflict_point : ProgramPoint?
   rejected : Bool
 } derive(Eq, @debug.Debug)
+
+pub(all) struct DenseCfgEdges {
+  preds : Array[Array[Int]]
+  succs : Array[Array[Int]]
+} derive(@debug.Debug)
 
 pub(all) struct FixedConstraint {
   operand : FixedConstraintOperand

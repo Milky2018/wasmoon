@@ -175,90 +175,50 @@ priv struct CFGEdges {
 }
 
 ///|
-fn build_block_id_to_index_dense(func : VCodeFunction) -> Array[Int] {
-  let mut max_block_id = -1
-  for block in func.blocks {
-    if block.id > max_block_id {
-      max_block_id = block.id
-    }
-  }
-  if max_block_id < 0 {
-    return []
-  }
-  let block_id_to_index = Array::make(max_block_id + 1, -1)
-  for i, block in func.blocks {
-    if block.id >= 0 && block.id < block_id_to_index.length() {
-      block_id_to_index[block.id] = i
-    }
-  }
-  block_id_to_index
-}
-
-///|
 /// Build CFG edges once (O(B + E))
 fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
   let blocks = func.blocks
-  let n = func.blocks.length()
-  let preds : Array[Array[Int]] = []
-  let succs : Array[Array[Int]] = []
-  let block_id_to_index = build_block_id_to_index_dense(func)
-
-  // Initialize arrays
-  for _ in 0..<n {
-    preds.push([])
-    succs.push([])
+  let block_ids : Array[Int] = []
+  let block_successor_ids : Array[Array[Int]] = []
+  for _, block in blocks {
+    block_ids.push(block.id)
   }
-
-  // Build edges from terminators
-  for block_idx, block in blocks {
+  for _, block in blocks {
+    let block_succs : Array[Int] = []
     if block.terminator is Some(term) {
-      let block_succs : Array[Int] = []
-      fn push_succ(
-        block_id_to_index : Array[Int],
-        block_succs : Array[Int],
-        preds : Array[Array[Int]],
-        block_idx : Int,
-        succ_id : Int,
-      ) -> Unit {
-        if succ_id >= 0 && succ_id < block_id_to_index.length() {
-          let succ_idx = block_id_to_index[succ_id]
-          if succ_idx >= 0 {
-            block_succs.push(succ_idx)
-            preds[succ_idx].push(block_idx)
-          }
-        }
-      }
       match term {
-        Jump(target, _) =>
-          push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+        Jump(target, _) => block_succs.push(target)
         Branch(_, then_b, else_b) => {
-          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
-          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+          block_succs.push(then_b)
+          block_succs.push(else_b)
         }
         BranchCmp(_, _, _, _, then_b, else_b) => {
-          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
-          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+          block_succs.push(then_b)
+          block_succs.push(else_b)
         }
         BranchCmpImm(_, _, _, _, then_b, else_b) => {
-          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
-          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+          block_succs.push(then_b)
+          block_succs.push(else_b)
         }
         BranchZero(_, _, _, then_b, else_b) => {
-          push_succ(block_id_to_index, block_succs, preds, block_idx, then_b)
-          push_succ(block_id_to_index, block_succs, preds, block_idx, else_b)
+          block_succs.push(then_b)
+          block_succs.push(else_b)
         }
         BrTable(_, targets, default) => {
           for target in targets {
-            push_succ(block_id_to_index, block_succs, preds, block_idx, target)
+            block_succs.push(target)
           }
-          push_succ(block_id_to_index, block_succs, preds, block_idx, default)
+          block_succs.push(default)
         }
         Return(_) | Trap(_) => ()
       }
-      succs[block_idx] = block_succs
     }
+    block_successor_ids.push(block_succs)
   }
-  { preds, succs }
+  let edges = @core_regalloc.build_dense_successor_edges(
+    block_ids, block_successor_ids,
+  )
+  { preds: edges.preds, succs: edges.succs }
 }
 
 // ============ Worklist ============

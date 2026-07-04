@@ -150,6 +150,17 @@ test "compute reverse postorder from dense successors" {
 }
 
 ///|
+test "build dense CFG edges from sparse block ids" {
+  let edges = build_dense_successor_edges([10, 20, 30], [
+    [20, 30, 99],
+    [30],
+    [10],
+  ])
+  debug_inspect(edges.succs, content="[[1, 2], [2], [0]]")
+  debug_inspect(edges.preds, content="[[2], [0], [0, 1]]")
+}
+
+///|
 test "linear scan evicts longer active interval for shorter current interval" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
