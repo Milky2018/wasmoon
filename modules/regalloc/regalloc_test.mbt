@@ -224,6 +224,28 @@ test "plan long-distance rematerialization clones by pure use positions" {
 }
 
 ///|
+test "plan cross-block rematerialization clones once per use block" {
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let defs : Array[RematDefInfo] = [{ vreg: v0, block_id: 0, inst_index: 0 }]
+  let uses : Array[RematUseInfo] = [
+    { vreg: v0, block_id: 0, inst_index: 3 },
+    { vreg: v0, block_id: 1, inst_index: 2 },
+    { vreg: v0, block_id: 1, inst_index: 4 },
+    { vreg: v0, block_id: 2, inst_index: 1 },
+  ]
+  let plan = plan_cross_block_rematerializations(defs, uses)
+  debug_inspect(
+    plan,
+    content=(
+      #|[
+      #|  { vreg: { id: 0, class: Int }, block_id: 1, first_inst_index: 2 },
+      #|  { vreg: { id: 0, class: Int }, block_id: 2, first_inst_index: 1 },
+      #|]
+    ),
+  )
+}
+
+///|
 test "linear scan co-locates tied use-def operands" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }

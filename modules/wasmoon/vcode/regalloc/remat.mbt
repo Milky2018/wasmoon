@@ -15,7 +15,6 @@
 ///|
 priv struct RematDef {
   opcode : @instr.VCodeOpcode
-  def_block_id : Int
   cls : @abi.RegClass
   uses : Array[@abi.Reg]
   use_constraints : Array[@abi.OperandConstraint]
@@ -108,43 +107,26 @@ fn count_remat_plan(
 }
 
 ///|
-/// Clone long-distance rematerializable defs within the same block.
-///
-/// This mirrors Cranelift's remat intent for cheap constants: shorten very long
-/// live ranges by re-defining constants near far-away uses.
-pub fn rematerialize_long_distance_constants(
+fn remat_local_plan_key(block_id : Int, vreg_id : Int) -> Int {
+  block_id * 1_000_003 + vreg_id
+}
+
+///|
+fn count_local_remat_plan(
+  plans : Array[@core_regalloc.RematLocalCloneInfo],
+) -> Map[Int, Int] {
+  let counts : Map[Int, Int] = {}
+  for plan in plans {
+    let key = remat_local_plan_key(plan.block_id, plan.vreg.id)
+    counts.set(key, counts.get(key).unwrap_or(0) + 1)
+  }
+  counts
+}
+
+///|
+fn collect_remat_uses(
   func : VCodeFunction,
-) -> VCodeFunction {
-  let remat_defs : Map[Int, RematDef] = {}
-  let remat_def_infos : Array[@core_regalloc.RematDefInfo] = []
-  for block in func.blocks {
-    for inst_idx, inst in block.insts {
-      if is_long_distance_remat_candidate(inst.opcode) &&
-        inst.defs.length() == 1 &&
-        inst.def_constraints.length() == 1 &&
-        inst.def_constraints[0] is Any &&
-        inst.defs[0].reg is Virtual(vreg) &&
-        remat_defs.get(vreg.id) is None {
-        remat_defs.set(vreg.id, {
-          opcode: inst.opcode,
-          def_block_id: block.id,
-          cls: vreg.class,
-          uses: inst.uses.copy(),
-          use_constraints: inst.use_constraints.copy(),
-        })
-        remat_def_infos.push({
-          vreg: remat_virtual_reg(vreg),
-          block_id: block.id,
-          inst_index: inst_idx,
-        })
-      }
-    }
-  }
-  if remat_defs.is_empty() {
-    return func
-  }
-  let min_distance = 4
-  let per_vreg_clone_cap = 16
+) -> Array[@core_regalloc.RematUseInfo] {
   let remat_uses : Array[@core_regalloc.RematUseInfo] = []
   for block in func.blocks {
     for inst_idx, inst in block.insts {
@@ -179,10 +161,50 @@ pub fn rematerialize_long_distance_constants(
       }
     }
   }
+  remat_uses
+}
+
+///|
+/// Clone long-distance rematerializable defs within the same block.
+///
+/// This mirrors Cranelift's remat intent for cheap constants: shorten very long
+/// live ranges by re-defining constants near far-away uses.
+pub fn rematerialize_long_distance_constants(
+  func : VCodeFunction,
+) -> VCodeFunction {
+  let remat_defs : Map[Int, RematDef] = {}
+  let remat_def_infos : Array[@core_regalloc.RematDefInfo] = []
+  for block in func.blocks {
+    for inst_idx, inst in block.insts {
+      if is_long_distance_remat_candidate(inst.opcode) &&
+        inst.defs.length() == 1 &&
+        inst.def_constraints.length() == 1 &&
+        inst.def_constraints[0] is Any &&
+        inst.defs[0].reg is Virtual(vreg) &&
+        remat_defs.get(vreg.id) is None {
+        remat_defs.set(vreg.id, {
+          opcode: inst.opcode,
+          cls: vreg.class,
+          uses: inst.uses.copy(),
+          use_constraints: inst.use_constraints.copy(),
+        })
+        remat_def_infos.push({
+          vreg: remat_virtual_reg(vreg),
+          block_id: block.id,
+          inst_index: inst_idx,
+        })
+      }
+    }
+  }
+  if remat_defs.is_empty() {
+    return func
+  }
+  let min_distance = 4
+  let per_vreg_clone_cap = 16
   let remat_plan_counts = count_remat_plan(
     @core_regalloc.plan_long_distance_rematerializations(
       remat_def_infos,
-      remat_uses,
+      collect_remat_uses(func),
       min_distance~,
       per_vreg_clone_cap~,
     ),
@@ -396,10 +418,11 @@ pub fn rematerialize_cross_block_constants(
 ) -> VCodeFunction {
   // vreg_id -> rematerializable def
   let remat_defs : Map[Int, RematDef] = {}
+  let remat_def_infos : Array[@core_regalloc.RematDefInfo] = []
 
   // 1) Collect rematerializable defs.
   for block in func.blocks {
-    for inst in block.insts {
+    for inst_idx, inst in block.insts {
       if is_cross_block_remat_candidate(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.def_constraints.length() == 1 &&
@@ -408,10 +431,14 @@ pub fn rematerialize_cross_block_constants(
         remat_defs.get(vreg.id) is None {
         remat_defs.set(vreg.id, {
           opcode: inst.opcode,
-          def_block_id: block.id,
           cls: vreg.class,
           uses: inst.uses.copy(),
           use_constraints: inst.use_constraints.copy(),
+        })
+        remat_def_infos.push({
+          vreg: remat_virtual_reg(vreg),
+          block_id: block.id,
+          inst_index: inst_idx,
         })
       }
     }
@@ -419,6 +446,12 @@ pub fn rematerialize_cross_block_constants(
   if remat_defs.is_empty() {
     return func
   }
+  let remat_plan_counts = count_local_remat_plan(
+    @core_regalloc.plan_cross_block_rematerializations(
+      remat_def_infos,
+      collect_remat_uses(func),
+    ),
+  )
 
   // 2) Rebuild blocks and materialize remat defs at first use position.
   for i in 0..<func.blocks.length() {
@@ -436,6 +469,7 @@ pub fn rematerialize_cross_block_constants(
       local_map : Map[Int, @abi.VReg],
       block_id : Int,
       new_block : @block.VCodeBlock,
+      remat_plan_counts : Map[Int, Int],
     ) -> @abi.Reg {
       match reg {
         Virtual(v) =>
@@ -443,8 +477,11 @@ pub fn rematerialize_cross_block_constants(
             Some(nv) => Virtual(nv)
             None =>
               match remat_defs.get(v.id) {
-                Some(def) =>
-                  if def.def_block_id != block_id {
+                Some(def) => {
+                  let key = remat_local_plan_key(block_id, v.id)
+                  let planned = remat_plan_counts.get(key).unwrap_or(0)
+                  if planned > 0 {
+                    remat_plan_counts.set(key, planned - 1)
                     let nv = func.new_vreg(def.cls)
                     local_map.set(v.id, nv)
                     new_block.insts.push(clone_remat_inst(def, nv))
@@ -452,6 +489,7 @@ pub fn rematerialize_cross_block_constants(
                   } else {
                     reg
                   }
+                }
                 None => reg
               }
           }
@@ -468,6 +506,7 @@ pub fn rematerialize_cross_block_constants(
           local_map,
           block.id,
           new_block,
+          remat_plan_counts,
         )
       }
       new_block.insts.push(inst)
@@ -485,6 +524,7 @@ pub fn rematerialize_cross_block_constants(
                 local_map,
                 block.id,
                 new_block,
+                remat_plan_counts,
               ),
             )
           }
@@ -499,6 +539,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             t,
             e,
@@ -512,6 +553,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             rewrite_use_with_local_remat(
               func,
@@ -520,6 +562,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             cond,
             is64,
@@ -535,6 +578,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             is_nonzero,
             is64,
@@ -550,6 +594,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             imm,
             cond,
@@ -568,6 +613,7 @@ pub fn rematerialize_cross_block_constants(
                 local_map,
                 block.id,
                 new_block,
+                remat_plan_counts,
               ),
             )
           }
@@ -582,6 +628,7 @@ pub fn rematerialize_cross_block_constants(
               local_map,
               block.id,
               new_block,
+              remat_plan_counts,
             ),
             targets,
             default,
