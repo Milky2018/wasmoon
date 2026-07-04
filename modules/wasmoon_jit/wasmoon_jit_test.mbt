@@ -60,6 +60,16 @@ test "build AArch64 direct-call stubs in wasmoon_jit" {
 }
 
 ///|
+test "encode AArch64 BL immediate for direct-call fixups" {
+  debug_inspect(
+    encode_aarch64_bl_imm26(0x1000L, 0x1008L),
+    content="Some(-1811939326)",
+  )
+  debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x1002L), content="None")
+  debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x9000000L), content="None")
+}
+
+///|
 test "plan Wasmoon JIT integration without leaking into machv_emit" {
   let milk = @milkir.Function::new("entry", @milkir.Signature::new([], []))
   let mach = @machv.Function::new("entry")

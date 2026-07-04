@@ -647,6 +647,56 @@ pub fn patch_aarch64_load_imm64_fixed(
 }
 
 ///|
+pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
+  let diff = target_ptr - pc
+  if diff % 4L != 0L {
+    return None
+  }
+  let imm26 = diff / 4L
+  if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
+    return None
+  }
+  Some((0x94000000L | (imm26 & 0x3FFFFFFL)).to_int())
+}
+
+///|
+pub fn patch_aarch64_call_veneer_target(
+  exec_ptr : Int64,
+  fixup : @cwasm.CallFixup,
+  target_ptr : Int64,
+) -> Unit {
+  // Veneer layout (16 bytes):
+  //   +0:  ldr x16, #8
+  //   +4:  br x16
+  //   +8:  target_ptr literal (u64)
+  c_jit_write_i64(exec_ptr + fixup.veneer_offset.to_int64() + 8L, target_ptr)
+}
+
+///|
+pub fn patch_aarch64_direct_call(
+  exec_ptr : Int64,
+  fixup : @cwasm.CallFixup,
+  target_ptr : Int64,
+) -> Unit {
+  let pc = exec_ptr + fixup.offset.to_int64()
+  if encode_aarch64_bl_imm26(pc, target_ptr) is Some(encoded) {
+    c_jit_write_u32(pc, encoded)
+    return
+  }
+  if fixup.veneer_offset >= 0 {
+    let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
+    if encode_aarch64_bl_imm26(pc, veneer_pc) is Some(encoded) {
+      patch_aarch64_call_veneer_target(exec_ptr, fixup, target_ptr)
+      c_jit_write_u32(pc, encoded)
+      return
+    }
+  }
+  abort(
+    "direct call target out of range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
+  )
+}
+
+///|
 /// GC-managed executable code block wrapper.
 struct ExecCode(@jit_ffi.ExecCode)
 

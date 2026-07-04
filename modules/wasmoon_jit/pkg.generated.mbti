@@ -42,6 +42,8 @@ pub fn decode_i31(Int64) -> Int
 
 pub fn default_native_glue() -> Array[NativeGlueBinding]
 
+pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
+
 pub fn encode_externref(Int) -> Int64
 
 pub fn encode_funcref_idx(Int) -> Int64
@@ -247,6 +249,10 @@ pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @mac
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
+
+pub fn patch_aarch64_call_veneer_target(Int64, @cwasm.CallFixup, Int64) -> Unit
+
+pub fn patch_aarch64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
 
 pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
 
