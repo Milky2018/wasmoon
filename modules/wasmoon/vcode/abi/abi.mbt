@@ -241,312 +241,80 @@ pub fn wasm_layout_overflow_stack(
 
 ///|
 /// AAPCS64 parameter registers (arguments)
-/// X0-X7 for integer/pointer arguments
 pub fn aapcs64_arg_gprs() -> Array[PReg] {
-  [
-    { index: 0, class: Int },
-    { index: 1, class: Int },
-    { index: 2, class: Int },
-    { index: 3, class: Int },
-    { index: 4, class: Int },
-    { index: 5, class: Int },
-    { index: 6, class: Int },
-    { index: 7, class: Int },
-  ]
+  @aarch64_target.aapcs64_arg_gprs()
 }
 
 ///|
-/// AAPCS64 integer return registers
-/// X0-X7 can be used for return values (up to 8)
+/// AAPCS64 integer return registers.
 pub fn aapcs64_ret_gprs() -> Array[PReg] {
-  [
-    { index: 0, class: Int },
-    { index: 1, class: Int },
-    { index: 2, class: Int },
-    { index: 3, class: Int },
-    { index: 4, class: Int },
-    { index: 5, class: Int },
-    { index: 6, class: Int },
-    { index: 7, class: Int },
-  ]
+  @aarch64_target.aapcs64_ret_gprs()
 }
 
 ///|
-/// AAPCS64 callee-saved registers
+/// AAPCS64 callee-saved registers.
 pub fn aapcs64_callee_saved() -> Array[PReg] {
-  [
-    { index: 19, class: Int },
-    { index: 20, class: Int },
-    { index: 21, class: Int },
-    { index: 22, class: Int },
-    { index: 23, class: Int },
-    { index: 24, class: Int },
-    { index: 25, class: Int },
-    { index: 26, class: Int },
-    { index: 27, class: Int },
-    { index: 28, class: Int },
-    { index: 29, class: Int }, // FP
-    { index: 30, class: Int }, // LR
-  ]
+  @aarch64_target.aapcs64_callee_saved()
 }
 
 ///|
-/// Scratch registers available for allocation (caller-saved, no save/restore needed)
-/// X0-X15 are available for allocation.
-/// X16-X17 (IP0/IP1) are reserved for linker/code emission scratch and indirect calls.
+/// Scratch registers available for allocation.
 pub fn allocatable_scratch_regs() -> Array[PReg] {
-  [
-    { index: 0, class: Int },
-    { index: 1, class: Int },
-    { index: 2, class: Int },
-    { index: 3, class: Int },
-    { index: 4, class: Int },
-    { index: 5, class: Int },
-    { index: 6, class: Int },
-    { index: 7, class: Int },
-    { index: 8, class: Int },
-    { index: 9, class: Int },
-    { index: 10, class: Int },
-    { index: 11, class: Int },
-    { index: 12, class: Int },
-    { index: 13, class: Int },
-    { index: 14, class: Int },
-    { index: 15, class: Int },
-  ]
+  @aarch64_target.allocatable_scratch_regs()
 }
 
 ///|
-/// Callee-saved registers available for allocation (must be saved/restored).
-///
-/// When `enable_pinned_reg` is true (Cranelift-style pinned VMContext), X21 is
-/// reserved and excluded from allocation.
-///
-/// When `enable_pinned_reg` is false, X21 becomes allocatable (unpinned mode).
+/// Callee-saved registers available for allocation.
 pub fn allocatable_callee_saved_regs(
   enable_pinned_reg? : Bool = true,
 ) -> Array[PReg] {
-  if enable_pinned_reg {
-    [
-      { index: 19, class: Int },
-      { index: 20, class: Int },
-      { index: 22, class: Int },
-      { index: 23, class: Int },
-      { index: 24, class: Int },
-      { index: 25, class: Int },
-      { index: 26, class: Int },
-      { index: 27, class: Int },
-      { index: 28, class: Int },
-    ]
-  } else {
-    [
-      { index: 19, class: Int },
-      { index: 20, class: Int },
-      { index: 21, class: Int },
-      { index: 22, class: Int },
-      { index: 23, class: Int },
-      { index: 24, class: Int },
-      { index: 25, class: Int },
-      { index: 26, class: Int },
-      { index: 27, class: Int },
-      { index: 28, class: Int },
-    ]
-  }
+  @aarch64_target.allocatable_callee_saved_regs(enable_pinned_reg~)
 }
 
 ///|
-/// AAPCS64 floating-point argument registers
-/// V0-V7 (using D for f64, S for f32)
+/// AAPCS64 floating-point argument registers.
 pub fn aapcs64_arg_fprs() -> Array[PReg] {
-  [
-    { index: 0, class: Float64 },
-    { index: 1, class: Float64 },
-    { index: 2, class: Float64 },
-    { index: 3, class: Float64 },
-    { index: 4, class: Float64 },
-    { index: 5, class: Float64 },
-    { index: 6, class: Float64 },
-    { index: 7, class: Float64 },
-  ]
+  @aarch64_target.aapcs64_arg_fprs()
 }
 
 ///|
-/// AAPCS64 floating-point return registers
-/// V0-V7 can be used for return values (up to 8)
+/// AAPCS64 floating-point return registers.
 pub fn aapcs64_ret_fprs() -> Array[PReg] {
-  [
-    { index: 0, class: Float64 },
-    { index: 1, class: Float64 },
-    { index: 2, class: Float64 },
-    { index: 3, class: Float64 },
-    { index: 4, class: Float64 },
-    { index: 5, class: Float64 },
-    { index: 6, class: Float64 },
-    { index: 7, class: Float64 },
-  ]
+  @aarch64_target.aapcs64_ret_fprs()
 }
 
 ///|
-/// Registers clobbered by function calls (caller-saved)
-/// These are registers that the caller must assume are destroyed after a call.
-/// X0-X17 for integer (args, return, scratch)
+/// Registers clobbered by function calls.
 pub fn call_clobbered_gprs() -> Array[PReg] {
-  [
-    { index: 0, class: Int },
-    { index: 1, class: Int },
-    { index: 2, class: Int },
-    { index: 3, class: Int },
-    { index: 4, class: Int },
-    { index: 5, class: Int },
-    { index: 6, class: Int },
-    { index: 7, class: Int },
-    { index: 8, class: Int },
-    { index: 9, class: Int },
-    { index: 10, class: Int },
-    { index: 11, class: Int },
-    { index: 12, class: Int },
-    { index: 13, class: Int },
-    { index: 14, class: Int },
-    { index: 15, class: Int },
-    { index: 16, class: Int },
-    { index: 17, class: Int },
-  ]
+  @aarch64_target.call_clobbered_gprs()
 }
-
-///|
 
 ///|
 /// Floating-point registers clobbered by function calls.
-///
-/// Cranelift conservatively treats all V0-V31 as clobbered at callsites because
-/// it cannot model partial preservation of V8-V15.
-///
-/// For AppleAarch64 parity, we follow the same conservative approximation.
 pub fn call_clobbered_fprs() -> Array[PReg] {
-  [
-    { index: 0, class: Float64 },
-    { index: 1, class: Float64 },
-    { index: 2, class: Float64 },
-    { index: 3, class: Float64 },
-    { index: 4, class: Float64 },
-    { index: 5, class: Float64 },
-    { index: 6, class: Float64 },
-    { index: 7, class: Float64 },
-    { index: 8, class: Float64 },
-    { index: 9, class: Float64 },
-    { index: 10, class: Float64 },
-    { index: 11, class: Float64 },
-    { index: 12, class: Float64 },
-    { index: 13, class: Float64 },
-    { index: 14, class: Float64 },
-    { index: 15, class: Float64 },
-    { index: 16, class: Float64 },
-    { index: 17, class: Float64 },
-    { index: 18, class: Float64 },
-    { index: 19, class: Float64 },
-    { index: 20, class: Float64 },
-    { index: 21, class: Float64 },
-    { index: 22, class: Float64 },
-    { index: 23, class: Float64 },
-    { index: 24, class: Float64 },
-    { index: 25, class: Float64 },
-    { index: 26, class: Float64 },
-    { index: 27, class: Float64 },
-    { index: 28, class: Float64 },
-    { index: 29, class: Float64 },
-    { index: 30, class: Float64 },
-    { index: 31, class: Float64 },
-  ]
+  @aarch64_target.call_clobbered_fprs()
 }
 
 ///|
-/// Floating-point registers clobbered by *same-ABI* calls.
-///
-/// When both caller and callee use the same AArch64 ABI, V8-V15 are callee-saved
-/// (low 64 bits). We treat them as preserved across Wasm-to-Wasm calls.
-///
-/// This mirrors Cranelift’s practice of excluding V8-V15 clobbers when the callee
-/// has the same ABI as the caller.
+/// Floating-point registers clobbered by same-ABI calls.
 pub fn call_clobbered_fprs_same_abi() -> Array[PReg] {
-  [
-    { index: 0, class: Float64 },
-    { index: 1, class: Float64 },
-    { index: 2, class: Float64 },
-    { index: 3, class: Float64 },
-    { index: 4, class: Float64 },
-    { index: 5, class: Float64 },
-    { index: 6, class: Float64 },
-    { index: 7, class: Float64 },
-    { index: 16, class: Float64 },
-    { index: 17, class: Float64 },
-    { index: 18, class: Float64 },
-    { index: 19, class: Float64 },
-    { index: 20, class: Float64 },
-    { index: 21, class: Float64 },
-    { index: 22, class: Float64 },
-    { index: 23, class: Float64 },
-    { index: 24, class: Float64 },
-    { index: 25, class: Float64 },
-    { index: 26, class: Float64 },
-    { index: 27, class: Float64 },
-    { index: 28, class: Float64 },
-    { index: 29, class: Float64 },
-    { index: 30, class: Float64 },
-    { index: 31, class: Float64 },
-  ]
+  @aarch64_target.call_clobbered_fprs_same_abi()
 }
 
 ///|
-/// Callee-saved floating-point registers (V8-V15 low 64 bits in AAPCS64)
-/// Functions must preserve these across calls
+/// Callee-saved floating-point registers.
 pub fn callee_saved_fprs() -> Array[PReg] {
-  [
-    { index: 8, class: Float64 },
-    { index: 9, class: Float64 },
-    { index: 10, class: Float64 },
-    { index: 11, class: Float64 },
-    { index: 12, class: Float64 },
-    { index: 13, class: Float64 },
-    { index: 14, class: Float64 },
-    { index: 15, class: Float64 },
-  ]
+  @aarch64_target.callee_saved_fprs()
 }
 
 ///|
-/// Allocatable floating-point registers (caller-saved, no save/restore needed)
-/// V16-V31 are all available for allocation.
+/// Allocatable floating-point registers.
 pub fn allocatable_scratch_fprs() -> Array[PReg] {
-  [
-    { index: 16, class: Float64 },
-    { index: 17, class: Float64 },
-    { index: 18, class: Float64 },
-    { index: 19, class: Float64 },
-    { index: 20, class: Float64 },
-    { index: 21, class: Float64 },
-    { index: 22, class: Float64 },
-    { index: 23, class: Float64 },
-    { index: 24, class: Float64 },
-    { index: 25, class: Float64 },
-    { index: 26, class: Float64 },
-    { index: 27, class: Float64 },
-    { index: 28, class: Float64 },
-    { index: 29, class: Float64 },
-    { index: 30, class: Float64 },
-    { index: 31, class: Float64 },
-  ]
+  @aarch64_target.allocatable_scratch_fprs()
 }
 
 ///|
-/// Allocatable callee-saved floating-point registers (must be saved/restored)
-/// V8-V15 are callee-saved (low 64 bits)
+/// Allocatable callee-saved floating-point registers.
 pub fn allocatable_callee_saved_fprs() -> Array[PReg] {
-  [
-    { index: 8, class: Float64 },
-    { index: 9, class: Float64 },
-    { index: 10, class: Float64 },
-    { index: 11, class: Float64 },
-    { index: 12, class: Float64 },
-    { index: 13, class: Float64 },
-    { index: 14, class: Float64 },
-    { index: 15, class: Float64 },
-  ]
+  @aarch64_target.callee_saved_fprs()
 }
