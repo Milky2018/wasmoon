@@ -7,4 +7,5 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/x64_target",
+  "moonbitlang/core/hashset",
 }

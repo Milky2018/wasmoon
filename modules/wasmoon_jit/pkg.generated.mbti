@@ -7,6 +7,7 @@ import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
 }
 
 // Values
@@ -77,6 +78,8 @@ pub fn get_gc_struct_new_ptr() -> Int64
 pub fn get_gc_struct_set_ptr() -> Int64
 
 pub fn get_gc_type_check_subtype_ptr() -> Int64
+
+pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
@@ -166,6 +169,69 @@ pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
 pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
 
+pub(all) struct CallCounter {
+  counts : Map[Int, Int]
+  mut total_calls : Int
+}
+pub fn CallCounter::clear(Self) -> Unit
+pub fn CallCounter::get_count(Self, Int) -> Int
+pub fn CallCounter::increment(Self, Int) -> Int
+pub fn CallCounter::new() -> Self
+pub fn CallCounter::reset(Self, Int) -> Unit
+pub fn CallCounter::total(Self) -> Int
+pub fn CallCounter::unique_functions(Self) -> Int
+
+pub(all) enum CompilationDecision {
+  Interpret
+  CompileAndExecute(CompilationMode)
+  ExecuteCompiled
+}
+pub impl Show for CompilationDecision
+
+pub(all) enum CompilationMode {
+  Interpret
+  Baseline
+  Optimized
+}
+pub impl Show for CompilationMode
+
+pub(all) struct CompilationQueue {
+  requests : Array[CompilationRequest]
+  max_size : Int
+}
+pub fn CompilationQueue::clear(Self) -> Unit
+pub fn CompilationQueue::contains(Self, Int) -> Bool
+pub fn CompilationQueue::dequeue(Self) -> CompilationRequest?
+pub fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
+pub fn CompilationQueue::is_empty(Self) -> Bool
+pub fn CompilationQueue::length(Self) -> Int
+pub fn CompilationQueue::new(Int) -> Self
+
+pub(all) struct CompilationRequest {
+  func_idx : Int
+  mode : CompilationMode
+  priority : Int
+}
+pub fn CompilationRequest::new(Int, CompilationMode) -> Self
+pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
+
+pub(all) struct CompilationStrategy {
+  profiler : Profiler
+  queue : CompilationQueue
+  config : TieredConfig
+  mut decisions_interpret : Int
+  mut decisions_compile : Int
+  mut decisions_compiled : Int
+}
+pub fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
+pub fn CompilationStrategy::is_compiled(Self, Int) -> Bool
+pub fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
+pub fn CompilationStrategy::new(TieredConfig) -> Self
+pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
+pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
+pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
+pub impl Show for CompilationStrategy
+
 pub(all) struct CwasmArtifact {
   version : Int
   code : Array[Int]
@@ -184,6 +250,21 @@ pub(all) struct CwasmFunctionRecord {
   code_offset : Int
   code_size : Int
 } derive(Eq, @debug.Debug)
+
+pub(all) enum FunctionTemperature {
+  Cold
+  Warm
+  Hot
+}
+pub impl Show for FunctionTemperature
+
+pub(all) struct HotThreshold {
+  warm_threshold : Int
+  hot_threshold : Int
+}
+pub fn HotThreshold::aggressive() -> Self
+pub fn HotThreshold::conservative() -> Self
+pub fn HotThreshold::default() -> Self
 
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
@@ -214,6 +295,23 @@ pub(all) enum NativeGlueKind {
   WasiPreview1
 } derive(Eq, @debug.Debug)
 
+pub(all) struct Profiler {
+  counter : CallCounter
+  threshold : HotThreshold
+  hot_functions : @hashset.HashSet[Int]
+  pending_compilation : @hashset.HashSet[Int]
+  compiled_functions : @hashset.HashSet[Int]
+}
+pub fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
+pub fn Profiler::get_pending(Self) -> Array[Int]
+pub fn Profiler::is_compiled(Self, Int) -> Bool
+pub fn Profiler::mark_compiled(Self, Int) -> Unit
+pub fn Profiler::new(HotThreshold) -> Self
+pub fn Profiler::record_call(Self, Int) -> (Int, Bool)
+pub fn Profiler::should_use_jit(Self, Int) -> Bool
+pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for Profiler
+
 pub(all) struct ResolvedRuntimeRelocation {
   offset : Int
   symbol : String
@@ -231,6 +329,16 @@ pub(all) struct RuntimeSymbolResolver {
 pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
 pub fn RuntimeSymbolResolver::new() -> Self
 pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
+
+pub(all) struct TieredConfig {
+  baseline_threshold : Int
+  optimize_threshold : Int
+  synchronous : Bool
+  max_concurrent : Int
+}
+pub fn TieredConfig::default() -> Self
+pub fn TieredConfig::deferred() -> Self
+pub fn TieredConfig::eager() -> Self
 
 // Type aliases
 
