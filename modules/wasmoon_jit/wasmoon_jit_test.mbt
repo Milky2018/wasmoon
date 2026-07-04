@@ -52,7 +52,27 @@ test "plan MilkIR through reusable JIT pipeline" {
   let plan = try! plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  debug_inspect(plan.object.code, content="[72, 137, 194, 72, 1, 202, 195]")
+  debug_inspect(plan.object.code, content="[72, 137, 240, 72, 1, 248, 195]")
+  inspect(plan.object.debug_entries.length(), content="2")
+}
+
+///|
+test "plan MilkIR floating point through reusable JIT pipeline" {
+  let signature = @milkir.Signature::new([F64, F64], [F64])
+  let milk = @milkir.Function::new("fadd64", signature)
+  let lhs = milk.new_value(F64)
+  let rhs = milk.new_value(F64)
+  let sum = milk.new_value(F64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Fadd, [lhs, rhs], [sum]))
+  entry.set_terminator(Return([sum]))
+  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  debug_inspect(plan.target, content="X64")
+  inspect(plan.entry_symbol, content="fadd64")
+  debug_inspect(
+    plan.object.code,
+    content="[242, 15, 16, 208, 242, 15, 88, 209, 195]",
+  )
   inspect(plan.object.debug_entries.length(), content="2")
 }
 

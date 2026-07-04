@@ -26,6 +26,13 @@ test "x64 target owns SystemV machine environment policy" {
 }
 
 ///|
+test "x64 allocatable regs include floating point registers" {
+  let regs = allocatable_regs()
+  inspect(regs.any(fn(r) { r.class == Float64 }), content="true")
+  inspect(regs.any(fn(r) { r.class == Vector }), content="true")
+}
+
+///|
 test "x64 lowers MilkIR arithmetic into MachV" {
   let signature = @milkir.Signature::new([I64, I64], [I64])
   let func = @milkir.Function::new("add64", signature)

@@ -121,16 +121,27 @@ pub fn target() -> Target {
 
 ///|
 pub fn allocatable_regs() -> Array[@machv.PReg] {
-  [
-    int_reg(0),
-    int_reg(1),
-    int_reg(2),
-    int_reg(3),
-    int_reg(4),
-    int_reg(5),
-    int_reg(6),
-    int_reg(7),
-  ]
+  let env = build_machine_env()
+  let regs : Array[@machv.PReg] = []
+  for r in env.preferred_int {
+    regs.push(r)
+  }
+  for r in env.nonpreferred_int {
+    regs.push(r)
+  }
+  for r in env.preferred_float {
+    regs.push(r)
+  }
+  for r in env.nonpreferred_float {
+    regs.push(r)
+  }
+  for r in env.preferred_vector {
+    regs.push(r)
+  }
+  for r in env.nonpreferred_vector {
+    regs.push(r)
+  }
+  regs
 }
 
 ///|
