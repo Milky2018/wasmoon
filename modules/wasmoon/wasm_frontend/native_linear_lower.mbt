@@ -955,9 +955,7 @@ fn try_lower_linear_function(
   let mut terminated = false
   for instr in body {
     if terminated {
-      // TODO(ISS-023): native wasm_frontend should model unreachable tails
-      // directly instead of falling back to the legacy translator.
-      return None
+      continue
     }
     match instr {
       Nop => ()

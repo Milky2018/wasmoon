@@ -182,6 +182,23 @@ test "lower linear explicit return without legacy bridge" {
 }
 
 ///|
+test "lower return with dead tail without legacy bridge" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [I32Const(7), Return, I32Const(1), I32Const(2), I32Add],
+    "dead_tail",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("return"), content="true")
+  inspect(text.contains("iadd"), content="false")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower linear float arithmetic and drop without legacy bridge" {
   let mod_ = @types.Module::simple(
     [F64],
