@@ -29,7 +29,7 @@ test "lower simple wasm body into MilkIR operations" {
 }
 
 ///|
-test "lower locals through production translator bridge" {
+test "lower locals through native linear fast path" {
   let body : Array[@types.Instruction] = [
     LocalGet(0),
     LocalGet(1),
@@ -49,6 +49,23 @@ test "lower locals through production translator bridge" {
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("imul"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "lower linear explicit return without legacy bridge" {
+  let mod_ = @types.Module::simple(
+    [I64, I64],
+    [I64],
+    [LocalGet(0), LocalGet(1), I64Add, Return],
+    "add64",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(func.blocks.length(), content="1")
+  inspect(text.contains("iadd"), content="true")
+  inspect(text.contains("return"), content="true")
   inspect(func.verify(), content="()")
 }
 

@@ -68,6 +68,9 @@ pub fn lower_function(
   mod_ : @types.Module,
   func_local_idx : Int,
 ) -> @milkir.Function raise LowerError {
+  if try_lower_linear_function(env, mod_, func_local_idx) is Some(func) {
+    return func
+  }
   let func_type = get_func_type(mod_, func_local_idx)
   get_code(mod_, func_local_idx)
   let signature = wasm_func_type_to_signature(env, func_type)
