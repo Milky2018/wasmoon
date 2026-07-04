@@ -655,7 +655,7 @@ test "lower direct calls as generic MilkIR calls" {
 }
 
 ///|
-test "lower memory operations through Wasmoon-owned adapter opcodes" {
+test "lower memory operations through native MilkIR pointer ops" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -676,7 +676,8 @@ test "lower memory operations through Wasmoon-owned adapter opcodes" {
   let env = EmbeddingEnvironment::new()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("wasmoon.LoadMemBase"), content="true")
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("load_ptr.i64"), content="true")
   inspect(text.contains("load_ptr.i32"), content="true")
   inspect(text.contains("store_ptr.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
@@ -754,7 +755,8 @@ test "lower narrow memory operations through native MilkIR pointer ops" {
   let env = EmbeddingEnvironment::new()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("wasmoon.LoadMemBase"), content="true")
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("load_ptr.i64"), content="true")
   inspect(text.contains("store_ptr16"), content="true")
   inspect(text.contains("load_ptr8s.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")

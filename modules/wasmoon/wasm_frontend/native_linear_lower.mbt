@@ -2,6 +2,9 @@
 const VMCTX_FUNC_TABLE_OFFSET : Int = 24
 
 ///|
+const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
+
+///|
 const VMCTX_GLOBALS_OFFSET : Int = 48
 
 ///|
@@ -1141,7 +1144,21 @@ fn push_memory_base(
   vmctx : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value? {
-  emit_op(builder, I64, Custom("wasmoon.LoadMemBase(\{memidx})"), [vmctx])
+  if memidx != 0 {
+    // TODO(ISS-023): move the full multi-memory descriptor layout into the
+    // reusable embedding ABI before lowering non-zero memory bases natively.
+    None
+  } else {
+    // TODO(ISS-023): source VMContext memory0 layout from the reusable
+    // embedding ABI instead of copy-first constants from legacy VCode lowering.
+    Some(
+      builder.load_ptr(
+        I64,
+        vmctx,
+        builder.iconst_i64(VMCTX_MEMORY0_BASE_OFFSET.to_int64()),
+      ),
+    )
+  }
 }
 
 ///|
