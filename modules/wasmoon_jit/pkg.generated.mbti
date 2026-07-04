@@ -286,6 +286,8 @@ pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> Linked
 
 pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
 
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes

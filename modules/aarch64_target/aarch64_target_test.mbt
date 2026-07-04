@@ -15,6 +15,24 @@ test "AArch64 target owns Wasm indirect-call ABI policy" {
 }
 
 ///|
+test "AArch64 lowers Wasm function body entry ABI" {
+  let func = @milkir.Function::new("wasm_body", @milkir.Signature::new([], []))
+  func.add_param(Ptr) |> ignore
+  func.add_param(I64) |> ignore
+  func.add_param(I64) |> ignore
+  func.add_result(I64)
+  let entry = func.new_block([])
+  entry.set_terminator(Return([]))
+  let lowered = lower_wasm_body_function(func)
+  guard lowered.param_pregs[0] is Some(vmctx) else { fail("missing vmctx") }
+  guard lowered.param_pregs[1] is Some(arg0) else { fail("missing arg0") }
+  guard lowered.param_pregs[2] is Some(arg1) else { fail("missing arg1") }
+  inspect(vmctx.index, content="0")
+  inspect(arg0.index, content="1")
+  inspect(arg1.index, content="2")
+}
+
+///|
 test "AArch64 allocatable regs include floating point registers" {
   let regs = allocatable_regs()
   inspect(regs.any(fn(r) { r.class == Float32 }), content="true")

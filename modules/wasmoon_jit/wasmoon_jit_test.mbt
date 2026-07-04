@@ -256,6 +256,35 @@ test "plan MilkIR through reusable JIT pipeline" {
 }
 
 ///|
+fn return_def_preg_index(inst : @machv.Instruction) -> Int {
+  if inst.operands.length() > 1 && inst.operands[1].reg is Physical(preg) {
+    preg.index
+  } else {
+    -1
+  }
+}
+
+///|
+test "Wasmoon JIT can request Wasm body ABI lowering" {
+  let signature = @milkir.Signature::new([Ptr, I64, I64], [I64, I64])
+  let milk = @milkir.Function::new("wasm_body", signature)
+  let vmctx = milk.new_value(Ptr)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.set_terminator(Return([lhs, rhs]))
+  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
+  guard lowered.param_pregs[0] is Some(vmctx_preg) else {
+    fail("missing vmctx")
+  }
+  guard lowered.param_pregs[1] is Some(arg0_preg) else { fail("missing arg0") }
+  inspect(vmctx_preg.index, content="7")
+  inspect(arg0_preg.index, content="6")
+  inspect(return_def_preg_index(lowered.blocks[0].instructions[1]), content="2")
+  inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
+}
+
+///|
 test "plan MilkIR branch block params through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([], [I64])
   let milk = @milkir.Function::new("branch_block_params", signature)

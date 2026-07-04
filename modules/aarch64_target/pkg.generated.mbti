@@ -42,6 +42,8 @@ pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn lower_function(@milkir.Function) -> @machv.Function
 
+pub fn lower_wasm_body_function(@milkir.Function) -> @machv.Function
+
 pub fn target() -> Target
 
 pub fn wasm_arg_fprs() -> Array[@machv.PReg]

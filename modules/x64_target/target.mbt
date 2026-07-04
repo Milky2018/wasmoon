@@ -180,15 +180,26 @@ fn add_return_moves(
   out : @machv.Function,
   block : @machv.Block,
   values : Array[@milkir.Value],
+  wasm_body? : Bool = false,
 ) -> Unit {
   let abi = abi_policy()
+  let int_return_regs = if wasm_body {
+    wasm_ret_gprs()
+  } else {
+    abi.int_return_regs
+  }
+  let float_return_regs = if wasm_body {
+    wasm_ret_fprs()
+  } else {
+    abi.float_return_regs
+  }
   let mut int_result_idx = 0
   let mut float_result_idx = 0
   for value in values {
     let preg : @machv.PReg? = match class_for_type(value.ty) {
       Int =>
-        if int_result_idx < abi.int_return_regs.length() {
-          let out = Some(abi.int_return_regs[int_result_idx])
+        if int_result_idx < int_return_regs.length() {
+          let out = Some(int_return_regs[int_result_idx])
           int_result_idx = int_result_idx + 1
           out
         } else {
@@ -197,10 +208,10 @@ fn add_return_moves(
           None
         }
       Float32 | Float64 | Vector =>
-        if float_result_idx < abi.float_return_regs.length() {
+        if float_result_idx < float_return_regs.length() {
           let class = class_for_type(value.ty)
           let out = Some(
-            preg_with_class(abi.float_return_regs[float_result_idx], class),
+            preg_with_class(float_return_regs[float_result_idx], class),
           )
           float_result_idx = float_result_idx + 1
           out
@@ -267,26 +278,33 @@ fn signature_param_preg(
   ty : @milkir.Type,
   int_arg_idx : Int,
   float_arg_idx : Int,
+  wasm_body? : Bool = false,
 ) -> (@machv.PReg?, Int, Int) {
   let abi = abi_policy()
+  let int_arg_regs = if wasm_body {
+    [wasm_vmctx_arg_preg(), ..wasm_user_arg_gprs()]
+  } else {
+    abi.int_argument_regs
+  }
+  let float_arg_regs = if wasm_body {
+    wasm_arg_fprs()
+  } else {
+    abi.float_argument_regs
+  }
   match class_for_type(ty) {
     Int =>
-      if int_arg_idx < abi.int_argument_regs.length() {
-        (
-          Some(abi.int_argument_regs[int_arg_idx]),
-          int_arg_idx + 1,
-          float_arg_idx,
-        )
+      if int_arg_idx < int_arg_regs.length() {
+        (Some(int_arg_regs[int_arg_idx]), int_arg_idx + 1, float_arg_idx)
       } else {
         // TODO(x64_target): materialize stack-passed entry parameters once
         // MachV carries function-entry stack argument slots.
         (None, int_arg_idx, float_arg_idx)
       }
     Float32 | Float64 | Vector =>
-      if float_arg_idx < abi.float_argument_regs.length() {
+      if float_arg_idx < float_arg_regs.length() {
         let class = class_for_type(ty)
         (
-          Some(preg_with_class(abi.float_argument_regs[float_arg_idx], class)),
+          Some(preg_with_class(float_arg_regs[float_arg_idx], class)),
           int_arg_idx,
           float_arg_idx + 1,
         )
@@ -302,6 +320,7 @@ fn signature_param_preg(
 fn add_function_signature(
   func : @milkir.Function,
   out : @machv.Function,
+  wasm_body? : Bool = false,
 ) -> Unit {
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
@@ -309,7 +328,10 @@ fn add_function_signature(
     let vreg : @machv.VReg = { id: i, class: class_for_type(ty) }
     out.push_param(vreg)
     let (preg, next_int, next_float) = signature_param_preg(
-      ty, int_arg_idx, float_arg_idx,
+      ty,
+      int_arg_idx,
+      float_arg_idx,
+      wasm_body~,
     )
     out.add_param_preg(preg)
     int_arg_idx = next_int
@@ -1250,10 +1272,11 @@ fn lower_terminator(
   out : @machv.Function,
   block : @machv.Block,
   terminator : @milkir.Terminator,
+  wasm_body? : Bool = false,
 ) -> Unit {
   match terminator {
     Return(values) => {
-      add_return_moves(out, block, values)
+      add_return_moves(out, block, values, wasm_body~)
       block.set_terminator(TermReturn([]))
     }
     Jump(target, values) =>
@@ -1301,10 +1324,13 @@ fn lower_terminator(
 }
 
 ///|
-pub fn lower_function(func : @milkir.Function) -> @machv.Function {
+fn lower_function_with_abi(
+  func : @milkir.Function,
+  wasm_body : Bool,
+) -> @machv.Function {
   let out = @machv.Function::new(func.name)
   out.next_vreg_id = func.next_value_id
-  add_function_signature(func, out)
+  add_function_signature(func, out, wasm_body~)
   for slot in func.stack_slots {
     out.new_stack_slot(slot.size, slot.align) |> ignore
   }
@@ -1317,8 +1343,18 @@ pub fn lower_function(func : @milkir.Function) -> @machv.Function {
       lower_inst(func, out, block, inst)
     }
     if milk_block.terminator is Some(terminator) {
-      lower_terminator(out, block, terminator)
+      lower_terminator(out, block, terminator, wasm_body~)
     }
   }
   out
+}
+
+///|
+pub fn lower_function(func : @milkir.Function) -> @machv.Function {
+  lower_function_with_abi(func, false)
+}
+
+///|
+pub fn lower_wasm_body_function(func : @milkir.Function) -> @machv.Function {
+  lower_function_with_abi(func, true)
 }

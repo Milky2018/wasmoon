@@ -72,6 +72,17 @@ pub fn lower_milkir_for_target(
 }
 
 ///|
+pub fn lower_wasm_body_milkir_for_target(
+  func : @milkir.Function,
+  target : @machv_emit.EmitTarget,
+) -> @machv.Function {
+  match target {
+    AArch64 => @aarch64_target.lower_wasm_body_function(func)
+    X64 => @x64_target.lower_wasm_body_function(func)
+  }
+}
+
+///|
 fn allocatable_regs_for_target(
   target : @machv_emit.EmitTarget,
 ) -> Array[@machv.PReg] {

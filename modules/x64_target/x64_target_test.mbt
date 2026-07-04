@@ -15,6 +15,35 @@ test "x64 target owns Wasm indirect-call ABI policy" {
 }
 
 ///|
+fn return_def_preg_index(inst : @machv.Instruction) -> Int {
+  if inst.operands.length() > 1 && inst.operands[1].reg is Physical(preg) {
+    preg.index
+  } else {
+    -1
+  }
+}
+
+///|
+test "x64 lowers Wasm function body return ABI separately from SystemV" {
+  let func = @milkir.Function::new("wasm_body", @milkir.Signature::new([], []))
+  func.add_param(Ptr) |> ignore
+  let lhs = func.add_param(I64)
+  let rhs = func.add_param(I64)
+  func.add_result(I64)
+  func.add_result(I64)
+  let entry = func.new_block([])
+  entry.set_terminator(Return([lhs, rhs]))
+  let sysv = lower_function(func)
+  let wasm = lower_wasm_body_function(func)
+  guard wasm.param_pregs[0] is Some(vmctx) else { fail("missing vmctx") }
+  guard wasm.param_pregs[1] is Some(arg0) else { fail("missing arg0") }
+  inspect(vmctx.index, content="7")
+  inspect(arg0.index, content="6")
+  inspect(return_def_preg_index(sysv.blocks[0].instructions[1]), content="3")
+  inspect(return_def_preg_index(wasm.blocks[0].instructions[1]), content="2")
+}
+
+///|
 test "x64 target owns SystemV machine environment policy" {
   inspect(call_clobbered_gprs().length(), content="9")
   inspect(call_clobbered_fprs().length(), content="16")
