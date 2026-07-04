@@ -140,6 +140,53 @@ fn emit_x64_cmp_imm32(object : CodeObject, lhs : Int, imm : Int) -> Unit {
 }
 
 ///|
+fn emit_x64_rex_if_needed(object : CodeObject, r : Int, b : Int) -> Unit {
+  if r != 0 || b != 0 {
+    object.code.push(0x40 | ((r & 1) << 2) | (b & 1))
+  }
+}
+
+///|
+fn emit_x64_load_base_disp32(
+  object : CodeObject,
+  dst : Int,
+  base : Int,
+  offset : Int,
+  is_64 : Bool,
+) -> Unit {
+  let r = (dst >> 3) & 1
+  let b = (base >> 3) & 1
+  if is_64 {
+    emit_x64_rex_w(object, r, b)
+  } else {
+    emit_x64_rex_if_needed(object, r, b)
+  }
+  object.code.push(0x8b)
+  emit_x64_modrm(object, 2, dst, base)
+  emit_u32_le(object, offset)
+}
+
+///|
+fn emit_x64_store_base_disp32(
+  object : CodeObject,
+  base : Int,
+  src : Int,
+  offset : Int,
+  is_64 : Bool,
+) -> Unit {
+  let r = (src >> 3) & 1
+  let b = (base >> 3) & 1
+  if is_64 {
+    emit_x64_rex_w(object, r, b)
+  } else {
+    emit_x64_rex_if_needed(object, r, b)
+  }
+  object.code.push(0x89)
+  emit_x64_modrm(object, 2, src, base)
+  emit_u32_le(object, offset)
+}
+
+///|
 fn x64_jcc_opcode(cond : @machv.Cond) -> Int {
   match cond {
     Eq => 0x84
@@ -383,6 +430,85 @@ fn emit_aarch64_int_const(
 }
 
 ///|
+fn mem_access_scale(mem_type : @machv.MemType) -> Int {
+  match mem_type {
+    MemI32 | MemF32 => 4
+    MemI64 | MemF64 | MemPtr => 8
+    MemV128 => 16
+  }
+}
+
+///|
+fn mem_access_is_64(mem_type : @machv.MemType) -> Bool raise EmitError {
+  match mem_type {
+    MemI32 => false
+    MemI64 | MemPtr => true
+    _ =>
+      raise UnsupportedOperand(
+        message="machv_emit memory access currently supports only i32, i64, and ptr",
+      )
+  }
+}
+
+///|
+fn emit_aarch64_load_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  mem_type : @machv.MemType,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base_reg = require_int_preg(
+    find_operand(inst, Use, 0, "load_ptr"),
+    "load_ptr base",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "load_ptr"),
+    "load_ptr destination",
+  )
+  let scale = mem_access_scale(mem_type)
+  guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 load_ptr requires a non-negative scaled unsigned 12-bit offset",
+    )
+  }
+  let imm12 = offset / scale
+  let base = if mem_access_is_64(mem_type) { 0xf9400000 } else { 0xb9400000 }
+  emit_u32_le(
+    object,
+    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (dst & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_store_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  mem_type : @machv.MemType,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base_reg = require_int_preg(
+    find_operand(inst, Use, 0, "store_ptr"),
+    "store_ptr base",
+  )
+  let src = require_int_preg(
+    find_operand(inst, Use, 1, "store_ptr"),
+    "store_ptr source",
+  )
+  let scale = mem_access_scale(mem_type)
+  guard offset >= 0 && offset % scale == 0 && offset / scale <= 0xfff else {
+    raise UnsupportedOperand(
+      message="AArch64 store_ptr requires a non-negative scaled unsigned 12-bit offset",
+    )
+  }
+  let imm12 = offset / scale
+  let base = if mem_access_is_64(mem_type) { 0xf9000000 } else { 0xb9000000 }
+  emit_u32_le(
+    object,
+    base | ((imm12 & 0xfff) << 10) | ((base_reg & 0x1f) << 5) | (src & 0x1f),
+  )
+}
+
+///|
 fn emit_x64_move(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -454,6 +580,54 @@ fn emit_x64_int_const(
 }
 
 ///|
+fn emit_x64_load_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  mem_type : @machv.MemType,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base = require_int_preg(
+    find_operand(inst, Use, 0, "load_ptr"),
+    "load_ptr base",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "load_ptr"),
+    "load_ptr destination",
+  )
+  emit_x64_load_base_disp32(
+    object,
+    dst,
+    base,
+    offset,
+    mem_access_is_64(mem_type),
+  )
+}
+
+///|
+fn emit_x64_store_ptr(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  mem_type : @machv.MemType,
+  offset : Int,
+) -> Unit raise EmitError {
+  let base = require_int_preg(
+    find_operand(inst, Use, 0, "store_ptr"),
+    "store_ptr base",
+  )
+  let src = require_int_preg(
+    find_operand(inst, Use, 1, "store_ptr"),
+    "store_ptr source",
+  )
+  emit_x64_store_base_disp32(
+    object,
+    base,
+    src,
+    offset,
+    mem_access_is_64(mem_type),
+  )
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -467,6 +641,10 @@ fn write_aarch64_inst_bytes(
     IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
     IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
     IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
+    LoadPtr(mem_type, offset) =>
+      emit_aarch64_load_ptr(object, inst, mem_type, offset)
+    StorePtr(mem_type, offset) =>
+      emit_aarch64_store_ptr(object, inst, mem_type, offset)
     Call(_) =>
       // TODO(machv_emit): resolve and range-check AArch64 BL relocations during real object linking.
       emit_u32_le(object, 0x94000000)
@@ -493,6 +671,10 @@ fn write_x64_inst_bytes(
     IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
     IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
     IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
+    LoadPtr(mem_type, offset) =>
+      emit_x64_load_ptr(object, inst, mem_type, offset)
+    StorePtr(mem_type, offset) =>
+      emit_x64_store_ptr(object, inst, mem_type, offset)
     Call(_) => {
       // TODO(machv_emit): patch X64 call rel32 displacement during object linking.
       object.code.push(0xe8)
