@@ -10,6 +10,8 @@ pub fn allocate(Program) -> Allocation
 
 pub fn build_live_ranges(Program) -> LiveRangeSet
 
+pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
+
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove]
 
 pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError

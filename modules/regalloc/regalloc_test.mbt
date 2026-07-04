@@ -212,3 +212,15 @@ test "resolve_parallel_moves lowers stack to stack through scratch" {
   inspect(resolved[1].from == Reg(scratch), content="true")
   inspect(resolved[1].to == Spill(1), content="true")
 }
+
+///|
+test "compute approximate loop depths from successors" {
+  let depths = compute_approx_loop_depths([[1], [2], [1, 3], []])
+  debug_inspect(depths, content="[0, 1, 1, 0]")
+}
+
+///|
+test "compute approximate loop depths ignores invalid successors" {
+  let depths = compute_approx_loop_depths([[1, -1, 99], [0], []])
+  debug_inspect(depths, content="[1, 1, 0]")
+}
