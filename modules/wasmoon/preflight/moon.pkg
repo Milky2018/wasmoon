@@ -1,8 +1,9 @@
 import {
-  "Milky2018/wasmoon/ir",
+  "Milky2018/machv_emit",
+  "Milky2018/milkir",
   "Milky2018/wasmoon/parser",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon/validator",
-  "Milky2018/wasmoon/vcode/lower",
-  "Milky2018/wasmoon/vcode/regalloc",
+  "Milky2018/wasmoon/wasm_frontend",
 }

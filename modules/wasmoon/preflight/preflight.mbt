@@ -176,10 +176,10 @@ pub fn validate_module(module_bytes : Bytes) -> PreflightResult {
 ///
 /// This API performs:
 /// - Parse and wasm validation.
-/// - IR translation, lowering, and regalloc checks per local function.
+/// - Wasm frontend lowering, MilkIR optimization, target lowering, regalloc,
+///   and code-object planning per local function.
 ///
-/// It intentionally does not execute machine-code emission to avoid hard runtime
-/// failures from backend aborts during preflight.
+/// It intentionally does not install or execute machine code.
 pub fn validate_jit(
   module_bytes : Bytes,
   opt_level? : Int = 2,
@@ -192,19 +192,27 @@ pub fn validate_jit(
   for i, _ in wasm_module.codes {
     let func_idx = num_imports + i
     let func_name = get_func_name(wasm_module, func_idx)
-    let ir_func = @ir.translate_function(wasm_module, i, name=func_name)
-    @ir.optimize_with_level(
-      ir_func,
-      @ir.OptLevel::from_int(normalized_opt_level),
-    )
-    |> ignore
-    let vcode_func = @lower.lower_function(
-      ir_func,
-      num_imports=wasm_module.imports.length(),
-      run_ir_opt=false,
-    )
-    ignore(@regalloc.allocate_registers_backtracking(vcode_func))
-    report.checked_funcs = report.checked_funcs + 1
+    try {
+      let env = @wasm_frontend.EmbeddingEnvironment::new(
+        hidden_context_type=None,
+      )
+      let milk = @wasm_frontend.lower_function(env, wasm_module, i)
+      @milkir.optimize_with_level(
+        milk,
+        @milkir.OptLevel::from_int(normalized_opt_level),
+      )
+      |> ignore
+      @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) |> ignore
+      report.checked_funcs = report.checked_funcs + 1
+    } catch {
+      err =>
+        report.add_error(
+          Regalloc,
+          to_repr(err).to_string(),
+          func_idx=Some(func_idx),
+          func_name=Some(func_name),
+        )
+    }
   }
   report
 }
