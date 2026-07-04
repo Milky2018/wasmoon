@@ -407,7 +407,7 @@ test "egraph: x * 9 = (x << 3) + x" {
 }
 
 ///|
-test "egraph: x % 8 = x & 7 (urem)" {
+test "egraph: generic rules exclude x % 8 = x & 7 (urem)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let eight = eg.add_const(8L)
@@ -415,11 +415,13 @@ test "egraph: x % 8 = x & 7 (urem)" {
   let rem = eg.add_binop(Urem, x, eight)
   let and_form = eg.add_and(x, seven)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(rem, and_form), content="false")
+  eg.saturate(legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(rem, and_form), content="true")
 }
 
 ///|
-test "egraph: x / 4 = x >> 2 (udiv)" {
+test "egraph: generic rules exclude x / 4 = x >> 2 (udiv)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let four = eg.add_const(4L)
@@ -427,6 +429,8 @@ test "egraph: x / 4 = x >> 2 (udiv)" {
   let div = eg.add_binop(Udiv, x, four)
   let shr = eg.add_binop(Ushr, x, two)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(div, shr), content="false")
+  eg.saturate(legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(div, shr), content="true")
 }
 
@@ -608,24 +612,28 @@ test "egraph: (x - y) - x = -y" {
 }
 
 ///|
-test "egraph: x / -1 = -x (sdiv)" {
+test "egraph: generic rules exclude x / -1 = -x (sdiv)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let neg_one = eg.add_const(-1L)
   let div = eg.add({ op: Sdiv, children: [x, neg_one] })
   let neg_x = eg.add_neg(x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(div, neg_x), content="false")
+  eg.saturate(legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(div, neg_x), content="true")
 }
 
 ///|
-test "egraph: x % -1 = 0 (srem)" {
+test "egraph: generic rules exclude x % -1 = 0 (srem)" {
   let eg = EGraph::new()
   let x = eg.add_var(0)
   let neg_one = eg.add_const(-1L)
   let rem = eg.add({ op: Srem, children: [x, neg_one] })
   let zero = eg.add_const(0L)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
+  inspect(eg.equiv(rem, zero), content="false")
+  eg.saturate(legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(rem, zero), content="true")
 }
 

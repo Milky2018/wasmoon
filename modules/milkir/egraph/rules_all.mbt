@@ -43,6 +43,25 @@ pub fn standard_rules_indexed() -> IndexedRuleSet {
 }
 
 ///|
+/// Rules that require frontend- or target-provided definedness facts.
+///
+/// These are intentionally not part of `standard_rules_indexed` because generic
+/// MilkIR does not yet model whether division/remainder operations are total,
+/// trapping, or poison-producing. A frontend adapter may use this collection
+/// only after proving the required non-zero and overflow preconditions.
+pub fn legality_sensitive_rules() -> Array[RewriteRule] {
+  [
+    rule_udiv_pow2(),
+    rule_urem_pow2(),
+    rule_sdiv_neg_one(),
+    rule_srem_neg_one(),
+    rule_div_one(),
+    rule_rem_one(),
+    rule_udiv_select_pow2(),
+  ]
+}
+
+///|
 /// Build the indexed ruleset (internal, called once by get_global_ruleset)
 fn build_indexed_ruleset() -> IndexedRuleSet {
   let rs = IndexedRuleSet::new()
@@ -116,8 +135,8 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_reassoc_mul_const(), [TMul])
   rs.add_rule(rule_mul_shl_const(), [TMul])
   rs.add_rule(rule_double(), [TAdd])
-  rs.add_rule(rule_udiv_pow2(), [TUdiv])
-  rs.add_rule(rule_urem_pow2(), [TUrem])
+  // TODO(ISS-017): re-enable div/rem strength reduction through a
+  // legality-aware rule set once MilkIR carries non-zero/overflow facts.
   rs.add_rule(rule_mul_3(), [TMul])
   rs.add_rule(rule_mul_5(), [TMul])
   rs.add_rule(rule_mul_7(), [TMul])
@@ -128,12 +147,12 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_add_neg(), [TAdd])
   rs.add_rule(rule_mul_neg_one(), [TMul])
   rs.add_rule(rule_neg_mul_neg(), [TMul])
-  rs.add_rule(rule_sdiv_neg_one(), [TSdiv])
-  rs.add_rule(rule_srem_neg_one(), [TSrem])
+  // TODO(ISS-017): signed div/rem rewrites need explicit trapping/overflow
+  // legality metadata before they belong in the generic MilkIR ruleset.
   rs.add_rule(rule_neg_sub_swap(), [TNeg])
-  // Division/Remainder by 1
-  rs.add_rule(rule_div_one(), [TSdiv, TUdiv])
-  rs.add_rule(rule_rem_one(), [TSrem, TUrem])
+  // TODO(ISS-017): division/remainder-by-one rewrites still need the same
+  // definedness metadata because generic MilkIR does not yet state whether
+  // division opcodes are total, trapping, or poison-producing.
   // Bnot patterns
   rs.add_rule(rule_bnot_add_one(), [TAdd])
   rs.add_rule(rule_bnot_sub_one(), [TSub])
@@ -384,8 +403,8 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_remat_bnot(), [TBnot])
   rs.add_rule(rule_remat_iconst(), [TConst])
   rs.add_rule(rule_remat_fconst(), [TFconst])
-  // Skeleton rules (side-effect simplifications)
-  rs.add_rule(rule_udiv_select_pow2(), [TUdiv])
+  // TODO(ISS-017): skeleton div-select strength reduction is legality-specific
+  // and must remain out of the generic default ruleset until facts are modeled.
   // Spaceship comparison simplification rules
   rs.add_rule(rule_spaceship_eq_zero(), [TEq, TIcmp])
   rs.add_rule(rule_spaceship_ne_zero(), [TNe, TIcmp])
@@ -419,8 +438,8 @@ fn build_compact_indexed_ruleset() -> IndexedRuleSet {
   rs.add_rule(rule_sub_self(), [TSub])
   rs.add_rule(rule_mul_one(), [TMul])
   rs.add_rule(rule_mul_zero(), [TMul])
-  rs.add_rule(rule_div_one(), [TSdiv, TUdiv])
-  rs.add_rule(rule_rem_one(), [TSrem, TUrem])
+  // TODO(ISS-017): compact rules intentionally exclude div/rem rewrites until
+  // MilkIR has explicit definedness facts for those opcodes.
   rs.add_rule(rule_and_zero(), [TAnd])
   rs.add_rule(rule_or_zero(), [TOr])
   rs.add_rule(rule_xor_zero(), [TXor])

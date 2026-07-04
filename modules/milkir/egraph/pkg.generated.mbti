@@ -10,6 +10,8 @@ pub fn get_compact_ruleset() -> IndexedRuleSet
 
 pub fn get_global_ruleset() -> IndexedRuleSet
 
+pub fn legality_sensitive_rules() -> Array[RewriteRule]
+
 pub fn remat_rules() -> Array[RewriteRule]
 
 pub fn select_rules() -> Array[RewriteRule]
