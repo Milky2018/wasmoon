@@ -1331,6 +1331,14 @@ fn try_lower_linear_function(
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
+      I64MulWideU =>
+        if !push_binary_opcode(builder, stack, Umulh) {
+          return None
+        }
+      I64MulWideS =>
+        if !push_binary_opcode(builder, stack, Smulh) {
+          return None
+        }
       I32DivS | I64DivS =>
         if !push_binary_opcode(builder, stack, Sdiv) {
           return None

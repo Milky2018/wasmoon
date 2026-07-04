@@ -509,6 +509,30 @@ test "lower copysign through native MilkIR bit operations" {
 }
 
 ///|
+test "lower wide i64 multiply through native MilkIR high-half ops" {
+  let mod_ = @types.Module::simple(
+    [I64, I64],
+    [I64, I64],
+    [
+      LocalGet(0),
+      LocalGet(1),
+      I64MulWideU,
+      LocalGet(0),
+      LocalGet(1),
+      I64MulWideS,
+    ],
+    "wide_mul",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("umulh"), content="true")
+  inspect(text.contains("smulh"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower narrow memory operations through native MilkIR pointer ops" {
   let mod_ = {
     ..@types.Module::simple(
