@@ -56,6 +56,63 @@ test "emit X64 move, add, and return bytes" {
 }
 
 ///|
+test "emit X64 integer constants and arithmetic bytes" {
+  let func = @machv.Function::new("int_ops")
+  let entry = func.new_block()
+  let c = func.new_inst(IntConst(42L))
+  c.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(c)
+  let sub = func.new_inst(IntSub)
+  sub.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  sub.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  sub.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(sub)
+  let mul = func.new_inst(IntMul)
+  mul.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  mul.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  mul.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(mul)
+  let and_ = func.new_inst(IntAnd)
+  and_.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  and_.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  and_.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(and_)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  72,
+      #|  184,
+      #|  42,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  137,
+      #|  194,
+      #|  72,
+      #|  41,
+      #|  202,
+      #|  72,
+      #|  15,
+      #|  175,
+      #|  209,
+      #|  72,
+      #|  33,
+      #|  202,
+      #|  195,
+      #|]
+    ),
+  )
+}
+
+///|
 test "emit X64 generic relocations and stack maps" {
   let func = @machv.Function::new("caller")
   let entry = func.new_block()
@@ -164,6 +221,31 @@ test "emit AArch64 compare branch terminator" {
   inspect(object.relocations.length(), content="2")
   inspect(object.fixups.length(), content="2")
   inspect(object.debug_entries.length(), content="3")
+}
+
+///|
+test "emit AArch64 integer constants and arithmetic bytes" {
+  let func = @machv.Function::new("int_ops")
+  let entry = func.new_block()
+  let c = func.new_inst(IntConst(42L))
+  c.add_operand(@machv.Operand::def(Physical({ index: 0, class: Int })))
+  entry.append(c)
+  let sub = func.new_inst(IntSub)
+  sub.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  sub.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  sub.add_operand(@machv.Operand::def(Physical({ index: 2, class: Int })))
+  entry.append(sub)
+  let and_ = func.new_inst(IntAnd)
+  and_.add_operand(@machv.Operand::use_reg(Physical({ index: 2, class: Int })))
+  and_.add_operand(@machv.Operand::use_reg(Physical({ index: 1, class: Int })))
+  and_.add_operand(@machv.Operand::def(Physical({ index: 3, class: Int })))
+  entry.append(and_)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function(func)
+  debug_inspect(
+    object.code,
+    content="[64, 5, 128, 210, 2, 0, 1, 203, 67, 0, 1, 138, 192, 3, 95, 214]",
+  )
 }
 
 ///|

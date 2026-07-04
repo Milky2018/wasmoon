@@ -31,6 +31,15 @@ fn emit_u32_le(object : CodeObject, word : Int) -> Unit {
 }
 
 ///|
+fn emit_u64_le(object : CodeObject, word : Int64) -> Unit {
+  let mut x = word
+  for _ in 0..<8 {
+    object.code.push((x & 0xffL).to_int())
+    x = x >> 8
+  }
+}
+
+///|
 fn emit_x64_rex_w(object : CodeObject, r : Int, b : Int) -> Unit {
   object.code.push(0x48 | ((r & 1) << 2) | (b & 1))
 }
@@ -54,6 +63,55 @@ fn emit_x64_add_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
   emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
   object.code.push(0x01)
   emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_sub_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: sub r/m64, r64.
+  emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x29)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_and_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: and r/m64, r64.
+  emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x21)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_or_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: or r/m64, r64.
+  emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x09)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_xor_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: xor r/m64, r64.
+  emit_x64_rex_w(object, (src >> 3) & 1, (dst >> 3) & 1)
+  object.code.push(0x31)
+  emit_x64_modrm(object, 3, src, dst)
+}
+
+///|
+fn emit_x64_imul_rr(object : CodeObject, dst : Int, src : Int) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: imul r64, r/m64.
+  emit_x64_rex_w(object, (dst >> 3) & 1, (src >> 3) & 1)
+  object.code.push(0x0f)
+  object.code.push(0xaf)
+  emit_x64_modrm(object, 3, dst, src)
+}
+
+///|
+fn emit_x64_mov_imm64(object : CodeObject, dst : Int, imm : Int64) -> Unit {
+  // Copied from legacy `vcode/emit/amd64_bytes`: mov r64, imm64.
+  emit_x64_rex_w(object, 0, (dst >> 3) & 1)
+  object.code.push(0xb8 + (dst & 7))
+  emit_u64_le(object, imm)
 }
 
 ///|
@@ -258,6 +316,73 @@ fn emit_aarch64_int_add(
 }
 
 ///|
+fn emit_aarch64_int_binop3(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  base : Int,
+  context : String,
+) -> Unit raise EmitError {
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): encode 32-bit and immediate/legalized forms once MachV carries lane width.
+  emit_u32_le(
+    object,
+    base | ((rhs & 0x1f) << 16) | ((lhs & 0x1f) << 5) | (dst & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_int_mul(
+  object : CodeObject,
+  inst : @machv.Instruction,
+) -> Unit raise EmitError {
+  let lhs = require_int_preg(find_operand(inst, Use, 0, "mul"), "mul lhs")
+  let rhs = require_int_preg(find_operand(inst, Use, 1, "mul"), "mul rhs")
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "mul"),
+    "mul destination",
+  )
+  // Copied from legacy `vcode/emit/instructions_bytes`: MUL as MADD rd, rn, rm, xzr.
+  emit_u32_le(
+    object,
+    0x9b000000 |
+    ((rhs & 0x1f) << 16) |
+    (31 << 10) |
+    ((lhs & 0x1f) << 5) |
+    (dst & 0x1f),
+  )
+}
+
+///|
+fn emit_aarch64_int_const(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  imm : Int64,
+) -> Unit raise EmitError {
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "iconst"),
+    "iconst destination",
+  )
+  guard imm >= 0L && imm <= 0xffffL else {
+    raise UnsupportedOperand(
+      message="AArch64 IntConst currently supports only unsigned 16-bit immediates",
+    )
+  }
+  // TODO(machv_emit): copy the full legacy MOVZ/MOVN/MOVK materialization sequence for arbitrary 64-bit constants.
+  emit_u32_le(object, 0xd2800000 | (imm.to_int() << 5) | (dst & 0x1f))
+}
+
+///|
 fn emit_x64_move(
   object : CodeObject,
   inst : @machv.Instruction,
@@ -290,13 +415,58 @@ fn emit_x64_int_add(
 }
 
 ///|
+fn emit_x64_int_binop3(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  emit_rr : (CodeObject, Int, Int) -> Unit,
+  context : String,
+) -> Unit raise EmitError {
+  let lhs = require_int_preg(
+    find_operand(inst, Use, 0, context),
+    "\{context} lhs",
+  )
+  let rhs = require_int_preg(
+    find_operand(inst, Use, 1, context),
+    "\{context} rhs",
+  )
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, context),
+    "\{context} destination",
+  )
+  // TODO(machv_emit): replace this copy-first lowering with an X64 legalization pass that can pick two-address forms before emission.
+  if dst != lhs {
+    emit_x64_mov_rr(object, dst, lhs)
+  }
+  emit_rr(object, dst, rhs)
+}
+
+///|
+fn emit_x64_int_const(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  imm : Int64,
+) -> Unit raise EmitError {
+  let dst = require_int_preg(
+    find_operand(inst, Def, 0, "iconst"),
+    "iconst destination",
+  )
+  emit_x64_mov_imm64(object, dst, imm)
+}
+
+///|
 fn write_aarch64_inst_bytes(
   object : CodeObject,
   inst : @machv.Instruction,
 ) -> Unit raise EmitError {
   match inst.opcode {
+    IntConst(imm) => emit_aarch64_int_const(object, inst, imm)
     Move => emit_aarch64_move(object, inst)
     IntAdd => emit_aarch64_int_add(object, inst)
+    IntSub => emit_aarch64_int_binop3(object, inst, 0xcb000000, "sub")
+    IntMul => emit_aarch64_int_mul(object, inst)
+    IntAnd => emit_aarch64_int_binop3(object, inst, 0x8a000000, "and")
+    IntOr => emit_aarch64_int_binop3(object, inst, 0xaa000000, "or")
+    IntXor => emit_aarch64_int_binop3(object, inst, 0xca000000, "xor")
     Call(_) =>
       // TODO(machv_emit): resolve and range-check AArch64 BL relocations during real object linking.
       emit_u32_le(object, 0x94000000)
@@ -315,8 +485,14 @@ fn write_x64_inst_bytes(
   inst : @machv.Instruction,
 ) -> Unit raise EmitError {
   match inst.opcode {
+    IntConst(imm) => emit_x64_int_const(object, inst, imm)
     Move => emit_x64_move(object, inst)
     IntAdd => emit_x64_int_add(object, inst)
+    IntSub => emit_x64_int_binop3(object, inst, emit_x64_sub_rr, "sub")
+    IntMul => emit_x64_int_binop3(object, inst, emit_x64_imul_rr, "mul")
+    IntAnd => emit_x64_int_binop3(object, inst, emit_x64_and_rr, "and")
+    IntOr => emit_x64_int_binop3(object, inst, emit_x64_or_rr, "or")
+    IntXor => emit_x64_int_binop3(object, inst, emit_x64_xor_rr, "xor")
     Call(_) => {
       // TODO(machv_emit): patch X64 call rel32 displacement during object linking.
       object.code.push(0xe8)
