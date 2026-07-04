@@ -212,6 +212,22 @@ test "lower terminal current-block ref branches through native linear fast path"
 }
 
 ///|
+test "lower empty if through native linear fast path" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [I32Const(1), If(Empty, [], []), I32Const(7)],
+    "empty_if",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("iconst 7"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower globals through native VMContext loads and stores" {
   let mod_ = {
     ..@types.Module::simple(

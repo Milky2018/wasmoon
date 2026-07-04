@@ -1340,7 +1340,9 @@ fn try_lower_linear_function(
     match instr {
       Nop => ()
       If(block_type, then_body, else_body) =>
-        if !push_simple_if_select(
+        if block_type is Empty && then_body.is_empty() && else_body.is_empty() {
+          guard pop_value(stack) is Some(_) else { return None }
+        } else if !push_simple_if_select(
             builder, stack, locals, block_type, then_body, else_body,
           ) {
           return None
