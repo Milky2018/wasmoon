@@ -9,6 +9,8 @@ import {
 // Values
 pub fn emit_function_for_target(@machv.Function, EmitTarget) -> CodeObject raise EmitError
 
+pub fn plan_signed_i8_chunks(Int) -> Array[Int]
+
 pub fn plan_stack_pointer_adjustment(Int, page_size? : Int) -> Array[StackAdjustStep]
 
 // Errors

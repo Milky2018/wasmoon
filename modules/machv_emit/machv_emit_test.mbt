@@ -26,6 +26,15 @@ test "plan stack pointer adjustments with guard-page probes" {
 }
 
 ///|
+test "plan signed i8 immediate chunks" {
+  debug_inspect(plan_signed_i8_chunks(0), content="[]")
+  debug_inspect(plan_signed_i8_chunks(127), content="[127]")
+  debug_inspect(plan_signed_i8_chunks(128), content="[127, 1]")
+  debug_inspect(plan_signed_i8_chunks(-129), content="[-128, -1]")
+  debug_inspect(plan_signed_i8_chunks(300), content="[127, 127, 46]")
+}
+
+///|
 test "emit AArch64 move, add, and return bytes" {
   let func = @machv.Function::new("entry")
   let entry = func.new_block()

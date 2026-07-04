@@ -106,20 +106,8 @@ fn MachineCode::emit_instruction_x86_64(
     reg : Int,
     imm : Int,
   ) -> Unit {
-    if imm == 0 {
-      return
-    }
-    let mut remaining = imm
-    while remaining > 127 {
-      self.x86_emit_add_r_imm8(reg, 127)
-      remaining = remaining - 127
-    }
-    while remaining < -128 {
-      self.x86_emit_add_r_imm8(reg, -128)
-      remaining = remaining + 128
-    }
-    if remaining != 0 {
-      self.x86_emit_add_r_imm8(reg, remaining)
+    for chunk in @machv_emit.plan_signed_i8_chunks(imm) {
+      self.x86_emit_add_r_imm8(reg, chunk)
     }
   }
 
