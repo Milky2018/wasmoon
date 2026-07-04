@@ -484,6 +484,31 @@ test "lower memory operations through Wasmoon-owned adapter opcodes" {
 }
 
 ///|
+test "lower copysign through native MilkIR bit operations" {
+  let mod_ = @types.Module::simple(
+    [F32, F32, F64, F64],
+    [F32, F64],
+    [
+      LocalGet(0),
+      LocalGet(1),
+      F32Copysign,
+      LocalGet(2),
+      LocalGet(3),
+      F64Copysign,
+    ],
+    "copysign",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("bitcast"), content="true")
+  inspect(text.contains("band"), content="true")
+  inspect(text.contains("bor"), content="true")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower narrow memory operations through native MilkIR pointer ops" {
   let mod_ = {
     ..@types.Module::simple(

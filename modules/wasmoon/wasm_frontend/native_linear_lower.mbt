@@ -150,6 +150,42 @@ fn push_float_cmp(
 }
 
 ///|
+fn push_float_copysign(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  float_ty : @milkir.Type,
+  int_ty : @milkir.Type,
+  magnitude_mask : Int64,
+  sign_mask : Int64,
+) -> Bool {
+  guard pop_value(stack) is Some(sign_source) else { return false }
+  guard pop_value(stack) is Some(magnitude_source) else { return false }
+  guard emit_op(builder, int_ty, Bitcast, [magnitude_source]) is Some(x_bits) else {
+    return false
+  }
+  guard emit_op(builder, int_ty, Bitcast, [sign_source]) is Some(y_bits) else {
+    return false
+  }
+  let magnitude_mask_value = builder.iconst(int_ty, magnitude_mask)
+  guard emit_op(builder, int_ty, Band, [x_bits, magnitude_mask_value])
+    is Some(magnitude) else {
+    return false
+  }
+  let sign_mask_value = builder.iconst(int_ty, sign_mask)
+  guard emit_op(builder, int_ty, Band, [y_bits, sign_mask_value]) is Some(sign) else {
+    return false
+  }
+  guard emit_op(builder, int_ty, Bor, [magnitude, sign]) is Some(result_bits) else {
+    return false
+  }
+  guard emit_op(builder, float_ty, Bitcast, [result_bits]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
 fn push_select(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -1395,6 +1431,28 @@ fn try_lower_linear_function(
         }
       F32Max | F64Max =>
         if !push_binary_opcode(builder, stack, Fmax) {
+          return None
+        }
+      F32Copysign =>
+        if !push_float_copysign(
+            builder,
+            stack,
+            F32,
+            I32,
+            0x7FFFFFFFL,
+            0x80000000U.reinterpret_as_int().to_int64(),
+          ) {
+          return None
+        }
+      F64Copysign =>
+        if !push_float_copysign(
+            builder,
+            stack,
+            F64,
+            I64,
+            0x7FFFFFFFFFFFFFFFL,
+            0x8000000000000000UL.reinterpret_as_int64(),
+          ) {
           return None
         }
       F32Neg | F64Neg =>
