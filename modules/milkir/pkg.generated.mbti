@@ -24,6 +24,8 @@ pub fn optimize_with_level(Function, OptLevel) -> OptResult
 
 pub fn simplify_branches(Function) -> OptResult
 
+pub fn thread_jumps(Function) -> OptResult
+
 // Errors
 pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)

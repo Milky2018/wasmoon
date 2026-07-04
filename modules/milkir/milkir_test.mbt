@@ -499,6 +499,80 @@ test "optimizer simplifies constant br_table" {
 }
 
 ///|
+test "optimizer threads trivial jump blocks" {
+  let builder = IRBuilder::new("thread_jump")
+  let entry = builder.create_block()
+  let middle = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.jump(middle, [])
+  builder.switch_to_block(middle)
+  builder.jump(exit, [])
+  builder.switch_to_block(exit)
+  builder.trap("exit")
+  let func = builder.get_function()
+  let result = thread_jumps(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function thread_jump() {
+      #|block0:
+      #|    jump block2
+      #|block1:
+      #|    jump block2
+      #|block2:
+      #|    trap "exit"
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer threads jump args through block params" {
+  let builder = IRBuilder::new("thread_jump_args")
+  let entry = builder.create_block()
+  let middle = builder.create_block()
+  let exit = builder.create_block()
+  builder.switch_to_block(entry)
+  let a = builder.iconst_i32(1)
+  let b = builder.iconst_i32(2)
+  builder.jump(middle, [a, b])
+  let p0 = builder.add_block_param(middle, I32)
+  let p1 = builder.add_block_param(middle, I32)
+  builder.switch_to_block(middle)
+  builder.jump(exit, [p1, p0])
+  let q0 = builder.add_block_param(exit, I32)
+  let q1 = builder.add_block_param(exit, I32)
+  builder.switch_to_block(exit)
+  let sum = builder.iadd(q0, q1)
+  builder.return_([sum])
+  let func = builder.get_function()
+  let result = thread_jumps(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function thread_jump_args() {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i32 = iconst 2
+      #|    jump block2(v1, v0)
+      #|block1(v2:i32, v3:i32):
+      #|    jump block2(v3, v2)
+      #|block2(v4:i32, v5:i32):
+      #|    v6:i32 = iadd v4, v5
+      #|    return v6
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "CSE keeps duplicate loads without alias metadata" {
   let builder = IRBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)

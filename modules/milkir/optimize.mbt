@@ -620,6 +620,211 @@ pub fn eliminate_dead_block_params(func : Function) -> OptResult {
 }
 
 ///|
+fn value_arrays_equal(lhs : Array[Value], rhs : Array[Value]) -> Bool {
+  if lhs.length() != rhs.length() {
+    return false
+  }
+  for i in 0..<lhs.length() {
+    if lhs[i].id != rhs[i].id {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn rewrite_jump_args_through_block(
+  block_params : Array[Value],
+  incoming_args : Array[Value],
+  outgoing_args : Array[Value],
+) -> Array[Value]? {
+  if block_params.length() != incoming_args.length() {
+    return None
+  }
+  let param_to_arg : @hashmap.HashMap[Int, Value] = HashMap([])
+  for i in 0..<block_params.length() {
+    param_to_arg.set(block_params[i].id, incoming_args[i])
+  }
+  let rewritten : Array[Value] = []
+  for arg in outgoing_args {
+    rewritten.push(param_to_arg.get(arg.id).unwrap_or(arg))
+  }
+  Some(rewritten)
+}
+
+///|
+fn resolve_jump_target_with_args(
+  target : Int,
+  args : Array[Value],
+  func : Function,
+  block_index : @hashmap.HashMap[Int, Int],
+) -> (Int, Array[Value]) {
+  let visited : @hashmap.HashMap[Int, Bool] = HashMap([])
+  let mut current_target = target
+  let mut current_args = args
+  let mut done = false
+  while !done {
+    if visited.get(current_target).unwrap_or(false) {
+      break
+    }
+    visited.set(current_target, true)
+    let block = match block_index.get(current_target) {
+      Some(index) => func.blocks[index]
+      None => break
+    }
+    if block.instructions.length() != 0 {
+      break
+    }
+    match block.terminator {
+      Some(Jump(next_target, next_args)) =>
+        match
+          rewrite_jump_args_through_block(block.params, current_args, next_args) {
+          Some(rewritten_args) => {
+            current_target = next_target
+            current_args = rewritten_args
+          }
+          None => done = true
+        }
+      _ => done = true
+    }
+  }
+  (current_target, current_args)
+}
+
+///|
+/// Bypass blocks that contain no instructions and only forward to another jump.
+pub fn thread_jumps(func : Function) -> OptResult {
+  let result = OptResult::new()
+  result.add_pass("thread_jumps")
+  let block_index = build_block_index(func)
+  for block in func.blocks {
+    match block.terminator {
+      Some(Jump(target, args)) => {
+        let (final_target, final_args) = resolve_jump_target_with_args(
+          target, args, func, block_index,
+        )
+        if final_target != target || !value_arrays_equal(final_args, args) {
+          block.terminator = Some(Jump(final_target, final_args))
+          result.mark_changed()
+        }
+      }
+      Some(Branch(cond, true_target, true_args, false_target, false_args)) => {
+        let (new_true_target, new_true_args) = resolve_jump_target_with_args(
+          true_target, true_args, func, block_index,
+        )
+        let (new_false_target, new_false_args) = resolve_jump_target_with_args(
+          false_target, false_args, func, block_index,
+        )
+        if new_true_target != true_target ||
+          new_false_target != false_target ||
+          !value_arrays_equal(new_true_args, true_args) ||
+          !value_arrays_equal(new_false_args, false_args) {
+          block.terminator = Some(
+            Branch(
+              cond, new_true_target, new_true_args, new_false_target, new_false_args,
+            ),
+          )
+          result.mark_changed()
+        }
+      }
+      Some(Brz(cond, true_target, false_target)) => {
+        let (resolved_true, true_args) = resolve_jump_target_with_args(
+          true_target,
+          [],
+          func,
+          block_index,
+        )
+        let (resolved_false, false_args) = resolve_jump_target_with_args(
+          false_target,
+          [],
+          func,
+          block_index,
+        )
+        let new_true = if true_args.length() == 0 {
+          resolved_true
+        } else {
+          true_target
+        }
+        let new_false = if false_args.length() == 0 {
+          resolved_false
+        } else {
+          false_target
+        }
+        if new_true != true_target || new_false != false_target {
+          block.terminator = Some(Brz(cond, new_true, new_false))
+          result.mark_changed()
+        }
+      }
+      Some(Brnz(cond, true_target, false_target)) => {
+        let (resolved_true, true_args) = resolve_jump_target_with_args(
+          true_target,
+          [],
+          func,
+          block_index,
+        )
+        let (resolved_false, false_args) = resolve_jump_target_with_args(
+          false_target,
+          [],
+          func,
+          block_index,
+        )
+        let new_true = if true_args.length() == 0 {
+          resolved_true
+        } else {
+          true_target
+        }
+        let new_false = if false_args.length() == 0 {
+          resolved_false
+        } else {
+          false_target
+        }
+        if new_true != true_target || new_false != false_target {
+          block.terminator = Some(Brnz(cond, new_true, new_false))
+          result.mark_changed()
+        }
+      }
+      Some(BrTable(index, targets, default_target)) => {
+        let new_targets : Array[Int] = []
+        let mut any_changed = false
+        for target in targets {
+          let (resolved, args) = resolve_jump_target_with_args(
+            target,
+            [],
+            func,
+            block_index,
+          )
+          let new_target = if args.length() == 0 { resolved } else { target }
+          new_targets.push(new_target)
+          if new_target != target {
+            any_changed = true
+          }
+        }
+        let (resolved_default, default_args) = resolve_jump_target_with_args(
+          default_target,
+          [],
+          func,
+          block_index,
+        )
+        let new_default = if default_args.length() == 0 {
+          resolved_default
+        } else {
+          default_target
+        }
+        if new_default != default_target {
+          any_changed = true
+        }
+        if any_changed {
+          block.terminator = Some(BrTable(index, new_targets, new_default))
+          result.mark_changed()
+        }
+      }
+      _ => ()
+    }
+  }
+  result
+}
+
+///|
 /// Remove blocks that cannot be reached from the entry block.
 pub fn eliminate_unreachable_blocks(func : Function) -> OptResult {
   let result = OptResult::new()
@@ -681,6 +886,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
       merge_opt_result(result, eliminate_dead_code(func))
       merge_opt_result(result, simplify_branches(func))
       merge_opt_result(result, eliminate_dead_block_params(func))
+      merge_opt_result(result, thread_jumps(func))
       merge_opt_result(result, eliminate_unreachable_blocks(func))
       result
     }
