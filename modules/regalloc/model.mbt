@@ -28,16 +28,25 @@ pub(all) enum OperandRole {
 pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
+  constraint : OperandConstraint
 } derive(Eq, Debug)
 
 ///|
 pub fn Operand::use_reg(vreg : VirtualReg) -> Operand {
-  { vreg, role: Use }
+  { vreg, role: Use, constraint: AnyReg }
 }
 
 ///|
 pub fn Operand::def(vreg : VirtualReg) -> Operand {
-  { vreg, role: Def }
+  { vreg, role: Def, constraint: AnyReg }
+}
+
+///|
+pub fn Operand::with_constraint(
+  self : Operand,
+  constraint : OperandConstraint,
+) -> Operand {
+  { vreg: self.vreg, role: self.role, constraint }
 }
 
 ///|

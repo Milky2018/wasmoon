@@ -308,7 +308,11 @@ pub fn build_live_ranges(program : Program) -> LiveRangeSet {
         let range = find_or_create_live_range(ranges, operand.vreg)
         range.touch(point)
         range.add_use(
-          UsePosition::new(point, use_kind_of_role(operand.role), AnyReg),
+          UsePosition::new(
+            point,
+            use_kind_of_role(operand.role),
+            operand.constraint,
+          ),
         )
       }
     }

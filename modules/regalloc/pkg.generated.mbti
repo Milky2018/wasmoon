@@ -81,9 +81,11 @@ pub(all) enum Location {
 pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
+  constraint : OperandConstraint
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::use_reg(VirtualReg) -> Self
+pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
 
 pub(all) enum OperandConstraint {
   AnyReg

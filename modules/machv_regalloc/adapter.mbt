@@ -32,22 +32,36 @@ fn preg_from_regalloc(preg : @regalloc.PhysicalReg) -> @machv.PReg {
 }
 
 ///|
-fn role_to_regalloc(role : @machv.OperandRole) -> @regalloc.OperandRole {
-  match role {
-    Use => Use
-    Def => Def
-    UseDef => UseDef
+fn constraint_for_operand(
+  inst : @machv.Instruction,
+  operand_index : Int,
+) -> @regalloc.OperandConstraint {
+  for constraint in inst.constraints {
+    if constraint.operand_index == operand_index {
+      if constraint.allowed_regs.length() == 1 {
+        return FixedReg(preg_to_regalloc(constraint.allowed_regs[0]))
+      }
+    }
   }
+  AnyReg
 }
 
 ///|
-fn operand_to_regalloc(operand : @machv.Operand) -> @regalloc.Operand? {
+fn operand_to_regalloc(
+  inst : @machv.Instruction,
+  operand_index : Int,
+  operand : @machv.Operand,
+) -> @regalloc.Operand? {
   match operand.reg {
-    Virtual(vreg) =>
-      Some({
-        vreg: vreg_to_regalloc(vreg),
-        role: role_to_regalloc(operand.role),
-      })
+    Virtual(vreg) => {
+      let base = match operand.role {
+        Use => @regalloc.Operand::use_reg(vreg_to_regalloc(vreg))
+        Def => @regalloc.Operand::def(vreg_to_regalloc(vreg))
+        UseDef =>
+          { vreg: vreg_to_regalloc(vreg), role: UseDef, constraint: AnyReg }
+      }
+      Some(base.with_constraint(constraint_for_operand(inst, operand_index)))
+    }
     Physical(_) => None
   }
 }
@@ -55,8 +69,8 @@ fn operand_to_regalloc(operand : @machv.Operand) -> @regalloc.Operand? {
 ///|
 fn instruction_to_regalloc(inst : @machv.Instruction) -> @regalloc.Instruction {
   let out = @regalloc.Instruction::new(inst.id)
-  for operand in inst.operands {
-    if operand_to_regalloc(operand) is Some(regalloc_operand) {
+  for i, operand in inst.operands {
+    if operand_to_regalloc(inst, i, operand) is Some(regalloc_operand) {
       out.add_operand(regalloc_operand)
     }
   }

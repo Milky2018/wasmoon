@@ -50,6 +50,25 @@ test "apply rewrites allocated virtual operands to physical registers" {
 }
 
 ///|
+test "projected MachV constraints guide fixed register allocation" {
+  let func = @machv.Function::new("fixed")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let inst = func.new_inst(Target("fixed_def"))
+  inst.add_operand(@machv.Operand::def(Virtual(v0)))
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  inst.add_constraint({ operand_index: 0, allowed_regs: [p1] })
+  entry.append(inst)
+  let allocation = allocate_function(func, [p0, p1])
+  inspect(
+    allocation.location_of({ id: v0.id, class: Int }) ==
+    Some(Reg({ id: 1, class: Int })),
+    content="true",
+  )
+}
+
+///|
 test "apply inserts reloads and spills for stack allocated operands" {
   let func = @machv.Function::new("reload_spill")
   let entry = func.new_block()

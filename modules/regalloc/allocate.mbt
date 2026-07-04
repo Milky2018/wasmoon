@@ -52,7 +52,18 @@ fn is_reg_active(
 fn choose_free_reg(
   regs : Array[PhysicalReg],
   active : Array[(LiveRange, PhysicalReg)],
+  fixed : PhysicalReg?,
 ) -> PhysicalReg? {
+  if fixed is Some(preg) {
+    if !is_reg_active(active, preg) {
+      for reg in regs {
+        if reg == preg {
+          return Some(preg)
+        }
+      }
+    }
+    return None
+  }
   for preg in regs {
     if !is_reg_active(active, preg) {
       return Some(preg)
@@ -85,9 +96,14 @@ fn choose_spill_candidate(
 ) -> Int? {
   let mut best_index = -1
   let mut best_end = range_end_order(current, block_order)
+  let fixed = current.get_fixed_reg()
   for i, item in active {
-    let (range, _) = item
-    if range.vreg.class == current.vreg.class {
+    let (range, preg) = item
+    let same_required_reg = match fixed {
+      Some(required) => preg == required
+      None => true
+    }
+    if same_required_reg && range.vreg.class == current.vreg.class {
       let end = range_end_order(range, block_order)
       if end > best_end {
         best_end = end
@@ -115,7 +131,7 @@ pub fn allocate(program : Program) -> Allocation {
   for interval in ranges.ranges {
     expire_old_intervals(active, interval, ranges.block_order)
     let regs = compatible_regs(program.physical_regs, interval.vreg.class)
-    match choose_free_reg(regs, active) {
+    match choose_free_reg(regs, active, interval.get_fixed_reg()) {
       Some(preg) => {
         allocation.assign(interval.vreg, Reg(preg))
         interval.allocation = Some(Reg(preg))
