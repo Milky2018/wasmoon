@@ -225,28 +225,10 @@ pub fn JITModule::load_with_imports(
   debug_db? : JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   let jit_module = JITModule::new()
-  let num_imports = precompiled.imports.length()
-
-  // Calculate total function slots in func_table.
-  //
-  // `precompiled.functions` may be sparse (subset eager precompile with
-  // original func_idx preserved), so we must size the context by global
-  // function-index space, not by compiled-entry count.
-  let total_funcs = {
-    let mut max_idx_plus_one = num_imports
-    for entry in precompiled.functions {
-      let candidate = entry.func_idx + 1
-      if candidate > max_idx_plus_one {
-        max_idx_plus_one = candidate
-      }
-    }
-    let by_signatures = func_signatures.length()
-    if by_signatures > max_idx_plus_one {
-      by_signatures
-    } else {
-      max_idx_plus_one
-    }
-  }
+  let total_funcs = @wasmoon_jit.required_context_function_count(
+    precompiled,
+    func_signatures.length(),
+  )
 
   // Create JIT context with function table
   let context = JITContext::new(total_funcs)

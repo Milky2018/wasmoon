@@ -284,6 +284,8 @@ pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emi
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
+pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
+
 pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
 
 pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?

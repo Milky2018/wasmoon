@@ -732,6 +732,25 @@ pub fn resolve_call_fixup_target(
 }
 
 ///|
+pub fn required_context_function_count(
+  precompiled : @cwasm.PrecompiledModule,
+  func_signature_count : Int,
+) -> Int {
+  let mut count = precompiled.imports.length()
+  for entry in precompiled.functions {
+    let candidate = entry.func_idx + 1
+    if candidate > count {
+      count = candidate
+    }
+  }
+  if func_signature_count > count {
+    func_signature_count
+  } else {
+    count
+  }
+}
+
+///|
 pub fn patch_aarch64_func_addr_fixup(
   exec_ptr : Int64,
   fixup : @cwasm.FuncAddrFixup,

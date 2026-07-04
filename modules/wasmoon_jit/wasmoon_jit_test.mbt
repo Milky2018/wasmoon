@@ -90,6 +90,16 @@ test "resolve direct-call fixup targets in wasmoon_jit" {
 }
 
 ///|
+test "compute required JIT context function count" {
+  let mod = @cwasm.PrecompiledModule::new(AArch64)
+  mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)
+  mod.add_import("spectest", "print", 1, 0)
+  mod.add_function(@cwasm.CompiledEntry::new(7, "f7", [0xC3], 0, 0, 0, 0))
+  inspect(required_context_function_count(mod, 5), content="8")
+  inspect(required_context_function_count(mod, 12), content="12")
+}
+
+///|
 test "encode AArch64 BL immediate for direct-call fixups" {
   debug_inspect(
     encode_aarch64_bl_imm26(0x1000L, 0x1008L),
