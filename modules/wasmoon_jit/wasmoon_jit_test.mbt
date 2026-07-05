@@ -368,6 +368,33 @@ test "resolve direct-call fixup targets in wasmoon_jit" {
 }
 
 ///|
+test "install direct-call stubs in wasmoon_jit" {
+  let stubs = install_direct_call_stubs_for_target(X86_64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(stubs.exec_codes.length(), content="2")
+  inspect(
+    stubs.targets.contains(direct_call_idx_memory_fill_mem0()),
+    content="true",
+  )
+  inspect(
+    stubs.targets.contains(direct_call_idx_memory_copy_mem0()),
+    content="true",
+  )
+  let unsupported = try install_direct_call_stubs_for_target(Unknown) catch {
+    UnsupportedDirectCallStubTarget(pseudo_idx~, code_size~) => {
+      inspect(pseudo_idx, content="-1001")
+      inspect(code_size, content="0")
+      true
+    }
+    _ => false
+  } noraise {
+    _ => false
+  }
+  inspect(unsupported, content="true")
+}
+
+///|
 test "compute required JIT context function count" {
   let mod = @cwasm.PrecompiledModule::new(AArch64)
   mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)

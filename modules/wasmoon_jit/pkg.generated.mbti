@@ -280,6 +280,8 @@ pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 
+pub fn install_direct_call_stubs_for_target(@cwasm.TargetArch) -> DirectCallStubSet raise DirectCallStubInstallError
+
 pub fn is_funcref_ptr(Int64) -> Bool
 
 pub fn is_i31(Int64) -> Bool
@@ -400,6 +402,11 @@ pub(all) suberror CHeapError {
   NullReference
   OutOfMemory
 }
+
+pub suberror DirectCallStubInstallError {
+  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
+  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
+} derive(Eq, @debug.Debug)
 
 pub suberror GCSetupError {
   MissingJITContext
@@ -570,6 +577,11 @@ pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
 pub fn DWARFBuilder::new() -> Self
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
+
+pub struct DirectCallStubSet {
+  exec_codes : Array[ExecCode]
+  targets : Map[Int, Int64]
+}
 
 type ExecCode
 pub fn ExecCode::new(Array[Int]) -> Self?

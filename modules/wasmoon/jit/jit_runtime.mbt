@@ -102,46 +102,29 @@ fn install_direct_call_stubs(
   jit_module : JITModule,
   target : @cwasm.TargetArch,
 ) -> Unit raise JITModuleLoadError {
-  fn install_one(
-    pseudo_idx : Int,
-    target_ptr : Int64,
-  ) -> Unit raise JITModuleLoadError {
-    let stub_code = match target {
-      AArch64 => @wasmoon_jit.build_aarch64_direct_call_stub(target_ptr)
-      X86_64 => @wasmoon_jit.build_x64_direct_call_stub(target_ptr)
-      Unknown => []
-    }
-    if stub_code.length() == 0 {
+  let stubs = @wasmoon_jit.install_direct_call_stubs_for_target(target) catch {
+    UnsupportedDirectCallStubTarget(pseudo_idx~, code_size~) =>
       raise ImportTrampolineAllocationFailed(
         import_idx=-1,
         module_name="__jit_direct_call",
         func_name="idx_\{pseudo_idx}",
-        code_size=0,
+        code_size~,
       )
-    }
-    match @wasmoon_jit.ExecCode::new(stub_code) {
-      Some(ec) => {
-        jit_module.import_exec_codes.push(ec)
-        jit_module.direct_call_targets.set(pseudo_idx, ec.ptr())
-      }
-      None =>
-        raise ImportTrampolineAllocationFailed(
-          import_idx=-1,
-          module_name="__jit_direct_call",
-          func_name="idx_\{pseudo_idx}",
-          code_size=stub_code.length(),
-        )
-    }
+    DirectCallStubAllocationFailed(pseudo_idx~, code_size~) =>
+      raise ImportTrampolineAllocationFailed(
+        import_idx=-1,
+        module_name="__jit_direct_call",
+        func_name="idx_\{pseudo_idx}",
+        code_size~,
+      )
   }
-
-  install_one(
-    @wasmoon_jit.direct_call_idx_memory_fill_mem0(),
-    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
-  )
-  install_one(
-    @wasmoon_jit.direct_call_idx_memory_copy_mem0(),
-    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
-  )
+  for exec_code in stubs.exec_codes {
+    jit_module.import_exec_codes.push(exec_code)
+  }
+  for entry in stubs.targets.iter() {
+    let (pseudo_idx, ptr) = entry
+    jit_module.direct_call_targets.set(pseudo_idx, ptr)
+  }
 }
 
 ///|
