@@ -10,6 +10,15 @@
 pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
 
 ///|
+pub fn host_target_arch() -> @cwasm.TargetArch {
+  match @jit_ffi.c_jit_host_target_arch() {
+    1 => X86_64
+    2 => AArch64
+    _ => Unknown
+  }
+}
+
+///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).
 pub struct TrapDetails {
   signal : Int
@@ -566,6 +575,22 @@ pub fn NativeJITContext::clear_hostcall_callback(
 }
 
 ///|
+pub fn NativeJITContext::set_interpcall_callback(
+  self : NativeJITContext,
+  callback : () -> Int,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
+  @jit_ffi.c_jit_set_interpcall_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+pub fn NativeJITContext::clear_interpcall_callback(
+  self : NativeJITContext,
+) -> Unit {
+  @jit_ffi.c_jit_clear_interpcall_callback(self.ptr())
+}
+
+///|
 pub fn NativeJITContext::call_trampoline(
   self : NativeJITContext,
   trampoline_ptr : Int64,
@@ -622,6 +647,30 @@ pub fn get_hostcall_num_arg_slots() -> Int {
 /// Note: slots are 8 bytes each; V128 occupies 2 slots.
 pub fn get_hostcall_num_result_slots() -> Int {
   @jit_ffi.c_jit_get_hostcall_num_results()
+}
+
+///|
+/// Get the module function index for the current JIT -> interpreter fallback.
+pub fn get_interpcall_func_idx() -> Int {
+  @jit_ffi.c_jit_get_interpcall_func_idx()
+}
+
+///|
+/// Get the pointer to the interpreter fallback scratch `values_vec` buffer.
+pub fn get_interpcall_values_ptr() -> Int64 {
+  @jit_ffi.c_jit_get_interpcall_values_ptr()
+}
+
+///|
+/// Get the number of argument *slots* in the interpreter fallback buffer.
+pub fn get_interpcall_num_arg_slots() -> Int {
+  @jit_ffi.c_jit_get_interpcall_num_args()
+}
+
+///|
+/// Get the number of result *slots* in the interpreter fallback buffer.
+pub fn get_interpcall_num_result_slots() -> Int {
+  @jit_ffi.c_jit_get_interpcall_num_results()
 }
 
 ///|

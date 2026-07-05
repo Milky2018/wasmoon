@@ -21,6 +21,7 @@ pub fn run_explore(
   html_output : Bool,
   debug : Bool,
 ) -> Unit {
+  debug |> ignore
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
   let show_source = show_all || stages.contains("source")
@@ -56,12 +57,6 @@ pub fn run_explore(
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
   let num_imports = count_func_imports(mod_.imports)
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-  let use_subtype_indirect_check = module_indirect_subtype_check_reason(mod_)
-    is Some(_)
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -128,59 +123,100 @@ pub fn run_explore(
       }
     }
 
-    // Stage 2: IR (SSA form) - use simplified from_module API
-    let ir_func = @ir.translate_function(mod_, local_idx)
-    let ir_text = ir_func.print()
+    let env = @wasm_frontend.EmbeddingEnvironment::new()
+    let milk_result = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
+      err => {
+        let text = "error: \{to_repr(err)}"
+        if !html_output {
+          println("")
+          println("── Compiler Infrastructure ──")
+          println(text)
+        }
+        if html_output {
+          compiled_funcs.push({
+            name: func_name,
+            type_str: format_func_type(func_type),
+            source: source_text,
+            ir: text,
+            ir_opt: text,
+            vcode: text,
+            regalloc: text,
+            mc: text,
+          })
+        }
+        continue
+      }
+    }
+    let ir_text = milk_result.print()
     if !html_output && show_ir {
       println("")
-      println("── IR (SSA Form) ──")
+      println("── MilkIR (ir alias) ──")
       println(ir_text)
     }
 
-    // Stage 3: Optimized IR
-    let level = @ir.OptLevel::from_int(opt_level)
-    @ir.optimize_with_level(ir_func, level) |> ignore
-    let ir_optimized = ir_func.print()
+    @milkir.optimize_with_level(
+      milk_result,
+      @milkir.OptLevel::from_int(opt_level),
+    )
+    |> ignore
+    let ir_optimized = milk_result.print()
     if !html_output && show_opt_ir {
       println("")
-      println("── Optimized IR ──")
+      println("── Optimized MilkIR (opt-ir alias) ──")
       println(ir_optimized)
     }
 
-    // Stage 4: VCode (Low-level IR)
-    let vcode_func = @lower.lower_function(
-      ir_func,
-      num_imports=mod_.imports.length(),
-      run_ir_opt=false,
-      use_subtype_indirect_check~,
-      canonical_type_indices~,
+    let target : @machv_emit.EmitTarget = match
+      @wasmoon_jit.host_target_arch() {
+      AArch64 => AArch64
+      X86_64 => X64
+      Unknown => X64
+    }
+    let mach_result = @wasmoon_jit.lower_wasm_body_milkir_for_target(
+      milk_result, target,
     )
-    let vcode_text = vcode_func.to_string()
+    let vcode_text = mach_result.print()
     if !html_output && show_vcode {
       println("")
-      println("── VCode ──")
+      println("── MachV (vcode alias) ──")
       println(vcode_text)
     }
 
-    // Stage 5: Register Allocation
-    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
-      vcode_func,
-    )
-    let allocated_text = ra_output.summary()
+    let allocated_text = "MachV register allocation is integrated into the wasmoon_jit planning pipeline."
     if !html_output && show_regalloc {
       println("")
       println("── Register Allocation ──")
       println(allocated_text)
     }
 
-    // Stage 6: Machine Code
-    let debug_func_idx = if debug { Some(actual_func_idx) } else { None }
-    let mc = @emit.emit_function_with_regalloc(
-      vcode_ra,
-      ra_output,
-      debug_func_idx~,
-    )
-    let mc_text = mc.dump_disasm()
+    let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+      milk_result, target,
+    ) catch {
+      err => {
+        let text = "error: \{to_repr(err)}"
+        if !html_output && show_mc {
+          println("")
+          println("── Machine Code ──")
+          println(text)
+        }
+        if html_output {
+          compiled_funcs.push({
+            name: func_name,
+            type_str: format_func_type(func_type),
+            source: source_text,
+            ir: ir_text,
+            ir_opt: ir_optimized,
+            vcode: vcode_text,
+            regalloc: allocated_text,
+            mc: text,
+          })
+        }
+        continue
+      }
+    }
+    let mc_text = plan.object.code
+      .map(fn(b) { @types.to_hex_byte(b) })
+      .join(" ")
     if !html_output && show_mc {
       println("")
       println("── Machine Code ──")
@@ -189,46 +225,25 @@ pub fn run_explore(
 
     if !html_output &&
       (show_milkir || show_opt_milkir || show_machv || show_machv_mc) {
-      let env = @wasm_frontend.EmbeddingEnvironment::new()
-      let milk = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
-        err => {
-          println("")
-          println("── Compiler Infrastructure ──")
-          println("error: \{to_repr(err)}")
-          return
-        }
-      }
       if show_milkir {
         println("")
         println("── MilkIR ──")
-        println(milk.print())
+        println(ir_text)
       }
-      @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
-      |> ignore
       if show_opt_milkir {
         println("")
         println("── Optimized MilkIR ──")
-        println(milk.print())
+        println(ir_optimized)
       }
       if show_machv {
-        let mach = @wasmoon_jit.lower_wasm_body_milkir_for_target(milk, X64)
         println("")
         println("── MachV ──")
-        println(mach.print())
+        println(vcode_text)
       }
       if show_machv_mc {
         println("")
         println("── MachV Machine Code ──")
-        let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
-          milk,
-          X64,
-        ) catch {
-          err => {
-            println("error: \{to_repr(err)}")
-            return
-          }
-        }
-        println(to_repr(plan.object.code).to_string())
+        println(mc_text)
       }
     }
 

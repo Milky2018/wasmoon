@@ -52,6 +52,8 @@ pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @ji
 
 pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance) -> Unit
 
+pub fn install_jit_interpcall_dispatcher(JITModuleContext, @runtime.Store, @runtime.ModuleInstance) -> Unit
+
 pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value] raise WastRunnerError
 
 pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
@@ -67,6 +69,8 @@ pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
 pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
 
 pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn sync_store_globals_to_jit(JITModuleContext, @runtime.Store) -> Unit
 
 pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 

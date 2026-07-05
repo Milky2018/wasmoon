@@ -22,7 +22,7 @@ pub impl Show for JITTrap with fn output(self, logger) {
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(ISS-025): move entry trampoline generation to
+/// TODO(ISS-026): move entry trampoline generation to
 /// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
 /// trampoline passes the full WAST/testsuite production gate, then move this
 /// context into `wasmoon_jit`.
@@ -230,6 +230,20 @@ fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
 }
 
 ///|
+/// Set interpreter fallback callback for JIT-generated interpreter stubs.
+fn JITContext::set_interpcall_callback(
+  self : JITContext,
+  callback : () -> Int,
+) -> Unit {
+  self.ctx.set_interpcall_callback(callback)
+}
+
+///|
+fn JITContext::clear_interpcall_callback(self : JITContext) -> Unit {
+  self.ctx.clear_interpcall_callback()
+}
+
+///|
 /// Clear WASI stdin callback
 fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
   @wasmoon_jit.clear_wasi_stdin_callback(self.ptr())
@@ -269,9 +283,6 @@ fn JITContext::call_multi_return(
   result_types : Array[@types.ValueType],
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
-  let use_reusable_trampoline = @wasmoon_jit.can_use_reusable_entry_trampoline(
-    param_types, result_types,
-  )
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
   let sig_hash = @wasmoon_jit.entry_trampoline_signature_hash(
     param_types, result_types,
@@ -281,29 +292,12 @@ fn JITContext::call_multi_return(
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.ptr()
     None => {
-      let code_ints = if use_reusable_trampoline {
-        let target : @machv_emit.EmitTarget = match @isa.ISA::current() {
-          AArch64 => AArch64
-          AMD64 => X64
-        }
-        @wasmoon_jit.plan_entry_trampoline_for_target(
-          param_types, result_types, target,
-        ).object.code catch {
-          err => raise JITTrap(to_repr(err).to_string())
-        }
-      } else {
-        // TODO(ISS-025): remove this legacy fallback after the reusable entry
-        // trampoline models production ABI surfaces beyond the currently proven
-        // scalar register-only slice: stack-passed entry params, overflow Wasm
-        // call args/results, reference-root handling, FP packing, and V128 lane
-        // extract/insert operations.
-        let param_codes_arr = @wasmoon_jit.entry_trampoline_type_codes(
-          param_types,
-        )
-        let result_codes_arr = @wasmoon_jit.entry_trampoline_type_codes(
-          result_types,
-        )
-        @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr).get_bytes()
+      let code_ints = @wasmoon_jit.build_entry_trampoline_for_target(
+        param_types,
+        result_types,
+        @wasmoon_jit.host_target_arch(),
+      ) catch {
+        err => raise JITTrap(to_repr(err).to_string())
       }
       let trampoline = @wasmoon_jit.ExecCode::new(code_ints)
       match trampoline {

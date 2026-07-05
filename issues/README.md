@@ -10,7 +10,7 @@ No ready issues.
 
 | ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
 | --- | --- | ---: | --- | --- | --- | --- | --- |
-| [ISS-025](ISS-025.md) | in_progress | 2 | task | unassigned | none | none | Retire wasmoon_jit legacy fallback internals |
+| [ISS-026](ISS-026.md) | deferred | 3 | task | unassigned | none | none | Complete reusable JIT coverage without legacy fallbacks |
 
 ## Dependency Graph
 
@@ -41,6 +41,7 @@ graph TD
   ISS_023["ISS-023: Retire legacy wasmoon IR and VCode implementation paths"]
   ISS_024["ISS-024: Validate real compiler-infrastructure migration"]
   ISS_025["ISS-025: Retire wasmoon_jit legacy fallback internals"]
+  ISS_026["ISS-026: Complete reusable JIT coverage without legacy fallbacks"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

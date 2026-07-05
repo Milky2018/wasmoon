@@ -5,16 +5,9 @@ import {
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/validator",
   "Milky2018/wasmoon/wat",
-  "Milky2018/wasmoon/wast",
-  "Milky2018/wasmoon_jit/legacy_ir" @ir,
-  "Milky2018/wasmoon_jit/legacy_vcode" @vcode,
-  "Milky2018/wasmoon_jit/legacy_vcode/emit",
-  "Milky2018/wasmoon_jit/legacy_vcode/isa",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
-  "Milky2018/wasmoon_jit/legacy_vcode/lower",
-  "Milky2018/wasmoon_jit/legacy_vcode/regalloc",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
@@ -33,5 +26,6 @@ import {
 } for "test"
 
 import {
+  "Milky2018/wasmoon/wast",
   "Milky2018/wasmoon/wasi",
 } for "wbtest"

@@ -156,6 +156,17 @@ fn apply_call_fixups(
   jit_module : JITModule,
   precompiled : @cwasm.PrecompiledModule,
 ) -> Unit {
+  for entry in precompiled.functions {
+    for fixup in entry.call_fixups {
+      if fixup.func_idx < 0 &&
+        jit_module.direct_call_targets.get(fixup.func_idx) is None {
+        if @wasmoon_jit.resolve_runtime_func_fixup_idx(fixup.func_idx)
+          is Some(ptr) {
+          jit_module.direct_call_targets.set(fixup.func_idx, ptr)
+        }
+      }
+    }
+  }
   let func_table_ptr = ctx.get_func_table_ptr()
   if func_table_ptr == 0L && jit_module.direct_call_targets.is_empty() {
     return
@@ -1066,6 +1077,25 @@ pub fn JITModule::set_hostcall_callback(
 pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
   if self.context is Some(ctx) {
     ctx.clear_hostcall_callback()
+  }
+}
+
+///|
+/// Set the interpreter fallback callback used by generated fallback stubs.
+/// The callback should return 0 on success, or a trap code on failure.
+pub fn JITModule::set_interpcall_callback(
+  self : JITModule,
+  callback : () -> Int,
+) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.set_interpcall_callback(callback)
+  }
+}
+
+///|
+pub fn JITModule::clear_interpcall_callback(self : JITModule) -> Unit {
+  if self.context is Some(ctx) {
+    ctx.clear_interpcall_callback()
   }
 }
 

@@ -207,6 +207,7 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
     -21011 => Some(@jit_ffi.c_jit_get_table_init_ptr())
     -21012 => Some(@jit_ffi.c_jit_get_elem_drop_ptr())
     -21013 => Some(@jit_ffi.c_jit_get_hostcall_ptr())
+    -21014 => Some(@jit_ffi.c_jit_get_interpcall_ptr())
     -22000 => Some(@jit_ffi.c_jit_get_exception_try_begin_ptr())
     -22001 => Some(@jit_ffi.c_jit_get_exception_try_end_ptr())
     -22002 => Some(@jit_ffi.c_jit_get_exception_throw_ptr())

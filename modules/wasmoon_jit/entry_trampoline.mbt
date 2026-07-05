@@ -9,7 +9,7 @@ fn entry_trampoline_type(
     F64 => F64
     V128 =>
       raise PipelineFailure(
-        message="TODO(ISS-025): V128 entry trampolines need MilkIR vector lane extract/insert operations",
+        message="TODO(ISS-026): V128 entry trampolines need MilkIR vector lane extract/insert operations",
       )
     FuncRef
     | ExternRef
@@ -187,7 +187,7 @@ pub fn can_use_reusable_entry_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> Bool {
-  // TODO(ISS-025): expand this gate as the reusable entry trampoline gains full
+  // TODO(ISS-026): expand this gate as the reusable entry trampoline gains full
   // production ABI coverage. Today it is intentionally limited to the scalar
   // register-only signature covered by the reusable MilkIR/MachV pipeline test.
   if param_types.length() != 2 || result_types.length() != 1 {

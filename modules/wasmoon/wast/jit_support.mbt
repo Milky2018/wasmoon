@@ -327,6 +327,81 @@ pub fn sync_jit_globals_to_store(
 }
 
 ///|
+fn encode_global_value_for_jit(
+  value : @types.Value,
+  jit_module : @jit.JITModule,
+  func_addrs : Array[Int],
+) -> (Int64, Int64?) {
+  match value {
+    I32(n) => (@types.ToInt64::to_int64_bits(n), None)
+    I64(n) => (@types.ToInt64::to_int64_bits(n), None)
+    F32(f) => (@types.ToInt64::to_int64_bits(f), None)
+    F64(d) => (@types.ToInt64::to_int64_bits(d), None)
+    FuncRef(store_addr) => {
+      let mut module_func_idx : Int? = None
+      for i, addr in func_addrs {
+        if addr == store_addr {
+          module_func_idx = Some(i)
+          break
+        }
+      }
+      match module_func_idx {
+        Some(func_idx) => {
+          let func_ptr = jit_module.get_func_ptr(func_idx)
+          if func_ptr == 0L {
+            (@wasmoon_jit.encode_funcref_idx(func_idx), None)
+          } else {
+            (@wasmoon_jit.tag_funcref_ptr(func_ptr), None)
+          }
+        }
+        None => (NULL_REF, None)
+      }
+    }
+    ExternRef(idx) => (idx.to_int64(), None)
+    ExnRef(idx) => (idx.to_int64(), None)
+    ArrayRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
+    StructRef(gc_ref) => (@wasmoon_jit.encode_heap_ref(gc_ref), None)
+    I31(n) => (@wasmoon_jit.encode_i31(n), None)
+    Null => (NULL_REF, None)
+    V128(bytes) =>
+      if bytes.length() >= 16 {
+        (
+          @types.bytes_to_int64_le(bytes, 0),
+          Some(@types.bytes_to_int64_le(bytes, 8)),
+        )
+      } else {
+        (0L, Some(0L))
+      }
+  }
+}
+
+///|
+pub fn sync_store_globals_to_jit(
+  jit_ctx : JITModuleContext,
+  store : @runtime.Store,
+) -> Unit {
+  if jit_ctx.globals_ptr == 0L || jit_ctx.global_addrs.is_empty() {
+    return
+  }
+  for i, global_addr in jit_ctx.global_addrs {
+    if global_addr < 0 || global_addr >= store.globals.length() {
+      continue
+    }
+    let global_inst = store.globals[global_addr]
+    let (low, high) = encode_global_value_for_jit(
+      global_inst.get(),
+      jit_ctx.jit_module,
+      jit_ctx.func_addrs,
+    )
+    let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
+    @wasmoon_jit.c_jit_write_i64(offset, low)
+    if high is Some(hi) {
+      @wasmoon_jit.c_jit_write_i64(offset + 8L, hi)
+    }
+  }
+}
+
+///|
 fn decode_funcref_from_jit_ctx(
   raw_value : Int64,
   jit_ctx : JITModuleContext,
@@ -1350,6 +1425,37 @@ pub fn build_external_imports_for_jit(
 }
 
 ///|
+fn find_local_tag_idx(
+  caller_instance : @runtime.ModuleInstance,
+  tag_addr : Int,
+) -> Int? {
+  for i, addr in caller_instance.tag_addrs {
+    if addr == tag_addr {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+fn jit_context_func_type(
+  jit_ctx : JITModuleContext,
+  func_idx : Int,
+) -> @types.FuncType? {
+  if func_idx < 0 || func_idx >= jit_ctx.func_type_indices.length() {
+    return None
+  }
+  let type_idx = jit_ctx.func_type_indices[func_idx]
+  if type_idx < 0 || type_idx >= jit_ctx.module_types.length() {
+    return None
+  }
+  match jit_ctx.module_types[type_idx].composite {
+    Func(ft) => Some(ft)
+    _ => None
+  }
+}
+
+///|
 /// Install a JIT hostcall dispatcher closure on `jit_module`.
 ///
 /// This enables arbitrary imported host functions (stored in `store`) to be
@@ -1359,18 +1465,6 @@ pub fn install_jit_hostcall_dispatcher(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> Unit {
-  fn find_local_tag_idx(
-    caller_instance : @runtime.ModuleInstance,
-    tag_addr : Int,
-  ) -> Int? {
-    for i, addr in caller_instance.tag_addrs {
-      if addr == tag_addr {
-        return Some(i)
-      }
-    }
-    None
-  }
-
   fn call_func_by_addr(
     store : @runtime.Store,
     caller_instance : @runtime.ModuleInstance,
@@ -1477,6 +1571,100 @@ pub fn install_jit_hostcall_dispatcher(
         }
       }
     }
+    0
+  })
+}
+
+///|
+/// Install a JIT -> interpreter dispatcher for generated local fallback stubs.
+pub fn install_jit_interpcall_dispatcher(
+  jit_ctx : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+) -> Unit {
+  let jit_module = jit_ctx.jit_module
+  jit_module.set_interpcall_callback(fn() {
+    let func_idx = @wasmoon_jit.get_interpcall_func_idx()
+    let values_ptr = @wasmoon_jit.get_interpcall_values_ptr()
+    let arg_slots = @wasmoon_jit.get_interpcall_num_arg_slots()
+    let res_slots = @wasmoon_jit.get_interpcall_num_result_slots()
+    let ft = match jit_context_func_type(jit_ctx, func_idx) {
+      Some(t) => t
+      None => return 3
+    }
+    if sum_slot_count(ft.params) != arg_slots ||
+      sum_slot_count(ft.results) != res_slots {
+      return 3
+    }
+    let args : Array[@types.Value] = []
+    let mut slot = 0
+    for ty in ft.params {
+      let (v, used) = decode_value(
+        ty, values_ptr, slot, store, jit_module, instance,
+      )
+      args.push(v)
+      slot = slot + used
+    }
+    sync_jit_globals_to_store(jit_ctx, store)
+    sync_jit_tables_to_store(jit_ctx, store)
+    let invoke_result = @executor.call_func_by_index_with_exception(
+      store, instance, func_idx, args,
+    ) catch {
+      e => return runtime_error_to_trap_code(e)
+    }
+    let results : Array[@types.Value] = match invoke_result {
+      Returned(values) => values
+      Thrown(tag_addr, values) => {
+        sync_store_globals_to_jit(jit_ctx, store)
+        sync_tables_to_jit(
+          instance,
+          store,
+          jit_module,
+          use_subtype_indirect_check=jit_ctx.use_subtype_indirect_check,
+        )
+        let local_tag_idx = find_local_tag_idx(instance, tag_addr).unwrap_or(-1)
+        if values.length() == 0 {
+          @jit.throw_exception_tag(jit_module.get_context_ptr(), local_tag_idx)
+        } else {
+          let encoded_values : Array[Int64] = []
+          for v in values {
+            match encode_exception_value_for_jit(v, jit_module, instance) {
+              Some(raw) => encoded_values.push(raw)
+              None => return 8
+            }
+          }
+          @jit.throw_exception_values(
+            jit_module.get_context_ptr(),
+            local_tag_idx,
+            encoded_values,
+          )
+        }
+        return 8
+      }
+    }
+    if results.length() != ft.results.length() {
+      return 3
+    }
+    let mut out_slot = arg_slots
+    for i, ty in ft.results {
+      let slots = encode_value(ty, results[i], jit_module, instance)
+      match slots {
+        None => return 3
+        Some(encoded_slots) => {
+          for j in 0..<encoded_slots.length() {
+            write_slot_i64(values_ptr, out_slot + j, encoded_slots[j])
+          }
+          out_slot = out_slot + encoded_slots.length()
+        }
+      }
+    }
+    sync_store_globals_to_jit(jit_ctx, store)
+    sync_tables_to_jit(
+      instance,
+      store,
+      jit_module,
+      use_subtype_indirect_check=jit_ctx.use_subtype_indirect_check,
+    )
     0
   })
 }

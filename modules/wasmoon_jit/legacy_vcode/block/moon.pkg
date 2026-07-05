@@ -1,8 +1,0 @@
-import {
-  "Milky2018/wasmoon_jit/legacy_vcode/instr",
-  "Milky2018/wasmoon_jit/legacy_vcode/abi",
-}
-
-import {
-  "Milky2018/wasm_core/types",
-} for "wbtest"

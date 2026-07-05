@@ -676,7 +676,7 @@ test "entry trampoline reports TODO for V128 lane packing" {
   let results : Array[@types.ValueType] = []
   try plan_entry_trampoline_for_target(params, results, X64) catch {
     PipelineFailure(message=msg) =>
-      inspect(msg.contains("TODO(ISS-025)"), content="true")
+      inspect(msg.contains("TODO(ISS-026)"), content="true")
   } noraise {
     _ => fail("expected V128 trampoline planning to report TODO")
   }

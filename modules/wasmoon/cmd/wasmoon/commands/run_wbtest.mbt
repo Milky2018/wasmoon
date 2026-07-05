@@ -76,14 +76,14 @@ test "compile api: reusable pipeline preserves direct wasm call fixups" {
 ///|
 test "compile api: reusable pipeline lowers ref.func without legacy custom" {
   let mod_ = @types.Module::simple([], [FuncRef], [RefFunc(0)], "make_ref")
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -114,14 +114,14 @@ test "compile api: reusable pipeline lowers memory0 base without legacy custom" 
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -141,14 +141,14 @@ test "compile api: reusable pipeline lowers memory.size without legacy custom" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -169,14 +169,14 @@ test "compile api: reusable pipeline lowers memory.size for non-zero memory" {
       { limits: { min: 2, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -206,14 +206,14 @@ test "compile api: reusable pipeline lowers memory.grow runtime call" {
       },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -251,14 +251,14 @@ test "compile api: reusable pipeline lowers memory fill and copy runtime calls" 
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -293,14 +293,14 @@ test "compile api: reusable pipeline lowers memory segment runtime calls" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -358,14 +358,14 @@ test "compile api: reusable pipeline lowers table runtime calls" {
     ),
     tables: [table],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -404,14 +404,14 @@ test "compile api: reusable pipeline lowers non-zero memory load store" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -438,14 +438,14 @@ test "compile api: reusable pipeline lowers memory64 load" {
       { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {
@@ -478,14 +478,14 @@ test "compile api: reusable pipeline lowers memory64 narrow load store" {
       { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
     ],
   }
-  let isa = @isa.ISA::current()
+  let target_arch = @wasmoon_jit.host_target_arch()
   let compiled = try_compile_with_reusable_pipeline(
     mod_,
     0,
     0,
     mod_.get_func_type(0),
-    isa,
-    current_emit_target(isa),
+    target_arch,
+    current_emit_target(target_arch),
     2,
   )
   guard compiled is Some(reusable) else {

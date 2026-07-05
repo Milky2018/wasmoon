@@ -192,7 +192,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
       allocatable_regs_for_target(target),
     )
     |> ignore
-    // TODO(ISS-025): install emitted CodeObject bytes through jit_ffi and
+    // TODO(ISS-026): install emitted CodeObject bytes through jit_ffi and
     // replace the legacy VCode JIT execution path end-to-end.
     plan_integration_for_target(func, machv_func, target)
   } catch {

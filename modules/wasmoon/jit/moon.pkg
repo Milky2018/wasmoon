@@ -1,27 +1,11 @@
 import {
-  "Milky2018/machv_emit",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon_jit/legacy_vcode/emit",
-  "Milky2018/wasmoon_jit/legacy_vcode/isa",
   "Milky2018/wasmoon_jit/cwasm",
   "Milky2018/wasm_core/types",
   "moonbitlang/core/hashset",
   "moonbitlang/x/fs",
 }
 
-import {
-  "Milky2018/wasmoon_jit/legacy_ir" @ir,
-  "Milky2018/wasmoon/wast",
-  "Milky2018/wasmoon_jit/legacy_vcode/lower",
-  "Milky2018/wasmoon_jit/legacy_vcode/regalloc",
-  "Milky2018/wasmoon_jit/legacy_vcode/emit",
-  "Milky2018/wasmoon_jit/legacy_vcode/isa",
-} for "wbtest"
-
 options(
-  targets: {
-    "execution_wbtest.mbt": [ "native" ],
-    "ffi_jit.mbt": [ "native" ],
-    "jit_runtime.mbt": [ "native" ],
-  },
+  targets: { "ffi_jit.mbt": [ "native" ], "jit_runtime.mbt": [ "native" ] },
 )

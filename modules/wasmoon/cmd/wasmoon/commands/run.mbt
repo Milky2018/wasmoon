@@ -841,9 +841,10 @@ fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
 
 ///|
 fn run_jit_cache_arch_tag() -> String {
-  match @isa.ISA::current() {
+  match @wasmoon_jit.host_target_arch() {
     AArch64 => "aarch64"
-    AMD64 => "x86_64"
+    X86_64 => "x86_64"
+    Unknown => "unknown"
   }
 }
 
@@ -1276,6 +1277,7 @@ fn run_with_jit(
             mod_.type_rec_groups,
             use_subtype_indirect_check,
           )
+          @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
 
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
@@ -1485,10 +1487,13 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-fn current_emit_target(isa : @isa.ISA) -> @machv_emit.EmitTarget {
-  match isa {
+fn current_emit_target(
+  target_arch : @cwasm.TargetArch,
+) -> @machv_emit.EmitTarget {
+  match target_arch {
     AArch64 => AArch64
-    AMD64 => X64
+    X86_64 => X64
+    Unknown => X64
   }
 }
 
@@ -1505,7 +1510,7 @@ priv struct ReusableCompiledFunction {
 ///|
 fn reusable_body_signature_supported(
   func_type : @types.FuncType,
-  isa : @isa.ISA,
+  target_arch : @cwasm.TargetArch,
 ) -> Bool {
   let mut int_params = 1 // hidden VMContext parameter
   let mut float_params = 0
@@ -1524,9 +1529,10 @@ fn reusable_body_signature_supported(
       return false
     }
   }
-  let max_int_params = match isa {
+  let max_int_params = match target_arch {
     AArch64 => 8
-    AMD64 => 6
+    X86_64 => 6
+    Unknown => return false
   }
   int_params <= max_int_params && float_params <= 8
 }
@@ -1537,11 +1543,11 @@ fn try_compile_with_reusable_pipeline(
   func_local_idx : Int,
   func_idx : Int,
   func_type : @types.FuncType,
-  isa : @isa.ISA,
+  target_arch : @cwasm.TargetArch,
   target : @machv_emit.EmitTarget,
   normalized_opt_level : Int,
 ) -> ReusableCompiledFunction? {
-  if !reusable_body_signature_supported(func_type, isa) {
+  if !reusable_body_signature_supported(func_type, target_arch) {
     return None
   }
   let env = @wasm_frontend.EmbeddingEnvironment::new()
@@ -1592,7 +1598,7 @@ fn try_compile_with_reusable_pipeline(
 ///|
 /// Compile a WASM module to precompiled format in memory
 /// actual_memory_max: Override for memory max limit (used for imported memories)
-fn compile_module_to_jit(
+pub fn compile_module_to_jit(
   mod_ : @types.Module,
   debug : Bool,
   dump_on_trap : Bool,
@@ -1604,15 +1610,14 @@ fn compile_module_to_jit(
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
 ) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
+  actual_memory_max |> ignore
+  enable_dwarf |> ignore
+  force_subtype_indirect_check |> ignore
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-  let isa = @isa.ISA::current()
-  let target_arch : @cwasm.TargetArch = match isa {
-    AArch64 => AArch64
-    AMD64 => X86_64
-  }
-  let emit_target = current_emit_target(isa)
+  let target_arch = @wasmoon_jit.host_target_arch()
+  let emit_target = current_emit_target(target_arch)
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(@wasmoon_jit.JITDebugDB::new())
@@ -1654,64 +1659,6 @@ fn compile_module_to_jit(
   if perf_on {
     @perf.reset_module(total_compile_funcs)
   }
-  let canonical_type_indices = @types.compute_canonical_type_indices(
-    mod_.types,
-    type_rec_groups=mod_.type_rec_groups,
-  )
-  let subtype_check_reason = module_indirect_subtype_check_reason(mod_)
-  // Cranelift-style behavior:
-  // - no-GC tables: exact equality on canonicalized type IDs
-  // - GC/subtyping tables: keep subtype helper slow path
-  let default_use_subtype_indirect_check = subtype_check_reason is Some(_)
-  let use_subtype_indirect_check = match force_subtype_indirect_check {
-    Some(v) => v
-    None => default_use_subtype_indirect_check
-  }
-  if debug {
-    if use_subtype_indirect_check {
-      let reason = match subtype_check_reason {
-        Some(r) => r
-        None => "unknown"
-      }
-      @logger.debug("JIT: indirect-call subtype check mode enabled (\{reason})")
-    } else {
-      @logger.debug(
-        "JIT: indirect-call exact mode enabled (canonical type ids)",
-      )
-    }
-  }
-  let import_func_type_indices : Array[Int] = []
-  let global_types : Array[@types.GlobalType] = []
-  let all_tags : Array[@types.TagType] = []
-  for imp in mod_.imports {
-    match imp.desc {
-      Func(type_idx) => import_func_type_indices.push(type_idx)
-      Global(global_type) => global_types.push(global_type)
-      Tag(tag_type_idx) => all_tags.push({ type_idx: tag_type_idx })
-      _ => ()
-    }
-  }
-  for global in mod_.globals {
-    global_types.push(global.type_)
-  }
-  for tag in mod_.tags {
-    all_tags.push(tag)
-  }
-  let memory_max_for_translate : Int? = match actual_memory_max {
-    Some(_) => actual_memory_max
-    None =>
-      if mod_.memories.length() > 0 {
-        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
-      } else {
-        None
-      }
-  }
-  let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
-  let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
-  let memory_mins = mod_.memories.map(fn(m) {
-    m.limits.min * (1L << m.page_size_log2)
-  })
-  let func_types = @types.extract_func_types(mod_.types)
   // Record imports in precompiled module
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1747,14 +1694,14 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // TODO(ISS-025): switch production JIT compilation to the reusable
+    // TODO(ISS-026): switch production JIT compilation to the reusable
     // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
     // function-body entry ABI, GC stackmaps, exceptions, and
     // dump-on-trap diagnostics are installed end-to-end. The fast path below
     // uses the reusable pipeline for the conservative native-frontend subset.
     let normalized_opt_level = normalize_opt_level(opt_level)
     if try_compile_with_reusable_pipeline(
-        mod_, i, func_idx, func_type, isa, emit_target, normalized_opt_level,
+        mod_, i, func_idx, func_type, target_arch, emit_target, normalized_opt_level,
       )
       is Some(reusable) {
       emit_compile_progress(
@@ -1833,31 +1780,6 @@ fn compile_module_to_jit(
       }
       continue
     }
-    // Stage 1: Translate WASM to IR.
-    // Reuse per-module metadata across all function translations (Cranelift-style
-    // module-environment reuse) to avoid rebuilding import/global/type vectors in
-    // every function.
-    let code = mod_.codes[i]
-    let translator = @ir.Translator::new(
-      func_name,
-      func_type,
-      code.locals,
-      func_types,
-      mod_.funcs,
-      num_imports,
-      import_func_type_indices,
-      memory_max=memory_max_for_translate,
-      memory_is_64~,
-      memory_page_size_log2~,
-      tables=mod_.tables,
-      global_types~,
-      type_rec_groups=mod_.type_rec_groups,
-      module_types=mod_.types,
-      tags=all_tags,
-      memory_mins~,
-    )
-    let ir_func = translator.translate(code.body)
-    // Stage 2: Optimize IR (configurable level)
     emit_compile_progress(
       on_progress,
       Optimize,
@@ -1867,28 +1789,6 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let optimize_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    if perf_on {
-      @perf.begin_function(
-        func_idx,
-        func_name,
-        normalized_opt_level,
-        @ir.instruction_count(ir_func),
-      )
-    }
-    @ir.optimize_with_level(
-      ir_func,
-      @ir.OptLevel::from_int(normalized_opt_level),
-    )
-    |> ignore
-    if optimize_tick is Some(tick) {
-      @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
-    }
-    let lower_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut ir_dump : String? = None
-    if debug_db is Some(_) {
-      ir_dump = Some(ir_func.print())
-    }
     emit_compile_progress(
       on_progress,
       Lower,
@@ -1898,22 +1798,6 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // Stage 3: Lower to VCode
-    let vcode_func = @lower.lower_function(
-      ir_func,
-      num_imports=mod_.imports.length(),
-      run_ir_opt=false,
-      use_subtype_indirect_check~,
-      canonical_type_indices~,
-    )
-    if lower_tick is Some(tick) {
-      @perf.record_stage_us("lower", @perf.elapsed_us(tick))
-    }
-    let regalloc_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut vcode_before_dump : String? = None
-    if debug_db is Some(_) {
-      vcode_before_dump = Some(vcode_func.print())
-    }
     emit_compile_progress(
       on_progress,
       Regalloc,
@@ -1923,27 +1807,6 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // Stage 4: Register allocation (Cranelift-style output)
-    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
-      vcode_func,
-    )
-    if regalloc_tick is Some(tick) {
-      @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
-      let (spills, reloads, reg_moves, spill_to_spill) = ra_output.spill_reload_stats()
-      @perf.record_regalloc_stats(
-        ra_output.get_num_spillslots(),
-        spills,
-        reloads,
-        reg_moves,
-        spill_to_spill,
-      )
-    }
-    let emit_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut vcode_after_dump : String? = None
-    if debug_db is Some(_) {
-      // Note: VCode is not rewritten; regalloc results are in `ra_output`.
-      vcode_after_dump = Some(vcode_ra.print())
-    }
     emit_compile_progress(
       on_progress,
       Codegen,
@@ -1953,57 +1816,33 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // Stage 5: Emit machine code
-    let debug_func_idx = Some(func_idx)
-    let mc = @emit.emit_function_with_regalloc(
-      vcode_ra,
-      ra_output,
-      debug_func_idx~,
-      force_frame_setup=enable_dwarf,
-      record_disasm=debug_db is Some(_),
-    )
-    if emit_tick is Some(tick) {
-      @perf.record_stage_us("emit", @perf.elapsed_us(tick))
+    let fallback = @wasmoon_jit.build_interpreter_fallback_trampoline_for_target(
+      func_type.params,
+      func_type.results,
+      func_idx,
+      target_arch,
+    ) catch {
+      err => {
+        if debug {
+          @logger.debug(
+            "JIT: reusable pipeline and interpreter fallback unsupported for \{func_name}: \{err}",
+          )
+        }
+        return None
+      }
     }
-    let mut mc_dump : String? = None
-    if debug_db is Some(_) {
-      mc_dump = Some(mc.dump_disasm())
-    }
-    // Stage 6: Add to precompiled module
-    let code_bytes = mc.get_bytes()
-    let code_size = code_bytes.length()
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
-    let func_addr_fixups : Array[@cwasm.FuncAddrFixup] = []
-    for fixup in mc.get_func_addr_fixups() {
-      func_addr_fixups.push({
-        offset: fixup.offset,
-        func_idx: fixup.func_idx,
-        reg: fixup.reg,
-      })
-    }
-    let call_fixups : Array[@cwasm.CallFixup] = []
-    for fixup in mc.get_call_fixups() {
-      call_fixups.push({
-        offset: fixup.offset,
-        func_idx: fixup.func_idx,
-        veneer_offset: fixup.veneer_offset,
-      })
-    }
     precompiled.add_function(
       @wasmoon_jit.build_cwasm_entry_from_code(
         func_idx,
         func_name,
-        code_bytes,
+        fallback.code,
         0,
         0,
         num_params,
         num_results,
-        func_addr_fixups~,
-        call_fixups~,
-        gc_safepoint_offsets=mc.get_gc_safepoint_offsets(),
-        gc_safepoint_root_counts=mc.get_gc_safepoint_root_counts(),
-        gc_safepoint_root_indices=mc.get_gc_safepoint_root_indices(),
+        func_addr_fixups=fallback.func_addr_fixups,
       ),
     )
     emit_compile_progress(
@@ -2016,17 +1855,17 @@ fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     if perf_on {
-      @perf.finish_function(@ir.instruction_count(ir_func), code_size)
+      @perf.begin_function(func_idx, func_name, normalized_opt_level, 0)
+      @perf.finish_function(0, fallback.code.length())
     }
     if debug_db is Some(db) {
-      // Store best-effort dumps (empty string if unavailable for a stage).
       db.set(
         func_idx,
         @wasmoon_jit.JITFunctionDebug::new(
-          ir_dump.unwrap_or(""),
-          vcode_before_dump.unwrap_or(""),
-          vcode_after_dump.unwrap_or(""),
-          mc_dump.unwrap_or(""),
+          "interpreter fallback",
+          "",
+          "",
+          "interpreter fallback trampoline: \{fallback.code.length()} bytes",
         ),
       )
     }

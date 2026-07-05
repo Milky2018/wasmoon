@@ -558,13 +558,13 @@ fn try_compile_jit(
           for group in lowered_mod.type_rec_groups {
             module_rec_groups_copy.push(group)
           }
-          Ok(
-            @wast.JITModuleContext::new(
-              jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
-              func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
-              module_rec_groups_copy, use_subtype_indirect_check,
-            ),
+          let jit_ctx = @wast.JITModuleContext::new(
+            jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
+            func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
+            module_rec_groups_copy, use_subtype_indirect_check,
           )
+          @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
+          Ok(jit_ctx)
         }
       }
     }

@@ -186,6 +186,11 @@ typedef struct {
     void *hostcall_callback;          // Function pointer for hostcall callback
     void *hostcall_callback_data;     // Closure data for hostcall callback
 
+    // Interpreter fallback callback (MoonBit closure) for JIT stubs that
+    // delegate unsupported function bodies back to the interpreter.
+    void *interpcall_callback;         // Function pointer for interpreter callback
+    void *interpcall_callback_data;    // Closure data for interpreter callback
+
     // ============ Bulk Memory/Table Segment State ============
     // Per-instance (per jit_context_t) storage for bulk memory/table operations:
     //   memory.init/data.drop/table.init/elem.drop and GC array.*_{data,elem}.

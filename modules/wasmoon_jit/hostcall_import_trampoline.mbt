@@ -12,6 +12,36 @@ pub suberror HostcallImportTrampolineError {
 } derive(Debug, Eq)
 
 ///|
+priv enum RuntimeValueBridge {
+  Hostcall(Int)
+  Interpcall(Int)
+}
+
+///|
+fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
+  match self {
+    Hostcall(host_func_addr) => host_func_addr.to_int64()
+    Interpcall(func_idx) => func_idx.to_int64()
+  }
+}
+
+///|
+fn RuntimeValueBridge::aarch64_runtime_fixup(self : RuntimeValueBridge) -> Int {
+  match self {
+    Hostcall(_) => jit_runtime_fixup_idx(13)
+    Interpcall(_) => jit_runtime_fixup_idx(14)
+  }
+}
+
+///|
+fn RuntimeValueBridge::x64_bridge_ptr(self : RuntimeValueBridge) -> Int64 {
+  match self {
+    Hostcall(_) => @jit_ffi.c_jit_get_hostcall_ptr()
+    Interpcall(_) => @jit_ffi.c_jit_get_interpcall_ptr()
+  }
+}
+
+///|
 pub impl Show for HostcallImportTrampolineError with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
@@ -33,7 +63,7 @@ fn hostcall_scalar_class(
     F64 => Float64
     V128 =>
       raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-025): hostcall import trampolines need V128 lane packing",
+        message="TODO(ISS-026): hostcall import trampolines need V128 lane packing",
       )
     _ => Int
   }
@@ -56,7 +86,7 @@ fn validate_hostcall_import_signature(
   }
   if int_seen > max_int_regs || float_seen > max_float_regs {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampolines need incoming stack-argument support",
+      "TODO(ISS-026): hostcall import trampolines need incoming stack-argument support",
     )
   }
   let mut int_results = 0
@@ -69,7 +99,7 @@ fn validate_hostcall_import_signature(
   }
   if int_results > 8 || float_results > 8 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampolines need overflow result areas",
+      "TODO(ISS-026): hostcall import trampolines need overflow result areas",
     )
   }
 }
@@ -114,7 +144,7 @@ fn a64_emit_add_imm(
 ) -> Unit raise HostcallImportTrampolineError {
   if imm < 0 || imm > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline stack adjustment needs large-immediate splitting",
+      "TODO(ISS-026): hostcall import trampoline stack adjustment needs large-immediate splitting",
     )
   }
   a64_emit(
@@ -132,7 +162,7 @@ fn a64_emit_sub_imm(
 ) -> Unit raise HostcallImportTrampolineError {
   if imm < 0 || imm > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline stack adjustment needs large-immediate splitting",
+      "TODO(ISS-026): hostcall import trampoline stack adjustment needs large-immediate splitting",
     )
   }
   a64_emit(
@@ -180,7 +210,7 @@ fn a64_emit_ldr_x(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 load offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 load offsets",
     )
   }
   a64_emit(
@@ -198,7 +228,7 @@ fn a64_emit_str_x(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 store offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 store offsets",
     )
   }
   a64_emit(
@@ -216,7 +246,7 @@ fn a64_emit_ldr_s(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 f32 load offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f32 load offsets",
     )
   }
   a64_emit(
@@ -234,7 +264,7 @@ fn a64_emit_str_s(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 f32 store offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f32 store offsets",
     )
   }
   a64_emit(
@@ -252,7 +282,7 @@ fn a64_emit_ldr_d(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 f64 load offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f64 load offsets",
     )
   }
   a64_emit(
@@ -270,7 +300,7 @@ fn a64_emit_str_d(
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
     unsupported_hostcall_import(
-      "TODO(ISS-025): hostcall import trampoline needs general AArch64 f64 store offsets",
+      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f64 store offsets",
     )
   }
   a64_emit(
@@ -321,7 +351,7 @@ fn a64_emit_load_slot(
 fn build_aarch64_hostcall_import_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  host_func_addr : Int,
+  bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types, 7, 8)
   let code : Array[Int] = []
@@ -350,7 +380,7 @@ fn build_aarch64_hostcall_import_trampoline(
     offset = offset + hostcall_value_byte_count(ty)
   }
   a64_emit_add_imm(code, 0, 21, 0)
-  a64_emit_load_imm64_fixed(code, 1, host_func_addr.to_int64())
+  a64_emit_load_imm64_fixed(code, 1, bridge.bridge_arg())
   a64_emit_add_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 4, layout.result_slots.to_int64())
@@ -387,7 +417,11 @@ fn build_aarch64_hostcall_import_trampoline(
   {
     code,
     func_addr_fixups: [
-      { offset: fixup_offset, func_idx: jit_runtime_fixup_idx(13), reg: 16 },
+      {
+        offset: fixup_offset,
+        func_idx: bridge.aarch64_runtime_fixup(),
+        reg: 16,
+      },
     ],
   }
 }
@@ -521,7 +555,7 @@ fn x64_emit_load_slot(
 fn build_x64_hostcall_import_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  host_func_addr : Int,
+  bridge : RuntimeValueBridge,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   validate_hostcall_import_signature(param_types, result_types, 5, 8)
   let code : Array[Int] = []
@@ -548,11 +582,11 @@ fn build_x64_hostcall_import_trampoline(
     offset = offset + hostcall_value_byte_count(ty)
   }
   x64_mov_rr(code, 7, 15)
-  x64_mov_imm64(code, 6, host_func_addr.to_int64())
+  x64_mov_imm64(code, 6, bridge.bridge_arg())
   x64_mov_rr(code, 2, 4)
   x64_mov_imm64(code, 1, layout.arg_slots.to_int64())
   x64_mov_imm64(code, 8, layout.result_slots.to_int64())
-  x64_mov_imm64(code, 11, @jit_ffi.c_jit_get_hostcall_ptr())
+  x64_mov_imm64(code, 11, bridge.x64_bridge_ptr())
   x64_call_reg(code, 11)
   let mut result_offset = offset
   let mut int_result_seen = 0
@@ -591,15 +625,216 @@ pub fn build_hostcall_import_trampoline_for_target(
   match target {
     AArch64 =>
       build_aarch64_hostcall_import_trampoline(
-        param_types, result_types, host_func_addr,
+        param_types,
+        result_types,
+        Hostcall(host_func_addr),
       )
     X86_64 =>
       build_x64_hostcall_import_trampoline(
-        param_types, result_types, host_func_addr,
+        param_types,
+        result_types,
+        Hostcall(host_func_addr),
       )
     Unknown =>
       raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-025): hostcall import trampoline needs a concrete target architecture",
+        message="TODO(ISS-026): hostcall import trampoline needs a concrete target architecture",
+      )
+  }
+}
+
+///|
+pub fn build_interpreter_fallback_trampoline_for_target(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+  func_idx : Int,
+  target : @cwasm.TargetArch,
+) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
+  match target {
+    AArch64 =>
+      build_aarch64_hostcall_import_trampoline(
+        param_types,
+        result_types,
+        Interpcall(func_idx),
+      )
+    X86_64 =>
+      build_x64_hostcall_import_trampoline(
+        param_types,
+        result_types,
+        Interpcall(func_idx),
+      )
+    Unknown =>
+      raise UnsupportedHostcallImportTrampoline(
+        message="TODO(ISS-026): interpreter fallback trampoline needs a concrete target architecture",
+      )
+  }
+}
+
+///|
+fn validate_entry_trampoline_signature(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+  max_int_regs : Int,
+  max_float_regs : Int,
+) -> Unit raise HostcallImportTrampolineError {
+  validate_hostcall_import_signature(
+    param_types, result_types, max_int_regs, max_float_regs,
+  )
+}
+
+///|
+fn build_aarch64_entry_trampoline(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+) -> Array[Int] raise HostcallImportTrampolineError {
+  validate_entry_trampoline_signature(param_types, result_types, 7, 8)
+  let code : Array[Int] = []
+  a64_emit_sub_imm(code, 31, 31, 32)
+  a64_emit_str_x(code, 19, 31, 0)
+  a64_emit_str_x(code, 20, 31, 8)
+  a64_emit_str_x(code, 30, 31, 24)
+  a64_emit_add_imm(code, 19, 1, 0)
+  a64_emit_add_imm(code, 20, 2, 0)
+  let mut offset = 0
+  let mut int_seen = 0
+  let mut float_seen = 0
+  for ty in param_types {
+    match hostcall_scalar_class(ty) {
+      Int => {
+        a64_emit_load_slot(code, ty, 1 + int_seen, offset)
+        int_seen = int_seen + 1
+      }
+      Float32 | Float64 | Vector => {
+        a64_emit_load_slot(code, ty, float_seen, offset)
+        float_seen = float_seen + 1
+      }
+    }
+    offset = offset + hostcall_value_byte_count(ty)
+  }
+  a64_emit_blr(code, 20)
+  let mut result_offset = offset
+  let mut int_result_seen = 0
+  let mut float_result_seen = 0
+  let int_result_regs = [0, 1, 2, 3, 4, 5, 6, 7]
+  for ty in result_types {
+    match hostcall_scalar_class(ty) {
+      Int => {
+        a64_emit_store_slot(
+          code,
+          ty,
+          int_result_regs[int_result_seen],
+          result_offset,
+        )
+        int_result_seen = int_result_seen + 1
+      }
+      Float32 | Float64 | Vector => {
+        a64_emit_store_slot(code, ty, float_result_seen, result_offset)
+        float_result_seen = float_result_seen + 1
+      }
+    }
+    result_offset = result_offset + hostcall_value_byte_count(ty)
+  }
+  a64_emit_load_imm64_fixed(code, 0, 0L)
+  a64_emit_ldr_x(code, 19, 31, 0)
+  a64_emit_ldr_x(code, 20, 31, 8)
+  a64_emit_ldr_x(code, 30, 31, 24)
+  a64_emit_add_imm(code, 31, 31, 32)
+  a64_emit_ret(code)
+  code
+}
+
+///|
+fn build_x64_entry_trampoline(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+) -> Array[Int] raise HostcallImportTrampolineError {
+  validate_entry_trampoline_signature(param_types, result_types, 5, 8)
+  let code : Array[Int] = []
+  code.push(0x41)
+  code.push(0x54) // push r12
+  code.push(0x41)
+  code.push(0x55) // push r13
+  code.push(0x48)
+  code.push(0x83)
+  code.push(0xec)
+  code.push(0x08)
+  x64_mov_rr(code, 12, 6)
+  x64_mov_rr(code, 13, 2)
+  let mut offset = 0
+  let mut int_seen = 0
+  let mut float_seen = 0
+  let int_arg_regs = [6, 2, 1, 8, 9]
+  for ty in param_types {
+    match hostcall_scalar_class(ty) {
+      Int => {
+        x64_rex(code, true, int_arg_regs[int_seen], 12)
+        code.push(0x8b)
+        x64_modrm(code, 2, int_arg_regs[int_seen], 12)
+        hostcall_append_u32_le(code, offset)
+        int_seen = int_seen + 1
+      }
+      Float32 | Float64 | Vector => {
+        code.push(0xf2)
+        x64_rex(code, false, float_seen, 12)
+        code.push(0x0f)
+        code.push(0x10)
+        x64_modrm(code, 2, float_seen, 12)
+        hostcall_append_u32_le(code, offset)
+        float_seen = float_seen + 1
+      }
+    }
+    offset = offset + hostcall_value_byte_count(ty)
+  }
+  x64_call_reg(code, 13)
+  let mut result_offset = offset
+  let mut int_result_seen = 0
+  let mut float_result_seen = 0
+  let int_result_regs = [0, 2, 1, 8, 9, 6, 7, 10]
+  for ty in result_types {
+    match hostcall_scalar_class(ty) {
+      Int => {
+        x64_rex(code, true, int_result_regs[int_result_seen], 12)
+        code.push(0x89)
+        x64_modrm(code, 2, int_result_regs[int_result_seen], 12)
+        hostcall_append_u32_le(code, result_offset)
+        int_result_seen = int_result_seen + 1
+      }
+      Float32 | Float64 | Vector => {
+        code.push(0xf2)
+        x64_rex(code, false, float_result_seen, 12)
+        code.push(0x0f)
+        code.push(0x11)
+        x64_modrm(code, 2, float_result_seen, 12)
+        hostcall_append_u32_le(code, result_offset)
+        float_result_seen = float_result_seen + 1
+      }
+    }
+    result_offset = result_offset + hostcall_value_byte_count(ty)
+  }
+  x64_mov_imm64(code, 0, 0L)
+  code.push(0x48)
+  code.push(0x83)
+  code.push(0xc4)
+  code.push(0x08)
+  code.push(0x41)
+  code.push(0x5d) // pop r13
+  code.push(0x41)
+  code.push(0x5c) // pop r12
+  x64_ret(code)
+  code
+}
+
+///|
+pub fn build_entry_trampoline_for_target(
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+  target : @cwasm.TargetArch,
+) -> Array[Int] raise HostcallImportTrampolineError {
+  match target {
+    AArch64 => build_aarch64_entry_trampoline(param_types, result_types)
+    X86_64 => build_x64_entry_trampoline(param_types, result_types)
+    Unknown =>
+      raise UnsupportedHostcallImportTrampoline(
+        message="TODO(ISS-026): entry trampoline needs a concrete target architecture",
       )
   }
 }
