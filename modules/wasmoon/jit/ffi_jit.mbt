@@ -269,6 +269,7 @@ fn JITContext::call_multi_return(
   result_types : Array[@types.ValueType],
 ) -> Unit raise JITTrap {
   let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
+  let num_params = param_types.length()
   let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
   let sig_hash = @wasmoon_jit.entry_trampoline_signature_hash(
     param_types, result_types,
@@ -278,13 +279,20 @@ fn JITContext::call_multi_return(
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.ptr()
     None => {
-      let code_ints = @wasmoon_jit.build_entry_trampoline_for_target(
-        param_types,
-        result_types,
-        @wasmoon_jit.host_target_arch(),
-      ) catch {
-        err => raise JITTrap(to_repr(err).to_string())
+      let param_codes_arr : Array[Int] = []
+      for i in 0..<num_params {
+        param_codes_arr.push(
+          @wasmoon_jit.entry_trampoline_value_type_code(param_types[i]),
+        )
       }
+      let result_codes_arr : Array[Int] = []
+      for result_type in result_types {
+        result_codes_arr.push(
+          @wasmoon_jit.entry_trampoline_value_type_code(result_type),
+        )
+      }
+      let mc = @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr)
+      let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::new(code_ints)
       match trampoline {
         Some(t) => {

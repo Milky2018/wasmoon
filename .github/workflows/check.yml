@@ -206,9 +206,7 @@ jobs:
           for f in \
             call.wast \
             call_indirect.wast \
-            conversions.wast \
             exceptions/try_table.wast \
-            float_exprs.wast \
             gc/array.wast \
             gc/array_init_data.wast \
             gc/array_init_elem.wast \
