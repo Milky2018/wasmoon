@@ -478,23 +478,6 @@ fn collect_memory_types(mod_ : @types.Module) -> Array[@types.MemoryType] {
 }
 
 ///|
-fn func_import_for_index(
-  mod_ : @types.Module,
-  func_idx : Int,
-) -> @types.Import? {
-  let mut import_func_idx = 0
-  for import_ in mod_.imports {
-    if import_.desc is Func(_) {
-      if import_func_idx == func_idx {
-        return Some(import_)
-      }
-      import_func_idx = import_func_idx + 1
-    }
-  }
-  None
-}
-
-///|
 fn push_direct_call(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -512,25 +495,6 @@ fn push_direct_call(
     wasm_args.push(value)
   }
   wasm_args.rev_in_place()
-
-  if func_import_for_index(mod_, func_idx) is Some(import_) &&
-    @wasmoon_jit.get_import_trampoline(import_.mod_name, import_.name)
-    is Some(_) {
-    let args : Array[@milkir.Value] = [context]
-    for arg in wasm_args {
-      args.push(arg)
-    }
-    let result_types = func_type.results.map(wasm_value_type_to_milkir)
-    let symbol = @milkir.ExternalSymbol::new("wasm.func.\{func_idx}")
-    if result_types.length() == 0 {
-      return emit_void_op(builder, Call(symbol), args)
-    }
-    let results = builder.call_multi(symbol, result_types, args)
-    for result in results {
-      stack.push(result)
-    }
-    return true
-  }
 
   let func_table = builder.load_ptr(
     Ptr,

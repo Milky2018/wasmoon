@@ -3717,6 +3717,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_callback(
     clear_wasi_stdin_buffer(ctx);
     clear_wasi_stdin_callback(ctx);
     ctx->wasi_stdin_callback = (void *)callback;
+    if (closure) moonbit_incref(closure);
     ctx->wasi_stdin_callback_data = closure;
 }
 

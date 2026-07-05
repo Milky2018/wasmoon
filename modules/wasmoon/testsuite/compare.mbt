@@ -262,7 +262,7 @@ fn native_frontend_supports_function(
   }
   if local_idx >= mod_.codes.length() ||
     body_has_direct_call(mod_.codes[local_idx].body) ||
-    body_has_native_segment_helper_gap(mod_.codes[local_idx].body) {
+    body_has_native_helper_gap(mod_.codes[local_idx].body) {
     return false
   }
   let env = @wasm_frontend.EmbeddingEnvironment::new()
@@ -294,21 +294,22 @@ fn body_has_direct_call(body : Array[@types.Instruction]) -> Bool {
 }
 
 ///|
-fn body_has_native_segment_helper_gap(body : Array[@types.Instruction]) -> Bool {
+fn body_has_native_helper_gap(body : Array[@types.Instruction]) -> Bool {
   for instr in body {
     match instr {
-      MemoryInit(_, _) | DataDrop(_) => return true
+      MemoryInit(_, _) | DataDrop(_) | MemoryGrow(_) | TableGrow(_) =>
+        return true
       Block(_, nested) | Loop(_, nested) =>
-        if body_has_native_segment_helper_gap(nested) {
+        if body_has_native_helper_gap(nested) {
           return true
         }
       If(_, then_body, else_body) =>
-        if body_has_native_segment_helper_gap(then_body) ||
-          body_has_native_segment_helper_gap(else_body) {
+        if body_has_native_helper_gap(then_body) ||
+          body_has_native_helper_gap(else_body) {
           return true
         }
       TryTable(_, _, nested) =>
-        if body_has_native_segment_helper_gap(nested) {
+        if body_has_native_helper_gap(nested) {
           return true
         }
       _ => ()

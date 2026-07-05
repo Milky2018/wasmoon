@@ -100,6 +100,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback(
     if (!ctx) return;
     clear_hostcall_callback(ctx);
     ctx->hostcall_callback = (void *)callback;
+    if (closure) moonbit_incref(closure);
     ctx->hostcall_callback_data = closure;
 }
 
@@ -198,6 +199,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_interpcall_callback(
     if (!ctx) return;
     clear_interpcall_callback(ctx);
     ctx->interpcall_callback = (void *)callback;
+    if (closure) moonbit_incref(closure);
     ctx->interpcall_callback_data = closure;
 }
 

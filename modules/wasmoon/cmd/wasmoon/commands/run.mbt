@@ -1523,6 +1523,7 @@ pub fn compile_module_to_jit(
   compile_start? : @perf.PerfTick? = None,
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
+  use_reusable_pipeline? : Bool = true,
 ) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
   actual_memory_max |> ignore
   enable_dwarf |> ignore
@@ -1614,7 +1615,8 @@ pub fn compile_module_to_jit(
     // dump-on-trap diagnostics are installed end-to-end. The fast path below
     // uses the reusable pipeline for the conservative native-frontend subset.
     let normalized_opt_level = normalize_opt_level(opt_level)
-    if try_compile_with_reusable_pipeline(
+    if use_reusable_pipeline &&
+      try_compile_with_reusable_pipeline(
         mod_, i, func_idx, func_type, target_arch, emit_target, normalized_opt_level,
       )
       is Some(reusable) {
