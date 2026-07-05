@@ -671,14 +671,14 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
 }
 
 ///|
-test "entry trampoline reports TODO for V128 lane packing" {
+test "entry trampoline reports V128 MilkIR planner gap" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = []
   try plan_entry_trampoline_for_target(params, results, X64) catch {
     PipelineFailure(message=msg) =>
-      inspect(msg.contains("TODO(ISS-026)"), content="true")
+      inspect(msg.contains("V128 MilkIR entry trampoline"), content="true")
   } noraise {
-    _ => fail("expected V128 trampoline planning to report TODO")
+    _ => fail("expected V128 trampoline planning to report unsupported")
   }
 }
 

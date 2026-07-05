@@ -1609,11 +1609,11 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // TODO(ISS-026): switch production JIT compilation to the reusable
-    // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
-    // function-body entry ABI, GC stackmaps, exceptions, and
-    // dump-on-trap diagnostics are installed end-to-end. The fast path below
-    // uses the reusable pipeline for the conservative native-frontend subset.
+    // Production JIT first tries the reusable
+    // wasm_frontend -> MilkIR -> MachV -> machv_emit path for the conservative
+    // native-frontend subset. Unsupported bodies are represented by
+    // interpreter fallback trampolines, matching the old main-branch
+    // function-table behavior without retaining the legacy VCode pipeline.
     let normalized_opt_level = normalize_opt_level(opt_level)
     if use_reusable_pipeline &&
       try_compile_with_reusable_pipeline(

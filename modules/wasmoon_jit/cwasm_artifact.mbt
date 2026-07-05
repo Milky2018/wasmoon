@@ -440,7 +440,7 @@ pub fn CwasmArtifact::to_precompiled_module(
   for record in self.functions {
     let gc_safepoints = self.function_gc_safepoints(record)
     let gc_root_counts = Array::make(gc_safepoints.length(), 0)
-    // TODO(ISS-026): carry real live-root indices/root counts and per-function
+    // TODO(wasmoon_jit): carry real live-root indices/root counts and per-function
     // function-address fixups from the production JIT pipeline.
     module_.add_function(
       build_cwasm_entry_from_code(

@@ -1070,7 +1070,7 @@ pub fn build_hostcall_import_trampoline_for_target(
       )
     Unknown =>
       raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-026): hostcall import trampoline needs a concrete target architecture",
+        message="hostcall import trampoline needs a concrete target architecture",
       )
   }
 }
@@ -1097,7 +1097,7 @@ pub fn build_interpreter_fallback_trampoline_for_target(
       )
     Unknown =>
       raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-026): interpreter fallback trampoline needs a concrete target architecture",
+        message="interpreter fallback trampoline needs a concrete target architecture",
       )
   }
 }
@@ -1286,7 +1286,7 @@ pub fn build_entry_trampoline_for_target(
     X86_64 => build_x64_entry_trampoline(param_types, result_types)
     Unknown =>
       raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-026): entry trampoline needs a concrete target architecture",
+        message="entry trampoline needs a concrete target architecture",
       )
   }
 }

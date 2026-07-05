@@ -22,7 +22,7 @@ pub impl Show for JITTrap with fn output(self, logger) {
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(ISS-026): move entry trampoline generation to
+/// TODO(wasmoon_jit): move entry trampoline generation to
 /// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
 /// trampoline passes the full WAST/testsuite production gate, then move this
 /// context into `wasmoon_jit`.

@@ -8,9 +8,7 @@ No ready issues.
 
 ## Unresolved Issues
 
-| ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
-| --- | --- | ---: | --- | --- | --- | --- | --- |
-| [ISS-026](ISS-026.md) | deferred | 3 | epic | unassigned | none | none | Complete reusable compiler infrastructure polish |
+No unresolved issues.
 
 ## Dependency Graph
 

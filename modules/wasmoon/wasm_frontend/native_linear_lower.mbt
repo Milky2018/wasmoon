@@ -991,7 +991,7 @@ fn push_memory_fill(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(ISS-026): add memory64-capable runtime helper ABI before enabling
+    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 memory.fill.
     return false
   }
@@ -1021,12 +1021,12 @@ fn push_memory_copy(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, dst_memidx) is Some(I32) else {
-    // TODO(ISS-026): add memory64-capable runtime helper ABI before enabling
+    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 destination memories.
     return false
   }
   guard memory_index_type(memory_types, src_memidx) is Some(I32) else {
-    // TODO(ISS-026): add memory64-capable runtime helper ABI before enabling
+    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 source memories.
     return false
   }
@@ -1057,7 +1057,7 @@ fn push_memory_init(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(ISS-026): add memory64-capable runtime helper ABI before enabling
+    // TODO(wasm_frontend): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 memory.init.
     return false
   }
@@ -1557,7 +1557,7 @@ fn push_simple_if_select(
     is Some(false_value) else {
     return false
   }
-  // TODO(ISS-026): lower general structured `if` control flow with block
+  // TODO(wasm_frontend): lower general structured `if` control flow with block
   // parameters and branch labels. This select form is only for pure expressions.
   stack.push(builder.select(cond, true_value, false_value))
   true
@@ -1836,8 +1836,8 @@ fn append_linear_block_body(
       | BrOnNull(_)
       | BrOnNonNull(_)
       | TryTable(_, _, _) =>
-        // TODO(ISS-026): lower structured labels and branch stack effects
-        // directly instead of using the legacy translator bridge.
+        // TODO(wasm_frontend): lower structured labels and branch stack effects
+        // directly instead of relying on the production fallback trampoline.
         return false
       _ => out.push(instr)
     }
@@ -1853,7 +1853,7 @@ fn append_linear_exit_block_body(
   for i, instr in body {
     match instr {
       Br(depth) =>
-        // TODO(ISS-026): model full label-stack branch effects. The native
+        // TODO(wasm_frontend): model full label-stack branch effects. The native
         // frontend can safely flatten only a terminal direct branch to the
         // current block label. Non-terminal branches may leave expression
         // operands that are unreachable in Wasm semantics but still visible to
@@ -2565,8 +2565,8 @@ fn try_lower_linear_function(
         terminated = true
       }
       _ =>
-        // TODO(ISS-026): port the remaining Wasm operators/control-flow
-        // lowering from the legacy translator into native MilkIR construction.
+        // TODO(wasm_frontend): port the remaining Wasm operators/control-flow
+        // into native MilkIR construction.
         return None
     }
   }

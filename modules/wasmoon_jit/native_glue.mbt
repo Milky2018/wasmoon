@@ -173,8 +173,6 @@ pub fn plan_milkir_integration_for_target(
       allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
     )
     |> ignore
-    // TODO(wasmoon_jit): install emitted CodeObject bytes through jit_ffi and
-    // replace the legacy VCode JIT execution path end-to-end.
     plan_integration_for_target(func, machv_func, target)
   } catch {
     err => raise PipelineFailure(message=to_repr(err).to_string())
@@ -193,8 +191,6 @@ pub fn plan_wasm_body_milkir_integration_for_target(
       allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
     )
     |> ignore
-    // TODO(ISS-026): install emitted CodeObject bytes through jit_ffi and
-    // replace the legacy VCode JIT execution path end-to-end.
     plan_integration_for_target(func, machv_func, target)
   } catch {
     err => raise PipelineFailure(message=to_repr(err).to_string())
