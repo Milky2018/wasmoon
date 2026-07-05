@@ -64,6 +64,23 @@ fn emit_void_op(
 }
 
 ///|
+fn emit_multi_op(
+  builder : @milkir.IRBuilder,
+  result_types : Array[@milkir.Type],
+  opcode : @milkir.Opcode,
+  operands : Array[@milkir.Value],
+) -> Array[@milkir.Value]? {
+  guard builder.current_block() is Some(block) else { return None }
+  let func = builder.get_function()
+  let results : Array[@milkir.Value] = []
+  for ty in result_types {
+    results.push(func.new_value(ty))
+  }
+  block.append_inst(func.new_inst(opcode, operands, results))
+  Some(results)
+}
+
+///|
 fn push_unary_opcode(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
@@ -101,6 +118,114 @@ fn push_binary_opcode(
   guard pop_value(stack) is Some(rhs) else { return false }
   guard pop_value(stack) is Some(lhs) else { return false }
   guard emit_op(builder, lhs.ty, opcode, [lhs, rhs]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_i32_binary_opcode(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  opcode : @milkir.Opcode,
+) -> Bool {
+  guard pop_value(stack) is Some(rhs) else { return false }
+  guard pop_value(stack) is Some(lhs) else { return false }
+  guard emit_op(builder, I32, opcode, [lhs, rhs]) is Some(raw) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [raw]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_i32_shift_opcode(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+  opcode : @milkir.Opcode,
+) -> Bool {
+  guard pop_value(stack) is Some(rhs) else { return false }
+  guard pop_value(stack) is Some(lhs) else { return false }
+  guard emit_op(builder, I32, Band, [rhs, builder.iconst_i32(31)])
+    is Some(masked) else {
+    return false
+  }
+  guard emit_op(builder, I32, opcode, [lhs, masked]) is Some(raw) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [raw]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_i32_clz(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+    return false
+  }
+  guard emit_op(builder, I64, Clz, [extended]) is Some(raw_count) else {
+    return false
+  }
+  guard emit_op(builder, I64, Isub, [raw_count, builder.iconst_i64(32L)])
+    is Some(i32_count) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [i32_count]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_i32_ctz(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+    return false
+  }
+  guard emit_op(builder, I64, Bor, [
+      extended,
+      builder.iconst_i64(0x1_0000_0000L),
+    ])
+    is Some(nonzero) else {
+    return false
+  }
+  guard emit_op(builder, I64, Ctz, [nonzero]) is Some(raw_count) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [raw_count]) is Some(result) else {
+    return false
+  }
+  stack.push(result)
+  true
+}
+
+///|
+fn push_i32_popcnt(
+  builder : @milkir.IRBuilder,
+  stack : Array[@milkir.Value],
+) -> Bool {
+  guard pop_value(stack) is Some(value) else { return false }
+  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+    return false
+  }
+  guard emit_op(builder, I64, Popcnt, [extended]) is Some(raw_count) else {
+    return false
+  }
+  guard emit_op(builder, I32, Ireduce, [raw_count]) is Some(result) else {
     return false
   }
   stack.push(result)
@@ -353,27 +478,91 @@ fn collect_memory_types(mod_ : @types.Module) -> Array[@types.MemoryType] {
 }
 
 ///|
+fn func_import_for_index(
+  mod_ : @types.Module,
+  func_idx : Int,
+) -> @types.Import? {
+  let mut import_func_idx = 0
+  for import_ in mod_.imports {
+    if import_.desc is Func(_) {
+      if import_func_idx == func_idx {
+        return Some(import_)
+      }
+      import_func_idx = import_func_idx + 1
+    }
+  }
+  None
+}
+
+///|
 fn push_direct_call(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
   mod_ : @types.Module,
+  vmctx : @milkir.Value?,
   func_idx : Int,
 ) -> Bool {
+  guard vmctx is Some(context) else { return false }
   guard get_global_func_type(mod_, func_idx) is Some(func_type) else {
     return false
   }
-  let args : Array[@milkir.Value] = []
+  let wasm_args : Array[@milkir.Value] = []
   for _ in 0..<func_type.params.length() {
     guard pop_value(stack) is Some(value) else { return false }
-    args.push(value)
+    wasm_args.push(value)
   }
-  args.rev_in_place()
-  let result_types = func_type.results.map(wasm_value_type_to_milkir)
-  let symbol = @milkir.ExternalSymbol::new("wasm.func.\{func_idx}")
-  if result_types.length() == 0 {
-    emit_void_op(builder, Call(symbol), args)
-  } else {
+  wasm_args.rev_in_place()
+
+  if func_import_for_index(mod_, func_idx) is Some(import_) &&
+    @wasmoon_jit.get_import_trampoline(import_.mod_name, import_.name)
+    is Some(_) {
+    let args : Array[@milkir.Value] = [context]
+    for arg in wasm_args {
+      args.push(arg)
+    }
+    let result_types = func_type.results.map(wasm_value_type_to_milkir)
+    let symbol = @milkir.ExternalSymbol::new("wasm.func.\{func_idx}")
+    if result_types.length() == 0 {
+      return emit_void_op(builder, Call(symbol), args)
+    }
     let results = builder.call_multi(symbol, result_types, args)
+    for result in results {
+      stack.push(result)
+    }
+    return true
+  }
+
+  let func_table = builder.load_ptr(
+    Ptr,
+    context,
+    builder.iconst_i64(
+      @wasmoon_jit.vmcontext_layout().func_table_offset.to_int64(),
+    ),
+  )
+  let callee = builder.load_ptr(
+    Ptr,
+    func_table,
+    builder.iconst_i64(
+      (func_idx * @wasmoon_jit.vmcontext_layout().func_table_entry_stride).to_int64(),
+    ),
+  )
+  let args : Array[@milkir.Value] = [callee, context]
+  for arg in wasm_args {
+    args.push(arg)
+  }
+  let result_types = func_type.results.map(wasm_value_type_to_milkir)
+  if result_types.length() == 0 {
+    emit_void_op(builder, CallPtr(func_type.params.length(), 0), args)
+  } else {
+    guard emit_multi_op(
+        builder,
+        result_types,
+        CallPtr(func_type.params.length(), result_types.length()),
+        args,
+      )
+      is Some(results) else {
+      return false
+    }
     for result in results {
       stack.push(result)
     }
@@ -1214,25 +1403,36 @@ fn push_simple_expr_instr(
       expr_stack.push(value)
       true
     }
-    I32Add | I64Add =>
-      push_binary(expr_stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) })
-    I32Sub | I64Sub =>
-      push_binary(expr_stack, fn(lhs, rhs) { builder.isub(lhs, rhs) })
-    I32Mul | I64Mul =>
-      push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
+    I32Add => push_i32_binary_opcode(builder, expr_stack, Iadd)
+    I64Add => push_binary(expr_stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) })
+    I32Sub => push_i32_binary_opcode(builder, expr_stack, Isub)
+    I64Sub => push_binary(expr_stack, fn(lhs, rhs) { builder.isub(lhs, rhs) })
+    I32Mul => push_i32_binary_opcode(builder, expr_stack, Imul)
+    I64Mul => push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
     I64MulWideU => push_binary_opcode(builder, expr_stack, Umulh)
     I64MulWideS => push_binary_opcode(builder, expr_stack, Smulh)
-    I32And | I64And => push_binary_opcode(builder, expr_stack, Band)
-    I32Or | I64Or => push_binary_opcode(builder, expr_stack, Bor)
-    I32Xor | I64Xor => push_binary_opcode(builder, expr_stack, Bxor)
-    I32Shl | I64Shl => push_binary_opcode(builder, expr_stack, Ishl)
-    I32ShrS | I64ShrS => push_binary_opcode(builder, expr_stack, Sshr)
-    I32ShrU | I64ShrU => push_binary_opcode(builder, expr_stack, Ushr)
-    I32Rotl | I64Rotl => push_binary_opcode(builder, expr_stack, Rotl)
-    I32Rotr | I64Rotr => push_binary_opcode(builder, expr_stack, Rotr)
-    I32Clz | I64Clz => push_unary_opcode(builder, expr_stack, Clz)
-    I32Ctz | I64Ctz => push_unary_opcode(builder, expr_stack, Ctz)
-    I32Popcnt | I64Popcnt => push_unary_opcode(builder, expr_stack, Popcnt)
+    I32And => push_i32_binary_opcode(builder, expr_stack, Band)
+    I64And => push_binary_opcode(builder, expr_stack, Band)
+    I32Or => push_i32_binary_opcode(builder, expr_stack, Bor)
+    I64Or => push_binary_opcode(builder, expr_stack, Bor)
+    I32Xor => push_i32_binary_opcode(builder, expr_stack, Bxor)
+    I64Xor => push_binary_opcode(builder, expr_stack, Bxor)
+    I32Shl => push_i32_shift_opcode(builder, expr_stack, Ishl)
+    I64Shl => push_binary_opcode(builder, expr_stack, Ishl)
+    I32ShrS => push_i32_shift_opcode(builder, expr_stack, Sshr)
+    I64ShrS => push_binary_opcode(builder, expr_stack, Sshr)
+    I32ShrU => push_i32_shift_opcode(builder, expr_stack, Ushr)
+    I64ShrU => push_binary_opcode(builder, expr_stack, Ushr)
+    I32Rotl => push_i32_shift_opcode(builder, expr_stack, Rotl)
+    I64Rotl => push_binary_opcode(builder, expr_stack, Rotl)
+    I32Rotr => push_i32_shift_opcode(builder, expr_stack, Rotr)
+    I64Rotr => push_binary_opcode(builder, expr_stack, Rotr)
+    I32Clz => push_i32_clz(builder, expr_stack)
+    I64Clz => push_unary_opcode(builder, expr_stack, Clz)
+    I32Ctz => push_i32_ctz(builder, expr_stack)
+    I64Ctz => push_unary_opcode(builder, expr_stack, Ctz)
+    I32Popcnt => push_i32_popcnt(builder, expr_stack)
+    I64Popcnt => push_unary_opcode(builder, expr_stack, Popcnt)
     I32Eqz => {
       guard pop_value(expr_stack) is Some(value) else { return false }
       expr_stack.push(builder.icmp_eq(value, builder.iconst_i32(0)))
@@ -1662,7 +1862,7 @@ fn append_linear_exit_block_body(
   out : Array[@types.Instruction],
   body : Array[@types.Instruction],
 ) -> Bool {
-  for instr in body {
+  for i, instr in body {
     match instr {
       Br(depth) =>
         // TODO(ISS-026): model full label-stack branch effects. The native
@@ -1671,7 +1871,7 @@ fn append_linear_exit_block_body(
         // still falls back to the legacy translator bridge.
         return depth == 0
       BrIf(depth) =>
-        if depth == 0 {
+        if depth == 0 && i == body.length() - 1 {
           // At the end of a block, both taken and not-taken paths leave the
           // same label values on the stack. The condition is still consumed.
           out.push(Drop)
@@ -1690,7 +1890,7 @@ fn append_linear_exit_block_body(
           return false
         }
       BrOnNull(depth) | BrOnNonNull(depth) =>
-        if depth == 0 {
+        if depth == 0 && i == body.length() - 1 {
           // At the end of a block, both reference-branch outcomes leave the
           // same reference value as the current block result in the native
           // frontend's uniform reference representation.
@@ -1814,15 +2014,18 @@ fn try_lower_linear_function(
       I64Const(value) => stack.push(builder.iconst_i64(value))
       F32Const(value) => stack.push(builder.fconst_f32(value))
       F64Const(value) => stack.push(builder.fconst_f64(value))
-      I32Add | I64Add =>
+      I32Add => if !push_i32_binary_opcode(builder, stack, Iadd) { return None }
+      I64Add =>
         if !push_binary(stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) }) {
           return None
         }
-      I32Sub | I64Sub =>
+      I32Sub => if !push_i32_binary_opcode(builder, stack, Isub) { return None }
+      I64Sub =>
         if !push_binary(stack, fn(lhs, rhs) { builder.isub(lhs, rhs) }) {
           return None
         }
-      I32Mul | I64Mul =>
+      I32Mul => if !push_i32_binary_opcode(builder, stack, Imul) { return None }
+      I64Mul =>
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
@@ -1850,50 +2053,28 @@ fn try_lower_linear_function(
         if !push_binary_opcode(builder, stack, Urem) {
           return None
         }
-      I32And | I64And =>
-        if !push_binary_opcode(builder, stack, Band) {
-          return None
-        }
-      I32Or | I64Or =>
-        if !push_binary_opcode(builder, stack, Bor) {
-          return None
-        }
-      I32Xor | I64Xor =>
-        if !push_binary_opcode(builder, stack, Bxor) {
-          return None
-        }
-      I32Shl | I64Shl =>
-        if !push_binary_opcode(builder, stack, Ishl) {
-          return None
-        }
-      I32ShrS | I64ShrS =>
-        if !push_binary_opcode(builder, stack, Sshr) {
-          return None
-        }
-      I32ShrU | I64ShrU =>
-        if !push_binary_opcode(builder, stack, Ushr) {
-          return None
-        }
-      I32Rotl | I64Rotl =>
-        if !push_binary_opcode(builder, stack, Rotl) {
-          return None
-        }
-      I32Rotr | I64Rotr =>
-        if !push_binary_opcode(builder, stack, Rotr) {
-          return None
-        }
-      I32Clz | I64Clz =>
-        if !push_unary_opcode(builder, stack, Clz) {
-          return None
-        }
-      I32Ctz | I64Ctz =>
-        if !push_unary_opcode(builder, stack, Ctz) {
-          return None
-        }
-      I32Popcnt | I64Popcnt =>
-        if !push_unary_opcode(builder, stack, Popcnt) {
-          return None
-        }
+      I32And => if !push_i32_binary_opcode(builder, stack, Band) { return None }
+      I64And => if !push_binary_opcode(builder, stack, Band) { return None }
+      I32Or => if !push_i32_binary_opcode(builder, stack, Bor) { return None }
+      I64Or => if !push_binary_opcode(builder, stack, Bor) { return None }
+      I32Xor => if !push_i32_binary_opcode(builder, stack, Bxor) { return None }
+      I64Xor => if !push_binary_opcode(builder, stack, Bxor) { return None }
+      I32Shl => if !push_i32_shift_opcode(builder, stack, Ishl) { return None }
+      I64Shl => if !push_binary_opcode(builder, stack, Ishl) { return None }
+      I32ShrS => if !push_i32_shift_opcode(builder, stack, Sshr) { return None }
+      I64ShrS => if !push_binary_opcode(builder, stack, Sshr) { return None }
+      I32ShrU => if !push_i32_shift_opcode(builder, stack, Ushr) { return None }
+      I64ShrU => if !push_binary_opcode(builder, stack, Ushr) { return None }
+      I32Rotl => if !push_i32_shift_opcode(builder, stack, Rotl) { return None }
+      I64Rotl => if !push_binary_opcode(builder, stack, Rotl) { return None }
+      I32Rotr => if !push_i32_shift_opcode(builder, stack, Rotr) { return None }
+      I64Rotr => if !push_binary_opcode(builder, stack, Rotr) { return None }
+      I32Clz => if !push_i32_clz(builder, stack) { return None }
+      I64Clz => if !push_unary_opcode(builder, stack, Clz) { return None }
+      I32Ctz => if !push_i32_ctz(builder, stack) { return None }
+      I64Ctz => if !push_unary_opcode(builder, stack, Ctz) { return None }
+      I32Popcnt => if !push_i32_popcnt(builder, stack) { return None }
+      I64Popcnt => if !push_unary_opcode(builder, stack, Popcnt) { return None }
       I32Eqz => {
         guard pop_value(stack) is Some(value) else { return None }
         stack.push(builder.icmp_eq(value, builder.iconst_i32(0)))
@@ -2104,7 +2285,7 @@ fn try_lower_linear_function(
           return None
         }
       Call(func_idx) =>
-        if !push_direct_call(builder, stack, mod_, func_idx) {
+        if !push_direct_call(builder, stack, mod_, vmctx, func_idx) {
           return None
         }
       I32Load(memidx, _, offset) =>

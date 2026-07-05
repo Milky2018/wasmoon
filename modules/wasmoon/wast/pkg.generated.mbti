@@ -48,6 +48,8 @@ pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance
 
 pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
 
+pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Int64
+
 pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
 
 pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance) -> Unit

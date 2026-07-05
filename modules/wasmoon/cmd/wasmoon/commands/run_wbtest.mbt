@@ -55,22 +55,17 @@ test "compile api: emits stage progress and returns artifact" {
 }
 
 ///|
-test "compile api: reusable pipeline preserves direct wasm call fixups" {
+test "compile api: reusable pipeline lowers direct wasm calls through func table" {
   let compiled = compile_module(direct_call_module_bytes())
   guard compiled is Some(precompiled) else { fail("compile failed") }
   inspect(precompiled.functions.length(), content="2")
   let mut call_fixup_count = -1
-  let mut target_func_idx = -1
   for entry in precompiled.functions {
     if entry.func_idx == 1 {
       call_fixup_count = entry.call_fixups.length()
-      if entry.call_fixups.length() > 0 {
-        target_func_idx = entry.call_fixups[0].func_idx
-      }
     }
   }
-  inspect(call_fixup_count, content="1")
-  inspect(target_func_idx, content="0")
+  inspect(call_fixup_count, content="0")
 }
 
 ///|

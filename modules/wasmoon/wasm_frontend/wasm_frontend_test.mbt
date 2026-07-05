@@ -22,8 +22,9 @@ test "lower simple wasm body into MilkIR operations" {
   let func = lower_function(env, mod_, 0)
   inspect(func.signature.params.length(), content="2")
   inspect(func.signature.results.length(), content="1")
-  inspect(func.blocks[0].instructions.length(), content="1")
+  inspect(func.blocks[0].instructions.length(), content="2")
   inspect(func.print().contains("iadd"), content="true")
+  inspect(func.print().contains("ireduce"), content="true")
   inspect(func.print().contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -650,10 +651,10 @@ test "lower direct calls as generic MilkIR calls" {
     tags: [],
     func_names: {},
   }
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::new()
   let func = lower_function(env, mod_, 1)
   let text = func.print()
-  inspect(text.contains("call wasm.func.0"), content="true")
+  inspect(text.contains("call_ptr(2) -> 1"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }

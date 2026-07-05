@@ -491,10 +491,9 @@ fn try_compile_jit(
             )
           }
           // Initialize globals (pass jm for tagged funcref pointers)
-          let globals_ptr = init_jit_globals(instance, store, jm)
-          if globals_ptr != 0L {
-            jm.set_globals(globals_ptr)
-          }
+          let globals_ptr = @wast.init_jit_globals_from_store(
+            instance, store, jm,
+          )
           // WAST drives heavy cross-module table/linking flows where table
           // entries can carry function refs from different type-index spaces.
           // Always use subtype-aware indirect checks to keep semantics correct.

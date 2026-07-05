@@ -962,91 +962,6 @@ fn get_import_func_type_idx(imports : Array[@types.Import], idx : Int) -> Int? {
 }
 
 ///|
-/// Convert a store function address to module function index
-fn store_addr_to_module_func_idx(
-  store_addr : Int,
-  instance : @runtime.ModuleInstance,
-) -> Int? {
-  // Search for the store address in the instance's func_addrs
-  for i, addr in instance.func_addrs {
-    if addr == store_addr {
-      return Some(i)
-    }
-  }
-  // Not found - treat as null
-  None
-}
-
-///|
-/// Allocate and initialize globals array for JIT
-/// Returns the pointer to the allocated array, or 0 on failure
-/// The caller is responsible for freeing the memory
-/// jit_module: The JIT module (needed for FuncRef globals to get tagged function pointers)
-fn init_jit_globals(
-  instance : @runtime.ModuleInstance,
-  store : @runtime.Store,
-  jit_module : @jit.JITModule,
-) -> Int64 {
-  let num_globals = instance.global_addrs.length()
-  if num_globals == 0 {
-    return 0L // No globals, no need to allocate
-  }
-  // Allocate 16 bytes per global (8 bytes value + 8 bytes tag)
-  let size = (num_globals * 16).to_int64()
-  let globals_ptr = @wasmoon_jit.alloc_memory(size)
-  if globals_ptr == 0L {
-    return 0L
-  }
-  // Write each global value to the array
-  for i in 0..<num_globals {
-    let global_addr = instance.global_addrs[i]
-    let global_inst = store.globals[global_addr]
-    let value = global_inst.get()
-    // Convert value to Int64 for storage
-    // For FuncRef, we need to get the tagged function pointer from JIT module
-    // This matches the encoding used by ref.func (via GetFuncRef)
-    let raw_value = match value {
-      I32(n) => @types.ToInt64::to_int64_bits(n)
-      I64(n) => @types.ToInt64::to_int64_bits(n)
-      F32(f) => @types.ToInt64::to_int64_bits(f)
-      F64(d) => @types.ToInt64::to_int64_bits(d)
-      FuncRef(store_addr) =>
-        match store_addr_to_module_func_idx(store_addr, instance) {
-          Some(func_idx) => {
-            let func_ptr = jit_module.get_func_ptr(func_idx)
-            if func_ptr == 0L {
-              @wasmoon_jit.encode_funcref_idx(func_idx)
-            } else {
-              @wasmoon_jit.tag_funcref_ptr(func_ptr)
-            }
-          }
-          None => @types.NULL_REF
-        }
-      ExternRef(idx) => idx.to_int64()
-      ExnRef(idx) => idx.to_int64()
-      ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
-      StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
-      I31(n) => @wasmoon_jit.encode_i31(n)
-      Null => @types.NULL_REF // null is encoded as 0 in JIT
-      V128(bytes) => {
-        // V128 needs special handling - write both 64-bit halves
-        let offset = globals_ptr + (i * 16).to_int64()
-        let low = @types.bytes_to_int64_le(bytes, 0)
-        let high = @types.bytes_to_int64_le(bytes, 8)
-        @wasmoon_jit.c_jit_write_i64(offset, low)
-        @wasmoon_jit.c_jit_write_i64(offset + 8L, high)
-        continue // Skip the normal write below
-      }
-    }
-    // Write value at offset i * 16
-    let offset = globals_ptr + (i * 16).to_int64()
-    // Use FFI to write the value
-    @wasmoon_jit.c_jit_write_i64(offset, raw_value)
-  }
-  globals_ptr
-}
-
-///|
 /// Initialize JIT tables from runtime table state.
 /// This is required for call_indirect and table operations in JIT mode.
 fn init_jit_tables(
@@ -1248,10 +1163,9 @@ fn run_with_jit(
             return exit_failure()
           }
           // Initialize globals (pass jm for tagged funcref pointers)
-          let globals_ptr = init_jit_globals(instance, store, jm)
-          if globals_ptr != 0L {
-            jm.set_globals(globals_ptr)
-          }
+          let globals_ptr = @wast.init_jit_globals_from_store(
+            instance, store, jm,
+          )
           // Initialize tables for call_indirect and table operations
           let use_subtype_indirect_check = module_indirect_subtype_check_reason(
               mod_,

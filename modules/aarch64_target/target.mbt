@@ -753,8 +753,8 @@ fn floatcc_to_machv(cc : @milkir.FloatCC) -> @machv.Cond {
   match cc {
     Eq => Eq
     Ne => Ne
-    Lt => Lt
-    Le => Le
+    Lt => Mi
+    Le => Ule
     Gt => Gt
     Ge => Ge
   }

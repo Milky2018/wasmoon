@@ -5,6 +5,9 @@ import {
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/validator",
   "Milky2018/wasmoon/wat",
+  "Milky2018/wasmoon/wast",
+  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasmoon/cmd/wasmoon/commands",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
@@ -26,6 +29,5 @@ import {
 } for "test"
 
 import {
-  "Milky2018/wasmoon/wast",
   "Milky2018/wasmoon/wasi",
 } for "wbtest"

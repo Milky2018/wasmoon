@@ -226,6 +226,152 @@ pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
 }
 
 ///|
+fn append_jit_arg_slots(
+  out : Array[Int64],
+  value : @types.Value,
+  ty : @types.ValueType,
+) -> Unit {
+  match (value, ty) {
+    (V128(bytes), V128) => {
+      out.push(@types.bytes_to_int64_le(bytes, 0))
+      out.push(@types.bytes_to_int64_le(bytes, 8))
+    }
+    _ => out.push(value_to_jit_arg_typed(value, ty))
+  }
+}
+
+///|
+fn count_func_imports(imports : Array[@types.Import]) -> Int {
+  let mut count = 0
+  for import_ in imports {
+    if import_.desc is Func(_) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+fn native_frontend_supports_function(
+  mod_ : @types.Module,
+  func_idx : Int,
+) -> Bool {
+  let local_idx = func_idx - count_func_imports(mod_.imports)
+  if local_idx < 0 {
+    return false
+  }
+  if local_idx >= mod_.codes.length() ||
+    body_has_direct_call(mod_.codes[local_idx].body) ||
+    body_has_native_segment_helper_gap(mod_.codes[local_idx].body) {
+    return false
+  }
+  if body_has_memory_grow_gap(mod_.codes[local_idx].body) {
+    return false
+  }
+  if body_has_table_grow_gap(mod_.codes[local_idx].body) {
+    return false
+  }
+  let env = @wasm_frontend.EmbeddingEnvironment::new()
+  try @wasm_frontend.lower_function(env, mod_, local_idx) catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+}
+
+///|
+fn body_has_direct_call(body : Array[@types.Instruction]) -> Bool {
+  for instr in body {
+    match instr {
+      Call(_) | ReturnCall(_) => return true
+      Block(_, nested) | Loop(_, nested) =>
+        if body_has_direct_call(nested) {
+          return true
+        }
+      If(_, then_body, else_body) =>
+        if body_has_direct_call(then_body) || body_has_direct_call(else_body) {
+          return true
+        }
+      TryTable(_, _, nested) => if body_has_direct_call(nested) { return true }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn body_has_native_segment_helper_gap(body : Array[@types.Instruction]) -> Bool {
+  for instr in body {
+    match instr {
+      MemoryInit(_, _) | DataDrop(_) => return true
+      Block(_, nested) | Loop(_, nested) =>
+        if body_has_native_segment_helper_gap(nested) {
+          return true
+        }
+      If(_, then_body, else_body) =>
+        if body_has_native_segment_helper_gap(then_body) ||
+          body_has_native_segment_helper_gap(else_body) {
+          return true
+        }
+      TryTable(_, _, nested) =>
+        if body_has_native_segment_helper_gap(nested) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn body_has_memory_grow_gap(body : Array[@types.Instruction]) -> Bool {
+  for instr in body {
+    match instr {
+      MemoryGrow(_) => return true
+      Block(_, nested) | Loop(_, nested) =>
+        if body_has_memory_grow_gap(nested) {
+          return true
+        }
+      If(_, then_body, else_body) =>
+        if body_has_memory_grow_gap(then_body) ||
+          body_has_memory_grow_gap(else_body) {
+          return true
+        }
+      TryTable(_, _, nested) =>
+        if body_has_memory_grow_gap(nested) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn body_has_table_grow_gap(body : Array[@types.Instruction]) -> Bool {
+  for instr in body {
+    match instr {
+      TableGrow(_) => return true
+      Block(_, nested) | Loop(_, nested) =>
+        if body_has_table_grow_gap(nested) {
+          return true
+        }
+      If(_, then_body, else_body) =>
+        if body_has_table_grow_gap(then_body) ||
+          body_has_table_grow_gap(else_body) {
+          return true
+        }
+      TryTable(_, _, nested) =>
+        if body_has_table_grow_gap(nested) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 /// Compare two Value arrays for equality
 pub fn values_array_equal(
   a : Array[@types.Value],
@@ -275,13 +421,6 @@ pub fn compare_jit_interp(
 
   // Run interpreter
   let interp_result = run_interp(mod_, func_name, args)
-
-  // AMD64 JIT is still being brought up. For now, keep testsuite stable by
-  // skipping JIT-vs-interpreter comparisons on amd64 (Ubuntu CI), while the
-  // amd64 backend is validated by WAST runners.
-  if @wasmoon_jit.host_target_arch() is X86_64 {
-    return { jit_result: interp_result, interp_result, match_: true }
-  }
 
   // Run JIT
   let jit_result = run_jit(
@@ -334,13 +473,108 @@ pub fn run_jit(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
-  func_idx |> ignore
-  param_types |> ignore
-  result_types |> ignore
-  // TODO(ISS-026): replace this compatibility path with a production JIT
-  // harness that installs Store/Instance state, hostcall, and interpcall
-  // dispatchers instead of the removed legacy runtime setup.
-  run_interp(mod_, func_name, args)
+  func_name |> ignore
+  if !native_frontend_supports_function(mod_, func_idx) {
+    // TODO(ISS-034): switch this compatibility path to the production
+    // interpcall fallback once unsupported function trampolines return
+    // reliably for structured branch bodies.
+    // TODO(ISS-035): remove the MemoryInit/DataDrop guard once native
+    // segment runtime helpers execute with the production JIT context.
+    // TODO(ISS-036): remove the memory.grow guard once the native memory grow
+    // helper returns through the production JIT context.
+    // TODO(ISS-037): remove the table.grow guard once the native table grow
+    // helper returns through the production JIT context.
+    return run_interp(mod_, func_name, args)
+  }
+  try {
+    let linker = @runtime.Linker::new()
+    let store = linker.get_store()
+    let instance = @executor.instantiate_with_linker(linker, "test", mod_)
+    guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
+      is Some((precompiled, debug_db)) else {
+      return Err("JIT compile returned unsupported")
+    }
+    let func_signatures = @wast.build_func_signatures(mod_)
+    let external_imports = @wast.build_external_imports_for_jit(
+      mod_, instance, store,
+    )
+    let jm = @jit.JITModule::load_with_imports(
+      precompiled,
+      func_signatures,
+      external_imports,
+      debug_db~,
+    )
+    @wast.register_instance_funcrefs_for_jit(jm, instance)
+    @wast.install_jit_hostcall_dispatcher(jm, store, instance)
+    jm.alloc_wasm_stack(1048576L) |> ignore
+    guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
+      return Err("JIT memory initialization failed")
+    }
+    let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
+    let use_subtype_indirect_check = true
+    @wast.init_elem_segments(
+      mod_,
+      jm,
+      instance,
+      store,
+      use_subtype_indirect_check~,
+    )
+    @wast.init_bulk_segments(
+      mod_,
+      jm,
+      instance,
+      store,
+      use_subtype_indirect_check~,
+    )
+    @wast.sync_tables_to_jit(instance, store, jm, use_subtype_indirect_check~)
+    let global_addrs : Array[Int] = []
+    for addr in instance.global_addrs {
+      global_addrs.push(addr)
+    }
+    let table_addrs : Array[Int] = []
+    for addr in instance.table_addrs {
+      table_addrs.push(addr)
+    }
+    let func_addrs : Array[Int] = []
+    for addr in instance.func_addrs {
+      func_addrs.push(addr)
+    }
+    let func_type_indices : Array[Int] = []
+    for type_idx in instance.func_type_indices {
+      func_type_indices.push(type_idx)
+    }
+    let canonical_type_indices : Array[Int] = []
+    for canonical_idx in instance.canonical_type_indices {
+      canonical_type_indices.push(canonical_idx)
+    }
+    let module_types : Array[@types.SubType] = []
+    for subtype in mod_.types {
+      module_types.push(subtype)
+    }
+    let module_rec_groups : Array[Int] = []
+    for group in mod_.type_rec_groups {
+      module_rec_groups.push(group)
+    }
+    let jit_ctx = @wast.JITModuleContext::new(
+      jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
+      canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
+    )
+    @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
+    guard jm.get_func(func_idx) is Some(func) else {
+      return Err("JIT function \{func_idx} not loaded")
+    }
+    let jit_args : Array[Int64] = []
+    for i, arg in args {
+      guard i < param_types.length() else {
+        return Err("too many JIT arguments")
+      }
+      append_jit_arg_slots(jit_args, arg, param_types[i])
+    }
+    let raw_results = jm.call_with_context(func, jit_args)
+    Ok(jit_results_to_values(raw_results, result_types))
+  } catch {
+    e => Err("JIT error: \{e}")
+  }
 }
 
 ///|

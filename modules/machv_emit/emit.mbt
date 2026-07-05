@@ -627,6 +627,7 @@ fn x64_jcc_opcode(cond : @machv.Cond) -> Int {
     Ule => 0x86
     Ugt => 0x87
     Uge => 0x83
+    Mi => abort("x64_jcc_opcode: mi condition is AArch64-only")
     Parity => 0x8a
     NotParity => 0x8b
     Custom(name) =>
@@ -647,6 +648,7 @@ fn aarch64_cond_bits(cond : @machv.Cond) -> Int {
     Lt => 11
     Gt => 12
     Le => 13
+    Mi => 4
     Parity | NotParity =>
       abort("aarch64_cond_bits: parity conditions are x64-only")
     Custom(name) =>
@@ -2765,7 +2767,7 @@ fn emit_x64_float_cmp(
       emit_x64_setcc_r8(object, if cond == Lt { Ugt } else { Uge }, dst)
       emit_x64_movzx_r32_r8(object, dst, dst)
     }
-    Ult | Ule | Ugt | Uge | Parity | NotParity | Custom(_) =>
+    Ult | Ule | Ugt | Uge | Mi | Parity | NotParity | Custom(_) =>
       raise UnsupportedOperand(
         message="x64 fcmp requires a scalar float comparison condition",
       )

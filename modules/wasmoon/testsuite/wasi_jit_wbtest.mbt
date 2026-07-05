@@ -290,9 +290,8 @@ fn run_wasi_jit_quiet(
 ) -> (Result[Array[@types.Value], String], Bytes) {
   func_idx |> ignore
   result_types |> ignore
-  // TODO(ISS-026): replace this compatibility path with a production JIT
-  // WASI harness that installs Store/Instance state, hostcall, and interpcall
-  // dispatchers instead of the removed legacy runtime setup.
+  // TODO(ISS-033): replace this compatibility path with a production WASI JIT
+  // harness once direct WASI import calls return reliably under the native JIT.
   run_wasi_interp_quiet(mod_, func_name, preopens, stdin_data, stdin_callback~)
 }
 

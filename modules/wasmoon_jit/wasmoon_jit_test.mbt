@@ -1382,7 +1382,7 @@ test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
       plan.object.code[i + 3] == 0x1e {
       has_fcmp_s = true
     }
-    if (plan.object.code[i + 1] & 0xf0) == 0xa0 &&
+    if (plan.object.code[i + 1] & 0xf0) == 0x50 &&
       plan.object.code[i + 2] == 0x9f &&
       plan.object.code[i + 3] == 0x9a {
       has_cset_mi = true

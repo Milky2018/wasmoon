@@ -77,6 +77,65 @@ fn store_addr_to_module_func_idx(
 }
 
 ///|
+/// Allocate and initialize the JIT globals array from the runtime store.
+///
+/// Returns the globals pointer installed into the JIT module, or 0 when the
+/// instance has no globals or allocation fails.
+pub fn init_jit_globals_from_store(
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+  jit_module : @jit.JITModule,
+) -> Int64 {
+  let num_globals = instance.global_addrs.length()
+  if num_globals == 0 {
+    return 0L
+  }
+  let globals_ptr = @wasmoon_jit.alloc_memory((num_globals * 16).to_int64())
+  if globals_ptr == 0L {
+    return 0L
+  }
+  for i in 0..<num_globals {
+    let global_addr = instance.global_addrs[i]
+    let global_inst = store.globals[global_addr]
+    let value = global_inst.get()
+    let raw_value = match value {
+      I32(n) => @types.ToInt64::to_int64_bits(n)
+      I64(n) => @types.ToInt64::to_int64_bits(n)
+      F32(f) => @types.ToInt64::to_int64_bits(f)
+      F64(n) => @types.ToInt64::to_int64_bits(n)
+      FuncRef(store_addr) =>
+        match
+          lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
+          Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
+          None =>
+            match store_addr_to_module_func_idx(store_addr, instance) {
+              Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
+              None => @types.NULL_REF
+            }
+        }
+      ExternRef(idx) => idx.to_int64()
+      ExnRef(idx) => idx.to_int64()
+      ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
+      I31(n) => @wasmoon_jit.encode_i31(n)
+      Null => @types.NULL_REF
+      V128(bytes) => {
+        let offset = globals_ptr + (i * 16).to_int64()
+        @wasmoon_jit.c_jit_write_i64(offset, @types.bytes_to_int64_le(bytes, 0))
+        @wasmoon_jit.c_jit_write_i64(
+          offset + 8L,
+          @types.bytes_to_int64_le(bytes, 8),
+        )
+        continue
+      }
+    }
+    @wasmoon_jit.c_jit_write_i64(globals_ptr + (i * 16).to_int64(), raw_value)
+  }
+  jit_module.set_globals(globals_ptr)
+  globals_ptr
+}
+
+///|
 pub fn clear_funcref_registry() -> Unit {
   jit_funcref_store_to_ptr.val = {}
   jit_funcref_ptr_to_store.val = {}

@@ -111,6 +111,7 @@ pub(all) enum Cond {
   Ule
   Ugt
   Uge
+  Mi
   Parity
   NotParity
   Custom(String)
