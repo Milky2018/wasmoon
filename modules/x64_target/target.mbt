@@ -245,26 +245,39 @@ fn add_return_moves(
         move_inst.add_operand(@machv.Operand::def(Physical(dst)))
         block.append(move_inst)
       }
-      ReturnArea(offset~, ..) =>
-        if wasm_body {
-          let store = out.new_inst(
-            StorePtr(mem_type_for_type(value.ty), offset),
-          )
-          store.add_operand(
-            @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
-          )
-          store.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
-          block.append(store)
-        } else {
-          // TODO(ISS-032): generic SystemV sret lowering must thread the hidden
-          // result pointer through function signatures before direct functions
-          // can materialize return-area results.
-        }
-      Stack(..) =>
-        // TODO(ISS-032): result stack locations are not valid for the current
-        // x64 ABI model; keep this branch explicit until verifier support can
-        // reject it earlier.
-        ()
+      ReturnArea(offset~, ..) => {
+        wasm_body |> ignore
+        let store = out.new_inst(StorePtr(mem_type_for_type(value.ty), offset))
+        store.add_operand(
+          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+        )
+        store.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
+        block.append(store)
+      }
+      Stack(..) => ()
+    }
+  }
+}
+
+///|
+fn add_call_return_area_loads(
+  out : @machv.Function,
+  block : @machv.Block,
+  inst : @machv.Instruction,
+  values : Array[@milkir.Value],
+) -> Unit {
+  for i, value in values {
+    guard i < inst.abi_result_locations.length() else { continue }
+    match inst.abi_result_locations[i] {
+      ReturnArea(offset~, ..) => {
+        let load = out.new_inst(LoadPtr(mem_type_for_type(value.ty), offset))
+        load.add_operand(
+          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+        )
+        load.add_operand(@machv.Operand::def(reg_for_value(value)))
+        block.append(load)
+      }
+      Reg(_) | Stack(..) => ()
     }
   }
 }
@@ -293,10 +306,7 @@ fn add_wasm_call_result_moves(
         load.add_operand(@machv.Operand::def(reg_for_value(value)))
         block.append(load)
       }
-      Stack(..) =>
-        // TODO(ISS-032): result stack locations are not valid for Wasm CallPtr
-        // results; keep the branch explicit until verifier support rejects it.
-        ()
+      Stack(..) => ()
     }
   }
 }
@@ -1519,6 +1529,9 @@ fn lower_inst(
   // TODO(x64_target): expand selected x64 machine operations, target
   // constraints, and legalization for non-trivial memory ops.
   block.append(lowered)
+  if inst.opcode is Call(_) {
+    add_call_return_area_loads(out, block, lowered, inst.results)
+  }
 }
 
 ///|

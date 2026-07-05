@@ -100,6 +100,29 @@ test "x64 lowers Wasm return-area stores through ExtraResultsPtr" {
 }
 
 ///|
+test "x64 lowers generic return-area stores through ExtraResultsPtr" {
+  let func = @milkir.Function::new_empty("generic_return_area_store")
+  let values : Array[@milkir.Value] = []
+  for _ in 0..<3 {
+    let value = func.new_value(I64)
+    values.push(value)
+    func.add_result(I64)
+  }
+  let entry = func.new_block([])
+  entry.set_terminator(Return(values))
+  let lowered = lower_function(func)
+  let mut has_store = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == StorePtr(MemI64, 0) &&
+      inst.operands.length() >= 2 &&
+      inst.operands[0].reg == Physical({ index: 12, class: Int }) {
+      has_store = true
+    }
+  }
+  inspect(has_store, content="true")
+}
+
+///|
 test "x64 target owns SystemV machine environment policy" {
   inspect(call_clobbered_gprs().length(), content="9")
   inspect(call_clobbered_fprs().length(), content="16")
@@ -682,6 +705,30 @@ test "x64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
   }
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, vmctx], results))
+  entry.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  let mut has_load = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == LoadPtr(MemI64, 0) &&
+      inst.operands.length() >= 2 &&
+      inst.operands[0].reg == Physical({ index: 12, class: Int }) {
+      has_load = true
+    }
+  }
+  inspect(has_load, content="true")
+}
+
+///|
+test "x64 lowers generic Call return-area loads through ExtraResultsPtr" {
+  let func = @milkir.Function::new_empty("call_return_area_load")
+  let results : Array[@milkir.Value] = []
+  for _ in 0..<3 {
+    results.push(func.new_value(I64))
+  }
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), [], results),
+  )
   entry.set_terminator(Return([]))
   let lowered = lower_function(func)
   let mut has_load = false
