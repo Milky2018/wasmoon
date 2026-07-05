@@ -18,6 +18,7 @@ pub suberror LowerError {
   TypeIndexOutOfRange(index~ : Int)
   NonFunctionType(index~ : Int)
   MissingCode(index~ : Int)
+  UnsupportedNativeLowering(index~ : Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for LowerError
 

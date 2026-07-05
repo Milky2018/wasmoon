@@ -11,22 +11,6 @@ fn wasm_value_type_to_milkir(ty : @types.ValueType) -> @milkir.Type {
 }
 
 ///|
-fn wasm_func_type_to_signature(
-  env : EmbeddingEnvironment,
-  func_type : @types.FuncType,
-) -> @milkir.Signature {
-  let params : Array[@milkir.Type] = []
-  if env.hidden_context_param() is Some(hidden_context_type) {
-    params.push(hidden_context_type)
-  }
-  for param in func_type.params {
-    params.push(wasm_value_type_to_milkir(param))
-  }
-  let results = func_type.results.map(wasm_value_type_to_milkir)
-  @milkir.Signature::new(params, results)
-}
-
-///|
 fn get_func_type(
   mod_ : @types.Module,
   func_local_idx : Int,
@@ -71,17 +55,8 @@ pub fn lower_function(
   if try_lower_linear_function(env, mod_, func_local_idx) is Some(func) {
     return func
   }
-  let func_type = get_func_type(mod_, func_local_idx)
   get_code(mod_, func_local_idx)
-  let signature = wasm_func_type_to_signature(env, func_type)
-  // TODO(ISS-025): replace this bridge with a native Wasm-to-MilkIR frontend
-  // so reusable MilkIR no longer depends on the legacy Wasmoon IR translator.
-  let legacy_func = @ir.translate_function(
-    mod_,
-    func_local_idx,
-    name=function_name(mod_, func_local_idx),
-  )
-  legacy_func.to_milkir_with_signature(signature)
+  raise UnsupportedNativeLowering(index=func_local_idx)
 }
 
 ///|

@@ -3,7 +3,7 @@ import {
   "Milky2018/machv_regalloc",
   "Milky2018/regalloc" @core_regalloc,
   "Milky2018/wasmoon_jit/legacy_ir" @ir,
-  "Milky2018/wasmoon_jit/legacy_perf" @perf,
+  "Milky2018/wasmoon_jit/perf",
   "Milky2018/wasmoon_jit/legacy_vcode/abi",
   "Milky2018/wasmoon_jit/legacy_vcode/isa",
   "Milky2018/wasmoon_jit/legacy_vcode/block",

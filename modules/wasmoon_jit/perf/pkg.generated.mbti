@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon_jit/legacy_perf"
+package "Milky2018/wasmoon_jit/perf"
 
 // Values
 pub fn begin_function(Int, String, Int, Int) -> Unit

@@ -194,7 +194,19 @@ pub fn validate_jit(
     let func_name = get_func_name(wasm_module, func_idx)
     try {
       let env = @wasm_frontend.EmbeddingEnvironment::new()
-      let milk = @wasm_frontend.lower_function(env, wasm_module, i)
+      let milk = match
+        @wasm_frontend.try_lower_native_function(env, wasm_module, i) {
+        Some(func) => func
+        None => {
+          report.add_warning(
+            Lower,
+            "native frontend does not support this function yet",
+            func_idx=Some(func_idx),
+            func_name=Some(func_name),
+          )
+          continue
+        }
+      }
       @milkir.optimize_with_level(
         milk,
         @milkir.OptLevel::from_int(normalized_opt_level),
