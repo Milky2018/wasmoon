@@ -241,82 +241,6 @@ fn append_jit_arg_slots(
 }
 
 ///|
-fn count_func_imports(imports : Array[@types.Import]) -> Int {
-  let mut count = 0
-  for import_ in imports {
-    if import_.desc is Func(_) {
-      count = count + 1
-    }
-  }
-  count
-}
-
-///|
-fn native_frontend_supports_function(
-  mod_ : @types.Module,
-  func_idx : Int,
-) -> Bool {
-  let local_idx = func_idx - count_func_imports(mod_.imports)
-  if local_idx < 0 {
-    return false
-  }
-  if local_idx >= mod_.codes.length() ||
-    body_has_direct_call(mod_.codes[local_idx].body) ||
-    body_has_native_helper_gap(mod_.codes[local_idx].body) {
-    return false
-  }
-  let env = @wasm_frontend.EmbeddingEnvironment::new()
-  try @wasm_frontend.lower_function(env, mod_, local_idx) catch {
-    _ => false
-  } noraise {
-    _ => true
-  }
-}
-
-///|
-fn body_has_direct_call(body : Array[@types.Instruction]) -> Bool {
-  for instr in body {
-    match instr {
-      Call(_) | ReturnCall(_) => return true
-      Block(_, nested) | Loop(_, nested) =>
-        if body_has_direct_call(nested) {
-          return true
-        }
-      If(_, then_body, else_body) =>
-        if body_has_direct_call(then_body) || body_has_direct_call(else_body) {
-          return true
-        }
-      TryTable(_, _, nested) => if body_has_direct_call(nested) { return true }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-fn body_has_native_helper_gap(body : Array[@types.Instruction]) -> Bool {
-  for instr in body {
-    match instr {
-      Block(_, nested) | Loop(_, nested) =>
-        if body_has_native_helper_gap(nested) {
-          return true
-        }
-      If(_, then_body, else_body) =>
-        if body_has_native_helper_gap(then_body) ||
-          body_has_native_helper_gap(else_body) {
-          return true
-        }
-      TryTable(_, _, nested) =>
-        if body_has_native_helper_gap(nested) {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
 /// Compare two Value arrays for equality
 pub fn values_array_equal(
   a : Array[@types.Value],
@@ -419,12 +343,6 @@ pub fn run_jit(
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore
-  if !native_frontend_supports_function(mod_, func_idx) {
-    // TODO(ISS-034): switch this compatibility path to the production
-    // interpcall fallback once unsupported function trampolines return
-    // reliably for structured branch bodies.
-    return run_interp(mod_, func_name, args)
-  }
   try {
     let linker = @runtime.Linker::new()
     let store = linker.get_store()

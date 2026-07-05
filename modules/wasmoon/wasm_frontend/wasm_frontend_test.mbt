@@ -140,7 +140,7 @@ test "lower direct block branch through native linear fast path" {
   let mod_ = @types.Module::simple(
     [],
     [I32],
-    [Block(Value(I32), [I32Const(7), Br(0), I32Const(9)])],
+    [Block(Value(I32), [I32Const(7), Br(0)])],
     "block_exit_branch",
   )
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
@@ -151,6 +151,18 @@ test "lower direct block branch through native linear fast path" {
   inspect(text.contains("iconst 9"), content="false")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
+}
+
+///|
+test "non-terminal block branch falls back to interpreter trampoline" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [Block(Value(I32), [I32Const(4), I32Const(8), Br(0), I32Add])],
+    "block_nonterminal_branch",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
 }
 
 ///|

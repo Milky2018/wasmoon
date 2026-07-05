@@ -288,11 +288,147 @@ fn run_wasi_jit_quiet(
   stdin_data : Bytes?,
   stdin_callback? : (() -> Bytes)? = None,
 ) -> (Result[Array[@types.Value], String], Bytes) {
-  func_idx |> ignore
-  result_types |> ignore
-  // TODO(ISS-033): restore this to a production WASI JIT harness after the
-  // native WASI import path stops corrupting the MoonBit runtime in-process.
-  run_wasi_interp_quiet(mod_, func_name, preopens, stdin_data, stdin_callback~)
+  func_name |> ignore
+  try {
+    let stdout_buf : Array[Byte] = []
+    let stderr_buf : Array[Byte] = []
+    let linker = @runtime.Linker::new()
+    let store = linker.get_store()
+    let wasi_builder = @wasi.WasiContextBuilder::new()
+      .stdout(fn(bytes) {
+        for b in bytes {
+          stdout_buf.push(b)
+        }
+      })
+      .stderr(fn(bytes) {
+        for b in bytes {
+          stderr_buf.push(b)
+        }
+      })
+    for entry in preopens {
+      let (host, guest) = entry
+      wasi_builder.preopen_dir(host, guest) |> ignore
+    }
+    match stdin_callback {
+      Some(cb) => wasi_builder.stdin(cb) |> ignore
+      None =>
+        match stdin_data {
+          Some(data) => {
+            let mut stdin_used = false
+            wasi_builder.stdin(fn() {
+              if stdin_used {
+                b""
+              } else {
+                stdin_used = true
+                data
+              }
+            })
+            |> ignore
+          }
+          None => ()
+        }
+    }
+    let wasi_ctx = wasi_builder.build()
+    @wasi.register_wasi(linker, wasi_ctx)
+    let instance = @executor.instantiate_with_linker(linker, "test", mod_)
+    guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
+      is Some((precompiled, debug_db)) else {
+      return (Err("JIT compile returned unsupported"), Bytes::from_array([]))
+    }
+    let func_signatures = @wast.build_func_signatures(mod_)
+    let external_imports = @wast.build_external_imports_for_jit(
+      mod_, instance, store,
+    )
+    let jm = @jit.JITModule::load_with_imports(
+      precompiled,
+      func_signatures,
+      external_imports,
+      debug_db~,
+    )
+    @wast.register_instance_funcrefs_for_jit(jm, instance)
+    @wast.install_jit_hostcall_dispatcher(jm, store, instance)
+    jm.alloc_wasm_stack(1048576L) |> ignore
+    jm.init_wasi_with_stdio(
+      [],
+      [],
+      preopens,
+      Some(fn(bytes) {
+        for b in bytes {
+          stdout_buf.push(b)
+        }
+      }),
+      Some(fn(bytes) {
+        for b in bytes {
+          stderr_buf.push(b)
+        }
+      }),
+      stdin_data,
+      stdin_callback~,
+    )
+    guard @wast.init_jit_memories_from_store(instance, store, jm) is Some(_) else {
+      return (Err("JIT memory initialization failed"), Bytes::from_array([]))
+    }
+    let globals_ptr = @wast.init_jit_globals_from_store(instance, store, jm)
+    let use_subtype_indirect_check = true
+    @wast.init_elem_segments(
+      mod_,
+      jm,
+      instance,
+      store,
+      use_subtype_indirect_check~,
+    )
+    @wast.init_bulk_segments(
+      mod_,
+      jm,
+      instance,
+      store,
+      use_subtype_indirect_check~,
+    )
+    @wast.sync_tables_to_jit(instance, store, jm, use_subtype_indirect_check~)
+    let global_addrs : Array[Int] = []
+    for addr in instance.global_addrs {
+      global_addrs.push(addr)
+    }
+    let table_addrs : Array[Int] = []
+    for addr in instance.table_addrs {
+      table_addrs.push(addr)
+    }
+    let func_addrs : Array[Int] = []
+    for addr in instance.func_addrs {
+      func_addrs.push(addr)
+    }
+    let func_type_indices : Array[Int] = []
+    for type_idx in instance.func_type_indices {
+      func_type_indices.push(type_idx)
+    }
+    let canonical_type_indices : Array[Int] = []
+    for canonical_idx in instance.canonical_type_indices {
+      canonical_type_indices.push(canonical_idx)
+    }
+    let module_types : Array[@types.SubType] = []
+    for subtype in mod_.types {
+      module_types.push(subtype)
+    }
+    let module_rec_groups : Array[Int] = []
+    for group in mod_.type_rec_groups {
+      module_rec_groups.push(group)
+    }
+    let jit_ctx = @wast.JITModuleContext::new(
+      jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
+      canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
+    )
+    @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
+    guard jm.get_func(func_idx) is Some(func) else {
+      return (Err("JIT function \{func_idx} not loaded"), Bytes::from_array([]))
+    }
+    let raw_results = jm.call_with_context(func, [])
+    (
+      Ok(jit_results_to_values(raw_results, result_types)),
+      Bytes::from_array(stdout_buf),
+    )
+  } catch {
+    e => (Err("JIT error: \{e}"), Bytes::from_array([]))
+  }
 }
 
 // ============ WASI Tests ============

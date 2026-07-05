@@ -1854,10 +1854,11 @@ fn append_linear_exit_block_body(
     match instr {
       Br(depth) =>
         // TODO(ISS-026): model full label-stack branch effects. The native
-        // frontend can safely flatten only a direct branch to the current
-        // block label; any outer label, conditional branch, or loop continue
-        // still falls back to the legacy translator bridge.
-        return depth == 0
+        // frontend can safely flatten only a terminal direct branch to the
+        // current block label. Non-terminal branches may leave expression
+        // operands that are unreachable in Wasm semantics but still visible to
+        // this linear stack model.
+        return depth == 0 && i == body.length() - 1
       BrIf(depth) =>
         if depth == 0 && i == body.length() - 1 {
           // At the end of a block, both taken and not-taken paths leave the
