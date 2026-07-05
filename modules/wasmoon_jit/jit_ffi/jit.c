@@ -552,7 +552,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_mem0(
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
-    return (int64_t)memory_grow_indexed_internal;
+    return (int64_t)wasmoon_jit_memory_grow;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_size_ptr(void) {

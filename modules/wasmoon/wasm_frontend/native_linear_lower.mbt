@@ -988,9 +988,9 @@ fn push_memory_grow(
     .declare_external_symbol("wasmoon.runtime.memory_grow")
   guard builder.call(symbol, Some(I32), [
       context,
-      builder.iconst_i64(memidx.to_int64()),
+      builder.iconst_i32(memidx),
       delta_i64,
-      builder.iconst_i64(max_pages.to_int64()),
+      builder.iconst_i32(max_pages),
     ])
     is Some(call_result_i32) else {
     return false
