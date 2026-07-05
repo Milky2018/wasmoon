@@ -1,7 +1,18 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasm_core"
 
+import {
+  "Milky2018/wasm_core/types",
+}
+
 // Values
+pub fn empty_module() -> @types.Module
+
+pub fn func_subtype(Array[@types.ValueType], Array[@types.ValueType]) -> @types.SubType
+
+pub fn func_type(Array[@types.ValueType], Array[@types.ValueType]) -> @types.FuncType
+
+pub fn simple_module(Array[@types.ValueType], Array[@types.ValueType], Array[@types.Instruction], String) -> @types.Module
 
 // Errors
 
