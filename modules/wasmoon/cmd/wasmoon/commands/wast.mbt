@@ -476,9 +476,10 @@ fn try_compile_jit(
           @wast.register_instance_funcrefs_for_jit(jm, instance)
           // Enable arbitrary host function imports via JIT -> hostcall bridge.
           @wast.install_jit_hostcall_dispatcher(jm, store, instance)
-          // Allocate independent WASM stack with guard page (1MB)
-          // This provides controlled stack overflow behavior
-          let _ = jm.alloc_wasm_stack(1048576L)
+          // Allocate independent WASM stack with guard page.
+          // Interpreter fallback stubs execute the MoonBit interpreter on this
+          // stack, so keep this aligned with `wasmoon run`.
+          let _ = jm.alloc_wasm_stack(16L * 1024L * 1024L)
           // Initialize WASI only when the module imports it.
           if module_has_wasi_import(lowered_mod) {
             jm.init_wasi_quiet([], [], [])

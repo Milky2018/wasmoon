@@ -69,6 +69,27 @@ test "compile api: reusable pipeline lowers direct wasm calls through func table
 }
 
 ///|
+test "compile api: recursive direct calls use interpreter fallback" {
+  let mod_ = @types.Module::simple(
+    [I32],
+    [I32],
+    [LocalGet(0), Call(0)],
+    "self_call",
+  )
+  let target_arch = @wasmoon_jit.host_target_arch()
+  let compiled = try_compile_with_reusable_pipeline(
+    mod_,
+    0,
+    0,
+    mod_.get_func_type(0),
+    target_arch,
+    current_emit_target(target_arch),
+    2,
+  )
+  inspect(compiled is None, content="true")
+}
+
+///|
 test "compile api: reusable pipeline lowers ref.func without legacy custom" {
   let mod_ = @types.Module::simple([], [FuncRef], [RefFunc(0)], "make_ref")
   let target_arch = @wasmoon_jit.host_target_arch()

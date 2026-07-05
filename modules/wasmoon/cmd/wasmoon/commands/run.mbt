@@ -71,8 +71,8 @@ fn convert_args_to_jit(args : Array[@types.Value]) -> Array[Int64] {
       ExternRef(idx) => @wasmoon_jit.encode_externref(idx)
       Null => @types.NULL_REF
       V128(_) => abort("V128 args not yet supported")
-      StructRef(idx) => idx.to_int64() << 1
-      ArrayRef(idx) => idx.to_int64() << 1
+      StructRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
+      ArrayRef(idx) => @wasmoon_jit.encode_heap_ref(idx)
       I31(n) => (n.to_int64() << 1) | 1L
       ExnRef(idx) => idx.to_int64()
     }
@@ -140,7 +140,7 @@ fn convert_jit_results(
         } else if (raw & 1L) == 1L {
           I31((raw >> 1).to_int())
         } else {
-          StructRef((raw >> 1).to_int())
+          StructRef(@wasmoon_jit.decode_heap_ref(raw))
         }
       }
       ExnRef | NullExnRef => {
@@ -158,7 +158,7 @@ fn convert_jit_results(
         if raw == 0L {
           Null
         } else {
-          StructRef((raw >> 1).to_int())
+          StructRef(@wasmoon_jit.decode_heap_ref(raw))
         }
       }
       RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs => {
@@ -167,7 +167,7 @@ fn convert_jit_results(
         if raw == 0L {
           Null
         } else {
-          ArrayRef((raw >> 1).to_int())
+          ArrayRef(@wasmoon_jit.decode_heap_ref(raw))
         }
       }
       RefI31 | RefNullI31 => {
@@ -1452,6 +1452,39 @@ fn reusable_body_signature_supported(
 }
 
 ///|
+fn body_calls_function(
+  body : Array[@types.Instruction],
+  target_func_idx : Int,
+) -> Bool {
+  for instr in body {
+    match instr {
+      Call(func_idx) | ReturnCall(func_idx) =>
+        if func_idx == target_func_idx {
+          return true
+        }
+      Block(_, nested) | Loop(_, nested) =>
+        if body_calls_function(nested, target_func_idx) {
+          return true
+        }
+      If(_, then_body, else_body) => {
+        if body_calls_function(then_body, target_func_idx) {
+          return true
+        }
+        if body_calls_function(else_body, target_func_idx) {
+          return true
+        }
+      }
+      TryTable(_, _, nested) =>
+        if body_calls_function(nested, target_func_idx) {
+          return true
+        }
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
 fn try_compile_with_reusable_pipeline(
   mod_ : @types.Module,
   func_local_idx : Int,
@@ -1462,6 +1495,15 @@ fn try_compile_with_reusable_pipeline(
   normalized_opt_level : Int,
 ) -> ReusableCompiledFunction? {
   if !reusable_body_signature_supported(func_type, target_arch) {
+    return None
+  }
+  if func_local_idx < 0 || func_local_idx >= mod_.codes.length() {
+    return None
+  }
+  // TODO(wasm_frontend): re-enable recursive native bodies once the reusable
+  // JIT path has Wasm call-depth and stack-exhaustion semantics matching the
+  // interpreter.
+  if body_calls_function(mod_.codes[func_local_idx].body, func_idx) {
     return None
   }
   let env = @wasm_frontend.EmbeddingEnvironment::new()

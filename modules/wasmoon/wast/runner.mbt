@@ -859,6 +859,7 @@ pub fn invoke_action(
               // Keep JIT shared tables coherent with interpreter-visible table state
               // before each call. This is required for mixed interpreter/JIT flows
               // (e.g. assertions that instantiate/trap between JIT invocations).
+              sync_store_globals_to_jit(jit, ctx.store)
               sync_tables_to_jit(
                 instance,
                 ctx.store,

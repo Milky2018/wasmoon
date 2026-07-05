@@ -9,6 +9,7 @@ wasmoon_module="${repo_root}/modules/wasmoon"
 build_dir="${repo_root}/target/moon-install-build"
 install_dir="${repo_root}/target/moon-install-bin"
 
+rm -rf "$build_dir" "$install_dir"
 mkdir -p "$build_dir"
 mkdir -p "$install_dir"
 
@@ -16,13 +17,23 @@ mkdir -p "$install_dir"
 # This mirrors Wasmtime's release-artifact pipeline style.
 moon -C "$wasmoon_module" build --target native --release --target-dir "$build_dir"
 
-main_bin_src="${build_dir}/native/release/build/cmd/wasmoon/wasmoon.exe"
-tools_bin_src="${build_dir}/native/release/build/cmd/wasmoon-tools/wasmoon-tools.exe"
-if [ ! -f "$main_bin_src" ]; then
-  main_bin_src="${build_dir}/native/release/build/cmd/wasmoon/wasmoon"
+release_build_dir="${build_dir}/native/release/build"
+main_bin_src="$(find "$release_build_dir" -type f \( \
+  -path "*/cmd/wasmoon/wasmoon.exe" -o \
+  -path "*/cmd/wasmoon/wasmoon" \
+\) | sort | head -n 1)"
+tools_bin_src="$(find "$release_build_dir" -type f \( \
+  -path "*/cmd/wasmoon-tools/wasmoon-tools.exe" -o \
+  -path "*/cmd/wasmoon-tools/wasmoon-tools" \
+\) | sort | head -n 1)"
+
+if [ -z "$main_bin_src" ] || [ ! -f "$main_bin_src" ]; then
+  echo "Error: missing built wasmoon binary under $release_build_dir" >&2
+  exit 1
 fi
-if [ ! -f "$tools_bin_src" ]; then
-  tools_bin_src="${build_dir}/native/release/build/cmd/wasmoon-tools/wasmoon-tools"
+if [ -z "$tools_bin_src" ] || [ ! -f "$tools_bin_src" ]; then
+  echo "Error: missing built wasmoon-tools binary under $release_build_dir" >&2
+  exit 1
 fi
 
 main_bin="${install_dir}/wasmoon"

@@ -354,13 +354,13 @@ pub fn sync_jit_globals_to_store(
           if raw_value == 0L {
             Null
           } else {
-            StructRef((raw_value >> 1).to_int())
+            StructRef(@wasmoon_jit.decode_heap_ref(raw_value))
           }
         RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
           if raw_value == 0L {
             Null
           } else {
-            ArrayRef((raw_value >> 1).to_int())
+            ArrayRef(@wasmoon_jit.decode_heap_ref(raw_value))
           }
         RefI31 | RefNullI31 =>
           if raw_value == 0L {
