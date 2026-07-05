@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn abi_location_stack_align(AbiValueLocation) -> Int
+
+pub fn abi_location_stack_size(AbiValueLocation) -> Int
+
 pub let spill_slot_base : Int
 
 // Errors
@@ -16,6 +20,17 @@ pub suberror VerifyError {
 pub impl Show for VerifyError
 
 // Types and methods
+pub(all) struct AbiReturnArea {
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AbiValueLocation {
+  Reg(PReg)
+  Stack(offset~ : Int, size~ : Int, align~ : Int)
+  ReturnArea(offset~ : Int, size~ : Int, align~ : Int)
+} derive(Eq, @debug.Debug)
+
 pub(all) struct Block {
   id : Int
   params : Array[VReg]
@@ -69,6 +84,9 @@ pub(all) struct Function {
   stack_slots : Array[StackSlot]
   mut num_spill_slots : Int
   param_pregs : Array[PReg?]
+  param_locations : Array[AbiValueLocation]
+  result_locations : Array[AbiValueLocation]
+  mut return_area : AbiReturnArea?
   mut int_stack_params : Int
   mut max_outgoing_args_size : Int
   mut next_block_id : Int
@@ -77,8 +95,10 @@ pub(all) struct Function {
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
 pub fn Function::add_param(Self, RegClass) -> VReg
+pub fn Function::add_param_location(Self, AbiValueLocation) -> Unit
 pub fn Function::add_param_preg(Self, PReg?) -> Unit
 pub fn Function::add_result(Self, RegClass) -> Unit
+pub fn Function::add_result_location(Self, AbiValueLocation) -> Unit
 pub fn Function::get_max_outgoing_args_size(Self) -> Int
 pub fn Function::get_num_spill_slots(Self) -> Int
 pub fn Function::new(String) -> Self
@@ -90,6 +110,7 @@ pub fn Function::print(Self) -> String
 pub fn Function::push_param(Self, VReg) -> Unit
 pub fn Function::set_int_stack_params(Self, Int) -> Unit
 pub fn Function::set_num_spill_slots(Self, Int) -> Unit
+pub fn Function::set_return_area(Self, AbiReturnArea) -> Unit
 pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
 pub fn Function::verify(Self) -> Unit raise VerifyError
 
@@ -99,8 +120,12 @@ pub(all) struct Instruction {
   operands : Array[Operand]
   clobbers : Array[PReg]
   constraints : Array[Constraint]
+  abi_arg_locations : Array[AbiValueLocation]
+  abi_result_locations : Array[AbiValueLocation]
   mut stack_effect : StackEffect
 } derive(Eq, @debug.Debug)
+pub fn Instruction::add_abi_arg_location(Self, AbiValueLocation) -> Unit
+pub fn Instruction::add_abi_result_location(Self, AbiValueLocation) -> Unit
 pub fn Instruction::add_clobber(Self, PReg) -> Unit
 pub fn Instruction::add_constraint(Self, Constraint) -> Unit
 pub fn Instruction::add_operand(Self, Operand) -> Unit

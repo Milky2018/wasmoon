@@ -94,6 +94,8 @@ pub(all) struct Instruction {
   operands : Array[Operand]
   clobbers : Array[PReg]
   constraints : Array[Constraint]
+  abi_arg_locations : Array[AbiValueLocation]
+  abi_result_locations : Array[AbiValueLocation]
   mut stack_effect : StackEffect
 } derive(Eq, Debug)
 
@@ -134,6 +136,8 @@ pub fn Instruction::new(id : Int, opcode : Opcode) -> Instruction {
     operands: [],
     clobbers: [],
     constraints: [],
+    abi_arg_locations: [],
+    abi_result_locations: [],
     stack_effect: None,
   }
 }
@@ -154,6 +158,22 @@ pub fn Instruction::add_constraint(
   constraint : Constraint,
 ) -> Unit {
   self.constraints.push(constraint)
+}
+
+///|
+pub fn Instruction::add_abi_arg_location(
+  self : Instruction,
+  location : AbiValueLocation,
+) -> Unit {
+  self.abi_arg_locations.push(location)
+}
+
+///|
+pub fn Instruction::add_abi_result_location(
+  self : Instruction,
+  location : AbiValueLocation,
+) -> Unit {
+  self.abi_result_locations.push(location)
 }
 
 ///|

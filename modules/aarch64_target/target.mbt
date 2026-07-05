@@ -164,6 +164,49 @@ fn class_for_type(ty : @milkir.Type) -> @machv.RegClass {
 }
 
 ///|
+fn align_to(value : Int, align : Int) -> Int {
+  if value == 0 {
+    0
+  } else {
+    (value + align - 1) / align * align
+  }
+}
+
+///|
+fn abi_stack_size_align(ty : @milkir.Type) -> (Int, Int) {
+  match ty {
+    V128 => (16, 16)
+    _ => (8, 8)
+  }
+}
+
+///|
+fn abi_stack_location(
+  ty : @milkir.Type,
+  offset : Int,
+) -> @machv.AbiValueLocation {
+  let (size, align) = abi_stack_size_align(ty)
+  Stack(offset~, size~, align~)
+}
+
+///|
+fn abi_return_area_location(
+  ty : @milkir.Type,
+  offset : Int,
+) -> @machv.AbiValueLocation {
+  let (size, align) = abi_stack_size_align(ty)
+  ReturnArea(offset~, size~, align~)
+}
+
+///|
+fn abi_location_preg(location : @machv.AbiValueLocation) -> @machv.PReg? {
+  match location {
+    Reg(preg) => Some(preg)
+    Stack(..) | ReturnArea(..) => None
+  }
+}
+
+///|
 fn vreg_for_value(value : @milkir.Value) -> @machv.VReg {
   { id: value.id, class: class_for_type(value.ty) }
 }
@@ -220,8 +263,9 @@ fn add_return_moves(
           int_result_idx = int_result_idx + 1
           out
         } else {
-          // TODO(aarch64_target): lower overflow return values through an
-          // explicit multi-value return area once MachV models it.
+          // TODO(ISS-032): materialize overflow return stores through the
+          // explicit MachV return area once the runtime return-area pointer
+          // convention is wired into Wasm calls.
           None
         }
       Float32 | Float64 | Vector =>
@@ -233,8 +277,9 @@ fn add_return_moves(
           float_result_idx = float_result_idx + 1
           out
         } else {
-          // TODO(aarch64_target): lower overflow FP/vector return values
-          // through an explicit multi-value return area once MachV models it.
+          // TODO(ISS-032): materialize overflow FP/vector return stores
+          // through the explicit MachV return area once the runtime return-area
+          // pointer convention is wired into Wasm calls.
           None
         }
     }
@@ -265,8 +310,9 @@ fn add_wasm_call_result_moves(
           int_result_idx = int_result_idx + 1
           out
         } else {
-          // TODO(aarch64_target): lower overflow Wasm call results through the
-          // extra-results pointer once MachV models multi-value return areas.
+          // TODO(ISS-032): materialize overflow Wasm call result loads from
+          // the explicit MachV return area once the extra-results pointer
+          // convention is wired into Wasm calls.
           None
         }
       Float32 | Float64 | Vector =>
@@ -276,8 +322,9 @@ fn add_wasm_call_result_moves(
           float_result_idx = float_result_idx + 1
           out
         } else {
-          // TODO(aarch64_target): lower overflow Wasm FP/vector call results
-          // through the extra-results pointer once MachV models it.
+          // TODO(ISS-032): materialize overflow Wasm FP/vector call result
+          // loads from the explicit MachV return area once the extra-results
+          // pointer convention is wired into Wasm calls.
           None
         }
     }
@@ -291,12 +338,13 @@ fn add_wasm_call_result_moves(
 }
 
 ///|
-fn signature_param_preg(
+fn signature_param_location(
   ty : @milkir.Type,
   int_arg_idx : Int,
   float_arg_idx : Int,
+  stack_offset : Int,
   wasm_body? : Bool = false,
-) -> (@machv.PReg?, Int, Int) {
+) -> (@machv.AbiValueLocation, Int, Int, Int) {
   let abi = abi_policy()
   let int_arg_regs = if wasm_body {
     [wasm_vmctx_arg_preg(), ..wasm_user_arg_gprs()]
@@ -311,24 +359,104 @@ fn signature_param_preg(
   match class_for_type(ty) {
     Int =>
       if int_arg_idx < int_arg_regs.length() {
-        (Some(int_arg_regs[int_arg_idx]), int_arg_idx + 1, float_arg_idx)
+        (
+          Reg(int_arg_regs[int_arg_idx]),
+          int_arg_idx + 1,
+          float_arg_idx,
+          stack_offset,
+        )
       } else {
-        // TODO(aarch64_target): materialize stack-passed entry parameters once
-        // MachV carries function-entry stack argument slots.
-        (None, int_arg_idx, float_arg_idx)
+        let (_, align) = abi_stack_size_align(ty)
+        let offset = align_to(stack_offset, align)
+        let location = abi_stack_location(ty, offset)
+        (
+          location,
+          int_arg_idx + 1,
+          float_arg_idx,
+          offset + @machv.abi_location_stack_size(location),
+        )
       }
     Float32 | Float64 | Vector =>
       if float_arg_idx < float_arg_regs.length() {
         let class = class_for_type(ty)
         (
-          Some(preg_with_class(float_arg_regs[float_arg_idx], class)),
+          Reg(preg_with_class(float_arg_regs[float_arg_idx], class)),
           int_arg_idx,
           float_arg_idx + 1,
+          stack_offset,
         )
       } else {
-        // TODO(aarch64_target): materialize stack-passed FP/vector entry
-        // parameters once MachV carries function-entry stack argument slots.
-        (None, int_arg_idx, float_arg_idx)
+        let (_, align) = abi_stack_size_align(ty)
+        let offset = align_to(stack_offset, align)
+        let location = abi_stack_location(ty, offset)
+        (
+          location,
+          int_arg_idx,
+          float_arg_idx + 1,
+          offset + @machv.abi_location_stack_size(location),
+        )
+      }
+  }
+}
+
+///|
+fn signature_result_location(
+  ty : @milkir.Type,
+  int_result_idx : Int,
+  float_result_idx : Int,
+  return_area_offset : Int,
+  wasm_body? : Bool = false,
+) -> (@machv.AbiValueLocation, Int, Int, Int) {
+  let abi = abi_policy()
+  let int_return_regs = if wasm_body {
+    wasm_ret_gprs()
+  } else {
+    abi.int_return_regs
+  }
+  let float_return_regs = if wasm_body {
+    wasm_ret_fprs()
+  } else {
+    abi.float_return_regs
+  }
+  match class_for_type(ty) {
+    Int =>
+      if int_result_idx < int_return_regs.length() {
+        (
+          Reg(int_return_regs[int_result_idx]),
+          int_result_idx + 1,
+          float_result_idx,
+          return_area_offset,
+        )
+      } else {
+        let (_, align) = abi_stack_size_align(ty)
+        let offset = align_to(return_area_offset, align)
+        let location = abi_return_area_location(ty, offset)
+        (
+          location,
+          int_result_idx + 1,
+          float_result_idx,
+          offset + @machv.abi_location_stack_size(location),
+        )
+      }
+    Float32 | Float64 | Vector =>
+      if float_result_idx < float_return_regs.length() {
+        let class = class_for_type(ty)
+        (
+          Reg(preg_with_class(float_return_regs[float_result_idx], class)),
+          int_result_idx,
+          float_result_idx + 1,
+          return_area_offset,
+        )
+      } else {
+        let (_, align) = abi_stack_size_align(ty)
+        let offset = align_to(return_area_offset, align)
+        let location = abi_return_area_location(ty, offset)
+        (
+          location,
+          int_result_idx,
+          float_result_idx + 1,
+          offset + @machv.abi_location_stack_size(location),
+        )
       }
   }
 }
@@ -341,21 +469,45 @@ fn add_function_signature(
 ) -> Unit {
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
+  let mut stack_offset = 0
   for i, ty in func.signature.params {
     let vreg : @machv.VReg = { id: i, class: class_for_type(ty) }
     out.push_param(vreg)
-    let (preg, next_int, next_float) = signature_param_preg(
+    let (location, next_int, next_float, next_stack_offset) = signature_param_location(
       ty,
       int_arg_idx,
       float_arg_idx,
+      stack_offset,
       wasm_body~,
     )
-    out.add_param_preg(preg)
+    out.add_param_location(location)
+    out.add_param_preg(abi_location_preg(location))
     int_arg_idx = next_int
     float_arg_idx = next_float
+    stack_offset = next_stack_offset
   }
+  if stack_offset > 0 {
+    out.set_int_stack_params(stack_offset / 8)
+  }
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  let mut return_area_offset = 0
   for result_ty in func.signature.results {
     out.add_result(class_for_type(result_ty))
+    let (location, next_int, next_float, next_return_area_offset) = signature_result_location(
+      result_ty,
+      int_result_idx,
+      float_result_idx,
+      return_area_offset,
+      wasm_body~,
+    )
+    out.add_result_location(location)
+    int_result_idx = next_int
+    float_result_idx = next_float
+    return_area_offset = next_return_area_offset
+  }
+  if return_area_offset > 0 {
+    out.set_return_area({ size: return_area_offset, align: 16 })
   }
 }
 
@@ -375,6 +527,7 @@ fn add_fixed_constraint(
 
 ///|
 fn add_call_abi_constraints(
+  out : @machv.Function,
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
   results : Array[@milkir.Value],
@@ -382,57 +535,102 @@ fn add_call_abi_constraints(
   let abi = abi_policy()
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
+  let mut arg_stack_offset = 0
   for operand_index, arg in args {
     match class_for_type(arg.ty) {
       Int =>
         if int_arg_idx < abi.int_argument_regs.length() {
+          inst.add_abi_arg_location(Reg(abi.int_argument_regs[int_arg_idx]))
           add_fixed_constraint(
             inst,
             operand_index,
             abi.int_argument_regs[int_arg_idx],
           )
           int_arg_idx = int_arg_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(arg.ty)
+          arg_stack_offset = align_to(arg_stack_offset, align)
+          let location = abi_stack_location(arg.ty, arg_stack_offset)
+          inst.add_abi_arg_location(location)
+          arg_stack_offset = arg_stack_offset +
+            @machv.abi_location_stack_size(location)
+          int_arg_idx = int_arg_idx + 1
         }
       Float32 | Float64 | Vector =>
         if float_arg_idx < abi.float_argument_regs.length() {
           let class = class_for_type(arg.ty)
+          inst.add_abi_arg_location(
+            Reg(preg_with_class(abi.float_argument_regs[float_arg_idx], class)),
+          )
           add_fixed_constraint(
             inst,
             operand_index,
             preg_with_class(abi.float_argument_regs[float_arg_idx], class),
           )
           float_arg_idx = float_arg_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(arg.ty)
+          arg_stack_offset = align_to(arg_stack_offset, align)
+          let location = abi_stack_location(arg.ty, arg_stack_offset)
+          inst.add_abi_arg_location(location)
+          arg_stack_offset = arg_stack_offset +
+            @machv.abi_location_stack_size(location)
+          float_arg_idx = float_arg_idx + 1
         }
     }
   }
   let mut int_result_idx = 0
   let mut float_result_idx = 0
+  let mut return_area_offset = 0
   for result_index, result in results {
     let operand_index = args.length() + result_index
     match class_for_type(result.ty) {
       Int =>
         if int_result_idx < abi.int_return_regs.length() {
+          inst.add_abi_result_location(Reg(abi.int_return_regs[int_result_idx]))
           add_fixed_constraint(
             inst,
             operand_index,
             abi.int_return_regs[int_result_idx],
           )
           int_result_idx = int_result_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(result.ty)
+          return_area_offset = align_to(return_area_offset, align)
+          let location = abi_return_area_location(result.ty, return_area_offset)
+          inst.add_abi_result_location(location)
+          return_area_offset = return_area_offset +
+            @machv.abi_location_stack_size(location)
+          int_result_idx = int_result_idx + 1
         }
       Float32 | Float64 | Vector =>
         if float_result_idx < abi.float_return_regs.length() {
           let class = class_for_type(result.ty)
+          inst.add_abi_result_location(
+            Reg(preg_with_class(abi.float_return_regs[float_result_idx], class)),
+          )
           add_fixed_constraint(
             inst,
             operand_index,
             preg_with_class(abi.float_return_regs[float_result_idx], class),
           )
           float_result_idx = float_result_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(result.ty)
+          return_area_offset = align_to(return_area_offset, align)
+          let location = abi_return_area_location(result.ty, return_area_offset)
+          inst.add_abi_result_location(location)
+          return_area_offset = return_area_offset +
+            @machv.abi_location_stack_size(location)
+          float_result_idx = float_result_idx + 1
         }
     }
   }
-  // TODO(aarch64_target): materialize overflow stack arguments once MachV
-  // carries outgoing stack-argument effects in a target-independent form.
+  let outgoing_stack_size = align_to(arg_stack_offset, 16)
+  if outgoing_stack_size > 0 {
+    inst.set_stack_effect(CallFrame(outgoing_stack_size))
+    out.update_max_outgoing_args_size(outgoing_stack_size)
+  }
   for preg in abi.caller_saved_regs {
     inst.add_clobber(preg)
   }
@@ -440,39 +638,104 @@ fn add_call_abi_constraints(
 
 ///|
 fn add_callptr_abi_constraints(
+  out : @machv.Function,
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
   _results : Array[@milkir.Value],
 ) -> Unit {
   guard args.length() >= 2 else { return }
+  inst.add_abi_arg_location(Reg(int_reg(int_reg_index(Scratch2))))
   add_fixed_constraint(inst, 0, int_reg(int_reg_index(Scratch2)))
+  inst.add_abi_arg_location(Reg(wasm_vmctx_arg_preg()))
   add_fixed_constraint(inst, 1, wasm_vmctx_arg_preg())
   let user_arg_gprs = wasm_user_arg_gprs()
   let user_arg_fprs = wasm_arg_fprs()
+  let ret_gprs = wasm_ret_gprs()
+  let ret_fprs = wasm_ret_fprs()
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
+  let mut arg_stack_offset = 0
   for arg_index in 2..<args.length() {
     let arg = args[arg_index]
     match class_for_type(arg.ty) {
       Int =>
         if int_arg_idx < user_arg_gprs.length() {
+          inst.add_abi_arg_location(Reg(user_arg_gprs[int_arg_idx]))
           add_fixed_constraint(inst, arg_index, user_arg_gprs[int_arg_idx])
+          int_arg_idx = int_arg_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(arg.ty)
+          arg_stack_offset = align_to(arg_stack_offset, align)
+          let location = abi_stack_location(arg.ty, arg_stack_offset)
+          inst.add_abi_arg_location(location)
+          arg_stack_offset = arg_stack_offset +
+            @machv.abi_location_stack_size(location)
           int_arg_idx = int_arg_idx + 1
         }
       Float32 | Float64 | Vector =>
         if float_arg_idx < user_arg_fprs.length() {
           let class = class_for_type(arg.ty)
+          inst.add_abi_arg_location(
+            Reg(preg_with_class(user_arg_fprs[float_arg_idx], class)),
+          )
           add_fixed_constraint(
             inst,
             arg_index,
             preg_with_class(user_arg_fprs[float_arg_idx], class),
           )
           float_arg_idx = float_arg_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(arg.ty)
+          arg_stack_offset = align_to(arg_stack_offset, align)
+          let location = abi_stack_location(arg.ty, arg_stack_offset)
+          inst.add_abi_arg_location(location)
+          arg_stack_offset = arg_stack_offset +
+            @machv.abi_location_stack_size(location)
+          float_arg_idx = float_arg_idx + 1
         }
     }
   }
-  // TODO(aarch64_target): model overflow stack arguments and split this Wasm
-  // VMContext convention from generic indirect-call lowering.
+  let mut int_result_idx = 0
+  let mut float_result_idx = 0
+  let mut return_area_offset = 0
+  for result in _results {
+    match class_for_type(result.ty) {
+      Int =>
+        if int_result_idx < ret_gprs.length() {
+          inst.add_abi_result_location(Reg(ret_gprs[int_result_idx]))
+          int_result_idx = int_result_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(result.ty)
+          return_area_offset = align_to(return_area_offset, align)
+          let location = abi_return_area_location(result.ty, return_area_offset)
+          inst.add_abi_result_location(location)
+          return_area_offset = return_area_offset +
+            @machv.abi_location_stack_size(location)
+          int_result_idx = int_result_idx + 1
+        }
+      Float32 | Float64 | Vector =>
+        if float_result_idx < ret_fprs.length() {
+          let class = class_for_type(result.ty)
+          inst.add_abi_result_location(
+            Reg(preg_with_class(ret_fprs[float_result_idx], class)),
+          )
+          float_result_idx = float_result_idx + 1
+        } else {
+          let (_, align) = abi_stack_size_align(result.ty)
+          return_area_offset = align_to(return_area_offset, align)
+          let location = abi_return_area_location(result.ty, return_area_offset)
+          inst.add_abi_result_location(location)
+          return_area_offset = return_area_offset +
+            @machv.abi_location_stack_size(location)
+          float_result_idx = float_result_idx + 1
+        }
+    }
+  }
+  let outgoing_stack_size = align_to(arg_stack_offset, 16)
+  if outgoing_stack_size > 0 {
+    inst.set_stack_effect(CallFrame(outgoing_stack_size))
+    out.update_max_outgoing_args_size(outgoing_stack_size)
+  }
   for preg in abi_policy().caller_saved_regs {
     inst.add_clobber(preg)
   }
@@ -947,7 +1210,7 @@ fn lower_inst(
     CallPtr(_, _) => {
       let lowered = out.new_inst(opcode_for(inst.opcode))
       add_uses(lowered, inst.args)
-      add_callptr_abi_constraints(lowered, inst.args, inst.results)
+      add_callptr_abi_constraints(out, lowered, inst.args, inst.results)
       block.append(lowered)
       add_wasm_call_result_moves(out, block, inst.results)
       return
@@ -1015,9 +1278,9 @@ fn lower_inst(
       add_uses(lowered, inst.args)
       add_defs(lowered, inst.results)
       if inst.opcode is Call(_) {
-        add_call_abi_constraints(lowered, inst.args, inst.results)
+        add_call_abi_constraints(out, lowered, inst.args, inst.results)
       } else if inst.opcode is CallPtr(_, _) {
-        add_callptr_abi_constraints(lowered, inst.args, inst.results)
+        add_callptr_abi_constraints(out, lowered, inst.args, inst.results)
       } else if inst.opcode is CallIndirect(_) {
         // TODO(aarch64_target): lower generic indirect calls once MilkIR carries
         // target-independent callee/table ABI metadata.

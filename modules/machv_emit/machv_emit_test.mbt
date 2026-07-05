@@ -654,6 +654,27 @@ test "emit X64 generic relocations and stack maps" {
 }
 
 ///|
+test "emit X64 outgoing stack argument stores before calls" {
+  let func = @machv.Function::new("caller")
+  func.update_max_outgoing_args_size(16)
+  let entry = func.new_block()
+  let call = func.new_inst(Call("callee"))
+  call.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  call.add_abi_arg_location(Stack(offset=0, size=8, align=8))
+  entry.append(call)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, X64)
+  inspect(object.frame_size, content="16")
+  let mut has_stack_store = false
+  for i in 0..<(object.code.length() - 2) {
+    if object.code[i] == 0x48 && object.code[i + 1] == 0x89 {
+      has_stack_store = true
+    }
+  }
+  inspect(has_stack_store, content="true")
+}
+
+///|
 test "emit X64 CallPtr as indirect register call" {
   let func = @machv.Function::new("callptr")
   let entry = func.new_block()
@@ -1746,6 +1767,10 @@ test "emit AArch64 stack spill load store bytes" {
     object.code,
     content=(
       #|[
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  209,
       #|  225,
       #|  3,
       #|  64,
@@ -1762,6 +1787,10 @@ test "emit AArch64 stack spill load store bytes" {
       #|  3,
       #|  0,
       #|  253,
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  145,
       #|  192,
       #|  3,
       #|  95,
@@ -1803,6 +1832,13 @@ test "emit X64 stack spill load store bytes" {
     content=(
       #|[
       #|  72,
+      #|  129,
+      #|  236,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
       #|  139,
       #|  140,
       #|  36,
@@ -1836,6 +1872,13 @@ test "emit X64 stack spill load store bytes" {
       #|  0,
       #|  0,
       #|  0,
+      #|  72,
+      #|  129,
+      #|  196,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
       #|  195,
       #|]
     ),
@@ -1860,7 +1903,30 @@ test "emit AArch64 vector stack spill load store bytes" {
   let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
-    content="[225, 3, 192, 61, 226, 7, 128, 61, 192, 3, 95, 214]",
+    content=(
+      #|[
+      #|  255,
+      #|  131,
+      #|  0,
+      #|  209,
+      #|  225,
+      #|  3,
+      #|  192,
+      #|  61,
+      #|  226,
+      #|  7,
+      #|  128,
+      #|  61,
+      #|  255,
+      #|  131,
+      #|  0,
+      #|  145,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
   )
 }
 
@@ -1884,6 +1950,13 @@ test "emit X64 vector stack spill load store bytes" {
     object.code,
     content=(
       #|[
+      #|  72,
+      #|  129,
+      #|  236,
+      #|  32,
+      #|  0,
+      #|  0,
+      #|  0,
       #|  243,
       #|  15,
       #|  111,
@@ -1899,6 +1972,13 @@ test "emit X64 vector stack spill load store bytes" {
       #|  148,
       #|  36,
       #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  129,
+      #|  196,
+      #|  32,
       #|  0,
       #|  0,
       #|  0,
@@ -1919,7 +1999,10 @@ test "emit AArch64 stack address bytes" {
   entry.append(addr)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, AArch64)
-  debug_inspect(object.code, content="[225, 67, 0, 145, 192, 3, 95, 214]")
+  debug_inspect(
+    object.code,
+    content="[255, 131, 0, 209, 225, 67, 0, 145, 255, 131, 0, 145, 192, 3, 95, 214]",
+  )
 }
 
 ///|
@@ -1933,7 +2016,36 @@ test "emit X64 stack address bytes" {
   entry.append(addr)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, X64)
-  debug_inspect(object.code, content="[72, 141, 140, 36, 16, 0, 0, 0, 195]")
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  72,
+      #|  129,
+      #|  236,
+      #|  32,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  141,
+      #|  140,
+      #|  36,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  129,
+      #|  196,
+      #|  32,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  195,
+      #|]
+    ),
+  )
   inspect(object.frame_size, content="32")
 }
 
@@ -1956,6 +2068,27 @@ test "emit generic relocations and stack maps" {
   inspect(object.fixups.length(), content="1")
   inspect(object.stack_maps.length(), content="1")
   inspect(object.debug_entries.length(), content="3")
+}
+
+///|
+test "emit AArch64 outgoing stack argument stores before calls" {
+  let func = @machv.Function::new("caller")
+  func.update_max_outgoing_args_size(16)
+  let entry = func.new_block()
+  let call = func.new_inst(Call("callee"))
+  call.add_operand(@machv.Operand::use_reg(Physical({ index: 0, class: Int })))
+  call.add_abi_arg_location(Stack(offset=0, size=8, align=8))
+  entry.append(call)
+  entry.set_terminator(TermReturn([]))
+  let object = try! emit_function_for_target(func, AArch64)
+  inspect(object.frame_size, content="16")
+  let mut has_stack_store = false
+  for i in 0..<(object.code.length() - 3) {
+    if object.code[i + 3] == 0xf9 {
+      has_stack_store = true
+    }
+  }
+  inspect(has_stack_store, content="true")
 }
 
 ///|

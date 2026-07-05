@@ -1847,10 +1847,72 @@ fn emit_aarch64_stack_store(
 }
 
 ///|
+fn emit_aarch64_outgoing_arg_store(
+  object : CodeObject,
+  src : Int,
+  src_class : @machv.RegClass,
+  offset : Int,
+) -> Unit raise EmitError {
+  match src_class {
+    Int => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 8, "AArch64 outgoing stack argument store",
+      )
+      emit_u32_le(
+        object,
+        0xf9000000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
+    Float32 | Float64 => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 8, "AArch64 outgoing float stack argument store",
+      )
+      emit_u32_le(
+        object,
+        0xfd000000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
+    Vector => {
+      let imm12 = require_scaled_stack_offset(
+        offset, 16, "AArch64 outgoing vector stack argument store",
+      )
+      emit_u32_le(
+        object,
+        0x3d800000 | ((imm12 & 0xfff) << 10) | (31 << 5) | (src & 0x1f),
+      )
+    }
+  }
+}
+
+///|
+fn emit_aarch64_outgoing_arg_stores(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  for operand_index, location in inst.abi_arg_locations {
+    if location is Stack(offset~, ..) {
+      let (src, src_class) = require_physical_preg(
+        find_operand(inst, Use, operand_index, "outgoing stack argument"),
+        "outgoing stack argument source",
+      )
+      emit_aarch64_outgoing_arg_store(
+        object,
+        src,
+        src_class,
+        frame.get_outgoing_arg_offset(offset),
+      )
+    }
+  }
+}
+
+///|
 fn emit_aarch64_call_ptr(
   object : CodeObject,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
+  emit_aarch64_outgoing_arg_stores(object, inst, frame)
   let target = require_int_preg(
     find_operand(inst, Use, 0, "call_ptr"),
     "call_ptr target",
@@ -2904,10 +2966,48 @@ fn emit_x64_stack_store(
 }
 
 ///|
+fn emit_x64_outgoing_arg_store(
+  object : CodeObject,
+  src : Int,
+  src_class : @machv.RegClass,
+  offset : Int,
+) -> Unit {
+  match src_class {
+    Int => emit_x64_int_stack_store(object, src, offset)
+    Float32 | Float64 => emit_x64_float_stack_store(object, src, offset)
+    Vector => emit_x64_vector_stack_store(object, src, offset)
+  }
+}
+
+///|
+fn emit_x64_outgoing_arg_stores(
+  object : CodeObject,
+  inst : @machv.Instruction,
+  frame : StackFrameLayout,
+) -> Unit raise EmitError {
+  for operand_index, location in inst.abi_arg_locations {
+    if location is Stack(offset~, ..) {
+      let (src, src_class) = require_physical_preg(
+        find_operand(inst, Use, operand_index, "outgoing stack argument"),
+        "outgoing stack argument source",
+      )
+      emit_x64_outgoing_arg_store(
+        object,
+        src,
+        src_class,
+        frame.get_outgoing_arg_offset(offset),
+      )
+    }
+  }
+}
+
+///|
 fn emit_x64_call_ptr(
   object : CodeObject,
   inst : @machv.Instruction,
+  frame : StackFrameLayout,
 ) -> Unit raise EmitError {
+  emit_x64_outgoing_arg_stores(object, inst, frame)
   let target = require_int_preg(
     find_operand(inst, Use, 0, "call_ptr"),
     "call_ptr target",
@@ -3062,10 +3162,12 @@ fn write_aarch64_inst_bytes(
     StackAddr(slot_id) => emit_aarch64_stack_addr(object, inst, slot_id, frame)
     Load(slot) => emit_aarch64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_aarch64_stack_store(object, inst, slot, frame)
-    Call(_) =>
+    Call(_) => {
+      emit_aarch64_outgoing_arg_stores(object, inst, frame)
       // TODO(machv_emit): resolve and range-check AArch64 BL relocations during real object linking.
       emit_u32_le(object, 0x94000000)
-    CallPtr(_, _) => emit_aarch64_call_ptr(object, inst)
+    }
+    CallPtr(_, _) => emit_aarch64_call_ptr(object, inst, frame)
     Jump(_) => emit_aarch64_b(object)
     Return => emit_u32_le(object, 0xd65f03c0)
     Trap(_) =>
@@ -3153,11 +3255,12 @@ fn write_x64_inst_bytes(
     Load(slot) => emit_x64_stack_load(object, inst, slot, frame)
     Store(slot) => emit_x64_stack_store(object, inst, slot, frame)
     Call(_) => {
+      emit_x64_outgoing_arg_stores(object, inst, frame)
       // TODO(machv_emit): patch X64 call rel32 displacement during object linking.
       object.code.push(0xe8)
       emit_u32_le(object, 0)
     }
-    CallPtr(_, _) => emit_x64_call_ptr(object, inst)
+    CallPtr(_, _) => emit_x64_call_ptr(object, inst, frame)
     Jump(_) =>
       // TODO(machv_emit): patch X64 jump rel32 displacement after block layout.
       emit_x64_jmp_rel32(object)
@@ -3775,7 +3878,10 @@ pub fn emit_function_for_target(
   target : EmitTarget,
 ) -> CodeObject raise EmitError {
   let object = CodeObject::new()
-  let emit_abi_frame = func.params.length() > 0
+  let emit_abi_frame = func.params.length() > 0 ||
+    func.stack_slots.length() > 0 ||
+    func.get_num_spill_slots() > 0 ||
+    func.get_max_outgoing_args_size() > 0
   let (saved_gprs, saved_fprs) = if emit_abi_frame {
     collect_saved_regs(func, target)
   } else {

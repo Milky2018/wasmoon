@@ -66,6 +66,9 @@ pub(all) struct Function {
   stack_slots : Array[StackSlot]
   mut num_spill_slots : Int
   param_pregs : Array[PReg?]
+  param_locations : Array[AbiValueLocation]
+  result_locations : Array[AbiValueLocation]
+  mut return_area : AbiReturnArea?
   mut int_stack_params : Int
   mut max_outgoing_args_size : Int
   mut next_block_id : Int
@@ -84,6 +87,9 @@ pub fn Function::new(name : String) -> Function {
     stack_slots: [],
     num_spill_slots: 0,
     param_pregs: [],
+    param_locations: [],
+    result_locations: [],
+    return_area: None,
     int_stack_params: 0,
     max_outgoing_args_size: 0,
     next_block_id: 0,
@@ -152,6 +158,27 @@ pub fn Function::set_num_spill_slots(self : Function, n : Int) -> Unit {
 ///|
 pub fn Function::add_param_preg(self : Function, preg : PReg?) -> Unit {
   self.param_pregs.push(preg)
+}
+
+///|
+pub fn Function::add_param_location(
+  self : Function,
+  location : AbiValueLocation,
+) -> Unit {
+  self.param_locations.push(location)
+}
+
+///|
+pub fn Function::add_result_location(
+  self : Function,
+  location : AbiValueLocation,
+) -> Unit {
+  self.result_locations.push(location)
+}
+
+///|
+pub fn Function::set_return_area(self : Function, area : AbiReturnArea) -> Unit {
+  self.return_area = Some(area)
 }
 
 ///|

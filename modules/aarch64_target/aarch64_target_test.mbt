@@ -33,6 +33,39 @@ test "AArch64 lowers Wasm function body entry ABI" {
 }
 
 ///|
+test "AArch64 records stack parameters and return area ABI locations" {
+  let func = @milkir.Function::new_empty("abi_locations")
+  for _ in 0..<9 {
+    func.add_param(I64) |> ignore
+  }
+  for _ in 0..<3 {
+    func.add_result(I64)
+  }
+  let entry = func.new_block([])
+  entry.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  inspect(lowered.param_locations.length(), content="9")
+  guard lowered.param_locations[8] is Stack(offset~, size~, align~) else {
+    fail("expected ninth AAPCS64 integer parameter on stack")
+  }
+  inspect(offset, content="0")
+  inspect(size, content="8")
+  inspect(align, content="8")
+  inspect(lowered.param_pregs[8] is None, content="true")
+  inspect(lowered.result_locations.length(), content="3")
+  guard lowered.result_locations[2]
+    is ReturnArea(offset=ret_offset, size=ret_size, align=ret_align) else {
+    fail("expected third AAPCS64 integer result in return area")
+  }
+  inspect(ret_offset, content="0")
+  inspect(ret_size, content="8")
+  inspect(ret_align, content="8")
+  guard lowered.return_area is Some(area) else { fail("missing return area") }
+  inspect(area.size, content="8")
+  inspect(area.align, content="16")
+}
+
+///|
 test "AArch64 allocatable regs include floating point registers" {
   let regs = allocatable_regs()
   inspect(regs.any(fn(r) { r.class == Float32 }), content="true")
@@ -372,6 +405,41 @@ test "AArch64 lowers direct calls with AAPCS64 ABI constraints" {
 }
 
 ///|
+test "AArch64 records outgoing stack arguments for direct calls" {
+  let func = @milkir.Function::new_empty("call_stack_args")
+  let args : Array[@milkir.Value] = []
+  for _ in 0..<9 {
+    args.push(func.new_value(I64))
+  }
+  let results : Array[@milkir.Value] = []
+  for _ in 0..<3 {
+    results.push(func.new_value(I64))
+  }
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), args, results),
+  )
+  entry.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  let call = lowered.blocks[0].instructions[0]
+  inspect(call.stack_effect == CallFrame(16), content="true")
+  inspect(lowered.get_max_outgoing_args_size(), content="16")
+  guard call.abi_arg_locations[8] is Stack(offset~, size~, align~) else {
+    fail("expected ninth direct-call integer argument on stack")
+  }
+  inspect(offset, content="0")
+  inspect(size, content="8")
+  inspect(align, content="8")
+  guard call.abi_result_locations[2]
+    is ReturnArea(offset=ret_offset, size=ret_size, align=ret_align) else {
+    fail("expected third direct-call integer result in return area")
+  }
+  inspect(ret_offset, content="0")
+  inspect(ret_size, content="8")
+  inspect(ret_align, content="8")
+}
+
+///|
 test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   let func = @milkir.Function::new_empty("callptr")
   let callee = func.new_value(Ptr)
@@ -405,4 +473,28 @@ test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
     content="true",
   )
   inspect(call.clobbers.length() > 0, content="true")
+}
+
+///|
+test "AArch64 records outgoing stack arguments for Wasm CallPtr" {
+  let func = @milkir.Function::new_empty("callptr_stack_args")
+  let callee = func.new_value(Ptr)
+  let vmctx = func.new_value(Ptr)
+  let args : Array[@milkir.Value] = [callee, vmctx]
+  for _ in 0..<8 {
+    args.push(func.new_value(I64))
+  }
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(CallPtr(8, 0), args, []))
+  entry.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  let call = lowered.blocks[0].instructions[0]
+  inspect(call.stack_effect == CallFrame(16), content="true")
+  inspect(lowered.get_max_outgoing_args_size(), content="16")
+  guard call.abi_arg_locations[9] is Stack(offset~, size~, align~) else {
+    fail("expected eighth Wasm CallPtr user argument on stack")
+  }
+  inspect(offset, content="0")
+  inspect(size, content="8")
+  inspect(align, content="8")
 }
