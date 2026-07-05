@@ -1,0 +1,16 @@
+import {
+  "Milky2018/machv",
+  "Milky2018/machv_emit",
+  "Milky2018/wasmoon_jit/legacy_ir" @ir,
+  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/jit_ffi",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+  "Milky2018/wasmoon_jit/legacy_vcode/emit/isaregs",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa",
+  "Milky2018/wasmoon_jit/legacy_vcode/layout",
+  "Milky2018/wasmoon_jit/legacy_vcode/lower",
+  "Milky2018/wasmoon_jit/legacy_vcode/regalloc",
+  "Milky2018/wasmoon_jit/legacy_vcode/instr",
+  "moonbitlang/core/hashset",
+}

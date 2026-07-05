@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/legacy_vcode/block"
+
+import {
+  "Milky2018/machv",
+  "Milky2018/wasmoon_jit/legacy_vcode/instr",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct VCodeBlock {
+  id : Int
+  insts : Array[@instr.VCodeInst]
+  params : Array[@machv.VReg]
+  mut terminator : @instr.VCodeTerminator?
+}
+pub fn VCodeBlock::add_inst(Self, @instr.VCodeInst) -> Unit
+pub fn VCodeBlock::new(Int) -> Self
+pub fn VCodeBlock::set_terminator(Self, @instr.VCodeTerminator) -> Unit
+
+// Type aliases
+
+// Traits
+

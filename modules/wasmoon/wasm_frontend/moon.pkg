@@ -1,5 +1,5 @@
 import {
-  "Milky2018/wasmoon/ir",
+  "Milky2018/wasmoon_jit/legacy_ir" @ir,
   "Milky2018/wasm_core/types",
   "Milky2018/milkir",
 }

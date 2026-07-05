@@ -432,7 +432,7 @@ fn push_global_get(
   if global_idx < 0 || global_idx >= global_types.length() {
     return false
   }
-  // TODO(ISS-023): source VMContext layout from the reusable embedding ABI
+  // TODO(ISS-025): source VMContext layout from the reusable embedding ABI
   // instead of copy-first constants from the legacy FuncEnvironment.
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
   let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
@@ -455,7 +455,7 @@ fn push_global_set(
     return false
   }
   guard pop_value(stack) is Some(value) else { return false }
-  // TODO(ISS-023): source VMContext layout from the reusable embedding ABI
+  // TODO(ISS-025): source VMContext layout from the reusable embedding ABI
   // instead of copy-first constants from the legacy FuncEnvironment.
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
   let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
@@ -486,7 +486,7 @@ fn push_table_size(
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
     return false
   }
-  // TODO(ISS-023): source VMContext table layout from the reusable embedding
+  // TODO(ISS-025): source VMContext table layout from the reusable embedding
   // ABI instead of copy-first constants from the legacy FuncEnvironment.
   let size_i64 = if table_idx == 0 {
     builder.load_ptr(
@@ -679,7 +679,7 @@ fn load_memory_base(
   context : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value {
-  // TODO(ISS-023): source VMContext memory layout from the reusable embedding
+  // TODO(ISS-025): source VMContext memory layout from the reusable embedding
   // ABI instead of copy-first constants from legacy VCode lowering.
   if memidx == 0 {
     builder.load_ptr(
@@ -708,7 +708,7 @@ fn load_memory_size_bytes(
   context : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value {
-  // TODO(ISS-023): source VMContext memory layout from the reusable embedding
+  // TODO(ISS-025): source VMContext memory layout from the reusable embedding
   // ABI instead of copy-first constants from legacy VCode lowering.
   if memidx == 0 {
     builder.load_ptr(
@@ -833,7 +833,7 @@ fn push_memory_fill(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // TODO(ISS-025): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 memory.fill.
     return false
   }
@@ -863,12 +863,12 @@ fn push_memory_copy(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, dst_memidx) is Some(I32) else {
-    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // TODO(ISS-025): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 destination memories.
     return false
   }
   guard memory_index_type(memory_types, src_memidx) is Some(I32) else {
-    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // TODO(ISS-025): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 source memories.
     return false
   }
@@ -899,7 +899,7 @@ fn push_memory_init(
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   guard memory_index_type(memory_types, memidx) is Some(I32) else {
-    // TODO(ISS-023): add memory64-capable runtime helper ABI before enabling
+    // TODO(ISS-025): add memory64-capable runtime helper ABI before enabling
     // this reusable call path for memory64 memory.init.
     return false
   }
@@ -1084,7 +1084,7 @@ fn push_ref_func(
   func_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  // TODO(ISS-023): source VMContext function-table layout from the reusable
+  // TODO(ISS-025): source VMContext function-table layout from the reusable
   // embedding ABI instead of copy-first constants from legacy VCode lowering.
   let func_table = builder.load_ptr(
     I64,
@@ -1362,7 +1362,7 @@ fn push_simple_if_select(
     is Some(false_value) else {
     return false
   }
-  // TODO(ISS-023): lower general structured `if` control flow with block
+  // TODO(ISS-025): lower general structured `if` control flow with block
   // parameters and branch labels. This select form is only for pure expressions.
   stack.push(builder.select(cond, true_value, false_value))
   true
@@ -1641,7 +1641,7 @@ fn append_linear_block_body(
       | BrOnNull(_)
       | BrOnNonNull(_)
       | TryTable(_, _, _) =>
-        // TODO(ISS-023): lower structured labels and branch stack effects
+        // TODO(ISS-025): lower structured labels and branch stack effects
         // directly instead of using the legacy translator bridge.
         return false
       _ => out.push(instr)
@@ -1658,7 +1658,7 @@ fn append_linear_exit_block_body(
   for instr in body {
     match instr {
       Br(depth) =>
-        // TODO(ISS-023): model full label-stack branch effects. The native
+        // TODO(ISS-025): model full label-stack branch effects. The native
         // frontend can safely flatten only a direct branch to the current
         // block label; any outer label, conditional branch, or loop continue
         // still falls back to the legacy translator bridge.
@@ -2381,7 +2381,7 @@ fn try_lower_linear_function(
         terminated = true
       }
       _ =>
-        // TODO(ISS-023): port the remaining Wasm operators/control-flow
+        // TODO(ISS-025): port the remaining Wasm operators/control-flow
         // lowering from the legacy translator into native MilkIR construction.
         return None
     }

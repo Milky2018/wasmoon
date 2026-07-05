@@ -1,8 +1,8 @@
 import {
   "Milky2018/machv_emit",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon/vcode/emit",
-  "Milky2018/wasmoon/vcode/isa",
+  "Milky2018/wasmoon_jit/legacy_vcode/emit",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa",
   "Milky2018/wasmoon_jit/cwasm",
   "Milky2018/wasm_core/types",
   "moonbitlang/core/hashset",
@@ -10,12 +10,12 @@ import {
 }
 
 import {
-  "Milky2018/wasmoon/ir",
+  "Milky2018/wasmoon_jit/legacy_ir" @ir,
   "Milky2018/wasmoon/wast",
-  "Milky2018/wasmoon/vcode/lower",
-  "Milky2018/wasmoon/vcode/regalloc",
-  "Milky2018/wasmoon/vcode/emit",
-  "Milky2018/wasmoon/vcode/isa",
+  "Milky2018/wasmoon_jit/legacy_vcode/lower",
+  "Milky2018/wasmoon_jit/legacy_vcode/regalloc",
+  "Milky2018/wasmoon_jit/legacy_vcode/emit",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa",
 } for "wbtest"
 
 options(

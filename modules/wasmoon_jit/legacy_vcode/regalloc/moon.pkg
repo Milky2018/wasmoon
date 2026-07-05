@@ -1,0 +1,20 @@
+import {
+  "Milky2018/machv",
+  "Milky2018/machv_regalloc",
+  "Milky2018/regalloc" @core_regalloc,
+  "Milky2018/wasmoon_jit/legacy_ir" @ir,
+  "Milky2018/wasmoon_jit/legacy_perf" @perf,
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa",
+  "Milky2018/wasmoon_jit/legacy_vcode/block",
+  "Milky2018/wasmoon_jit/legacy_vcode/instr",
+  "moonbitlang/x/sys",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
+  "moonbitlang/core/math",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/core/strconv",
+} for "wbtest"

@@ -1747,7 +1747,7 @@ fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // TODO(ISS-022): switch production JIT compilation to the reusable
+    // TODO(ISS-025): switch production JIT compilation to the reusable
     // wasm_frontend -> MilkIR -> MachV -> machv_emit path after Wasmoon JIT
     // function-body entry ABI, GC stackmaps, exceptions, and
     // dump-on-trap diagnostics are installed end-to-end. The fast path below

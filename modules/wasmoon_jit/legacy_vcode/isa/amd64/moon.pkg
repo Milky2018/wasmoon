@@ -1,0 +1,9 @@
+import {
+  "Milky2018/x64_target",
+  "Milky2018/machv",
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa/spec",
+}
+
+import {
+} for "wbtest"

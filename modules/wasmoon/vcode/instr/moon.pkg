@@ -1,9 +1,0 @@
-import {
-  "Milky2018/machv",
-  "Milky2018/wasmoon/vcode/abi",
-  "Milky2018/wasm_core/types",
-}
-
-import {
-  "Milky2018/wasmoon/wat",
-} for "wbtest"

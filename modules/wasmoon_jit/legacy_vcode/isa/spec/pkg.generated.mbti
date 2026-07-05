@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/legacy_vcode/isa/spec"
+
+import {
+  "Milky2018/machv",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum IntRegRole {
+  Vmctx
+  Mem0Desc
+  FuncTable
+  ExtraResultsPtr
+  Scratch1
+  Scratch2
+  FP
+  LR
+  SRet
+}
+
+pub(all) struct MachineEnvData {
+  preferred_int : Array[@machv.PReg]
+  nonpreferred_int : Array[@machv.PReg]
+  preferred_float : Array[@machv.PReg]
+  nonpreferred_float : Array[@machv.PReg]
+  preferred_vector : Array[@machv.PReg]
+  nonpreferred_vector : Array[@machv.PReg]
+  callee_saved_int : Array[@machv.PReg]
+  callee_saved_float : Array[@machv.PReg]
+  scratch_int : Array[Int]
+  scratch_float : Array[Int]
+}
+
+// Type aliases
+
+// Traits
+

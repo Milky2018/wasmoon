@@ -1,0 +1,12 @@
+import {
+  "Milky2018/regalloc" @core_regalloc,
+  "Milky2018/machv",
+  "Milky2018/wasmoon_jit/legacy_vcode/regalloc",
+  "Milky2018/wasmoon_jit/legacy_vcode/instr",
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+  "moonbitlang/core/hashmap",
+}
+
+import {
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+} for "wbtest"

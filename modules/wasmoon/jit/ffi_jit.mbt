@@ -22,7 +22,7 @@ pub impl Show for JITTrap with fn output(self, logger) {
 
 ///|
 /// JIT execution context (JIT ABI) - GC managed
-/// TODO(ISS-022): move entry trampoline generation to
+/// TODO(ISS-025): move entry trampoline generation to
 /// `wasmoon_jit.plan_entry_trampoline_for_target` after the reusable
 /// trampoline passes the full WAST/testsuite production gate, then move this
 /// context into `wasmoon_jit`.
@@ -292,7 +292,7 @@ fn JITContext::call_multi_return(
           err => raise JITTrap(to_repr(err).to_string())
         }
       } else {
-        // TODO(ISS-022): remove this legacy fallback after the reusable entry
+        // TODO(ISS-025): remove this legacy fallback after the reusable entry
         // trampoline models production ABI surfaces beyond the currently proven
         // scalar register-only slice: stack-passed entry params, overflow Wasm
         // call args/results, reference-root handling, FP packing, and V128 lane

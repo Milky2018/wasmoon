@@ -1,0 +1,14 @@
+import {
+  "Milky2018/machv",
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa/spec",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa/aarch64",
+  "Milky2018/wasmoon_jit/legacy_vcode/isa/amd64",
+}
+
+import {
+} for "wbtest"
+
+options(
+  "native-stub": [ "host_arch.c" ],
+)

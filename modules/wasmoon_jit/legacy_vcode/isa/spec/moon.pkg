@@ -1,0 +1,6 @@
+import {
+  "Milky2018/wasmoon_jit/legacy_vcode/abi",
+}
+
+import {
+} for "wbtest"
