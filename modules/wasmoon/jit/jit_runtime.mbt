@@ -230,62 +230,59 @@ pub fn JITModule::load_with_imports(
 
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
-        let resolved_import = @wasmoon_jit.resolve_import_function(
+        // First check external imports, then fall back to built-in trampolines.
+        let func_ptr = @wasmoon_jit.resolve_import_function_ptr(
           external_imports,
           imp.module_name,
           imp.func_name,
         )
-        match resolved_import {
-          DirectImportFunction(ptr) => ctx.set_func(i, ptr)
-          HostImportFunctionAddr(host_func_addr) => {
-            let (param_types, result_types) = if i < func_signatures.length() {
-              func_signatures[i]
-            } else {
-              ([], [])
-            }
-            let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
-              param_types,
-              result_types,
-              host_func_addr,
-              precompiled.target,
-            ) catch {
-              _ =>
-                raise UnsupportedImport(
-                  import_idx=i,
-                  module_name=imp.module_name,
-                  func_name=imp.func_name,
-                )
-            }
-            let code_ints = trampoline.code
-            let exec = @wasmoon_jit.ExecCode::new(code_ints)
-            match exec {
-              Some(ec) => {
-                // AArch64 hostcall trampolines may carry runtime func-address
-                // fixups (LoadJITFuncPtr). Patch them before first execution.
-                let func_table_ptr = ctx.get_func_table_ptr()
-                for fixup in trampoline.func_addr_fixups {
-                  @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
-                    precompiled.target,
-                    ec.ptr(),
-                    fixup.offset,
-                    fixup.reg,
-                    fixup.func_idx,
-                    func_table_ptr,
-                  )
-                }
-                jit_module.import_exec_codes.push(ec)
-                ctx.set_func(i, ec.ptr())
+        match func_ptr {
+          Some(ptr) =>
+            if ptr < 0L {
+              // Special encoding: negative values represent a runtime Store host func address.
+              // This allows callers to pass host funcs through `external_imports` without
+              // exposing raw function pointers.
+              let host_func_addr = (-(ptr + 1L)).to_int()
+              let (param_types, result_types) = if i < func_signatures.length() {
+                func_signatures[i]
+              } else {
+                ([], [])
               }
-              None =>
-                raise ImportTrampolineAllocationFailed(
-                  import_idx=i,
-                  module_name=imp.module_name,
-                  func_name=imp.func_name,
-                  code_size=code_ints.length(),
-                )
+              let mc = @emit.emit_hostcall_import_trampoline(
+                param_types, result_types, host_func_addr,
+              )
+              let code_ints = mc.get_bytes()
+              let exec = @wasmoon_jit.ExecCode::new(code_ints)
+              match exec {
+                Some(ec) => {
+                  // AArch64 hostcall trampolines may carry runtime func-address
+                  // fixups (LoadJITFuncPtr). Patch them before first execution.
+                  let func_table_ptr = ctx.get_func_table_ptr()
+                  for fixup in mc.get_func_addr_fixups() {
+                    @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
+                      precompiled.target,
+                      ec.ptr(),
+                      fixup.offset,
+                      fixup.reg,
+                      fixup.func_idx,
+                      func_table_ptr,
+                    )
+                  }
+                  jit_module.import_exec_codes.push(ec)
+                  ctx.set_func(i, ec.ptr())
+                }
+                None =>
+                  raise ImportTrampolineAllocationFailed(
+                    import_idx=i,
+                    module_name=imp.module_name,
+                    func_name=imp.func_name,
+                    code_size=code_ints.length(),
+                  )
+              }
+            } else {
+              ctx.set_func(i, ptr)
             }
-          }
-          UnsupportedImportFunction =>
+          None =>
             raise UnsupportedImport(
               import_idx=i,
               module_name=imp.module_name,
