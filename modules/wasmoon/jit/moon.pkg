@@ -1,7 +1,6 @@
 import {
   "Milky2018/machv_emit",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon/vcode/emit",
   "Milky2018/wasmoon/vcode/isa",
   "Milky2018/wasmoon_jit/cwasm",

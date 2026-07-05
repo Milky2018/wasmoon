@@ -32,7 +32,7 @@ pub impl Show for JITTrap with fn output(self, logger) {
 /// Only pinned vmctx is cached; all other values are loaded on-demand.
 /// Memory is automatically freed when the object is garbage collected
 priv struct JITContext {
-  ctx : @jit_ffi.JITContext
+  ctx : @wasmoon_jit.NativeJITContext
   // Trampoline cache: maps signature hash to generated trampoline
   // Signature hash = hash of (param_types, result_types)
   trampoline_cache : Map[Int64, @wasmoon_jit.ExecCode]
@@ -41,32 +41,27 @@ priv struct JITContext {
 ///|
 /// Create a new JIT context - GC managed
 fn JITContext::new(total_funcs : Int) -> JITContext? {
-  let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
-  let ctx_ptr = @jit_ffi.c_jit_context_ptr(ctx)
-  // Check if allocation succeeded by verifying the pointer is valid
-  if ctx_ptr != 0L {
-    Some({ ctx, trampoline_cache: Map([]) })
-  } else {
-    None
-  }
+  @wasmoon_jit.NativeJITContext::new(total_funcs).map(fn(ctx) {
+    { ctx, trampoline_cache: Map([]) }
+  })
 }
 
 ///|
 /// Get the raw context pointer (for FFI calls)
 fn JITContext::ptr(self : JITContext) -> Int64 {
-  @jit_ffi.c_jit_context_ptr(self.ctx)
+  self.ctx.ptr()
 }
 
 ///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_func(self.ptr(), idx, func_ptr)
+  self.ctx.set_func(idx, func_ptr)
 }
 
 ///|
 /// Allocate indirect table for call_indirect
 fn JITContext::alloc_indirect_table(self : JITContext, count : Int) -> Bool {
-  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ptr(), count) != 0
+  self.ctx.alloc_indirect_table(count)
 }
 
 ///|
@@ -77,19 +72,19 @@ fn JITContext::set_indirect(
   func_idx : Int,
   type_idx : Int,
 ) -> Unit {
-  @jit_ffi.c_jit_ctx_set_indirect(self.ptr(), table_idx, func_idx, type_idx)
+  self.ctx.set_indirect(table_idx, func_idx, type_idx)
 }
 
 ///|
 /// Set memory0 in the context
 fn JITContext::set_memory(self : JITContext, mem0_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem0_ptr)
+  self.ctx.set_memory(mem0_ptr)
 }
 
 ///|
 /// Set globals array in the context
 fn JITContext::set_globals(self : JITContext, globals_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_ctx_set_globals(self.ptr(), globals_ptr)
+  self.ctx.set_globals(globals_ptr)
 }
 
 ///|
@@ -102,18 +97,13 @@ fn JITContext::alloc_guarded_memory(
   initial_pages : Int,
   max_pages : Int?,
 ) -> Int64 {
-  let max_pages_val = max_pages.unwrap_or(-1).to_int64()
-  @jit_ffi.c_jit_ctx_alloc_guarded_memory(
-    self.ptr(),
-    initial_pages.to_int64(),
-    max_pages_val,
-  )
+  self.ctx.alloc_guarded_memory(initial_pages, max_pages)
 }
 
 ///|
 /// Get the function table base pointer
 fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
-  @jit_ffi.c_jit_ctx_get_func_table(self.ptr())
+  self.ctx.func_table_ptr()
 }
 
 ///|
@@ -124,34 +114,7 @@ fn JITContext::set_table_pointers(
   self : JITContext,
   jit_tables : Array[@wasmoon_jit.JITTable?],
 ) -> Unit {
-  if jit_tables.is_empty() {
-    return
-  }
-  // Convert Array[JITTable?] to FixedArray[Int64] of table pointers, sizes, and max sizes
-  let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
-  let table_sizes = FixedArray::make(jit_tables.length(), 0)
-  let table_max_sizes = FixedArray::make(jit_tables.length(), -1) // -1 = unlimited
-  for i, jit_table_opt in jit_tables {
-    match jit_table_opt {
-      Some(jit_table) => {
-        table_ptrs[i] = jit_table.raw_ptr()
-        table_sizes[i] = jit_table.get_size()
-        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1)
-      }
-      None => {
-        table_ptrs[i] = 0L // Null table pointer
-        table_sizes[i] = 0
-        table_max_sizes[i] = -1
-      }
-    }
-  }
-  @jit_ffi.c_jit_ctx_set_table_pointers(
-    self.ptr(),
-    table_ptrs,
-    table_sizes,
-    table_max_sizes,
-    jit_tables.length(),
-  )
+  self.ctx.set_table_pointers(jit_tables)
 }
 
 ///|
@@ -160,26 +123,17 @@ fn JITContext::set_memory_pointers(
   self : JITContext,
   memories : Array[@wasmoon_jit.MemoryInfo],
 ) -> Unit {
-  if memories.is_empty() {
-    return
-  }
-  let count = memories.length()
-  // Convert to FixedArray for FFI
-  let ptrs = FixedArray::make(count, 0L)
-  for i, mem in memories {
-    ptrs[i] = mem.ptr
-  }
-  @jit_ffi.c_jit_ctx_set_memory_pointers(self.ptr(), ptrs, count)
+  self.ctx.set_memory_pointers(memories)
 }
 
 ///|
 fn JITContext::get_memory_ptr(self : JITContext, memidx : Int) -> Int64 {
-  @jit_ffi.c_jit_ctx_get_memory_ptr(self.ptr(), memidx)
+  self.ctx.memory_ptr(memidx)
 }
 
 ///|
 fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
-  @jit_ffi.c_jit_ctx_get_memory_size(self.ptr(), memidx)
+  self.ctx.memory_size(memidx)
 }
 
 ///|
@@ -193,13 +147,13 @@ fn JITContext::get_memory_size(self : JITContext, memidx : Int) -> Int64 {
 ///
 /// Returns: true on success, false on failure
 fn JITContext::alloc_wasm_stack(self : JITContext, stack_size : Int64) -> Bool {
-  @jit_ffi.c_jit_alloc_wasm_stack(self.ptr(), stack_size) == 0
+  self.ctx.alloc_wasm_stack(stack_size)
 }
 
 ///|
 /// Check if a WASM stack has been allocated
 fn JITContext::has_wasm_stack(self : JITContext) -> Bool {
-  @jit_ffi.c_jit_get_wasm_stack_top(self.ptr()) != 0L
+  self.ctx.has_wasm_stack()
 }
 
 // ============ WASI Initialization ============
@@ -267,13 +221,12 @@ fn JITContext::set_hostcall_callback(
   self : JITContext,
   callback : () -> Int,
 ) -> Unit {
-  let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
-  @jit_ffi.c_jit_set_hostcall_callback(self.ptr(), call_closure, callback)
+  self.ctx.set_hostcall_callback(callback)
 }
 
 ///|
 fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
-  @jit_ffi.c_jit_clear_hostcall_callback(self.ptr())
+  self.ctx.clear_hostcall_callback()
 }
 
 ///|
@@ -376,23 +329,13 @@ fn JITContext::call_multi_return(
 
   // Call via trampoline (Standard: all ABI complexity in JIT code)
   // Use stack-switching call if a WASM stack has been allocated
-  let trap_code = if self.has_wasm_stack() {
-    @jit_ffi.c_jit_call_with_stack_switch_managed(
-      self.ctx,
-      trampoline_ptr,
-      func_ptr,
-      values_vec,
-      values_len,
-    )
-  } else {
-    @jit_ffi.c_jit_call_trampoline_managed(
-      self.ctx,
-      trampoline_ptr,
-      func_ptr,
-      values_vec,
-      values_len,
-    )
-  }
+  let trap_code = self.ctx.call_trampoline(
+    trampoline_ptr,
+    func_ptr,
+    values_vec,
+    values_len,
+    self.has_wasm_stack(),
+  )
   if trap_code != 0 {
     if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
       raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.ptr()))

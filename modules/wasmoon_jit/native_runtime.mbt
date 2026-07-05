@@ -397,6 +397,203 @@ pub fn clear_segments(ctx_ptr : Int64) -> Unit {
 }
 
 ///|
+struct NativeJITContext(@jit_ffi.JITContext)
+
+///|
+pub fn NativeJITContext::new(total_funcs : Int) -> NativeJITContext? {
+  let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
+  if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
+    Some(NativeJITContext(ctx))
+  } else {
+    None
+  }
+}
+
+///|
+pub fn NativeJITContext::ptr(self : NativeJITContext) -> Int64 {
+  @jit_ffi.c_jit_context_ptr(self.0)
+}
+
+///|
+pub fn NativeJITContext::set_func(
+  self : NativeJITContext,
+  idx : Int,
+  func_ptr : Int64,
+) -> Unit {
+  @jit_ffi.c_jit_ctx_set_func(self.ptr(), idx, func_ptr)
+}
+
+///|
+pub fn NativeJITContext::alloc_indirect_table(
+  self : NativeJITContext,
+  count : Int,
+) -> Bool {
+  @jit_ffi.c_jit_ctx_alloc_indirect_table(self.ptr(), count) != 0
+}
+
+///|
+pub fn NativeJITContext::set_indirect(
+  self : NativeJITContext,
+  table_idx : Int,
+  func_idx : Int,
+  type_idx : Int,
+) -> Unit {
+  @jit_ffi.c_jit_ctx_set_indirect(self.ptr(), table_idx, func_idx, type_idx)
+}
+
+///|
+pub fn NativeJITContext::set_memory(
+  self : NativeJITContext,
+  mem0_ptr : Int64,
+) -> Unit {
+  @jit_ffi.c_jit_ctx_set_memory(self.ptr(), mem0_ptr)
+}
+
+///|
+pub fn NativeJITContext::set_globals(
+  self : NativeJITContext,
+  globals_ptr : Int64,
+) -> Unit {
+  @jit_ffi.c_jit_ctx_set_globals(self.ptr(), globals_ptr)
+}
+
+///|
+pub fn NativeJITContext::alloc_guarded_memory(
+  self : NativeJITContext,
+  initial_pages : Int,
+  max_pages : Int?,
+) -> Int64 {
+  @jit_ffi.c_jit_ctx_alloc_guarded_memory(
+    self.ptr(),
+    initial_pages.to_int64(),
+    max_pages.unwrap_or(-1).to_int64(),
+  )
+}
+
+///|
+pub fn NativeJITContext::func_table_ptr(self : NativeJITContext) -> Int64 {
+  context_func_table_ptr(self.ptr())
+}
+
+///|
+pub fn NativeJITContext::set_table_pointers(
+  self : NativeJITContext,
+  jit_tables : Array[JITTable?],
+) -> Unit {
+  if jit_tables.is_empty() {
+    return
+  }
+  let table_ptrs = FixedArray::make(jit_tables.length(), 0L)
+  let table_sizes = FixedArray::make(jit_tables.length(), 0)
+  let table_max_sizes = FixedArray::make(jit_tables.length(), -1)
+  for i, jit_table_opt in jit_tables {
+    match jit_table_opt {
+      Some(jit_table) => {
+        table_ptrs[i] = jit_table.raw_ptr()
+        table_sizes[i] = jit_table.get_size()
+        table_max_sizes[i] = jit_table.get_max().unwrap_or(-1)
+      }
+      None => ()
+    }
+  }
+  @jit_ffi.c_jit_ctx_set_table_pointers(
+    self.ptr(),
+    table_ptrs,
+    table_sizes,
+    table_max_sizes,
+    jit_tables.length(),
+  )
+}
+
+///|
+pub fn NativeJITContext::set_memory_pointers(
+  self : NativeJITContext,
+  memories : Array[MemoryInfo],
+) -> Unit {
+  if memories.is_empty() {
+    return
+  }
+  let ptrs = FixedArray::make(memories.length(), 0L)
+  for i, mem in memories {
+    ptrs[i] = mem.ptr
+  }
+  @jit_ffi.c_jit_ctx_set_memory_pointers(self.ptr(), ptrs, memories.length())
+}
+
+///|
+pub fn NativeJITContext::memory_ptr(
+  self : NativeJITContext,
+  memidx : Int,
+) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_ptr(self.ptr(), memidx)
+}
+
+///|
+pub fn NativeJITContext::memory_size(
+  self : NativeJITContext,
+  memidx : Int,
+) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_memory_size(self.ptr(), memidx)
+}
+
+///|
+pub fn NativeJITContext::alloc_wasm_stack(
+  self : NativeJITContext,
+  stack_size : Int64,
+) -> Bool {
+  @jit_ffi.c_jit_alloc_wasm_stack(self.ptr(), stack_size) == 0
+}
+
+///|
+pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
+  @jit_ffi.c_jit_get_wasm_stack_top(self.ptr()) != 0L
+}
+
+///|
+pub fn NativeJITContext::set_hostcall_callback(
+  self : NativeJITContext,
+  callback : () -> Int,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
+  @jit_ffi.c_jit_set_hostcall_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+pub fn NativeJITContext::clear_hostcall_callback(
+  self : NativeJITContext,
+) -> Unit {
+  @jit_ffi.c_jit_clear_hostcall_callback(self.ptr())
+}
+
+///|
+pub fn NativeJITContext::call_trampoline(
+  self : NativeJITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values_vec : FixedArray[Int64],
+  values_len : Int,
+  use_stack_switch : Bool,
+) -> Int {
+  if use_stack_switch {
+    @jit_ffi.c_jit_call_with_stack_switch_managed(
+      self.0,
+      trampoline_ptr,
+      func_ptr,
+      values_vec,
+      values_len,
+    )
+  } else {
+    @jit_ffi.c_jit_call_trampoline_managed(
+      self.0,
+      trampoline_ptr,
+      func_ptr,
+      values_vec,
+      values_len,
+    )
+  }
+}
+
+///|
 /// Get the runtime store function address for the current JIT -> hostcall.
 ///
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the
