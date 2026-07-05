@@ -320,10 +320,15 @@ fn MachineCode::emit_instruction_x86_64(
       // Unsigned multiply high: rd = (lhs * rhs) >> 64.
       //
       // amd64 encoding uses implicit RAX/RDX: MUL r/m64 computes RDX:RAX.
-      // Lowering constrains lhs to RAX and result to RDX (Cranelift-style).
+      // Lowering constrains result to RDX; this emitter moves lhs to RAX.
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
-      let rhs = reg_num(inst.uses[1])
+      let mut rhs = reg_num(inst.uses[1])
+      if lhs != 0 && rhs == 0 {
+        let scratch = pick_scratch_gpr(isa, rd, lhs, rhs, -1)
+        self.x86_emit_mov_rr(scratch, rhs)
+        rhs = scratch
+      }
       if lhs != 0 {
         self.x86_emit_mov_rr(0, lhs)
       }
@@ -336,10 +341,15 @@ fn MachineCode::emit_instruction_x86_64(
       // Signed multiply high: rd = (lhs * rhs) >> 64.
       //
       // amd64 encoding uses implicit RAX/RDX: IMUL r/m64 computes RDX:RAX.
-      // Lowering constrains lhs to RAX and result to RDX (Cranelift-style).
+      // Lowering constrains result to RDX; this emitter moves lhs to RAX.
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
-      let rhs = reg_num(inst.uses[1])
+      let mut rhs = reg_num(inst.uses[1])
+      if lhs != 0 && rhs == 0 {
+        let scratch = pick_scratch_gpr(isa, rd, lhs, rhs, -1)
+        self.x86_emit_mov_rr(scratch, rhs)
+        rhs = scratch
+      }
       if lhs != 0 {
         self.x86_emit_mov_rr(0, lhs)
       }

@@ -880,14 +880,14 @@ fn lower_umulh(
   if @isa.ISA::current() is AMD64 {
     // Match Cranelift x64: use MUL with implicit RAX/RDX.
     //
-    // Result (high 64 bits) is produced in RDX.
+    // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
+    // uses; the amd64 emitter moves lhs into RAX and preserves rhs if needed.
     let vcode_inst = @instr.VCodeInst::new(Umulh)
     vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
-    vcode_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
+    vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
-    // Clobbers: rax/rdx are implicit in mul.
+    // Clobbers: rax is the implicit low-half output; rdx is the fixed result.
     vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-    vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
     block.add_inst(vcode_inst)
     return
   }
@@ -907,14 +907,14 @@ fn lower_smulh(
   if @isa.ISA::current() is AMD64 {
     // Match Cranelift x64: use one-operand IMUL with implicit RAX/RDX.
     //
-    // Result (high 64 bits) is produced in RDX.
+    // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
+    // uses; the amd64 emitter moves lhs into RAX and preserves rhs if needed.
     let vcode_inst = @instr.VCodeInst::new(Smulh)
     vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
-    vcode_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
+    vcode_inst.add_use(Virtual(lhs))
     vcode_inst.add_use(Virtual(rhs))
-    // Clobbers: rax/rdx are implicit in imul.
+    // Clobbers: rax is the implicit low-half output; rdx is the fixed result.
     vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-    vcode_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
     block.add_inst(vcode_inst)
     return
   }
