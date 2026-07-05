@@ -207,6 +207,61 @@ test "apply materializes overlapping call fixed constraints in reverse order" {
 }
 
 ///|
+test "apply keeps fixed call inputs out of cycle scratch registers" {
+  let func = @machv.Function::new("call_fixed_protected_scratch")
+  let entry = func.new_block()
+  let vmctx = func.new_vreg(Int)
+  let delta = func.new_vreg(Int)
+  let memidx = func.new_vreg(Int)
+  let max_pages = func.new_vreg(Int)
+  let result = func.new_vreg(Int)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let p2 : @machv.PReg = { index: 2, class: Int }
+  let p3 : @machv.PReg = { index: 3, class: Int }
+  let p4 : @machv.PReg = { index: 4, class: Int }
+  let defs = func.new_inst(Target("defs"))
+  defs.add_operand(@machv.Operand::def(Virtual(vmctx)))
+  defs.add_operand(@machv.Operand::def(Virtual(delta)))
+  defs.add_operand(@machv.Operand::def(Virtual(memidx)))
+  defs.add_operand(@machv.Operand::def(Virtual(max_pages)))
+  defs.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  defs.add_constraint({ operand_index: 1, allowed_regs: [p1] })
+  defs.add_constraint({ operand_index: 2, allowed_regs: [p2] })
+  defs.add_constraint({ operand_index: 3, allowed_regs: [p3] })
+  entry.append(defs)
+  let call = func.new_inst(Call("wasmoon.runtime.memory_grow"))
+  call.add_operand(@machv.Operand::use_reg(Virtual(vmctx)))
+  call.add_operand(@machv.Operand::use_reg(Virtual(memidx)))
+  call.add_operand(@machv.Operand::use_reg(Virtual(delta)))
+  call.add_operand(@machv.Operand::use_reg(Virtual(max_pages)))
+  call.add_operand(@machv.Operand::def(Virtual(result)))
+  call.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  call.add_constraint({ operand_index: 1, allowed_regs: [p1] })
+  call.add_constraint({ operand_index: 2, allowed_regs: [p2] })
+  call.add_constraint({ operand_index: 3, allowed_regs: [p3] })
+  call.add_constraint({ operand_index: 4, allowed_regs: [p0] })
+  entry.append(call)
+  allocate_and_apply(func, [p0, p1, p2, p3, p4]) |> ignore
+  let mut call_index = -1
+  for i, inst in entry.instructions {
+    if inst.opcode is Call(_) {
+      call_index = i
+    }
+  }
+  inspect(call_index > 0, content="true")
+  for i in 1..<call_index {
+    let inst = entry.instructions[i]
+    if inst.opcode is Move {
+      for operand in inst.operands {
+        inspect(operand.reg != Physical(p0), content="true")
+      }
+    }
+  }
+  inspect(entry.instructions[call_index].operands[0].reg, content="x0")
+}
+
+///|
 test "projected MachV ties co-locate use-def operands" {
   let func = @machv.Function::new("tied")
   let entry = func.new_block()

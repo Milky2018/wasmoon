@@ -750,6 +750,31 @@ fn scratch_regs_for_class(
 }
 
 ///|
+fn scratch_regs_for_class_excluding(
+  physical_regs : Array[@machv.PReg],
+  class : @regalloc.RegClass,
+  avoid : Array[@machv.PReg],
+) -> Array[@regalloc.PhysicalReg] {
+  let out : Array[@regalloc.PhysicalReg] = []
+  for preg in physical_regs {
+    if preg_to_regalloc(preg).class != class {
+      continue
+    }
+    let mut blocked = false
+    for reserved in avoid {
+      if same_reg_bank(preg, reserved) {
+        blocked = true
+        break
+      }
+    }
+    if !blocked {
+      out.push(preg_to_regalloc(preg))
+    }
+  }
+  out
+}
+
+///|
 fn class_tag_for_machv(class : @machv.RegClass) -> Int {
   match class {
     Int => 0
@@ -826,6 +851,7 @@ fn append_fixed_constraint_moves(
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
   class : @machv.RegClass,
+  avoid : Array[@machv.PReg],
   edits : Array[@regalloc.FixedConstraintMove],
   out : Array[@machv.Instruction],
 ) -> Unit raise @regalloc.VerifyError {
@@ -840,14 +866,15 @@ fn append_fixed_constraint_moves(
       class: class_to_regalloc(class_from_fixed_constraint_tag(edit.class_tag)),
     })
   }
-  let scratch_int = scratch_regs_for_class(physical_regs, Int)
-  let scratch_float = scratch_regs_for_class(
+  let scratch_int = scratch_regs_for_class_excluding(physical_regs, Int, avoid)
+  let scratch_float = scratch_regs_for_class_excluding(
     physical_regs,
     if class == Vector {
       Vector
     } else {
       Float
     },
+    avoid,
   )
   let resolved = @regalloc.resolve_parallel_moves(
     moves, scratch_int, scratch_float,
@@ -943,6 +970,8 @@ fn materialize_fixed_constraint_moves(
       let after_f32 : Array[@regalloc.FixedConstraintMove] = []
       let after_f64 : Array[@regalloc.FixedConstraintMove] = []
       let after_vector : Array[@regalloc.FixedConstraintMove] = []
+      let before_avoid : Array[@machv.PReg] = []
+      let after_avoid : Array[@machv.PReg] = []
       if fixed_constraint_inst_edits(block_index, inst_index, inst, allocation)
         is Some(edits) {
         for mv in edits.before {
@@ -970,6 +999,12 @@ fn materialize_fixed_constraint_moves(
         }
         let required = constraint.allowed_regs[0]
         let operand = inst.operands[constraint.operand_index]
+        if operand.role == Use || operand.role == UseDef {
+          before_avoid.push(required)
+        }
+        if operand.role == Def || operand.role == UseDef {
+          after_avoid.push(required)
+        }
         inst.operands[constraint.operand_index] = operand_with_physical(
           operand, required,
         )
@@ -979,6 +1014,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Int,
+        before_avoid,
         before_int,
         before,
       )
@@ -987,6 +1023,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Float32,
+        before_avoid,
         before_f32,
         before,
       )
@@ -995,6 +1032,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Float64,
+        before_avoid,
         before_f64,
         before,
       )
@@ -1003,6 +1041,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Vector,
+        before_avoid,
         before_vector,
         before,
       )
@@ -1011,6 +1050,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Int,
+        after_avoid,
         after_int,
         after,
       )
@@ -1019,6 +1059,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Float32,
+        after_avoid,
         after_f32,
         after,
       )
@@ -1027,6 +1068,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Float64,
+        after_avoid,
         after_f64,
         after,
       )
@@ -1035,6 +1077,7 @@ fn materialize_fixed_constraint_moves(
         spill_slots,
         physical_regs,
         Vector,
+        after_avoid,
         after_vector,
         after,
       )

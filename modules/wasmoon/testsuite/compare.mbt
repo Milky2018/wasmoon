@@ -297,8 +297,6 @@ fn body_has_direct_call(body : Array[@types.Instruction]) -> Bool {
 fn body_has_native_helper_gap(body : Array[@types.Instruction]) -> Bool {
   for instr in body {
     match instr {
-      MemoryInit(_, _) | DataDrop(_) | MemoryGrow(_) | TableGrow(_) =>
-        return true
       Block(_, nested) | Loop(_, nested) =>
         if body_has_native_helper_gap(nested) {
           return true
@@ -425,8 +423,6 @@ pub fn run_jit(
     // TODO(ISS-034): switch this compatibility path to the production
     // interpcall fallback once unsupported function trampolines return
     // reliably for structured branch bodies.
-    // TODO(ISS-035): remove the MemoryInit/DataDrop guard once native
-    // segment runtime helpers execute with the production JIT context.
     return run_interp(mod_, func_name, args)
   }
   try {
