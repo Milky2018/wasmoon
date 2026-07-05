@@ -841,6 +841,186 @@ test "hostcall and interpcall trampolines support V128 registers" {
 }
 
 ///|
+fn code_contains_x64_rsp_int_load(code : Array[Int]) -> Bool {
+  if code.length() < 4 {
+    return false
+  }
+  for i in 0..<(code.length() - 3) {
+    if code[i] == 0x4c &&
+      code[i + 1] == 0x8b &&
+      code[i + 2] == 0x94 &&
+      code[i + 3] == 0x24 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_x64_rsp_int_store(code : Array[Int]) -> Bool {
+  if code.length() < 4 {
+    return false
+  }
+  for i in 0..<(code.length() - 3) {
+    if code[i] == 0x4c &&
+      code[i + 1] == 0x89 &&
+      code[i + 2] == 0x94 &&
+      code[i + 3] == 0x24 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_x64_r12_int_load(code : Array[Int]) -> Bool {
+  if code.length() < 4 {
+    return false
+  }
+  for i in 0..<(code.length() - 3) {
+    if code[i] == 0x4d &&
+      code[i + 1] == 0x8b &&
+      code[i + 2] == 0x94 &&
+      code[i + 3] == 0x24 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_a64_x16_load_from_base(code : Array[Int], base : Int) -> Bool {
+  if code.length() < 4 {
+    return false
+  }
+  let expected = 0xf9400000 | ((base & 31) << 5) | 16
+  let mask = 0xffc003ff
+  for i in 0..<(code.length() - 3) {
+    let word = code[i] |
+      (code[i + 1] << 8) |
+      (code[i + 2] << 16) |
+      (code[i + 3] << 24)
+    if (word & mask) == expected {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_a64_x16_store_to_base(code : Array[Int], base : Int) -> Bool {
+  if code.length() < 4 {
+    return false
+  }
+  let expected = 0xf9000000 | ((base & 31) << 5) | 16
+  let mask = 0xffc003ff
+  for i in 0..<(code.length() - 3) {
+    let word = code[i] |
+      (code[i + 1] << 8) |
+      (code[i + 2] << 16) |
+      (code[i + 3] << 24)
+    if (word & mask) == expected {
+      return true
+    }
+  }
+  false
+}
+
+///|
+test "hostcall and interpcall trampolines support stack-passed arguments" {
+  let x64_params : Array[@types.ValueType] = [I64, I64, I64, I64, I64, I64]
+  let a64_params : Array[@types.ValueType] = [
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+  ]
+  let results : Array[@types.ValueType] = []
+  let x64_host = build_hostcall_import_trampoline_for_target(
+    x64_params,
+    results,
+    0,
+    X86_64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let x64_interp = build_interpreter_fallback_trampoline_for_target(
+    x64_params,
+    results,
+    7,
+    X86_64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
+  inspect(code_contains_x64_rsp_int_store(x64_host.code), content="true")
+  inspect(code_contains_x64_rsp_int_load(x64_interp.code), content="true")
+  inspect(code_contains_x64_rsp_int_store(x64_interp.code), content="true")
+  let a64_host = build_hostcall_import_trampoline_for_target(
+    a64_params,
+    results,
+    0,
+    AArch64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let a64_interp = build_interpreter_fallback_trampoline_for_target(
+    a64_params,
+    results,
+    7,
+    AArch64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(
+    code_contains_a64_x16_load_from_base(a64_host.code, 31),
+    content="true",
+  )
+  inspect(
+    code_contains_a64_x16_store_to_base(a64_host.code, 31),
+    content="true",
+  )
+  inspect(
+    code_contains_a64_x16_load_from_base(a64_interp.code, 31),
+    content="true",
+  )
+  inspect(
+    code_contains_a64_x16_store_to_base(a64_interp.code, 31),
+    content="true",
+  )
+}
+
+///|
+test "entry trampolines support stack-passed arguments" {
+  let x64_params : Array[@types.ValueType] = [I64, I64, I64, I64, I64, I64]
+  let a64_params : Array[@types.ValueType] = [
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+  ]
+  let results : Array[@types.ValueType] = []
+  let x64_code = build_entry_trampoline_for_target(x64_params, results, X86_64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(code_contains_x64_r12_int_load(x64_code), content="true")
+  inspect(code_contains_x64_rsp_int_store(x64_code), content="true")
+  let a64_code = build_entry_trampoline_for_target(a64_params, results, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(code_contains_a64_x16_load_from_base(a64_code, 19), content="true")
+  inspect(code_contains_a64_x16_store_to_base(a64_code, 31), content="true")
+}
+
+///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([F64, F64], [F64])
   let milk = @milkir.Function::new("fadd64", signature)
