@@ -12,7 +12,7 @@ pub fn abi_policy() -> AbiPolicy
 
 pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[@machv.PReg]
 
-pub fn allocatable_regs() -> Array[@machv.PReg]
+pub fn allocatable_regs(reserve_extra_results_ptr? : Bool) -> Array[@machv.PReg]
 
 pub fn allocatable_scratch_fprs() -> Array[@machv.PReg]
 

@@ -153,10 +153,11 @@ pub fn lower_wasm_body_milkir_for_target(
 ///|
 fn allocatable_regs_for_target(
   target : @machv_emit.EmitTarget,
+  reserve_extra_results_ptr? : Bool = false,
 ) -> Array[@machv.PReg] {
   match target {
-    AArch64 => @aarch64_target.allocatable_regs()
-    X64 => @x64_target.allocatable_regs()
+    AArch64 => @aarch64_target.allocatable_regs(reserve_extra_results_ptr~)
+    X64 => @x64_target.allocatable_regs(reserve_extra_results_ptr~)
   }
 }
 
@@ -169,7 +170,7 @@ pub fn plan_milkir_integration_for_target(
   try {
     @machv_regalloc.allocate_and_apply(
       machv_func,
-      allocatable_regs_for_target(target),
+      allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
     )
     |> ignore
     // TODO(wasmoon_jit): install emitted CodeObject bytes through jit_ffi and
@@ -189,7 +190,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   try {
     @machv_regalloc.allocate_and_apply(
       machv_func,
-      allocatable_regs_for_target(target),
+      allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
     )
     |> ignore
     // TODO(ISS-026): install emitted CodeObject bytes through jit_ffi and

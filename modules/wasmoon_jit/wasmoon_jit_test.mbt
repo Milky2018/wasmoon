@@ -1577,6 +1577,28 @@ test "emit MachV regalloc stack spills through reusable x64 pipeline" {
 }
 
 ///|
+test "plan Wasm body return area through reusable JIT pipeline" {
+  let milk = @milkir.Function::new_empty("wasm_return_area")
+  let values : Array[@milkir.Value] = []
+  let entry = milk.new_block([])
+  for i in 0..<9 {
+    let value = milk.new_value(I64)
+    milk.add_result(I64)
+    entry.append_inst(milk.new_inst(Iconst(i.to_int64()), [], [value]))
+    values.push(value)
+  }
+  entry.set_terminator(Return(values))
+  let x64_plan = plan_wasm_body_milkir_integration_for_target(milk, X64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(x64_plan.object.code.length() > 0, content="true")
+  let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  inspect(a64_plan.object.code.length() > 0, content="true")
+}
+
+///|
 test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::new([], [Ptr])
   let milk = @milkir.Function::new("stack_addr_x64", signature)

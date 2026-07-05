@@ -66,6 +66,29 @@ test "AArch64 records stack parameters and return area ABI locations" {
 }
 
 ///|
+test "AArch64 lowers Wasm return-area stores through ExtraResultsPtr" {
+  let func = @milkir.Function::new_empty("wasm_return_area_store")
+  let values : Array[@milkir.Value] = []
+  for _ in 0..<9 {
+    let value = func.new_value(I64)
+    values.push(value)
+    func.add_result(I64)
+  }
+  let entry = func.new_block([])
+  entry.set_terminator(Return(values))
+  let lowered = lower_wasm_body_function(func)
+  let mut has_store = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == StorePtr(MemI64, 0) &&
+      inst.operands.length() >= 2 &&
+      inst.operands[0].reg == Physical({ index: 23, class: Int }) {
+      has_store = true
+    }
+  }
+  inspect(has_store, content="true")
+}
+
+///|
 test "AArch64 allocatable regs include floating point registers" {
   let regs = allocatable_regs()
   inspect(regs.any(fn(r) { r.class == Float32 }), content="true")
@@ -497,4 +520,28 @@ test "AArch64 records outgoing stack arguments for Wasm CallPtr" {
   inspect(offset, content="0")
   inspect(size, content="8")
   inspect(align, content="8")
+}
+
+///|
+test "AArch64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
+  let func = @milkir.Function::new_empty("callptr_return_area_load")
+  let callee = func.new_value(Ptr)
+  let vmctx = func.new_value(Ptr)
+  let results : Array[@milkir.Value] = []
+  for _ in 0..<9 {
+    results.push(func.new_value(I64))
+  }
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, vmctx], results))
+  entry.set_terminator(Return([]))
+  let lowered = lower_function(func)
+  let mut has_load = false
+  for inst in lowered.blocks[0].instructions {
+    if inst.opcode == LoadPtr(MemI64, 0) &&
+      inst.operands.length() >= 2 &&
+      inst.operands[0].reg == Physical({ index: 23, class: Int }) {
+      has_load = true
+    }
+  }
+  inspect(has_load, content="true")
 }

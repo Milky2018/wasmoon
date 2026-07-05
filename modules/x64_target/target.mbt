@@ -110,8 +110,10 @@ pub fn target() -> Target {
 }
 
 ///|
-pub fn allocatable_regs() -> Array[@machv.PReg] {
-  let env = build_machine_env()
+pub fn allocatable_regs(
+  reserve_extra_results_ptr? : Bool = false,
+) -> Array[@machv.PReg] {
+  let env = build_machine_env(reserve_extra_results_ptr~)
   let regs : Array[@machv.PReg] = []
   for r in env.preferred_int {
     regs.push(r)
@@ -190,6 +192,11 @@ fn abi_location_preg(location : @machv.AbiValueLocation) -> @machv.PReg? {
 }
 
 ///|
+fn extra_results_ptr_preg() -> @machv.PReg {
+  int_reg(int_reg_index(ExtraResultsPtr))
+}
+
+///|
 fn vreg_for_value(value : @milkir.Value) -> @machv.VReg {
   { id: value.id, class: class_for_type(value.ty) }
 }
@@ -225,52 +232,39 @@ fn add_return_moves(
   values : Array[@milkir.Value],
   wasm_body? : Bool = false,
 ) -> Unit {
-  let abi = abi_policy()
-  let int_return_regs = if wasm_body {
-    wasm_ret_gprs()
-  } else {
-    abi.int_return_regs
-  }
-  let float_return_regs = if wasm_body {
-    wasm_ret_fprs()
-  } else {
-    abi.float_return_regs
-  }
-  let mut int_result_idx = 0
-  let mut float_result_idx = 0
-  for value in values {
-    let preg : @machv.PReg? = match class_for_type(value.ty) {
-      Int =>
-        if int_result_idx < int_return_regs.length() {
-          let out = Some(int_return_regs[int_result_idx])
-          int_result_idx = int_result_idx + 1
-          out
-        } else {
-          // TODO(ISS-032): materialize overflow return stores through the
-          // explicit MachV return area once the runtime return-area pointer
-          // convention is wired into Wasm calls.
-          None
-        }
-      Float32 | Float64 | Vector =>
-        if float_result_idx < float_return_regs.length() {
-          let class = class_for_type(value.ty)
-          let out = Some(
-            preg_with_class(float_return_regs[float_result_idx], class),
-          )
-          float_result_idx = float_result_idx + 1
-          out
-        } else {
-          // TODO(ISS-032): materialize overflow FP/vector return stores
-          // through the explicit MachV return area once the runtime return-area
-          // pointer convention is wired into Wasm calls.
-          None
-        }
+  for i, value in values {
+    let location = if i < out.result_locations.length() {
+      out.result_locations[i]
+    } else {
+      Reg({ index: -1, class: class_for_type(value.ty) })
     }
-    if preg is Some(dst) {
-      let move_inst = out.new_inst(Move)
-      move_inst.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
-      move_inst.add_operand(@machv.Operand::def(Physical(dst)))
-      block.append(move_inst)
+    match location {
+      Reg(dst) => {
+        let move_inst = out.new_inst(Move)
+        move_inst.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
+        move_inst.add_operand(@machv.Operand::def(Physical(dst)))
+        block.append(move_inst)
+      }
+      ReturnArea(offset~, ..) =>
+        if wasm_body {
+          let store = out.new_inst(
+            StorePtr(mem_type_for_type(value.ty), offset),
+          )
+          store.add_operand(
+            @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+          )
+          store.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
+          block.append(store)
+        } else {
+          // TODO(ISS-032): generic SystemV sret lowering must thread the hidden
+          // result pointer through function signatures before direct functions
+          // can materialize return-area results.
+        }
+      Stack(..) =>
+        // TODO(ISS-032): result stack locations are not valid for the current
+        // x64 ABI model; keep this branch explicit until verifier support can
+        // reject it earlier.
+        ()
     }
   }
 }
@@ -279,43 +273,30 @@ fn add_return_moves(
 fn add_wasm_call_result_moves(
   out : @machv.Function,
   block : @machv.Block,
+  inst : @machv.Instruction,
   values : Array[@milkir.Value],
 ) -> Unit {
-  let ret_gprs = wasm_ret_gprs()
-  let ret_fprs = wasm_ret_fprs()
-  let mut int_result_idx = 0
-  let mut float_result_idx = 0
-  for value in values {
-    let preg : @machv.PReg? = match class_for_type(value.ty) {
-      Int =>
-        if int_result_idx < ret_gprs.length() {
-          let out = Some(ret_gprs[int_result_idx])
-          int_result_idx = int_result_idx + 1
-          out
-        } else {
-          // TODO(ISS-032): materialize overflow Wasm call result loads from
-          // the explicit MachV return area once the extra-results pointer
-          // convention is wired into Wasm calls.
-          None
-        }
-      Float32 | Float64 | Vector =>
-        if float_result_idx < ret_fprs.length() {
-          let class = class_for_type(value.ty)
-          let out = Some(preg_with_class(ret_fprs[float_result_idx], class))
-          float_result_idx = float_result_idx + 1
-          out
-        } else {
-          // TODO(ISS-032): materialize overflow Wasm FP/vector call result
-          // loads from the explicit MachV return area once the extra-results
-          // pointer convention is wired into Wasm calls.
-          None
-        }
-    }
-    if preg is Some(src) {
-      let move_inst = out.new_inst(Move)
-      move_inst.add_operand(@machv.Operand::use_reg(Physical(src)))
-      move_inst.add_operand(@machv.Operand::def(reg_for_value(value)))
-      block.append(move_inst)
+  for i, value in values {
+    guard i < inst.abi_result_locations.length() else { continue }
+    match inst.abi_result_locations[i] {
+      Reg(src) => {
+        let move_inst = out.new_inst(Move)
+        move_inst.add_operand(@machv.Operand::use_reg(Physical(src)))
+        move_inst.add_operand(@machv.Operand::def(reg_for_value(value)))
+        block.append(move_inst)
+      }
+      ReturnArea(offset~, ..) => {
+        let load = out.new_inst(LoadPtr(mem_type_for_type(value.ty), offset))
+        load.add_operand(
+          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+        )
+        load.add_operand(@machv.Operand::def(reg_for_value(value)))
+        block.append(load)
+      }
+      Stack(..) =>
+        // TODO(ISS-032): result stack locations are not valid for Wasm CallPtr
+        // results; keep the branch explicit until verifier support rejects it.
+        ()
     }
   }
 }
@@ -1451,7 +1432,7 @@ fn lower_inst(
       add_uses(lowered, inst.args)
       add_callptr_abi_constraints(out, lowered, inst.args, inst.results)
       block.append(lowered)
-      add_wasm_call_result_moves(out, block, inst.results)
+      add_wasm_call_result_moves(out, block, lowered, inst.results)
       return
     }
     Fconst(value) => {
