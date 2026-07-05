@@ -3344,8 +3344,15 @@ fn emit_instruction(
   block_id : Int,
   inst : @machv.Instruction,
   frame : StackFrameLayout,
+  emit_abi_frame : Bool,
 ) -> Unit raise EmitError {
   let offset = object.current_offset()
+  if emit_abi_frame && inst.opcode is Return {
+    match target {
+      AArch64 => emit_aarch64_epilogue(object, frame)
+      X64 => emit_x64_epilogue(object, frame)
+    }
+  }
   write_inst_bytes(object, target, inst, frame)
   record_relocations(object, offset, inst.opcode)
   record_stack_map(object, offset, inst)
@@ -3736,6 +3743,19 @@ fn collect_saved_regs(
 }
 
 ///|
+fn function_has_call(func : @machv.Function) -> Bool {
+  for block in func.blocks {
+    for inst in block.instructions {
+      match inst.opcode {
+        Call(_) | CallPtr(_, _) | CallIndirect => return true
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
 fn find_block_offset(block_offsets : Array[(Int, Int)], block_id : Int) -> Int? {
   for entry in block_offsets {
     let (id, offset) = entry
@@ -3880,14 +3900,19 @@ pub fn emit_function_for_target(
   target : EmitTarget,
 ) -> CodeObject raise EmitError {
   let object = CodeObject::new()
+  let has_call = function_has_call(func)
   let emit_abi_frame = func.params.length() > 0 ||
     func.stack_slots.length() > 0 ||
     func.get_num_spill_slots() > 0 ||
-    func.get_max_outgoing_args_size() > 0
+    func.get_max_outgoing_args_size() > 0 ||
+    (target == AArch64 && has_call)
   let (saved_gprs, saved_fprs) = if emit_abi_frame {
     collect_saved_regs(func, target)
   } else {
     ([], [])
+  }
+  if target == AArch64 && has_call && !int_array_contains(saved_gprs, 30) {
+    saved_gprs.push(30)
   }
   let frame = if func.stack_slots.length() > 0 {
     StackFrameLayout::build_with_slots(
@@ -3923,7 +3948,7 @@ pub fn emit_function_for_target(
     }
     block_offsets.push((block.id, object.current_offset()))
     for inst in block.instructions {
-      emit_instruction(object, target, block.id, inst, frame)
+      emit_instruction(object, target, block.id, inst, frame, emit_abi_frame)
     }
     if block.terminator is Some(term) {
       emit_terminator(object, target, block.id, term, frame, emit_abi_frame)

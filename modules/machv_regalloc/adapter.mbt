@@ -750,6 +750,66 @@ fn scratch_regs_for_class(
 }
 
 ///|
+fn preg_array_contains(
+  values : Array[@machv.PReg],
+  value : @machv.PReg,
+) -> Bool {
+  for item in values {
+    if item == value {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn scratch_regs_for_class_excluding(
+  physical_regs : Array[@machv.PReg],
+  class : @regalloc.RegClass,
+  excluded : Array[@machv.PReg],
+) -> Array[@regalloc.PhysicalReg] {
+  let out : Array[@regalloc.PhysicalReg] = []
+  for preg in physical_regs {
+    let reg = preg_to_regalloc(preg)
+    if reg.class == class && !preg_array_contains(excluded, preg) {
+      out.push(reg)
+    }
+  }
+  out
+}
+
+///|
+fn resolve_fixed_constraint_moves(
+  func : @machv.Function,
+  spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
+  class : @machv.RegClass,
+  moves : Array[@regalloc.ParallelMove],
+  excluded : Array[@machv.PReg],
+  out : Array[@machv.Instruction],
+) -> Unit raise @regalloc.VerifyError {
+  if moves.length() == 0 {
+    return
+  }
+  let scratch_int = scratch_regs_for_class_excluding(
+    physical_regs,
+    Int,
+    excluded,
+  )
+  let scratch_float = scratch_regs_for_class_excluding(
+    physical_regs,
+    class_to_regalloc(if class == Vector { Vector } else { Float64 }),
+    excluded,
+  )
+  let resolved = @regalloc.resolve_parallel_moves(
+    moves, scratch_int, scratch_float,
+  )
+  for mv in resolved {
+    append_location_move(func, spill_slots, class, mv.from, mv.to, out)
+  }
+}
+
+///|
 fn append_location_move(
   func : @machv.Function,
   spill_slots : Array[@machv.StackSlot],
@@ -820,12 +880,18 @@ fn materialize_fixed_constraint_moves(
   func : @machv.Function,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
+  physical_regs : Array[@machv.PReg],
 ) -> Unit raise @regalloc.VerifyError {
   for block in func.blocks {
     let rewritten : Array[@machv.Instruction] = []
     for inst in block.instructions {
       let before : Array[@machv.Instruction] = []
       let after : Array[@machv.Instruction] = []
+      let int_moves : Array[@regalloc.ParallelMove] = []
+      let f32_moves : Array[@regalloc.ParallelMove] = []
+      let f64_moves : Array[@regalloc.ParallelMove] = []
+      let vector_moves : Array[@regalloc.ParallelMove] = []
+      let excluded_scratch : Array[@machv.PReg] = []
       for constraint in inst.constraints {
         guard constraint.allowed_regs.length() == 1 else { continue }
         guard constraint.operand_index >= 0 &&
@@ -833,18 +899,24 @@ fn materialize_fixed_constraint_moves(
           continue
         }
         let required = constraint.allowed_regs[0]
+        if !preg_array_contains(excluded_scratch, required) {
+          excluded_scratch.push(required)
+        }
         let operand = inst.operands[constraint.operand_index]
         let class = operand_class(operand)
         if operand.role == Use || operand.role == UseDef {
           if source_location(operand.reg, allocation) is Some(from) {
-            append_location_move(
-              func,
-              spill_slots,
-              class,
+            let fixed_move : @regalloc.ParallelMove = {
               from,
-              Reg(preg_to_regalloc(required)),
-              before,
-            )
+              to: Reg(preg_to_regalloc(required)),
+              class: class_to_regalloc(class),
+            }
+            match class {
+              Int => int_moves.push(fixed_move)
+              Float32 => f32_moves.push(fixed_move)
+              Float64 => f64_moves.push(fixed_move)
+              Vector => vector_moves.push(fixed_move)
+            }
           }
         }
         if operand.role == Def || operand.role == UseDef {
@@ -863,6 +935,42 @@ fn materialize_fixed_constraint_moves(
           operand, required,
         )
       }
+      resolve_fixed_constraint_moves(
+        func,
+        spill_slots,
+        physical_regs,
+        Int,
+        int_moves,
+        excluded_scratch,
+        before,
+      )
+      resolve_fixed_constraint_moves(
+        func,
+        spill_slots,
+        physical_regs,
+        Float32,
+        f32_moves,
+        excluded_scratch,
+        before,
+      )
+      resolve_fixed_constraint_moves(
+        func,
+        spill_slots,
+        physical_regs,
+        Float64,
+        f64_moves,
+        excluded_scratch,
+        before,
+      )
+      resolve_fixed_constraint_moves(
+        func,
+        spill_slots,
+        physical_regs,
+        Vector,
+        vector_moves,
+        excluded_scratch,
+        before,
+      )
       for mov in before {
         rewritten.push(mov)
       }
@@ -1249,7 +1357,9 @@ pub fn allocate_and_apply(
   let allocation = allocate_with_optional_scratch(func, physical_regs)
   let spill_slots = ensure_spill_slots(func, allocation)
   materialize_edge_transfers(func, allocation, spill_slots, physical_regs)
-  materialize_fixed_constraint_moves(func, allocation, spill_slots)
+  materialize_fixed_constraint_moves(
+    func, allocation, spill_slots, physical_regs,
+  )
   rewrite_operands_and_spills(func, allocation, spill_slots, physical_regs)
   materialize_entry_param_transfers(
     func, allocation, spill_slots, physical_regs,

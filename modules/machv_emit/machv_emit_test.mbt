@@ -2062,7 +2062,38 @@ test "emit generic relocations and stack maps" {
   let object = try! emit_function_for_target(func, AArch64)
   debug_inspect(
     object.code,
-    content="[0, 0, 0, 148, 1, 0, 0, 20, 192, 3, 95, 214]",
+    content=(
+      #|[
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  209,
+      #|  254,
+      #|  3,
+      #|  0,
+      #|  249,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  148,
+      #|  1,
+      #|  0,
+      #|  0,
+      #|  20,
+      #|  254,
+      #|  3,
+      #|  64,
+      #|  249,
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  145,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
   )
   inspect(object.relocations.length(), content="2")
   inspect(object.fixups.length(), content="1")
@@ -2081,7 +2112,7 @@ test "emit AArch64 outgoing stack argument stores before calls" {
   entry.append(call)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, AArch64)
-  inspect(object.frame_size, content="16")
+  inspect(object.frame_size, content="32")
   let mut has_stack_store = false
   for i in 0..<(object.code.length() - 3) {
     if object.code[i + 3] == 0xf9 {
@@ -2100,7 +2131,37 @@ test "emit AArch64 CallPtr as indirect register call" {
   entry.append(call)
   entry.set_terminator(TermReturn([]))
   let object = try! emit_function_for_target(func, AArch64)
-  debug_inspect(object.code, content="[32, 2, 63, 214, 192, 3, 95, 214]")
+  debug_inspect(
+    object.code,
+    content=(
+      #|[
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  209,
+      #|  254,
+      #|  3,
+      #|  0,
+      #|  249,
+      #|  32,
+      #|  2,
+      #|  63,
+      #|  214,
+      #|  254,
+      #|  3,
+      #|  64,
+      #|  249,
+      #|  255,
+      #|  67,
+      #|  0,
+      #|  145,
+      #|  192,
+      #|  3,
+      #|  95,
+      #|  214,
+      #|]
+    ),
+  )
 }
 
 ///|

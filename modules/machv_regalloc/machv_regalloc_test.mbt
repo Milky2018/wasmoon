@@ -146,6 +146,67 @@ test "apply materializes call fixed constraints as moves" {
 }
 
 ///|
+test "apply materializes overlapping call fixed constraints in reverse order" {
+  let func = @machv.Function::new("call_fixed_overlap")
+  let entry = func.new_block()
+  let v0 = func.new_vreg(Int)
+  let v1 = func.new_vreg(Int)
+  let v2 = func.new_vreg(Int)
+  let p0 : @machv.PReg = { index: 0, class: Int }
+  let p1 : @machv.PReg = { index: 1, class: Int }
+  let p2 : @machv.PReg = { index: 2, class: Int }
+  let p3 : @machv.PReg = { index: 3, class: Int }
+  let defs = func.new_inst(Target("defs"))
+  defs.add_operand(@machv.Operand::def(Virtual(v0)))
+  defs.add_operand(@machv.Operand::def(Virtual(v1)))
+  defs.add_operand(@machv.Operand::def(Virtual(v2)))
+  defs.add_constraint({ operand_index: 0, allowed_regs: [p0] })
+  defs.add_constraint({ operand_index: 1, allowed_regs: [p1] })
+  defs.add_constraint({ operand_index: 2, allowed_regs: [p2] })
+  entry.append(defs)
+  let call = func.new_inst(Call("callee"))
+  call.add_operand(@machv.Operand::use_reg(Virtual(v0)))
+  call.add_operand(@machv.Operand::use_reg(Virtual(v1)))
+  call.add_operand(@machv.Operand::use_reg(Virtual(v2)))
+  call.add_constraint({ operand_index: 0, allowed_regs: [p1] })
+  call.add_constraint({ operand_index: 1, allowed_regs: [p2] })
+  call.add_constraint({ operand_index: 2, allowed_regs: [p3] })
+  entry.append(call)
+  allocate_and_apply(func, [p0, p1, p2, p3]) |> ignore
+  inspect(entry.instructions.length(), content="5")
+  inspect(entry.instructions[1].opcode is Move, content="true")
+  inspect(entry.instructions[2].opcode is Move, content="true")
+  inspect(entry.instructions[3].opcode is Move, content="true")
+  debug_inspect(
+    entry.instructions[1].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 3, class: Int }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 2, class: Int }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+  debug_inspect(
+    entry.instructions[2].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 2, class: Int }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 1, class: Int }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+  debug_inspect(
+    entry.instructions[3].operands,
+    content=(
+      #|[
+      #|  { reg: Physical({ index: 1, class: Int }), role: Def, tie_id: -1 },
+      #|  { reg: Physical({ index: 0, class: Int }), role: Use, tie_id: -1 },
+      #|]
+    ),
+  )
+}
+
+///|
 test "projected MachV ties co-locate use-def operands" {
   let func = @machv.Function::new("tied")
   let entry = func.new_block()

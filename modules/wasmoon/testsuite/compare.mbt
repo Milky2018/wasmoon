@@ -265,12 +265,6 @@ fn native_frontend_supports_function(
     body_has_native_segment_helper_gap(mod_.codes[local_idx].body) {
     return false
   }
-  if body_has_memory_grow_gap(mod_.codes[local_idx].body) {
-    return false
-  }
-  if body_has_table_grow_gap(mod_.codes[local_idx].body) {
-    return false
-  }
   let env = @wasm_frontend.EmbeddingEnvironment::new()
   try @wasm_frontend.lower_function(env, mod_, local_idx) catch {
     _ => false
@@ -315,54 +309,6 @@ fn body_has_native_segment_helper_gap(body : Array[@types.Instruction]) -> Bool 
         }
       TryTable(_, _, nested) =>
         if body_has_native_segment_helper_gap(nested) {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-fn body_has_memory_grow_gap(body : Array[@types.Instruction]) -> Bool {
-  for instr in body {
-    match instr {
-      MemoryGrow(_) => return true
-      Block(_, nested) | Loop(_, nested) =>
-        if body_has_memory_grow_gap(nested) {
-          return true
-        }
-      If(_, then_body, else_body) =>
-        if body_has_memory_grow_gap(then_body) ||
-          body_has_memory_grow_gap(else_body) {
-          return true
-        }
-      TryTable(_, _, nested) =>
-        if body_has_memory_grow_gap(nested) {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-fn body_has_table_grow_gap(body : Array[@types.Instruction]) -> Bool {
-  for instr in body {
-    match instr {
-      TableGrow(_) => return true
-      Block(_, nested) | Loop(_, nested) =>
-        if body_has_table_grow_gap(nested) {
-          return true
-        }
-      If(_, then_body, else_body) =>
-        if body_has_table_grow_gap(then_body) ||
-          body_has_table_grow_gap(else_body) {
-          return true
-        }
-      TryTable(_, _, nested) =>
-        if body_has_table_grow_gap(nested) {
           return true
         }
       _ => ()
@@ -480,10 +426,6 @@ pub fn run_jit(
     // reliably for structured branch bodies.
     // TODO(ISS-035): remove the MemoryInit/DataDrop guard once native
     // segment runtime helpers execute with the production JIT context.
-    // TODO(ISS-036): remove the memory.grow guard once the native memory grow
-    // helper returns through the production JIT context.
-    // TODO(ISS-037): remove the table.grow guard once the native table grow
-    // helper returns through the production JIT context.
     return run_interp(mod_, func_name, args)
   }
   try {

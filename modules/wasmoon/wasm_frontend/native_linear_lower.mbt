@@ -1098,6 +1098,30 @@ fn push_memory_init(
     return false
   }
   guard pop3(stack) is Some((dst, src, size)) else { return false }
+  let dst_i64 = if dst.ty == I64 {
+    dst
+  } else {
+    guard emit_op(builder, I64, Uextend, [dst]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
+  let src_i64 = if src.ty == I64 {
+    src
+  } else {
+    guard emit_op(builder, I64, Uextend, [src]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
+  let size_i64 = if size.ty == I64 {
+    size
+  } else {
+    guard emit_op(builder, I64, Uextend, [size]) is Some(extended) else {
+      return false
+    }
+    extended
+  }
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.memory_init")
@@ -1105,9 +1129,9 @@ fn push_memory_init(
     context,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
-    dst,
-    src,
-    size,
+    dst_i64,
+    src_i64,
+    size_i64,
   ])
   |> ignore
   true
