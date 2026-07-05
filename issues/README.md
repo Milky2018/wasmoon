@@ -10,7 +10,7 @@ No ready issues.
 
 | ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
 | --- | --- | ---: | --- | --- | --- | --- | --- |
-| [ISS-025](ISS-025.md) | deferred | 2 | task | unassigned | none | none | Retire wasmoon_jit legacy fallback internals |
+| [ISS-025](ISS-025.md) | in_progress | 2 | task | unassigned | none | none | Retire wasmoon_jit legacy fallback internals |
 
 ## Dependency Graph
 

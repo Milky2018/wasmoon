@@ -30,6 +30,8 @@ pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[In
 
 pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
 
+pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
+
 pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
 
 pub fn c_jit_read_i64(Int64) -> Int64
@@ -438,6 +440,11 @@ pub suberror GCSetupError {
 } derive(@debug.Debug)
 pub impl Show for GCSetupError
 
+pub suberror HostcallImportTrampolineError {
+  UnsupportedHostcallImportTrampoline(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for HostcallImportTrampolineError
+
 pub suberror JitPipelineError {
   PipelineFailure(message~ : String)
 } derive(Eq, @debug.Debug)
@@ -621,6 +628,11 @@ pub(all) enum FunctionTemperature {
   Hot
 }
 pub impl Show for FunctionTemperature
+
+pub(all) struct HostcallImportTrampolineCode {
+  code : Array[Int]
+  func_addr_fixups : Array[@cwasm.FuncAddrFixup]
+}
 
 pub(all) struct HostcallImportTrampolineLayout {
   arg_slots : Int
