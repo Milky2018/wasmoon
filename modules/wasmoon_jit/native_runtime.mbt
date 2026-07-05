@@ -312,6 +312,91 @@ pub fn init_wasi_context(
 }
 
 ///|
+pub fn context_func_table_ptr(ctx_ptr : Int64) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_func_table(ctx_ptr)
+}
+
+///|
+pub fn context_func_count(ctx_ptr : Int64) -> Int {
+  @jit_ffi.c_jit_ctx_get_func_count(ctx_ptr)
+}
+
+///|
+pub fn context_table_ptr(ctx_ptr : Int64, table_idx : Int) -> Int64 {
+  @jit_ffi.c_jit_ctx_get_table_ptr(ctx_ptr, table_idx)
+}
+
+///|
+pub fn context_table_size(ctx_ptr : Int64, table_idx : Int) -> Int {
+  @jit_ffi.c_jit_ctx_get_table_size(ctx_ptr, table_idx)
+}
+
+///|
+pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
+  @jit_ffi.c_jit_exception_throw_tag(ctx_ptr, tag_addr)
+}
+
+///|
+pub fn throw_exception_values(
+  ctx_ptr : Int64,
+  tag_addr : Int,
+  values : Array[Int64],
+) -> Unit {
+  let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
+  @jit_ffi.c_jit_exception_throw_values(
+    ctx_ptr,
+    tag_addr,
+    payload,
+    values.length(),
+  )
+}
+
+///|
+pub fn setup_segments(
+  ctx_ptr : Int64,
+  datas : Array[@types.Data],
+  elem_segments : Array[Array[Int64]],
+  data_dropped? : Array[Bool] = [],
+  elem_dropped? : Array[Bool] = [],
+) -> Unit {
+  @jit_ffi.c_jit_ctx_init_data_segments(ctx_ptr, datas.length())
+  for i, data in datas {
+    let bytes = data.init
+    let size = bytes.length()
+    let dropped = if i < data_dropped.length() && data_dropped[i] {
+      1
+    } else {
+      0
+    }
+    let buf = FixedArray::make(size.max(1), b'\x00')
+    for j in 0..<size {
+      buf[j] = bytes[j]
+    }
+    @jit_ffi.c_jit_ctx_add_data_segment(ctx_ptr, i, buf, size, dropped)
+  }
+
+  @jit_ffi.c_jit_ctx_init_elem_segments(ctx_ptr, elem_segments.length())
+  for i, seg in elem_segments {
+    let dropped = if i < elem_dropped.length() && elem_dropped[i] {
+      1
+    } else {
+      0
+    }
+    let nslots = seg.length()
+    let buf = FixedArray::make(nslots.max(1), 0L)
+    for j in 0..<nslots {
+      buf[j] = seg[j]
+    }
+    @jit_ffi.c_jit_ctx_add_elem_segment(ctx_ptr, i, buf, nslots / 2, dropped)
+  }
+}
+
+///|
+pub fn clear_segments(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_clear_segments(ctx_ptr)
+}
+
+///|
 /// Get the runtime store function address for the current JIT -> hostcall.
 ///
 /// This value is set by `wasmoon_jit_hostcall` right before invoking the

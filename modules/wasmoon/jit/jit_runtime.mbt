@@ -415,7 +415,7 @@ pub fn JITModule::get_context_ptr(self : JITModule) -> Int64 {
 /// Returns 0 if no context is available
 pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_get_func_table(self.context_ptr)
+    @wasmoon_jit.context_func_table_ptr(self.context_ptr)
   } else {
     0L
   }
@@ -426,7 +426,7 @@ pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
 /// Returns 0 if no context is available
 pub fn JITModule::get_func_count(self : JITModule) -> Int {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_get_func_count(self.context_ptr)
+    @wasmoon_jit.context_func_count(self.context_ptr)
   } else {
     0
   }
@@ -436,7 +436,7 @@ pub fn JITModule::get_func_count(self : JITModule) -> Int {
 /// Get current table base pointer from active JIT context.
 pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_get_table_ptr(self.context_ptr, table_idx)
+    @wasmoon_jit.context_table_ptr(self.context_ptr, table_idx)
   } else {
     0L
   }
@@ -446,7 +446,7 @@ pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
 /// Get current table size from active JIT context.
 pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_get_table_size(self.context_ptr, table_idx)
+    @wasmoon_jit.context_table_size(self.context_ptr, table_idx)
   } else {
     0
   }
@@ -885,7 +885,7 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
 pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_set_gc_heap(self.context_ptr, heap_ptr)
+    @wasmoon_jit.gc_set_context_heap_ptr(self.context_ptr, heap_ptr)
   }
 }
 
@@ -893,7 +893,7 @@ pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
 /// Push a GC frame node in current JIT context.
 pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_gc_begin_frame(self.context_ptr, frame_id)
+    @wasmoon_jit.gc_begin_frame(self.context_ptr, frame_id)
   }
 }
 
@@ -901,7 +901,7 @@ pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
 /// Pop a GC frame node in current JIT context.
 pub fn JITModule::gc_end_frame(self : JITModule) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_gc_end_frame(self.context_ptr)
+    @wasmoon_jit.gc_end_frame(self.context_ptr)
   }
 }
 
@@ -914,13 +914,7 @@ pub fn JITModule::gc_set_root_scratch(
   if self.context_ptr == 0L {
     return false
   }
-  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  @jit_ffi.c_jit_gc_set_root_scratch(
-    self.context_ptr,
-    raw_roots,
-    roots.length(),
-  ) ==
-  1
+  @wasmoon_jit.gc_set_root_scratch(self.context_ptr, roots)
 }
 
 ///|
@@ -930,7 +924,7 @@ pub fn JITModule::gc_set_safepoint_table(
   table_ptr : Int64,
 ) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_gc_set_safepoint_table(self.context_ptr, table_ptr)
+    @wasmoon_jit.gc_set_safepoint_table(self.context_ptr, table_ptr)
   }
 }
 
@@ -945,18 +939,12 @@ pub fn JITModule::gc_set_func_safepoints(
   if self.context_ptr == 0L {
     return false
   }
-  let offsets = FixedArray::makei(safepoints.length(), fn(i) {
-    safepoints[i].code_offset
-  })
-  @jit_ffi.c_jit_gc_set_func_safepoints(
+  @wasmoon_jit.gc_set_func_safepoints(
     self.context_ptr,
     func_idx,
+    safepoints,
     stackmap_blob,
-    stackmap_blob.length(),
-    offsets,
-    safepoints.length(),
-  ) ==
-  1
+  )
 }
 
 ///|
@@ -966,7 +954,7 @@ pub fn JITModule::gc_use_func_safepoints(
   func_idx : Int,
 ) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_gc_use_func_safepoints(self.context_ptr, func_idx)
+    @wasmoon_jit.gc_use_func_safepoints(self.context_ptr, func_idx)
   }
 }
 
@@ -974,7 +962,7 @@ pub fn JITModule::gc_use_func_safepoints(
 /// Throw a payload-less wasm exception into the active JIT exception chain.
 /// Used by hostcall bridges that need to surface imported-callee throws.
 pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
-  @jit_ffi.c_jit_exception_throw_tag(ctx_ptr, tag_addr)
+  @wasmoon_jit.throw_exception_tag(ctx_ptr, tag_addr)
 }
 
 ///|
@@ -985,13 +973,7 @@ pub fn throw_exception_values(
   tag_addr : Int,
   values : Array[Int64],
 ) -> Unit {
-  let payload = FixedArray::makei(values.length(), fn(i) { values[i] })
-  @jit_ffi.c_jit_exception_throw_values(
-    ctx_ptr,
-    tag_addr,
-    payload,
-    values.length(),
-  )
+  @wasmoon_jit.throw_exception_values(ctx_ptr, tag_addr, values)
 }
 
 ///|
@@ -1186,50 +1168,20 @@ pub fn JITModule::setup_segments(
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
   guard self.context is Some(ctx) else { return }
-  let ctx_ptr = ctx.ptr()
-
-  // Data segments
-  @jit_ffi.c_jit_ctx_init_data_segments(ctx_ptr, datas.length())
-  for i, data in datas {
-    let bytes = data.init
-    let size = bytes.length()
-    let dropped = if i < data_dropped.length() && data_dropped[i] {
-      1
-    } else {
-      0
-    }
-    let buf = FixedArray::make(size.max(1), b'\x00')
-    for j in 0..<size {
-      buf[j] = bytes[j]
-    }
-    @jit_ffi.c_jit_ctx_add_data_segment(ctx_ptr, i, buf, size, dropped)
-  }
-
-  // Element segments (pairs)
-  @jit_ffi.c_jit_ctx_init_elem_segments(ctx_ptr, elem_segments.length())
-  for i, seg in elem_segments {
-    let dropped = if i < elem_dropped.length() && elem_dropped[i] {
-      1
-    } else {
-      0
-    }
-    let nslots = seg.length()
-    // Represent empty segments with a 1-slot buffer, but report size=0.
-    let buf = FixedArray::make(nslots.max(1), 0L)
-    for j in 0..<nslots {
-      buf[j] = seg[j]
-    }
-    // size is number of elements, not Int64 slots.
-    let nelems = nslots / 2
-    @jit_ffi.c_jit_ctx_add_elem_segment(ctx_ptr, i, buf, nelems, dropped)
-  }
+  @wasmoon_jit.setup_segments(
+    ctx.ptr(),
+    datas,
+    elem_segments,
+    data_dropped~,
+    elem_dropped~,
+  )
 }
 
 ///|
 /// Clear per-context segment state (frees owned segment buffers).
 pub fn JITModule::clear_segments(self : JITModule) -> Unit {
   if self.context_ptr != 0L {
-    @jit_ffi.c_jit_ctx_clear_segments(self.context_ptr)
+    @wasmoon_jit.clear_segments(self.context_ptr)
   }
 }
 

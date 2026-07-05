@@ -311,6 +311,11 @@ pub fn gc_set_heap(ctx_ptr : Int64, heap : CHeap) -> Unit {
 }
 
 ///|
+pub fn gc_set_context_heap_ptr(ctx_ptr : Int64, heap_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_ctx_set_gc_heap(ctx_ptr, heap_ptr)
+}
+
+///|
 /// Clear the GC heap pointer after JIT execution
 pub fn gc_clear_heap(ctx_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_gc_clear_heap(ctx_ptr)
@@ -346,6 +351,32 @@ pub fn gc_collect_for_alloc(ctx_ptr : Int64, roots : Array[Int64]) -> Int {
 /// Set safepoint metadata table pointer for current context.
 pub fn gc_set_safepoint_table(ctx_ptr : Int64, table_ptr : Int64) -> Unit {
   @jit_ffi.c_jit_gc_set_safepoint_table(ctx_ptr, table_ptr)
+}
+
+///|
+pub fn gc_set_func_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+  safepoints : Array[@cwasm.GcSafepoint],
+  stackmap_blob : Bytes,
+) -> Bool {
+  let offsets = FixedArray::makei(safepoints.length(), fn(i) {
+    safepoints[i].code_offset
+  })
+  @jit_ffi.c_jit_gc_set_func_safepoints(
+    ctx_ptr,
+    func_idx,
+    stackmap_blob,
+    stackmap_blob.length(),
+    offsets,
+    safepoints.length(),
+  ) ==
+  1
+}
+
+///|
+pub fn gc_use_func_safepoints(ctx_ptr : Int64, func_idx : Int) -> Unit {
+  @jit_ffi.c_jit_gc_use_func_safepoints(ctx_ptr, func_idx)
 }
 
 ///|

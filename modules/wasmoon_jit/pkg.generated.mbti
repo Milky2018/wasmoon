@@ -42,11 +42,21 @@ pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.V
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
 
+pub fn clear_segments(Int64) -> Unit
+
 pub fn clear_wasi_stdin_buffer(Int64) -> Unit
 
 pub fn clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+
+pub fn context_func_count(Int64) -> Int
+
+pub fn context_func_table_ptr(Int64) -> Int64
+
+pub fn context_table_ptr(Int64, Int) -> Int64
+
+pub fn context_table_size(Int64, Int) -> Int
 
 pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
 
@@ -116,6 +126,10 @@ pub fn gc_runtime_fixup_idx(Int) -> Int
 
 pub fn gc_safepoint_metadata_to_root_count(Int64) -> Int
 
+pub fn gc_set_context_heap_ptr(Int64, Int64) -> Unit
+
+pub fn gc_set_func_safepoints(Int64, Int, Array[@cwasm.GcSafepoint], Bytes) -> Bool
+
 pub fn gc_set_heap(Int64, CHeap) -> Unit
 
 pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
@@ -125,6 +139,8 @@ pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
 pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
 
 pub fn gc_teardown(Int64) -> Unit
+
+pub fn gc_use_func_safepoints(Int64, Int) -> Unit
 
 pub fn get_args_get_ptr() -> Int64
 
@@ -378,6 +394,8 @@ pub fn set_wasi_stdin_callback(Int64, () -> Bytes) -> Unit
 
 pub fn set_wasi_stdout_capture(Int64, Bool) -> Unit
 
+pub fn setup_segments(Int64, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+
 pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
 
 pub fn tag_funcref_ptr(Int64) -> Int64
@@ -389,6 +407,10 @@ pub fn take_wasi_exit_code(Int64) -> Int
 pub fn take_wasi_stderr(Int64) -> Bytes
 
 pub fn take_wasi_stdout(Int64) -> Bytes
+
+pub fn throw_exception_tag(Int64, Int) -> Unit
+
+pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
 
 pub fn untag_funcref_ptr(Int64) -> Int64
 
