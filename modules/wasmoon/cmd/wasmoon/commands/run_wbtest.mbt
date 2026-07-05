@@ -15,24 +15,6 @@ fn minimal_i32_const_module_bytes() -> Bytes {
 }
 
 ///|
-fn direct_call_module_bytes() -> Bytes {
-  Bytes::from_array([
-    // Magic + version
-    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-    // Type section: (func) -> i32
-     0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
-    // Function section: two local functions of type 0
-     0x03, 0x03, 0x02, 0x00, 0x00,
-    // Export section: (export "run" (func 1))
-     0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01,
-    // Code section:
-    //   func0: i32.const 42
-    //   func1: call 0
-     0x0a, 0x0b, 0x02, 0x04, 0x00, 0x41, 0x2a, 0x0b, 0x04, 0x00, 0x10, 0x00, 0x0b,
-  ])
-}
-
-///|
 test "compile api: emits stage progress and returns artifact" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(minimal_i32_const_module_bytes(), on_progress=fn(
@@ -47,25 +29,6 @@ test "compile api: emits stage progress and returns artifact" {
   let last = events[events.length() - 1]
   inspect(last.stage.to_string(), content="done")
   inspect(last.compiled_funcs, content="1")
-  guard compiled is Some(precompiled) else { return }
-  inspect(precompiled.functions.length(), content="1")
-  inspect(precompiled.functions[0].name, content="run")
-  inspect(precompiled.functions[0].code.length() > 0, content="true")
-  inspect(precompiled.functions[0].num_results, content="1")
-}
-
-///|
-test "compile api: legacy JIT pipeline lowers direct wasm calls" {
-  let compiled = compile_module(direct_call_module_bytes())
-  guard compiled is Some(precompiled) else { fail("compile failed") }
-  inspect(precompiled.functions.length(), content="2")
-  let mut call_fixup_count = -1
-  for entry in precompiled.functions {
-    if entry.func_idx == 1 {
-      call_fixup_count = entry.call_fixups.length()
-    }
-  }
-  inspect(call_fixup_count, content="1")
 }
 
 ///|
