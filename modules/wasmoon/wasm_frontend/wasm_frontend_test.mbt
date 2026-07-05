@@ -928,6 +928,31 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
 }
 
 ///|
+test "lower v128 load store through native memory path" {
+  let body : Array[@types.Instruction] = [
+    I32Const(0),
+    LocalGet(0),
+    V128Store(0, 4, 0),
+    I32Const(0),
+    V128Load(0, 4, 0),
+  ]
+  let mod_ = {
+    ..@types.Module::simple([V128], [V128], body, "v128_roundtrip"),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  let func = lower_function(env, mod_, 0)
+  let text = func.print()
+  inspect(text.contains("load_ptr.v128"), content="true")
+  inspect(text.contains("store_ptr.v128"), content="true")
+  inspect(text.contains("wasmoon.LoadMemBase"), content="false")
+  inspect(text.contains("TODO(wasm_frontend)"), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower table bulk helpers as native custom ops" {
   let table : @types.Table = {
     type_: {
@@ -1063,6 +1088,57 @@ test "pure if rejects trapping i31 get in branch expression" {
   )
   let env = EmbeddingEnvironment::new(hidden_context_type=None)
   inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
+}
+
+///|
+test "unsupported structured branch reports label-stack capability" {
+  let mod_ = @types.Module::simple(
+    [],
+    [],
+    [Loop(Empty, [Br(0)])],
+    "loop_branch",
+  )
+  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  try lower_function(env, mod_, 0) catch {
+    err => {
+      let msg = to_repr(err).to_string()
+      inspect(
+        msg.contains("structured branches require label-stack lowering"),
+        content="true",
+      )
+    }
+  } noraise {
+    _ => fail("expected unsupported native lowering")
+  }
+}
+
+///|
+test "unsupported memory64 bulk helper reports runtime ABI capability" {
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [],
+      [I64Const(0L), I32Const(0), I64Const(4L), MemoryFill(0)],
+      "memory64_fill",
+    ),
+    memories: [
+      { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
+    ],
+  }
+  let env = EmbeddingEnvironment::new()
+  try lower_function(env, mod_, 0) catch {
+    err => {
+      let msg = to_repr(err).to_string()
+      inspect(
+        msg.contains(
+          "memory64 memory.fill requires a reusable runtime helper ABI",
+        ),
+        content="true",
+      )
+    }
+  } noraise {
+    _ => fail("expected unsupported native lowering")
+  }
 }
 
 ///|

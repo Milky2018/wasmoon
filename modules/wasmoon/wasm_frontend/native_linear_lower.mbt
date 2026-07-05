@@ -1728,8 +1728,7 @@ fn try_lower_linear_function(
   func_local_idx : Int,
 ) -> @milkir.Function? raise LowerError {
   let func_type = get_func_type(mod_, func_local_idx)
-  get_code(mod_, func_local_idx)
-  let code = mod_.codes[func_local_idx]
+  let code = get_code(mod_, func_local_idx)
   guard flatten_linear_blocks(code.body) is Some(body) else { return None }
   let global_types = collect_global_types(mod_)
   let table_types = collect_table_types(mod_)
@@ -2278,6 +2277,14 @@ fn try_lower_linear_function(
         }
       F64Store(memidx, _, offset) =>
         if !push_memory_store(builder, stack, vmctx, mod_, memidx, F64, offset) {
+          return None
+        }
+      V128Load(memidx, _, offset) =>
+        if !push_memory_load(builder, stack, vmctx, mod_, memidx, V128, offset) {
+          return None
+        }
+      V128Store(memidx, _, offset) =>
+        if !push_memory_store(builder, stack, vmctx, mod_, memidx, V128, offset) {
           return None
         }
       I32Store8(memidx, _, offset) =>

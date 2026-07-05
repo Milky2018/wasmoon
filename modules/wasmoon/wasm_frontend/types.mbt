@@ -33,7 +33,7 @@ pub suberror LowerError {
   TypeIndexOutOfRange(index~ : Int)
   NonFunctionType(index~ : Int)
   MissingCode(index~ : Int)
-  UnsupportedNativeLowering(index~ : Int)
+  UnsupportedNativeLowering(index~ : Int, reason~ : String)
 } derive(Debug, Eq)
 
 ///|
