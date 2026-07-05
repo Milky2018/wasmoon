@@ -737,6 +737,110 @@ test "plan hostcall import trampoline values_vec layout" {
 }
 
 ///|
+test "machine-code entry trampolines support V128 registers" {
+  let params : Array[@types.ValueType] = [V128]
+  let results : Array[@types.ValueType] = [V128]
+  let x64_code = build_entry_trampoline_for_target(params, results, X86_64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut x64_has_load = false
+  let mut x64_has_store = false
+  for i in 0..<(x64_code.length() - 3) {
+    if x64_code[i] == 0xf3 && x64_code[i + 2] == 0x0f && x64_code[i + 3] == 0x6f {
+      x64_has_load = true
+    }
+    if x64_code[i] == 0xf3 && x64_code[i + 2] == 0x0f && x64_code[i + 3] == 0x7f {
+      x64_has_store = true
+    }
+  }
+  inspect(x64_has_load, content="true")
+  inspect(x64_has_store, content="true")
+  let a64_code = build_entry_trampoline_for_target(params, results, AArch64) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut a64_has_load = false
+  let mut a64_has_store = false
+  for i in 0..<(a64_code.length() - 3) {
+    if a64_code[i + 3] == 0x3d {
+      if (a64_code[i + 2] & 0xc0) == 0xc0 {
+        a64_has_load = true
+      } else if (a64_code[i + 2] & 0x80) == 0x80 {
+        a64_has_store = true
+      }
+    }
+  }
+  inspect(a64_has_load, content="true")
+  inspect(a64_has_store, content="true")
+}
+
+///|
+test "hostcall and interpcall trampolines support V128 registers" {
+  let params : Array[@types.ValueType] = [V128]
+  let results : Array[@types.ValueType] = [V128]
+  let x64_host = build_hostcall_import_trampoline_for_target(
+    params,
+    results,
+    0,
+    X86_64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let x64_interp = build_interpreter_fallback_trampoline_for_target(
+    params,
+    results,
+    7,
+    X86_64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut x64_has_store = false
+  let mut x64_has_load = false
+  for code in [x64_host.code, x64_interp.code] {
+    for i in 0..<(code.length() - 3) {
+      if code[i] == 0xf3 && code[i + 2] == 0x0f && code[i + 3] == 0x7f {
+        x64_has_store = true
+      }
+      if code[i] == 0xf3 && code[i + 2] == 0x0f && code[i + 3] == 0x6f {
+        x64_has_load = true
+      }
+    }
+  }
+  inspect(x64_has_store, content="true")
+  inspect(x64_has_load, content="true")
+  let a64_host = build_hostcall_import_trampoline_for_target(
+    params,
+    results,
+    0,
+    AArch64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let a64_interp = build_interpreter_fallback_trampoline_for_target(
+    params,
+    results,
+    7,
+    AArch64,
+  ) catch {
+    err => fail(to_repr(err).to_string())
+  }
+  let mut a64_has_store = false
+  let mut a64_has_load = false
+  for code in [a64_host.code, a64_interp.code] {
+    for i in 0..<(code.length() - 3) {
+      if code[i + 3] == 0x3d {
+        if (code[i + 2] & 0xc0) == 0xc0 {
+          a64_has_load = true
+        } else if (code[i + 2] & 0x80) == 0x80 {
+          a64_has_store = true
+        }
+      }
+    }
+  }
+  inspect(a64_has_store, content="true")
+  inspect(a64_has_load, content="true")
+}
+
+///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
   let signature = @milkir.Signature::new([F64, F64], [F64])
   let milk = @milkir.Function::new("fadd64", signature)
@@ -1994,4 +2098,35 @@ test "reference encoding helpers roundtrip JIT values" {
   debug_inspect(decode_externref(encode_externref(11)), content="Some(11)")
   debug_inspect(decode_gc_heap_ref(encode_gc_heap_ref(3)), content="Some(3)")
   debug_inspect(decode_gc_heap_ref(encode_null_ref()), content="None")
+}
+
+///|
+test "VMContext reusable ABI layout matches JIT fixed prefix" {
+  let layout = vmcontext_layout()
+  inspect(layout.memory0_offset, content="0")
+  inspect(layout.memory0_base_offset, content="8")
+  inspect(layout.memory0_size_offset, content="16")
+  inspect(layout.func_table_offset, content="24")
+  inspect(layout.table0_base_offset, content="32")
+  inspect(layout.table0_elements_offset, content="40")
+  inspect(layout.globals_offset, content="48")
+  inspect(layout.tables_offset, content="56")
+  inspect(layout.table_count_offset, content="64")
+  inspect(layout.func_count_offset, content="68")
+  inspect(layout.table_sizes_offset, content="72")
+  inspect(layout.table_max_sizes_offset, content="80")
+  inspect(layout.memories_offset, content="88")
+  inspect(layout.memory_count_offset, content="96")
+  inspect(layout.debug_current_func_idx_offset, content="100")
+  inspect(layout.gc_heap_ptr_offset, content="104")
+  inspect(layout.gc_heap_limit_offset, content="112")
+  inspect(layout.gc_heap_offset, content="120")
+  inspect(layout.pointer_stride, content="8")
+  inspect(layout.global_value_stride, content="16")
+  inspect(layout.table_entry_value_offset, content="0")
+  inspect(layout.table_entry_stride, content="16")
+  inspect(layout.func_table_entry_stride, content="8")
+  let memory = memory_descriptor_layout()
+  inspect(memory.base_offset, content="0")
+  inspect(memory.current_length_offset, content="8")
 }

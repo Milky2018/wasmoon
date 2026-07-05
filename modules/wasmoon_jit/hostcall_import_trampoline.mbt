@@ -54,17 +54,12 @@ fn unsupported_hostcall_import(
 }
 
 ///|
-fn hostcall_scalar_class(
-  ty : @types.ValueType,
-) -> @machv.RegClass raise HostcallImportTrampolineError {
+fn hostcall_scalar_class(ty : @types.ValueType) -> @machv.RegClass {
   match ty {
     I32 | I64 => Int
     F32 => Float32
     F64 => Float64
-    V128 =>
-      raise UnsupportedHostcallImportTrampoline(
-        message="TODO(ISS-026): hostcall import trampolines need V128 lane packing",
-      )
+    V128 => Vector
     _ => Int
   }
 }
@@ -142,15 +137,24 @@ fn a64_emit_add_imm(
   rn : Int,
   imm : Int,
 ) -> Unit raise HostcallImportTrampolineError {
-  if imm < 0 || imm > 4095 {
+  if imm < 0 {
     unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline stack adjustment needs large-immediate splitting",
+      "hostcall import trampoline stack adjustment must be non-negative",
     )
   }
-  a64_emit(
-    code,
-    0x91000000 | ((imm & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
-  )
+  if imm == 0 {
+    a64_emit(code, 0x91000000 | ((rn & 31) << 5) | (rd & 31))
+    return
+  }
+  let mut remaining = imm
+  while remaining > 0 {
+    let chunk = if remaining > 4095 { 4095 } else { remaining }
+    a64_emit(
+      code,
+      0x91000000 | ((chunk & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
+    )
+    remaining = remaining - chunk
+  }
 }
 
 ///|
@@ -160,15 +164,24 @@ fn a64_emit_sub_imm(
   rn : Int,
   imm : Int,
 ) -> Unit raise HostcallImportTrampolineError {
-  if imm < 0 || imm > 4095 {
+  if imm < 0 {
     unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline stack adjustment needs large-immediate splitting",
+      "hostcall import trampoline stack adjustment must be non-negative",
     )
   }
-  a64_emit(
-    code,
-    0xd1000000 | ((imm & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
-  )
+  if imm == 0 {
+    a64_emit(code, 0xd1000000 | ((rn & 31) << 5) | (rd & 31))
+    return
+  }
+  let mut remaining = imm
+  while remaining > 0 {
+    let chunk = if remaining > 4095 { 4095 } else { remaining }
+    a64_emit(
+      code,
+      0xd1000000 | ((chunk & 0xfff) << 10) | ((rn & 31) << 5) | (rd & 31),
+    )
+    remaining = remaining - chunk
+  }
 }
 
 ///|
@@ -202,6 +215,30 @@ fn a64_emit_load_imm64_fixed(
 }
 
 ///|
+fn a64_emit_add_byte_offset(
+  code : Array[Int],
+  rd : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit raise HostcallImportTrampolineError {
+  if offset < 0 {
+    unsupported_hostcall_import(
+      "hostcall import trampoline AArch64 memory offset must be non-negative",
+    )
+  }
+  a64_emit_add_imm(code, rd, rn, offset)
+}
+
+///|
+fn a64_scratch_gpr_for(rt : Int) -> Int {
+  if rt == 16 {
+    17
+  } else {
+    16
+  }
+}
+
+///|
 fn a64_emit_ldr_x(
   code : Array[Int],
   rt : Int,
@@ -209,9 +246,10 @@ fn a64_emit_ldr_x(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 load offsets",
-    )
+    let scratch = a64_scratch_gpr_for(rt)
+    a64_emit_add_byte_offset(code, scratch, rn, offset)
+    a64_emit_ldr_x(code, rt, scratch, 0)
+    return
   }
   a64_emit(
     code,
@@ -227,9 +265,10 @@ fn a64_emit_str_x(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 store offsets",
-    )
+    let scratch = a64_scratch_gpr_for(rt)
+    a64_emit_add_byte_offset(code, scratch, rn, offset)
+    a64_emit_str_x(code, rt, scratch, 0)
+    return
   }
   a64_emit(
     code,
@@ -245,9 +284,9 @@ fn a64_emit_ldr_s(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f32 load offsets",
-    )
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_ldr_s(code, rt, 16, 0)
+    return
   }
   a64_emit(
     code,
@@ -263,9 +302,9 @@ fn a64_emit_str_s(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 4 != 0 || offset < 0 || offset / 4 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f32 store offsets",
-    )
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_str_s(code, rt, 16, 0)
+    return
   }
   a64_emit(
     code,
@@ -281,9 +320,9 @@ fn a64_emit_ldr_d(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f64 load offsets",
-    )
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_ldr_d(code, rt, 16, 0)
+    return
   }
   a64_emit(
     code,
@@ -299,13 +338,49 @@ fn a64_emit_str_d(
   offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   if offset % 8 != 0 || offset < 0 || offset / 8 > 4095 {
-    unsupported_hostcall_import(
-      "TODO(ISS-026): hostcall import trampoline needs general AArch64 f64 store offsets",
-    )
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_str_d(code, rt, 16, 0)
+    return
   }
   a64_emit(
     code,
     0xfd000000 | ((offset / 8) << 10) | ((rn & 31) << 5) | (rt & 31),
+  )
+}
+
+///|
+fn a64_emit_ldr_q(
+  code : Array[Int],
+  rt : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit raise HostcallImportTrampolineError {
+  if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_ldr_q(code, rt, 16, 0)
+    return
+  }
+  a64_emit(
+    code,
+    0x3dc00000 | ((offset / 16) << 10) | ((rn & 31) << 5) | (rt & 31),
+  )
+}
+
+///|
+fn a64_emit_str_q(
+  code : Array[Int],
+  rt : Int,
+  rn : Int,
+  offset : Int,
+) -> Unit raise HostcallImportTrampolineError {
+  if offset % 16 != 0 || offset < 0 || offset / 16 > 4095 {
+    a64_emit_add_byte_offset(code, 16, rn, offset)
+    a64_emit_str_q(code, rt, 16, 0)
+    return
+  }
+  a64_emit(
+    code,
+    0x3d800000 | ((offset / 16) << 10) | ((rn & 31) << 5) | (rt & 31),
   )
 }
 
@@ -329,6 +404,7 @@ fn a64_emit_store_slot(
   match ty {
     F32 => a64_emit_str_s(code, reg, 31, offset)
     F64 => a64_emit_str_d(code, reg, 31, offset)
+    V128 => a64_emit_str_q(code, reg, 31, offset)
     _ => a64_emit_str_x(code, reg, 31, offset)
   }
 }
@@ -343,6 +419,7 @@ fn a64_emit_load_slot(
   match ty {
     F32 => a64_emit_ldr_s(code, reg, 31, offset)
     F64 => a64_emit_ldr_d(code, reg, 31, offset)
+    V128 => a64_emit_ldr_q(code, reg, 31, offset)
     _ => a64_emit_ldr_x(code, reg, 31, offset)
   }
 }
@@ -439,8 +516,16 @@ fn x64_modrm(code : Array[Int], mod_ : Int, reg : Int, rm : Int) -> Unit {
 }
 
 ///|
-fn x64_sib_rsp(code : Array[Int]) -> Unit {
-  code.push(0x24)
+fn x64_sib_base(code : Array[Int], base : Int) -> Unit {
+  code.push(0x20 | (base & 7))
+}
+
+///|
+fn x64_modrm_base_disp32(code : Array[Int], reg : Int, base : Int) -> Unit {
+  x64_modrm(code, 2, reg, if (base & 7) == 4 { 4 } else { base })
+  if (base & 7) == 4 {
+    x64_sib_base(code, base)
+  }
 }
 
 ///|
@@ -475,41 +560,117 @@ fn x64_sub_rsp(code : Array[Int], imm : Int) -> Unit {
 
 ///|
 fn x64_mov_m64_r64_rsp(code : Array[Int], offset : Int, src : Int) -> Unit {
-  x64_rex(code, true, src, 4)
+  x64_mov_m64_r64_base(code, 4, offset, src)
+}
+
+///|
+fn x64_mov_m64_r64_base(
+  code : Array[Int],
+  base : Int,
+  offset : Int,
+  src : Int,
+) -> Unit {
+  x64_rex(code, true, src, base)
   code.push(0x89)
-  x64_modrm(code, 2, src, 4)
-  x64_sib_rsp(code)
+  x64_modrm_base_disp32(code, src, base)
   hostcall_append_u32_le(code, offset)
 }
 
 ///|
 fn x64_mov_r64_m64_rsp(code : Array[Int], dst : Int, offset : Int) -> Unit {
-  x64_rex(code, true, dst, 4)
+  x64_mov_r64_m64_base(code, dst, 4, offset)
+}
+
+///|
+fn x64_mov_r64_m64_base(
+  code : Array[Int],
+  dst : Int,
+  base : Int,
+  offset : Int,
+) -> Unit {
+  x64_rex(code, true, dst, base)
   code.push(0x8b)
-  x64_modrm(code, 2, dst, 4)
-  x64_sib_rsp(code)
+  x64_modrm_base_disp32(code, dst, base)
   hostcall_append_u32_le(code, offset)
 }
 
 ///|
 fn x64_movsd_m64_xmm_rsp(code : Array[Int], offset : Int, src : Int) -> Unit {
+  x64_movsd_m64_xmm_base(code, 4, offset, src)
+}
+
+///|
+fn x64_movsd_m64_xmm_base(
+  code : Array[Int],
+  base : Int,
+  offset : Int,
+  src : Int,
+) -> Unit {
   code.push(0xf2)
-  x64_rex(code, false, src, 4)
+  x64_rex(code, false, src, base)
   code.push(0x0f)
   code.push(0x11)
-  x64_modrm(code, 2, src, 4)
-  x64_sib_rsp(code)
+  x64_modrm_base_disp32(code, src, base)
   hostcall_append_u32_le(code, offset)
 }
 
 ///|
 fn x64_movsd_xmm_m64_rsp(code : Array[Int], dst : Int, offset : Int) -> Unit {
+  x64_movsd_xmm_m64_base(code, dst, 4, offset)
+}
+
+///|
+fn x64_movsd_xmm_m64_base(
+  code : Array[Int],
+  dst : Int,
+  base : Int,
+  offset : Int,
+) -> Unit {
   code.push(0xf2)
-  x64_rex(code, false, dst, 4)
+  x64_rex(code, false, dst, base)
   code.push(0x0f)
   code.push(0x10)
-  x64_modrm(code, 2, dst, 4)
-  x64_sib_rsp(code)
+  x64_modrm_base_disp32(code, dst, base)
+  hostcall_append_u32_le(code, offset)
+}
+
+///|
+fn x64_movdqu_m128_xmm_rsp(code : Array[Int], offset : Int, src : Int) -> Unit {
+  x64_movdqu_m128_xmm_base(code, 4, offset, src)
+}
+
+///|
+fn x64_movdqu_m128_xmm_base(
+  code : Array[Int],
+  base : Int,
+  offset : Int,
+  src : Int,
+) -> Unit {
+  code.push(0xf3)
+  x64_rex(code, false, src, base)
+  code.push(0x0f)
+  code.push(0x7f)
+  x64_modrm_base_disp32(code, src, base)
+  hostcall_append_u32_le(code, offset)
+}
+
+///|
+fn x64_movdqu_xmm_m128_rsp(code : Array[Int], dst : Int, offset : Int) -> Unit {
+  x64_movdqu_xmm_m128_base(code, dst, 4, offset)
+}
+
+///|
+fn x64_movdqu_xmm_m128_base(
+  code : Array[Int],
+  dst : Int,
+  base : Int,
+  offset : Int,
+) -> Unit {
+  code.push(0xf3)
+  x64_rex(code, false, dst, base)
+  code.push(0x0f)
+  code.push(0x6f)
+  x64_modrm_base_disp32(code, dst, base)
   hostcall_append_u32_le(code, offset)
 }
 
@@ -533,6 +694,7 @@ fn x64_emit_store_slot(
   offset : Int,
 ) -> Unit {
   match ty {
+    V128 => x64_movdqu_m128_xmm_rsp(code, offset, reg)
     F32 | F64 => x64_movsd_m64_xmm_rsp(code, offset, reg)
     _ => x64_mov_m64_r64_rsp(code, offset, reg)
   }
@@ -546,6 +708,7 @@ fn x64_emit_load_slot(
   offset : Int,
 ) -> Unit {
   match ty {
+    V128 => x64_movdqu_xmm_m128_rsp(code, reg, offset)
     F32 | F64 => x64_movsd_xmm_m64_rsp(code, reg, offset)
     _ => x64_mov_r64_m64_rsp(code, reg, offset)
   }
@@ -766,19 +929,14 @@ fn build_x64_entry_trampoline(
   for ty in param_types {
     match hostcall_scalar_class(ty) {
       Int => {
-        x64_rex(code, true, int_arg_regs[int_seen], 12)
-        code.push(0x8b)
-        x64_modrm(code, 2, int_arg_regs[int_seen], 12)
-        hostcall_append_u32_le(code, offset)
+        x64_mov_r64_m64_base(code, int_arg_regs[int_seen], 12, offset)
         int_seen = int_seen + 1
       }
       Float32 | Float64 | Vector => {
-        code.push(0xf2)
-        x64_rex(code, false, float_seen, 12)
-        code.push(0x0f)
-        code.push(0x10)
-        x64_modrm(code, 2, float_seen, 12)
-        hostcall_append_u32_le(code, offset)
+        match ty {
+          V128 => x64_movdqu_xmm_m128_base(code, float_seen, 12, offset)
+          _ => x64_movsd_xmm_m64_base(code, float_seen, 12, offset)
+        }
         float_seen = float_seen + 1
       }
     }
@@ -792,19 +950,21 @@ fn build_x64_entry_trampoline(
   for ty in result_types {
     match hostcall_scalar_class(ty) {
       Int => {
-        x64_rex(code, true, int_result_regs[int_result_seen], 12)
-        code.push(0x89)
-        x64_modrm(code, 2, int_result_regs[int_result_seen], 12)
-        hostcall_append_u32_le(code, result_offset)
+        x64_mov_m64_r64_base(
+          code,
+          12,
+          result_offset,
+          int_result_regs[int_result_seen],
+        )
         int_result_seen = int_result_seen + 1
       }
       Float32 | Float64 | Vector => {
-        code.push(0xf2)
-        x64_rex(code, false, float_result_seen, 12)
-        code.push(0x0f)
-        code.push(0x11)
-        x64_modrm(code, 2, float_result_seen, 12)
-        hostcall_append_u32_le(code, result_offset)
+        match ty {
+          V128 =>
+            x64_movdqu_m128_xmm_base(code, 12, result_offset, float_result_seen)
+          _ =>
+            x64_movsd_m64_xmm_base(code, 12, result_offset, float_result_seen)
+        }
         float_result_seen = float_result_seen + 1
       }
     }

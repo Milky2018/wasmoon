@@ -1,43 +1,4 @@
 ///|
-const VMCTX_FUNC_TABLE_OFFSET : Int = 24
-
-///|
-const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
-
-///|
-const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
-
-///|
-const VMCTX_GLOBALS_OFFSET : Int = 48
-
-///|
-const VMCTX_TABLE0_BASE_OFFSET : Int = 32
-
-///|
-const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
-
-///|
-const VMCTX_TABLES_OFFSET : Int = 56
-
-///|
-const VMCTX_TABLE_SIZES_OFFSET : Int = 72
-
-///|
-const VMCTX_MEMORIES_OFFSET : Int = 88
-
-///|
-const GLOBAL_STRIDE : Int = 16
-
-///|
-const TABLE_ENTRY_STRIDE : Int = 16
-
-///|
-const FUNC_TABLE_ENTRY_STRIDE : Int = 8
-
-///|
-const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
-
-///|
 fn type_byte_size(ty : @milkir.Type) -> Int {
   match ty {
     I32 | F32 => 4
@@ -432,12 +393,14 @@ fn push_global_get(
   if global_idx < 0 || global_idx >= global_types.length() {
     return false
   }
-  // TODO(ISS-026): source VMContext layout from the reusable embedding ABI
-  // instead of copy-first constants from the legacy FuncEnvironment.
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
-  let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_offset = builder.iconst_i64(
+    @wasmoon_jit.vmcontext_layout().globals_offset.to_int64(),
+  )
   let globals_ptr = builder.load_ptr(I64, context, globals_offset)
-  let field_offset = builder.iconst_i64((global_idx * GLOBAL_STRIDE).to_int64())
+  let field_offset = builder.iconst_i64(
+    (global_idx * @wasmoon_jit.vmcontext_layout().global_value_stride).to_int64(),
+  )
   stack.push(builder.load_ptr(ty, globals_ptr, field_offset))
   true
 }
@@ -455,12 +418,14 @@ fn push_global_set(
     return false
   }
   guard pop_value(stack) is Some(value) else { return false }
-  // TODO(ISS-026): source VMContext layout from the reusable embedding ABI
-  // instead of copy-first constants from the legacy FuncEnvironment.
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
-  let globals_offset = builder.iconst_i64(VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_offset = builder.iconst_i64(
+    @wasmoon_jit.vmcontext_layout().globals_offset.to_int64(),
+  )
   let globals_ptr = builder.load_ptr(I64, context, globals_offset)
-  let field_offset = builder.iconst_i64((global_idx * GLOBAL_STRIDE).to_int64())
+  let field_offset = builder.iconst_i64(
+    (global_idx * @wasmoon_jit.vmcontext_layout().global_value_stride).to_int64(),
+  )
   builder.store_ptr(ty, globals_ptr, value, field_offset)
   true
 }
@@ -486,24 +451,28 @@ fn push_table_size(
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
     return false
   }
-  // TODO(ISS-026): source VMContext table layout from the reusable embedding
-  // ABI instead of copy-first constants from the legacy FuncEnvironment.
   let size_i64 = if table_idx == 0 {
     builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table0_elements_offset.to_int64(),
+      ),
     )
   } else {
     let sizes_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLE_SIZES_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table_sizes_offset.to_int64(),
+      ),
     )
     builder.load_ptr(
       I64,
       sizes_ptr,
-      builder.iconst_i64((table_idx * 8).to_int64()),
+      builder.iconst_i64(
+        (table_idx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
+      ),
     )
   }
   if is_table64 {
@@ -527,26 +496,36 @@ fn load_table_size_and_base(
     let size = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table0_elements_offset.to_int64(),
+      ),
     )
     let base = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLE0_BASE_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table0_base_offset.to_int64(),
+      ),
     )
     (size, base)
   } else {
-    let idx_offset = builder.iconst_i64((table_idx * 8).to_int64())
+    let idx_offset = builder.iconst_i64(
+      (table_idx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
+    )
     let sizes_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLE_SIZES_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table_sizes_offset.to_int64(),
+      ),
     )
     let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
     let tables_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_TABLES_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().tables_offset.to_int64(),
+      ),
     )
     let base = builder.load_ptr(I64, tables_ptr, idx_offset)
     (size, base)
@@ -589,10 +568,20 @@ fn push_table_get(
   builder.switch_to_block(continue_block)
   let byte_offset = builder.imul(
     elem_idx_i64,
-    builder.iconst_i64(TABLE_ENTRY_STRIDE.to_int64()),
+    builder.iconst_i64(
+      @wasmoon_jit.vmcontext_layout().table_entry_stride.to_int64(),
+    ),
   )
   let addr = builder.iadd(table_base, byte_offset)
-  stack.push(builder.load_ptr(I64, addr, builder.iconst_i64(0L)))
+  stack.push(
+    builder.load_ptr(
+      I64,
+      addr,
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().table_entry_value_offset.to_int64(),
+      ),
+    ),
+  )
   true
 }
 
@@ -679,26 +668,36 @@ fn load_memory_base(
   context : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value {
-  // TODO(ISS-026): source VMContext memory layout from the reusable embedding
-  // ABI instead of copy-first constants from legacy VCode lowering.
   if memidx == 0 {
     builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_MEMORY0_BASE_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().memory0_base_offset.to_int64(),
+      ),
     )
   } else {
     let memories_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_MEMORIES_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().memories_offset.to_int64(),
+      ),
     )
     let memory_ptr = builder.load_ptr(
       I64,
       memories_ptr,
-      builder.iconst_i64((memidx * 8).to_int64()),
+      builder.iconst_i64(
+        (memidx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
+      ),
     )
-    builder.load_ptr(I64, memory_ptr, builder.iconst_i64(0L))
+    builder.load_ptr(
+      I64,
+      memory_ptr,
+      builder.iconst_i64(
+        @wasmoon_jit.memory_descriptor_layout().base_offset.to_int64(),
+      ),
+    )
   }
 }
 
@@ -708,29 +707,35 @@ fn load_memory_size_bytes(
   context : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value {
-  // TODO(ISS-026): source VMContext memory layout from the reusable embedding
-  // ABI instead of copy-first constants from legacy VCode lowering.
   if memidx == 0 {
     builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_MEMORY0_SIZE_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().memory0_size_offset.to_int64(),
+      ),
     )
   } else {
     let memories_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(VMCTX_MEMORIES_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.vmcontext_layout().memories_offset.to_int64(),
+      ),
     )
     let memory_ptr = builder.load_ptr(
       I64,
       memories_ptr,
-      builder.iconst_i64((memidx * 8).to_int64()),
+      builder.iconst_i64(
+        (memidx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
+      ),
     )
     builder.load_ptr(
       I64,
       memory_ptr,
-      builder.iconst_i64(MEMORY_CURRENT_LENGTH_OFFSET.to_int64()),
+      builder.iconst_i64(
+        @wasmoon_jit.memory_descriptor_layout().current_length_offset.to_int64(),
+      ),
     )
   }
 }
@@ -1084,17 +1089,19 @@ fn push_ref_func(
   func_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
-  // TODO(ISS-026): source VMContext function-table layout from the reusable
-  // embedding ABI instead of copy-first constants from legacy VCode lowering.
   let func_table = builder.load_ptr(
     I64,
     context,
-    builder.iconst_i64(VMCTX_FUNC_TABLE_OFFSET.to_int64()),
+    builder.iconst_i64(
+      @wasmoon_jit.vmcontext_layout().func_table_offset.to_int64(),
+    ),
   )
   let raw_func_ptr = builder.load_ptr(
     Ref,
     func_table,
-    builder.iconst_i64((func_idx * FUNC_TABLE_ENTRY_STRIDE).to_int64()),
+    builder.iconst_i64(
+      (func_idx * @wasmoon_jit.vmcontext_layout().func_table_entry_stride).to_int64(),
+    ),
   )
   let tag = builder.iconst(Ref, @types.FUNCREF_TAG)
   guard emit_op(builder, Ref, Bor, [raw_func_ptr, tag]) is Some(result) else {

@@ -342,6 +342,8 @@ pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarge
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
+pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
+
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
@@ -433,6 +435,8 @@ pub fn untag_funcref_ptr(Int64) -> Int64
 pub fn value_to_i64(@types.Value) -> Int64
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
+
+pub fn vmcontext_layout() -> VMContextLayout
 
 // Errors
 pub(all) suberror CHeapError {
@@ -711,6 +715,11 @@ pub(all) struct LinkedCode {
   debug_entries : Array[@machv_emit.DebugEntry]
 } derive(@debug.Debug)
 
+pub(all) struct MemoryDescriptorLayout {
+  base_offset : Int
+  current_length_offset : Int
+}
+
 pub struct MemoryInfo {
   ptr : Int64
   size : Int64
@@ -848,6 +857,32 @@ pub(all) struct TrapReport {
   wasm_frames : Array[WasmTrapFrame]
   host_frames : Array[String]
   dump_path : String?
+}
+
+pub(all) struct VMContextLayout {
+  memory0_offset : Int
+  memory0_base_offset : Int
+  memory0_size_offset : Int
+  func_table_offset : Int
+  table0_base_offset : Int
+  table0_elements_offset : Int
+  globals_offset : Int
+  tables_offset : Int
+  table_count_offset : Int
+  func_count_offset : Int
+  table_sizes_offset : Int
+  table_max_sizes_offset : Int
+  memories_offset : Int
+  memory_count_offset : Int
+  debug_current_func_idx_offset : Int
+  gc_heap_ptr_offset : Int
+  gc_heap_limit_offset : Int
+  gc_heap_offset : Int
+  pointer_stride : Int
+  global_value_stride : Int
+  table_entry_value_offset : Int
+  table_entry_stride : Int
+  func_table_entry_stride : Int
 }
 
 pub(all) struct WasmTrapFrame {
