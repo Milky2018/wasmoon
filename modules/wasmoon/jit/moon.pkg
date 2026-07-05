@@ -1,7 +1,7 @@
 import {
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/cwasm",
-  "Milky2018/wasmoon_jit/vcode/emit",
+  "Milky2018/machv_emit",
   "Milky2018/wasm_core/types",
   "moonbitlang/core/hashset",
   "moonbitlang/x/fs",

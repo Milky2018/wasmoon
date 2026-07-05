@@ -191,30 +191,9 @@ pub fn run_explore(
 
     let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
       milk_result, target,
-    ) catch {
-      err => {
-        let text = "error: \{to_repr(err)}"
-        if !html_output && show_mc {
-          println("")
-          println("── Machine Code ──")
-          println(text)
-        }
-        if html_output {
-          compiled_funcs.push({
-            name: func_name,
-            type_str: format_func_type(func_type),
-            source: source_text,
-            ir: ir_text,
-            ir_opt: ir_optimized,
-            vcode: vcode_text,
-            regalloc: allocated_text,
-            mc: text,
-          })
-        }
-        continue
-      }
-    }
-    let mc_text = plan.object.code
+    )
+    let mc_text = plan.object
+      .get_bytes()
       .map(fn(b) { @types.to_hex_byte(b) })
       .join(" ")
     if !html_output && show_mc {

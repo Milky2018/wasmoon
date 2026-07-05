@@ -38,7 +38,7 @@ graph TD
   ISS_022["ISS-022: Move cwasm and native JIT glue into wasmoon_jit"]
   ISS_023["ISS-023: Retire legacy wasmoon IR and VCode implementation paths"]
   ISS_024["ISS-024: Validate real compiler-infrastructure migration"]
-  ISS_025["ISS-025: Retire wasmoon_jit legacy fallback internals"]
+  ISS_025["ISS-025: Retire wasmoon_jit legacy compiler internals"]
   ISS_026["ISS-026: Complete reusable compiler infrastructure polish"]
   ISS_027["ISS-027: Stabilize reusable module public APIs"]
   ISS_028["ISS-028: Complete reusable trampoline ABI coverage"]

@@ -291,7 +291,9 @@ fn JITContext::call_multi_return(
           @wasmoon_jit.entry_trampoline_value_type_code(result_type),
         )
       }
-      let mc = @emit.emit_entry_trampoline(param_codes_arr, result_codes_arr)
+      let mc = @machv_emit.emit_entry_trampoline(
+        param_codes_arr, result_codes_arr,
+      )
       let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::new(code_ints)
       match trampoline {

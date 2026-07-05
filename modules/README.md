@@ -14,7 +14,7 @@ Wasmoon-specific integration packages. The public package boundary is:
 | `Milky2018/machv_emit` | Machine-code emission from allocated MachV. | `EmitTarget`, `CodeObject`, `emit_function_for_target`, relocation/fixup and stack-frame helpers. |
 | `Milky2018/x64_target` | x64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_wasm_body_function`. |
 | `Milky2018/aarch64_target` | AArch64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_wasm_body_function`. |
-| `Milky2018/wasmoon_jit` | Wasmoon-specific native runtime and JIT integration. | cwasm artifact construction, native runtime wrappers, Wasm entry/hostcall/fallback trampolines, VMContext layout, runtime symbols, and integration planning. |
+| `Milky2018/wasmoon_jit` | Wasmoon-specific native runtime and JIT integration. | cwasm artifact construction, native runtime wrappers, Wasm entry/hostcall trampolines, VMContext layout, runtime symbols, and integration planning. |
 
 Generic packages (`milkir`, `machv`, `regalloc`, `machv_regalloc`,
 `machv_emit`, and ISA target packages) must not import `Milky2018/wasmoon`.

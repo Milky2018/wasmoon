@@ -775,7 +775,7 @@ test "lower narrow memory operations through native MilkIR pointer ops" {
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("load_ptr.i64"), content="true")
   inspect(text.contains("store_ptr16"), content="true")
-  inspect(text.contains("load_ptr8s.i32"), content="true")
+  inspect(text.contains("load_ptr8_s.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -934,7 +934,7 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
-  inspect(text.contains("load_ptr8u.i32"), content="true")
+  inspect(text.contains("load_ptr8_u.i32"), content="true")
   inspect(text.contains("store_ptr8"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")

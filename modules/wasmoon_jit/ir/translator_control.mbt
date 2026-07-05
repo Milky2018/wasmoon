@@ -81,7 +81,9 @@ fn Translator::translate_if(
     block: continuation,
     result_types,
     stack_height: stack_height_after_params,
+    has_predecessor: false,
   }
+  let frame_idx = self.block_stack.length()
   self.block_stack.push(frame)
 
   // Save locals at entry for else branch
@@ -112,6 +114,7 @@ fn Translator::translate_if(
     for loc in self.locals {
       args.push(loc)
     }
+    self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   }
 
@@ -150,8 +153,11 @@ fn Translator::translate_if(
     for loc in self.locals {
       args.push(loc)
     }
+    self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   }
+
+  let continuation_reachable = self.block_stack[frame_idx].has_predecessor
 
   // Pop frame
   self.block_stack.pop() |> ignore
@@ -159,20 +165,18 @@ fn Translator::translate_if(
   // Switch to continuation
   self.builder.switch_to_block(continuation)
 
-  // Continuation is reachable if outer was reachable.
-  // Even if both branches end with `br 0` (making them "unreachable" after the br),
-  // those branches jump TO the continuation, so the continuation is still reachable.
-  // Only mark continuation unreachable if the outer context was unreachable.
-  self.is_unreachable = outer_is_unreachable
+  self.is_unreachable = outer_is_unreachable || !continuation_reachable
 
   // Push results onto stack
-  for i, _ty in result_types {
-    self.push(continuation.params[i].0)
-  }
+  if continuation_reachable {
+    for i, _ty in result_types {
+      self.push(continuation.params[i].0)
+    }
 
-  // Update locals to use the continuation's phi values
-  for i, _loc in self.locals {
-    self.locals[i] = continuation.params[local_param_start + i].0
+    // Update locals to use the continuation's phi values
+    for i, _loc in self.locals {
+      self.locals[i] = continuation.params[local_param_start + i].0
+    }
   }
 }
 
@@ -194,6 +198,7 @@ fn Translator::translate_br(self : Translator, depth : Int) -> Unit {
     for loc in self.locals {
       args.push(loc)
     }
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else if idx == -1 {
     // Jump to function level (early return)
@@ -248,6 +253,7 @@ fn Translator::translate_br_if(self : Translator, depth : Int) -> Unit {
 
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough
@@ -320,6 +326,7 @@ fn Translator::translate_br_on_null(self : Translator, depth : Int) -> Unit {
 
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough - push the non-null ref back on stack
@@ -391,6 +398,7 @@ fn Translator::translate_br_on_non_null(self : Translator, depth : Int) -> Unit 
 
     // Critical edge split: taken block jumps to target with args
     self.builder.switch_to_block(taken)
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
 
     // Continue with fallthrough - reference is consumed (null), nothing pushed
@@ -461,6 +469,7 @@ fn Translator::translate_br_on_cast(
     for loc in self.locals {
       args.push(loc)
     }
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the original ref back
     self.builder.switch_to_block(fallthrough)
@@ -536,6 +545,7 @@ fn Translator::translate_br_on_cast_fail(
     self.builder.brnz(matches, fallthrough, taken)
     // Critical edge split: taken block jumps to target with original ref
     self.builder.switch_to_block(taken)
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
@@ -586,6 +596,7 @@ fn Translator::translate_br_table(
     let idx = self.block_stack.length() - 1 - depth
     if idx >= 0 && idx < self.block_stack.length() {
       let frame = self.block_stack[idx]
+      self.mark_block_frame_reachable(idx)
       (frame.block, frame.result_types, false)
     } else {
       // Function level
@@ -709,7 +720,7 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
     }
     args.rev_in_place()
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
     // Remap function index for cross-module calls
     let global_func_idx = self.remap_func_idx(func_idx)
     // Emit call with multi-value support
@@ -766,7 +777,7 @@ fn Translator::translate_call_indirect(
     }
     args.rev_in_place()
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
     // Emit call_indirect with original type_idx
     // is_subtype_cached handles canonical indices for structural equivalence
     let results = self.builder.call_indirect_multi(
@@ -813,7 +824,7 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
     args.rev_in_place()
 
     // Get result types
-    let result_types : Array[Type] = func_type.results.map(Type::from_wasm)
+    let result_types : Array[Type] = func_type.results.map(type_from_wasm)
 
     // Emit call_ref instruction
     let results = self.builder.call_ref_multi(

@@ -56,8 +56,13 @@ fn terminator_targets(term : Terminator) -> Array[Int] {
       out.push(default_target)
       out
     }
-    Return(_) | TrapExit(_) => []
+    Return(_) | Trap(_) | TrapExit(_) => []
   }
+}
+
+///|
+fn get_terminator_targets(term : Terminator) -> Array[Int] {
+  terminator_targets(term)
 }
 
 ///|

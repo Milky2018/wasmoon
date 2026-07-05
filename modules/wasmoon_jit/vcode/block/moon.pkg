@@ -1,4 +1,0 @@
-import {
-  "Milky2018/wasmoon_jit/vcode/instr",
-  "Milky2018/wasmoon_jit/vcode/abi",
-}

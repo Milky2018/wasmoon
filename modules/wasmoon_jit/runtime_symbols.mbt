@@ -236,46 +236,77 @@ pub(all) struct LinkedCode {
   code : Array[Int]
   frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  block_fixups : Array[@machv_emit.Fixup]
-  stack_maps : Array[@machv_emit.StackMap]
-  debug_entries : Array[@machv_emit.DebugEntry]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_stackmap_blob : Bytes
 } derive(Debug)
 
 ///|
-pub fn link_code_object(
-  object : @machv_emit.CodeObject,
+fn cwasm_symbol_for_fixup_idx(func_idx : Int) -> String {
+  if func_idx >= 0 {
+    "wasm.func.\{func_idx}"
+  } else {
+    "wasmoon.runtime.fixup.\{func_idx}"
+  }
+}
+
+///|
+fn runtime_relocations_from_machine_code(
+  object : @machv_emit.MachineCode,
   resolver : RuntimeSymbolResolver,
-) -> LinkedCode raise LinkError {
+) -> Array[ResolvedRuntimeRelocation] raise LinkError {
   let runtime_relocations : Array[ResolvedRuntimeRelocation] = []
-  for relocation in object.relocations {
-    match relocation.kind {
-      ExternalSymbol(symbol) =>
-        if resolver.resolve_symbol(symbol) is Some(runtime_symbol) {
-          runtime_relocations.push({
-            offset: relocation.offset,
-            symbol,
-            address: runtime_symbol.address,
-            fixup_idx: runtime_symbol.fixup_idx,
-          })
-        } else if resolve_wasm_func_symbol(symbol) is Some(func_idx) {
-          runtime_relocations.push({
-            offset: relocation.offset,
-            symbol,
-            address: 0L,
-            fixup_idx: Some(func_idx),
-          })
-        } else {
-          raise UnknownRuntimeSymbol(symbol)
-        }
-      BlockTarget(_) => ()
+  for fixup in object.get_call_fixups() {
+    let symbol = cwasm_symbol_for_fixup_idx(fixup.func_idx)
+    if fixup.func_idx >= 0 {
+      runtime_relocations.push({
+        offset: fixup.offset,
+        symbol,
+        address: 0L,
+        fixup_idx: Some(fixup.func_idx),
+      })
+    } else if resolve_runtime_func_fixup_idx(fixup.func_idx) is Some(address) {
+      runtime_relocations.push({
+        offset: fixup.offset,
+        symbol,
+        address,
+        fixup_idx: Some(fixup.func_idx),
+      })
+    } else if resolver.resolve_symbol(symbol) is Some(runtime_symbol) {
+      runtime_relocations.push({
+        offset: fixup.offset,
+        symbol,
+        address: runtime_symbol.address,
+        fixup_idx: runtime_symbol.fixup_idx,
+      })
+    } else {
+      raise UnknownRuntimeSymbol(symbol)
     }
   }
+  runtime_relocations
+}
+
+///|
+pub fn link_machine_code(
+  object : @machv_emit.MachineCode,
+  resolver : RuntimeSymbolResolver,
+) -> LinkedCode raise LinkError {
   {
-    code: object.code,
-    frame_size: object.frame_size,
-    runtime_relocations,
-    block_fixups: object.fixups,
-    stack_maps: object.stack_maps,
-    debug_entries: object.debug_entries,
+    code: object.get_bytes(),
+    frame_size: 0,
+    runtime_relocations: runtime_relocations_from_machine_code(object, resolver),
+    func_addr_fixups: object.get_func_addr_fixups(),
+    call_fixups: object.get_call_fixups(),
+    gc_safepoints: @machv_emit.CompiledFunction::new("", object, 0).get_gc_safepoints(),
+    gc_stackmap_blob: @machv_emit.CompiledFunction::new("", object, 0).get_gc_stackmap_blob(),
   }
+}
+
+///|
+pub fn link_code_object(
+  object : @machv_emit.MachineCode,
+  resolver : RuntimeSymbolResolver,
+) -> LinkedCode raise LinkError {
+  link_machine_code(object, resolver)
 }

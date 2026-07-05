@@ -24,9 +24,10 @@ pub(all) struct CwasmArtifact {
   functions : Array[CwasmFunctionRecord]
   call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  block_fixups : Array[@machv_emit.Fixup]
-  stack_maps : Array[@machv_emit.StackMap]
-  debug_entries : Array[@machv_emit.DebugEntry]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_stackmap_blob : Bytes
 } derive(Debug)
 
 ///|
@@ -70,15 +71,7 @@ pub fn CwasmArtifact::from_linked_code_for_target_with_signature(
   num_results : Int,
 ) -> CwasmArtifact {
   let code = linked.code.copy()
-  let call_veneers = if target is AArch64 {
-    materialize_aarch64_call_veneers(
-      code,
-      function_index,
-      linked.runtime_relocations,
-    )
-  } else {
-    []
-  }
+  let call_veneers = collect_call_veneers(function_index, linked.call_fixups)
   {
     version: 1,
     target,
@@ -96,9 +89,10 @@ pub fn CwasmArtifact::from_linked_code_for_target_with_signature(
     ],
     call_veneers,
     runtime_relocations: linked.runtime_relocations,
-    block_fixups: linked.block_fixups,
-    stack_maps: linked.stack_maps,
-    debug_entries: linked.debug_entries,
+    func_addr_fixups: linked.func_addr_fixups,
+    call_fixups: linked.call_fixups,
+    gc_safepoints: linked.gc_safepoints,
+    gc_stackmap_blob: linked.gc_stackmap_blob,
   }
 }
 
@@ -145,41 +139,20 @@ fn CwasmArtifact::function_code(
 }
 
 ///|
-fn append_aarch64_call_veneer(code : Array[Int]) -> Int {
-  let offset = code.length()
-  // Veneer layout:
-  //   ldr x16, #8
-  //   br x16
-  //   .quad target_ptr
-  code.push(0x50)
-  code.push(0x00)
-  code.push(0x00)
-  code.push(0x58)
-  code.push(0x00)
-  code.push(0x02)
-  code.push(0x1f)
-  code.push(0xd6)
-  for _ in 0..<8 {
-    code.push(0)
-  }
-  offset
-}
-
-///|
-fn materialize_aarch64_call_veneers(
-  code : Array[Int],
+fn collect_call_veneers(
   function_index : Int,
-  runtime_relocations : Array[ResolvedRuntimeRelocation],
+  call_fixups : Array[@machv_emit.CallFixup],
 ) -> Array[CwasmCallVeneer] {
   let out : Array[CwasmCallVeneer] = []
-  let veneers_by_func : Map[Int, Int] = {}
-  for relocation in runtime_relocations {
-    if relocation.fixup_idx is Some(func_idx) {
-      if veneers_by_func.get(func_idx) is None {
-        let offset = append_aarch64_call_veneer(code)
-        veneers_by_func.set(func_idx, offset)
-        out.push({ function_index, func_idx, offset })
-      }
+  let seen : Map[Int, Unit] = {}
+  for fixup in call_fixups {
+    if fixup.veneer_offset >= 0 && seen.get(fixup.func_idx) is None {
+      seen.set(fixup.func_idx, ())
+      out.push({
+        function_index,
+        func_idx: fixup.func_idx,
+        offset: fixup.veneer_offset,
+      })
     }
   }
   out
@@ -207,9 +180,35 @@ fn CwasmArtifact::function_gc_safepoints(
   let out : Array[@cwasm.GcSafepoint] = []
   let start = record.code_offset
   let end = record.code_offset + record.code_size
-  for stack_map in self.stack_maps {
-    if stack_map.offset >= start && stack_map.offset < end {
-      out.push(@cwasm.GcSafepoint::new(stack_map.offset - start, [], 0L))
+  for safepoint in self.gc_safepoints {
+    if safepoint.code_offset >= start && safepoint.code_offset < end {
+      out.push(
+        @cwasm.GcSafepoint::new(
+          safepoint.code_offset - start,
+          safepoint.live_refs,
+          safepoint.metadata,
+        ),
+      )
+    }
+  }
+  out
+}
+
+///|
+fn CwasmArtifact::function_func_addr_fixups(
+  self : CwasmArtifact,
+  record : CwasmFunctionRecord,
+) -> Array[@cwasm.FuncAddrFixup] {
+  let out : Array[@cwasm.FuncAddrFixup] = []
+  let start = record.code_offset
+  let end = record.code_offset + record.code_size
+  for fixup in self.func_addr_fixups {
+    if fixup.offset >= start && fixup.offset < end {
+      out.push({
+        offset: fixup.offset - start,
+        func_idx: fixup.func_idx,
+        reg: fixup.reg,
+      })
     }
   }
   out
@@ -223,16 +222,18 @@ fn CwasmArtifact::function_call_fixups(
   let out : Array[@cwasm.CallFixup] = []
   let start = record.code_offset
   let end = record.code_offset + record.code_size
-  for relocation in self.runtime_relocations {
-    if relocation.offset >= start && relocation.offset < end {
-      if relocation.fixup_idx is Some(func_idx) {
-        let veneer_offset = match
-          self.find_call_veneer(record.function_index, func_idx) {
-          Some(offset) => offset - start
-          None => -1
-        }
-        out.push({ offset: relocation.offset - start, func_idx, veneer_offset })
+  for fixup in self.call_fixups {
+    if fixup.offset >= start && fixup.offset < end {
+      let veneer_offset = match
+        self.find_call_veneer(record.function_index, fixup.func_idx) {
+        Some(offset) => offset - start
+        None => fixup.veneer_offset
       }
+      out.push({
+        offset: fixup.offset - start,
+        func_idx: fixup.func_idx,
+        veneer_offset,
+      })
     }
   }
   out
@@ -440,8 +441,6 @@ pub fn CwasmArtifact::to_precompiled_module(
   for record in self.functions {
     let gc_safepoints = self.function_gc_safepoints(record)
     let gc_root_counts = Array::make(gc_safepoints.length(), 0)
-    // TODO(wasmoon_jit): carry real live-root indices/root counts and per-function
-    // function-address fixups from the production JIT pipeline.
     module_.add_function(
       build_cwasm_entry_from_code(
         record.function_index,
@@ -451,9 +450,11 @@ pub fn CwasmArtifact::to_precompiled_module(
         0,
         record.num_params,
         record.num_results,
+        func_addr_fixups=self.function_func_addr_fixups(record),
         gc_safepoints~,
         gc_safepoint_root_counts=gc_root_counts,
         call_fixups=self.function_call_fixups(record),
+        gc_stackmap_blob=self.gc_stackmap_blob,
       ),
     )
   }
@@ -473,7 +474,7 @@ pub fn CwasmArtifact::manifest(self : CwasmArtifact) -> Array[String] {
     "cwasm.code_size=" + self.code.length().to_string(),
     "cwasm.functions=" + self.functions.length().to_string(),
     "cwasm.runtime_relocations=" + self.runtime_relocations.length().to_string(),
-    "cwasm.block_fixups=" + self.block_fixups.length().to_string(),
+    "cwasm.call_fixups=" + self.call_fixups.length().to_string(),
     "cwasm.serialized_size=" + self.serialize().length().to_string(),
   ]
 }

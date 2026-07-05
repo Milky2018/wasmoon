@@ -1400,7 +1400,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 
 ///|
 fn vcode_func_addr_fixups_to_cwasm(
-  fixups : Array[@emit.FuncAddrFixup],
+  fixups : Array[@machv_emit.FuncAddrFixup],
 ) -> Array[@cwasm.FuncAddrFixup] {
   let out : Array[@cwasm.FuncAddrFixup] = []
   for fixup in fixups {
@@ -1411,7 +1411,7 @@ fn vcode_func_addr_fixups_to_cwasm(
 
 ///|
 fn vcode_call_fixups_to_cwasm(
-  fixups : Array[@emit.CallFixup],
+  fixups : Array[@machv_emit.CallFixup],
 ) -> Array[@cwasm.CallFixup] {
   let out : Array[@cwasm.CallFixup] = []
   for fixup in fixups {
@@ -1426,7 +1426,7 @@ fn vcode_call_fixups_to_cwasm(
 
 ///|
 fn vcode_gc_safepoints_to_cwasm(
-  safepoints : Array[@vcode.GcSafepoint],
+  safepoints : Array[@machv_emit.GcSafepoint],
 ) -> Array[@cwasm.GcSafepoint] {
   let out : Array[@cwasm.GcSafepoint] = []
   for safepoint in safepoints {
@@ -1675,7 +1675,7 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
+    let (vcode_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output(
       vcode_func,
     )
     if regalloc_tick is Some(tick) {
@@ -1703,7 +1703,7 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let mc = @emit.emit_function_with_regalloc(
+    let mc = @machv_emit.emit_function_with_regalloc(
       vcode_ra,
       ra_output,
       debug_func_idx=Some(func_idx),
@@ -1717,7 +1717,7 @@ pub fn compile_module_to_jit(
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())
     }
-    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
+    let compiled = @machv_emit.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(

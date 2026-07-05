@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/isa_target/lower/peephole"
+
+import {
+  "Milky2018/machv_regalloc",
+}
+
+// Values
+pub fn optimize_vcode(@machv_regalloc.VCodeFunction, profile? : PeepholeProfile) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum PeepholeProfile {
+  Full
+  Lowering
+}
+
+// Type aliases
+
+// Traits
+

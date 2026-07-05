@@ -2,7 +2,7 @@
 fn type_byte_size(ty : @milkir.Type) -> Int {
   match ty {
     I32 | F32 => 4
-    I64 | F64 | Ptr | Ref => 8
+    I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
     V128 => 16
   }
 }
@@ -11,7 +11,7 @@ fn type_byte_size(ty : @milkir.Type) -> Int {
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
   match ty {
     I32 => Some(builder.iconst_i32(0))
-    I64 | Ref | Ptr => Some(builder.iconst_i64(0L))
+    I64 | Ref | Ptr | FuncRef | ExternRef => Some(builder.iconst_i64(0L))
     F32 => Some(builder.fconst_f32(0.0))
     F64 => Some(builder.fconst_f64(0.0))
     _ => None
@@ -758,7 +758,7 @@ fn push_table_set(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.table_fill")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
     elem_idx,
@@ -783,7 +783,7 @@ fn push_table_fill(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.table_fill")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
     dst,
@@ -950,7 +950,7 @@ fn push_memory_grow(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.memory_grow")
-  guard builder.call(symbol, Some(I32), [
+  guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(memidx),
       delta_i64,
@@ -999,7 +999,7 @@ fn push_memory_fill(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.memory_fill")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
     dst,
@@ -1034,7 +1034,7 @@ fn push_memory_copy(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.memory_copy")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_memidx),
     builder.iconst_i32(src_memidx),
@@ -1089,7 +1089,7 @@ fn push_memory_init(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.memory_init")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
     builder.iconst_i32(data_idx),
@@ -1111,7 +1111,8 @@ fn push_data_drop(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.data_drop")
-  builder.call(symbol, None, [context, builder.iconst_i32(data_idx)]) |> ignore
+  builder.call_symbol(symbol, None, [context, builder.iconst_i32(data_idx)])
+  |> ignore
   true
 }
 
@@ -1140,7 +1141,7 @@ fn push_table_grow(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.table_grow")
-  guard builder.call(symbol, Some(I32), [
+  guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(table_idx),
       delta_i64,
@@ -1177,7 +1178,7 @@ fn push_table_copy(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.table_copy")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_table_idx),
     builder.iconst_i32(src_table_idx),
@@ -1204,7 +1205,7 @@ fn push_table_init(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.table_init")
-  builder.call(symbol, None, [
+  builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
     builder.iconst_i32(elem_idx),
@@ -1226,7 +1227,8 @@ fn push_elem_drop(
   let symbol = builder
     .get_function()
     .declare_external_symbol("wasmoon.runtime.elem_drop")
-  builder.call(symbol, None, [context, builder.iconst_i32(elem_idx)]) |> ignore
+  builder.call_symbol(symbol, None, [context, builder.iconst_i32(elem_idx)])
+  |> ignore
   true
 }
 
@@ -1837,7 +1839,7 @@ fn append_linear_block_body(
       | BrOnNonNull(_)
       | TryTable(_, _, _) =>
         // TODO(wasm_frontend): lower structured labels and branch stack effects
-        // directly instead of relying on the production fallback trampoline.
+        // directly instead of relying on the full structured translator path.
         return false
       _ => out.push(instr)
     }

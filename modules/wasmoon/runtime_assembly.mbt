@@ -17,13 +17,13 @@ pub(all) struct RuntimeAssembly {
 ///|
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  machv_function : @machv.Function
-  regalloc_program : @regalloc.Program
-  code_object : @machv_emit.CodeObject
+  vcode_function : @machv_regalloc.VCodeFunction
+  allocated_function : @machv_regalloc.VCodeFunction
+  code_object : @machv_emit.MachineCode
   x64_abi : @x64_target.AbiPolicy
   aarch64_abi : @aarch64_target.AbiPolicy
   jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
-} derive(Debug)
+}
 
 ///|
 pub suberror WasmCompilerPipelineError {
@@ -68,17 +68,22 @@ pub fn runtime_assembly() -> RuntimeAssembly {
 }
 
 ///|
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise @machv_emit.EmitError {
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let signature = @milkir.Signature::new([], [])
-  let machv_function = @machv.Function::new("wasmoon_runtime_probe")
-  let entry = machv_function.new_block()
-  entry.append(machv_function.new_inst(Return))
-  let x64_regs = @x64_target.allocatable_regs()
+  let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
+  let entry = milk.new_block0()
+  entry.set_terminator(Return([]))
+  let vcode_function = @lower.lower_function(milk, run_ir_opt=false)
+  let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
+    vcode_function,
+  )
   {
     signature,
-    machv_function,
-    regalloc_program: @machv_regalloc.project_function(machv_function, x64_regs),
-    code_object: @machv_emit.emit_function_for_target(machv_function, AArch64),
+    vcode_function,
+    allocated_function,
+    code_object: @machv_emit.emit_function_with_regalloc(
+      allocated_function, output,
+    ),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),
     jit_glue: @wasmoon_jit.default_native_glue(),

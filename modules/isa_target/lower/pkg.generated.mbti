@@ -1,0 +1,102 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/isa_target/lower"
+
+import {
+  "Milky2018/machv/abi",
+  "Milky2018/machv/block",
+  "Milky2018/machv/instr",
+  "Milky2018/machv_regalloc",
+  "Milky2018/milkir",
+}
+
+// Values
+pub fn apply_aarch64_rule(String, MatchResult, @milkir.Inst, LoweringContext) -> AArch64RewriteResult
+
+pub fn get_aarch64_rules() -> Array[RewriteRule]
+
+pub fn get_optimization_rules() -> Array[RewriteRule]
+
+pub fn is_consecutive_ones(Int64) -> Bool
+
+pub fn is_valid_add_imm(Int64) -> Bool
+
+pub fn is_valid_logical_imm(Int64) -> Bool
+
+pub fn lower_function(@milkir.Function, abi_settings? : @abi.ABISettings, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv_regalloc.VCodeFunction
+
+pub fn lower_function_optimized(@milkir.Function) -> @machv_regalloc.VCodeFunction
+
+pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
+
+pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
+
+pub fn optimize_vcode(@machv_regalloc.VCodeFunction) -> Unit
+
+pub fn optimize_vcode_for_lowering(@machv_regalloc.VCodeFunction) -> Unit
+
+pub fn try_apply_rules(@milkir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
+
+// Errors
+
+// Types and methods
+pub enum AArch64RewriteResult {
+  AddShifted(Int, Int, Int)
+  SubShifted(Int, Int, Int)
+  Madd(Int, Int, Int)
+  Msub(Int, Int, Int)
+  Mneg(Int, Int)
+  LogicalShifted(@instr.VCodeOpcode, Int, Int, Int)
+  NoMatch
+}
+
+type LoweringContext
+pub fn LoweringContext::new(@milkir.Function, @abi.ABISettings, Int, Bool, Array[Int]) -> Self
+
+type MatchResult
+
+pub enum Pattern {
+  Any
+  ConstInt(Int64)
+  ConstFloat(Double)
+  AnyConstInt
+  Inst(PatternOpcode, Array[Pattern])
+}
+
+pub enum PatternOpcode {
+  Iadd
+  Isub
+  Imul
+  Sdiv
+  Udiv
+  Band
+  Bor
+  Bxor
+  Ishl
+  Sshr
+  Ushr
+  Fadd
+  Fsub
+  Fmul
+  Fdiv
+  Iconst
+  Fconst
+  Icmp
+  Fcmp
+  Copy
+  Select
+}
+
+pub enum RewriteResult {
+  Identity(Int)
+  Constant(Int64)
+  ShiftLeft(Int, Int)
+  ShiftRight(Int, Int)
+  NoMatch
+}
+
+type RewriteRule
+
+// Type aliases
+
+// Traits
+

@@ -18,12 +18,14 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
     raise EmptyFunction
   }
   let defined : @hashmap.HashMap[Int, Type] = HashMap([])
-  for i, ty in self.signature.params {
-    defined.set(i, ty)
+  for item in self.params {
+    let (param, ty) = item
+    defined.set(param.id, ty)
   }
   for block in self.blocks {
-    for param in block.params {
-      defined.set(param.id, param.ty)
+    for item in block.params {
+      let (param, ty) = item
+      defined.set(param.id, ty)
     }
     for inst in block.instructions {
       verify_inst(inst, defined)
@@ -167,6 +169,7 @@ fn verify_inst(
         )
       }
     Call(_) | CallIndirect(_) | CallPtr(_, _) | Custom(_) => ()
+    _ => ()
   }
 }
 
@@ -191,6 +194,6 @@ fn verify_terminator(
     }
     Brz(cond, _, _) | Brnz(cond, _, _) => verify_defined(cond, defined)
     BrTable(index, _, _) => verify_defined(index, defined)
-    TrapExit(_) => ()
+    Trap(_) | TrapExit(_) => ()
   }
 }

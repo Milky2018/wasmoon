@@ -131,7 +131,7 @@ pub fn FuncEnvironment::translate_global_get(
   global_idx : Int,
 ) -> Value {
   let global_type = self.global_types[global_idx]
-  let ty = Type::from_wasm(global_type.value_type)
+  let ty = type_from_wasm(global_type.value_type)
 
   // Load globals_ptr from vmctx
   let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
@@ -157,7 +157,7 @@ pub fn FuncEnvironment::translate_global_set(
   value : Value,
 ) -> Unit {
   let global_type = self.global_types[global_idx]
-  let ty = Type::from_wasm(global_type.value_type)
+  let ty = type_from_wasm(global_type.value_type)
 
   // Load globals_ptr from vmctx
   let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
@@ -361,7 +361,7 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
     Some(block) => block
     None => {
       let trap_block = builder.create_block()
-      let current = builder.current_block // save current position
+      let current = builder.current_block() // save current position
       builder.switch_to_block(trap_block)
       builder.trap("memory out of bounds")
       match current {
@@ -384,7 +384,7 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
     Some(block) => block
     None => {
       let trap_block = builder.create_block()
-      let current = builder.current_block
+      let current = builder.current_block()
       builder.switch_to_block(trap_block)
       builder.trap("unaligned atomic")
       match current {
@@ -444,7 +444,7 @@ fn type_byte_size(ty : Type) -> Int {
     F32 => 4
     F64 => 8
     V128 => 16 // SIMD vector
-    FuncRef | ExternRef => 8 // Reference types are pointer-sized
+    Ptr | Ref | FuncRef | ExternRef => 8 // Reference/pointer types are pointer-sized
   }
 }
 

@@ -23,8 +23,8 @@ pub(all) struct JitIntegrationPlan {
   entry_symbol : String
   target : @machv_emit.EmitTarget
   native_glue : Array[NativeGlueBinding]
-  object : @machv_emit.CodeObject
-} derive(Debug)
+  object : @machv_emit.MachineCode
+}
 
 ///|
 pub suberror JitPipelineError {
@@ -117,14 +117,23 @@ pub fn native_glue_covers_jit_ffi_stubs(
 ///|
 pub fn plan_integration_for_target(
   func : @milkir.Function,
-  machv_func : @machv.Function,
+  vcode_func : @machv_regalloc.VCodeFunction,
+  regalloc_output : @machv_regalloc.Output,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan raise @machv_emit.EmitError {
+) -> JitIntegrationPlan {
   {
     entry_symbol: func.name,
     target,
     native_glue: default_native_glue(),
-    object: @machv_emit.emit_function_for_target(machv_func, target),
+    object: @machv_emit.emit_function_with_regalloc(vcode_func, regalloc_output),
+  }
+}
+
+///|
+fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
+  match target {
+    AArch64 => AArch64
+    X64 => AMD64
   }
 }
 
@@ -132,67 +141,58 @@ pub fn plan_integration_for_target(
 pub fn lower_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv.Function {
-  match target {
-    AArch64 => @aarch64_target.lower_function(func)
-    X64 => @x64_target.lower_function(func)
-  }
+) -> @machv_regalloc.VCodeFunction {
+  let isa = emit_target_to_isa(target)
+  let previous = @isa.push_isa_override(isa)
+  let lowered = @lower.lower_function(func)
+  @isa.restore_isa_override(previous)
+  lowered
 }
 
 ///|
 pub fn lower_wasm_body_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv.Function {
-  match target {
-    AArch64 => @aarch64_target.lower_wasm_body_function(func)
-    X64 => @x64_target.lower_wasm_body_function(func)
-  }
-}
-
-///|
-fn allocatable_regs_for_target(
-  target : @machv_emit.EmitTarget,
-  reserve_extra_results_ptr? : Bool = false,
-) -> Array[@machv.PReg] {
-  match target {
-    AArch64 => @aarch64_target.allocatable_regs(reserve_extra_results_ptr~)
-    X64 => @x64_target.allocatable_regs(reserve_extra_results_ptr~)
-  }
+) -> @machv_regalloc.VCodeFunction {
+  let isa = emit_target_to_isa(target)
+  let previous = @isa.push_isa_override(isa)
+  let lowered = @lower.lower_function(func, run_ir_opt=false)
+  @isa.restore_isa_override(previous)
+  lowered
 }
 
 ///|
 pub fn plan_milkir_integration_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan raise JitPipelineError {
-  let machv_func = lower_milkir_for_target(func, target)
-  try {
-    @machv_regalloc.allocate_and_apply(
-      machv_func,
-      allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
-    )
-    |> ignore
-    plan_integration_for_target(func, machv_func, target)
-  } catch {
-    err => raise PipelineFailure(message=to_repr(err).to_string())
-  }
+) -> JitIntegrationPlan {
+  let isa = emit_target_to_isa(target)
+  let previous = @isa.push_isa_override(isa)
+  let vcode_func = @lower.lower_function(func)
+  let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
+    vcode_func,
+    isa,
+    @abi.ABISettings::default(),
+  )
+  let plan = plan_integration_for_target(func, allocated_func, output, target)
+  @isa.restore_isa_override(previous)
+  plan
 }
 
 ///|
 pub fn plan_wasm_body_milkir_integration_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan raise JitPipelineError {
-  let machv_func = lower_wasm_body_milkir_for_target(func, target)
-  try {
-    @machv_regalloc.allocate_and_apply(
-      machv_func,
-      allocatable_regs_for_target(target, reserve_extra_results_ptr=true),
-    )
-    |> ignore
-    plan_integration_for_target(func, machv_func, target)
-  } catch {
-    err => raise PipelineFailure(message=to_repr(err).to_string())
-  }
+) -> JitIntegrationPlan {
+  let isa = emit_target_to_isa(target)
+  let previous = @isa.push_isa_override(isa)
+  let vcode_func = @lower.lower_function(func, run_ir_opt=false)
+  let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
+    vcode_func,
+    isa,
+    @abi.ABISettings::default(),
+  )
+  let plan = plan_integration_for_target(func, allocated_func, output, target)
+  @isa.restore_isa_override(previous)
+  plan
 }

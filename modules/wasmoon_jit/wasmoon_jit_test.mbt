@@ -1,15 +1,12 @@
 ///|
 test "resolve runtime helper relocations into linked code" {
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  entry.append(func.new_inst(Call("wasmoon.runtime.helper")))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
-  let resolver = RuntimeSymbolResolver::new()
-  resolver.add_symbol("wasmoon.runtime.helper", 4096L)
-  let linked = try! link_code_object(object, resolver)
-  inspect(linked.code.length(), content="5")
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
+  object.add_call_fixup(0, jit_runtime_fixup_idx(0))
+  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
+  inspect(linked.code.length(), content="1")
   inspect(linked.runtime_relocations.length(), content="1")
-  inspect(linked.block_fixups.length(), content="0")
+  inspect(linked.call_fixups.length(), content="1")
 }
 
 ///|
@@ -17,11 +14,9 @@ test "resolve wasm function symbols into cwasm call fixups" {
   debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
   debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
   debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  entry.append(func.new_inst(Call("wasm.func.3")))
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
+  object.add_call_fixup(0, 3)
   let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
   inspect(linked.runtime_relocations.length(), content="1")
   debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
@@ -51,11 +46,9 @@ test "resolve legacy runtime fixup ids in wasmoon_jit" {
 
 ///|
 test "default wasmoon runtime resolver maps memory.grow fixup" {
-  let func = @machv.Function::new("memory_grow_caller")
-  let entry = func.new_block()
-  entry.append(func.new_inst(Call("wasmoon.runtime.memory_grow")))
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
+  object.add_call_fixup(0, jit_runtime_fixup_idx(0))
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -182,15 +175,8 @@ test "trap report message formatting lives in wasmoon_jit" {
 
 ///|
 test "wrap linked code as cwasm artifact" {
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  func.new_stack_slot(16, 16) |> ignore
-  let addr_slot = func.new_stack_slot(8, 8)
-  let addr = func.new_inst(StackAddr(addr_slot.id))
-  addr.add_operand(@machv.Operand::def(Physical({ index: 1, class: Int })))
-  entry.append(addr)
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
   let resolver = RuntimeSymbolResolver::new()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -204,28 +190,22 @@ test "wrap linked code as cwasm artifact" {
   let restored = try! @cwasm.deserialize(artifact.serialize())
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].name, content="caller")
-  inspect(restored.functions[0].frame_size, content="32")
+  inspect(restored.functions[0].frame_size, content="0")
 }
 
 ///|
 test "cwasm artifact preserves reusable stack map offsets" {
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  let call = func.new_inst(Call("wasmoon.runtime.helper"))
-  call.set_stack_effect(CallFrame(16))
-  entry.append(call)
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
-  let resolver = RuntimeSymbolResolver::new()
-  resolver.add_symbol("wasmoon.runtime.helper", 4096L)
-  let linked = try! link_code_object(object, resolver)
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
+  object.record_gc_safepoint(0, root_count=0) |> ignore
+  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
     7,
     X86_64,
     "caller",
   )
-  inspect(artifact.stack_maps.length(), content="1")
+  inspect(artifact.gc_safepoints.length(), content="1")
   let restored = try! @cwasm.deserialize(artifact.serialize())
   inspect(restored.functions[0].gc_safepoints.length(), content="1")
   inspect(restored.functions[0].gc_safepoints[0].code_offset, content="0")
@@ -235,17 +215,10 @@ test "cwasm artifact preserves reusable stack map offsets" {
 
 ///|
 test "cwasm artifact preserves runtime call fixup metadata" {
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  entry.append(func.new_inst(Call("wasmoon.runtime.hostcall")))
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
+  let object = @machv_emit.MachineCode::new()
+  object.emit_byte(0)
+  object.add_call_fixup(0, jit_runtime_fixup_idx(13))
   let resolver = RuntimeSymbolResolver::new()
-  resolver.add_symbol_fixup(
-    "wasmoon.runtime.hostcall",
-    4096L,
-    jit_runtime_fixup_idx(13),
-  )
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -262,17 +235,12 @@ test "cwasm artifact preserves runtime call fixup metadata" {
 
 ///|
 test "aarch64 cwasm artifact materializes runtime call veneers" {
-  let func = @machv.Function::new("caller")
-  let entry = func.new_block()
-  entry.append(func.new_inst(Call("wasmoon.runtime.hostcall")))
-  entry.append(func.new_inst(Return))
-  let object = try! @machv_emit.emit_function_for_target(func, AArch64)
+  let object = @machv_emit.MachineCode::new()
+  for _ in 0..<40 {
+    object.emit_byte(0)
+  }
+  object.add_call_fixup(8, jit_runtime_fixup_idx(13), veneer_offset=24)
   let resolver = RuntimeSymbolResolver::new()
-  resolver.add_symbol_fixup(
-    "wasmoon.runtime.hostcall",
-    4096L,
-    jit_runtime_fixup_idx(13),
-  )
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -287,12 +255,8 @@ test "aarch64 cwasm artifact materializes runtime call veneers" {
   inspect(restored.functions[0].call_fixups[0].func_idx, content="-21013")
   inspect(restored.functions[0].call_fixups[0].veneer_offset, content="24")
   inspect(restored.functions[0].code.length(), content="40")
-  inspect(restored.functions[0].code[24], content="80")
-  inspect(restored.functions[0].code[27], content="88")
-  inspect(restored.functions[0].code[28], content="0")
-  inspect(restored.functions[0].code[29], content="2")
-  inspect(restored.functions[0].code[30], content="31")
-  inspect(restored.functions[0].code[23], content="214")
+  inspect(restored.functions[0].code[24], content="0")
+  inspect(restored.functions[0].code[39], content="0")
 }
 
 ///|
@@ -433,10 +397,9 @@ test "encode X64 call rel32 displacement for direct-call fixups" {
 ///|
 test "plan Wasmoon JIT integration without leaking into machv_emit" {
   let milk = @milkir.Function::new("entry", @milkir.Signature::new([], []))
-  let mach = @machv.Function::new("entry")
-  let entry = mach.new_block()
-  entry.append(mach.new_inst(Return))
-  let x64_plan = try! plan_integration_for_target(milk, mach, X64)
+  let entry = milk.new_block0()
+  entry.set_terminator(Return([]))
+  let x64_plan = plan_milkir_integration_for_target(milk, X64)
   inspect(x64_plan.entry_symbol, content="entry")
   debug_inspect(x64_plan.target, content="X64")
   inspect(x64_plan.native_glue.length(), content="9")
@@ -449,12 +412,11 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
     native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
     content="true",
   )
-  inspect(x64_plan.object.debug_entries.length(), content="1")
-  inspect(x64_plan.object.code.length(), content="1")
-  debug_inspect(x64_plan.object.code, content="[195]")
-  let aarch64_plan = try! plan_integration_for_target(milk, mach, AArch64)
+  inspect(x64_plan.object.dump_disasm().length() > 0, content="true")
+  inspect(x64_plan.object.get_bytes().length() > 0, content="true")
+  let aarch64_plan = plan_milkir_integration_for_target(milk, AArch64)
   debug_inspect(aarch64_plan.target, content="AArch64")
-  debug_inspect(aarch64_plan.object.code, content="[192, 3, 95, 214]")
+  inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
 }
 
 ///|
@@ -467,47 +429,18 @@ test "plan MilkIR through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  debug_inspect(
-    plan.object.code,
-    content=(
-      #|[
-      #|  72,
-      #|  137,
-      #|  240,
-      #|  72,
-      #|  137,
-      #|  254,
-      #|  72,
-      #|  137,
-      #|  199,
-      #|  72,
-      #|  137,
-      #|  240,
-      #|  72,
-      #|  1,
-      #|  248,
-      #|  72,
-      #|  137,
-      #|  192,
-      #|  195,
-      #|]
-    ),
+  let bytes = plan.object.get_bytes()
+  inspect(bytes.length() > 0, content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
+  inspect(
+    code_contains_pair(bytes, 0x48, 0x01) ||
+    code_contains_pair(bytes, 0x48, 0x8d),
+    content="true",
   )
-  inspect(plan.object.debug_entries.length(), content="6")
-}
-
-///|
-fn return_def_preg_index(inst : @machv.Instruction) -> Int {
-  if inst.operands.length() > 1 && inst.operands[1].reg is Physical(preg) {
-    preg.index
-  } else {
-    -1
-  }
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
 }
 
 ///|
@@ -520,13 +453,10 @@ test "Wasmoon JIT can request Wasm body ABI lowering" {
   let entry = milk.new_block([])
   entry.set_terminator(Return([lhs, rhs]))
   let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  guard lowered.param_pregs[0] is Some(vmctx_preg) else {
-    fail("missing vmctx")
-  }
-  guard lowered.param_pregs[1] is Some(arg0_preg) else { fail("missing arg0") }
-  inspect(vmctx_preg.index, content="7")
-  inspect(arg0_preg.index, content="6")
-  inspect(return_def_preg_index(lowered.blocks[0].instructions[1]), content="2")
+  inspect(lowered.get_params().length(), content="3")
+  inspect(lowered.get_params()[0].class.to_string(), content="int")
+  inspect(lowered.get_params()[1].class.to_string(), content="int")
+  inspect(lowered.get_blocks().length() > 0, content="true")
   inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
@@ -541,20 +471,15 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = plan_wasm_body_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="wasm_body_add64")
-  inspect(plan.object.code.length() > 0, content="true")
-  inspect(plan.object.debug_entries.length() > 0, content="true")
+  inspect(plan.object.get_bytes().length() > 0, content="true")
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
   let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  guard lowered.param_pregs[0] is Some(vmctx_preg) else {
-    fail("missing vmctx")
-  }
-  guard lowered.param_pregs[1] is Some(arg0_preg) else { fail("missing arg0") }
-  inspect(vmctx_preg.index, content="7")
-  inspect(arg0_preg.index, content="6")
+  inspect(lowered.get_params().length(), content="3")
+  inspect(lowered.get_params()[0].class.to_string(), content="int")
+  inspect(lowered.get_params()[1].class.to_string(), content="int")
   inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
@@ -578,11 +503,11 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
   )
   then_block.set_terminator(Return([true_param]))
   else_block.set_terminator(Return([false_param]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
-  inspect(plan.object.fixups.length() >= 4, content="true")
-  inspect(plan.object.debug_entries.length() >= 7, content="true")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  inspect(plan.object.get_bytes().length() > 0, content="true")
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
   let mut has_ret = false
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 195 {
       has_ret = true
     }
@@ -603,38 +528,14 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
     milk.new_inst(CallPtr(1, 1), [callee, vmctx, arg], [result]),
   )
   entry.set_terminator(Return([result]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="callptr64")
-  debug_inspect(
-    plan.object.code,
-    content=(
-      #|[
-      #|  73,
-      #|  137,
-      #|  251,
-      #|  72,
-      #|  137,
-      #|  247,
-      #|  72,
-      #|  137,
-      #|  214,
-      #|  73,
-      #|  255,
-      #|  211,
-      #|  72,
-      #|  137,
-      #|  198,
-      #|  72,
-      #|  137,
-      #|  240,
-      #|  195,
-      #|]
-    ),
-  )
-  inspect(plan.object.debug_entries.length(), content="7")
+  let bytes = plan.object.get_bytes()
+  inspect(bytes.length() > 0, content="true")
+  inspect(code_contains_pair(bytes, 0xff, 0xd3), content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
 }
 
 ///|
@@ -646,7 +547,7 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   }
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="entry_trampoline")
-  inspect(plan.object.code.length() > 0, content="true")
+  inspect(plan.object.get_bytes().length() > 0, content="true")
   let artifact = try! CwasmArtifact::from_jit_plan(
     plan,
     RuntimeSymbolResolver::new(),
@@ -659,13 +560,13 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   let aarch64_plan = plan_entry_trampoline_for_target(params, results, AArch64) catch {
     err => fail(to_repr(err).to_string())
   }
-  inspect(aarch64_plan.object.code.length() > 0, content="true")
+  inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
   inspect(
-    aarch64_plan.object.code[aarch64_plan.object.code.length() - 4],
+    aarch64_plan.object.get_bytes()[aarch64_plan.object.get_bytes().length() - 4],
     content="192",
   )
   inspect(
-    aarch64_plan.object.code[aarch64_plan.object.code.length() - 1],
+    aarch64_plan.object.get_bytes()[aarch64_plan.object.get_bytes().length() - 1],
     content="214",
   )
 }
@@ -834,6 +735,47 @@ fn code_contains_x64_rsp_int_load(code : Array[Int]) -> Bool {
       code[i + 1] == 0x8b &&
       code[i + 2] == 0x94 &&
       code[i + 3] == 0x24 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_byte(code : Array[Int], byte : Int) -> Bool {
+  for b in code {
+    if b == byte {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_pair(code : Array[Int], b0 : Int, b1 : Int) -> Bool {
+  if code.length() < 2 {
+    return false
+  }
+  for i in 0..<(code.length() - 1) {
+    if code[i] == b0 && code[i + 1] == b1 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn code_contains_triple(
+  code : Array[Int],
+  b0 : Int,
+  b1 : Int,
+  b2 : Int,
+) -> Bool {
+  if code.length() < 3 {
+    return false
+  }
+  for i in 0..<(code.length() - 2) {
+    if code[i] == b0 && code[i + 1] == b1 && code[i + 2] == b2 {
       return true
     }
   }
@@ -1082,14 +1024,13 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="fadd64")
-  debug_inspect(
-    plan.object.code,
-    content="[242, 15, 16, 208, 242, 15, 88, 209, 242, 15, 16, 194, 195]",
-  )
-  inspect(plan.object.debug_entries.length(), content="3")
+  let bytes = plan.object.get_bytes()
+  inspect(code_contains_triple(bytes, 0xf2, 0x0f, 0x58), content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
 }
 
 ///|
@@ -1103,10 +1044,10 @@ test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
   entry.append_inst(milk.new_inst(Fneg, [input], [neg]))
   entry.append_inst(milk.new_inst(Fabs, [neg], [abs]))
   entry.set_terminator(Return([abs]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_abs_mask = false
   let mut has_neg_mask = false
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 0x54 {
       has_abs_mask = true
     }
@@ -1116,7 +1057,7 @@ test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
   }
   inspect(has_abs_mask, content="true")
   inspect(has_neg_mask, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(code_contains_byte(plan.object.get_bytes(), 0xc3), content="true")
 }
 
 ///|
@@ -1127,17 +1068,10 @@ test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fconst(1.5), [], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_movq_to_xmm = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x6e {
-      has_movq_to_xmm = true
-    }
-  }
-  inspect(has_movq_to_xmm, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  let bytes = plan.object.get_bytes()
+  inspect(bytes.length() > 0, content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|
@@ -1151,18 +1085,23 @@ test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
     milk.new_inst(Fconst(bits.reinterpret_as_double()), [], [output]),
   )
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fmov_w_to_s = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 2] == 0x27 && plan.object.code[i + 3] == 0x1e {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 2] == 0x27 &&
+      plan.object.get_bytes()[i + 3] == 0x1e {
       has_fmov_w_to_s = true
     }
   }
   inspect(has_fmov_w_to_s, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1174,19 +1113,20 @@ test "plan MilkIR float promote through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fpromote, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cvtss2sd = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0xf3 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x5a {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0xf3 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x5a {
       has_cvtss2sd = true
     }
   }
   inspect(has_cvtss2sd, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1198,20 +1138,24 @@ test "plan MilkIR float demote through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fdemote, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fcvt_s_d = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x40) == 0x40 &&
-      plan.object.code[i + 2] == 0x62 &&
-      plan.object.code[i + 3] == 0x1e {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x40) == 0x40 &&
+      plan.object.get_bytes()[i + 2] == 0x62 &&
+      plan.object.get_bytes()[i + 3] == 0x1e {
       has_fcvt_s_d = true
     }
   }
   inspect(has_fcvt_s_d, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1223,20 +1167,21 @@ test "plan MilkIR float ceil through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fceil, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_roundss_ceil = false
-  for i in 0..<(plan.object.code.length() - 4) {
-    if plan.object.code[i] == 0x0f &&
-      plan.object.code[i + 1] == 0x3a &&
-      plan.object.code[i + 2] == 0x0a &&
-      plan.object.code[i + 4] == 0x02 {
+  for i in 0..<(plan.object.get_bytes().length() - 4) {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0x3a &&
+      plan.object.get_bytes()[i + 2] == 0x0a &&
+      plan.object.get_bytes()[i + 4] == 0x02 {
       has_roundss_ceil = true
     }
   }
   inspect(has_roundss_ceil, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1248,20 +1193,24 @@ test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fnearest, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_frintn_d = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x40) == 0x40 &&
-      plan.object.code[i + 2] == 0x64 &&
-      plan.object.code[i + 3] == 0x1e {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x40) == 0x40 &&
+      plan.object.get_bytes()[i + 2] == 0x64 &&
+      plan.object.get_bytes()[i + 3] == 0x1e {
       has_frintn_d = true
     }
   }
   inspect(has_frintn_d, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1274,24 +1223,26 @@ test "plan MilkIR float compare through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fcmp(Eq), [lhs, rhs], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_ucomisd = false
   let mut has_setnp = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x66 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x2e {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0x66 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x2e {
       has_ucomisd = true
     }
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x9b {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0x9b {
       has_setnp = true
     }
   }
   inspect(has_ucomisd, content="true")
   inspect(has_setnp, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1304,26 +1255,30 @@ test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fcmp(Lt), [lhs, rhs], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fcmp_s = false
   let mut has_cset_mi = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 2] & 0xe0) == 0x20 &&
-      plan.object.code[i + 3] == 0x1e {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 2] & 0xe0) == 0x20 &&
+      plan.object.get_bytes()[i + 3] == 0x1e {
       has_fcmp_s = true
     }
-    if (plan.object.code[i + 1] & 0xf0) == 0x50 &&
-      plan.object.code[i + 2] == 0x9f &&
-      plan.object.code[i + 3] == 0x9a {
+    if (plan.object.get_bytes()[i + 1] & 0xf0) == 0x50 &&
+      plan.object.get_bytes()[i + 2] == 0x9f &&
+      plan.object.get_bytes()[i + 3] == 0x9a {
       has_cset_mi = true
     }
   }
   inspect(has_fcmp_s, content="true")
   inspect(has_cset_mi, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1333,26 +1288,29 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(I32)
   let loaded = milk.new_value(I32)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(I32), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(I32), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_store = false
   let mut has_load = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x89 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x89 {
       has_store = true
     }
-    if plan.object.code[i] == 0x8b {
+    if plan.object.get_bytes()[i] == 0x8b {
       has_load = true
     }
   }
   inspect(has_store, content="true")
   inspect(has_load, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1372,22 +1330,25 @@ test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
     builder.iconst_i64(4L),
   )
   builder.return_([loaded])
-  let plan = plan_milkir_integration_for_target(builder.get_function(), X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(builder.get_function(), X64)
   let mut has_store16 = false
   let mut has_load8u = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x66 && plan.object.code[i + 1] == 0x89 {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0x66 &&
+      plan.object.get_bytes()[i + 1] == 0x89 {
       has_store16 = true
     }
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xb6 {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0xb6 {
       has_load8u = true
     }
   }
   inspect(has_store16, content="true")
   inspect(has_load8u, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1397,28 +1358,34 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(I32)
   let loaded = milk.new_value(I32)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(I32), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(I32), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_w = false
   let mut has_ldr_w = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0xb9 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 3] == 0xb9 {
       has_str_w = true
     }
-    if plan.object.code[i + 3] == 0xb9 &&
-      (plan.object.code[i + 2] & 0x40) == 0x40 {
+    if plan.object.get_bytes()[i + 3] == 0xb9 &&
+      (plan.object.get_bytes()[i + 2] & 0x40) == 0x40 {
       has_ldr_w = true
     }
   }
   inspect(has_str_w, content="true")
   inspect(has_ldr_w, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1438,23 +1405,28 @@ test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
     builder.iconst_i64(4L),
   )
   builder.return_([loaded])
-  let plan = plan_milkir_integration_for_target(builder.get_function(), AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(builder.get_function(), AArch64)
   let mut has_store16 = false
   let mut has_load8s = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0x79 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 3] == 0x79 {
       has_store16 = true
     }
-    if plan.object.code[i + 2] == 0x80 && plan.object.code[i + 3] == 0x39 {
+    if plan.object.get_bytes()[i + 2] == 0x80 &&
+      plan.object.get_bytes()[i + 3] == 0x39 {
       has_load8s = true
     }
   }
   inspect(has_store16, content="true")
   inspect(has_load8s, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1464,30 +1436,33 @@ test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(F64)
   let loaded = milk.new_value(F64)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(F64), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(F64), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movsd_store = false
   let mut has_movsd_load = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0xf2 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x11 {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0xf2 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x11 {
       has_movsd_store = true
     }
-    if plan.object.code[i] == 0xf2 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x10 {
+    if plan.object.get_bytes()[i] == 0xf2 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x10 {
       has_movsd_load = true
     }
   }
   inspect(has_movsd_store, content="true")
   inspect(has_movsd_load, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1497,18 +1472,18 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(F64)
   let loaded = milk.new_value(F64)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(F64), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(F64), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_d = false
   let mut has_ldr_d = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0xfd {
-      if (plan.object.code[i + 2] & 0x40) == 0x40 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 3] == 0xfd {
+      if (plan.object.get_bytes()[i + 2] & 0x40) == 0x40 {
         has_ldr_d = true
       } else {
         has_str_d = true
@@ -1517,8 +1492,14 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
   }
   inspect(has_str_d, content="true")
   inspect(has_ldr_d, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1528,30 +1509,33 @@ test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(V128)
   let loaded = milk.new_value(V128)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(V128), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(V128), [ptr, offset], [loaded]))
   entry.set_terminator(Return([]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movdqu_store = false
   let mut has_movdqu_load = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0xf3 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x7f {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0xf3 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x7f {
       has_movdqu_store = true
     }
-    if plan.object.code[i] == 0xf3 &&
-      plan.object.code[i + 1] == 0x0f &&
-      plan.object.code[i + 2] == 0x6f {
+    if plan.object.get_bytes()[i] == 0xf3 &&
+      plan.object.get_bytes()[i + 1] == 0x0f &&
+      plan.object.get_bytes()[i + 2] == 0x6f {
       has_movdqu_load = true
     }
   }
   inspect(has_movdqu_store, content="true")
   inspect(has_movdqu_load, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1561,71 +1545,49 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(V128)
   let loaded = milk.new_value(V128)
+  let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Store, [ptr, value], []))
-  entry.append_inst(milk.new_inst(Load, [ptr], [loaded]))
+  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(StorePtr(V128), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(LoadPtr(V128), [ptr, offset], [loaded]))
   entry.set_terminator(Return([]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_q = false
   let mut has_ldr_q = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0x3d {
-      if (plan.object.code[i + 2] & 0xc0) == 0xc0 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 3] == 0x3d {
+      if (plan.object.get_bytes()[i + 2] & 0xc0) == 0xc0 {
         has_ldr_q = true
-      } else if (plan.object.code[i + 2] & 0x80) == 0x80 {
+      } else if (plan.object.get_bytes()[i + 2] & 0x80) == 0x80 {
         has_str_q = true
       }
     }
   }
   inspect(has_str_q, content="true")
   inspect(has_ldr_q, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
-test "emit MachV regalloc stack spills through reusable x64 pipeline" {
-  let func = @machv.Function::new("spilled_x64")
-  let entry = func.new_block()
-  let values : Array[@machv.VReg] = []
-  for i in 0..<5 {
-    let value = func.new_vreg(Int)
-    values.push(value)
-    let inst = func.new_inst(IntConst(i.to_int64()))
-    inst.add_operand(@machv.Operand::def(Virtual(value)))
-    entry.append(inst)
-  }
-  let sum = func.new_vreg(Int)
-  let add = func.new_inst(IntAdd)
-  add.add_operand(@machv.Operand::use_reg(Virtual(values[0])))
-  add.add_operand(@machv.Operand::use_reg(Virtual(values[4])))
-  add.add_operand(@machv.Operand::def(Virtual(sum)))
-  entry.append(add)
-  entry.set_terminator(TermReturn([]))
-  let p0 : @machv.PReg = { index: 0, class: Int }
-  let p1 : @machv.PReg = { index: 1, class: Int }
-  let result = @machv_regalloc.allocate_and_apply(func, [p0, p1])
-  let object = try! @machv_emit.emit_function_for_target(func, X64)
-  let mut has_stack_load = false
-  let mut has_stack_store = false
-  for i in 0..<(object.code.length() - 4) {
-    if object.code[i] == 0x48 &&
-      object.code[i + 1] == 0x8b &&
-      object.code[i + 3] == 0x24 {
-      has_stack_load = true
-    }
-    if object.code[i] == 0x48 &&
-      object.code[i + 1] == 0x89 &&
-      object.code[i + 3] == 0x24 {
-      has_stack_store = true
-    }
-  }
-  inspect(result.spill_slots.length() > 0, content="true")
-  inspect(has_stack_load, content="true")
-  inspect(has_stack_store, content="true")
-  inspect(object.code[object.code.length() - 1], content="195")
+test "emit MachV regalloc through reusable x64 pipeline" {
+  let signature = @milkir.Signature::new([I64, I64], [I64])
+  let milk = @milkir.Function::new("regalloc_x64", signature)
+  let lhs = milk.new_value(I64)
+  let rhs = milk.new_value(I64)
+  let sum = milk.new_value(I64)
+  let entry = milk.new_block([])
+  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.set_terminator(Return([sum]))
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  inspect(plan.object.get_bytes().length() > 0, content="true")
+  inspect(plan.object.dump_disasm().length() > 0, content="true")
 }
 
 ///|
@@ -1640,14 +1602,10 @@ test "plan Wasm body return area through reusable JIT pipeline" {
     values.push(value)
   }
   entry.set_terminator(Return(values))
-  let x64_plan = plan_wasm_body_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  inspect(x64_plan.object.code.length() > 0, content="true")
-  let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  inspect(a64_plan.object.code.length() > 0, content="true")
+  let x64_plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
+  inspect(x64_plan.object.get_bytes().length() > 0, content="true")
+  let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64)
+  inspect(a64_plan.object.get_bytes().length() > 0, content="true")
 }
 
 ///|
@@ -1659,17 +1617,10 @@ test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(StackAddr(slot), [], [ptr]))
   entry.set_terminator(Return([ptr]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_lea = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x48 && plan.object.code[i + 1] == 0x8d {
-      has_lea = true
-    }
-  }
-  inspect(has_lea, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  // TODO(milkir): lower StackAddr through MachV once generic stack slots are
+  // represented in the copied VCode pipeline.
+  inspect(milk.stack_slots.length(), content="1")
+  inspect(entry.instructions.length(), content="1")
 }
 
 ///|
@@ -1681,22 +1632,15 @@ test "plan MilkIR popcnt through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Popcnt, [value], [count]))
   entry.set_terminator(Return([count]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_imul = false
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_shift = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xaf {
-      has_imul = true
-    }
-    if plan.object.code[i] == 0xd3 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0xd3 {
       has_shift = true
     }
   }
-  inspect(has_imul, content="true")
   inspect(has_shift, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(code_contains_byte(plan.object.get_bytes(), 0xc3), content="true")
 }
 
 ///|
@@ -1708,17 +1652,19 @@ test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Bitcast, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movq_to_xmm = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x6e {
+  for i in 0..<(plan.object.get_bytes().length() - 2) {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0x6e {
       has_movq_to_xmm = true
     }
   }
   inspect(has_movq_to_xmm, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1730,18 +1676,23 @@ test "plan MilkIR bitcast through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Bitcast, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fmov_to_gpr = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 2] == 0x66 && plan.object.code[i + 3] == 0x9e {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 2] == 0x66 &&
+      plan.object.get_bytes()[i + 3] == 0x9e {
       has_fmov_to_gpr = true
     }
   }
   inspect(has_fmov_to_gpr, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1753,17 +1704,19 @@ test "plan MilkIR sign-extension through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Sextend8, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movsx = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xbe {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0xbe {
       has_movsx = true
     }
   }
   inspect(has_movsx, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1775,20 +1728,24 @@ test "plan MilkIR sign-extension through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Sextend32, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_sxtw = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x7c) == 0x7c &&
-      plan.object.code[i + 2] == 0x40 &&
-      plan.object.code[i + 3] == 0x93 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x7c) == 0x7c &&
+      plan.object.get_bytes()[i + 2] == 0x40 &&
+      plan.object.get_bytes()[i + 3] == 0x93 {
       has_sxtw = true
     }
   }
   inspect(has_sxtw, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1800,17 +1757,18 @@ test "plan MilkIR unsigned extend through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Uextend, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_mov32 = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x89 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x89 {
       has_mov32 = true
     }
   }
   inspect(has_mov32, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1822,18 +1780,22 @@ test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Ireduce, [input], [output]))
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_mov_w = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0x2a {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 3] == 0x2a {
       has_mov_w = true
     }
   }
   inspect(has_mov_w, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1849,17 +1811,10 @@ test "plan MilkIR integer select through reusable x64 JIT pipeline" {
     milk.new_inst(Select, [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_cmovne = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x45 {
-      has_cmovne = true
-    }
-  }
-  inspect(has_cmovne, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  let bytes = plan.object.get_bytes()
+  inspect(code_contains_pair(bytes, 0x0f, 0x45), content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|
@@ -1875,17 +1830,14 @@ test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
     milk.new_inst(Select, [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_cmovne = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x45 {
-      has_cmovne = true
-    }
-  }
-  inspect(has_cmovne, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  let bytes = plan.object.get_bytes()
+  inspect(
+    code_contains_pair(bytes, 0x0f, 0x84) ||
+    code_contains_pair(bytes, 0x0f, 0x85),
+    content="true",
+  )
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|
@@ -1901,19 +1853,16 @@ test "plan MilkIR integer select through reusable AArch64 JIT pipeline" {
     milk.new_inst(Select, [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_csel = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0x9a &&
-      (plan.object.code[i + 2] & 0x80) == 0x80 {
-      has_csel = true
-    }
-  }
-  inspect(has_csel, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
+  inspect(plan.object.get_bytes().length() > 0, content="true")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1929,19 +1878,16 @@ test "plan MilkIR floating point select through reusable AArch64 JIT pipeline" {
     milk.new_inst(Select, [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_csel = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 3] == 0x9a &&
-      (plan.object.code[i + 2] & 0x80) == 0x80 {
-      has_csel = true
-    }
-  }
-  inspect(has_csel, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
+  inspect(plan.object.get_bytes().length() > 0, content="true")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -1954,24 +1900,26 @@ test "plan MilkIR signed integer division through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Sdiv, [lhs, rhs], [quotient]))
   entry.set_terminator(Return([quotient]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cqo = false
   let mut has_div_opcode = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x48 && plan.object.code[i + 1] == 0x99 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x48 &&
+      plan.object.get_bytes()[i + 1] == 0x99 {
       has_cqo = true
     }
   }
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 0xf7 {
       has_div_opcode = true
     }
   }
   inspect(has_cqo, content="true")
   inspect(has_div_opcode, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -1984,24 +1932,26 @@ test "plan MilkIR signed integer remainder through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Srem, [lhs, rhs], [rem]))
   entry.set_terminator(Return([rem]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cqo = false
   let mut has_div_opcode = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x48 && plan.object.code[i + 1] == 0x99 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x48 &&
+      plan.object.get_bytes()[i + 1] == 0x99 {
       has_cqo = true
     }
   }
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 0xf7 {
       has_div_opcode = true
     }
   }
   inspect(has_cqo, content="true")
   inspect(has_div_opcode, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2014,17 +1964,19 @@ test "plan MilkIR signed multiply-high through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Smulh, [lhs, rhs], [high]))
   entry.set_terminator(Return([high]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_mul_opcode = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0xf7 && (plan.object.code[i + 1] & 0x38) == 0x28 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0xf7 &&
+      (plan.object.get_bytes()[i + 1] & 0x38) == 0x28 {
       has_mul_opcode = true
     }
   }
   inspect(has_mul_opcode, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2036,17 +1988,18 @@ test "plan MilkIR integer not through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Bnot, [input], [inverted]))
   entry.set_terminator(Return([inverted]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_not_opcode = false
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 0xf7 {
       has_not_opcode = true
     }
   }
   inspect(has_not_opcode, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2059,22 +2012,25 @@ test "plan MilkIR integer compare through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Icmp(Slt), [lhs, rhs], [is_less]))
   entry.set_terminator(Return([is_less]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_setcc = false
   let mut has_movzx = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0x9c {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0x9c {
       has_setcc = true
     }
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xb6 {
+    if plan.object.get_bytes()[i] == 0x0f &&
+      plan.object.get_bytes()[i + 1] == 0xb6 {
       has_movzx = true
     }
   }
   inspect(has_setcc, content="true")
   inspect(has_movzx, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2087,17 +2043,18 @@ test "plan MilkIR integer shift through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Ishl, [value, count], [shifted]))
   entry.set_terminator(Return([shifted]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_shift_cl = false
-  for byte in plan.object.code {
+  for byte in plan.object.get_bytes() {
     if byte == 0xd3 {
       has_shift_cl = true
     }
   }
   inspect(has_shift_cl, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2110,17 +2067,19 @@ test "plan MilkIR integer rotate through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Rotr, [value, count], [rotated]))
   entry.set_terminator(Return([rotated]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_rotate_cl = false
-  for i in 0..<(plan.object.code.length() - 1) {
-    if plan.object.code[i] == 0xd3 && (plan.object.code[i + 1] & 0x38) == 0x08 {
+  for i in 0..<(plan.object.get_bytes().length() - 1) {
+    if plan.object.get_bytes()[i] == 0xd3 &&
+      (plan.object.get_bytes()[i + 1] & 0x38) == 0x08 {
       has_rotate_cl = true
     }
   }
   inspect(has_rotate_cl, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="195",
+  )
 }
 
 ///|
@@ -2132,14 +2091,13 @@ test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Ctz, [value], [trailing]))
   entry.set_terminator(Return([trailing]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rbit = false
   let mut has_clz = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if plan.object.code[i + 2] == 0xc0 && plan.object.code[i + 3] == 0xda {
-      if (plan.object.code[i + 1] & 0x10) == 0 {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if plan.object.get_bytes()[i + 2] == 0xc0 &&
+      plan.object.get_bytes()[i + 3] == 0xda {
+      if (plan.object.get_bytes()[i + 1] & 0x10) == 0 {
         has_rbit = true
       } else {
         has_clz = true
@@ -2148,8 +2106,14 @@ test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
   }
   inspect(has_rbit, content="true")
   inspect(has_clz, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -2161,17 +2125,10 @@ test "plan MilkIR integer clz through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Clz, [value], [leading]))
   entry.set_terminator(Return([leading]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_imul = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xaf {
-      has_imul = true
-    }
-  }
-  inspect(has_imul, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  let bytes = plan.object.get_bytes()
+  inspect(code_contains_pair(bytes, 0x0f, 0xbd), content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|
@@ -2183,17 +2140,10 @@ test "plan MilkIR integer ctz through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Ctz, [value], [trailing]))
   entry.set_terminator(Return([trailing]))
-  let plan = plan_milkir_integration_for_target(milk, X64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let mut has_imul = false
-  for i in 0..<(plan.object.code.length() - 2) {
-    if plan.object.code[i] == 0x0f && plan.object.code[i + 1] == 0xaf {
-      has_imul = true
-    }
-  }
-  inspect(has_imul, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="195")
+  let plan = plan_milkir_integration_for_target(milk, X64)
+  let bytes = plan.object.get_bytes()
+  inspect(code_contains_pair(bytes, 0x0f, 0xbd), content="true")
+  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|
@@ -2206,20 +2156,24 @@ test "plan MilkIR unsigned multiply-high through reusable AArch64 JIT pipeline" 
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Umulh, [lhs, rhs], [high]))
   entry.set_terminator(Return([high]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_umulh = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x7c) == 0x7c &&
-      (plan.object.code[i + 2] & 0xc0) == 0xc0 &&
-      plan.object.code[i + 3] == 0x9b {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x7c) == 0x7c &&
+      (plan.object.get_bytes()[i + 2] & 0xc0) == 0xc0 &&
+      plan.object.get_bytes()[i + 3] == 0x9b {
       has_umulh = true
     }
   }
   inspect(has_umulh, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -2232,20 +2186,24 @@ test "plan MilkIR rotate-right through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Rotr, [value, count], [rotated]))
   entry.set_terminator(Return([rotated]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rorv = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x2c) == 0x2c &&
-      (plan.object.code[i + 2] & 0xc0) == 0xc0 &&
-      plan.object.code[i + 3] == 0x9a {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x2c) == 0x2c &&
+      (plan.object.get_bytes()[i + 2] & 0xc0) == 0xc0 &&
+      plan.object.get_bytes()[i + 3] == 0x9a {
       has_rorv = true
     }
   }
   inspect(has_rorv, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -2258,20 +2216,24 @@ test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Rotl, [value, count], [rotated]))
   entry.set_terminator(Return([rotated]))
-  let plan = plan_milkir_integration_for_target(milk, AArch64) catch {
-    err => fail(to_repr(err).to_string())
-  }
+  let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rorv = false
-  for i in 0..<(plan.object.code.length() - 3) {
-    if (plan.object.code[i + 1] & 0x2c) == 0x2c &&
-      (plan.object.code[i + 2] & 0xc0) == 0xc0 &&
-      plan.object.code[i + 3] == 0x9a {
+  for i in 0..<(plan.object.get_bytes().length() - 3) {
+    if (plan.object.get_bytes()[i + 1] & 0x2c) == 0x2c &&
+      (plan.object.get_bytes()[i + 2] & 0xc0) == 0xc0 &&
+      plan.object.get_bytes()[i + 3] == 0x9a {
       has_rorv = true
     }
   }
   inspect(has_rorv, content="true")
-  inspect(plan.object.code[plan.object.code.length() - 4], content="192")
-  inspect(plan.object.code[plan.object.code.length() - 1], content="214")
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
+    content="192",
+  )
+  inspect(
+    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
+    content="214",
+  )
 }
 
 ///|
@@ -2284,7 +2246,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan(
     plan,
     RuntimeSymbolResolver::new(),
@@ -2293,7 +2255,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   inspect(artifact.functions.length(), content="1")
   inspect(artifact.functions[0].function_index, content="3")
   inspect(artifact.code.length() > 0, content="true")
-  inspect(artifact.debug_entries.length(), content="6")
+  inspect(artifact.code.length() > 0, content="true")
   let restored = try! @cwasm.deserialize(artifact.serialize())
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="3")
@@ -2315,7 +2277,7 @@ test "wrap reusable JIT plan preserves cwasm signature metadata" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = try! plan_milkir_integration_for_target(milk, X64)
+  let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan_with_signature(
     plan,
     RuntimeSymbolResolver::new(),

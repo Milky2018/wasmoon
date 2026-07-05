@@ -161,7 +161,7 @@ fn class_for_type(ty : @milkir.Type) -> @machv.RegClass {
     F32 => Float32
     F64 => Float64
     V128 => Vector
-    I32 | I64 | Ptr | Ref => Int
+    I32 | I64 | Ptr | Ref | FuncRef | ExternRef => Int
   }
 }
 
@@ -768,7 +768,7 @@ fn mem_type_for_type(ty : @milkir.Type) -> @machv.MemType {
     F32 => MemF32
     F64 => MemF64
     V128 => MemV128
-    Ptr | Ref => MemPtr
+    Ptr | Ref | FuncRef | ExternRef => MemPtr
   }
 }
 
@@ -874,6 +874,7 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     CallPtr(params, results) => CallPtr(params, results)
     Trap(reason) => Trap(reason)
     Custom(name) => Custom(name)
+    _ => Custom(to_repr(opcode).to_string())
   }
 }
 
@@ -1346,6 +1347,7 @@ fn lower_terminator(
           map_block_id(block_map, default_target),
         ),
       )
+    Trap(reason) => block.set_terminator(TermTrap(reason))
   }
 }
 
@@ -1375,7 +1377,8 @@ fn lower_function_with_abi(
   for milk_block in func.blocks {
     let block = out.new_block()
     block_map.push((milk_block.id, block.id))
-    for param in milk_block.params {
+    for item in milk_block.params {
+      let (param, _) = item
       block.add_param(vreg_for_value(param))
     }
   }

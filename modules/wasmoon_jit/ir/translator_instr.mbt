@@ -833,7 +833,7 @@ fn Translator::translate_instruction(
     // Reference types
     RefNull(ref_type) => {
       // JIT/reference encoding uses 0 for null.
-      let result_ty = Type::from_wasm(ref_type)
+      let result_ty = type_from_wasm(ref_type)
       let result = self.builder.iconst(result_ty, @types.NULL_REF)
       self.push(result)
     }
@@ -1217,11 +1217,15 @@ fn Translator::translate_instruction(
       // 4. In catch_dispatch: match tag and branch to handler
 
       let handler_id = self.block_stack.length() // Use stack depth as unique ID
+      let result_types = get_block_result_types(block_type, self.func_types)
 
       // Create blocks for control flow
       let try_body_block = self.builder.create_block()
       let catch_dispatch = self.builder.create_block()
       let try_continuation = self.builder.create_block()
+      for ty in result_types {
+        self.builder.add_block_param(try_continuation, ty) |> ignore
+      }
 
       // Emit TryTableBegin - sets up exception handler and calls setjmp
       let setjmp_result = self.builder.try_table_begin(handler_id)
@@ -1258,10 +1262,16 @@ fn Translator::translate_instruction(
       self.builder.try_table_end(handler_id)
 
       // Jump to continuation after try body
-      if !self.is_unreachable &&
+      let normal_args : Array[Value] = []
+      let normal_falls_through = !self.is_unreachable &&
         self.builder.current_block() is Some(blk) &&
-        blk.terminator is None {
-        self.builder.jump(try_continuation, [])
+        blk.terminator is None
+      if normal_falls_through {
+        for _ in 0..<result_types.length() {
+          normal_args.push(self.pop())
+        }
+        normal_args.rev_in_place()
+        self.builder.jump(try_continuation, normal_args)
       }
 
       // === Catch dispatch block ===
@@ -1358,7 +1368,12 @@ fn Translator::translate_instruction(
       for loc in post_body_locals {
         self.locals.push(loc)
       }
-      self.is_unreachable = false
+      if normal_falls_through {
+        for i, _ty in result_types {
+          self.push(try_continuation.params[i].0)
+        }
+      }
+      self.is_unreachable = !normal_falls_through
     }
     // ============ SIMD Instructions ============
     _ => self.translate_instruction_simd(instr)

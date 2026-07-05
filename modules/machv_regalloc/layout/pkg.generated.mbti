@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv_regalloc/layout"
+
+import {
+  "Milky2018/machv_regalloc",
+}
+
+// Values
+pub fn layout_blocks(@machv_regalloc.VCodeFunction) -> Array[Int]
+
+pub fn optimize_layout(@machv_regalloc.VCodeFunction) -> @machv_regalloc.VCodeFunction
+
+pub fn reorder_blocks(@machv_regalloc.VCodeFunction, Array[Int]) -> @machv_regalloc.VCodeFunction
+
+// Errors
+
+// Types and methods
+pub struct VCodeCFG {
+  size : Int
+  preds : Array[Array[Int]]
+  succs : Array[Array[Int]]
+}
+pub fn VCodeCFG::build(@machv_regalloc.VCodeFunction) -> Self
+pub fn VCodeCFG::compute_dominators(Self) -> Array[Int]
+pub fn VCodeCFG::find_back_edges(Self) -> Array[(Int, Int)]
+pub fn VCodeCFG::find_loops(Self) -> Array[VCodeLoop]
+
+pub struct VCodeLoop {
+  header : Int
+  body : Array[Int]
+  latch : Int
+}
+
+// Type aliases
+
+// Traits
+

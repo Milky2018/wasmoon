@@ -68,6 +68,14 @@ priv struct BlockFrame {
   result_types : Array[Type]
   // Stack height at block entry
   stack_height : Int
+  mut has_predecessor : Bool
+}
+
+///|
+fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit {
+  if idx >= 0 && idx < self.block_stack.length() {
+    self.block_stack[idx].has_predecessor = true
+  }
 }
 
 ///|
@@ -112,24 +120,21 @@ pub fn Translator::new(
   // Add wasm function parameters (starting from params[1])
   let local_values : Array[Value] = []
   for param in func_type.params {
-    let p = builder.add_param(Type::from_wasm(param))
+    let p = builder.add_param(type_from_wasm(param))
     local_values.push(p)
   }
   // Add result types
   let func_result_types : Array[Type] = []
   for result in func_type.results {
-    builder.add_result(Type::from_wasm(result))
-    func_result_types.push(Type::from_wasm(result))
+    builder.add_result(type_from_wasm(result))
+    func_result_types.push(type_from_wasm(result))
   }
   // Initialize locals with zero values - we'll handle them specially
   for local_ty in locals {
     // Create placeholder values for locals
     // In SSA, we need to track the current value of each local
     local_values.push(
-      Value::new(
-        -1 - local_values.length(), // Temporary IDs for locals
-        Type::from_wasm(local_ty),
-      ),
+      builder.get_function().new_value(type_from_wasm(local_ty)),
     )
   }
   // Calculate table base offsets for multi-table support
@@ -322,7 +327,7 @@ fn Translator::local_to_spill_words(
 ) -> Array[Value] {
   match loc_val.ty {
     I32 => [self.builder.uextend(I64, loc_val)]
-    I64 | FuncRef | ExternRef => [loc_val] // refs are already word-sized
+    I64 | Ptr | Ref | FuncRef | ExternRef => [loc_val] // refs are already word-sized
     F32 => {
       let bits32 = self.builder.bitcast(I32, loc_val)
       [self.builder.uextend(I64, bits32)]
@@ -345,7 +350,7 @@ fn Translator::i64_bits_to_local(
 ) -> Value {
   match target_ty {
     I32 => self.builder.ireduce(I32, bits)
-    I64 | FuncRef | ExternRef => bits // refs are already i64
+    I64 | Ptr | Ref | FuncRef | ExternRef => bits // refs are already i64
     F32 => {
       let bits32 = self.builder.ireduce(I32, bits)
       self.builder.bitcast(F32, bits32)
@@ -421,7 +426,7 @@ fn Translator::get_array_element_ir_type(
   match subtype.composite {
     Array(arr) =>
       match arr.element.storage_type {
-        Val(vt) => Type::from_wasm(vt)
+        Val(vt) => type_from_wasm(vt)
         // Packed types (i8, i16) are extended to i32
         Packed(_) => I32
       }
@@ -447,7 +452,7 @@ fn Translator::get_struct_field_ir_type(
         return I64
       }
       match st.fields[field_idx].storage_type {
-        Val(vt) => Type::from_wasm(vt)
+        Val(vt) => type_from_wasm(vt)
         // Packed types (i8, i16) are extended to i32
         Packed(_) => I32
       }
@@ -575,12 +580,12 @@ fn get_block_result_types(
 ) -> Array[Type] {
   match block_type {
     Empty => []
-    Value(vt) => [Type::from_wasm(vt)]
-    MultiValue(vts) => vts.map(Type::from_wasm)
-    InlineType(_, results) => results.map(Type::from_wasm)
+    Value(vt) => [type_from_wasm(vt)]
+    MultiValue(vts) => vts.map(type_from_wasm)
+    InlineType(_, results) => results.map(type_from_wasm)
     TypeIndex(idx) =>
       if idx < func_types.length() {
-        func_types[idx].results.map(Type::from_wasm)
+        func_types[idx].results.map(type_from_wasm)
       } else {
         []
       }
@@ -597,10 +602,10 @@ fn get_block_param_types(
     Empty => []
     Value(_) => [] // Simple block types have no params
     MultiValue(_) => [] // MultiValue blocks have no params (result-only)
-    InlineType(params, _) => params.map(Type::from_wasm)
+    InlineType(params, _) => params.map(type_from_wasm)
     TypeIndex(idx) =>
       if idx < func_types.length() {
-        func_types[idx].params.map(Type::from_wasm)
+        func_types[idx].params.map(type_from_wasm)
       } else {
         []
       }
@@ -669,11 +674,11 @@ pub fn Translator::translate(
             init_f64 = Some(v)
             v
           }
-        FuncRef =>
+        Ptr | Ref | FuncRef =>
           if init_funcref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(FuncRef, @types.NULL_REF)
+            let v = self.builder.iconst(loc.ty, @types.NULL_REF)
             init_funcref = Some(v)
             v
           }
@@ -813,6 +818,7 @@ fn Translator::emit_catch_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
     // Function-level branch
@@ -867,6 +873,7 @@ fn Translator::emit_catch_ref_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
     let ret_cont = self.get_or_create_return_continuation()
@@ -896,6 +903,7 @@ fn Translator::emit_catch_all_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
     let ret_cont = self.get_or_create_return_continuation()
@@ -928,6 +936,7 @@ fn Translator::emit_catch_all_ref_branch(
   let idx = self.block_stack.length() - 1 - label_depth
   if idx >= 0 && idx < self.block_stack.length() {
     let frame = self.block_stack[idx]
+    self.mark_block_frame_reachable(idx)
     self.builder.jump(frame.block, args)
   } else {
     let ret_cont = self.get_or_create_return_continuation()
@@ -1243,7 +1252,9 @@ fn Translator::translate_block(
     block: continuation,
     result_types,
     stack_height: stack_height_after_params,
+    has_predecessor: false,
   }
+  let frame_idx = self.block_stack.length()
   self.block_stack.push(frame)
 
   // Reset unreachable for block body (block entry is reachable if outer is)
@@ -1260,9 +1271,6 @@ fn Translator::translate_block(
     self.translate_instruction(instr)
   }
 
-  // Pop frame
-  self.block_stack.pop() |> ignore
-
   // Fall through to continuation (only if not unreachable)
   if !self.is_unreachable &&
     self.builder.current_block() is Some(block) &&
@@ -1277,8 +1285,14 @@ fn Translator::translate_block(
     for loc in self.locals {
       args.push(loc)
     }
+    self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
   }
+
+  let continuation_reachable = self.block_stack[frame_idx].has_predecessor
+
+  // Pop frame
+  self.block_stack.pop() |> ignore
 
   // When unreachable, we need to restore stack to block entry height
   // because unreachable code may have pushed values that shouldn't persist
@@ -1289,18 +1303,18 @@ fn Translator::translate_block(
   // Switch to continuation
   self.builder.switch_to_block(continuation)
 
-  // Continuation is reachable (either from fall-through or from br)
-  // unless the outer context was unreachable
-  self.is_unreachable = outer_is_unreachable
+  self.is_unreachable = outer_is_unreachable || !continuation_reachable
 
   // Push block results onto stack
-  for i, _ty in result_types {
-    self.push(continuation.params[i].0)
-  }
+  if continuation_reachable {
+    for i, _ty in result_types {
+      self.push(continuation.params[i].0)
+    }
 
-  // Update locals to use the continuation's phi values
-  for i, _loc in self.locals {
-    self.locals[i] = continuation.params[local_param_start + i].0
+    // Update locals to use the continuation's phi values
+    for i, _loc in self.locals {
+      self.locals[i] = continuation.params[local_param_start + i].0
+    }
   }
 }
 
@@ -1372,6 +1386,7 @@ fn Translator::translate_loop(
     block: loop_header, // Loop's br target is the header
     result_types: param_types, // For br, we need params not results
     stack_height: self.value_stack.length(),
+    has_predecessor: false,
   }
   self.block_stack.push(frame)
 
@@ -1387,6 +1402,7 @@ fn Translator::translate_loop(
   self.block_stack.pop() |> ignore
 
   // Fall through to continuation (only if not unreachable)
+  let mut loop_falls_through = false
   if !self.is_unreachable &&
     self.builder.current_block() is Some(block) &&
     block.terminator is None {
@@ -1395,6 +1411,7 @@ fn Translator::translate_loop(
       args.push(self.pop())
     }
     args.rev_in_place()
+    loop_falls_through = true
     self.builder.jump(continuation, args)
   }
 
@@ -1406,11 +1423,12 @@ fn Translator::translate_loop(
   // Switch to continuation
   self.builder.switch_to_block(continuation)
 
-  // Continuation is reachable unless outer was unreachable
-  self.is_unreachable = outer_is_unreachable
+  self.is_unreachable = outer_is_unreachable || !loop_falls_through
 
   // Push results onto stack
-  for i, _ty in result_types {
-    self.push(continuation.params[i].0)
+  if loop_falls_through {
+    for i, _ty in result_types {
+      self.push(continuation.params[i].0)
+    }
   }
 }

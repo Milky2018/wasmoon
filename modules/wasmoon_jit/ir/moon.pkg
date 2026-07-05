@@ -1,8 +1,5 @@
 import {
+  "Milky2018/milkir",
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon_jit/perf",
-  "Milky2018/wasmoon_jit/ir/egraph",
-  "moonbitlang/core/debug",
   "moonbitlang/core/hashmap",
-  "moonbitlang/core/hashset",
 }

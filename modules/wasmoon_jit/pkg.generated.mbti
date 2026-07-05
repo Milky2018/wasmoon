@@ -2,8 +2,8 @@
 package "Milky2018/wasmoon_jit"
 
 import {
-  "Milky2018/machv",
   "Milky2018/machv_emit",
+  "Milky2018/machv_regalloc",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit/cwasm",
@@ -324,11 +324,13 @@ pub fn jit_trap_message(Int) -> String
 
 pub fn legacy_trap_immediate_from_message(String) -> Int
 
-pub fn link_code_object(@machv_emit.CodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_regalloc.VCodeFunction
+
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_regalloc.VCodeFunction
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -372,11 +374,11 @@ pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.Va
 
 pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
-pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise @machv_emit.EmitError
+pub fn plan_integration_for_target(@milkir.Function, @machv_regalloc.VCodeFunction, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
 
-pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
 
-pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
 
 pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
 
@@ -576,9 +578,10 @@ pub(all) struct CwasmArtifact {
   functions : Array[CwasmFunctionRecord]
   call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  block_fixups : Array[@machv_emit.Fixup]
-  stack_maps : Array[@machv_emit.StackMap]
-  debug_entries : Array[@machv_emit.DebugEntry]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
 pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
 pub fn CwasmArtifact::from_jit_plan_with_signature(JitIntegrationPlan, RuntimeSymbolResolver, Int, Int, Int) -> Self raise LinkError
@@ -693,16 +696,17 @@ pub(all) struct JitIntegrationPlan {
   entry_symbol : String
   target : @machv_emit.EmitTarget
   native_glue : Array[NativeGlueBinding]
-  object : @machv_emit.CodeObject
-} derive(@debug.Debug)
+  object : @machv_emit.MachineCode
+}
 
 pub(all) struct LinkedCode {
   code : Array[Int]
   frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  block_fixups : Array[@machv_emit.Fixup]
-  stack_maps : Array[@machv_emit.StackMap]
-  debug_entries : Array[@machv_emit.DebugEntry]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
 
 pub(all) struct MemoryDescriptorLayout {
