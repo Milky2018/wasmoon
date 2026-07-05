@@ -230,20 +230,6 @@ fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
 }
 
 ///|
-/// Set interpreter fallback callback for JIT-generated interpreter stubs.
-fn JITContext::set_interpcall_callback(
-  self : JITContext,
-  callback : () -> Int,
-) -> Unit {
-  self.ctx.set_interpcall_callback(callback)
-}
-
-///|
-fn JITContext::clear_interpcall_callback(self : JITContext) -> Unit {
-  self.ctx.clear_interpcall_callback()
-}
-
-///|
 /// Clear WASI stdin callback
 fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
   @wasmoon_jit.clear_wasi_stdin_callback(self.ptr())

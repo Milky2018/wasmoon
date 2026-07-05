@@ -1081,25 +1081,6 @@ pub fn JITModule::clear_hostcall_callback(self : JITModule) -> Unit {
 }
 
 ///|
-/// Set the interpreter fallback callback used by generated fallback stubs.
-/// The callback should return 0 on success, or a trap code on failure.
-pub fn JITModule::set_interpcall_callback(
-  self : JITModule,
-  callback : () -> Int,
-) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.set_interpcall_callback(callback)
-  }
-}
-
-///|
-pub fn JITModule::clear_interpcall_callback(self : JITModule) -> Unit {
-  if self.context is Some(ctx) {
-    ctx.clear_interpcall_callback()
-  }
-}
-
-///|
 /// Initialize WASI context for JIT execution
 /// args: command-line arguments
 /// env: environment variables (KEY=VALUE format)

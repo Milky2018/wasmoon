@@ -14,14 +14,12 @@ pub suberror HostcallImportTrampolineError {
 ///|
 priv enum RuntimeValueBridge {
   Hostcall(Int)
-  Interpcall(Int)
 }
 
 ///|
 fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
   match self {
     Hostcall(host_func_addr) => host_func_addr.to_int64()
-    Interpcall(func_idx) => func_idx.to_int64()
   }
 }
 
@@ -29,7 +27,6 @@ fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
 fn RuntimeValueBridge::aarch64_runtime_fixup(self : RuntimeValueBridge) -> Int {
   match self {
     Hostcall(_) => jit_runtime_fixup_idx(13)
-    Interpcall(_) => jit_runtime_fixup_idx(14)
   }
 }
 
@@ -37,7 +34,6 @@ fn RuntimeValueBridge::aarch64_runtime_fixup(self : RuntimeValueBridge) -> Int {
 fn RuntimeValueBridge::x64_bridge_ptr(self : RuntimeValueBridge) -> Int64 {
   match self {
     Hostcall(_) => @jit_ffi.c_jit_get_hostcall_ptr()
-    Interpcall(_) => @jit_ffi.c_jit_get_interpcall_ptr()
   }
 }
 
@@ -1071,33 +1067,6 @@ pub fn build_hostcall_import_trampoline_for_target(
     Unknown =>
       raise UnsupportedHostcallImportTrampoline(
         message="hostcall import trampoline needs a concrete target architecture",
-      )
-  }
-}
-
-///|
-pub fn build_interpreter_fallback_trampoline_for_target(
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
-  func_idx : Int,
-  target : @cwasm.TargetArch,
-) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
-  match target {
-    AArch64 =>
-      build_aarch64_hostcall_import_trampoline(
-        param_types,
-        result_types,
-        Interpcall(func_idx),
-      )
-    X86_64 =>
-      build_x64_hostcall_import_trampoline(
-        param_types,
-        result_types,
-        Interpcall(func_idx),
-      )
-    Unknown =>
-      raise UnsupportedHostcallImportTrampoline(
-        message="interpreter fallback trampoline needs a concrete target architecture",
       )
   }
 }

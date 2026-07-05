@@ -563,7 +563,6 @@ fn try_compile_jit(
             func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
             module_rec_groups_copy, use_subtype_indirect_check,
           )
-          @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
           Ok(jit_ctx)
         }
       }

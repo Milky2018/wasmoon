@@ -54,8 +54,6 @@ pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @ji
 
 pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance) -> Unit
 
-pub fn install_jit_interpcall_dispatcher(JITModuleContext, @runtime.Store, @runtime.ModuleInstance) -> Unit
-
 pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value] raise WastRunnerError
 
 pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError

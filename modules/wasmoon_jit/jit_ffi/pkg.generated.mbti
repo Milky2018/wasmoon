@@ -110,8 +110,6 @@ pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray
 
 pub fn c_jit_clear_hostcall_callback(Int64) -> Unit
 
-pub fn c_jit_clear_interpcall_callback(Int64) -> Unit
-
 pub fn c_jit_clear_trap() -> Unit
 
 pub fn c_jit_clear_wasi_exit(Int64) -> Unit
@@ -364,16 +362,6 @@ pub fn c_jit_get_i64_udiv_ptr() -> Int64
 
 pub fn c_jit_get_i64_urem_ptr() -> Int64
 
-pub fn c_jit_get_interpcall_func_idx() -> Int
-
-pub fn c_jit_get_interpcall_num_args() -> Int
-
-pub fn c_jit_get_interpcall_num_results() -> Int
-
-pub fn c_jit_get_interpcall_ptr() -> Int64
-
-pub fn c_jit_get_interpcall_values_ptr() -> Int64
-
 pub fn c_jit_get_memory_copy_mem0_ptr() -> Int64
 
 pub fn c_jit_get_memory_copy_ptr() -> Int64
@@ -495,8 +483,6 @@ pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
-
-pub fn c_jit_set_interpcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
 
 pub fn c_jit_set_wasi_arg(Int64, Int, FixedArray[Byte]) -> Unit
 

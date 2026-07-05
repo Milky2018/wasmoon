@@ -12,11 +12,6 @@ static __thread int64_t g_hostcall_values_ptr = 0;
 static __thread int32_t g_hostcall_num_args = 0;
 static __thread int32_t g_hostcall_num_results = 0;
 
-static __thread int32_t g_interpcall_func_idx = -1;
-static __thread int64_t g_interpcall_values_ptr = 0;
-static __thread int32_t g_interpcall_num_args = 0;
-static __thread int32_t g_interpcall_num_results = 0;
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_target_arch(void) {
 #if defined(__x86_64__) || defined(_M_X64)
     return 1;
@@ -175,96 +170,6 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_num_args(void) {
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_num_results(void) {
     return g_hostcall_num_results;
-}
-
-// ============ Interpreter Fallback Callback Registration ============
-
-typedef int32_t (*interpcall_callback_fn)(void *closure);
-
-static void clear_interpcall_callback(jit_context_t *ctx) {
-    if (!ctx) return;
-    if (ctx->interpcall_callback_data) {
-        moonbit_decref(ctx->interpcall_callback_data);
-        ctx->interpcall_callback_data = NULL;
-    }
-    ctx->interpcall_callback = NULL;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_set_interpcall_callback(
-    int64_t ctx_ptr,
-    interpcall_callback_fn callback,
-    void *closure
-) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
-    clear_interpcall_callback(ctx);
-    ctx->interpcall_callback = (void *)callback;
-    if (closure) moonbit_incref(closure);
-    ctx->interpcall_callback_data = closure;
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_clear_interpcall_callback(int64_t ctx_ptr) {
-    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
-    clear_interpcall_callback(ctx);
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_interpcall(
-    jit_context_t *ctx,
-    int32_t func_idx,
-    int64_t values_ptr,
-    int32_t num_args,
-    int32_t num_results
-) {
-    if (!ctx || !ctx->interpcall_callback) {
-        g_trap_code = 3; // unreachable
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-        return (int32_t)g_trap_code;
-    }
-    if (ctx->wasm_stack_base && ctx->wasm_stack_top) {
-        uintptr_t base = (uintptr_t)ctx->wasm_stack_base;
-        uintptr_t top = (uintptr_t)ctx->wasm_stack_top;
-        uintptr_t ptr = (uintptr_t)values_ptr;
-        uintptr_t bytes = (uintptr_t)(num_args + num_results) * 8u;
-        if (ptr < base || ptr + bytes > top) {
-            g_trap_code = 3; // unreachable
-            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-            return (int32_t)g_trap_code;
-        }
-    }
-
-    g_interpcall_func_idx = func_idx;
-    g_interpcall_values_ptr = values_ptr;
-    g_interpcall_num_args = num_args;
-    g_interpcall_num_results = num_results;
-
-    interpcall_callback_fn cb = (interpcall_callback_fn)ctx->interpcall_callback;
-    int32_t trap = cb(ctx->interpcall_callback_data);
-    if (trap != 0) {
-        g_trap_code = trap;
-        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
-    }
-    return trap;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_interpcall_ptr(void) {
-    return (int64_t)wasmoon_jit_interpcall;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_interpcall_func_idx(void) {
-    return g_interpcall_func_idx;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_interpcall_values_ptr(void) {
-    return g_interpcall_values_ptr;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_interpcall_num_args(void) {
-    return g_interpcall_num_args;
-}
-
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_interpcall_num_results(void) {
-    return g_interpcall_num_results;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_brk_imm(void) {

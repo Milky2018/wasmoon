@@ -1,0 +1,14 @@
+import {
+  "Milky2018/wasmoon_jit/ir",
+  "Milky2018/wasmoon_jit/perf",
+  "Milky2018/wasmoon_jit/vcode/abi",
+  "Milky2018/wasmoon_jit/vcode/isa",
+  "Milky2018/wasmoon_jit/vcode/block",
+  "Milky2018/wasmoon_jit/vcode/instr",
+  "Milky2018/wasmoon_jit/vcode/regalloc/unionfind",
+  "moonbitlang/x/sys",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
+  "moonbitlang/core/math",
+  "moonbitlang/core/string",
+}

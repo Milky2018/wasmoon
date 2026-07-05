@@ -413,11 +413,11 @@ fn run_wasi_jit_quiet(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    let jit_ctx = @wast.JITModuleContext::new(
+    @wast.JITModuleContext::new(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
+    |> ignore
     guard jm.get_func(func_idx) is Some(func) else {
       return (Err("JIT function \{func_idx} not loaded"), Bytes::from_array([]))
     }

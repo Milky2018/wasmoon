@@ -1,0 +1,6 @@
+import {
+  "Milky2018/wasmoon_jit/vcode/regalloc",
+  "Milky2018/wasmoon_jit/vcode/instr",
+  "Milky2018/wasmoon_jit/vcode/abi",
+  "moonbitlang/core/hashmap",
+}

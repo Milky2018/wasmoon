@@ -34,8 +34,6 @@ pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
-pub fn build_interpreter_fallback_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
-
 pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
 
 pub fn c_jit_read_i64(Int64) -> Int64
@@ -235,14 +233,6 @@ pub fn get_hostcall_num_result_slots() -> Int
 pub fn get_hostcall_values_ptr() -> Int64
 
 pub fn get_import_trampoline(String, String) -> Int64?
-
-pub fn get_interpcall_func_idx() -> Int
-
-pub fn get_interpcall_num_arg_slots() -> Int
-
-pub fn get_interpcall_num_result_slots() -> Int
-
-pub fn get_interpcall_values_ptr() -> Int64
 
 pub fn get_last_trap_details() -> TrapDetails
 
@@ -751,7 +741,6 @@ pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
-pub fn NativeJITContext::clear_interpcall_callback(Self) -> Unit
 pub fn NativeJITContext::func_table_ptr(Self) -> Int64
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
@@ -762,7 +751,6 @@ pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> Int) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
-pub fn NativeJITContext::set_interpcall_callback(Self, () -> Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit

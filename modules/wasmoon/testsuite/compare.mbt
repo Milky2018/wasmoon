@@ -343,6 +343,7 @@ pub fn run_jit(
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
   func_name |> ignore
+  let mut jm_opt : @jit.JITModule? = None
   try {
     let linker = @runtime.Linker::new()
     let store = linker.get_store()
@@ -361,6 +362,7 @@ pub fn run_jit(
       external_imports,
       debug_db~,
     )
+    jm_opt = Some(jm)
     @wast.register_instance_funcrefs_for_jit(jm, instance)
     @wast.install_jit_hostcall_dispatcher(jm, store, instance)
     jm.alloc_wasm_stack(1048576L) |> ignore
@@ -412,12 +414,27 @@ pub fn run_jit(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    let jit_ctx = @wast.JITModuleContext::new(
+    @wast.JITModuleContext::new(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
-    @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
+    |> ignore
+    let c_heap = @wasmoon_jit.CHeap::new()
+    @wasmoon_jit.gc_setup(
+      c_heap,
+      module_types,
+      canonical_type_indices,
+      ctx_ptr=jm.get_context_ptr(),
+      func_type_indices~,
+      func_table_ptr=jm.get_func_table_ptr(),
+      num_funcs=jm.get_func_count(),
+    ) catch {
+      err => return Err("GC setup failed: \{err}")
+    }
+    jm.set_gc_heap(c_heap.get_ptr())
     guard jm.get_func(func_idx) is Some(func) else {
+      @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+      jm.clear_segments()
       return Err("JIT function \{func_idx} not loaded")
     }
     let jit_args : Array[Int64] = []
@@ -428,9 +445,17 @@ pub fn run_jit(
       append_jit_arg_slots(jit_args, arg, param_types[i])
     }
     let raw_results = jm.call_with_context(func, jit_args)
+    @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+    jm.clear_segments()
     Ok(jit_results_to_values(raw_results, result_types))
   } catch {
-    e => Err("JIT error: \{e}")
+    e => {
+      if jm_opt is Some(jm) {
+        @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+        jm.clear_segments()
+      }
+      Err("JIT error: \{e}")
+    }
   }
 }
 

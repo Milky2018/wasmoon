@@ -774,7 +774,7 @@ test "machine-code entry trampolines support V128 registers" {
 }
 
 ///|
-test "hostcall and interpcall trampolines support V128 registers" {
+test "hostcall trampolines support V128 registers" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = [V128]
   let x64_host = build_hostcall_import_trampoline_for_target(
@@ -785,24 +785,18 @@ test "hostcall and interpcall trampolines support V128 registers" {
   ) catch {
     err => fail(to_repr(err).to_string())
   }
-  let x64_interp = build_interpreter_fallback_trampoline_for_target(
-    params,
-    results,
-    7,
-    X86_64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
   let mut x64_has_store = false
   let mut x64_has_load = false
-  for code in [x64_host.code, x64_interp.code] {
-    for i in 0..<(code.length() - 3) {
-      if code[i] == 0xf3 && code[i + 2] == 0x0f && code[i + 3] == 0x7f {
-        x64_has_store = true
-      }
-      if code[i] == 0xf3 && code[i + 2] == 0x0f && code[i + 3] == 0x6f {
-        x64_has_load = true
-      }
+  for i in 0..<(x64_host.code.length() - 3) {
+    if x64_host.code[i] == 0xf3 &&
+      x64_host.code[i + 2] == 0x0f &&
+      x64_host.code[i + 3] == 0x7f {
+      x64_has_store = true
+    }
+    if x64_host.code[i] == 0xf3 &&
+      x64_host.code[i + 2] == 0x0f &&
+      x64_host.code[i + 3] == 0x6f {
+      x64_has_load = true
     }
   }
   inspect(x64_has_store, content="true")
@@ -815,24 +809,14 @@ test "hostcall and interpcall trampolines support V128 registers" {
   ) catch {
     err => fail(to_repr(err).to_string())
   }
-  let a64_interp = build_interpreter_fallback_trampoline_for_target(
-    params,
-    results,
-    7,
-    AArch64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
   let mut a64_has_store = false
   let mut a64_has_load = false
-  for code in [a64_host.code, a64_interp.code] {
-    for i in 0..<(code.length() - 3) {
-      if code[i + 3] == 0x3d {
-        if (code[i + 2] & 0xc0) == 0xc0 {
-          a64_has_load = true
-        } else if (code[i + 2] & 0x80) == 0x80 {
-          a64_has_store = true
-        }
+  for i in 0..<(a64_host.code.length() - 3) {
+    if a64_host.code[i + 3] == 0x3d {
+      if (a64_host.code[i + 2] & 0xc0) == 0xc0 {
+        a64_has_load = true
+      } else if (a64_host.code[i + 2] & 0x80) == 0x80 {
+        a64_has_store = true
       }
     }
   }
@@ -953,7 +937,7 @@ fn code_contains_a64_x16_store_to_base(code : Array[Int], base : Int) -> Bool {
 }
 
 ///|
-test "hostcall and interpcall trampolines support stack-passed arguments" {
+test "hostcall trampolines support stack-passed arguments" {
   let x64_params : Array[@types.ValueType] = [I64, I64, I64, I64, I64, I64]
   let a64_params : Array[@types.ValueType] = [
     I64,
@@ -974,30 +958,12 @@ test "hostcall and interpcall trampolines support stack-passed arguments" {
   ) catch {
     err => fail(to_repr(err).to_string())
   }
-  let x64_interp = build_interpreter_fallback_trampoline_for_target(
-    x64_params,
-    results,
-    7,
-    X86_64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
   inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
   inspect(code_contains_x64_rsp_int_store(x64_host.code), content="true")
-  inspect(code_contains_x64_rsp_int_load(x64_interp.code), content="true")
-  inspect(code_contains_x64_rsp_int_store(x64_interp.code), content="true")
   let a64_host = build_hostcall_import_trampoline_for_target(
     a64_params,
     results,
     0,
-    AArch64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let a64_interp = build_interpreter_fallback_trampoline_for_target(
-    a64_params,
-    results,
-    7,
     AArch64,
   ) catch {
     err => fail(to_repr(err).to_string())
@@ -1008,14 +974,6 @@ test "hostcall and interpcall trampolines support stack-passed arguments" {
   )
   inspect(
     code_contains_a64_x16_store_to_base(a64_host.code, 31),
-    content="true",
-  )
-  inspect(
-    code_contains_a64_x16_load_from_base(a64_interp.code, 31),
-    content="true",
-  )
-  inspect(
-    code_contains_a64_x16_store_to_base(a64_interp.code, 31),
     content="true",
   )
 }
@@ -1047,7 +1005,7 @@ test "entry trampolines support stack-passed arguments" {
 }
 
 ///|
-test "hostcall and interpcall trampolines support overflow result areas" {
+test "hostcall trampolines support overflow result areas" {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = [
     I64,
@@ -1068,30 +1026,12 @@ test "hostcall and interpcall trampolines support overflow result areas" {
   ) catch {
     err => fail(to_repr(err).to_string())
   }
-  let x64_interp = build_interpreter_fallback_trampoline_for_target(
-    params,
-    results,
-    7,
-    X86_64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
   inspect(code_contains_x64_rsp_int_load(x64_host.code), content="true")
   inspect(code_contains_x64_r12_int_store(x64_host.code), content="true")
-  inspect(code_contains_x64_rsp_int_load(x64_interp.code), content="true")
-  inspect(code_contains_x64_r12_int_store(x64_interp.code), content="true")
   let a64_host = build_hostcall_import_trampoline_for_target(
     params,
     results,
     0,
-    AArch64,
-  ) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  let a64_interp = build_interpreter_fallback_trampoline_for_target(
-    params,
-    results,
-    7,
     AArch64,
   ) catch {
     err => fail(to_repr(err).to_string())
@@ -1102,14 +1042,6 @@ test "hostcall and interpcall trampolines support overflow result areas" {
   )
   inspect(
     code_contains_a64_x16_store_to_base(a64_host.code, 23),
-    content="true",
-  )
-  inspect(
-    code_contains_a64_x16_load_from_base(a64_interp.code, 31),
-    content="true",
-  )
-  inspect(
-    code_contains_a64_x16_store_to_base(a64_interp.code, 23),
     content="true",
   )
 }

@@ -92,43 +92,6 @@ pub extern "c" fn c_jit_get_hostcall_num_args() -> Int = "wasmoon_jit_get_hostca
 /// Current hostcall num_results (thread-local).
 pub extern "c" fn c_jit_get_hostcall_num_results() -> Int = "wasmoon_jit_get_hostcall_num_results"
 
-// ============ Interpreter Fallback Bridge (JIT -> Interpreter) ============
-
-///|
-/// Get interpreter fallback bridge function pointer (C calling convention).
-pub extern "c" fn c_jit_get_interpcall_ptr() -> Int64 = "wasmoon_jit_get_interpcall_ptr"
-
-///|
-/// Set interpreter fallback callback for a JITContext.
-/// The callback closure is invoked with no arguments; it can query the current
-/// fallback parameters via `c_jit_get_interpcall_*` helpers.
-#owned(closure)
-pub extern "c" fn c_jit_set_interpcall_callback(
-  ctx_ptr : Int64,
-  call_closure : FuncRef[(() -> Int) -> Int],
-  closure : () -> Int,
-) -> Unit = "wasmoon_jit_set_interpcall_callback"
-
-///|
-/// Clear interpreter fallback callback for a JITContext.
-pub extern "c" fn c_jit_clear_interpcall_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_interpcall_callback"
-
-///|
-/// Current interpreter fallback module func_idx (thread-local).
-pub extern "c" fn c_jit_get_interpcall_func_idx() -> Int = "wasmoon_jit_get_interpcall_func_idx"
-
-///|
-/// Current interpreter fallback values_vec pointer (thread-local).
-pub extern "c" fn c_jit_get_interpcall_values_ptr() -> Int64 = "wasmoon_jit_get_interpcall_values_ptr"
-
-///|
-/// Current interpreter fallback num_args (thread-local).
-pub extern "c" fn c_jit_get_interpcall_num_args() -> Int = "wasmoon_jit_get_interpcall_num_args"
-
-///|
-/// Current interpreter fallback num_results (thread-local).
-pub extern "c" fn c_jit_get_interpcall_num_results() -> Int = "wasmoon_jit_get_interpcall_num_results"
-
 // ============ GC-managed JITContext ============
 
 ///|

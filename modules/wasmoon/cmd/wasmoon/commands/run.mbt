@@ -1191,8 +1191,6 @@ fn run_with_jit(
             mod_.type_rec_groups,
             use_subtype_indirect_check,
           )
-          @wast.install_jit_interpcall_dispatcher(jit_ctx, store, instance)
-
           // Find and call the function
           let jit_func = jm.get_func_by_name(func_name)
           match jit_func {
@@ -1401,154 +1399,46 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-fn current_emit_target(
-  target_arch : @cwasm.TargetArch,
-) -> @machv_emit.EmitTarget {
-  match target_arch {
-    AArch64 => AArch64
-    X86_64 => X64
-    Unknown => X64
+fn vcode_func_addr_fixups_to_cwasm(
+  fixups : Array[@emit.FuncAddrFixup],
+) -> Array[@cwasm.FuncAddrFixup] {
+  let out : Array[@cwasm.FuncAddrFixup] = []
+  for fixup in fixups {
+    out.push({ offset: fixup.offset, func_idx: fixup.func_idx, reg: fixup.reg })
   }
+  out
 }
 
 ///|
-priv struct ReusableCompiledFunction {
-  entry : @cwasm.CompiledEntry
-  milk_dump : String
-  mach_dump : String
-  mc_dump : String
-  instruction_count : Int
-  code_size : Int
-}
-
-///|
-fn reusable_body_signature_supported(
-  func_type : @types.FuncType,
-  target_arch : @cwasm.TargetArch,
-) -> Bool {
-  let mut int_params = 1 // hidden VMContext parameter
-  let mut float_params = 0
-  for param in func_type.params {
-    match param {
-      V128 => return false
-      F32 | F64 => float_params = float_params + 1
-      _ => int_params = int_params + 1
-    }
-  }
-  if func_type.results.length() > 1 {
-    return false
-  }
-  for result in func_type.results {
-    if result is V128 {
-      return false
-    }
-  }
-  let max_int_params = match target_arch {
-    AArch64 => 8
-    X86_64 => 6
-    Unknown => return false
-  }
-  int_params <= max_int_params && float_params <= 8
-}
-
-///|
-fn body_calls_function(
-  body : Array[@types.Instruction],
-  target_func_idx : Int,
-) -> Bool {
-  for instr in body {
-    match instr {
-      Call(func_idx) | ReturnCall(func_idx) =>
-        if func_idx == target_func_idx {
-          return true
-        }
-      Block(_, nested) | Loop(_, nested) =>
-        if body_calls_function(nested, target_func_idx) {
-          return true
-        }
-      If(_, then_body, else_body) => {
-        if body_calls_function(then_body, target_func_idx) {
-          return true
-        }
-        if body_calls_function(else_body, target_func_idx) {
-          return true
-        }
-      }
-      TryTable(_, _, nested) =>
-        if body_calls_function(nested, target_func_idx) {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-fn try_compile_with_reusable_pipeline(
-  mod_ : @types.Module,
-  func_local_idx : Int,
-  func_idx : Int,
-  func_type : @types.FuncType,
-  target_arch : @cwasm.TargetArch,
-  target : @machv_emit.EmitTarget,
-  normalized_opt_level : Int,
-) -> ReusableCompiledFunction? {
-  if !reusable_body_signature_supported(func_type, target_arch) {
-    return None
-  }
-  if func_local_idx < 0 || func_local_idx >= mod_.codes.length() {
-    return None
-  }
-  // TODO(wasm_frontend): re-enable recursive native bodies once the reusable
-  // JIT path has Wasm call-depth and stack-exhaustion semantics matching the
-  // interpreter.
-  if body_calls_function(mod_.codes[func_local_idx].body, func_idx) {
-    return None
-  }
-  let env = @wasm_frontend.EmbeddingEnvironment::new()
-  let milk = @wasm_frontend.try_lower_native_function(env, mod_, func_local_idx) catch {
-    _ => return None
-  }
-  guard milk is Some(milk_func) else { return None }
-  let instruction_count = @milkir.instruction_count(milk_func)
-  @milkir.optimize_with_level(
-    milk_func,
-    @milkir.OptLevel::from_int(normalized_opt_level),
-  )
-  |> ignore
-  let milk_dump = milk_func.print()
-  let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
-    milk_func, target,
-  ) catch {
-    _ => return None
-  }
-  let mach_dump = plan.object.debug_entries
-    .map(fn(entry) {
-      "\{entry.offset}: block\{entry.block_id} inst\{entry.inst_id} \{entry.opcode}"
+fn vcode_call_fixups_to_cwasm(
+  fixups : Array[@emit.CallFixup],
+) -> Array[@cwasm.CallFixup] {
+  let out : Array[@cwasm.CallFixup] = []
+  for fixup in fixups {
+    out.push({
+      offset: fixup.offset,
+      func_idx: fixup.func_idx,
+      veneer_offset: fixup.veneer_offset,
     })
-    .join("\n")
-  let artifact = @wasmoon_jit.CwasmArtifact::from_jit_plan_with_signature(
-    plan,
-    @wasmoon_jit.RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
-    func_idx,
-    func_type.params.length(),
-    func_type.results.length(),
-  ) catch {
-    _ => return None
   }
-  let compiled = artifact.to_precompiled_module()
-  if compiled.functions.length() != 1 {
-    return None
+  out
+}
+
+///|
+fn vcode_gc_safepoints_to_cwasm(
+  safepoints : Array[@vcode.GcSafepoint],
+) -> Array[@cwasm.GcSafepoint] {
+  let out : Array[@cwasm.GcSafepoint] = []
+  for safepoint in safepoints {
+    out.push(
+      @cwasm.GcSafepoint::new(
+        safepoint.code_offset,
+        safepoint.live_refs,
+        safepoint.metadata,
+      ),
+    )
   }
-  Some({
-    entry: compiled.functions[0],
-    milk_dump,
-    mach_dump,
-    mc_dump: artifact.manifest().join("\n"),
-    instruction_count,
-    code_size: artifact.code.length(),
-  })
+  out
 }
 
 ///|
@@ -1567,14 +1457,11 @@ pub fn compile_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
 ) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
-  actual_memory_max |> ignore
-  enable_dwarf |> ignore
-  force_subtype_indirect_check |> ignore
+  use_reusable_pipeline |> ignore
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
-  let emit_target = current_emit_target(target_arch)
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(@wasmoon_jit.JITDebugDB::new())
@@ -1616,6 +1503,58 @@ pub fn compile_module_to_jit(
   if perf_on {
     @perf.reset_module(total_compile_funcs)
   }
+  let canonical_type_indices = @types.compute_canonical_type_indices(
+    mod_.types,
+    type_rec_groups=mod_.type_rec_groups,
+  )
+  let subtype_check_reason = module_indirect_subtype_check_reason(mod_)
+  let default_use_subtype_indirect_check = subtype_check_reason is Some(_)
+  let use_subtype_indirect_check = match force_subtype_indirect_check {
+    Some(v) => v
+    None => default_use_subtype_indirect_check
+  }
+  if debug {
+    if use_subtype_indirect_check {
+      let reason = subtype_check_reason.unwrap_or("unknown")
+      @logger.debug("JIT: indirect-call subtype check mode enabled (\{reason})")
+    } else {
+      @logger.debug(
+        "JIT: indirect-call exact mode enabled (canonical type ids)",
+      )
+    }
+  }
+  let import_func_type_indices : Array[Int] = []
+  let global_types : Array[@types.GlobalType] = []
+  let all_tags : Array[@types.TagType] = []
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) => import_func_type_indices.push(type_idx)
+      Global(global_type) => global_types.push(global_type)
+      Tag(tag_type_idx) => all_tags.push({ type_idx: tag_type_idx })
+      _ => ()
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+  for tag in mod_.tags {
+    all_tags.push(tag)
+  }
+  let memory_max_for_translate : Int? = match actual_memory_max {
+    Some(_) => actual_memory_max
+    None =>
+      if mod_.memories.length() > 0 {
+        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+      } else {
+        None
+      }
+  }
+  let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
+  let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
+  let memory_mins = mod_.memories.map(fn(m) {
+    m.limits.min * (1L << m.page_size_log2)
+  })
+  let func_types = @types.extract_func_types(mod_.types)
   // Record imports in precompiled module
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
@@ -1651,93 +1590,27 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    // Production JIT first tries the reusable
-    // wasm_frontend -> MilkIR -> MachV -> machv_emit path for the conservative
-    // native-frontend subset. Unsupported bodies are represented by
-    // interpreter fallback trampolines, matching the old main-branch
-    // function-table behavior without retaining the legacy VCode pipeline.
     let normalized_opt_level = normalize_opt_level(opt_level)
-    if use_reusable_pipeline &&
-      try_compile_with_reusable_pipeline(
-        mod_, i, func_idx, func_type, target_arch, emit_target, normalized_opt_level,
-      )
-      is Some(reusable) {
-      emit_compile_progress(
-        on_progress,
-        Optimize,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      emit_compile_progress(
-        on_progress,
-        Lower,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      emit_compile_progress(
-        on_progress,
-        Regalloc,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      emit_compile_progress(
-        on_progress,
-        Codegen,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      precompiled.add_function(reusable.entry)
-      emit_compile_progress(
-        on_progress,
-        Link,
-        progress_start,
-        total_compile_funcs,
-        compiled_count + 1,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      if perf_on {
-        @perf.begin_function(
-          func_idx,
-          func_name,
-          normalized_opt_level,
-          reusable.instruction_count,
-        )
-        @perf.finish_function(reusable.instruction_count, reusable.code_size)
-      }
-      if debug_db is Some(db) {
-        db.set(
-          func_idx,
-          @wasmoon_jit.JITFunctionDebug::new(
-            reusable.milk_dump,
-            reusable.mach_dump,
-            "",
-            reusable.mc_dump,
-          ),
-        )
-      }
-      compiled_count = compiled_count + 1
-      if @logger.is_debug_enabled() &&
-        total_compile_funcs > 10 &&
-        (compiled_count % 10 == 0 || compiled_count == total_compile_funcs) {
-        @logger.debug(
-          "JIT: Compiled \{compiled_count}/\{total_compile_funcs} functions",
-        )
-      }
-      continue
-    }
+    let code = mod_.codes[i]
+    let translator = @ir.Translator::new(
+      func_name,
+      func_type,
+      code.locals,
+      func_types,
+      mod_.funcs,
+      num_imports,
+      import_func_type_indices,
+      memory_max=memory_max_for_translate,
+      memory_is_64~,
+      memory_page_size_log2~,
+      tables=mod_.tables,
+      global_types~,
+      type_rec_groups=mod_.type_rec_groups,
+      module_types=mod_.types,
+      tags=all_tags,
+      memory_mins~,
+    )
+    let ir_func = translator.translate(code.body)
     emit_compile_progress(
       on_progress,
       Optimize,
@@ -1747,6 +1620,28 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
+    let optimize_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+    if perf_on {
+      @perf.begin_function(
+        func_idx,
+        func_name,
+        normalized_opt_level,
+        @ir.instruction_count(ir_func),
+      )
+    }
+    @ir.optimize_with_level(
+      ir_func,
+      @ir.OptLevel::from_int(normalized_opt_level),
+    )
+    |> ignore
+    if optimize_tick is Some(tick) {
+      @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
+    }
+    let lower_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+    let mut ir_dump : String? = None
+    if debug_db is Some(_) {
+      ir_dump = Some(ir_func.print())
+    }
     emit_compile_progress(
       on_progress,
       Lower,
@@ -1756,6 +1651,21 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
+    let vcode_func = @lower.lower_function(
+      ir_func,
+      num_imports=mod_.imports.length(),
+      run_ir_opt=false,
+      use_subtype_indirect_check~,
+      canonical_type_indices~,
+    )
+    if lower_tick is Some(tick) {
+      @perf.record_stage_us("lower", @perf.elapsed_us(tick))
+    }
+    let regalloc_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+    let mut vcode_before_dump : String? = None
+    if debug_db is Some(_) {
+      vcode_before_dump = Some(vcode_func.print())
+    }
     emit_compile_progress(
       on_progress,
       Regalloc,
@@ -1765,6 +1675,25 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
+    let (vcode_ra, ra_output) = @regalloc.allocate_registers_backtracking_output(
+      vcode_func,
+    )
+    if regalloc_tick is Some(tick) {
+      @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
+      let (spills, reloads, reg_moves, spill_to_spill) = ra_output.spill_reload_stats()
+      @perf.record_regalloc_stats(
+        ra_output.get_num_spillslots(),
+        spills,
+        reloads,
+        reg_moves,
+        spill_to_spill,
+      )
+    }
+    let emit_tick = if perf_on { Some(@perf.tick_now()) } else { None }
+    let mut vcode_after_dump : String? = None
+    if debug_db is Some(_) {
+      vcode_after_dump = Some(vcode_ra.print())
+    }
     emit_compile_progress(
       on_progress,
       Codegen,
@@ -1774,33 +1703,38 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let fallback = @wasmoon_jit.build_interpreter_fallback_trampoline_for_target(
-      func_type.params,
-      func_type.results,
-      func_idx,
-      target_arch,
-    ) catch {
-      err => {
-        if debug {
-          @logger.debug(
-            "JIT: reusable pipeline and interpreter fallback unsupported for \{func_name}: \{err}",
-          )
-        }
-        return None
-      }
+    let mc = @emit.emit_function_with_regalloc(
+      vcode_ra,
+      ra_output,
+      debug_func_idx=Some(func_idx),
+      force_frame_setup=enable_dwarf,
+      record_disasm=debug_db is Some(_),
+    )
+    if emit_tick is Some(tick) {
+      @perf.record_stage_us("emit", @perf.elapsed_us(tick))
     }
+    let mut mc_dump : String? = None
+    if debug_db is Some(_) {
+      mc_dump = Some(mc.dump_disasm())
+    }
+    let compiled = @vcode.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
       @wasmoon_jit.build_cwasm_entry_from_code(
         func_idx,
         func_name,
-        fallback.code,
-        0,
-        0,
+        compiled.get_code(),
+        compiled.frame_size,
+        compiled.entry_offset,
         num_params,
         num_results,
-        func_addr_fixups=fallback.func_addr_fixups,
+        func_addr_fixups=vcode_func_addr_fixups_to_cwasm(
+          compiled.get_func_addr_fixups(),
+        ),
+        call_fixups=vcode_call_fixups_to_cwasm(compiled.get_call_fixups()),
+        gc_safepoints=vcode_gc_safepoints_to_cwasm(compiled.get_gc_safepoints()),
+        gc_stackmap_blob=compiled.get_gc_stackmap_blob(),
       ),
     )
     emit_compile_progress(
@@ -1813,17 +1747,16 @@ pub fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     if perf_on {
-      @perf.begin_function(func_idx, func_name, normalized_opt_level, 0)
-      @perf.finish_function(0, fallback.code.length())
+      @perf.finish_function(@ir.instruction_count(ir_func), compiled.code_size)
     }
     if debug_db is Some(db) {
       db.set(
         func_idx,
         @wasmoon_jit.JITFunctionDebug::new(
-          "interpreter fallback",
-          "",
-          "",
-          "interpreter fallback trampoline: \{fallback.code.length()} bytes",
+          ir_dump.unwrap_or(""),
+          vcode_before_dump.unwrap_or(""),
+          vcode_after_dump.unwrap_or(""),
+          mc_dump.unwrap_or(""),
         ),
       )
     }

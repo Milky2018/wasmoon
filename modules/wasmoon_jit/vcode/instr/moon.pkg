@@ -1,0 +1,4 @@
+import {
+  "Milky2018/wasmoon_jit/vcode/abi",
+  "Milky2018/wasm_core/types",
+}
