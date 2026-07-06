@@ -1931,9 +1931,7 @@ fn check_jit_import_support(
   }
   if unsupported.length() > 0 {
     let joined = unsupported.join(", ")
-    @logger.debug(
-      "JIT: Falling back to interpreter - unsupported imports: \{joined}",
-    )
+    @logger.debug("JIT: unsupported imports: \{joined}")
     false
   } else {
     true
